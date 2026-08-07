@@ -1,6 +1,6 @@
 # Executive Admin SOP - The BEE Suite
 
-Last updated: July 29, 2026
+Last updated: August 6, 2026
 
 Audience: school owners, corporate users, franchise/brand admins, regional managers, and platform operators.
 
@@ -32,6 +32,18 @@ Use the desktop view for multi-location comparisons, reporting periods, and exce
 - Approve payout and payment readiness before tuition checkout is enabled.
 - Review FTE, enrollment, billing, compliance, and support issues across locations.
 - Use audit logs for sensitive changes and support actions.
+
+## Current Executive UI And User Flows
+
+Use `https://thebeesuite.io/executives`. The sidebar is permission-scoped and may include `Dashboard`, `Multi-location`, `AI Command`, `FTE reports`, `School Operations`, `Families & Communication`, `Staff & Access`, `Billing & Payments`, `Records & Compliance`, `Executive admin`, `Enrollment CRM`, `Insights & Reputation`, `Settings & Setup`, `Asset Hub`, `Audit logs`, and `Help`.
+
+`Enrollment Status Summary` is available from the dashboard, School Operations, and `Insights & Reputation` -> `Enrollment status`. It shows a school-scoped current roster grouped by classroom and age and supports search, CSV, PDF, and print. Always confirm the selected school before exporting.
+
+Payroll/time-card review includes a school filter for tenant-wide executive users and retains terminated staff who have hours in the selected pay period. Do not remove historical time records merely because the staff profile is no longer active.
+
+AI Command may propose school-scoped data changes only for authorized users. Review the preview, target school, record, and exact values, then explicitly confirm. Treat custody, safety, medical, licensing, payment-policy, legal, and destructive decisions as human-only.
+
+Full dashboard pages no longer auto-refresh in the background. Notification counts use a lightweight refresh. Reopen the specific record or report when a fresh verification is required.
 
 ## Daily Executive Review
 
@@ -102,7 +114,7 @@ Do not approve live parent payments for a school until every item below is compl
 4. Tuition plans, fees, discounts, subsidy rules, ledger balances, and open invoices are validated.
 5. Parent card and bank payment choices are approved; the current flow presents card before available bank options.
 6. Saved card, saved bank, one-time bank, and autopay disclosures match approved school policy.
-7. Parent processing recovery disclosure is approved before card recovery is enabled.
+7. The school-absorbed Stripe processing-cost policy is confirmed and no parent processing surcharge is configured.
 8. Refund, dispute, failed payment, duplicate payment, and support procedures are assigned.
 9. A low-risk billing smoke test has passed.
 10. Directors and billing users know who owns parent billing questions.

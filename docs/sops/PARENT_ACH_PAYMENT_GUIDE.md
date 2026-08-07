@@ -1,12 +1,12 @@
 # Parent Step-By-Step Guide: Card, Bank, And Autopay Payments
 
-Last updated: July 29, 2026
+Last updated: August 6, 2026
 
 Audience: parents and guardians paying tuition through The BEE Suite.
 
 ## Goal
 
-Choose the payment method that works for your family. The current portal presents debit/credit card first, followed by Instant Bank and One-Time Bank when the school enables those options. A school-approved card processing recovery may apply to card payments; the exact total is shown before submission.
+Choose the payment method that works for your family. The current portal presents debit/credit card first, followed by Instant Bank and One-Time Bank when the school enables those options. The school absorbs Stripe processing costs, so no processing fee is added to the parent payment. The exact total is shown before submission.
 
 Exact totals are always shown before you submit payment. Do not submit a payment if the amount or payment method looks wrong.
 
@@ -29,7 +29,7 @@ Card is presented first in the current parent payment flow.
 
 1. Open the parent portal or the secure payment request from your school.
 2. Choose `Save Debit/Credit Card` to save a method, or `Pay With Debit/Credit Card` to pay an open invoice.
-3. Review the family, invoice, amount, and any approved card processing recovery.
+3. Review the family, invoice, amount, payment method, and exact total. No processing fee is added to the parent payment.
 4. Continue to Stripe's secure card form.
 5. Enter the card details there, not in a BEE Suite message, email, note, or screenshot.
 6. Submit and wait for the confirmation screen.
@@ -82,9 +82,9 @@ If your portal shows `One-Time Bank` or `ACH`, use it when you want a bank payme
 
 ## When To Use A Card
 
-Use `Debit/Credit Card` when you choose that option and accept any disclosed card processing recovery.
+Use `Debit/Credit Card` when you choose that option and accept any disclosed school-absorbed processing cost policy.
 
-Card payments may be convenient, but they can cost more than bank payment. If the school has approved card processing recovery, the card total may include a separate recovery line before checkout.
+Card payments may be convenient, but they can cost more than bank payment. If the school has approved school-absorbed processing cost policy, the card total may include a separate recovery line before checkout.
 
 ## Autopay Status Meanings
 
@@ -109,7 +109,7 @@ Contact the school if:
 - Setup says pending for more than a few business days.
 - Your invoice still looks unpaid after a confirmed payment.
 - You chose the wrong payment method.
-- The checkout shows card recovery but you intended to use a bank option.
+- The checkout shows school-absorbed processing cost policy but you intended to use a bank option.
 - You see a family or invoice that is not yours.
 
 Include your name, child name, school, invoice number, payment method, time of attempt, and a screenshot if safe to share.

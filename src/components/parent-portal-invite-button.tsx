@@ -166,8 +166,9 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
           </Alert>
         ) : null}
         <p className="text-xs leading-5 text-muted-foreground">
-          Before creating access or contacting the parent, BEE Suite checks the completed ProCare batch, all four source reports,
-          unresolved rows, family-child links, guardian identity, email, and phone. Accepted email is tracked separately from confirmed delivery.
+          Before creating access or contacting the parent, BEE Suite checks the current school and family-child links, active or pending
+          enrollment, guardian identity, email, phone, and duplicate conflicts. Import history is diagnostic when present but is not required
+          for a safely entered current family. Accepted email is tracked separately from confirmed delivery.
         </p>
         <Button disabled={isPending || !email} onClick={() => submit("invitation")} className="w-full">
           <Send data-icon="inline-start" />

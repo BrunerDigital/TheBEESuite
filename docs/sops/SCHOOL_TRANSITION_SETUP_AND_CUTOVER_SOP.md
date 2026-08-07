@@ -1,6 +1,6 @@
 # School Transition Setup And Cutover SOP - The BEE Suite
 
-**Updated:** August 2, 2026  
+**Updated:** August 6, 2026  
 **Audience:** owners, directors, billing owners, and BEE Suite implementation support  
 **Purpose:** move one school from ProCare to The BEE Suite without duplicating tuition, skipping safety validation, or treating technical setup as launch approval.
 
@@ -71,7 +71,7 @@ If Stripe does not show both charges and payouts ready, parent checkout remains 
 
 The director validates the operational workspace before teachers, parents, or the lobby kiosk depend on it.
 
-1. Sign in at `https://thebeesuite.io/login` with the approved director account.
+1. Sign in at `https://thebeesuite.io/directors` with the approved director account.
 2. Confirm the correct school and role. Stop immediately if another school is visible.
 3. Verify the official school name, address, time zone, phone, email, hours, director contact, notification recipients, and parent-facing name.
 4. Verify every classroom name, age group, capacity, ratio, schedule, and active child assignment.
@@ -87,7 +87,7 @@ Parent invitations are a separate gate even when family data has been imported.
 
 1. Confirm the guardian email and phone number on the family profile.
 2. Confirm the guardian is linked to the correct family and children.
-3. Use only the approved `Parent Portal Access` invitation or resend action.
+3. Use only the approved `Parent Portal Access` invitation or resend action. A current, safely linked family can be invited without requiring a ProCare import batch; unresolved identity or relationship conflicts still block access.
 4. Do not send a broad invitation wave without the named school's approval.
 5. If invitations were already sent, review the completion record and any delivery failures or manual-copy fallbacks.
 6. Have an approved test parent sign in and verify family-only visibility before launch.
@@ -129,10 +129,10 @@ Billing configuration, live payments, and payouts are separate approvals.
 2. Reconcile opening balances, credits, open invoices, subsidies, fees, discounts, and recent payments with ProCare.
 3. Confirm the recurring tuition assignment for each child, including amount, plan, start week, due date, and enabled status.
 4. Confirm the family total equals the active per-child assignments.
-5. Confirm the last ProCare tuition cycle and first BEE Suite tuition cycle in writing.
+5. Confirm the last ProCare tuition cycle and first BEE Suite tuition cycle in writing. For four-week cadence, confirm every covered service week and the next unbilled period.
 6. Preview the first BEE Suite invoice cycle and review family count, child count, service period, amounts, exceptions, and duplicate risk.
 7. Confirm payout readiness for the exact school.
-8. Confirm the refund, failed-payment, dispute, duplicate-payment, reconciliation, and parent-support owners.
+8. Confirm the school absorbs Stripe processing costs, no parent processing surcharge is configured, and the refund, failed-payment, dispute, duplicate-payment, reconciliation, and parent-support owners are assigned.
 9. Use an approved test payment only when test authorization and the test record are documented.
 10. Record who will reconcile the first cycle and when the comparison will be completed.
 

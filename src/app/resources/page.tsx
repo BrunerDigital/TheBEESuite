@@ -246,16 +246,43 @@ const guides: ResourceGuide[] = [
     ],
     icon: ClipboardCheck,
     steps: [
-      "Begin each day by reviewing attendance, staff coverage, ratios, open messages, pending documents, and billing exceptions.",
-      "Process enrollment and registration tasks, including family profile completion and classroom placement.",
-      "Monitor classroom workflows for attendance, reports, incidents, and photo approvals where required.",
-      "Review billing readiness before invoices or autopay runs are processed.",
-      "Close the day by checking unresolved exceptions, pickup issues, and follow-up tasks.",
+      "Sign in at https://thebeesuite.io/directors and confirm the correct school before opening or changing records.",
+      "Use the Dashboard or School Operations > Enrollment status to search the current roster and export CSV or PDF, or print it.",
+      "Use Families & Communication for Families, Children, Messages, and Media review; use Add Family, Parent + Child for a new enrollment.",
+      "Confirm guardian email, phone, relationship, linked children, enrollment status, classroom, and safety notes before sending Parent Portal access.",
+      "Review the active per-child tuition breakdown and family total in Billing & Payments; withdrawn records stay in Past & Other review.",
+      "Monitor classroom attendance, daily reports, incidents, and photos throughout the school day.",
+      "Wait for saved or sent confirmation before repeating an action; reopen the specific record when fresh verification is needed.",
     ],
     visual: [
       { label: "Open", detail: "Attendance and staffing", icon: DoorOpen },
       { label: "Run", detail: "Enrollment and classroom flow", icon: GraduationCap },
       { label: "Close", detail: "Exceptions and follow-up", icon: CheckCircle2 },
+    ],
+  },
+  {
+    id: "director-parent-invites",
+    audience: "Directors and assistant directors",
+    title: "New Enrollment & Parent Invitations",
+    summary: "Add a new family safely, verify the guardian relationship, send or resend parent access, and understand delivery status.",
+    graphicSrc: "/brand/the-bee-suite/explainers/current/parent-access-install.png",
+    graphicAlt: "Current secure parent invitation, setup, and installation flow",
+    icon: Mail,
+    steps: [
+      "Open Families & Communication, choose Families, and use Add Family, Parent + Child for a new enrollment.",
+      "Confirm School / center. Enter the family, guardian, and child; leave Prior balance owed at cutover blank or 0 unless a verified pre-BEE Suite debt exists.",
+      "Save, reopen the family, and confirm the sticky school/family context, guardian relationship, personal email, phone, linked children, active or pending enrollment, classroom, and safety notes.",
+      "Scroll to Parent Portal Access, select the exact guardian, and choose Send Parent App Invite. A safely entered current family does not require a ProCare import batch.",
+      "Read the invitation result: Accepted means the email provider accepted it; Delivered confirms delivery; Failed or Expired needs follow-up.",
+      "If Copy Invitation for Manual Email appears, send that copy only from the approved school email account to the guardian email shown.",
+      "Use Resend Parent App Invite for an existing linked parent. The current password is preserved; the parent can choose Forgot password.",
+      "After the account is linked, Send Parent Feature Guide & FAQ may be used.",
+      "Stop if the wrong family or child appears, an identity is ambiguous, or the email belongs to conflicting guardians. Correct the existing record; do not create a duplicate.",
+    ],
+    visual: [
+      { label: "Verify", detail: "School, guardian, and child", icon: ShieldCheck },
+      { label: "Invite", detail: "Send from Parent Portal Access", icon: Mail },
+      { label: "Confirm", detail: "Accepted, delivered, or follow-up", icon: CheckCircle2 },
     ],
   },
   {
@@ -310,7 +337,7 @@ const guides: ResourceGuide[] = [
     icon: CreditCard,
     steps: [
       "Review school-scoped tuition plans, assigned child rates, discounts, balances, credits, failed payments, and upcoming autopay runs.",
-      "Confirm the Thursday schedule will create the following week's tuition invoice once and use the assigned child's canonical billing rate.",
+      "Confirm the weekly Thursday schedule or four-week cadence, the next unbilled service period, and the assigned child's canonical rate before invoices are created.",
       "Confirm family payment methods belong to the correct account; the parent flow presents card first while secure bank choices remain available.",
       "For an in-person card payment, use the school's connected Terminal location and network reader only while the parent is present.",
       "Reconcile invoices, Stripe events, ledger entries, and payout destination. Document exceptions, reversals, credits, and parent conversations.",
@@ -509,7 +536,7 @@ export default function ResourcesPage() {
                 SOPs and guides for every BEE Suite user.
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300">
-                Updated July 29, 2026. Use these guides for secure parent access, card and bank payments, independent school launch gates, daily operations, classroom workflows, billing, kiosk pickup, FTE reporting, and support escalation.
+                Updated August 6, 2026. Use these guides for secure parent access, card and bank payments, independent school launch gates, daily operations, classroom workflows, billing, kiosk pickup, FTE reporting, and support escalation.
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
                 <Button className="h-11 px-5" nativeButton={false} render={<Link href="#parent-portal-install" />}>

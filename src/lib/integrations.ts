@@ -9,6 +9,10 @@ import {
   isSecurePaymentUrl,
 } from "@/lib/payment-redirect-security";
 import { readStripeConnectAccountId } from "@/lib/stripe-connect-readiness";
+import {
+  calculateStripeSchoolProcessingFeeAmount,
+  type StripeSchoolProcessingFeeCategory,
+} from "@/lib/stripe-school-processing-fees";
 
 export type IntegrationSendResult = {
   ok: boolean;
@@ -32,7 +36,7 @@ const STRIPE_CONNECTED_ACCOUNT_INCLUDES = ["configuration.merchant", "configurat
 export const STRIPE_CHILD_CARE_MCC = "8351";
 export const STRIPE_KID_CITY_STATEMENT_DESCRIPTOR = "KID CITY USA";
 
-export type StripePaymentMethodCategory = "default" | "ach" | "card" | "link_bank";
+export type StripePaymentMethodCategory = StripeSchoolProcessingFeeCategory;
 export type StripeBankAccountVerificationMethod = "automatic" | "instant";
 
 export type StripeCheckoutFeePolicy = {
@@ -404,10 +408,15 @@ export function getStripeCheckoutAmounts(invoiceAmountCents: number, policy: Str
     safeInvoiceAmountCents,
     policy.waiveBeeSuitePaymentOperationsFee,
   );
+  const schoolProcessingFeeAmountCents = calculateStripeSchoolProcessingFeeAmount(
+    safeInvoiceAmountCents,
+    paymentMethodCategory,
+  );
   const checkoutTotalCents = safeInvoiceAmountCents + parentProcessingRecoveryAmountCents;
   const applicationFeeAmountCents = Math.min(
     getStripeApplicationFeeAmount(safeInvoiceAmountCents) +
       parentProcessingRecoveryAmountCents +
+      schoolProcessingFeeAmountCents +
       beeSuitePaymentOperationsFeeAmountCents,
     checkoutTotalCents,
   );
@@ -417,6 +426,7 @@ export function getStripeCheckoutAmounts(invoiceAmountCents: number, policy: Str
     paymentMethodCategory,
     parentSurchargeAmountCents: parentProcessingRecoveryAmountCents,
     parentProcessingRecoveryAmountCents,
+    schoolProcessingFeeAmountCents,
     beeSuitePaymentOperationsFeeAmountCents,
     checkoutTotalCents,
     applicationFeeAmountCents,

@@ -54,6 +54,7 @@ type StripeCheckoutSessionCompleted = {
     invoiceAmountCents?: string;
     parentSurchargeAmountCents?: string;
     parentProcessingRecoveryAmountCents?: string;
+    schoolProcessingFeeAmountCents?: string;
     beeSuitePaymentOperationsFeeAmountCents?: string;
     checkoutTotalCents?: string;
     applicationFeeAmountCents?: string;
@@ -100,6 +101,7 @@ type StripeMetadata = {
   stripeChargePrincipalCents?: string;
   parentSurchargeAmountCents?: string;
   parentProcessingRecoveryAmountCents?: string;
+  schoolProcessingFeeAmountCents?: string;
   beeSuitePaymentOperationsFeeAmountCents?: string;
   checkoutTotalCents?: string;
   applicationFeeAmountCents?: string;
@@ -546,6 +548,7 @@ async function handleFamilyBalancePaymentSucceeded(
             invoiceAmountCents: metadataCents(input.metadata.invoiceAmountCents) || null,
             parentSurchargeAmountCents: metadataCents(input.metadata.parentSurchargeAmountCents),
             parentProcessingRecoveryAmountCents: metadataCents(input.metadata.parentProcessingRecoveryAmountCents || input.metadata.parentSurchargeAmountCents),
+            schoolProcessingFeeAmountCents: metadataCents(input.metadata.schoolProcessingFeeAmountCents),
             beeSuitePaymentOperationsFeeAmountCents: metadataCents(input.metadata.beeSuitePaymentOperationsFeeAmountCents),
             checkoutTotalCents: metadataCents(input.metadata.checkoutTotalCents) || input.stripeAmountTotalCents || null,
             applicationFeeAmountCents: metadataCents(input.metadata.applicationFeeAmountCents),
@@ -584,6 +587,7 @@ async function handleFamilyBalancePaymentSucceeded(
             ...productPaymentMetadata(input.metadata),
             parentSurchargeAmountCents: metadataCents(input.metadata.parentSurchargeAmountCents),
             parentProcessingRecoveryAmountCents: metadataCents(input.metadata.parentProcessingRecoveryAmountCents || input.metadata.parentSurchargeAmountCents),
+            schoolProcessingFeeAmountCents: metadataCents(input.metadata.schoolProcessingFeeAmountCents),
             beeSuitePaymentOperationsFeeAmountCents: metadataCents(input.metadata.beeSuitePaymentOperationsFeeAmountCents),
             applicationFeeAmountCents: metadataCents(input.metadata.applicationFeeAmountCents),
           },
@@ -1291,6 +1295,7 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
             stripeChargePrincipalCents: currentPayment.amountCents,
             parentSurchargeAmountCents: Number(metadata.parentSurchargeAmountCents || 0) || 0,
             parentProcessingRecoveryAmountCents: Number(metadata.parentProcessingRecoveryAmountCents || metadata.parentSurchargeAmountCents || 0) || 0,
+            schoolProcessingFeeAmountCents: Number(metadata.schoolProcessingFeeAmountCents || 0) || 0,
             beeSuitePaymentOperationsFeeAmountCents: Number(metadata.beeSuitePaymentOperationsFeeAmountCents || 0) || 0,
             checkoutTotalCents: Number(metadata.checkoutTotalCents || paymentIntent.amount || 0) || null,
             applicationFeeAmountCents: Number(metadata.applicationFeeAmountCents || 0) || 0,
@@ -1324,6 +1329,7 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
             stripeChargePrincipalCents: currentPayment.amountCents,
             parentSurchargeAmountCents: Number(metadata.parentSurchargeAmountCents || 0) || 0,
             parentProcessingRecoveryAmountCents: Number(metadata.parentProcessingRecoveryAmountCents || metadata.parentSurchargeAmountCents || 0) || 0,
+            schoolProcessingFeeAmountCents: Number(metadata.schoolProcessingFeeAmountCents || 0) || 0,
             beeSuitePaymentOperationsFeeAmountCents: Number(metadata.beeSuitePaymentOperationsFeeAmountCents || 0) || 0,
             applicationFeeAmountCents: Number(metadata.applicationFeeAmountCents || 0) || 0,
           },
@@ -1834,6 +1840,7 @@ async function dispatchAuthenticatedEvent(event: StripeWebhookEvent, matchedTena
             invoiceAmountCents: Number(session.metadata?.invoiceAmountCents || 0) || null,
             parentSurchargeAmountCents: Number(session.metadata?.parentSurchargeAmountCents || 0) || 0,
             parentProcessingRecoveryAmountCents: Number(session.metadata?.parentProcessingRecoveryAmountCents || session.metadata?.parentSurchargeAmountCents || 0) || 0,
+            schoolProcessingFeeAmountCents: Number(session.metadata?.schoolProcessingFeeAmountCents || 0) || 0,
             beeSuitePaymentOperationsFeeAmountCents: Number(session.metadata?.beeSuitePaymentOperationsFeeAmountCents || 0) || 0,
             checkoutTotalCents: Number(session.metadata?.checkoutTotalCents || session.amount_total || 0) || null,
             applicationFeeAmountCents: Number(session.metadata?.applicationFeeAmountCents || 0) || 0,
@@ -1862,6 +1869,7 @@ async function dispatchAuthenticatedEvent(event: StripeWebhookEvent, matchedTena
             stripeAmountTotalCents: session.amount_total ?? null,
             parentSurchargeAmountCents: Number(session.metadata?.parentSurchargeAmountCents || 0) || 0,
             parentProcessingRecoveryAmountCents: Number(session.metadata?.parentProcessingRecoveryAmountCents || session.metadata?.parentSurchargeAmountCents || 0) || 0,
+            schoolProcessingFeeAmountCents: Number(session.metadata?.schoolProcessingFeeAmountCents || 0) || 0,
             beeSuitePaymentOperationsFeeAmountCents: Number(session.metadata?.beeSuitePaymentOperationsFeeAmountCents || 0) || 0,
             applicationFeeAmountCents: Number(session.metadata?.applicationFeeAmountCents || 0) || 0,
             ...productPaymentMetadata(session.metadata ?? {}),

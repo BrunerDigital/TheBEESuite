@@ -28,6 +28,8 @@ const reportOptions: Array<{ value: ReportKind; label: string }> = [
   { value: "lead_funnel", label: "Lead funnel" },
   { value: "attendance", label: "Attendance" },
   { value: "billing", label: "Billing/AR" },
+  { value: "weekly_billing", label: "Weekly Billing" },
+  { value: "weekly_payments", label: "Weekly Payments" },
   { value: "messages", label: "Messages" },
   { value: "staff_hours", label: "Staff hours" },
 ];
@@ -156,13 +158,26 @@ export function AnalyticsReportBuilder({
   }, [data.attendanceTrends, query]);
 
   const filteredBilling = useMemo(() => {
+    const billingRows = report === "weekly_billing"
+      ? data.weeklyBilling
+      : report === "weekly_payments"
+        ? data.weeklyPayments
+        : data.billing;
     const needle = query.trim().toLowerCase();
-    return data.billing.filter((row) =>
+    return billingRows.filter((row) =>
       !needle ||
       row.period.includes(needle) ||
       row.centerLabel.toLowerCase().includes(needle),
     );
-  }, [data.billing, query]);
+  }, [data.billing, data.weeklyBilling, data.weeklyPayments, query, report]);
+  const filteredBillingTotals = useMemo(() => filteredBilling.reduce((totals, row) => ({
+    invoiceCount: totals.invoiceCount + row.invoiceCount,
+    paymentCount: totals.paymentCount + row.paymentCount,
+    invoiceCents: totals.invoiceCents + row.invoiceCents,
+    paidCents: totals.paidCents + row.paidCents,
+    openCents: totals.openCents + row.openCents,
+    overdueCents: totals.overdueCents + row.overdueCents,
+  }), { invoiceCount: 0, paymentCount: 0, invoiceCents: 0, paidCents: 0, openCents: 0, overdueCents: 0 }), [filteredBilling]);
 
   const filteredMessages = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -207,7 +222,21 @@ export function AnalyticsReportBuilder({
           )}
           <p>Generated: {formatPrintDateTime(printGeneratedAt, timeZone)}</p>
         </header>
-        {report !== "enrollment_status" ? (
+        {report === "billing" || report === "weekly_billing" || report === "weekly_payments" ? (
+          <>
+            <h2>Summary</h2>
+            <table>
+              <tbody>
+                {report !== "weekly_payments" ? <tr><th>Invoices</th><td>{filteredBillingTotals.invoiceCount.toLocaleString()}</td></tr> : null}
+                {report !== "weekly_payments" ? <tr><th>Billed</th><td>{money(filteredBillingTotals.invoiceCents)}</td></tr> : null}
+                {report !== "weekly_billing" ? <tr><th>Payments</th><td>{filteredBillingTotals.paymentCount.toLocaleString()}</td></tr> : null}
+                {report !== "weekly_billing" ? <tr><th>Paid</th><td>{money(filteredBillingTotals.paidCents)}</td></tr> : null}
+                {report !== "weekly_payments" ? <tr><th>Open AR</th><td>{money(filteredBillingTotals.openCents)}</td></tr> : null}
+                {report !== "weekly_payments" ? <tr><th>Overdue AR</th><td>{money(filteredBillingTotals.overdueCents)}</td></tr> : null}
+              </tbody>
+            </table>
+          </>
+        ) : report !== "enrollment_status" ? (
           <>
             <h2>Summary</h2>
             <table>
@@ -338,6 +367,52 @@ export function AnalyticsReportBuilder({
                   </tr>
                 ))}
                 {!filteredBilling.length ? <tr><td colSpan={7}>No billing rows match the report filters.</td></tr> : null}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {report === "weekly_billing" ? (
+          <>
+            <h2>Weekly Billing</h2>
+            <table>
+              <thead>
+                <tr><th>Week</th><th>Center</th><th>Invoices</th><th>Billed</th><th>Open AR</th><th>Overdue</th></tr>
+              </thead>
+              <tbody>
+                {filteredBilling.map((row) => (
+                  <tr key={`${row.period}:${row.centerId}`}>
+                    <td>{row.period}</td>
+                    <td>{row.centerLabel}</td>
+                    <td>{row.invoiceCount}</td>
+                    <td>{money(row.invoiceCents)}</td>
+                    <td>{money(row.openCents)}</td>
+                    <td>{money(row.overdueCents)}</td>
+                  </tr>
+                ))}
+                {!filteredBilling.length ? <tr><td colSpan={6}>No weekly billing rows match the report filters.</td></tr> : null}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {report === "weekly_payments" ? (
+          <>
+            <h2>Weekly Payments</h2>
+            <table>
+              <thead>
+                <tr><th>Week</th><th>Center</th><th>Payments</th><th>Paid</th></tr>
+              </thead>
+              <tbody>
+                {filteredBilling.map((row) => (
+                  <tr key={`${row.period}:${row.centerId}`}>
+                    <td>{row.period}</td>
+                    <td>{row.centerLabel}</td>
+                    <td>{row.paymentCount}</td>
+                    <td>{money(row.paidCents)}</td>
+                  </tr>
+                ))}
+                {!filteredBilling.length ? <tr><td colSpan={4}>No weekly payment rows match the report filters.</td></tr> : null}
               </tbody>
             </table>
           </>
@@ -531,6 +606,8 @@ export function AnalyticsReportBuilder({
           <TabsTrigger value="lead_funnel"><TrendingUp data-icon="inline-start" />Lead funnel</TabsTrigger>
           <TabsTrigger value="attendance"><UsersRound data-icon="inline-start" />Attendance</TabsTrigger>
           <TabsTrigger value="billing"><ReceiptText data-icon="inline-start" />Billing/AR</TabsTrigger>
+          <TabsTrigger value="weekly_billing"><ReceiptText data-icon="inline-start" />Weekly billing</TabsTrigger>
+          <TabsTrigger value="weekly_payments"><ReceiptText data-icon="inline-start" />Weekly payments</TabsTrigger>
           <TabsTrigger value="messages"><MessageSquare data-icon="inline-start" />Messages</TabsTrigger>
           <TabsTrigger value="staff_hours"><Clock data-icon="inline-start" />Staff hours</TabsTrigger>
         </TabsList>
@@ -723,6 +800,48 @@ export function AnalyticsReportBuilder({
                   {!filteredBilling.length ? (
                     <TableRow><TableCell colSpan={7} className="text-muted-foreground">No billing rows match the report filters.</TableCell></TableRow>
                   ) : null}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="weekly_billing">
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>Weekly Billing</CardTitle>
+              <CardDescription>Invoices billed, open AR, and overdue AR by center for each Monday-Sunday week.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader><TableRow><TableHead>Week</TableHead><TableHead>Center</TableHead><TableHead>Invoices</TableHead><TableHead>Billed</TableHead><TableHead>Open AR</TableHead><TableHead>Overdue</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {filteredBilling.map((row) => (
+                    <TableRow key={`${row.period}:${row.centerId}`}>
+                      <TableCell>{row.period}</TableCell><TableCell>{row.centerLabel}</TableCell><TableCell>{row.invoiceCount}</TableCell><TableCell>{money(row.invoiceCents)}</TableCell><TableCell>{money(row.openCents)}</TableCell><TableCell>{money(row.overdueCents)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {!filteredBilling.length ? <TableRow><TableCell colSpan={6} className="text-muted-foreground">No weekly billing rows match the report filters.</TableCell></TableRow> : null}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="weekly_payments">
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>Weekly Payments</CardTitle>
+              <CardDescription>Successful payment count and collected amount by center for each Monday-Sunday week.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader><TableRow><TableHead>Week</TableHead><TableHead>Center</TableHead><TableHead>Payments</TableHead><TableHead>Paid</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {filteredBilling.map((row) => (
+                    <TableRow key={`${row.period}:${row.centerId}`}>
+                      <TableCell>{row.period}</TableCell><TableCell>{row.centerLabel}</TableCell><TableCell>{row.paymentCount}</TableCell><TableCell>{money(row.paidCents)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {!filteredBilling.length ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No weekly payment rows match the report filters.</TableCell></TableRow> : null}
                 </TableBody>
               </Table>
             </CardContent>

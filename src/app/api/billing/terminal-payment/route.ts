@@ -355,7 +355,7 @@ async function processPayment(body: Record<string, unknown>) {
     brandName: context.center.organization.brand?.name,
   });
   const amounts = getStripeCheckoutAmounts(amountCents, {
-    paymentMethodCategory: "card",
+    paymentMethodCategory: "card_present",
     waiveBeeSuitePaymentOperationsFee,
   });
   const description = clean(body.description) || "In-person tuition payment";
@@ -392,6 +392,7 @@ async function processPayment(body: Record<string, unknown>) {
     invoiceAmountCents: String(amounts.invoiceAmountCents),
     parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
     parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
+    schoolProcessingFeeAmountCents: String(amounts.schoolProcessingFeeAmountCents),
     beeSuitePaymentOperationsFeeAmountCents: String(amounts.beeSuitePaymentOperationsFeeAmountCents),
     beeSuitePaymentOperationsFeeWaived: String(waiveBeeSuitePaymentOperationsFee),
     requestedPaymentMethodCategory: "card_present",

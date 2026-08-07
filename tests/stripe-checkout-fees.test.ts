@@ -28,6 +28,18 @@ const managedEnvKeys = [
   "STRIPE_LINK_BANK_PROCESSING_RECOVERY_MAX_CENTS",
   "STRIPE_APPLICATION_FEE_BPS",
   "STRIPE_APPLICATION_FEE_FIXED_CENTS",
+  "STRIPE_SCHOOL_CARD_PROCESSING_FEE_BPS",
+  "STRIPE_SCHOOL_CARD_PROCESSING_FEE_FIXED_CENTS",
+  "STRIPE_SCHOOL_CARD_PROCESSING_FEE_MAX_CENTS",
+  "STRIPE_SCHOOL_ACH_PROCESSING_FEE_BPS",
+  "STRIPE_SCHOOL_ACH_PROCESSING_FEE_FIXED_CENTS",
+  "STRIPE_SCHOOL_ACH_PROCESSING_FEE_MAX_CENTS",
+  "STRIPE_SCHOOL_LINK_PROCESSING_FEE_BPS",
+  "STRIPE_SCHOOL_LINK_PROCESSING_FEE_FIXED_CENTS",
+  "STRIPE_SCHOOL_LINK_PROCESSING_FEE_MAX_CENTS",
+  "STRIPE_SCHOOL_CARD_PRESENT_PROCESSING_FEE_BPS",
+  "STRIPE_SCHOOL_CARD_PRESENT_PROCESSING_FEE_FIXED_CENTS",
+  "STRIPE_SCHOOL_CARD_PRESENT_PROCESSING_FEE_MAX_CENTS",
 ] as const;
 
 const originalEnv = Object.fromEntries(managedEnvKeys.map((key) => [key, process.env[key]]));
@@ -47,9 +59,10 @@ test("tuition checkout retains the school-paid 1 percent BEE Suite feature fee",
 
   assert.equal(amounts.invoiceAmountCents, 100_000);
   assert.equal(amounts.beeSuitePaymentOperationsFeeAmountCents, 1_000);
+  assert.equal(amounts.schoolProcessingFeeAmountCents, 500);
   assert.equal(amounts.parentProcessingRecoveryAmountCents, 0);
   assert.equal(amounts.checkoutTotalCents, 100_000);
-  assert.equal(amounts.applicationFeeAmountCents, 1_000);
+  assert.equal(amounts.applicationFeeAmountCents, 1_500);
 });
 
 test("card checkout charges only principal while the school pays Stripe costs and the 1 percent BEE Suite fee", () => {
@@ -61,9 +74,10 @@ test("card checkout charges only principal while the school pays Stripe costs an
 
   assert.equal(amounts.invoiceAmountCents, 100_000);
   assert.equal(amounts.beeSuitePaymentOperationsFeeAmountCents, 1_000);
+  assert.equal(amounts.schoolProcessingFeeAmountCents, 2_130);
   assert.equal(amounts.parentProcessingRecoveryAmountCents, 0);
   assert.equal(amounts.checkoutTotalCents, 100_000);
-  assert.equal(amounts.applicationFeeAmountCents, 1_000);
+  assert.equal(amounts.applicationFeeAmountCents, 3_130);
 });
 
 test("instant bank checkout ignores legacy link-bank recovery defaults", () => {
@@ -76,8 +90,9 @@ test("instant bank checkout ignores legacy link-bank recovery defaults", () => {
 
   assert.equal(amounts.invoiceAmountCents, 100_000);
   assert.equal(amounts.parentProcessingRecoveryAmountCents, 0);
+  assert.equal(amounts.schoolProcessingFeeAmountCents, 1_440);
   assert.equal(amounts.checkoutTotalCents, 100_000);
-  assert.equal(amounts.applicationFeeAmountCents, 1_000);
+  assert.equal(amounts.applicationFeeAmountCents, 2_440);
 });
 
 test("all payment methods ignore legacy parent recovery settings", () => {
@@ -110,8 +125,9 @@ test("the reported 45.60 scenario cannot add any parent processing fee", () => {
   const amounts = getStripeCheckoutAmounts(154_224, { paymentMethodCategory: "card" });
 
   assert.equal(amounts.parentProcessingRecoveryAmountCents, 0);
+  assert.equal(amounts.schoolProcessingFeeAmountCents, 3_269);
   assert.equal(amounts.checkoutTotalCents, 154_224);
-  assert.equal(amounts.applicationFeeAmountCents, 1_542);
+  assert.equal(amounts.applicationFeeAmountCents, 4_811);
 });
 
 test("no tenant location brand or caller can waive the platform-wide fee policy", () => {
@@ -131,9 +147,10 @@ test("no tenant location brand or caller can waive the platform-wide fee policy"
       waiveBeeSuitePaymentOperationsFee: true,
     });
     assert.equal(card.parentProcessingRecoveryAmountCents, 0);
+    assert.equal(card.schoolProcessingFeeAmountCents, 2_130);
     assert.equal(card.beeSuitePaymentOperationsFeeAmountCents, 1_000);
     assert.equal(card.checkoutTotalCents, 100_000);
-    assert.equal(card.applicationFeeAmountCents, 1_000);
+    assert.equal(card.applicationFeeAmountCents, 3_130);
   }
 });
 
@@ -144,6 +161,33 @@ test("legacy application fee settings cannot stack on top of the one percent BEE
 
   const amounts = getStripeCheckoutAmounts(100_000, { paymentMethodCategory: "card" });
   assert.equal(amounts.parentProcessingRecoveryAmountCents, 0);
+  assert.equal(amounts.schoolProcessingFeeAmountCents, 2_130);
   assert.equal(amounts.beeSuitePaymentOperationsFeeAmountCents, 1_000);
-  assert.equal(amounts.applicationFeeAmountCents, 1_000);
+  assert.equal(amounts.applicationFeeAmountCents, 3_130);
+});
+
+test("school processing allocation follows configurable processor pricing without changing parent principal", () => {
+  for (const key of managedEnvKeys) delete process.env[key];
+  process.env.STRIPE_SCHOOL_CARD_PROCESSING_FEE_BPS = "225";
+  process.env.STRIPE_SCHOOL_CARD_PROCESSING_FEE_FIXED_CENTS = "25";
+
+  const amounts = getStripeCheckoutAmounts(20_000, { paymentMethodCategory: "card" });
+
+  assert.equal(amounts.invoiceAmountCents, 20_000);
+  assert.equal(amounts.checkoutTotalCents, 20_000);
+  assert.equal(amounts.parentProcessingRecoveryAmountCents, 0);
+  assert.equal(amounts.schoolProcessingFeeAmountCents, 475);
+  assert.equal(amounts.beeSuitePaymentOperationsFeeAmountCents, 200);
+  assert.equal(amounts.applicationFeeAmountCents, 675);
+});
+
+test("card-present payments use their own processor rate", () => {
+  for (const key of managedEnvKeys) delete process.env[key];
+
+  const amounts = getStripeCheckoutAmounts(10_000, { paymentMethodCategory: "card_present" });
+
+  assert.equal(amounts.checkoutTotalCents, 10_000);
+  assert.equal(amounts.schoolProcessingFeeAmountCents, 275);
+  assert.equal(amounts.beeSuitePaymentOperationsFeeAmountCents, 100);
+  assert.equal(amounts.applicationFeeAmountCents, 375);
 });

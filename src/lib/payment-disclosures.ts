@@ -1,6 +1,6 @@
 export const PAYMENT_PROCESSING_RECOVERY_LABEL = "School-paid processing";
 
-export const PAYMENT_PROCESSING_RECOVERY_VERSION = "school-paid-processing-2026-08-04-v1";
+export const PAYMENT_PROCESSING_RECOVERY_VERSION = "school-paid-processing-2026-08-06-v2";
 
 export const PAYMENT_PROCESSING_RECOVERY_DISCLOSURE =
   "Schools absorb Stripe processing costs. Parents are charged only the eligible parent-responsible amount, with no added processing, convenience, service, platform, or application fee.";

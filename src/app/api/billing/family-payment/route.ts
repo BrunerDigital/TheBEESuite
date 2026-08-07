@@ -461,6 +461,7 @@ async function POSTHandler(request: NextRequest) {
     invoiceAmountCents: String(amounts.invoiceAmountCents),
     parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
     parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
+    schoolProcessingFeeAmountCents: String(amounts.schoolProcessingFeeAmountCents),
     beeSuitePaymentOperationsFeeAmountCents: String(amounts.beeSuitePaymentOperationsFeeAmountCents),
     beeSuitePaymentOperationsFeeWaived: String(waiveBeeSuitePaymentOperationsFee),
     requestedPaymentMethodCategory,

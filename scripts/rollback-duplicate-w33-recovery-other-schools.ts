@@ -134,12 +134,15 @@ async function loadState() {
       prior = candidates[0];
     }
 
+    const centerId = invoice.billingAccount.family.centerId;
+    invariant(centerId === LONGMONT_ID || centerId === CORDERA_ID, `${invoice.number} is outside the guarded school scope.`);
+
     return {
       id: invoice.id,
       number: invoice.number,
       status: invoice.status,
       totalCents: invoice.totalCents,
-      centerId: invoice.billingAccount.family.centerId,
+      centerId,
       familyId: invoice.billingAccount.family.id,
       familyName: invoice.billingAccount.family.name,
       billingAccountId: invoice.billingAccount.id,

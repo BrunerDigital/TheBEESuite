@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { getPasswordResetRedirectUrl, requestSupabasePasswordReset } from "@/lib/supabase-auth";
+import {
+  classifyPasswordResetProviderResponse,
+  passwordResetEmailCooldownKey,
+  passwordResetIpVolumeKey,
+} from "@/lib/password-reset-provider-response";
 
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -22,14 +27,26 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Enter a valid email address." }, { status: 400 });
   }
 
-  const rate = await checkPersistentRateLimit({
-    key: `forgot-password:${requestIp(request.headers)}:${email}`,
-    limit: 5,
-    windowMs: 15 * 60 * 1000,
-  });
+  const ip = requestIp(request.headers);
+  const [emailRate, ipRate] = await Promise.all([
+    checkPersistentRateLimit({
+      // Keep the cooldown address-wide (not IP + address) so changing clients
+      // cannot turn Supabase's per-user cooldown into an enumeration signal.
+      // Persist only a fingerprint, never the submitted email.
+      key: passwordResetEmailCooldownKey(email),
+      limit: 1,
+      windowMs: 60 * 1000,
+    }),
+    checkPersistentRateLimit({
+      key: passwordResetIpVolumeKey(ip),
+      limit: 20,
+      windowMs: 15 * 60 * 1000,
+    }),
+  ]);
+  const rate = !emailRate.ok ? emailRate : ipRate;
   if (!rate.ok) {
     return NextResponse.json(
-      { ok: false, error: "Too many reset requests. Please try again shortly." },
+      { ok: false, error: "Please wait about a minute before requesting another reset email." },
       { status: 429, headers: { "Retry-After": String(retryAfterSeconds(rate.resetAt)) } },
     );
   }
@@ -38,15 +55,41 @@ async function POSTHandler(request: NextRequest) {
 
   try {
     const response = await requestSupabasePasswordReset(email, redirectTo);
+    const outcome = classifyPasswordResetProviderResponse(response);
 
-    if (!response.ok) {
-      logOperationalError("auth.forgot_password.supabase_request_failed", null, { status: response.status });
+    if (outcome.kind === "temporary_failure") {
+      logOperationalError("auth.forgot_password.provider_temporary_failure", null, {
+        provider: "supabase_auth",
+        status: outcome.providerStatus,
+        providerStatus: outcome.providerStatus,
+        retryAfterSeconds: outcome.retryAfterSeconds,
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Password reset email is temporarily unavailable. Please wait a minute and try again.",
+        },
+        {
+          status: 503,
+          headers: { "Retry-After": String(outcome.retryAfterSeconds) },
+        },
+      );
+    }
+
+    if (outcome.kind === "privacy_safe_non_success") {
+      logOperationalError("auth.forgot_password.provider_non_success", null, {
+        provider: "supabase_auth",
+        providerStatus: outcome.providerStatus,
+      });
     }
   } catch (error) {
     logOperationalError("auth.forgot_password.supabase_request_error", error);
     return NextResponse.json(
-      { ok: false, error: "Password reset email service is not configured yet." },
-      { status: 503 },
+      {
+        ok: false,
+        error: "Password reset email is temporarily unavailable. Please wait a minute and try again.",
+      },
+      { status: 503, headers: { "Retry-After": "60" } },
     );
   }
 

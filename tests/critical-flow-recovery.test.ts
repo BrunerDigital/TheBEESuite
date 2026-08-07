@@ -21,6 +21,7 @@ test("login and password recovery preserve controlled input when services are un
   const login = readFileSync("src/components/login-form.tsx", "utf8");
   const forgot = readFileSync("src/components/forgot-password-form.tsx", "utf8");
   const reset = readFileSync("src/components/reset-password-form.tsx", "utf8");
+  const forgotRoute = readFileSync("src/app/api/auth/forgot-password/route.ts", "utf8");
 
   assert.match(login, /value=\{email\}/);
   assert.match(login, /could not reach the sign-in service/i);
@@ -32,7 +33,18 @@ test("login and password recovery preserve controlled input when services are un
   assert.match(reset, /linkStatus === "ready"/);
   assert.match(reset, /Reset link unavailable/);
   assert.match(reset, /Request one fresh reset link/);
+  assert.match(reset, /addEventListener\("hashchange", resolveCurrentRecoveryState\)/);
+  assert.match(reset, /removeEventListener\("hashchange", resolveCurrentRecoveryState\)/);
+  assert.match(reset, /passwordRecoveryUrlWithoutSecrets\(window\.location\.href\)/);
   assert.match(forgot, /Use only the newest email/i);
+  assert.match(forgotRoute, /classifyPasswordResetProviderResponse/);
+  assert.match(forgotRoute, /provider_temporary_failure/);
+  assert.match(forgotRoute, /status:\s*503/);
+  assert.match(forgotRoute, /providerStatus/);
+  assert.match(forgotRoute, /passwordResetEmailCooldownKey\(email\)/);
+  assert.match(forgotRoute, /passwordResetIpVolumeKey\(ip\)/);
+  assert.doesNotMatch(forgotRoute, /forgot-password:\$\{[^}]*email/);
+  assert.doesNotMatch(forgotRoute, /metadata:[^\n]*(email|recipient)/i);
 });
 
 test("payment return states cover expiry, cancellation, failure, retry, and confirmation", () => {

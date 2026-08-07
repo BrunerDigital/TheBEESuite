@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PaymentStatus } from "@prisma/client";
 import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
 import {
   billingDedupeKey,
@@ -14,10 +15,13 @@ import {
   weeklyTuitionChargeDateForPeriod,
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { normalizeTuitionCredits, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
+
+const TUITION_INVOICE_TRANSACTION_CONCURRENCY = 5;
 
 function authorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -42,6 +46,9 @@ async function GETHandler(request: NextRequest) {
   }
 
   const dryRun = request.nextUrl.searchParams.get("dryRun") === "1";
+  const suppressAutopay = request.nextUrl.searchParams.get("suppressAutopay") === "1";
+  const requestedCadence = clean(request.nextUrl.searchParams.get("cadence")).toLowerCase();
+  const cadenceScope = ["weekly", "four_week", "monthly"].includes(requestedCadence) ? requestedCadence : null;
   const asOfParam = request.nextUrl.searchParams.get("asOf");
   const asOf = asOfParam ? new Date(asOfParam) : new Date();
   const safeAsOf = Number.isNaN(asOf.getTime()) ? new Date() : asOf;
@@ -59,6 +66,7 @@ async function GETHandler(request: NextRequest) {
 
   const assignedChildren = await prisma.child.findMany({
     where: {
+      ...currentlyEnrolledChildWhere(),
       customFields: { path: ["tuitionBillingEnabled"], equals: true },
       family: { is: { centerId: { in: openCenterIds } } },
     },
@@ -95,6 +103,7 @@ async function GETHandler(request: NextRequest) {
     const plan = plansById.get(entry.planId);
     if (!plan || plan.centerId !== entry.child.family.centerId) return [];
     const cadence = normalizeBillingCadence(entry.fields.tuitionBillingCadence ?? plan?.cadence ?? entry.fields.tuitionPlanCadence);
+    if (cadenceScope && cadence !== cadenceScope) return [];
     const billingPeriod = cadence === "weekly" || cadence === "four_week" ? weeklyBillingPeriod : monthlyBillingPeriod;
     const startsPeriod = defaultRecurringBillingPeriod(clean(entry.fields.tuitionBillingStartsPeriod) || billingPeriod, safeAsOf, cadence);
     const billingDay = cadence === "weekly" || cadence === "four_week"
@@ -118,15 +127,12 @@ async function GETHandler(request: NextRequest) {
   let skipped = 0;
   let totalCents = 0;
   const invoices: Array<{ id: string; number: string; totalCents: number; childId: string; familyId: string }> = [];
+  const failures: Array<{ childId: string; familyId: string; error: string }> = [];
 
   if (!dryRun && dueChildren.length) {
-    const result = await prisma.$transaction(async (tx) => {
-      let transactionCreated = 0;
-      let transactionSkipped = 0;
-      let transactionTotalCents = 0;
-      const transactionInvoices: typeof invoices = [];
-
-      for (const entry of dueChildren) {
+    for (let index = 0; index < dueChildren.length; index += TUITION_INVOICE_TRANSACTION_CONCURRENCY) {
+      const batch = dueChildren.slice(index, index + TUITION_INVOICE_TRANSACTION_CONCURRENCY);
+      const results = await Promise.allSettled(batch.map(async (entry) => {
         const plan = plansById.get(entry.planId);
         const description = clean(entry.fields.tuitionBillingDescription) || plan?.name || clean(entry.fields.tuitionPlanName) || "Tuition";
         const amountCents = plan?.amountCents ?? entry.snapshotAmountCents;
@@ -150,62 +156,95 @@ async function GETHandler(request: NextRequest) {
         const lineDescription = `${description} - ${entry.child.fullName}${invoiceWeekCount === 4 ? " (4 weeks ahead)" : ""}`;
         const invoiceItems = tuitionInvoiceItems({ description: lineDescription, grossAmountCents: amountCents, credits: tuitionCredits })
           .map((item) => ({ ...item, amountCents: item.amountCents * invoiceWeekCount }));
-        const invoice = await createBillingInvoiceForFamily(tx, {
-          familyId: entry.child.familyId,
-          dueDate,
-          description: lineDescription,
-          items: invoiceItems,
-          customFields: {
-            mode: "recurring",
-            billingPeriod: entry.billingPeriod,
-            billingCadence: entry.cadence,
-            scheduledChargeDate: dueDate.toISOString(),
-            centerId: entry.child.family.centerId,
-            childId: entry.child.id,
-            childName: entry.child.fullName,
-            chargeSource: "tuitionPlan",
-            sourceId: entry.planId,
-            tuitionPlanName: (plan?.name ?? clean(entry.fields.tuitionPlanName)) || null,
-            tuitionPlanCadence: (plan?.cadence ?? clean(entry.fields.tuitionPlanCadence)) || entry.cadence,
-            invoiceWeekCount,
-            coverageStartsPeriod: entry.billingPeriod,
-            grossTuitionCents: amountCents * invoiceWeekCount,
-            tuitionCredits,
-            tuitionCreditsTotalCents: tuitionCreditsTotalCents * invoiceWeekCount,
-            netTuitionCents: (amountCents - tuitionCreditsTotalCents) * invoiceWeekCount,
-            dedupeKey,
-          },
-        });
 
-        if (invoice.created) {
-          transactionCreated += 1;
-          transactionTotalCents += invoice.totalCents;
-        } else {
-          transactionSkipped += 1;
+        const invoice = await prisma.$transaction(async (tx) => {
+          const equivalentInvoice = await tx.invoice.findFirst({
+            where: {
+              status: { not: PaymentStatus.VOID },
+              billingAccount: { familyId: entry.child.familyId },
+              AND: [
+                { customFields: { path: ["billingPeriod"], equals: entry.billingPeriod } },
+                { customFields: { path: ["childId"], equals: entry.child.id } },
+                { customFields: { path: ["chargeSource"], equals: "tuitionPlan" } },
+              ],
+            },
+            select: { id: true, number: true, totalCents: true },
+          });
+          if (equivalentInvoice) {
+            return { invoice: equivalentInvoice, created: false as const, totalCents: 0 };
+          }
+
+          return createBillingInvoiceForFamily(tx, {
+            familyId: entry.child.familyId,
+            dueDate,
+            description: lineDescription,
+            items: invoiceItems,
+            customFields: {
+              mode: "recurring",
+              billingPeriod: entry.billingPeriod,
+              billingCadence: entry.cadence,
+              scheduledChargeDate: dueDate.toISOString(),
+              centerId: entry.child.family.centerId,
+              childId: entry.child.id,
+              childName: entry.child.fullName,
+              chargeSource: "tuitionPlan",
+              sourceId: entry.planId,
+              tuitionPlanName: (plan?.name ?? clean(entry.fields.tuitionPlanName)) || null,
+              tuitionPlanCadence: (plan?.cadence ?? clean(entry.fields.tuitionPlanCadence)) || entry.cadence,
+              invoiceWeekCount,
+              coverageStartsPeriod: entry.billingPeriod,
+              grossTuitionCents: amountCents * invoiceWeekCount,
+              tuitionCredits,
+              tuitionCreditsTotalCents: tuitionCreditsTotalCents * invoiceWeekCount,
+              netTuitionCents: (amountCents - tuitionCreditsTotalCents) * invoiceWeekCount,
+              dedupeKey,
+              ...(suppressAutopay ? {
+                autopaySuppressed: true,
+                autopaySuppressedReason: "weekly_tuition_recovery_review",
+                noPaymentSubmitted: true,
+              } : {}),
+            },
+          });
+        },
+          { maxWait: 10_000, timeout: 30_000 },
+        );
+
+        return {
+          created: invoice.created ? 1 : 0,
+          skipped: invoice.created ? 0 : 1,
+          totalCents: invoice.totalCents,
+          invoice: {
+            ...invoice.invoice,
+            childId: entry.child.id,
+            familyId: entry.child.familyId,
+          },
+        };
+      }));
+
+      for (const [batchIndex, result] of results.entries()) {
+        if (result.status === "fulfilled") {
+          created += result.value.created;
+          skipped += result.value.skipped;
+          totalCents += result.value.totalCents;
+          invoices.push(result.value.invoice);
+          continue;
         }
-        transactionInvoices.push({
-          ...invoice.invoice,
+
+        const entry = batch[batchIndex];
+        failures.push({
           childId: entry.child.id,
           familyId: entry.child.familyId,
+          error: result.reason instanceof Error ? result.reason.message.slice(0, 500) : "Recurring tuition invoice failed.",
         });
       }
-
-      return {
-        created: transactionCreated,
-        skipped: transactionSkipped,
-        totalCents: transactionTotalCents,
-        invoices: transactionInvoices,
-      };
-    });
-    created = result.created;
-    skipped = result.skipped;
-    totalCents = result.totalCents;
-    invoices.push(...result.invoices);
+    }
   }
 
   return NextResponse.json({
-    ok: true,
+    ok: failures.length === 0,
     dryRun,
+    cadenceScope,
+    suppressAutopay,
     asOf: safeAsOf.toISOString(),
     billingPeriod: monthlyBillingPeriod,
     monthlyBillingPeriod,
@@ -214,10 +253,12 @@ async function GETHandler(request: NextRequest) {
     dueChildren: dueChildren.length,
     created,
     skipped: dryRun ? 0 : skipped,
+    failed: failures.length,
     wouldCreate: dryRun ? dueChildren.length : 0,
     totalCents,
     invoices,
-  });
+    failures,
+  }, { status: failures.length ? 500 : 200 });
 }
 
 export const GET = withApiLogging("GET", GETHandler);

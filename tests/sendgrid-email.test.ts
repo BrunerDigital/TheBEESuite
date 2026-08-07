@@ -77,12 +77,14 @@ test("SendGrid email helper falls back to platform credentials when tenant key i
   const originalApiKey = process.env.SENDGRID_API_KEY;
   const originalFrom = process.env.SENDGRID_FROM_EMAIL;
   const originalFallback = process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK;
+  const originalForcePlatform = process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS;
   const authorizations: string[] = [];
   const fromEmails: string[] = [];
 
   process.env.SENDGRID_API_KEY = "SG.platform";
   process.env.SENDGRID_FROM_EMAIL = "noreply@thebeesuite.io";
   process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK = "true";
+  delete process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS;
   globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
     authorizations.push(String((init?.headers as Record<string, string> | undefined)?.Authorization ?? ""));
     const payload = JSON.parse(String(init?.body)) as { from?: { email?: string } };
@@ -119,6 +121,8 @@ test("SendGrid email helper falls back to platform credentials when tenant key i
     else process.env.SENDGRID_FROM_EMAIL = originalFrom;
     if (originalFallback === undefined) delete process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK;
     else process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK = originalFallback;
+    if (originalForcePlatform === undefined) delete process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS;
+    else process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS = originalForcePlatform;
   }
 });
 
@@ -175,10 +179,12 @@ test("SendGrid tenant credential failures fail closed unless platform fallback i
   const originalApiKey = process.env.SENDGRID_API_KEY;
   const originalFrom = process.env.SENDGRID_FROM_EMAIL;
   const originalFallback = process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK;
+  const originalForcePlatform = process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS;
   const authorizations: string[] = [];
   process.env.SENDGRID_API_KEY = "SG.platform";
   process.env.SENDGRID_FROM_EMAIL = "noreply@thebeesuite.io";
   delete process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK;
+  delete process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS;
   globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
     authorizations.push(String((init?.headers as Record<string, string> | undefined)?.Authorization ?? ""));
     return new Response(null, { status: 401 });
@@ -195,5 +201,6 @@ test("SendGrid tenant credential failures fail closed unless platform fallback i
     if (originalApiKey === undefined) delete process.env.SENDGRID_API_KEY; else process.env.SENDGRID_API_KEY = originalApiKey;
     if (originalFrom === undefined) delete process.env.SENDGRID_FROM_EMAIL; else process.env.SENDGRID_FROM_EMAIL = originalFrom;
     if (originalFallback === undefined) delete process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK; else process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK = originalFallback;
+    if (originalForcePlatform === undefined) delete process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS; else process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS = originalForcePlatform;
   }
 });

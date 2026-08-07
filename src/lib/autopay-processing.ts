@@ -290,6 +290,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
   for (const invoice of invoices) {
     const family = invoice.billingAccount.family;
     const center = family.centerId ? centersById.get(family.centerId) : null;
+    const invoiceFields = jsonRecord(invoice.customFields);
     let baseResult = {
       invoiceId: invoice.id,
       invoiceNumber: invoice.number,
@@ -303,6 +304,15 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       paymentId: null,
       stripePaymentIntentId: null,
     };
+
+    if (collectionMode === "autopay" && invoiceFields.autopaySuppressed === true) {
+      results.push({
+        ...baseResult,
+        status: "skipped",
+        reason: "Automatic collection is paused for this recovery invoice pending billing review.",
+      });
+      continue;
+    }
 
     if (blockedBillingAccountIds.has(invoice.billingAccountId)) {
       results.push({

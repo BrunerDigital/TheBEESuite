@@ -75,3 +75,23 @@ test("parent checkout cannot charge a negative or agency-only balance", () => {
     ],
   }), 0);
 });
+
+test("a parent can choose an account payment while the agency split is under review", () => {
+  assert.equal(parentPaymentAmountCents({
+    accountBalanceCents: 50_000,
+    agencyLedgerEntries: [],
+    requestedAmountCents: 7_500,
+    responsibilityReviewRequired: true,
+  }), 7_500);
+  assert.equal(parentPaymentAmountCents({
+    accountBalanceCents: 50_000,
+    agencyLedgerEntries: [],
+    requestedAmountCents: 75_000,
+    responsibilityReviewRequired: true,
+  }), 50_000);
+  assert.equal(parentPaymentAmountCents({
+    accountBalanceCents: 50_000,
+    agencyLedgerEntries: [],
+    responsibilityReviewRequired: true,
+  }), 0);
+});

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  buildBillingReports,
   buildEnrollmentStatusReportRows,
   childAgeInMonths,
   normalizeReportFilters,
@@ -48,6 +49,8 @@ const emptyReportData: AnalyticsReportData = {
   funnelStages: [{ stage: "ENROLLED", count: 3, share: 30 }],
   attendanceTrends: [],
   billing: [],
+  weeklyBilling: [],
+  weeklyPayments: [],
   messages: [],
   staffHours: [
     {
@@ -88,6 +91,61 @@ const emptyReportData: AnalyticsReportData = {
     currentEnrollmentCount: 1,
   },
 };
+
+test("weekly billing and payment rows use Monday-Sunday center-local periods", () => {
+  const centerById = new Map([["center_1", emptyReportData.centers[0]]]);
+  const rows = buildBillingReports({
+    invoices: [
+      {
+        createdAt: new Date("2026-06-08T03:30:00.000Z"),
+        dueDate: new Date("2026-06-10T12:00:00.000Z"),
+        status: "OPEN",
+        totalCents: 12500,
+        billingAccount: { family: { centerId: "center_1" } },
+      },
+    ],
+    payments: [
+      {
+        paidAt: new Date("2026-06-08T14:00:00.000Z"),
+        status: "PAID",
+        amountCents: 5000,
+        billingAccount: { family: { centerId: "center_1" } },
+      },
+    ],
+    centerById,
+    interval: "weekly",
+    now: new Date("2026-06-11T12:00:00.000Z"),
+  });
+
+  assert.deepEqual(rows.map((row) => [row.period, row.invoiceCount, row.paymentCount]), [
+    ["2026-06-08 to 2026-06-14", 0, 1],
+    ["2026-06-01 to 2026-06-07", 1, 0],
+  ]);
+});
+
+test("weekly billing and payment exports stay separate", () => {
+  const weeklyRow = {
+    period: "2026-06-01 to 2026-06-07",
+    centerId: "center_1",
+    centerLabel: "FL | Tampa",
+    invoiceCents: 12500,
+    paidCents: 5000,
+    openCents: 7500,
+    overdueCents: 0,
+    invoiceCount: 2,
+    paymentCount: 1,
+  };
+  const data = { ...emptyReportData, weeklyBilling: [weeklyRow], weeklyPayments: [weeklyRow] };
+
+  const billingCsv = reportRowsToCsv(rowsForReportKind(data, "weekly_billing"));
+  const paymentCsv = reportRowsToCsv(rowsForReportKind(data, "weekly_payments"));
+  assert.match(billingCsv, /Weekly Billing Report/);
+  assert.match(billingCsv, /"Invoices","Billed","Open AR","Overdue AR"/);
+  assert.doesNotMatch(billingCsv, /Payments,Paid/);
+  assert.match(paymentCsv, /Weekly Payment Report/);
+  assert.match(paymentCsv, /"Payments","Paid"/);
+  assert.doesNotMatch(paymentCsv, /Open AR/);
+});
 
 test("enrollment status rows calculate age as of the report date and retain missing DOB exceptions", () => {
   const centerById = new Map([["center_1", emptyReportData.centers[0]]]);

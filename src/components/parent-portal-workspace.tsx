@@ -535,7 +535,9 @@ export function ParentPortalWorkspace({
   );
   const firstPendingOpenInvoice = pendingOpenInvoices[0] ?? null;
   const accountPaymentAmountCents = paymentAmountCents(accountPaymentAmountDollars);
-  const showFamilyPaymentPanel = parentBalanceReviewRequired || Boolean(nextOpenInvoice);
+  const showFamilyPaymentPanel = parentBalanceReviewRequired
+    || Boolean(nextOpenInvoice)
+    || (balanceCents > 0 && openInvoices.length === 0);
   const latestAccountLedgerEntry = latestLedgerEntry ?? ledgerEntries[0] ?? null;
   const parentVisiblePayments = payments.filter(isParentVisiblePayment);
   const paymentMethodManagement = billingAccount?.paymentMethodManagement;
@@ -784,7 +786,9 @@ export function ParentPortalWorkspace({
   }
 
   function payBalance(paymentMethodCategory: "ach" | "card" | "link_bank") {
-    if (!nextOpenInvoice && !parentBalanceReviewRequired) return showError("There is no open invoice to pay.");
+    if (!nextOpenInvoice && balanceCents <= 0 && !parentBalanceReviewRequired) {
+      return showError("There is no family balance to pay.");
+    }
     payFamilyBalance(paymentMethodCategory);
   }
 
@@ -1620,7 +1624,9 @@ export function ParentPortalWorkspace({
                     <div className="font-medium">
                       {parentBalanceReviewRequired
                         ? "Choose the amount you want credited to your family account."
-                        : <>Family balance {money(balanceCents)} · {nextOpenInvoice?.number} due {formatDate(nextOpenInvoice?.dueDate ?? null)}</>}
+                        : nextOpenInvoice
+                          ? <>Family balance {money(balanceCents)} · {nextOpenInvoice.number} due {formatDate(nextOpenInvoice.dueDate)}</>
+                          : <>Family balance {money(balanceCents)} · available for secure account payment</>}
                     </div>
                   </div>
                   {parentBalanceReviewRequired ? (

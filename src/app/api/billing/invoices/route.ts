@@ -615,6 +615,79 @@ async function createManualCheckPayment(user: CurrentBillingUser, body: Record<s
   return NextResponse.json({ ok: true, totalCents: amountCents, payment: result.payment, entry: result.entry });
 }
 
+async function createManualCashPayment(user: CurrentBillingUser, body: Record<string, unknown>) {
+  const familyAccess = await assertFamilyAccess(user, clean(body.familyId));
+  if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
+  const amountCents = amountCentsFromBody(body);
+  if (amountCents <= 0) return NextResponse.json({ ok: false, error: "Cash payment amount is required." }, { status: 400 });
+  const paidAt = parseDate(body.paidAt);
+  const reference = clean(body.reference);
+  const notes = clean(body.notes);
+  const description = clean(body.description) || "Cash payment";
+
+  const result = await prisma.$transaction(async (tx) => {
+    const account = await tx.billingAccount.upsert({
+      where: { familyId: familyAccess.family.id },
+      update: {},
+      create: { familyId: familyAccess.family.id, balanceCents: 0 },
+    });
+    const payment = await tx.payment.create({
+      data: {
+        billingAccountId: account.id,
+        amountCents,
+        status: PaymentStatus.PAID,
+        provider: "manual_cash",
+        externalIdPlaceholder: `cash:${randomUUID()}`,
+        paidAt,
+        customFields: {
+          paymentType: "manual_cash",
+          reference: reference || null,
+          notes: notes || null,
+          enteredBy: user.email,
+          familyId: familyAccess.family.id,
+          centerId: familyAccess.centerId,
+        },
+      },
+    });
+    const updatedAccount = await tx.billingAccount.update({
+      where: { id: account.id },
+      data: { balanceCents: { decrement: amountCents } },
+    });
+    const entry = await tx.ledgerEntry.create({
+      data: {
+        billingAccountId: account.id,
+        paymentId: payment.id,
+        type: "cash_payment",
+        description,
+        amountCents: -amountCents,
+        balanceAfterCents: updatedAccount.balanceCents,
+        effectiveAt: paidAt,
+        sourceSystem: "bee_suite_manual_cash",
+        externalId: `cash:${payment.id}`,
+        metadata: {
+          reference: reference || null,
+          notes: notes || null,
+          enteredBy: user.email,
+        },
+      },
+    });
+    return { payment, entry };
+  });
+
+  await writeAuditLog(user, {
+    centerId: familyAccess.centerId,
+    action: "billing.cash_payment.created",
+    resource: "Payment",
+    resourceId: result.payment.id,
+    metadata: {
+      familyId: familyAccess.family.id,
+      amountCents,
+      reference: reference || null,
+    },
+  });
+  return NextResponse.json({ ok: true, totalCents: amountCents, payment: result.payment, entry: result.entry });
+}
+
 async function refundStripePayment(user: CurrentBillingUser, body: Record<string, unknown>) {
   const familyId = clean(body.familyId);
   if (!familyId) return NextResponse.json({ ok: false, error: "Choose a family to refund." }, { status: 400 });
@@ -1052,6 +1125,7 @@ async function POSTHandler(request: NextRequest) {
   if (mode === "adjustment") return createLedgerAdjustment(user, body);
   if (mode === "agencyPayment") return createAgencyPayment(user, body);
   if (mode === "manualCheckPayment") return createManualCheckPayment(user, body);
+  if (mode === "manualCashPayment") return createManualCashPayment(user, body);
   if (mode === "refundPayment") return refundStripePayment(user, body);
 
   return NextResponse.json({ ok: false, error: "Unsupported billing action." }, { status: 400 });

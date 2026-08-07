@@ -366,6 +366,7 @@ function paymentProviderLabel(provider: string) {
   if (provider === "stripe") return "Online payment";
   if (provider === "stripe_terminal") return "In-person card payment";
   if (provider === "manual_check") return "Check payment";
+  if (provider === "manual_cash") return "Cash payment";
   return provider.replaceAll("_", " ");
 }
 

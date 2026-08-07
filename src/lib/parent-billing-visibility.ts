@@ -63,7 +63,13 @@ export function parentVisibleBillingBalanceCents(input: {
 export function parentPaymentAmountCents(input: {
   accountBalanceCents: number;
   agencyLedgerEntries: AgencyLedgerEntry[];
+  requestedAmountCents?: number;
+  responsibilityReviewRequired?: boolean;
 }) {
+  if (input.responsibilityReviewRequired) {
+    const requestedAmountCents = Math.max(0, Math.round(input.requestedAmountCents ?? 0));
+    return Math.min(requestedAmountCents, Math.max(0, input.accountBalanceCents));
+  }
   return Math.max(0, parentVisibleBillingBalanceCents(input));
 }
 

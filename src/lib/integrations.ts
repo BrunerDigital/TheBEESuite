@@ -196,7 +196,11 @@ export async function getStripeSecretKey(input: TenantCredentialRuntimeInput = {
 
 export async function getStripeWebhookSecret(input: TenantCredentialRuntimeInput = {}) {
   const credentials = await resolveTenantCredentials("stripe", input);
-  return credentialEnvValue(credentials, "STRIPE_WEBHOOK_SECRET");
+  return (
+    clean(credentialEnvValue(credentials, "STRIPE_WEBHOOK_SECRET")) ||
+    clean(process.env.STRIPE_PLATFORM_WEBHOOK_SECRET) ||
+    clean(process.env.STRIPE_WEBHOOK_SECRET)
+  );
 }
 
 function nonNegativeIntEnv(name: string, fallback = 0) {

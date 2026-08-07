@@ -70,6 +70,7 @@ import {
 import {
   closedEnrollmentChildWhere,
   currentlyEnrolledChildWhere,
+  currentlyEnrolledStatusValues,
   isCurrentlyEnrolledChildRecord,
   isCurrentlyEnrolledStatus,
   summarizeEnrollmentLifecycleCounts,
@@ -3048,6 +3049,7 @@ async function renderLivePage(
       ledgerRollupRows,
       billingAccountRows,
       billingFamilies,
+      needsEnrollmentSetupFamilies,
       billingProducts,
       tuitionPlans,
       billingClassrooms,
@@ -3176,6 +3178,32 @@ async function renderLivePage(
               schedule: true,
               customFields: true,
             },
+          },
+        },
+      }),
+      prisma.family.findMany({
+        where: {
+          centerId: scopedCenterIds,
+          children: {
+            some: {
+              enrollmentStatus: { in: currentlyEnrolledStatusValues() },
+              classroomId: null,
+            },
+          },
+        },
+        orderBy: { name: "asc" },
+        take: 250,
+        select: {
+          id: true,
+          name: true,
+          centerId: true,
+          children: {
+            where: {
+              enrollmentStatus: { in: currentlyEnrolledStatusValues() },
+              classroomId: null,
+            },
+            orderBy: { fullName: "asc" },
+            select: { id: true, fullName: true, enrollmentStatus: true },
           },
         },
       }),
@@ -3367,6 +3395,12 @@ async function renderLivePage(
               (plan): plan is typeof plan & { centerId: string } => Boolean(plan.centerId),
             ),
           },
+          needsEnrollmentSetup: needsEnrollmentSetupFamilies.map((family) => ({
+            familyId: family.id,
+            familyName: family.name,
+            centerId: family.centerId,
+            children: family.children,
+          })),
           invoices: invoices.map((invoice) => ({
             id: invoice.id,
             number: invoice.number,

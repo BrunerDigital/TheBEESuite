@@ -10,7 +10,6 @@ import {
   applyProcareFieldMapping,
   buildProcareCorrelationReview,
   PROCARE_FIELD_OPTIONS,
-  normalizeProcareEnrollmentStatus,
   normalizeProcareEnrollmentStatusWithEndDate,
   procareAgeGroup,
   procareChildFullName,
@@ -50,6 +49,7 @@ import {
   mergeProcareGuardianImports,
   type ProcareGuardianImportRecord,
 } from "@/lib/procare-guardian-merge";
+import { enrollmentClassroomValidationError } from "@/lib/enrollment-status";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -2593,13 +2593,13 @@ async function POSTHandler(request: NextRequest) {
           : await prisma.child.findMany({
             where: { familyId: family.id, fullName: childName },
             take: 2,
-            select: { id: true, dateOfBirth: true, customFields: true },
+            select: { id: true, dateOfBirth: true, customFields: true, enrollmentStatus: true, classroomId: true },
           });
         const externalChildren = childExternalId
           ? await prisma.child.findMany({
             where: { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: childExternalId },
             take: 2,
-            select: { id: true, dateOfBirth: true, customFields: true },
+            select: { id: true, dateOfBirth: true, customFields: true, enrollmentStatus: true, classroomId: true },
           })
           : [];
         if (fallbackChildren.length > 1) {
@@ -2611,6 +2611,19 @@ async function POSTHandler(request: NextRequest) {
         const existingChild = childExternalId
           ? externalChildren[0] ?? null
           : fallbackChildren[0] ?? null;
+        const nextEnrollmentStatus = enrollmentStatusProvided || !existingChild
+          ? enrollmentStatus
+          : existingChild.enrollmentStatus;
+        const nextClassroomId = classroomName
+          ? classroomId
+          : enrollmentStatusProvided && !isActiveProcareEnrollmentStatus(enrollmentStatus)
+            ? null
+            : existingChild?.classroomId ?? null;
+        const classroomError = enrollmentClassroomValidationError({
+          enrollmentStatus: nextEnrollmentStatus,
+          classroomId: nextClassroomId,
+        });
+        if (classroomError) throw new Error(classroomError);
         if (!existingChild) {
           const child = await prisma.child.create({
             data: {

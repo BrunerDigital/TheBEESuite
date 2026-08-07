@@ -7,6 +7,7 @@ import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
 import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { prisma } from "@/lib/prisma";
 import { familyNameFromGuardian } from "@/lib/registration-packet";
+import { enrollmentClassroomValidationError } from "@/lib/enrollment-status";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -96,6 +97,10 @@ async function POSTHandler(request: NextRequest) {
     if (!classroom || classroom.centerId !== center.id) {
       return NextResponse.json({ ok: false, error: "Classroom must belong to the selected center." }, { status: 400 });
     }
+  }
+  const classroomError = enrollmentClassroomValidationError({ enrollmentStatus, classroomId });
+  if (classroomError) {
+    return NextResponse.json({ ok: false, error: classroomError, errors: { classroomId: classroomError } }, { status: 400 });
   }
 
   const existingFamilyMatch = guardianEmail

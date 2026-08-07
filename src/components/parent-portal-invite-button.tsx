@@ -174,6 +174,11 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
           <Send data-icon="inline-start" />
           {linked ? "Resend Parent App Invite" : "Send Parent App Invite"}
         </Button>
+        {linked ? (
+          <p className="text-xs text-muted-foreground">
+            This guardian is already linked. Resend sends a reminder only; their existing account and password are preserved.
+          </p>
+        ) : null}
         <Button
           type="button"
           variant="outline"

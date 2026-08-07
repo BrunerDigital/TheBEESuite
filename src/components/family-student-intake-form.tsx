@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { enrollmentClassroomValidationError } from "@/lib/enrollment-status";
 
 type CenterOption = {
   id: string;
@@ -80,6 +81,10 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
   const selectedCenter = useMemo(() => centers.find((center) => center.id === centerId), [centers, centerId]);
   const classroomOptions = selectedCenter?.classrooms ?? [];
   const familyNameHint = familyName.trim() ? "" : suggestedFamilyName(guardianName);
+  const enrollmentClassroomError = enrollmentClassroomValidationError({
+    enrollmentStatus,
+    classroomId: classroomId === "none" ? null : classroomId,
+  });
 
   function resetStudentFields() {
     setChildName("");
@@ -323,6 +328,8 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+              {enrollmentClassroomError ? <p className="text-xs text-destructive">{enrollmentClassroomError}</p> : null}
+              {errorFor("classroomId")}
             </div>
             <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
               <input type="checkbox" checked={photoVideoPermission} onChange={(event) => setPhotoVideoPermission(event.target.checked)} />
@@ -361,7 +368,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
           </div>
         </section>
 
-        <Button disabled={isPending || !centers.length} onClick={submit}>
+        <Button disabled={isPending || !centers.length || Boolean(enrollmentClassroomError)} onClick={submit}>
           <UserPlus data-icon="inline-start" />
           Save Family, Parent + Child
         </Button>

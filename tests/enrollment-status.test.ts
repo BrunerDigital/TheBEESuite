@@ -6,9 +6,11 @@ import {
   currentlyEnrolledChildWhere,
   currentlyEnrolledStatusValues,
   enrollmentLifecycleCategory,
+  enrollmentClassroomValidationError,
   hasAssignedClassroom,
   isCurrentlyEnrolledChildRecord,
   isCurrentlyEnrolledStatus,
+  needsEnrollmentSetup,
   normalizedEnrollmentStatus,
   summarizeEnrollmentLifecycleCounts,
 } from "../src/lib/enrollment-status";
@@ -35,6 +37,17 @@ test("current enrollment requires a classroom assignment", () => {
   assert.equal(isCurrentlyEnrolledChildRecord({ enrollmentStatus: "active", classroomId: "classroom_1" }), true);
   assert.equal(isCurrentlyEnrolledChildRecord({ enrollmentStatus: "active", classroomId: null }), false);
   assert.equal(isCurrentlyEnrolledChildRecord({ enrollmentStatus: "waitlisted", classroomId: "classroom_1" }), false);
+});
+
+test("current enrollment validation rejects unassigned enrolled records but permits pipeline statuses", () => {
+  assert.equal(
+    enrollmentClassroomValidationError({ enrollmentStatus: "enrolled", classroomId: null }),
+    "Choose a classroom before marking this child enrolled. Billing and active rosters require a classroom assignment.",
+  );
+  assert.equal(enrollmentClassroomValidationError({ enrollmentStatus: "pending", classroomId: null }), null);
+  assert.equal(enrollmentClassroomValidationError({ enrollmentStatus: "waitlisted", classroomId: null }), null);
+  assert.equal(needsEnrollmentSetup({ enrollmentStatus: "active", classroomId: null }), true);
+  assert.equal(needsEnrollmentSetup({ enrollmentStatus: "withdrawn", classroomId: null }), false);
 });
 
 test("current enrollment Prisma filter excludes unassigned child records", () => {

@@ -65,6 +65,7 @@
     "kidcity:reconcile-cordera-balances": "tsx -r tsconfig-paths/register scripts/reconcile-cordera-pdf-balances.ts",
     "kidcity:reconcile-oakleaf-balances": "tsx -r tsconfig-paths/register scripts/reconcile-oakleaf-procare-balances.ts",
     "kidcity:reconcile-longmont-parent-access": "tsx -r tsconfig-paths/register scripts/reconcile-longmont-pdf-parent-access.ts",
+    "kidcity:audit-longmont-billing": "tsx -r tsconfig-paths/register scripts/audit-longmont-billing-account.ts",
     "kidcity:reconcile-procare-guardian-contacts": "tsx -r tsconfig-paths/register scripts/reconcile-procare-guardian-contacts.ts",
     "kidcity:retry-granbury-parent-invite": "tsx -r tsconfig-paths/register scripts/retry-granbury-parent-invite-timeout.ts",
     "kidcity:test-parent-invites": "tsx -r tsconfig-paths/register scripts/send-kidcity-corporate-parent-invite-tests.ts",

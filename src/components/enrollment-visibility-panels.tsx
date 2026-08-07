@@ -15,7 +15,12 @@ import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, hasCustodyWarning } from "@/lib/custody-visibility";
 import { BULK_ENROLLMENT_STATUSES } from "@/lib/child-enrollment-bulk";
-import { isCurrentlyEnrolledChildRecord, normalizedEnrollmentStatus, type EnrollmentLifecycleCounts } from "@/lib/enrollment-status";
+import {
+  isCurrentlyEnrolledChildRecord,
+  needsEnrollmentSetup,
+  normalizedEnrollmentStatus,
+  type EnrollmentLifecycleCounts,
+} from "@/lib/enrollment-status";
 import { familiesForCompleteRecordEditing } from "@/lib/family-profile-visibility";
 
 type IntakeCenter = { id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> };
@@ -91,6 +96,7 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [postSaveBillingHref, setPostSaveBillingHref] = useState<string | null>(null);
 
   const statusCounts = useMemo(() => rows.reduce<Record<string, number>>((counts, row) => {
     const status = normalizedEnrollmentStatus(row.enrollmentStatus) || "not_set";
@@ -128,6 +134,7 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
     });
     setMessage("");
     setError("");
+    setPostSaveBillingHref(null);
   }
 
   function toggleFiltered(checked: boolean) {
@@ -140,6 +147,7 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
     });
     setMessage("");
     setError("");
+    setPostSaveBillingHref(null);
   }
 
   async function applyStatusChange() {
@@ -158,9 +166,22 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
           classroomId: movingToEnrolled ? targetClassroomId : null,
         }),
       });
-      const json = await response.json().catch(() => null) as { error?: string; updatedCount?: number } | null;
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        updatedCount?: number;
+        reenrollments?: Array<{ familyId: string; centerId: string; childId: string }>;
+      } | null;
       if (!response.ok) throw new Error(json?.error || "The selected records could not be updated.");
       setMessage(`${json?.updatedCount ?? selectedIds.size} child record(s) updated to ${formatRecordLabel(targetStatus)}.`);
+      if (json?.reenrollments?.length === 1) {
+        const reenrollment = json.reenrollments[0];
+        const params = new URLSearchParams({
+          familyId: reenrollment.familyId,
+          centerId: reenrollment.centerId,
+          childId: reenrollment.childId,
+        });
+        setPostSaveBillingHref(`/billing-invoices?${params.toString()}#billing-workbench`);
+      }
       setSelectedIds(new Set());
       startRefresh(() => router.refresh());
     } catch (updateError) {
@@ -220,7 +241,16 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
             </p>
           </div>
         ) : null}
-        {message ? <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">{message}</div> : null}
+        {message ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">
+            <span>{message}</span>
+            {postSaveBillingHref ? (
+              <Link href={postSaveBillingHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                Open billing
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
         {error ? <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
         <div className="text-xs text-muted-foreground">
           Showing {filteredRows.length.toLocaleString()} records · {selectedIds.size.toLocaleString()} selected
@@ -259,7 +289,11 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
                   </TableCell>
                   <TableCell><div className="font-medium">{row.fullName}</div><div className="text-xs text-muted-foreground">{row.ageGroup}</div></TableCell>
                   <TableCell>{row.familyName}</TableCell>
-                  <TableCell><Badge variant="outline">{formatRecordLabel(row.enrollmentStatus)}</Badge></TableCell>
+                  <TableCell>
+                    <Badge variant={needsEnrollmentSetup(row) ? "destructive" : "outline"}>
+                      {needsEnrollmentSetup(row) ? "Needs enrollment setup" : formatRecordLabel(row.enrollmentStatus)}
+                    </Badge>
+                  </TableCell>
                   <TableCell>{row.classroomName ?? "Unassigned"}</TableCell>
                   <TableCell>
                     <Link href={`/family-detail?familyId=${encodeURIComponent(row.familyId)}&childId=${encodeURIComponent(row.id)}#family-editor`} className={buttonVariants({ variant: "outline", size: "sm" })}>

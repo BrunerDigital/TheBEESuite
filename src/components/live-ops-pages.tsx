@@ -4987,6 +4987,12 @@ export type BillingInvoicesPageData = {
     tuitionPlans: BillingWorkbenchTuitionPlan[];
     currentRole: string;
   };
+  needsEnrollmentSetup: Array<{
+    familyId: string;
+    familyName: string;
+    centerId: string | null;
+    children: Array<{ id: string; fullName: string; enrollmentStatus: string }>;
+  }>;
   invoices: Array<{
     id: string;
     number: string;
@@ -5079,6 +5085,12 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
 
   function familyProfileHref(family: { id: string }) {
     return `/family-detail?familyId=${encodeURIComponent(family.id)}#family-editor`;
+  }
+
+  function enrollmentSetupHref(row: BillingInvoicesPageData["needsEnrollmentSetup"][number], childId: string) {
+    const params = new URLSearchParams({ familyId: row.familyId, childId });
+    if (row.centerId) params.set("centerId", row.centerId);
+    return `/family-detail?${params.toString()}#family-editor`;
   }
 
   return (
@@ -5178,6 +5190,47 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
               </Table>
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+      <Card className="glass-panel" id="needs-enrollment-setup">
+        <CardHeader>
+          <CardTitle>Needs enrollment setup</CardTitle>
+          <CardDescription>
+            Current-status children without a classroom are shown here for correction. They remain non-chargeable and excluded from active Billing and Accounts Receivable totals.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {data.needsEnrollmentSetup.length ? (
+            <div className="overflow-hidden rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Family</TableHead>
+                    <TableHead>Child</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.needsEnrollmentSetup.flatMap((family) => family.children.map((child) => (
+                    <TableRow key={child.id}>
+                      <TableCell>{family.familyName}</TableCell>
+                      <TableCell>{child.fullName}</TableCell>
+                      <TableCell><Badge variant="outline">Needs classroom</Badge></TableCell>
+                      <TableCell>
+                        <Link href={enrollmentSetupHref(family, child.id)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                          <ArrowRight data-icon="inline-start" />
+                          Complete enrollment
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  )))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No current-status child records are missing a classroom assignment.</p>
+          )}
         </CardContent>
       </Card>
       <BillingWorkbench

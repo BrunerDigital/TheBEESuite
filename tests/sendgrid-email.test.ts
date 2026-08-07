@@ -122,6 +122,54 @@ test("SendGrid email helper falls back to platform credentials when tenant key i
   }
 });
 
+test("SendGrid email helper forces shared platform credentials for every tenant", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.SENDGRID_API_KEY;
+  const originalFrom = process.env.SENDGRID_FROM_EMAIL;
+  const originalForcePlatform = process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS;
+  const authorizations: string[] = [];
+  const fromEmails: string[] = [];
+
+  process.env.SENDGRID_API_KEY = "SG.platform";
+  process.env.SENDGRID_FROM_EMAIL = "mrbee@thebeesuite.io";
+  process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS = "true";
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    authorizations.push(String((init?.headers as Record<string, string> | undefined)?.Authorization ?? ""));
+    const payload = JSON.parse(String(init?.body)) as { from?: { email?: string } };
+    fromEmails.push(payload.from?.email ?? "");
+    return new Response(null, {
+      status: 202,
+      headers: { "x-message-id": "shared-platform-message" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await sendEmail({
+      to: ["parent@example.com"],
+      subject: "Parent portal invitation",
+      text: "Welcome to The BEE Suite.",
+      tenantId: "tenant-1",
+      credentials: {
+        SENDGRID_API_KEY: "SG.tenant",
+        SENDGRID_FROM_EMAIL: "tenant@example.com",
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.id, "shared-platform-message");
+    assert.deepEqual(authorizations, ["Bearer SG.platform"]);
+    assert.deepEqual(fromEmails, ["mrbee@thebeesuite.io"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.SENDGRID_API_KEY;
+    else process.env.SENDGRID_API_KEY = originalApiKey;
+    if (originalFrom === undefined) delete process.env.SENDGRID_FROM_EMAIL;
+    else process.env.SENDGRID_FROM_EMAIL = originalFrom;
+    if (originalForcePlatform === undefined) delete process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS;
+    else process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS = originalForcePlatform;
+  }
+});
+
 test("SendGrid tenant credential failures fail closed unless platform fallback is explicitly approved", async () => {
   const originalFetch = globalThis.fetch;
   const originalApiKey = process.env.SENDGRID_API_KEY;

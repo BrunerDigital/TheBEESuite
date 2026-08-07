@@ -33,4 +33,3 @@ test("conversation direction is derived from role data inside the existing scope
   assert.match(routePage, /message\.sender\?\.role === UserRole\.PARENT_GUARDIAN/);
   assert.match(routePage, /message\.sender\?\.role === UserRole\.AUTHORIZED_PICKUP/);
 });
-

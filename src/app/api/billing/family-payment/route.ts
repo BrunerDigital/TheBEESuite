@@ -143,7 +143,7 @@ async function POSTHandler(request: NextRequest) {
   const method = familyPaymentMethod(body.method);
   const parentCheckout = userIsParentGuardian && !userCanManageBilling;
   const returnPath = safeReturnPath(body.returnPath, parentCheckout ? "/parent-portal" : "/billing-invoices");
-  const description = parentCheckout ? "Family balance payment" : clean(body.description) || "Tuition payment";
+  let description = parentCheckout ? "Family balance payment" : clean(body.description) || "Tuition payment";
   const source = parentCheckout ? "parent_portal" : clean(body.source) || "director_dashboard";
   const collectionMode = checkoutCollectionMode(method, body.collectionMode, userCanManageBilling);
 
@@ -220,7 +220,7 @@ async function POSTHandler(request: NextRequest) {
         select: { type: true, sourceSystem: true, amountCents: true },
       })
     : [];
-  if (parentCheckout && parentBalanceNeedsResponsibilityReview({
+  const responsibilityReviewRequired = parentCheckout && parentBalanceNeedsResponsibilityReview({
     accountBalanceCents: billingAccount.balanceCents,
     agencyLedgerEntries,
     responsibilityEvidence: [
@@ -228,20 +228,34 @@ async function POSTHandler(request: NextRequest) {
       billingAccount.family.customFields,
       ...billingAccount.family.children.map((child) => child.customFields),
     ],
-  })) {
+  });
+  if (responsibilityReviewRequired && requestedAmountCents <= 0) {
     return NextResponse.json(
       {
         ok: false,
-        error: "This balance includes subsidy information that has not been separated into agency and family responsibility. Payment is blocked until the school reviews it.",
-        code: "parent_balance_responsibility_review_required",
+        error: "Enter the amount you want to pay toward your account while the school reviews the agency and family split.",
+        code: "parent_account_payment_amount_required",
       },
-      { status: 409 },
+      { status: 400 },
     );
   }
+  if (responsibilityReviewRequired && requestedAmountCents > billingAccount.balanceCents) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Payment amount cannot exceed the current account balance.",
+        code: "parent_account_payment_exceeds_balance",
+      },
+      { status: 400 },
+    );
+  }
+  if (responsibilityReviewRequired) description = "Payment toward family account";
   const amountCents = parentCheckout
     ? parentPaymentAmountCents({
         accountBalanceCents: billingAccount.balanceCents,
         agencyLedgerEntries,
+        requestedAmountCents,
+        responsibilityReviewRequired,
       })
     : requestedAmountCents > 0 ? requestedAmountCents : billingAccount.balanceCents;
   if (amountCents <= 0) {
@@ -473,6 +487,7 @@ async function POSTHandler(request: NextRequest) {
     description,
     collectionMode,
     source,
+    responsibilityReviewRequired: String(responsibilityReviewRequired),
     requestedByUserId: user.id,
     environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
   };

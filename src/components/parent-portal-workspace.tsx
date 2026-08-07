@@ -422,6 +422,11 @@ function dateTimestamp(value: string | Date | null | undefined) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
+function paymentAmountCents(value: string) {
+  const dollars = Number.parseFloat(value);
+  return Number.isFinite(dollars) ? Math.max(0, Math.round(dollars * 100)) : 0;
+}
+
 export function ParentPortalWorkspace({
   family,
   billingAccount,
@@ -486,6 +491,7 @@ export function ParentPortalWorkspace({
   const [uniformQuantity, setUniformQuantity] = useState(1);
   const [selectedUpdateDayKey, setSelectedUpdateDayKey] = useState("");
   const [tuitionCadenceDrafts, setTuitionCadenceDrafts] = useState<Record<string, string>>({});
+  const [accountPaymentAmountDollars, setAccountPaymentAmountDollars] = useState("");
   const [isPending, startTransition] = useTransition();
 
   function saveTuitionCadence(child: Child) {
@@ -519,6 +525,8 @@ export function ParentPortalWorkspace({
     [payableOpenInvoices],
   );
   const firstPendingOpenInvoice = pendingOpenInvoices[0] ?? null;
+  const accountPaymentAmountCents = paymentAmountCents(accountPaymentAmountDollars);
+  const showFamilyPaymentPanel = parentBalanceReviewRequired || Boolean(nextOpenInvoice);
   const latestAccountLedgerEntry = latestLedgerEntry ?? ledgerEntries[0] ?? null;
   const parentVisiblePayments = payments.filter(isParentVisiblePayment);
   const paymentMethodManagement = billingAccount?.paymentMethodManagement;
@@ -716,11 +724,11 @@ export function ParentPortalWorkspace({
     if (!family || !billingAccount) {
       return showError("Your family billing account is not available yet.");
     }
-    if (parentBalanceReviewRequired) {
-      return showError("Your school must separate the agency and family portions before this balance can be paid.");
-    }
-    if (balanceCents <= 0) {
+    if (balanceCents <= 0 && !parentBalanceReviewRequired) {
       return showError("There is no family balance to pay.");
+    }
+    if (parentBalanceReviewRequired && accountPaymentAmountCents <= 0) {
+      return showError("Enter the amount you want to pay toward your account.");
     }
     startTransition(async () => {
       const method = paymentMethodCategory === "card"
@@ -734,6 +742,7 @@ export function ParentPortalWorkspace({
           familyId: family.id,
           method,
           returnPath: "/parent-portal",
+          ...(parentBalanceReviewRequired ? { amountCents: accountPaymentAmountCents } : {}),
         }),
       });
       const json = await response.json().catch(() => null) as { error?: string; url?: string; configured?: boolean } | null;
@@ -745,7 +754,7 @@ export function ParentPortalWorkspace({
   }
 
   function payBalance(paymentMethodCategory: "ach" | "card" | "link_bank") {
-    if (!nextOpenInvoice) return showError("There is no open invoice to pay.");
+    if (!nextOpenInvoice && !parentBalanceReviewRequired) return showError("There is no open invoice to pay.");
     payFamilyBalance(paymentMethodCategory);
   }
 
@@ -1338,10 +1347,10 @@ export function ParentPortalWorkspace({
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-xs text-muted-foreground">Balance due</div>
-                <div className="mt-1 text-2xl font-semibold">{parentBalanceReviewRequired ? "Under review" : money(balanceCents)}</div>
+                <div className="mt-1 text-2xl font-semibold">{parentBalanceReviewRequired ? "Agency split under review" : money(balanceCents)}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   {parentBalanceReviewRequired
-                    ? "Payment is blocked until the school separates agency and family responsibility."
+                    ? "You can still choose an amount to pay toward your account. Agency responsibility remains hidden."
                     : "Only your family responsibility is included."}
                 </div>
               </div>
@@ -1521,25 +1530,42 @@ export function ParentPortalWorkspace({
                 </div>
               </div>
             </div>
-            {nextOpenInvoice ? (
+            {showFamilyPaymentPanel ? (
               <div className="rounded-xl border bg-primary/10 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs text-muted-foreground">Pay today</div>
+                    <div className="text-xs text-muted-foreground">{parentBalanceReviewRequired ? "Make an account payment" : "Pay today"}</div>
                     <div className="font-medium">
-                      Family balance {money(balanceCents)} · {nextOpenInvoice.number} due {formatDate(nextOpenInvoice.dueDate)}
+                      {parentBalanceReviewRequired
+                        ? "Choose the amount you want credited to your family account."
+                        : <>Family balance {money(balanceCents)} · {nextOpenInvoice?.number} due {formatDate(nextOpenInvoice?.dueDate ?? null)}</>}
                     </div>
                   </div>
+                  {parentBalanceReviewRequired ? (
+                    <div className="w-full space-y-1 sm:w-48">
+                      <Label htmlFor="account-payment-amount">Amount to pay</Label>
+                      <Input
+                        id="account-payment-amount"
+                        type="number"
+                        inputMode="decimal"
+                        min="0.01"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={accountPaymentAmountDollars}
+                        onChange={(event) => setAccountPaymentAmountDollars(event.target.value)}
+                      />
+                    </div>
+                  ) : null}
                   <div className="flex flex-wrap gap-2">
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")}>
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || (parentBalanceReviewRequired && accountPaymentAmountCents <= 0)} onClick={() => payBalance("card")}>
                       <CreditCard data-icon="inline-start" />
                       Debit/Credit Card
                     </Button>
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("link_bank")} variant="outline">
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || (parentBalanceReviewRequired && accountPaymentAmountCents <= 0)} onClick={() => payBalance("link_bank")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       Instant Bank
                     </Button>
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("ach")} variant="outline">
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || (parentBalanceReviewRequired && accountPaymentAmountCents <= 0)} onClick={() => payBalance("ach")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       Pay by Bank
                     </Button>
@@ -1552,7 +1578,7 @@ export function ParentPortalWorkspace({
                     formatMoney: money,
                   })}
                 </div>
-                {openInvoices.length > 1 ? (
+                {!parentBalanceReviewRequired && openInvoices.length > 1 ? (
                   <div className="mt-2 text-xs text-muted-foreground">
                     {openInvoices.length} open invoice records are listed below. Checkout uses only the family balance shown here.
                   </div>

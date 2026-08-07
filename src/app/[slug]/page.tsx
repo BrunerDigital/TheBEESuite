@@ -2256,7 +2256,7 @@ async function renderLivePage(
         family={parentPortalFamily}
         billingAccount={billingAccount ? {
           id: billingAccount.id,
-          balanceCents: parentBalanceCents,
+          balanceCents: parentBalanceReviewRequired ? 0 : parentBalanceCents,
           autopayPlaceholder: billingAccount.autopayPlaceholder,
           paymentMethodManagement: paymentMethodManagementSummary({
             autopayPlaceholder: billingAccount.autopayPlaceholder,

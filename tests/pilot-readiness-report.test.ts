@@ -116,3 +116,11 @@ test("module gates keep setup, invitations, kiosk, and billing separately contro
   assert.equal(importGates["parent-invitations"].status, "blocked");
   assert.deepEqual(importGates["parent-invitations"].automatedGaps, ["The linked ProCare import is not complete and error-free."]);
 });
+
+test("classroom readiness applies only to currently enrolled children", () => {
+  assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "enrolled", classroomId: null }), true);
+  assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "active", classroomId: null }), true);
+  assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "waitlisted", classroomId: null }), false);
+  assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "withdrawn", classroomId: null }), false);
+  assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "enrolled", classroomId: "room-1" }), false);
+});

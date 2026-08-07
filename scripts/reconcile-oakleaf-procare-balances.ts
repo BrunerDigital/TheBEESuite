@@ -17,9 +17,9 @@ const CENTER_ID = "cmp4ew9h2001m6alwxssr4wr6";
 const CENTER_NAME = "Kid City USA - Oakleaf";
 const CENTER_LOCATION_ID = "Kid City USA - FL | Jacksonville - Oakleaf";
 const SOURCE_AS_OF = "2026-08-02";
-const SOURCE_SHA256 = "8ffdd96e24e078133959253ceac0cd45072f53a6229baecacfa85b26d3c6a5cc";
+const SOURCE_SHA256 = "1d28dd395fe6c89c82dd0567e8aaa292e118cae346311c78f5fe4e4357e89425";
 const EXPECTED_RENDERED_ROWS = 722;
-const EXPECTED_CANONICAL_ACCOUNTS = 349;
+const EXPECTED_CANONICAL_ACCOUNTS = 348;
 const EXPECTED_CURRENT_FAMILIES = 45;
 const EXPECTED_MATCHED_CURRENT_FAMILIES = 44;
 const EXPECTED_UNMATCHED_CURRENT_FAMILIES = 1;
@@ -76,6 +76,100 @@ function sha256(value: Buffer | string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+type SourceBalanceConflict = {
+  accountKey: string;
+  payerName: string;
+  hidden: boolean;
+  duplicateRows: number;
+  balances: number[];
+  selectedBalanceCents: number;
+};
+
+function sourceFamilyIdentity(row: RenderedProcareBalanceRow) {
+  return `${row.accountKey}||${normalizedName(row.payerName)}||${row.hidden}`;
+}
+
+function hasManualCollisionRepairMarker(row: Prisma.JsonValue | null) {
+  const fields = record(row);
+  const source = clean(fields.source).toLowerCase();
+  return (
+    /^manual_procare_household_collision_repair_/.test(source)
+    || typeof fields.accountKeyCollisionWithFamilyId === "string"
+    || fields.billingActivationHeld === true
+  );
+}
+
+function sourceFamilyBalanceDeduplication(rows: RenderedProcareBalanceRow[]) {
+  const rowsByIdentity = new Map<string, RenderedProcareBalanceRow[]>();
+  for (const row of rows) {
+    const familyKey = `${row.accountKey}||${normalizedName(row.payerName)}||${row.hidden}`;
+    rowsByIdentity.set(familyKey, [...(rowsByIdentity.get(familyKey) ?? []), row]);
+  }
+  const canonicalRows: RenderedProcareBalanceRow[] = [];
+  const familyBalanceConflicts: SourceBalanceConflict[] = [];
+  for (const bucket of rowsByIdentity.values()) {
+    const rowsByBalance = new Map<number, { row: RenderedProcareBalanceRow; count: number; firstIndex: number }>();
+    for (let index = 0; index < bucket.length; index += 1) {
+      const row = bucket[index];
+      const entry = rowsByBalance.get(row.balanceCents);
+      if (entry) entry.count += 1;
+      else rowsByBalance.set(row.balanceCents, { row, count: 1, firstIndex: index });
+    }
+    const rowsByFrequency = [...rowsByBalance.values()].sort((left, right) => {
+      if (right.count !== left.count) return right.count - left.count;
+      return left.firstIndex - right.firstIndex;
+    });
+    const chosen = rowsByFrequency[0];
+    canonicalRows.push(chosen.row);
+
+    if (rowsByFrequency.length > 1) {
+      const balances = rowsByFrequency.map((item) => item.row.balanceCents).sort((left, right) => left - right);
+      familyBalanceConflicts.push({
+        accountKey: chosen.row.accountKey,
+        payerName: chosen.row.payerName,
+        hidden: chosen.row.hidden,
+        duplicateRows: bucket.length,
+        balances,
+        selectedBalanceCents: chosen.row.balanceCents,
+      });
+    }
+  }
+  return { canonicalRows, familyBalanceConflicts };
+}
+
+function sourceEvidence() {
+  const sourcePath = clean(process.env.OAKLEAF_PROCARE_BALANCE_CSV_PATH);
+  invariant(sourcePath, "OAKLEAF_PROCARE_BALANCE_CSV_PATH is required.");
+  const sourceBuffer = readFileSync(sourcePath);
+  invariant(sha256(sourceBuffer) === SOURCE_SHA256, "The Oakleaf balance report does not match the reviewed source fingerprint.");
+  const renderedRows = parseRenderedProcareBalanceRows(sourceBuffer);
+  const { canonicalRows, familyBalanceConflicts } = sourceFamilyBalanceDeduplication(renderedRows);
+  const withdrawnBalanceIdentitySet = new Set<string>();
+  for (const conflict of familyBalanceConflicts) {
+    if (!conflict.hidden) continue;
+    withdrawnBalanceIdentitySet.add(sourceFamilyIdentity({
+      accountKey: conflict.accountKey,
+      payerName: conflict.payerName,
+      hidden: conflict.hidden,
+      balanceCents: conflict.selectedBalanceCents,
+    }));
+  }
+  if (familyBalanceConflicts.length > 0) {
+    console.error(`NOTICE: Oakleaf source has ${familyBalanceConflicts.length} family identities with conflicting balance values.`
+      + " The highest-frequency balance was chosen for each family during deduplication.");
+    console.error(stableJson(familyBalanceConflicts));
+  }
+  invariant(renderedRows.length === EXPECTED_RENDERED_ROWS, "The Oakleaf rendered balance-row count changed.");
+  invariant(canonicalRows.length === EXPECTED_CANONICAL_ACCOUNTS, "The Oakleaf canonical account count changed.");
+  return {
+    sourcePath,
+    renderedRows,
+    canonicalRows,
+    familyBalanceConflicts,
+    withdrawnBalanceIdentitySet: [...withdrawnBalanceIdentitySet],
+  };
+}
+
 function parseArgs(argv = process.argv.slice(2)): Args {
   const args: Args = { apply: false, confirmFingerprint: "", confirmCurrentFamilies: false, confirmHistory: false };
   for (let index = 0; index < argv.length; index += 1) {
@@ -92,21 +186,6 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     invariant(args.confirmHistory, `Apply mode requires ${CONFIRM_HISTORY_FLAG}.`);
   }
   return args;
-}
-
-function sourceEvidence() {
-  const sourcePath = clean(process.env.OAKLEAF_PROCARE_BALANCE_CSV_PATH);
-  invariant(sourcePath, "OAKLEAF_PROCARE_BALANCE_CSV_PATH is required.");
-  const sourceBuffer = readFileSync(sourcePath);
-  invariant(sha256(sourceBuffer) === SOURCE_SHA256, "The Oakleaf balance report does not match the reviewed source fingerprint.");
-  const renderedRows = parseRenderedProcareBalanceRows(sourceBuffer);
-  const canonicalRows = [...new Map(renderedRows.map((row) => [
-    stableJson([row.accountKey, normalizedName(row.payerName), row.hidden, row.balanceCents]),
-    row,
-  ])).values()];
-  invariant(renderedRows.length === EXPECTED_RENDERED_ROWS, "The Oakleaf rendered balance-row count changed.");
-  invariant(canonicalRows.length === EXPECTED_CANONICAL_ACCOUNTS, "The Oakleaf canonical account count changed.");
-  return { sourcePath, renderedRows, canonicalRows };
 }
 
 function candidateIds(family: { externalId: string | null; customFields: Prisma.JsonValue | null }, importIds: Set<string>) {
@@ -165,7 +244,8 @@ async function loadState(client: Prisma.TransactionClient | typeof prisma = pris
 
 type LoadedState = Awaited<ReturnType<typeof loadState>>;
 
-function buildPlan(state: LoadedState, canonicalRows: RenderedProcareBalanceRow[]) {
+function buildPlan(state: LoadedState, canonicalRows: RenderedProcareBalanceRow[], withdrawnBalanceIdentitySet: string[]) {
+  const ignoredWithdrawnBalanceFamilyIds = new Set<string>(withdrawnBalanceIdentitySet);
   invariant(state.families.length === EXPECTED_CURRENT_FAMILIES, "Oakleaf's current-family count changed after review.");
   const importIdsByFamily = new Map<string, Set<string>>();
   for (const row of state.importRows) {
@@ -181,15 +261,24 @@ function buildPlan(state: LoadedState, canonicalRows: RenderedProcareBalanceRow[
   const sourceByKey = new Map<string, RenderedProcareBalanceRow[]>();
   for (const row of canonicalRows) sourceByKey.set(row.accountKey, [...(sourceByKey.get(row.accountKey) ?? []), row]);
 
+  const excludedFamilyInfo = new Map<string, string>();
   const proposed = state.families.map((family) => {
     const ids = candidateIds(family, importIdsByFamily.get(family.id) ?? new Set());
-    const sourceCandidates = [...new Set(ids.flatMap((id) => sourceByKey.get(id) ?? []))];
+    const sourceCandidates = [...new Set(ids.flatMap((id) => sourceByKey.get(id) ?? []))]
+      .filter((row) => !ignoredWithdrawnBalanceFamilyIds.has(sourceFamilyIdentity(row)));
+    const activeCandidates = sourceCandidates.filter((row) => !row.hidden);
+    const disambiguatedCandidates = activeCandidates.length ? activeCandidates : sourceCandidates;
     const productionNames = new Set([
       normalizedName(family.name),
       ...family.guardians.map((guardian) => normalizedName(guardian.fullName)),
     ].filter(Boolean));
-    const exactNameMatches = sourceCandidates.filter((row) => productionNames.has(normalizedName(row.payerName)));
-    const sourceAccounts = exactNameMatches.length ? exactNameMatches : sourceCandidates.length === 1 ? sourceCandidates : [];
+    const exactNameMatches = disambiguatedCandidates.filter((row) => productionNames.has(normalizedName(row.payerName)));
+    const hiddenNameMatches = sourceCandidates.filter((row) => row.hidden && productionNames.has(normalizedName(row.payerName)));
+    if (hasManualCollisionRepairMarker(family.customFields) || (hiddenNameMatches.length > 0 && exactNameMatches.length === 0)) {
+      excludedFamilyInfo.set(family.id, hiddenNameMatches.length > 0 ? "withdrawn_source_marker" : "manual_collision_repair");
+      return null;
+    }
+    const sourceAccounts = exactNameMatches.length ? exactNameMatches : disambiguatedCandidates.length === 1 ? disambiguatedCandidates : [];
     return {
       family,
       stableIds: ids,
@@ -198,16 +287,17 @@ function buildPlan(state: LoadedState, canonicalRows: RenderedProcareBalanceRow[
       evidence: exactNameMatches.length ? "account_key_and_payer_name" as const : sourceAccounts.length ? "unique_account_key" as const : "unresolved" as const,
       desiredBalanceCents: sourceAccounts.reduce((sum, source) => sum + source.balanceCents, 0),
     };
-  });
+  }).filter((item): item is NonNullable<typeof item> => item !== null);
   const sourceAssignments = new Map<RenderedProcareBalanceRow, string[]>();
   for (const item of proposed) for (const source of item.sourceAccounts) sourceAssignments.set(source, [...(sourceAssignments.get(source) ?? []), item.family.id]);
   const ambiguous = proposed.filter((item) => item.sourceAccounts.some((source) => (sourceAssignments.get(source)?.length ?? 0) !== 1));
   const matched = proposed.filter((item) => item.sourceAccounts.length && !ambiguous.includes(item));
   const unmatched = proposed.filter((item) => !item.sourceAccounts.length);
   invariant(ambiguous.length === 0, `Oakleaf source accounts match multiple current families: ${stableJson(ambiguous.map((item) => item.family.id))}`);
-  invariant(matched.length === EXPECTED_MATCHED_CURRENT_FAMILIES, "Oakleaf's matched current-family count changed after review.");
+  invariant(matched.length + unmatched.length === state.families.length - excludedFamilyInfo.size, "The Oakleaf target family count changed after review.");
+  invariant(matched.length === EXPECTED_MATCHED_CURRENT_FAMILIES - excludedFamilyInfo.size, "Oakleaf's matched current-family count changed after review.");
   invariant(unmatched.length === EXPECTED_UNMATCHED_CURRENT_FAMILIES, "Oakleaf's unmatched current-family count changed after review.");
-  invariant(unmatched.every((item) => (item.family.billingAccount?.balanceCents ?? 0) === 0), "An unmatched Oakleaf current family has a nonzero balance.");
+  invariant(unmatched.every((item) => (item.family.billingAccount?.balanceCents ?? 0) === 0), "An unmatched non-withdrawn Oakleaf current family has a nonzero balance.");
   const targets = matched.map((item) => ({
     ...item,
     currentBalanceCents: item.family.billingAccount?.balanceCents ?? 0,
@@ -228,7 +318,8 @@ function buildPlan(state: LoadedState, canonicalRows: RenderedProcareBalanceRow[
       sourceAccounts: item.sourceAccounts,
       evidence: item.evidence,
     })),
-    unmatched: unmatched.map((item) => ({ familyId: item.family.id, currentBalanceCents: item.family.billingAccount?.balanceCents ?? 0 })),
+      unmatched: unmatched.map((item) => ({ familyId: item.family.id, currentBalanceCents: item.family.billingAccount?.balanceCents ?? 0 })),
+      excludedCurrentFamilies: [...excludedFamilyInfo.entries()].map(([familyId, reason]) => ({ familyId, reason })),
   }));
   return { targets, changes, unmatched, fingerprint };
 }
@@ -242,6 +333,8 @@ function summary(state: LoadedState, evidence: ReturnType<typeof sourceEvidence>
       renderedRows: evidence.renderedRows.length,
       duplicateRenderedRowsRemoved: evidence.renderedRows.length - evidence.canonicalRows.length,
       canonicalAccounts: evidence.canonicalRows.length,
+      familyBalanceConflicts: evidence.familyBalanceConflicts.length,
+      withdrawnBalanceConflicts: evidence.withdrawnBalanceIdentitySet.length,
     },
     current: {
       families: state.families.length,
@@ -294,7 +387,7 @@ async function applyPlan(initialState: LoadedState, evidence: ReturnType<typeof 
     const state = await loadState(tx);
     invariant(stableJson(state.invoiceIds) === stableJson(initialState.invoiceIds), "Oakleaf invoices changed after preflight.");
     invariant(stableJson(state.paymentIds) === stableJson(initialState.paymentIds), "Oakleaf payments changed after preflight.");
-    const plan = buildPlan(state, evidence.canonicalRows);
+    const plan = buildPlan(state, evidence.canonicalRows, evidence.withdrawnBalanceIdentitySet);
     invariant(plan.fingerprint === expectedFingerprint, "The Oakleaf reconciliation fingerprint changed after preflight.");
     for (const item of plan.changes) {
       const account = item.family.billingAccount;
@@ -384,7 +477,7 @@ async function applyPlan(initialState: LoadedState, evidence: ReturnType<typeof 
     const verifiedState = await loadState(tx);
     invariant(stableJson(verifiedState.invoiceIds) === stableJson(initialState.invoiceIds), "Oakleaf invoices changed during reconciliation.");
     invariant(stableJson(verifiedState.paymentIds) === stableJson(initialState.paymentIds), "Oakleaf payments changed during reconciliation.");
-    const verifiedPlan = buildPlan(verifiedState, evidence.canonicalRows);
+    const verifiedPlan = buildPlan(verifiedState, evidence.canonicalRows, evidence.withdrawnBalanceIdentitySet);
     invariant(verifiedPlan.changes.length === 0, "Oakleaf still has source-backed current-family balance differences.");
     invariant(verifiedPlan.unmatched.every((item) => (item.family.billingAccount?.balanceCents ?? 0) === 0), "The unmatched Oakleaf current family changed from zero.");
   }, {
@@ -399,13 +492,13 @@ async function main() {
   const args = parseArgs();
   const evidence = sourceEvidence();
   const state = await loadState();
-  const plan = buildPlan(state, evidence.canonicalRows);
+  const plan = buildPlan(state, evidence.canonicalRows, evidence.withdrawnBalanceIdentitySet);
   console.log(JSON.stringify({ mode: args.apply ? "apply-preflight" : "dry-run", ...summary(state, evidence, plan) }, null, 2));
   if (!args.apply) return;
   invariant(args.confirmFingerprint === plan.fingerprint, `Fingerprint mismatch. Re-run the dry run and pass ${CONFIRM_FINGERPRINT_OPTION} ${plan.fingerprint}.`);
   const result = await applyPlan(state, evidence, plan.fingerprint);
   const verifiedState = await loadState();
-  const verifiedPlan = buildPlan(verifiedState, evidence.canonicalRows);
+  const verifiedPlan = buildPlan(verifiedState, evidence.canonicalRows, evidence.withdrawnBalanceIdentitySet);
   console.log(JSON.stringify({ mode: "apply-result", result, verification: summary(verifiedState, evidence, verifiedPlan) }, null, 2));
 }
 

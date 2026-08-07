@@ -53,6 +53,20 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(workspace, /Pay Product by Card/);
 });
 
+test("a positive family balance remains payable when no open invoice exists", () => {
+  const workspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
+
+  assert.match(
+    workspace,
+    /const showFamilyPaymentPanel = parentBalanceReviewRequired[\s\S]*balanceCents > 0 && openInvoices\.length === 0/,
+  );
+  assert.match(
+    workspace,
+    /if \(!nextOpenInvoice && balanceCents <= 0 && !parentBalanceReviewRequired\)/,
+  );
+  assert.match(workspace, /available for secure account payment/);
+});
+
 test("automated payment processing blocks unresolved subsidy responsibility before applying credit or charging Stripe", () => {
   const source = readFileSync("src/lib/autopay-processing.ts", "utf8");
   const holdIndex = source.indexOf("parentBalanceNeedsResponsibilityReview({");

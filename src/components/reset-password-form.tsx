@@ -52,33 +52,44 @@ export function ResetPasswordForm() {
   useEffect(() => {
     if (forceReset) return;
 
-    const hash = window.location.hash;
-    const resolution =
-      hasPasswordRecoveryContext(search, hash) || !recoveryResolutionRef.current
-        ? resolvePasswordRecoveryLink(search, hash)
-        : recoveryResolutionRef.current;
-    recoveryResolutionRef.current = resolution;
     let active = true;
-    if (resolution.status === "ready") {
-      credentialRef.current = resolution.credential;
-      queueMicrotask(() => {
-        if (active) setLinkStatus("ready");
-      });
-    } else {
-      credentialRef.current = {};
-      queueMicrotask(() => {
-        if (!active) return;
-        setError(resolution.message);
-        setLinkStatus("invalid");
-      });
+
+    function resolveCurrentRecoveryState() {
+      const currentSearch = window.location.search;
+      const currentHash = window.location.hash;
+      const resolution =
+        hasPasswordRecoveryContext(currentSearch, currentHash) || !recoveryResolutionRef.current
+          ? resolvePasswordRecoveryLink(currentSearch, currentHash)
+          : recoveryResolutionRef.current;
+      recoveryResolutionRef.current = resolution;
+
+      if (resolution.status === "ready") {
+        credentialRef.current = resolution.credential;
+        queueMicrotask(() => {
+          if (!active) return;
+          setError("");
+          setLinkStatus("ready");
+        });
+      } else {
+        credentialRef.current = {};
+        queueMicrotask(() => {
+          if (!active) return;
+          setError(resolution.message);
+          setLinkStatus("invalid");
+        });
+      }
+
+      const cleanUrl = passwordRecoveryUrlWithoutSecrets(window.location.href);
+      const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (cleanUrl !== currentUrl) window.history.replaceState(null, "", cleanUrl);
     }
 
-    const cleanUrl = passwordRecoveryUrlWithoutSecrets(window.location.href);
-    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    if (cleanUrl !== currentUrl) window.history.replaceState(null, "", cleanUrl);
+    resolveCurrentRecoveryState();
+    window.addEventListener("hashchange", resolveCurrentRecoveryState);
 
     return () => {
       active = false;
+      window.removeEventListener("hashchange", resolveCurrentRecoveryState);
     };
   }, [forceReset, search]);
 

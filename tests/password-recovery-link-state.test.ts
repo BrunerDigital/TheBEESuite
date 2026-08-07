@@ -39,6 +39,21 @@ test("password recovery identifies expired or already-consumed query redirects",
   );
 });
 
+test("password recovery treats already-used and replaced links as newest-link-only failures", () => {
+  for (const description of [
+    "Email link is invalid or already used",
+    "One-time token was replaced by a newer request",
+  ]) {
+    assert.deepEqual(
+      resolvePasswordRecoveryLink(
+        `?error=access_denied&error_description=${encodeURIComponent(description)}&next=%2Fparent-portal%2Fsetup`,
+        "",
+      ),
+      { status: "invalid", reason: "expired", message: EXPIRED_PASSWORD_RECOVERY_LINK_MESSAGE },
+    );
+  }
+});
+
 test("password recovery identifies provider errors returned in URL fragments", () => {
   assert.deepEqual(
     resolvePasswordRecoveryLink("?next=%2Fdashboard", "#error=access_denied&error_description=Verification+failed"),

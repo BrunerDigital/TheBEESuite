@@ -260,7 +260,7 @@ async function loadPlan(db: Database = prisma) {
   return { summary, plans, center, repairable };
 }
 
-function publicSummary(plan: ReturnType<Awaited<ReturnType<typeof loadPlan>>>) {
+function publicSummary(plan: Awaited<ReturnType<typeof loadPlan>>) {
   const repairItems = plan.plans
     .filter((item) => item.status === "repair")
     .map((item) => ({

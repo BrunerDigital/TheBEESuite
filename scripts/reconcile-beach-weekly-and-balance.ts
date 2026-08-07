@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import { Prisma } from "@prisma/client";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import {
-  NEXT_WEEKLY_BILLING_PERIOD,
   WEEKLY_TUITION_AUTOBILL_CADENCE,
   WEEKLY_TUITION_AUTOBILL_DAY,
   nextWeeklyBillingPeriod,
@@ -26,7 +25,8 @@ type FamilyState = {
   id: string;
   name: string;
   externalId: string;
-  billingAccount: { id: string; balanceCents: number; invoices: { id: string }[]; payments: { id: string }[] } | null;
+  customFields: Prisma.JsonValue | null;
+  billingAccount: { id: string; balanceCents: number; customFields: Prisma.JsonValue | null; invoices: { id: string }[]; payments: { id: string }[] } | null;
   children: Array<{
     id: string;
     fullName: string;
@@ -300,7 +300,7 @@ function buildPlan(
   const tuitionAutoResolved: Array<{ accountKey: string; childName: string; childId: string; resolvedChildName: string }> = [];
   const tuitionMatches = new Map<string, number>();
 
-  const startsPeriod = nextWeeklyBillingPeriod(asOf) || NEXT_WEEKLY_BILLING_PERIOD;
+  const startsPeriod = nextWeeklyBillingPeriod(asOf);
   for (const contract of contracts) {
     const familiesForAccount = familyByAccount.get(contract.accountKey) ?? [];
     if (familiesForAccount.length !== 1) {

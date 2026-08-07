@@ -177,7 +177,6 @@ async function loadState(client: Prisma.TransactionClient | typeof prisma = pris
 }
 
 type LoadedState = Awaited<ReturnType<typeof loadState>>;
-type FamilyRecord = LoadedState["families"][number];
 
 function familyById(state: LoadedState, id: string) {
   const family = state.families.find((item) => item.id === id);

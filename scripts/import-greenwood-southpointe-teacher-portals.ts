@@ -3,7 +3,7 @@ import "./load-env";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Prisma, UserRole } from "@prisma/client";
+import { UserRole } from "@prisma/client";
 import { createClient, type SupabaseClient, type User as SupabaseUser } from "@supabase/supabase-js";
 import { prisma } from "../src/lib/prisma";
 import { buildTeacherLoginEmail, getDefaultTeacherInitialPassword } from "../src/lib/teacher-login";

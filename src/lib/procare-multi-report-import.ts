@@ -216,7 +216,17 @@ export function decodeProcareTabularBuffer(buffer: Buffer) {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
   } catch {
-    return new TextDecoder("windows-1252").decode(buffer);
+    // Node builds without full ICU data can treat the windows-1252 label like
+    // ISO-8859-1 and leave bytes 0x80-0x9f as control characters. Decode the
+    // Windows-specific range explicitly so names and other imported text are
+    // consistent in every runtime.
+    const windows1252Characters = [
+      "€", "�", "‚", "ƒ", "„", "…", "†", "‡", "ˆ", "‰", "Š", "‹", "Œ", "�", "Ž", "�",
+      "�", "‘", "’", "“", "”", "•", "–", "—", "˜", "™", "š", "›", "œ", "�", "ž", "Ÿ",
+    ];
+    return buffer.toString("latin1").replace(/[\x80-\x9f]/g, (character) =>
+      windows1252Characters[character.charCodeAt(0) - 0x80],
+    );
   }
 }
 

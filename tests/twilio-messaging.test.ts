@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
 import {
+  parseTwilioWebhookParams,
   phoneMatchKey,
   twilioDeliveryStatus,
   twilioSmsConsentAction,
@@ -64,4 +65,23 @@ test("Twilio SMS consent keywords require exact opt-in or opt-out commands", () 
   assert.equal(twilioSmsConsentAction("unstop"), "opt_in");
   assert.equal(twilioSmsConsentAction("please stop by the office"), null);
   assert.equal(twilioSmsConsentAction("stop reminders"), null);
+});
+
+test("Twilio webhook parsing accepts form posts and rejects malformed content", async () => {
+  const formRequest = new Request("https://thebeesuite.io/api/twilio/inbound", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ MessageSid: "SM123", Body: "Pickup question" }),
+  });
+  assert.deepEqual(await parseTwilioWebhookParams(formRequest), {
+    MessageSid: "SM123",
+    Body: "Pickup question",
+  });
+
+  const malformedRequest = new Request("https://thebeesuite.io/api/twilio/inbound", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(await parseTwilioWebhookParams(malformedRequest), null);
 });

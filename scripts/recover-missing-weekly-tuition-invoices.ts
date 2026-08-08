@@ -7,12 +7,14 @@ loadEnvConfig(process.env.BEE_RECOVERY_ENV_DIR || process.cwd());
 async function main() {
 const [
   { createBillingInvoiceForFamily },
+  { stripeSchoolBillingApproval },
   { billingDedupeKey, normalizeBillingCadence, weeklyTuitionChargeDateForPeriod },
   { currentlyEnrolledChildWhere },
   { prisma },
   { normalizeTuitionCredits, totalTuitionCreditsCents, tuitionInvoiceItems },
 ] = await Promise.all([
   import("@/lib/billing-invoices"),
+  import("@/lib/stripe-billing-approval"),
   import("@/lib/billing-workflows"),
   import("@/lib/enrollment-status"),
   import("@/lib/prisma"),
@@ -40,13 +42,14 @@ function fingerprint(value: unknown) {
 
 const period = argumentValue("--period").toUpperCase();
 const apply = process.argv.includes("--apply");
+const confirmedRecovery = process.argv.includes("--confirm-missing-weekly-tuition-recovery");
 const confirmedFingerprint = argumentValue("--confirm-fingerprint").toLowerCase();
 
 if (!/^20\d{2}-W(?:0[1-9]|[1-4]\d|5[0-3])$/.test(period)) {
   throw new Error("Pass an explicit weekly period such as --period=2026-W33.");
 }
-if (apply && !confirmedFingerprint) {
-  throw new Error("Apply requires --confirm-fingerprint=<dry-run fingerprint>.");
+if (apply && (!confirmedRecovery || !confirmedFingerprint)) {
+  throw new Error("Apply requires --confirm-missing-weekly-tuition-recovery and --confirm-fingerprint=<dry-run fingerprint>.");
 }
 
 const assignedChildren = await prisma.child.findMany({
@@ -74,9 +77,17 @@ const assignedChildren = await prisma.child.findMany({
 const centerIds = Array.from(new Set(assignedChildren.map((child) => child.family.centerId).filter((value): value is string => Boolean(value))));
 const centers = await prisma.center.findMany({
   where: { id: { in: centerIds }, status: { not: "closed" } },
-  select: { id: true, name: true },
+  select: { id: true, name: true, customFields: true },
 });
-const centerNamesById = new Map(centers.map((center) => [center.id, center.name]));
+const centerEligibility = centers.map((center) => {
+  const fields = jsonRecord(center.customFields);
+  const billingApproval = stripeSchoolBillingApproval({ customFields: fields, centerName: center.name });
+  const approved = billingApproval.approved
+    && fields.livePaymentsEnabled === true
+    && fields.tuitionBillingEnabled === true;
+  return { center, approved, blockingReason: approved ? null : billingApproval.blockingReason || "School live-payment or tuition billing approval is not active." };
+});
+const centerNamesById = new Map(centerEligibility.filter((item) => item.approved).map(({ center }) => [center.id, center.name]));
 
 const planIds = Array.from(new Set(assignedChildren.map((child) => clean(jsonRecord(child.customFields).tuitionPlanId)).filter(Boolean)));
 const plans = planIds.length
@@ -178,6 +189,9 @@ console.log(JSON.stringify({
   targetInvoices: targets.length,
   targetTotalCents: bySchool.reduce((total, school) => total + school.totalCents, 0),
   bySchool,
+  excludedSchools: centerEligibility
+    .filter((item) => !item.approved)
+    .map(({ center, blockingReason }) => ({ centerId: center.id, school: center.name, blockingReason })),
   excludedInvalidCreditAssignments: invalidCreditAssignments,
 }, null, 2));
 

@@ -1220,7 +1220,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   }));
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-5 sm:gap-6">
       <ReportPrintStyles />
       <PrintableReport active={printActive} label="Printable dashboard snapshot">
         <header>
@@ -1466,39 +1466,39 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           </>
         ) : null}
       </PrintableReport>
-      <section className="honeyglass-hero dashboard-command-center relative overflow-hidden rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/20">
+      <section className="honeyglass-hero dashboard-command-center relative min-w-0 overflow-hidden rounded-2xl border bg-card/80 p-4 shadow-2xl shadow-black/20 sm:p-6">
         <div className="hive-texture absolute inset-0 opacity-[0.08]" />
-        <div className={showAiBrief ? "relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]" : "relative grid gap-6"}>
-          <div className="flex flex-col gap-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-primary">{asOfLabel}</p>
-                <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-                  The BEE Suite command center
-                </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  {commandCenterDescription}
-                </p>
-              </div>
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                {canPrintDashboard ? <Button className="w-full sm:w-auto" variant="outline" onClick={printDashboard}>
-                  <Printer data-icon="inline-start" />
+        <div className="relative flex min-w-0 flex-col gap-5">
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-primary">{asOfLabel}</p>
+              <h1 className="mt-2 max-w-3xl text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">
+                The BEE Suite command center
+              </h1>
+              <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-muted-foreground">
+                {commandCenterDescription}
+              </p>
+            </div>
+            <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2 lg:flex lg:flex-wrap">
+                {canPrintDashboard ? <Button className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" variant="outline" onClick={printDashboard}>
+                  <Printer data-icon="inline-start" aria-hidden="true" />
                   Print dashboard
                 </Button> : null}
-                {showAiBrief ? <Button className="w-full sm:w-auto" nativeButton={false} render={<Link href={aiBriefHref} />}>
-                  <Sparkles data-icon="inline-start" />
+                {showAiBrief ? <Button className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" nativeButton={false} render={<Link href={aiBriefHref} />}>
+                  <Sparkles data-icon="inline-start" aria-hidden="true" />
                   {isTeacherDashboard ? "Open teacher portal" : isBillingDashboard ? "Open messages" : isParentDashboard || isPickupDashboard ? "Open family portal" : "Review AI brief"}
                 </Button> : null}
-                {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? <Button className="w-full sm:w-auto" variant="outline" nativeButton={false} render={<Link href="/crm-leads" />}>
-                  <ArrowUpRight data-icon="inline-start" />
+                {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? <Button className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" variant="outline" nativeButton={false} render={<Link href="/crm-leads" />}>
+                  <ArrowUpRight data-icon="inline-start" aria-hidden="true" />
                   Open pipeline
                 </Button> : null}
-                {isDirectorDashboard && live?.dataReadiness ? <Button className="w-full sm:w-auto" variant="outline" nativeButton={false} render={<Link href="/data-readiness" />}>
-                  <ShieldCheck data-icon="inline-start" />
+                {isDirectorDashboard && live?.dataReadiness ? <Button className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" variant="outline" nativeButton={false} render={<Link href="/data-readiness" />}>
+                  <ShieldCheck data-icon="inline-start" aria-hidden="true" />
                   Data readiness
                 </Button> : null}
-              </div>
             </div>
+          </div>
+          <div className={showAiBrief ? "grid min-w-0 gap-5 min-[112rem]:grid-cols-[minmax(0,1fr)_28rem] min-[112rem]:gap-6" : "grid min-w-0 gap-5"}>
             {topKpiRows.length ? (
               <WorkspaceBoard
                 storageId="dashboard-command-center-kpis"
@@ -1508,19 +1508,18 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 items={topKpiItems}
               />
             ) : null}
-          </div>
-          {showAiBrief ? (
-          <CollapsibleCard
-            id="dashboard-ai-daily-summary"
-            className="dashboard-ai-brief border-primary/30 bg-primary/10"
-            title={(
-              <span className="flex items-center gap-2 text-lg">
-                <Sparkles className="text-primary" />
-                AI daily center summary
-              </span>
-            )}
-            description="Human review required"
-          >
+            {showAiBrief ? (
+              <CollapsibleCard
+                id="dashboard-ai-daily-summary"
+                className="dashboard-ai-brief order-first border-primary/30 bg-primary/10 min-[112rem]:order-none"
+                title={(
+                  <span className="flex items-center gap-2 text-lg">
+                    <Sparkles className="text-primary" aria-hidden="true" />
+                    AI daily center summary
+                  </span>
+                )}
+                description="Human review required"
+              >
               <p className="text-sm leading-6 text-muted-foreground">
                 {aiSummary}
               </p>
@@ -1533,8 +1532,9 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 ))}
               </div>
               ) : null}
-          </CollapsibleCard>
-          ) : null}
+              </CollapsibleCard>
+            ) : null}
+          </div>
         </div>
       </section>
 
@@ -1624,7 +1624,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           {visibleLenses.includes("pickup") ? <TabsTrigger value="pickup">Pickup</TabsTrigger> : null}
         </TabsList>
         {visibleLenses.includes("director") ? <TabsContent value="director" className="mt-0 min-w-0">
-          <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_22rem]">
             <div className="grid min-w-0 gap-6">
               {lowerKpiRows.length ? (
                 <WorkspaceBoard storageId="dashboard-director-kpis" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" items={lowerKpiItems} />

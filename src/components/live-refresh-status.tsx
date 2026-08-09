@@ -106,7 +106,7 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
     <Badge
       variant={offline ? "outline" : "secondary"}
       className={cn(
-        "hidden gap-1 rounded-lg px-2.5 py-1 text-[0.68rem] xl:inline-flex",
+        "hidden gap-1 rounded-lg px-2.5 py-1 text-[0.68rem] 2xl:inline-flex",
         offline && "border-amber-500/40 text-amber-700 dark:text-amber-300",
       )}
     >

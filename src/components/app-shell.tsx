@@ -546,11 +546,11 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
               key={href}
               href={href}
               className={cn(
-                "flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[0.68rem] font-medium text-muted-foreground transition",
+                "flex min-h-12 touch-manipulation flex-col items-center justify-center gap-1 rounded-xl px-2 text-[0.68rem] font-medium text-muted-foreground transition",
                 active && "bg-primary/12 text-primary",
               )}
             >
-              <Icon className="size-4" />
+              <Icon className="size-4" aria-hidden="true" />
               <span className="truncate">{label}</span>
             </Link>
           );
@@ -610,14 +610,14 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
           ? "messages"
           : "dashboard";
   const searchPlaceholder = searchDestination === "crm-leads"
-    ? "Search families, children, invoices, tours, tasks..."
+    ? "Search families, children, invoices, tours, tasks…"
     : searchDestination === "parent-portal"
-      ? "Search your family portal..."
+      ? "Search your family portal…"
       : searchDestination === "billing-invoices"
-        ? "Search billing accounts and invoices..."
+        ? "Search billing accounts and invoices…"
         : searchDestination === "messages"
-          ? "Search messages..."
-          : "Search your dashboard...";
+          ? "Search messages…"
+          : "Search your dashboard…";
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("bee-suite-theme");
@@ -745,37 +745,39 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
       <a href="#workspace-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-xl">
         Skip to workspace content
       </a>
-      <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-20 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl lg:block xl:hidden">
+      <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-20 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl lg:block 2xl:hidden">
         <SidebarRail currentUser={currentUser} />
       </aside>
-      <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl xl:block">
+      <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl 2xl:block">
         <SidebarNav currentUser={currentUser} />
       </aside>
-      <div className="lg:pl-20 xl:pl-72">
-        <header className="app-header sticky top-0 z-10 border-b bg-background/75 backdrop-blur-xl">
-          <div className="flex min-h-16 items-center gap-3 px-4 sm:px-6">
+      <div className="min-w-0 lg:pl-20 2xl:pl-72">
+        <header className="app-header sticky top-0 z-10 min-w-0 border-b bg-background/75 backdrop-blur-xl">
+          <div className="flex min-h-16 min-w-0 items-center gap-2 px-3 sm:px-4 lg:px-6">
             <Sheet>
               <SheetTrigger
                 render={
-                  <Button variant="outline" size="icon" className="lg:hidden" aria-label="Open navigation" />
+                  <Button variant="outline" size="icon" className="shrink-0 touch-manipulation lg:hidden" aria-label="Open navigation" />
                 }
               >
-                <Menu />
+                <Menu aria-hidden="true" />
               </SheetTrigger>
               <SheetContent side="left" className="w-80 p-0">
                 <SheetTitle className="sr-only">Navigation</SheetTitle>
                 <SidebarNav currentUser={currentUser} />
               </SheetContent>
             </Sheet>
-            {showWorkspaceTools ? <div className="hidden flex-1 items-center md:flex">
-              <div className="relative w-full max-w-2xl">
-                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            {showWorkspaceTools ? <div className="hidden min-w-0 flex-1 items-center lg:flex">
+              <div className="relative min-w-0 w-full max-w-2xl">
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <Input
                   ref={searchInputRef}
                   aria-autocomplete="list"
                   aria-controls="global-search-results"
                   aria-expanded={searchOpen && searchQuery.trim().length >= 2}
                   className="app-global-search h-11 rounded-xl border-border/70 bg-card/70 pl-10 pr-16"
+                  autoComplete="off"
+                  name="workspace-search"
                   placeholder={searchPlaceholder}
                   role="combobox"
                   value={searchQuery}
@@ -833,10 +835,10 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                 ) : null}
               </div>
             </div> : null}
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
               {showWorkspaceTools ? <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
-                <DialogTrigger render={<Button variant="outline" size="icon" aria-label="Search workspace" className="md:hidden" />}>
-                  <Search />
+                <DialogTrigger render={<Button variant="outline" size="icon" aria-label="Search workspace" className="touch-manipulation lg:hidden" />}>
+                  <Search aria-hidden="true" />
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-xl">
                   <DialogHeader>
@@ -844,11 +846,11 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                     <DialogDescription>Find families, child records, billing items, tasks, and messages for your role.</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-3">
-                    <Input autoFocus placeholder={searchPlaceholder} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitGlobalSearch(); }} />
+                    <Input autoComplete="off" name="mobile-workspace-search" placeholder={searchPlaceholder} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitGlobalSearch(); }} />
                     {trimmedSearchQuery.length < 2 ? (
                       <p className="text-sm text-muted-foreground">Type at least two characters to search scoped workspace records.</p>
                     ) : searchPending ? (
-                      <p className="text-sm text-muted-foreground">Searching...</p>
+                      <p className="text-sm text-muted-foreground" aria-live="polite">Searching…</p>
                     ) : activeSearchError ? (
                       <p className="text-sm text-destructive">{activeSearchError}</p>
                     ) : activeSearchResults.length ? (
@@ -870,8 +872,8 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                 </DialogContent>
               </Dialog> : null}
               {showWorkspaceTools ? (
-                <Badge variant="secondary" className="hidden gap-1 rounded-lg px-3 py-1 sm:inline-flex">
-                  <Sparkles data-icon="inline-start" />
+                <Badge variant="secondary" className="hidden gap-1 rounded-lg px-3 py-1 2xl:inline-flex">
+                  <Sparkles data-icon="inline-start" aria-hidden="true" />
                   AI suggestions require review
                 </Badge>
               ) : null}
@@ -922,12 +924,12 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                   </div>
                   <div className="hidden items-center gap-2 sm:flex">
                     <AccountMenu currentUser={currentUser} onLogout={logout} />
-                    <div className="rounded-lg border bg-card/70 px-3 py-1.5 text-right">
+                    <div className="hidden rounded-lg border bg-card/70 px-3 py-1.5 text-right 2xl:block">
                       <div className="text-xs font-medium leading-none">{displayUserName}</div>
                       <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>
                     </div>
-                    <Button variant="outline" size="icon" aria-label="Sign out" onClick={logout}>
-                      <LogOut />
+                    <Button variant="outline" size="icon" className="hidden 2xl:inline-flex" aria-label="Sign out" onClick={logout}>
+                      <LogOut aria-hidden="true" />
                     </Button>
                   </div>
                 </>
@@ -940,7 +942,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
             </div>
           </div>
         </header>
-        <main id="workspace-main" className={cn("dashboard-workspace min-h-[calc(100vh-4rem)] scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 lg:pb-6 xl:pb-8")}>
+        <main id="workspace-main" className={cn("dashboard-workspace min-h-[calc(100vh-4rem)] min-w-0 scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 lg:pb-6 xl:pb-8")}>
           {canViewDataReadiness && readinessContext ? <DataReadinessContextPanel context={readinessContext} summary={readinessSummary} loading={readinessLoading} /> : null}
           {children}
         </main>

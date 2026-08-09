@@ -151,8 +151,9 @@ test("executive account summary rolls family balances up by visible school", () 
   assert.equal(summary.schools[0]?.totalOwedCents, 50000);
 });
 
-test("dashboard and main shell use the same protected school-balance surface", () => {
+test("director and executive dashboard billing widgets use current-family balances", () => {
   const route = readFileSync("src/app/api/dashboard/accounts-receivable/route.ts", "utf8");
+  const aiCommandRoute = readFileSync("src/app/api/ai/command/route.ts", "utf8");
   const shell = readFileSync("src/components/app-shell.tsx", "utf8");
   const dashboardPage = readFileSync("src/app/dashboard/page.tsx", "utf8");
   const dashboard = readFileSync("src/components/dashboard.tsx", "utf8");
@@ -166,6 +167,10 @@ test("dashboard and main shell use the same protected school-balance surface", (
   assert.match(dashboardPage, /accountsReceivableFamilySelect/);
   assert.match(dashboardPage, /accountsReceivableSummaryFamilySelect/);
   assert.equal((dashboardPage.match(/(?:where: |family: )currentFamilyWhere,/g) ?? []).length >= 3, true);
+  assert.match(
+    aiCommandRoute,
+    /const currentFamilyWhere:[\s\S]*children: \{ some: currentlyEnrolledChildWhere\(\) \}[\s\S]*const openInvoiceWhere:[\s\S]*billingAccount: \{ family: currentFamilyWhere \}/,
+  );
   assert.match(dashboard, /dashboard-director-account-balances/);
   assert.match(dashboard, /dashboard-billing-account-balances/);
   assert.match(dashboard, /dashboard-\$\{lens\}-executive-account-balances/);

@@ -120,6 +120,8 @@ test("landing page provides real light and dark Honeyglass themes", () => {
     "aria-pressed={isDark}",
     "useSyncExternalStore(subscribeToTheme, getThemeSnapshot, getServerThemeSnapshot)",
     "new MutationObserver(onStoreChange)",
+    'event.key !== themeStorageKey || (event.newValue !== "light" && event.newValue !== "dark")',
+    'document.documentElement.classList.toggle("dark", nextDark)',
     'localStorage.setItem(themeStorageKey, nextDark ? "dark" : "light")',
     'root.classList.toggle("dark", nextDark)',
     'root.style.colorScheme = nextDark ? "dark" : "light"',

@@ -7,12 +7,21 @@ const themeStorageKey = "bee-suite-theme";
 
 function subscribeToTheme(onStoreChange: () => void) {
   const observer = new MutationObserver(onStoreChange);
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key !== themeStorageKey || (event.newValue !== "light" && event.newValue !== "dark")) return;
+
+    const nextDark = event.newValue === "dark";
+    document.documentElement.classList.toggle("dark", nextDark);
+    document.documentElement.style.colorScheme = nextDark ? "dark" : "light";
+    onStoreChange();
+  };
+
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-  window.addEventListener("storage", onStoreChange);
+  window.addEventListener("storage", handleStorage);
 
   return () => {
     observer.disconnect();
-    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener("storage", handleStorage);
   };
 }
 

@@ -21,6 +21,7 @@ export type ModuleSlug =
   | "forgot-password"
   | "onboarding"
   | "school-setup"
+  | "data-readiness"
   | "dashboard"
   | "multi-location-dashboard"
   | "center-dashboard"
@@ -259,6 +260,7 @@ export const navGroups = [
     title: "Command",
     items: [
       ["Dashboard", "dashboard", LayoutDashboard],
+      ["Data readiness", "data-readiness", ClipboardCheck],
       ["Multi-location", "multi-location-dashboard", Building2],
       ["AI Command", "ai-command", Bot],
     ],
@@ -321,6 +323,18 @@ export type ModuleDefinition = {
 };
 
 export const modules: ModuleDefinition[] = [
+  {
+    slug: "data-readiness",
+    title: "Director Data Readiness Center",
+    eyebrow: "Audited migration readiness",
+    description:
+      "School-scoped ProCare action queue, source evidence, reviewed differences, append-only director decisions, guarded onboarding, and post-import verification.",
+    owner: "Center director, assistant director, regional manager, brand admin",
+    metrics: ["7 shared statuses", "7 risk priorities", "Append-only decisions", "Separate launch gates"],
+    features: ["Prioritized action queue", "Focused review drawers", "Safe low-risk bulk confirmation", "CSV audit export"],
+    records: ["Source rows", "Import batches", "Review fingerprints", "Reconciliation evidence"],
+    sensitive: true,
+  },
   {
     slug: "school-setup",
     title: "School Setup Command Center",

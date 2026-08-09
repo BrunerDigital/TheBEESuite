@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Printer,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -118,6 +119,14 @@ export type LiveDashboardData = {
     automaticCompletedIds?: string[];
     graphicHref: string;
   }>;
+  dataReadiness?: {
+    actionable: number;
+    blocked: number;
+    confirm: number;
+    failed: number;
+    completionPercent: number;
+    lastUpdated: string | null;
+  };
   executiveMetrics?: {
     currentWeekStart: string;
     currentWeekKey: string;
@@ -1159,15 +1168,15 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     .map((lens) => lens.replaceAll("_", " "))
     .join(", ") || live?.dashboardWidgetRoleLabel || "Dashboard";
 
-  function renderKpiCard({ kpi, Icon, widgetId }: (typeof dashboardKpiRows)[number], valueClassName: string) {
+  function renderKpiCard({ kpi, Icon, widgetId }: (typeof dashboardKpiRows)[number], valueClassName: string, honeycomb = false) {
     const href = widgetSummaries[widgetId]?.href ?? "/dashboard";
     return (
       <Link
         href={href}
-        className="group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn("group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", honeycomb && "honeycomb-kpi-link")}
         aria-label={`Open ${kpi.label}`}
       >
-        <Card className="glass-panel h-full transition group-hover:border-primary/40 group-hover:bg-background/70">
+        <Card className={cn("glass-panel h-full transition group-hover:border-primary/40 group-hover:bg-background/70", honeycomb && "honeycomb-kpi-card")}>
           <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
             <CardDescription>{kpi.label}</CardDescription>
             <Icon className="text-primary" />
@@ -1185,11 +1194,25 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     );
   }
 
-  const topKpiItems: WorkspaceBoardItem[] = topKpiRows.map((row) => ({
+  const topKpiItems: WorkspaceBoardItem[] = [
+    ...topKpiRows.map((row) => ({
     id: `top-kpi-${row.widgetId}-${row.kpi.label}`,
     title: row.kpi.label,
-    children: renderKpiCard(row, "text-3xl"),
-  }));
+    children: renderKpiCard(row, "text-3xl", true),
+  })),
+    ...(isDirectorDashboard && live?.dataReadiness ? [{
+      id: "top-kpi-data-readiness",
+      title: "Data readiness",
+      children: (
+        <Link href="/data-readiness" className="honeycomb-kpi-link group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Open Data Readiness Center with ${live.dataReadiness.actionable} actionable tasks`}>
+          <Card className="glass-panel honeycomb-kpi-card h-full transition group-hover:border-primary/40 group-hover:bg-background/70">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2"><CardDescription>Data readiness</CardDescription><ShieldCheck className="text-sky-500" /></CardHeader>
+            <CardContent><div className="text-3xl font-semibold">{live.dataReadiness.actionable}</div><p className="mt-1 text-xs text-muted-foreground">{live.dataReadiness.blocked} blocked · {live.dataReadiness.failed} failed · {live.dataReadiness.completionPercent}% resolved</p><span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">Open queue <ArrowUpRight className="size-3" /></span></CardContent>
+          </Card>
+        </Link>
+      ),
+    } satisfies WorkspaceBoardItem] : []),
+  ];
   const lowerKpiItems: WorkspaceBoardItem[] = lowerKpiRows.map((row) => ({
     id: `director-kpi-${row.widgetId}-${row.kpi.label}`,
     title: row.kpi.label,
@@ -1470,10 +1493,14 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   <ArrowUpRight data-icon="inline-start" />
                   Open pipeline
                 </Button> : null}
+                {isDirectorDashboard && live?.dataReadiness ? <Button className="w-full sm:w-auto" variant="outline" nativeButton={false} render={<Link href="/data-readiness" />}>
+                  <ShieldCheck data-icon="inline-start" />
+                  Data readiness
+                </Button> : null}
               </div>
             </div>
             {topKpiRows.length ? (
-              <WorkspaceBoard storageId="dashboard-command-center-kpis" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" items={topKpiItems} />
+              <WorkspaceBoard storageId="dashboard-command-center-kpis" className="honeycomb-kpi-cluster" itemClassName="honeycomb-kpi-item" items={topKpiItems} />
             ) : null}
           </div>
           {showAiBrief ? (

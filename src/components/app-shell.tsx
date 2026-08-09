@@ -4,8 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Activity,
   ArrowRight,
+  BadgeDollarSign,
   Bell,
+  Building2,
   CheckCheck,
   ChevronDown,
   ClipboardList,
@@ -20,8 +23,9 @@ import {
   ShieldCheck,
   Sparkles,
   Sun,
+  Users,
 } from "lucide-react";
-import { BrandLogo } from "@/components/brand-logo";
+import { BrandIcon, BrandLogo } from "@/components/brand-logo";
 import { AccountsReceivableSheet } from "@/components/accounts-receivable-sheet";
 import { LiveRefreshStatus } from "@/components/live-refresh-status";
 import { ProfilePhotoUploader } from "@/components/profile-photo-uploader";
@@ -59,6 +63,8 @@ import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { workspaceVisualDomain } from "@/lib/workspace-visual-domain";
 import { SchoolTimeZoneProvider } from "@/components/school-time-zone-context";
 import { WebPushControl } from "@/components/web-push-control";
+import { DataReadinessContextBadge } from "@/components/data-readiness-context-badge";
+import { dataReadinessCenterEnabled, honeyglassUiEnabled } from "@/lib/honeyglass";
 
 type ShellUser = {
   name: string;
@@ -73,11 +79,55 @@ type ShellUser = {
 };
 
 function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) {
+  if (slug === "data-readiness" && !dataReadinessCenterEnabled()) return false;
   if (
     slug === "corporate-billing"
     && !canUseKidCityCorporateBilling(currentUser?.role, currentUser?.branding?.kind)
   ) return false;
   return canAccessModule(currentUser, slug);
+}
+
+function SidebarRail({ currentUser }: { currentUser?: ShellUser }) {
+  const pathname = usePathname();
+  const visibleItems = navGroups
+    .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
+    .filter((item) => canAccessShellModule(currentUser, item.slug));
+
+  return (
+    <div className="flex h-full min-h-0 flex-col items-center gap-3 overflow-hidden py-4">
+      <Link href="/" aria-label={`${currentUser?.branding?.name ?? "The BEE Suite"} home`}>
+        <BrandIcon branding={currentUser?.branding} className="size-10" />
+      </Link>
+      <ScrollArea className="min-h-0 w-full flex-1 px-2">
+        <nav className="flex flex-col items-center gap-2 py-2" aria-label="Tablet navigation rail">
+          {visibleItems.map(({ label, slug, Icon, group }) => {
+            const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
+            const active = pathname === href || (slug === "dashboard" && pathname === "/center-dashboard");
+            return (
+              <Tooltip key={slug}>
+                <TooltipTrigger
+                  render={(
+                    <Link
+                      href={href}
+                      aria-label={label}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "grid size-11 place-items-center rounded-xl border border-transparent text-muted-foreground transition hover:border-primary/20 hover:bg-primary/[0.08] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        active && "border-primary/30 bg-primary/15 text-primary shadow-sm",
+                      )}
+                    />
+                  )}
+                >
+                  <Icon className="size-5" />
+                </TooltipTrigger>
+                <TooltipContent side="right"><span className="font-semibold">{label}</span><span className="ml-1 opacity-75">· {group}</span></TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </nav>
+      </ScrollArea>
+    </div>
+  );
 }
 
 function shellUserViewText(value: string, currentUser?: ShellUser) {
@@ -436,19 +486,54 @@ function AccountMenu({ currentUser, onLogout }: { currentUser: ShellUser; onLogo
 function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
   const pathname = usePathname();
   const teacherItems = [
-    { label: "Home", href: "/dashboard", Icon: Home },
-    { label: "Classroom", href: "/teacher-portal", Icon: ClipboardList },
-    { label: "Messages", href: "/messages", Icon: MessageSquare },
-    { label: "Docs", href: "/documents", Icon: FileText },
+    { label: "Home", href: "/dashboard", slug: "dashboard", Icon: Home },
+    { label: "Classroom", href: "/teacher-portal", slug: "teacher-portal", Icon: ClipboardList },
+    { label: "Messages", href: "/messages", slug: "messages", Icon: MessageSquare },
+    { label: "Docs", href: "/documents", slug: "documents", Icon: FileText },
   ];
-  const parentItems = [{ label: "Parent Portal", href: "/parent-portal", Icon: Home }];
-  const items = isTeacherUser(currentUser) ? teacherItems : isParentFacingUser(currentUser) ? parentItems : [];
+  const parentItems = [
+    { label: "Home", href: "/parent-portal", slug: "parent-portal", Icon: Home },
+    { label: "Updates", href: "/parent-portal#daily-reports", slug: "parent-portal", Icon: Activity },
+    { label: "Billing", href: "/parent-portal#billing", slug: "parent-portal", Icon: BadgeDollarSign },
+    { label: "Messages", href: "/parent-portal#messages", slug: "parent-portal", Icon: MessageSquare },
+  ];
+  const directorItems = [
+    { label: "Home", href: "/dashboard", slug: "dashboard", Icon: Home },
+    { label: "Families", href: "/family-detail", slug: "family-detail", Icon: Users },
+    { label: "School day", href: "/classroom-dashboard", slug: "classroom-dashboard", Icon: Activity },
+    { label: "Readiness", href: "/data-readiness", slug: "data-readiness", Icon: ShieldCheck },
+  ];
+  const executiveItems = [
+    { label: "Home", href: "/dashboard", slug: "dashboard", Icon: Home },
+    { label: "Locations", href: "/multi-location-dashboard", slug: "multi-location-dashboard", Icon: Building2 },
+    { label: "Families", href: "/family-detail", slug: "family-detail", Icon: Users },
+    { label: "Readiness", href: "/data-readiness", slug: "data-readiness", Icon: ShieldCheck },
+  ];
+  const billingItems = [
+    { label: "Home", href: "/dashboard", slug: "dashboard", Icon: Home },
+    { label: "Billing", href: "/billing-invoices", slug: "billing-invoices", Icon: BadgeDollarSign },
+    { label: "Payments", href: "/billing-invoices?view=payments", slug: "payments", Icon: Activity },
+    { label: "Messages", href: "/messages", slug: "messages", Icon: MessageSquare },
+  ];
+  const executiveRole = ["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER"].includes(currentUser?.role ?? "");
+  const sourceItems = isTeacherUser(currentUser)
+    ? teacherItems
+    : isParentFacingUser(currentUser)
+      ? parentItems
+      : currentUser?.role === "BILLING_ADMIN"
+        ? billingItems
+        : executiveRole
+          ? executiveItems
+          : currentUser
+            ? directorItems
+            : [];
+  const items = sourceItems.filter((item) => canAccessShellModule(currentUser, item.slug));
   if (!items.length) return null;
 
   return (
     <nav
       aria-label="Role quick navigation"
-      className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl xl:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden"
     >
       <div className={cn("mx-auto grid max-w-md gap-1", items.length === 1 ? "grid-cols-1" : items.length === 2 ? "grid-cols-2" : items.length === 3 ? "grid-cols-3" : items.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
         {items.map(({ label, href, Icon }) => {
@@ -493,7 +578,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   const activeSearchResults = searchResponse.query === trimmedSearchQuery ? searchResponse.results : [];
   const activeSearchError = searchResponse.query === trimmedSearchQuery ? searchResponse.error : "";
   const searchPending = trimmedSearchQuery.length >= 2 && searchResponse.query !== trimmedSearchQuery;
-  const hasRoleBottomNav = isTeacherUser(currentUser) || isParentFacingUser(currentUser);
+  const hasRoleBottomNav = Boolean(currentUser);
   const parentFacing = isParentFacingUser(currentUser);
   const showWorkspaceTools = !parentFacing;
   const showNotificationTools = Boolean(currentUser);
@@ -620,20 +705,24 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
       className="bee-app-frame min-h-screen"
       data-module={visualDomain}
       data-role={currentUser?.role ?? "PUBLIC"}
+      data-honeyglass={honeyglassUiEnabled() ? "true" : "false"}
     >
       <a href="#workspace-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-xl">
         Skip to workspace content
       </a>
-      <aside className={cn("app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl", hasRoleBottomNav ? "xl:block" : "lg:block")}>
+      <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-20 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl lg:block xl:hidden">
+        <SidebarRail currentUser={currentUser} />
+      </aside>
+      <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl xl:block">
         <SidebarNav currentUser={currentUser} />
       </aside>
-      <div className={cn(hasRoleBottomNav ? "xl:pl-72" : "lg:pl-72")}>
+      <div className="lg:pl-20 xl:pl-72">
         <header className="app-header sticky top-0 z-10 border-b bg-background/75 backdrop-blur-xl">
           <div className="flex min-h-16 items-center gap-3 px-4 sm:px-6">
             <Sheet>
               <SheetTrigger
                 render={
-                  <Button variant="outline" size="icon" className={cn(hasRoleBottomNav ? "xl:hidden" : "lg:hidden")} aria-label="Open navigation" />
+                  <Button variant="outline" size="icon" className="lg:hidden" aria-label="Open navigation" />
                 }
               >
                 <Menu />
@@ -751,6 +840,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                   AI suggestions require review
                 </Badge>
               ) : null}
+              {canAccessShellModule(currentUser, "data-readiness") ? <DataReadinessContextBadge /> : null}
               {currentUser ? <LiveRefreshStatus role={currentUser.role} /> : null}
               {showWorkspaceTools ? (
                 <Dialog>
@@ -815,7 +905,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
             </div>
           </div>
         </header>
-        <main id="workspace-main" className={cn("dashboard-workspace min-h-[calc(100vh-4rem)] scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 xl:pb-8")}>{children}</main>
+        <main id="workspace-main" className={cn("dashboard-workspace min-h-[calc(100vh-4rem)] scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 lg:pb-6 xl:pb-8")}>{children}</main>
       </div>
       <RoleBottomNav currentUser={currentUser} />
     </div>

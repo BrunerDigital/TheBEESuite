@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { campaignTemplates } from "@/lib/marketing-workflows";
 import { SocialPublishingStudio, type SocialConnection } from "@/components/social-publishing-studio";
+import { SocialEngagementHub, type MarketingCenterOption } from "@/components/social-engagement-hub";
 
 type CampaignRow = {
   id: string;
@@ -53,6 +54,8 @@ export type CampaignWorkspaceData = {
     lastSyncAt: Date | string | null;
   }>;
   socialConnections: SocialConnection[];
+  engagementCenters: MarketingCenterOption[];
+  initialEngagementCenterId: string | null;
   stats: {
     total: number;
     active: number;
@@ -352,11 +355,15 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
         <TabsList>
           <TabsTrigger value="editor">Editor</TabsTrigger>
           <TabsTrigger value="social">Social Publisher</TabsTrigger>
+          <TabsTrigger value="engagement">Inbox & Reviews</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
         <TabsContent value="social">
           <SocialPublishingStudio connections={data.socialConnections} />
+        </TabsContent>
+        <TabsContent value="engagement">
+          <SocialEngagementHub centers={data.engagementCenters} initialCenterId={data.initialEngagementCenterId} />
         </TabsContent>
         <TabsContent value="editor" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card className="glass-panel">

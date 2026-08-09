@@ -94,6 +94,19 @@ test("Meta OAuth requests read-only ads access until ad mutation is implemented"
   assert.equal(scopes.has("ads_management"), false);
 });
 
+test("Meta social OAuth requests publishing, insights, and direct inbox permissions", () => {
+  const authorization = buildMarketingAuthorization({
+    provider: "meta_social",
+    state: "signed-state",
+    redirectUri: "https://example.com/api/integrations/oauth/meta_social/callback",
+    env: { META_APP_ID: "app-id", META_APP_SECRET: "app-secret" },
+  });
+  const scopes = new Set((new URL(authorization.authorizationUrl).searchParams.get("scope") || "").split(","));
+  for (const scope of ["pages_manage_posts", "pages_messaging", "instagram_content_publish", "instagram_manage_messages", "instagram_manage_insights"]) {
+    assert.equal(scopes.has(scope), true, `Expected Meta social scope ${scope}.`);
+  }
+});
+
 test("credential presence alone does not make a marketing account publish-ready", () => {
   assert.equal(hasRequiredMarketingAccountConfig("meta_ads", {}), false);
   assert.equal(hasRequiredMarketingAccountConfig("meta_ads", { adAccountId: "act_123" }), true);

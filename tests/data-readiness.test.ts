@@ -122,6 +122,22 @@ test("Honeyglass shell includes progressive navigation and reversible flags", ()
   assert.match(flags, /NEXT_PUBLIC_DATA_READINESS_ENABLED=false/);
 });
 
+test("Honeyglass dashboard keeps KPI content inside the hexagons and narrow layouts shrinkable", () => {
+  const dashboard = readFileSync(new URL("../src/components/dashboard.tsx", import.meta.url), "utf8");
+  const workspace = readFileSync(new URL("../src/components/workspace-preferences.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+
+  assert.match(dashboard, /controlsClassName="honeycomb-kpi-controls"/);
+  assert.match(dashboard, /xl:grid-cols-\[minmax\(0,1fr\)_22rem\]/);
+  assert.match(workspace, /className=\{cn\("min-w-0", className\)\}/);
+  assert.match(workspace, /className=\{cn\("min-w-0", itemClassName/);
+  assert.match(css, /\.honeycomb-kpi-card \[data-slot="card-header"\][\s\S]*flex-direction: column-reverse/);
+  assert.match(css, /\.honeycomb-kpi-card \[data-slot="card-content"\][\s\S]*padding-inline: 3\.4rem/);
+  assert.match(css, /font-variant-numeric: tabular-nums/);
+  assert.match(css, /\.honeycomb-kpi-controls[\s\S]*position: absolute/);
+  assert.match(css, /\.dashboard-ai-brief/);
+});
+
 test("dashboard readiness contexts deep-link and filter only the intended categories", () => {
   const safety = row({ id: "row-safety-context", message: "Review custody restriction" });
   const billing = row({ id: "row-billing-context", message: "Review family billing responsibility" });

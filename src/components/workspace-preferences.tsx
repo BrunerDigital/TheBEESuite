@@ -172,9 +172,10 @@ type WorkspaceBoardProps = {
   items: WorkspaceBoardItem[];
   className?: string;
   itemClassName?: string;
+  controlsClassName?: string;
 };
 
-export function WorkspaceBoard({ storageId, items, className, itemClassName }: WorkspaceBoardProps) {
+export function WorkspaceBoard({ storageId, items, className, itemClassName, controlsClassName }: WorkspaceBoardProps) {
   const currentIdsKey = JSON.stringify(items.map((item) => item.id));
   const currentIds = useMemo(() => parseStoredStringArray(currentIdsKey), [currentIdsKey]);
   const key = storageKey("order", storageId);
@@ -234,16 +235,16 @@ export function WorkspaceBoard({ storageId, items, className, itemClassName }: W
   }
 
   return (
-    <div className={className}>
+    <div className={cn("min-w-0", className)}>
       {orderedItems.map((item, index) => (
         <div
           key={item.id}
-          className={cn(itemClassName, item.className, draggingId === item.id && "opacity-70")}
+          className={cn("min-w-0", itemClassName, item.className, draggingId === item.id && "opacity-70")}
           onDragOver={(event) => overDrag(event, item.id)}
           onDrop={(event) => dropDrag(event, item.id)}
         >
           {orderedItems.length > 1 ? (
-            <div className="mb-2 flex justify-end gap-1 print:hidden">
+            <div className={cn("mb-2 flex justify-end gap-1 print:hidden", controlsClassName)}>
               <Tooltip>
                 <TooltipTrigger
                   render={(

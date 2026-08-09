@@ -17,7 +17,7 @@ const routeDomains: Array<[WorkspaceVisualDomain, readonly string[]]> = [
   ["classroom", ["/teacher", "/classroom", "/attendance", "/daily-reports", "/lessons"]],
   ["enrollment", ["/crm", "/pipeline", "/tours", "/waitlist", "/registration", "/enrollment", "/campaigns", "/automations"]],
   ["communication", ["/messages", "/notifications", "/announcements"]],
-  ["executive", ["/executives", "/multi-location", "/analytics", "/team-permissions"]],
+  ["executive", ["/executives", "/multi-location", "/analytics", "/team-permissions", "/data-readiness"]],
   ["operations", ["/center-dashboard", "/fte", "/staff", "/payroll", "/school-setup", "/operations"]],
 ];
 

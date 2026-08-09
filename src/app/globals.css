@@ -413,6 +413,217 @@
   }
 }
 
+/* Honeyglass modernization. Set NEXT_PUBLIC_HONEYGLASS_UI_ENABLED=false to
+   return to the preserved glass presentation without reverting application data. */
+@layer utilities {
+  .bee-app-frame[data-honeyglass="true"] {
+    --honey-blue: oklch(0.76 0.12 225);
+    --honey-gold: oklch(0.82 0.16 82);
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeyglass-hero {
+    border-color: color-mix(in oklch, var(--honey-gold) 30%, var(--glass-border));
+    background:
+      radial-gradient(circle at 84% 10%, color-mix(in oklch, var(--honey-blue) 16%, transparent), transparent 25rem),
+      radial-gradient(circle at 12% 92%, color-mix(in oklch, var(--honey-gold) 18%, transparent), transparent 27rem),
+      linear-gradient(145deg, color-mix(in oklch, var(--glass-surface-strong) 96%, var(--honey-gold) 4%), var(--glass-surface-strong));
+    box-shadow:
+      inset 0 1px var(--glass-highlight),
+      0 30px 80px var(--glass-shadow-color);
+    -webkit-backdrop-filter: blur(26px) saturate(1.2);
+    backdrop-filter: blur(26px) saturate(1.2);
+  }
+
+  .dark .bee-app-frame[data-honeyglass="true"]:is(
+    [data-role="PLATFORM_OWNER"],
+    [data-role="BRAND_ADMIN"],
+    [data-role="REGIONAL_MANAGER"],
+    [data-role="CENTER_DIRECTOR"],
+    [data-role="ASSISTANT_DIRECTOR"]
+  ) {
+    --glass-canvas: oklch(0.105 0.025 252);
+    --glass-surface: oklch(0.18 0.03 250 / 72%);
+    --glass-surface-strong: oklch(0.155 0.028 250 / 91%);
+    --glass-nav: oklch(0.105 0.026 252 / 92%);
+    background:
+      radial-gradient(circle at 92% 2%, color-mix(in oklch, var(--honey-blue) 12%, transparent), transparent 34rem),
+      radial-gradient(circle at 14% 24%, color-mix(in oklch, var(--honey-gold) 10%, transparent), transparent 30rem),
+      var(--glass-canvas);
+  }
+
+  .bee-app-frame[data-honeyglass="true"]:is([data-role="TEACHER"], [data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .glass-panel {
+    border-radius: 1.5rem;
+    background-image:
+      linear-gradient(145deg, color-mix(in oklch, var(--glass-highlight) 62%, transparent), transparent 42%),
+      radial-gradient(circle at 92% 4%, color-mix(in oklch, var(--honey-blue) 8%, transparent), transparent 20rem);
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-cluster {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 0.85rem;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card {
+    min-height: 12.5rem;
+    justify-content: center;
+    overflow: hidden;
+    clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%);
+    background:
+      radial-gradient(circle at 72% 22%, color-mix(in oklch, var(--honey-blue) 12%, transparent), transparent 8rem),
+      linear-gradient(145deg, color-mix(in oklch, var(--glass-surface-strong) 90%, var(--honey-gold) 10%), var(--glass-surface));
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-header"],
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-content"] {
+    padding-inline: 2rem;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-link:focus-visible {
+    border-radius: 32%;
+    outline: 3px solid var(--ring);
+    outline-offset: 4px;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-honeycomb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding-block: 1rem;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex {
+    display: grid;
+    width: 7.25rem;
+    aspect-ratio: 1.08;
+    place-items: center;
+    color: var(--foreground);
+    background: color-mix(in oklch, var(--glass-surface-solid) 88%, var(--honey-gold) 12%);
+    clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+    filter: drop-shadow(0 12px 18px color-mix(in oklch, var(--glass-shadow-color) 80%, transparent));
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex:nth-child(even) {
+    transform: translateY(1.8rem);
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex--blocked,
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex--failed {
+    color: color-mix(in oklch, var(--destructive) 82%, var(--foreground));
+    background: color-mix(in oklch, var(--glass-surface-solid) 82%, var(--destructive) 18%);
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex--verified,
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex--ready {
+    color: color-mix(in oklch, oklch(0.66 0.16 150) 82%, var(--foreground));
+    background: color-mix(in oklch, var(--glass-surface-solid) 84%, oklch(0.78 0.13 150) 16%);
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex__inner {
+    display: flex;
+    max-width: 5.5rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    text-align: center;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex__inner strong {
+    font-size: 1.4rem;
+    line-height: 1.1;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex__inner span {
+    font-size: 0.68rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeyline {
+    height: 0.3rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: color-mix(in oklch, var(--glass-field) 88%, var(--honey-blue) 12%);
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeyline > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--honey-gold), color-mix(in oklch, var(--honey-blue) 72%, var(--honey-gold)));
+    box-shadow: 0 0 16px color-mix(in oklch, var(--honey-gold) 35%, transparent);
+    transition: width 240ms ease;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .nectar-tabs [data-slot="tabs-trigger"][data-active] {
+    border-color: color-mix(in oklch, var(--honey-gold) 34%, var(--glass-border));
+    color: var(--foreground);
+    background: linear-gradient(135deg, color-mix(in oklch, var(--honey-gold) 18%, var(--glass-field)), color-mix(in oklch, var(--honey-blue) 8%, var(--glass-field)));
+  }
+
+  @media (min-width: 80rem) {
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-cluster {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 0;
+      padding-bottom: 3.5rem;
+    }
+
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item {
+      width: clamp(12.25rem, 17vw, 15.5rem);
+      margin-inline: -0.55rem;
+    }
+
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item:nth-child(even) {
+      transform: translateY(3.55rem);
+    }
+  }
+
+  @media (max-width: 47.99rem) {
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card {
+      min-height: auto;
+      border-radius: 1.35rem;
+      clip-path: none;
+    }
+
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-header"],
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-content"] {
+      padding-inline: 1.25rem;
+    }
+
+    .bee-app-frame[data-honeyglass="true"] .readiness-hex {
+      width: 6.15rem;
+    }
+
+    .bee-app-frame[data-honeyglass="true"] .readiness-hex:nth-child(even) {
+      transform: translateY(1rem);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bee-app-frame[data-honeyglass="true"] .honeyline > span,
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card,
+    .bee-app-frame[data-honeyglass="true"] .readiness-hex {
+      border: 1px solid CanvasText;
+      color: CanvasText;
+      background: Canvas;
+      clip-path: none;
+      filter: none;
+    }
+  }
+}
+
 @custom-variant data-closed {
   &:where([data-state="closed"]),
   &:where([data-closed]:not([data-closed="false"])) {

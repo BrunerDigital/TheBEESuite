@@ -10,13 +10,15 @@ import {
   canViewAccountBalances,
 } from "@/lib/accounts-receivable";
 import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
-import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
+import { canAccessAllCenters, canManageCrmLeads, canManageOperations, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
 import { stageLabels } from "@/lib/crm";
 import { buildDashboardAttendanceSnapshot } from "@/lib/dashboard-attendance-snapshot";
 import { getDashboardWidgetPreferenceValue, normalizeDashboardWidgetPreferences } from "@/lib/dashboard-widgets";
 import type { DashboardWidgetId } from "@/lib/dashboard-widgets";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
+import { dataReadinessCenterEnabled } from "@/lib/honeyglass";
+import { loadDataReadinessWorkspace } from "@/lib/data-readiness-server";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
 import { buildRegistrationShareUrl } from "@/lib/registration-sharing";
@@ -920,6 +922,18 @@ export default async function DashboardPage() {
         today,
       )
     : undefined;
+  const readinessEnabled = dataReadinessCenterEnabled() && canManageOperations(user);
+  const readinessWorkspace = readinessEnabled
+    ? await loadDataReadinessWorkspace(user, { taskLimit: 500, batchLimit: 60 })
+    : null;
+  const dataReadiness = readinessWorkspace ? {
+    actionable: readinessWorkspace.summary.actionable,
+    blocked: readinessWorkspace.summary.BLOCKED,
+    confirm: readinessWorkspace.summary.CONFIRM,
+    failed: readinessWorkspace.summary.FAILED,
+    completionPercent: readinessWorkspace.summary.completionPercent,
+    lastUpdated: readinessWorkspace.summary.lastUpdated,
+  } : undefined;
   const live: LiveDashboardData = {
     kpis: [
       { label: "Active children", value: activeChildren.toLocaleString(), trend: `${centers.length} visible centers`, tone: "emerald" },
@@ -985,6 +999,7 @@ export default async function DashboardPage() {
     visibleLenses: visibleDashboardLenses,
     dashboardWidgets: dashboardWidgetConfig.widgets,
     dashboardWidgetRoleLabel: dashboardWidgetConfig.roleLabel,
+    dataReadiness,
     setupChecklists: [
       ...(user.role === UserRole.TEACHER ? [{
         key: "teacher_profile" as const,

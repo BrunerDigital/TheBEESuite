@@ -1,6 +1,6 @@
 # School Marketing Connections and Integrations
 
-Last updated: July 29, 2026
+Last updated: August 8, 2026
 
 ## What is implemented
 
@@ -25,6 +25,9 @@ The Campaigns workspace can:
 - draft, schedule, and publish approved social posts through supported official APIs;
 - automatically refresh expiring OAuth tokens when the provider issues a refresh token.
 - exchange Meta's short-lived login token for a long-lived user token before saving the connection.
+- load a selected school's recent Facebook and Instagram conversations directly through Meta without copying message content into BEE Suite records;
+- load Google Business Profile reviews and publish a deliberately confirmed, audit-logged public reply;
+- show executives the same inbox and review experience one explicitly selected active school at a time.
 
 The application never asks a director to email, paste into chat, or expose a provider password. Platform OAuth client secrets remain deployment environment variables. Per-school user tokens remain encrypted `IntegrationCredential` records.
 
@@ -38,6 +41,9 @@ The application never asks a director to email, paste into chat, or expose a pro
 - Account discovery never sends provider tokens to the browser. If a login controls multiple accounts, the UI receives only account IDs, labels, and kinds.
 - Publishing and analytics routes re-check the BEE Suite session, role, tenant, and school scope on every request.
 - Social publishing remains a human action. TikTok unaudited Direct Post stays private-only.
+- Inbox requests require an exact school-scoped Facebook Page mapping. Executives must select a school before reading provider data, and directors cannot override their assigned school.
+- Google review replies validate the complete configured account/location resource path before the provider mutation is allowed.
+- External message and review bodies are returned only to the active authorized request and are not persisted in `Message`, `Review`, family, billing, or campaign records.
 
 ## Provider capability matrix
 
@@ -55,6 +61,7 @@ The application never asks a director to email, paste into chat, or expose a pro
 | TikTok | Yes | Current profile | Profile counts | Video Direct Post; public visibility requires TikTok audit |
 | Pinterest | Yes | Profile and boards | Profile counts | Image Pins |
 | X | Yes, OAuth 2.0 PKCE | Current profile | Profile counts | Text/link posts, subject to the active API tier |
+| Facebook & Instagram inbox | Via Meta | The selected Page and linked Instagram professional account | Recent direct conversations with a Meta Business Suite response handoff | Uses the same school-scoped Meta connection as publishing and analytics |
 
 No provider account is considered ready from token presence alone. The school must also select or save the required ad account, Page, organization, location, board, or profile identifier.
 
@@ -96,6 +103,22 @@ Required platform environment variables:
 | Pinterest | `PINTEREST_APP_ID`, `PINTEREST_APP_SECRET` |
 | X | `X_CLIENT_ID`, `X_CLIENT_SECRET` |
 
+## Direct inbox and review operating model
+
+The BEE Suite uses official provider APIs rather than a separate social-management service:
+
+- Meta supplies the selected school's Facebook Messenger and linked Instagram professional-account conversations.
+- Official Meta, Google Ads, TikTok Ads, LinkedIn Ads, and Microsoft Advertising connections remain responsible for paid campaign data.
+- Official network APIs remain responsible for final post publishing.
+- Google Business Profile supplies authoritative reviews and review replies directly.
+- When a provider does not expose an inbox capability available to this app, the capability map says so and hands the director to that provider's native business inbox instead of implying unsupported coverage.
+
+To activate the unified Meta inbox, connect **Facebook & Instagram** under **Settings & Setup → Integrations**, select the school's correct Facebook Page and linked Instagram professional account, and complete Meta's messaging-permission review. Then open **Campaigns → Inbox & Reviews**, select the school, and use **Refresh Inbox**. A partial Facebook-only or Instagram-only response remains usable and displays the provider permission warning for the unavailable side.
+
+The Meta production app review must approve `pages_messaging` and `instagram_manage_messages` in addition to the existing Page publishing, Instagram publishing, engagement, and insights permissions. Reconnect previously authorized school accounts after those permissions are approved so the refreshed consent includes the inbox scopes.
+
+For Google reviews, connect and map the school's Google Business Profile from **Settings & Setup → Integrations** first. Then select the same school under **Campaigns → Inbox & Reviews** and use **Refresh Reviews**. Every public reply requires a final confirmation that calls out the privacy boundary.
+
 Use a dedicated, randomly generated `INTEGRATION_CREDENTIALS_SECRET` in production. Rotating it without a credential re-encryption plan makes existing school tokens unreadable.
 
 ## Provider approval gates
@@ -122,6 +145,9 @@ Relevant primary documentation:
 - [Microsoft Advertising OAuth](https://learn.microsoft.com/advertising/guides/authentication-oauth)
 - [Pinterest authentication](https://developers.pinterest.com/docs/getting-started/set-up-authentication-and-authorization/)
 - [X OAuth 2.0 with PKCE](https://docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code)
+- [Google Business Profile review data](https://developers.google.com/my-business/content/review-data)
+- [Meta Messenger Platform](https://developers.facebook.com/docs/messenger-platform/)
+- [Messenger API for Instagram](https://developers.facebook.com/docs/messenger-platform/instagram/)
 
 ## Deployment sequence
 

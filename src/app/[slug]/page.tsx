@@ -57,7 +57,7 @@ import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { modules } from "@/lib/demo-data";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
-import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import { canManageExecutiveMarketingPortfolio } from "@/lib/executive-marketing";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
 import {
@@ -2903,7 +2903,7 @@ async function renderLivePage(
           ],
         };
     const marketingScope = integrationScopeForUser(user, "meta_ads");
-    const [campaigns, total, active, draft, paused, scheduled, sent, integrationRecords, integrationCredentials] = await Promise.all([
+    const [campaigns, total, active, draft, paused, scheduled, sent, integrationRecords, integrationCredentials, engagementCenters] = await Promise.all([
       prisma.campaign.findMany({
         where: campaignWhere,
         orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
@@ -2937,6 +2937,11 @@ async function renderLivePage(
           scopeKey: marketingScope.scopeKey,
         },
         select: { provider: true, key: true, lastFour: true },
+      }),
+      prisma.center.findMany({
+        where: { ...getDashboardCenterScopeWhere(user), status: "active" },
+        orderBy: [{ crmLocationId: "asc" }, { name: "asc" }],
+        select: { id: true, name: true, crmLocationId: true },
       }),
     ]);
 
@@ -2992,7 +2997,14 @@ async function renderLivePage(
         };
       });
 
-    return <CampaignsPage data={{ campaigns, marketingConnections, socialConnections, stats: { total, active, draft, paused, scheduled, sent } }} />;
+    return <CampaignsPage data={{
+      campaigns,
+      marketingConnections,
+      socialConnections,
+      engagementCenters,
+      initialEngagementCenterId: user.primaryCenterId ?? engagementCenters[0]?.id ?? null,
+      stats: { total, active, draft, paused, scheduled, sent },
+    }} />;
   }
 
   if (slug === "automations") {

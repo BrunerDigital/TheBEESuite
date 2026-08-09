@@ -83,6 +83,7 @@ import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import { buildParentPortalTodayState } from "@/lib/parent-portal-today";
 import { AD_INTEGRATION_PROVIDERS, buildIntegrationSetupViews, getIntegrationRuntimeStatus, hasRequiredMarketingAccountConfig, MARKETING_INTEGRATION_PROVIDERS, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
 import { integrationScopeForUser } from "@/lib/integration-scope";
 import { expandCalendarEventOccurrences } from "@/lib/calendar-events";
@@ -1944,6 +1945,14 @@ async function renderLivePage(
               photoVideoPermission: true,
               fieldTripPermission: true,
               classroom: { select: { name: true, ageGroup: true } },
+              liveLocation: {
+                select: {
+                  areaName: true,
+                  status: true,
+                  movedAt: true,
+                  currentClassroom: { select: { name: true } },
+                },
+              },
             },
             orderBy: { fullName: "asc" },
           },
@@ -1956,6 +1965,10 @@ async function renderLivePage(
 
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
+    const parentPortalCenter = family?.centerId
+      ? centers.find((center) => center.id === family.centerId) ?? null
+      : null;
+    const parentServiceDay = centerServiceDayWindow(today, parentPortalCenter);
     const agencyOnlyLedgerWhere: Prisma.LedgerEntryWhereInput = {
       OR: [
         { type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } },
@@ -1965,7 +1978,7 @@ async function renderLivePage(
     const parentVisibleLedgerWhere: Prisma.LedgerEntryWhereInput = {
       NOT: agencyOnlyLedgerWhere,
     };
-    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter] = await Promise.all([
+    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs] = await Promise.all([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -2030,6 +2043,7 @@ async function renderLivePage(
         take: 20,
         select: {
           id: true,
+          childId: true,
           date: true,
           sentAt: true,
           mood: true,
@@ -2101,6 +2115,22 @@ async function renderLivePage(
             },
           })
         : Promise.resolve(null),
+      prisma.attendanceRecord.findMany({
+        where: {
+          childId: { in: childIds.length ? childIds : ["__none__"] },
+          date: { gte: parentServiceDay.start, lt: parentServiceDay.end },
+        },
+        orderBy: { date: "desc" },
+        select: { childId: true, date: true, status: true },
+      }),
+      prisma.checkInOutLog.findMany({
+        where: {
+          childId: { in: childIds.length ? childIds : ["__none__"] },
+          occurredAt: { gte: parentServiceDay.start, lt: parentServiceDay.end },
+        },
+        orderBy: { occurredAt: "desc" },
+        select: { childId: true, type: true, occurredAt: true },
+      }),
     ]);
 
     const [signedDocuments, signedMedia, signedMessages] = await Promise.all([
@@ -2130,13 +2160,43 @@ async function renderLivePage(
             },
           }))
       : [];
+    const parentAttendanceByChild = new Map<string, (typeof parentAttendanceRecords)[number]>();
+    for (const attendance of parentAttendanceRecords) {
+      if (attendance.childId && !parentAttendanceByChild.has(attendance.childId)) {
+        parentAttendanceByChild.set(attendance.childId, attendance);
+      }
+    }
+    const parentLatestCheckByChild = latestLogMap(parentCheckLogs);
+    const parentDailyReportChildIds = new Set(
+      dailyReports
+        .filter((report) => report.sentAt && report.date >= parentServiceDay.start && report.date < parentServiceDay.end)
+        .map((report) => report.childId),
+    );
     const parentPortalFamily = family
       ? {
           ...family,
-          children: family.children.map((child) => ({
-            ...child,
-            tuitionAssignment: tuitionAssignmentFromCustomFields(child.customFields),
-          })),
+          children: family.children.map((child) => {
+            const attendance = parentAttendanceByChild.get(child.id);
+            const latestCheck = parentLatestCheckByChild.get(child.id);
+            const { liveLocation, ...portalChild } = child;
+            return {
+              ...portalChild,
+              tuitionAssignment: tuitionAssignmentFromCustomFields(child.customFields),
+              today: buildParentPortalTodayState({
+                attendanceStatus: attendance?.status,
+                attendanceMarkedAt: attendance?.date,
+                latestCheckType: latestCheck?.type,
+                latestCheckAt: latestCheck?.occurredAt,
+                currentLocationName: liveLocation?.areaName || liveLocation?.currentClassroom?.name || null,
+                currentLocationIsFresh: Boolean(
+                  liveLocation?.movedAt
+                  && liveLocation.movedAt >= parentServiceDay.start
+                  && liveLocation.movedAt < parentServiceDay.end,
+                ),
+                dailyReportShared: parentDailyReportChildIds.has(child.id),
+              }),
+            };
+          }),
           guardians: family.guardians.map((guardian) => {
             const safeGuardian = { ...guardian };
             delete (safeGuardian as { checkInPinHash?: string | null }).checkInPinHash;

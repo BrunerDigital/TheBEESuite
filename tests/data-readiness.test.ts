@@ -9,6 +9,11 @@ import {
   statusForImportRow,
   summarizeDataReadiness,
 } from "@/lib/data-readiness";
+import {
+  dataReadinessContextForPath,
+  dataReadinessViewFilters,
+  filterDataReadinessTasksForContext,
+} from "@/lib/data-readiness-context";
 
 const createdAt = "2026-08-08T12:00:00.000Z";
 
@@ -115,4 +120,33 @@ test("Honeyglass shell includes progressive navigation and reversible flags", ()
   assert.match(css, /prefers-reduced-motion/);
   assert.match(flags, /NEXT_PUBLIC_HONEYGLASS_UI_ENABLED=false/);
   assert.match(flags, /NEXT_PUBLIC_DATA_READINESS_ENABLED=false/);
+});
+
+test("dashboard readiness contexts deep-link and filter only the intended categories", () => {
+  const safety = row({ id: "row-safety-context", message: "Review custody restriction" });
+  const billing = row({ id: "row-billing-context", message: "Review family billing responsibility" });
+  const historical = row({ id: "row-history-context", message: "Review retained historical note" });
+  assert.equal(dataReadinessContextForPath("/family-detail"), "families");
+  assert.equal(dataReadinessContextForPath("/billing-invoices"), "billing");
+  assert.equal(dataReadinessContextForPath("/parent-portal"), null);
+  assert.deepEqual(filterDataReadinessTasksForContext([safety, billing, historical], "billing").map((task) => task.id), ["row:row-billing-context"]);
+  assert.deepEqual(filterDataReadinessTasksForContext([safety, billing, historical], "families").map((task) => task.id), ["row:row-safety-context"]);
+  assert.deepEqual(dataReadinessViewFilters({ context: "staff" }), {
+    tab: "queue",
+    status: "actionable",
+    risk: "all",
+    category: "context:staff",
+    sort: "priority",
+    context: "staff",
+  });
+});
+
+test("context summaries reuse one scoped API projection in the shell", () => {
+  const shell = readFileSync(new URL("../src/components/app-shell.tsx", import.meta.url), "utf8");
+  const route = readFileSync(new URL("../src/app/api/data-readiness/route.ts", import.meta.url), "utf8");
+  assert.match(shell, /dataReadinessContextForPath\(pathname\)/);
+  assert.match(shell, /DataReadinessContextPanel context=\{readinessContext\} summary=\{readinessSummary\} loading=\{readinessLoading\}/);
+  assert.equal((shell.match(/fetch\(`\/api\/data-readiness\?/g) ?? []).length, 1);
+  assert.match(route, /filterDataReadinessTasksForContext\(workspace\.tasks, context\)/);
+  assert.match(route, /requestedCategory/);
 });

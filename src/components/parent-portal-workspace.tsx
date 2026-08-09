@@ -53,6 +53,7 @@ import type { MessageAttachmentView } from "@/lib/message-attachments";
 import { replySubject } from "@/lib/message-reply-routing";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { isParentVisiblePayment } from "@/lib/parent-billing-visibility";
+import type { ParentPortalTodayState } from "@/lib/parent-portal-today";
 import {
   dailyReportTimedCareEvents,
   sortDailyReportsChronologically,
@@ -75,6 +76,7 @@ type Child = {
     amountCents: number | null;
     tuitionPlanName: string | null;
   } | null;
+  today?: ParentPortalTodayState;
 };
 
 type PendingInvoicePayment = {
@@ -408,6 +410,13 @@ function scheduleSummary(value: unknown) {
       .join(" · ");
   }
   return String(value);
+}
+
+function todayStatusVariant(status: ParentPortalTodayState["status"] | undefined) {
+  if (status === "absent") return "destructive" as const;
+  if (status === "checked_in" || status === "present") return "default" as const;
+  if (status === "checked_out") return "secondary" as const;
+  return "outline" as const;
 }
 
 function localDateKey(value: string | Date | null | undefined) {
@@ -1116,6 +1125,54 @@ export function ParentPortalWorkspace({
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
+
+      <section id="today" className="scroll-mt-28 overflow-hidden rounded-2xl border border-primary/20 bg-card/85 shadow-xl shadow-black/[0.07]" aria-labelledby="parent-today-heading">
+        <div className="border-b border-border/70 bg-gradient-to-r from-primary/[0.10] via-transparent to-transparent p-4 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <Badge className="mb-3" variant="secondary"><CalendarDays data-icon="inline-start" /> Today</Badge>
+              <h2 id="parent-today-heading" className="text-2xl font-semibold tracking-tight text-pretty sm:text-3xl">Your Child’s Day at a Glance</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Current check-in evidence, assigned classroom, schedule, and shared daily report status from your existing family records.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <a href="#daily-updates" className="inline-flex min-h-10 items-center gap-2 rounded-lg border bg-background/70 px-3 text-sm font-medium transition-colors hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Camera className="size-4" aria-hidden="true" /> Updates</a>
+              <a href="#recent-messages" className="inline-flex min-h-10 items-center gap-2 rounded-lg border bg-background/70 px-3 text-sm font-medium transition-colors hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><MessageSquare className="size-4" aria-hidden="true" /> Messages</a>
+              <a href="#billing" className="inline-flex min-h-10 items-center gap-2 rounded-lg border bg-background/70 px-3 text-sm font-medium transition-colors hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><CreditCard className="size-4" aria-hidden="true" /> Billing</a>
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-2">
+          {family.children.map((child) => (
+            <article key={child.id} className="min-w-0 rounded-2xl border bg-background/60 p-4 sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="truncate text-lg font-semibold">{child.preferredName || child.fullName}</h3>
+                  <p className="mt-1 truncate text-sm text-muted-foreground">{child.classroom?.name || "Classroom not assigned"}</p>
+                </div>
+                <Badge variant={todayStatusVariant(child.today?.status)}>{child.today?.label || "Not marked today"}</Badge>
+              </div>
+              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                <div className="min-w-0 rounded-xl border bg-card/70 p-3">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Today’s Schedule</dt>
+                  <dd className="mt-1 line-clamp-2 break-words font-medium">{scheduleSummary(child.schedule)}</dd>
+                </div>
+                <div className="min-w-0 rounded-xl border bg-card/70 p-3">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current Location</dt>
+                  <dd className="mt-1 truncate font-medium">{child.today?.currentLocationName || (child.today?.status === "checked_out" ? "Checked out" : "No live location shared")}</dd>
+                </div>
+                <div className="min-w-0 rounded-xl border bg-card/70 p-3">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Latest Attendance Event</dt>
+                  <dd className="mt-1 font-medium">{child.today?.latestEventAt ? formatTime(child.today.latestEventAt) : "No event recorded today"}</dd>
+                </div>
+                <div className="min-w-0 rounded-xl border bg-card/70 p-3">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Daily Report</dt>
+                  <dd className="mt-1 font-medium">{child.today?.dailyReportShared ? "Shared today" : "Not shared yet"}</dd>
+                </div>
+              </dl>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="glass-panel">
@@ -2048,7 +2105,7 @@ export function ParentPortalWorkspace({
         ) : null}
       </div>
 
-      <Card className="glass-panel">
+      <Card id="recent-messages" className="glass-panel scroll-mt-28">
         <CardHeader>
           <CardTitle>Recent Messages</CardTitle>
           <CardDescription>Family communication timeline</CardDescription>

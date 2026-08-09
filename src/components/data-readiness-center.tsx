@@ -41,12 +41,18 @@ import {
   type DataReadinessTask,
   type DataReadinessWorkspaceData,
 } from "@/lib/data-readiness";
+import {
+  DATA_READINESS_CONTEXTS,
+  normalizeDataReadinessContext,
+  type DataReadinessViewFilters,
+} from "@/lib/data-readiness-context";
 import { cn } from "@/lib/utils";
 
 type DataReadinessCenterProps = {
   data: DataReadinessWorkspaceData;
   centers: Array<{ id: string; name: string }>;
   allowBulkImport: boolean;
+  initialView: DataReadinessViewFilters;
 };
 
 const statusCopy: Record<DataReadinessStatus, { label: string; detail: string; icon: typeof ShieldCheck }> = {
@@ -111,15 +117,15 @@ function ReadinessHex({ status, value }: { status: DataReadinessStatus; value: n
   );
 }
 
-export function DataReadinessCenter({ data, centers, allowBulkImport }: DataReadinessCenterProps) {
+export function DataReadinessCenter({ data, centers, allowBulkImport, initialView }: DataReadinessCenterProps) {
   const router = useRouter();
   const [tasks, setTasks] = useState(data.tasks);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("actionable");
-  const [riskFilter, setRiskFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [tab, setTab] = useState("overview");
-  const [sort, setSort] = useState("priority");
+  const [statusFilter, setStatusFilter] = useState(initialView.status);
+  const [riskFilter, setRiskFilter] = useState(initialView.risk);
+  const [categoryFilter, setCategoryFilter] = useState(initialView.category);
+  const [tab, setTab] = useState(initialView.tab);
+  const [sort, setSort] = useState(initialView.sort);
   const [page, setPage] = useState(1);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [bulkTaskIds, setBulkTaskIds] = useState<string[]>([]);
@@ -129,16 +135,25 @@ export function DataReadinessCenter({ data, centers, allowBulkImport }: DataRead
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const pageSize = 20;
+  const categoryContext = normalizeDataReadinessContext(categoryFilter.startsWith("context:") ? categoryFilter.slice(8) : "");
+  const exportParams = new URLSearchParams({ format: "csv" });
+  if (categoryContext) exportParams.set("context", categoryContext);
+  if (!categoryContext && categoryFilter !== "all") exportParams.set("category", categoryFilter);
+  const exportHref = `/api/data-readiness?${exportParams.toString()}`;
 
   const categories = useMemo(() => [...new Set(tasks.map((task) => task.category))], [tasks]);
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const contextCategories = categoryContext
+      ? DATA_READINESS_CONTEXTS[categoryContext].categories as readonly string[]
+      : [];
     return tasks
       .filter((task) => {
         if (statusFilter === "actionable" && !["BLOCKED", "CONFIRM", "FAILED"].includes(task.status)) return false;
         if (statusFilter !== "all" && statusFilter !== "actionable" && task.status !== statusFilter) return false;
         if (riskFilter !== "all" && task.risk !== riskFilter) return false;
-        if (categoryFilter !== "all" && task.category !== categoryFilter) return false;
+        if (categoryContext && contextCategories.length && !contextCategories.includes(task.category)) return false;
+        if (!categoryContext && categoryFilter !== "all" && task.category !== categoryFilter) return false;
         if (!query) return true;
         return [task.entity, task.centerName, task.reason, task.sourceFilename, task.category, ...task.sourceIds]
           .join(" ")
@@ -152,12 +167,31 @@ export function DataReadinessCenter({ data, centers, allowBulkImport }: DataRead
           || left.priority - right.priority
           || right.updatedAt.localeCompare(left.updatedAt);
       });
-  }, [categoryFilter, riskFilter, search, sort, statusFilter, tasks]);
+  }, [categoryContext, categoryFilter, riskFilter, search, sort, statusFilter, tasks]);
   const pageCount = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
   const safePage = Math.min(page, pageCount);
   const visibleTasks = filteredTasks.slice((safePage - 1) * pageSize, safePage * pageSize);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
   const bulkEligibleVisible = visibleTasks.filter((task) => task.bulkEligible).map((task) => task.id);
+
+  function updateView(next: Partial<Pick<DataReadinessViewFilters, "tab" | "status" | "risk" | "category" | "sort">>) {
+    const view = {
+      tab: next.tab ?? tab,
+      status: next.status ?? statusFilter,
+      risk: next.risk ?? riskFilter,
+      category: next.category ?? categoryFilter,
+      sort: next.sort ?? sort,
+    };
+    const params = new URLSearchParams();
+    if (view.tab !== "overview") params.set("tab", view.tab);
+    if (view.status !== "actionable") params.set("status", view.status);
+    if (view.risk !== "all") params.set("risk", view.risk);
+    const nextContext = normalizeDataReadinessContext(view.category.startsWith("context:") ? view.category.slice(8) : "");
+    if (nextContext) params.set("context", nextContext);
+    else if (view.category !== "all") params.set("category", view.category);
+    if (view.sort !== "priority") params.set("sort", view.sort);
+    router.replace(params.size ? `/data-readiness?${params.toString()}` : "/data-readiness", { scroll: false });
+  }
 
   function openTask(task: DataReadinessTask) {
     setSelectedTaskId(task.id);
@@ -250,7 +284,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport }: DataRead
         </Alert>
       ) : null}
 
-      <Tabs value={tab} onValueChange={setTab} className="gap-5">
+      <Tabs value={tab} onValueChange={(value) => { const nextTab = value as DataReadinessViewFilters["tab"]; setTab(nextTab); updateView({ tab: nextTab }); }} className="gap-5">
         <TabsList className="nectar-tabs h-auto w-full justify-start overflow-x-auto rounded-xl border bg-card/75 p-1 sm:w-fit" aria-label="Data readiness views">
           <TabsTrigger value="overview" className="min-h-10 px-4"><ShieldCheck /> Overview</TabsTrigger>
           <TabsTrigger value="queue" className="min-h-10 px-4"><ListChecks /> Action queue <Badge variant="secondary">{data.summary.actionable}</Badge></TabsTrigger>
@@ -273,7 +307,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport }: DataRead
                   const matching = tasks.filter((task) => task.category === category);
                   const actionable = matching.filter((task) => ["BLOCKED", "CONFIRM", "FAILED"].includes(task.status)).length;
                   return (
-                    <button key={category} type="button" className="group flex min-h-14 items-center gap-3 rounded-xl border bg-background/55 p-3 text-left transition hover:border-primary/35 hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setCategoryFilter(String(category)); setStatusFilter("actionable"); setPage(1); setTab("queue"); }}>
+                    <button key={category} type="button" className="group flex min-h-14 items-center gap-3 rounded-xl border bg-background/55 p-3 text-left transition hover:border-primary/35 hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { const nextCategory = String(category); setCategoryFilter(nextCategory); setStatusFilter("actionable"); setPage(1); setTab("queue"); updateView({ category: nextCategory, status: "actionable", tab: "queue" }); }}>
                       <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/12 font-semibold text-primary">{priority}</span>
                       <span className="min-w-0 flex-1"><span className="block font-medium">{category}</span><span className="text-xs text-muted-foreground">{matching.length} tracked · {actionable} actionable</span></span>
                       <ArrowRight className="size-4 text-muted-foreground transition group-hover:translate-x-0.5" />
@@ -318,16 +352,16 @@ export function DataReadinessCenter({ data, centers, allowBulkImport }: DataRead
             <CardHeader className="border-b">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div><CardTitle>Prioritized action queue</CardTitle><CardDescription>Search, filter, sort, and open a focused review drawer. Results stay inside your authorized school scope.</CardDescription></div>
-                <Button variant="outline" nativeButton={false} render={<Link href="/api/data-readiness?format=csv" />}><Download data-icon="inline-start" /> Export CSV</Button>
+                <Button variant="outline" nativeButton={false} render={<Link href={exportHref} />}><Download data-icon="inline-start" /> Export CSV</Button>
               </div>
             </CardHeader>
             <CardContent className="grid gap-4 pt-5">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(15rem,1fr)_11rem_11rem_16rem_11rem]">
                 <label className="relative"><span className="sr-only">Search readiness tasks</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="min-h-11 pl-10" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search entity, location, source ID..." /></label>
-                <Select value={statusFilter} onValueChange={(value) => { if (value) { setStatusFilter(value); setPage(1); } }}><SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="actionable">Actionable</SelectItem><SelectItem value="all">All statuses</SelectItem>{DATA_READINESS_STATUSES.map((status) => <SelectItem key={status} value={status}>{statusCopy[status].label}</SelectItem>)}</SelectContent></Select>
-                <Select value={riskFilter} onValueChange={(value) => { if (value) { setRiskFilter(value); setPage(1); } }}><SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All risks</SelectItem>{["critical", "high", "medium", "low"].map((risk) => <SelectItem key={risk} value={risk}>{risk}</SelectItem>)}</SelectContent></Select>
-                <Select value={categoryFilter} onValueChange={(value) => { if (value) { setCategoryFilter(value); setPage(1); } }}><SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select>
-                <Select value={sort} onValueChange={(value) => value && setSort(value)}><SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="priority">Priority</SelectItem><SelectItem value="updated">Last updated</SelectItem><SelectItem value="location">Location</SelectItem></SelectContent></Select>
+                <Select value={statusFilter} onValueChange={(value) => { if (value) { setStatusFilter(value); setPage(1); updateView({ status: value }); } }}><SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="actionable">Actionable</SelectItem><SelectItem value="all">All statuses</SelectItem>{DATA_READINESS_STATUSES.map((status) => <SelectItem key={status} value={status}>{statusCopy[status].label}</SelectItem>)}</SelectContent></Select>
+                <Select value={riskFilter} onValueChange={(value) => { if (value) { setRiskFilter(value); setPage(1); updateView({ risk: value }); } }}><SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All risks</SelectItem>{["critical", "high", "medium", "low"].map((risk) => <SelectItem key={risk} value={risk}>{risk}</SelectItem>)}</SelectContent></Select>
+                <Select value={categoryFilter} onValueChange={(value) => { if (value) { setCategoryFilter(value); setPage(1); updateView({ category: value }); } }}><SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categoryContext ? <SelectItem value={`context:${categoryContext}`}>{DATA_READINESS_CONTEXTS[categoryContext].label}</SelectItem> : null}{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select>
+                <Select value={sort} onValueChange={(value) => { if (value) { const nextSort = value as DataReadinessViewFilters["sort"]; setSort(nextSort); updateView({ sort: nextSort }); } }}><SelectTrigger className="min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="priority">Priority</SelectItem><SelectItem value="updated">Last updated</SelectItem><SelectItem value="location">Location</SelectItem></SelectContent></Select>
               </div>
 
               <div className="flex flex-col gap-3 rounded-xl border bg-background/45 p-3 sm:flex-row sm:items-center sm:justify-between">

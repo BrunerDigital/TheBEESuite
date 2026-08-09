@@ -63,7 +63,9 @@ import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { workspaceVisualDomain } from "@/lib/workspace-visual-domain";
 import { SchoolTimeZoneProvider } from "@/components/school-time-zone-context";
 import { WebPushControl } from "@/components/web-push-control";
-import { DataReadinessContextBadge } from "@/components/data-readiness-context-badge";
+import { DataReadinessContextBadge, type CountSummary } from "@/components/data-readiness-context-badge";
+import { DataReadinessContextPanel } from "@/components/data-readiness-context-panel";
+import { dataReadinessContextForPath } from "@/lib/data-readiness-context";
 import { dataReadinessCenterEnabled, honeyglassUiEnabled } from "@/lib/honeyglass";
 
 type ShellUser = {
@@ -561,6 +563,17 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
 export function AppShell({ children, currentUser }: { children: React.ReactNode; currentUser?: ShellUser }) {
   const router = useRouter();
   const pathname = usePathname();
+  const readinessContext = dataReadinessContextForPath(pathname);
+  const canViewDataReadiness = canAccessShellModule(currentUser, "data-readiness");
+  const readinessRequestKey = `${currentUser?.email ?? "anonymous"}:${readinessContext ?? "global"}`;
+  const [readinessState, setReadinessState] = useState<{
+    key: string;
+    summary: CountSummary | null;
+    unavailable: boolean;
+  } | null>(null);
+  const currentReadinessState = readinessState?.key === readinessRequestKey ? readinessState : null;
+  const readinessSummary = currentReadinessState?.summary ?? null;
+  const readinessLoading = canViewDataReadiness && !currentReadinessState;
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResponse, setSearchResponse] = useState<{ query: string; results: GlobalSearchResult[]; error: string }>({
     query: "",
@@ -627,6 +640,28 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
       if (favicon && previousFavicon) favicon.href = previousFavicon;
     };
   }, [currentUser?.branding]);
+
+  useEffect(() => {
+    if (!canViewDataReadiness) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ mode: "count" });
+    if (readinessContext) params.set("context", readinessContext);
+    fetch(`/api/data-readiness?${params.toString()}`, { cache: "no-store", signal: controller.signal })
+      .then((response) => response.json())
+      .then((result: { ok?: boolean; summary?: CountSummary }) => {
+        setReadinessState({
+          key: readinessRequestKey,
+          summary: result.ok && result.summary ? result.summary : null,
+          unavailable: !result.ok || !result.summary,
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setReadinessState({ key: readinessRequestKey, summary: null, unavailable: true });
+        }
+      });
+    return () => controller.abort();
+  }, [canViewDataReadiness, readinessContext, readinessRequestKey]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -840,7 +875,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                   AI suggestions require review
                 </Badge>
               ) : null}
-              {canAccessShellModule(currentUser, "data-readiness") ? <DataReadinessContextBadge /> : null}
+              {canViewDataReadiness ? <DataReadinessContextBadge summary={readinessSummary} context={readinessContext} /> : null}
               {currentUser ? <LiveRefreshStatus role={currentUser.role} /> : null}
               {showWorkspaceTools ? (
                 <Dialog>
@@ -905,7 +940,10 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
             </div>
           </div>
         </header>
-        <main id="workspace-main" className={cn("dashboard-workspace min-h-[calc(100vh-4rem)] scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 lg:pb-6 xl:pb-8")}>{children}</main>
+        <main id="workspace-main" className={cn("dashboard-workspace min-h-[calc(100vh-4rem)] scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 lg:pb-6 xl:pb-8")}>
+          {canViewDataReadiness && readinessContext ? <DataReadinessContextPanel context={readinessContext} summary={readinessSummary} loading={readinessLoading} /> : null}
+          {children}
+        </main>
       </div>
       <RoleBottomNav currentUser={currentUser} />
     </div>

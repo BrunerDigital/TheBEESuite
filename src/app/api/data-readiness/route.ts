@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { canBulkConfirmReadinessTask, dataReadinessCsv, type DataReadinessDecision } from "@/lib/data-readiness";
+import { canBulkConfirmReadinessTask, dataReadinessCsv, summarizeDataReadiness, type DataReadinessDecision } from "@/lib/data-readiness";
+import { filterDataReadinessTasksForContext, normalizeDataReadinessContext } from "@/lib/data-readiness-context";
 import { loadDataReadinessWorkspace } from "@/lib/data-readiness-server";
 import { canManageOperations, getCurrentUser } from "@/lib/auth";
 import { dataReadinessCenterEnabled } from "@/lib/honeyglass";
@@ -35,14 +36,25 @@ async function requireAccess() {
 async function GETHandler(request: NextRequest) {
   const access = await requireAccess();
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
-  const workspace = await loadDataReadinessWorkspace(access.user);
   const mode = request.nextUrl.searchParams.get("mode");
+  const workspace = await loadDataReadinessWorkspace(access.user, mode === "count" ? { taskLimit: 1500, batchLimit: 150 } : undefined);
+  const requestedContext = clean(request.nextUrl.searchParams.get("context"), 40);
+  const context = normalizeDataReadinessContext(requestedContext);
+  if (requestedContext && !context) {
+    return NextResponse.json({ ok: false, error: "Unknown data readiness context." }, { status: 400 });
+  }
+  const requestedCategory = clean(request.nextUrl.searchParams.get("category"), 120);
+  const contextTasks = filterDataReadinessTasksForContext(workspace.tasks, context);
+  const tasks = requestedCategory
+    ? contextTasks.filter((task) => task.category === requestedCategory)
+    : contextTasks;
+  const summary = context || requestedCategory ? summarizeDataReadiness(tasks, tasks.length) : workspace.summary;
   if (mode === "count") {
-    return NextResponse.json({ ok: true, summary: workspace.summary }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ ok: true, context, summary }, { headers: { "Cache-Control": "private, no-store" } });
   }
   if (request.nextUrl.searchParams.get("format") === "csv") {
     const filename = `bee-suite-data-readiness-${new Date().toISOString().slice(0, 10)}.csv`;
-    return new Response(dataReadinessCsv(workspace.tasks), {
+    return new Response(dataReadinessCsv(tasks), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,
@@ -50,7 +62,7 @@ async function GETHandler(request: NextRequest) {
       },
     });
   }
-  return NextResponse.json({ ok: true, data: workspace }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json({ ok: true, context, data: context || requestedCategory ? { ...workspace, tasks, summary } : workspace }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 async function PATCHHandler(request: NextRequest) {

@@ -1,85 +1,91 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
 const root = process.cwd();
 const pageSource = readFileSync(path.join(root, "src/app/page.tsx"), "utf8");
-const heroSource = readFileSync(
-  path.join(root, "src/components/landing-hero-showcase.tsx"),
-  "utf8",
-);
-const combinedSource = `${pageSource}\n${heroSource}`;
 
-test("landing page presents the current role and device views", () => {
+test("landing page makes sign-in the primary action", () => {
   for (const expected of [
-    "screenshots/current/director-desktop-dashboard-light.png",
-    "screenshots/current/teacher-ipad-daily-report-light.png",
-    "screenshots/current/parent-iphone-overview-light.png",
-    "screenshots/current/executive-desktop-dashboard-light.png",
-    "Current light-mode product",
-    "Director desktop",
-    "Teacher iPad",
-    "Parent iPhone",
-    "Executive desktop",
+    "Welcome to The BEE Suite",
+    "Sign In to The BEE Suite",
+    "Choose Your Workspace",
+    "Already signed in?",
   ]) {
-    assert.match(combinedSource, new RegExp(expected.replaceAll(".", "\\.")));
+    assert.ok(pageSource.includes(expected), `missing entry-first copy: ${expected}`);
+  }
+
+  assert.ok(pageSource.includes('href="/login"'), "missing generic sign-in link");
+  assert.ok(pageSource.includes('href="#get-started"'), "missing new-user shortcut");
+  assert.ok(
+    pageSource.indexOf('<Link href="/login"') < pageSource.indexOf('<section id="get-started"'),
+    "the sign-in action should render before the new-user setup section",
+  );
+});
+
+test("landing page provides direct role workspace entry", () => {
+  const rolePortals = [
+    ["Director Workspace", "/directors"],
+    ["Executive Workspace", "/executives"],
+    ["Teacher Workspace", "/teachers"],
+    ["Parent & Guardian Portal", "/parents"],
+  ];
+
+  for (const [label, href] of rolePortals) {
+    assert.ok(pageSource.includes(label), `missing role portal label: ${label}`);
+    assert.ok(pageSource.includes(`href: "${href}"`), `missing role portal link: ${href}`);
   }
 });
 
-test("landing page describes the current operating and rollout flows", () => {
+test("landing page separates new-user setup paths from portal login", () => {
+  const setupPaths = [
+    ["I Received an Invitation", "/login"],
+    ["I’m Setting Up Parent Access", "/parents/setup"],
+    ["I’m Registering a Child", "/registration"],
+    ["I’m Setting Up a School", "/onboarding"],
+  ];
+
+  for (const [label, href] of setupPaths) {
+    assert.ok(pageSource.includes(label), `missing setup choice: ${label}`);
+    assert.ok(pageSource.includes(`href: "${href}"`), `missing setup route: ${href}`);
+  }
+});
+
+test("landing page keeps support and device guidance visible", () => {
+  for (const href of ["/resources", "/support", "/app"]) {
+    assert.ok(pageSource.includes(`href: "${href}"`) || pageSource.includes(`href="${href}"`), `missing help link: ${href}`);
+  }
+
+  for (const expected of ["Help & Guides", "Need Help Getting In?", "Use The BEE Suite on Your Device"]) {
+    assert.ok(pageSource.includes(expected), `missing support content: ${expected}`);
+  }
+});
+
+test("landing page is accessible, responsive, and no longer a long sales funnel", () => {
   for (const expected of [
-    "Thursday invoice",
-    "School-linked registration",
-    "ProCare migration with review",
-    "School-local daily operations",
-    "Payment readiness by school",
-    "School-scoped marketing accounts",
-    "Independent launch gates",
-    "selected FTE reporting period",
+    'href="#main-content"',
+    '<main id="main-content">',
+    'aria-label="Primary navigation"',
+    'aria-hidden="true"',
+    "sm:grid-cols-2",
+    "md:grid-cols-2",
+    "xl:grid-cols-4",
+    "min-h-11",
   ]) {
-    assert.ok(
-      combinedSource.toLowerCase().includes(expected.toLowerCase()),
-      `missing current landing-page copy: ${expected}`,
-    );
+    assert.ok(pageSource.includes(expected), `missing UX safeguard: ${expected}`);
   }
 
-  for (const href of ["/resources", "/registration", "/onboarding"]) {
-    assert.ok(combinedSource.includes(`href="${href}"`), `missing link to ${href}`);
-  }
-});
-
-test("landing page uses the current SOP and explainer graphics", () => {
-  const assetPaths = [
-    ...combinedSource.matchAll(/src(?:=|:)\s*"(\/brand\/[^"]+\.(?:png|webp))"/g),
-  ].map((match) => match[1]);
-
-  assert.ok(assetPaths.length >= 12, "expected a substantial set of current product graphics");
-  assert.ok(assetPaths.some((asset) => asset.includes("/explainers/current/")));
-  assert.ok(assetPaths.some((asset) => asset.includes("/screenshots/current/")));
-  assert.ok(assetPaths.some((asset) => asset.includes("/sop-graphics/current/")));
-
-  for (const asset of assetPaths) {
-    assert.ok(
-      existsSync(path.join(root, "public", asset.slice(1))),
-      `landing-page asset does not exist: ${asset}`,
-    );
-  }
-});
-
-test("landing page excludes stale and unverified marketing content", () => {
-  for (const staleCopy of [
-    "May 16, 2025",
-    "Welcome back, Maya",
-    "real customer reviews",
-    "Capacity planning before empty seats",
-    "LandingSavingsCalculator",
-    "Native app path",
-    "testimonials",
+  for (const removed of [
+    "LandingHeroShowcase",
+    "Current product proof",
+    "Request a workspace",
+    "A CRM built around childcare enrollment",
+    "Ready to connect the whole school day?",
+    'id="billing"',
+    'id="product-maps"',
+    "transition-all",
   ]) {
-    assert.ok(
-      !combinedSource.toLowerCase().includes(staleCopy.toLowerCase()),
-      `stale landing-page content remains: ${staleCopy}`,
-    );
+    assert.ok(!pageSource.includes(removed), `sales-funnel content remains: ${removed}`);
   }
 });

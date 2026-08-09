@@ -167,6 +167,7 @@ import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripeCheckoutReadiness, stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { terminalStoreCatalog } from "@/lib/terminal-store";
+import { terminalStoreEnabled } from "@/lib/feature-availability";
 import { readSchoolEin } from "@/lib/school-tax-id";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
 import { canUseKidCityCorporateBilling, isMissHoneysBrandText } from "@/lib/brand-assets";
@@ -6134,6 +6135,8 @@ export async function renderAuthenticatedModulePage(
   slug: string,
   resolvedSearchParams: Record<string, string | string[] | undefined> = {},
 ) {
+  if (slug === "terminal-store" && !terminalStoreEnabled()) notFound();
+
   if (slug === "forgot-password" || slug === "onboarding") {
     return <AuthLikePage type={slug} nextPath={safeAuthNextPath(resolvedSearchParams.next)} />;
   }

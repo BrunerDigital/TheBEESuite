@@ -204,7 +204,13 @@ export default function Home() {
 
       <header className="sticky top-0 z-40 border-b border-slate-900/10 bg-[#fbf7ec]/90 backdrop-blur-xl dark:border-white/10 dark:bg-[#03070d]/90">
         <div className="mx-auto flex min-h-16 max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-10">
-          <BrandLogo href="/" compact size="sm" priority />
+          <BrandLogo
+            href="/"
+            compact
+            size="sm"
+            priority
+            textClassName="[&>span:first-child]:!text-amber-700 dark:[&>span:first-child]:!text-amber-300"
+          />
           <nav aria-label="Primary navigation" className="flex items-center gap-2 sm:gap-3">
             <Link
               href="#get-started"
@@ -373,7 +379,12 @@ export default function Home() {
 
       <footer className="border-t border-slate-900/10 px-4 py-7 dark:border-white/10 sm:px-6 lg:px-10">
         <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-5 text-center sm:flex-row sm:text-left">
-          <BrandLogo href="/" compact size="sm" />
+          <BrandLogo
+            href="/"
+            compact
+            size="sm"
+            textClassName="[&>span:first-child]:!text-amber-700 dark:[&>span:first-child]:!text-amber-300"
+          />
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 text-sm text-slate-600 dark:text-zinc-400 sm:justify-end">
             <Link href="/resources" className="min-h-11 touch-manipulation content-center transition-colors hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:hover:text-white dark:focus-visible:ring-amber-200">
               Help & Guides

@@ -109,12 +109,17 @@ test("landing page provides real light and dark Honeyglass themes", () => {
     "dark:bg-transparent",
     "dark:text-white",
     "PublicThemeToggle",
+    "[&>span:first-child]:!text-amber-700",
+    "dark:[&>span:first-child]:!text-amber-300",
   ]) {
     assert.ok(pageSource.includes(expected), `missing landing theme treatment: ${expected}`);
   }
 
   for (const expected of [
-    'aria-label="Toggle color theme"',
+    'aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}',
+    "aria-pressed={isDark}",
+    "useSyncExternalStore(subscribeToTheme, getThemeSnapshot, getServerThemeSnapshot)",
+    "new MutationObserver(onStoreChange)",
     'localStorage.setItem(themeStorageKey, nextDark ? "dark" : "light")',
     'root.classList.toggle("dark", nextDark)',
     'root.style.colorScheme = nextDark ? "dark" : "light"',

@@ -1466,7 +1466,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           </>
         ) : null}
       </PrintableReport>
-      <section className="relative overflow-hidden rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/20">
+      <section className="honeyglass-hero dashboard-command-center relative overflow-hidden rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/20">
         <div className="hive-texture absolute inset-0 opacity-[0.08]" />
         <div className={showAiBrief ? "relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]" : "relative grid gap-6"}>
           <div className="flex flex-col gap-5">
@@ -1500,13 +1500,19 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               </div>
             </div>
             {topKpiRows.length ? (
-              <WorkspaceBoard storageId="dashboard-command-center-kpis" className="honeycomb-kpi-cluster" itemClassName="honeycomb-kpi-item" items={topKpiItems} />
+              <WorkspaceBoard
+                storageId="dashboard-command-center-kpis"
+                className="honeycomb-kpi-cluster"
+                itemClassName="honeycomb-kpi-item"
+                controlsClassName="honeycomb-kpi-controls"
+                items={topKpiItems}
+              />
             ) : null}
           </div>
           {showAiBrief ? (
           <CollapsibleCard
             id="dashboard-ai-daily-summary"
-            className="border-primary/30 bg-primary/10"
+            className="dashboard-ai-brief border-primary/30 bg-primary/10"
             title={(
               <span className="flex items-center gap-2 text-lg">
                 <Sparkles className="text-primary" />
@@ -1606,7 +1612,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         </div>
       ) : null}
 
-      <Tabs defaultValue={defaultLens} className="flex flex-col gap-4">
+      <Tabs defaultValue={defaultLens} className="min-w-0 flex flex-col gap-4">
         <TabsList className="w-full justify-start overflow-x-auto">
           {visibleLenses.includes("platform") ? <TabsTrigger value="platform">Platform admin</TabsTrigger> : null}
           {visibleLenses.includes("brand") ? <TabsTrigger value="brand">Brand admin</TabsTrigger> : null}
@@ -1617,9 +1623,9 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           {visibleLenses.includes("parent") ? <TabsTrigger value="parent">Parent</TabsTrigger> : null}
           {visibleLenses.includes("pickup") ? <TabsTrigger value="pickup">Pickup</TabsTrigger> : null}
         </TabsList>
-        {visibleLenses.includes("director") ? <TabsContent value="director" className="mt-0">
-          <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
-            <div className="grid gap-6">
+        {visibleLenses.includes("director") ? <TabsContent value="director" className="mt-0 min-w-0">
+          <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="grid min-w-0 gap-6">
               {lowerKpiRows.length ? (
                 <WorkspaceBoard storageId="dashboard-director-kpis" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" items={lowerKpiItems} />
               ) : null}
@@ -1809,7 +1815,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 />
               ) : null}
             </div>
-            <aside>
+            <aside className="min-w-0">
               <WorkspaceBoard
                 storageId="dashboard-director-sidebar"
                 className="flex flex-col gap-6"

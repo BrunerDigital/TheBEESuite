@@ -419,6 +419,7 @@
   .bee-app-frame[data-honeyglass="true"] {
     --honey-blue: oklch(0.76 0.12 225);
     --honey-gold: oklch(0.82 0.16 82);
+    --honey-mint: oklch(0.76 0.12 156);
   }
 
   .bee-app-frame[data-honeyglass="true"] .honeyglass-hero {
@@ -461,22 +462,88 @@
   .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-cluster {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-    gap: 0.85rem;
+    gap: 1rem;
+    min-width: 0;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item {
+    min-width: 0;
   }
 
   .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card {
-    min-height: 12.5rem;
+    min-height: 13.5rem;
+    gap: 0.35rem;
     justify-content: center;
     overflow: hidden;
+    border-color: color-mix(in oklch, var(--honey-gold) 38%, var(--glass-border));
     clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%);
+    color: var(--foreground);
     background:
-      radial-gradient(circle at 72% 22%, color-mix(in oklch, var(--honey-blue) 12%, transparent), transparent 8rem),
-      linear-gradient(145deg, color-mix(in oklch, var(--glass-surface-strong) 90%, var(--honey-gold) 10%), var(--glass-surface));
+      radial-gradient(circle at 72% 22%, color-mix(in oklch, var(--honey-blue) 20%, transparent), transparent 8rem),
+      linear-gradient(145deg, color-mix(in oklch, var(--glass-surface-solid) 82%, var(--honey-gold) 18%), var(--glass-surface-solid));
+    box-shadow:
+      inset 0 1px color-mix(in oklch, white 72%, transparent),
+      inset 0 -1px color-mix(in oklch, var(--honey-gold) 26%, transparent);
+    filter: drop-shadow(0 14px 22px color-mix(in oklch, var(--glass-shadow-color) 78%, transparent));
   }
 
-  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-header"],
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item:nth-child(3n + 2) .honeycomb-kpi-card {
+    border-color: color-mix(in oklch, var(--honey-blue) 38%, var(--glass-border));
+    background:
+      radial-gradient(circle at 28% 78%, color-mix(in oklch, var(--honey-gold) 14%, transparent), transparent 8rem),
+      linear-gradient(145deg, color-mix(in oklch, var(--glass-surface-solid) 82%, var(--honey-blue) 18%), var(--glass-surface-solid));
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item:nth-child(3n + 3) .honeycomb-kpi-card {
+    border-color: color-mix(in oklch, var(--honey-mint) 38%, var(--glass-border));
+    background:
+      radial-gradient(circle at 76% 24%, color-mix(in oklch, var(--honey-blue) 13%, transparent), transparent 8rem),
+      linear-gradient(145deg, color-mix(in oklch, var(--glass-surface-solid) 84%, var(--honey-mint) 16%), var(--glass-surface-solid));
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-header"] {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding-inline: 3.4rem;
+    padding-bottom: 0.25rem;
+    text-align: center;
+  }
+
   .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-content"] {
-    padding-inline: 2rem;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    padding-inline: 3.4rem;
+    text-align: center;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-description"] {
+    max-width: 9.5rem;
+    color: color-mix(in oklch, var(--foreground) 76%, var(--muted-foreground));
+    font-weight: 620;
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-content"] > div {
+    font-variant-numeric: tabular-nums;
+    line-height: 1.05;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-content"] > p {
+    max-width: 9.5rem;
+    color: color-mix(in oklch, var(--foreground) 68%, var(--muted-foreground));
+    line-height: 1.35;
+    text-wrap: pretty;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-content"] > span {
+    color: color-mix(in oklch, var(--primary) 74%, var(--foreground));
+    font-weight: 700;
   }
 
   .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-link:focus-visible {
@@ -519,6 +586,21 @@
   .bee-app-frame[data-honeyglass="true"] .readiness-hex--ready {
     color: color-mix(in oklch, oklch(0.66 0.16 150) 82%, var(--foreground));
     background: color-mix(in oklch, var(--glass-surface-solid) 84%, oklch(0.78 0.13 150) 16%);
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex--confirm {
+    color: color-mix(in oklch, oklch(0.58 0.17 72) 76%, var(--foreground));
+    background: color-mix(in oklch, var(--glass-surface-solid) 78%, var(--honey-gold) 22%);
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex--imported {
+    color: color-mix(in oklch, oklch(0.52 0.14 230) 76%, var(--foreground));
+    background: color-mix(in oklch, var(--glass-surface-solid) 80%, var(--honey-blue) 20%);
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex--excluded {
+    color: color-mix(in oklch, var(--foreground) 72%, var(--muted-foreground));
+    background: color-mix(in oklch, var(--glass-surface-solid) 88%, var(--foreground) 12%);
   }
 
   .bee-app-frame[data-honeyglass="true"] .readiness-hex__inner {
@@ -564,6 +646,49 @@
     background: linear-gradient(135deg, color-mix(in oklch, var(--honey-gold) 18%, var(--glass-field)), color-mix(in oklch, var(--honey-blue) 8%, var(--glass-field)));
   }
 
+  .bee-app-frame[data-honeyglass="true"] .dashboard-command-center {
+    border-color: color-mix(in oklch, var(--honey-gold) 42%, var(--glass-border));
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .dashboard-ai-brief {
+    border-color: color-mix(in oklch, var(--honey-gold) 38%, var(--glass-border));
+    background:
+      radial-gradient(circle at 88% 10%, color-mix(in oklch, var(--honey-blue) 14%, transparent), transparent 16rem),
+      linear-gradient(145deg, color-mix(in oklch, var(--glass-surface-solid) 84%, var(--honey-gold) 16%), var(--glass-surface-strong));
+    box-shadow:
+      inset 0 1px var(--glass-highlight),
+      0 18px 42px color-mix(in oklch, var(--honey-gold) 10%, var(--glass-shadow-color));
+  }
+
+  @media (min-width: 48rem) {
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item {
+      position: relative;
+      padding-top: 0.7rem;
+    }
+
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-controls {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      z-index: 3;
+      margin: 0;
+      padding: 0.15rem;
+      transform: translate(-50%, -35%);
+      border: 1px solid color-mix(in oklch, var(--honey-gold) 30%, var(--glass-border));
+      border-radius: 999px;
+      background: color-mix(in oklch, var(--glass-surface-solid) 94%, var(--honey-gold) 6%);
+      box-shadow: 0 8px 20px var(--glass-shadow-color);
+      opacity: 0.78;
+      transition: opacity 160ms ease, box-shadow 160ms ease;
+    }
+
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item:hover .honeycomb-kpi-controls,
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item:focus-within .honeycomb-kpi-controls {
+      box-shadow: 0 10px 24px color-mix(in oklch, var(--honey-gold) 14%, var(--glass-shadow-color));
+      opacity: 1;
+    }
+  }
+
   @media (min-width: 80rem) {
     .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-cluster {
       display: flex;
@@ -589,11 +714,28 @@
       min-height: auto;
       border-radius: 1.35rem;
       clip-path: none;
+      filter: none;
     }
 
     .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-header"],
     .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-content"] {
       padding-inline: 1.25rem;
+    }
+
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-header"] {
+      flex-direction: row;
+      justify-content: space-between;
+      text-align: left;
+    }
+
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-content"] {
+      align-items: flex-start;
+      text-align: left;
+    }
+
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-description"],
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-content"] > p {
+      max-width: none;
     }
 
     .bee-app-frame[data-honeyglass="true"] .readiness-hex {
@@ -607,7 +749,8 @@
 
   @media (prefers-reduced-motion: reduce) {
     .bee-app-frame[data-honeyglass="true"] .honeyline > span,
-    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item {
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item,
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-controls {
       transition: none;
     }
   }

@@ -29,7 +29,9 @@ const portalLinks: Array<{
   action: string;
   href: string;
   icon: LucideIcon;
-  accent: string;
+  hexClass: string;
+  iconClass: string;
+  glowClass: string;
 }> = [
   {
     title: "Director Workspace",
@@ -37,7 +39,9 @@ const portalLinks: Array<{
     action: "Open Director Login",
     href: "/directors",
     icon: School,
-    accent: "border-amber-300/30 bg-amber-300/10 text-amber-200",
+    hexClass: "bg-amber-300/80",
+    iconClass: "text-amber-200",
+    glowClass: "group-hover:shadow-[0_0_30px_rgba(251,191,36,0.34)]",
   },
   {
     title: "Executive Workspace",
@@ -45,7 +49,9 @@ const portalLinks: Array<{
     action: "Open Executive Login",
     href: "/executives",
     icon: Building2,
-    accent: "border-sky-300/30 bg-sky-300/10 text-sky-200",
+    hexClass: "bg-sky-300/70",
+    iconClass: "text-sky-200",
+    glowClass: "group-hover:shadow-[0_0_30px_rgba(125,211,252,0.28)]",
   },
   {
     title: "Teacher Workspace",
@@ -53,7 +59,9 @@ const portalLinks: Array<{
     action: "Open Teacher Login",
     href: "/teachers",
     icon: GraduationCap,
-    accent: "border-emerald-300/30 bg-emerald-300/10 text-emerald-200",
+    hexClass: "bg-emerald-300/70",
+    iconClass: "text-emerald-200",
+    glowClass: "group-hover:shadow-[0_0_30px_rgba(110,231,183,0.28)]",
   },
   {
     title: "Parent & Guardian Portal",
@@ -61,7 +69,9 @@ const portalLinks: Array<{
     action: "Open Parent Login",
     href: "/parents",
     icon: UsersRound,
-    accent: "border-violet-300/30 bg-violet-300/10 text-violet-200",
+    hexClass: "bg-violet-300/70",
+    iconClass: "text-violet-200",
+    glowClass: "group-hover:shadow-[0_0_30px_rgba(196,181,253,0.28)]",
   },
 ];
 
@@ -74,28 +84,28 @@ const gettingStartedLinks: Array<{
 }> = [
   {
     title: "I Received an Invitation",
-    description: "Use the email address or username connected to your invitation to enter your workspace.",
+    description: "Use the email address or username connected to your invitation.",
     action: "Continue to Sign In",
     href: "/login",
     icon: KeyRound,
   },
   {
     title: "I’m Setting Up Parent Access",
-    description: "Finish connecting your parent or guardian account to the family profile at your school.",
+    description: "Connect your parent or guardian account to your family profile.",
     action: "Set Up Parent Access",
     href: "/parents/setup",
     icon: UserRound,
   },
   {
     title: "I’m Registering a Child",
-    description: "Start or continue the online registration packet for a participating school.",
+    description: "Start or continue a registration packet for a participating school.",
     action: "Start Registration",
     href: "/registration",
     icon: ClipboardPenLine,
   },
   {
     title: "I’m Setting Up a School",
-    description: "Create a gated setup workspace for a school that is new to The BEE Suite.",
+    description: "Create a gated setup workspace for a school new to The BEE Suite.",
     action: "Start School Setup",
     href: "/onboarding",
     icon: ShieldCheck,
@@ -105,21 +115,21 @@ const gettingStartedLinks: Array<{
 const helpLinks = [
   {
     title: "Help & Guides",
-    description: "Find walkthroughs for access, daily work, billing, reports, and common questions.",
+    description: "Walkthroughs for access, daily work, billing, reports, and common questions.",
     href: "/resources",
     action: "Browse Guides",
     icon: BookOpenText,
   },
   {
     title: "Support",
-    description: "Get help when you cannot sign in, need account guidance, or are not sure where to start.",
+    description: "Get help when you cannot sign in or are not sure where to start.",
     href: "/support",
     action: "Visit Support",
     icon: CircleHelp,
   },
   {
     title: "Use The BEE Suite on Your Device",
-    description: "Open the install guide for a phone, tablet, or desktop computer.",
+    description: "Open the install guide for your phone, tablet, or computer.",
     href: "/app",
     action: "View Device Options",
     icon: Smartphone,
@@ -133,14 +143,57 @@ const helpLinks = [
 }>;
 
 const primaryLinkClass =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3 text-sm font-semibold text-zinc-950 shadow-[0_12px_32px_rgba(251,191,36,0.18)] transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-amber-200 hover:shadow-[0_16px_38px_rgba(251,191,36,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#07090d]";
+  "inline-flex min-h-11 touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-amber-300 px-5 py-3 text-sm font-semibold text-zinc-950 shadow-[0_12px_32px_rgba(251,191,36,0.18)] transition-[background-color,box-shadow,transform] motion-safe:hover:-translate-y-0.5 hover:bg-amber-200 hover:shadow-[0_16px_38px_rgba(251,191,36,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05070a]";
 
 const secondaryLinkClass =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white transition-[background-color,border-color,transform] hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#07090d]";
+  "inline-flex min-h-11 touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-white/15 bg-white/[0.055] px-5 py-3 text-sm font-semibold text-white transition-[background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05070a]";
+
+function HexIcon({
+  icon: Icon,
+  hexClass,
+  iconClass,
+  glowClass,
+  size = "lg",
+}: {
+  icon: LucideIcon;
+  hexClass: string;
+  iconClass: string;
+  glowClass?: string;
+  size?: "sm" | "lg";
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`${size === "lg" ? "size-[4.5rem] sm:size-20" : "size-12"} relative grid shrink-0 place-items-center [clip-path:polygon(50%_0%,93%_25%,93%_75%,50%_100%,7%_75%,7%_25%)] ${hexClass} ${glowClass ?? ""} transition-[box-shadow,transform] duration-300 motion-safe:group-hover:scale-[1.035]`}
+    >
+      <span className="absolute inset-px [clip-path:inherit] bg-[linear-gradient(145deg,#14202b_0%,#071019_72%)]" />
+      <span className="absolute inset-[3px] [clip-path:inherit] bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.08),transparent_58%)]" />
+      <Icon className={`${size === "lg" ? "size-7 sm:size-8" : "size-5"} relative z-10 ${iconClass}`} />
+    </span>
+  );
+}
+
+function HoneycombAccessRail() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 140 520"
+      className="pointer-events-none absolute bottom-6 left-1 top-[6.65rem] hidden h-[calc(100%-8rem)] w-32 text-amber-300/75 lg:block"
+      fill="none"
+      preserveAspectRatio="none"
+    >
+      <path d="M66 3 121 34v70l-55 31-55-31V34L66 3Z" stroke="currentColor" strokeWidth="1.4" />
+      <path d="m66 132 55 31v70l-55 31-55-31v-70l55-31Z" stroke="currentColor" strokeWidth="1.4" />
+      <path d="m66 261 55 31v70l-55 31-55-31v-70l55-31Z" stroke="currentColor" strokeWidth="1.4" />
+      <path d="m66 390 55 31v70l-55 31-55-31v-70l55-31Z" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M121 69h18M121 198h18M121 327h18M121 456h18" stroke="currentColor" strokeLinecap="round" strokeWidth="1.4" />
+    </svg>
+  );
+}
 
 export default function Home() {
   return (
-    <div className="min-h-dvh overflow-hidden bg-[#05070a] text-white">
+    <div className="min-h-dvh overflow-x-hidden bg-[#03070d] text-white">
       <a
         href="#main-content"
         className="sr-only z-50 rounded-lg bg-amber-300 px-4 py-3 font-semibold text-zinc-950 focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
@@ -148,19 +201,19 @@ export default function Home() {
         Skip to main content
       </a>
 
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#05070a]/90 backdrop-blur-xl">
-        <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#03070d]/90 backdrop-blur-xl">
+        <div className="mx-auto flex min-h-16 max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-10">
           <BrandLogo href="/" compact size="sm" priority />
           <nav aria-label="Primary navigation" className="flex items-center gap-2 sm:gap-3">
             <Link
               href="#get-started"
-              className="hidden min-h-11 items-center rounded-lg px-3 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 sm:inline-flex"
+              className="hidden min-h-11 touch-manipulation items-center rounded-lg px-3 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 sm:inline-flex"
             >
               Get Started
             </Link>
             <Link
               href="/resources"
-              className="hidden min-h-11 items-center rounded-lg px-3 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 md:inline-flex"
+              className="hidden min-h-11 touch-manipulation items-center rounded-lg px-3 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 md:inline-flex"
             >
               Help & Guides
             </Link>
@@ -173,24 +226,32 @@ export default function Home() {
       </header>
 
       <main id="main-content">
-        <section className="relative px-4 pb-16 pt-14 sm:px-6 sm:pb-20 sm:pt-20 lg:px-8 lg:pb-24 lg:pt-24">
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-            <div className="absolute left-[8%] top-8 h-64 w-64 rounded-full bg-amber-300/10 blur-3xl sm:h-96 sm:w-96" />
-            <div className="absolute right-[4%] top-28 h-72 w-72 rounded-full bg-sky-400/[0.07] blur-3xl sm:h-[28rem] sm:w-[28rem]" />
+        <section className="relative px-4 pb-12 pt-14 sm:px-6 sm:pb-16 sm:pt-20 lg:px-10 xl:py-16">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="absolute -left-24 top-10 h-[34rem] w-[34rem] rounded-full bg-amber-300/[0.055] blur-3xl motion-safe:animate-pulse motion-safe:[animation-duration:7s]" />
+            <div className="absolute right-[-14rem] top-16 h-[42rem] w-[42rem] rounded-full bg-sky-400/[0.04] blur-3xl motion-safe:animate-pulse motion-safe:[animation-delay:1.5s] motion-safe:[animation-duration:8s]" />
+            <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-amber-300/20 to-transparent" />
           </div>
 
-          <div className="relative mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-16">
-            <div className="min-w-0 text-center lg:text-left">
-              <div className="mx-auto mb-6 flex size-14 items-center justify-center rounded-2xl border border-amber-300/30 bg-amber-300/10 text-amber-200 lg:mx-0">
-                <KeyRound aria-hidden="true" className="size-6" />
+          <div className="relative mx-auto grid w-full max-w-[1440px] items-center gap-12 min-[1400px]:grid-cols-[minmax(0,0.68fr)_minmax(0,1.32fr)] min-[1400px]:gap-14">
+            <div className="min-w-0 text-center min-[1400px]:text-left">
+              <div className="flex flex-col items-center gap-7 min-[1400px]:flex-row min-[1400px]:items-start">
+                <div className="grid h-20 w-14 shrink-0 place-items-center rounded-[1.45rem] border border-amber-300/55 bg-[linear-gradient(160deg,rgba(251,191,36,0.14),rgba(251,191,36,0.025))] text-amber-200 shadow-[inset_0_1px_rgba(255,255,255,0.12),0_20px_60px_rgba(251,191,36,0.08)]">
+                  <KeyRound aria-hidden="true" className="size-6" />
+                </div>
+                <h1
+                  aria-label="Welcome to The BEE Suite"
+                  className="text-balance text-[clamp(2.65rem,6.4vw,5.2rem)] font-semibold leading-[0.95] tracking-[-0.055em]"
+                >
+                  <span className="min-[1400px]:block">Welcome</span>{" "}
+                  <span className="min-[1400px]:block">to The</span>{" "}
+                  <span className="min-[1400px]:block" translate="no">BEE Suite</span>
+                </h1>
               </div>
-              <h1 className="text-balance text-[clamp(2.55rem,7vw,5.5rem)] font-semibold leading-[0.94] tracking-[-0.055em]">
-                Welcome to The BEE Suite
-              </h1>
-              <p className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-7 text-zinc-300 sm:text-lg sm:leading-8 lg:mx-0">
+              <p className="mx-auto mt-7 max-w-xl text-pretty text-base leading-7 text-zinc-300 sm:text-lg sm:leading-8 min-[1400px]:ml-[5.25rem] min-[1400px]:mr-0">
                 Sign in to your workspace, finish setup from an invitation, or choose the portal that matches how you use The BEE Suite.
               </p>
-              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start">
+              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row min-[1400px]:ml-16 min-[1400px]:justify-start">
                 <Link href="/login" className={primaryLinkClass}>
                   Sign In to The BEE Suite
                   <ArrowRight aria-hidden="true" className="size-4" />
@@ -199,34 +260,72 @@ export default function Home() {
                   I’m New Here
                 </Link>
               </div>
-              <p className="mt-5 text-sm leading-6 text-zinc-500">
+              <p className="mt-5 text-sm leading-6 text-zinc-500 min-[1400px]:ml-[5.25rem]">
                 Already signed in? We’ll take you to the workspace available for your account.
               </p>
             </div>
 
-            <div className="min-w-0 rounded-[2rem] border border-white/12 bg-white/[0.055] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-6">
-              <div className="mb-5 flex items-end justify-between gap-4 px-1">
-                <div>
-                  <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">Choose Your Workspace</h2>
-                  <p className="mt-1 text-sm leading-6 text-zinc-400">Go directly to the login made for your role.</p>
+            <div
+              data-testid="workspace-access-rail"
+              className="relative min-w-0 rounded-[1.8rem] border border-white/[0.14] bg-[linear-gradient(145deg,rgba(17,29,41,0.78),rgba(5,12,20,0.92))] p-4 shadow-[inset_0_1px_rgba(255,255,255,0.055),0_36px_100px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:p-6 lg:p-7"
+            >
+              <div className="relative z-10 mb-6 flex items-end justify-between gap-5 pl-1 lg:pl-28">
+                <div className="min-w-0">
+                  <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">Choose Your Workspace</h2>
+                  <p className="mt-1.5 text-sm leading-6 text-zinc-400 sm:text-base">Go directly to the login made for your role.</p>
                 </div>
-                <span className="hidden rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-zinc-400 sm:inline-flex">
-                  Secure access
-                </span>
+                <ShieldCheck aria-hidden="true" className="hidden size-5 shrink-0 text-zinc-500 sm:block" />
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                {portalLinks.map(({ title, description, action, href, icon: Icon, accent }) => (
+              <HoneycombAccessRail />
+              <div className="relative z-10 grid gap-3 lg:pl-20">
+                {portalLinks.map(({ title, description, action, href, icon, hexClass, iconClass, glowClass }) => (
                   <Link
                     key={href}
                     href={href}
-                    className="group flex min-h-48 min-w-0 flex-col rounded-2xl border border-white/10 bg-black/25 p-5 transition-[background-color,border-color,transform] hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
+                    className="group flex min-w-0 touch-manipulation items-center gap-4 rounded-[1.35rem] border border-white/[0.16] bg-[linear-gradient(100deg,rgba(17,30,42,0.82),rgba(8,18,28,0.72))] p-3.5 shadow-[inset_0_1px_rgba(255,255,255,0.045)] transition-[background-color,border-color,box-shadow,transform] motion-safe:hover:translate-x-1 hover:border-white/30 hover:bg-white/[0.075] hover:shadow-[0_16px_42px_rgba(0,0,0,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 sm:gap-5 sm:p-4 lg:-ml-20"
                   >
-                    <span className={`flex size-11 items-center justify-center rounded-xl border ${accent}`}>
-                      <Icon aria-hidden="true" className="size-5" />
+                    <HexIcon icon={icon} hexClass={hexClass} iconClass={iconClass} glowClass={glowClass} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-base font-semibold text-white sm:text-lg">{title}</span>
+                      <span className="mt-1 block text-pretty text-sm leading-5 text-zinc-400 sm:leading-6">{description}</span>
+                      <span className="mt-3 flex items-center gap-2 text-sm font-semibold text-amber-200 xl:hidden">
+                        {action}
+                        <ArrowRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-1" />
+                      </span>
                     </span>
-                    <span className="mt-4 block text-base font-semibold text-white">{title}</span>
-                    <span className="mt-2 block text-sm leading-6 text-zinc-400">{description}</span>
+                    <span className="hidden shrink-0 items-center gap-2 pl-3 text-sm font-semibold text-amber-200 xl:flex">
+                      {action}
+                      <ArrowRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-1" />
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="get-started" className="scroll-mt-24 px-4 py-12 sm:px-6 sm:py-16 lg:px-10">
+          <div className="mx-auto grid max-w-[1440px] gap-5 xl:grid-cols-[1.18fr_0.82fr]">
+            <article className="rounded-[1.65rem] border border-white/[0.13] bg-[linear-gradient(145deg,rgba(15,27,39,0.78),rgba(5,12,20,0.92))] p-5 shadow-[inset_0_1px_rgba(255,255,255,0.05),0_26px_70px_rgba(0,0,0,0.28)] sm:p-7">
+              <div className="flex items-start gap-4">
+                <HexIcon icon={KeyRound} hexClass="bg-amber-300/80" iconClass="text-amber-200" size="sm" />
+                <div className="min-w-0">
+                  <h2 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">New Here? Start With What You Need</h2>
+                  <p className="mt-1.5 text-pretty text-sm leading-6 text-zinc-400">Choose the setup path that matches what you are doing today.</p>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                {gettingStartedLinks.map(({ title, description, action, href, icon: Icon }) => (
+                  <Link
+                    key={title}
+                    href={href}
+                    className="group flex min-h-48 min-w-0 touch-manipulation flex-col rounded-2xl border border-white/10 bg-black/20 p-5 transition-[background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 hover:border-amber-300/30 hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
+                  >
+                    <Icon aria-hidden="true" className="size-6 text-amber-200" />
+                    <span className="mt-4 block font-semibold text-white">{title}</span>
+                    <span className="mt-2 block text-sm leading-5 text-zinc-400">{description}</span>
                     <span className="mt-auto flex items-center gap-2 pt-5 text-sm font-semibold text-amber-200">
                       {action}
                       <ArrowRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-1" />
@@ -234,83 +333,53 @@ export default function Home() {
                   </Link>
                 ))}
               </div>
-            </div>
-          </div>
-        </section>
+            </article>
 
-        <section id="get-started" className="scroll-mt-24 border-y border-white/10 bg-white/[0.025] px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
-          <div className="mx-auto max-w-7xl">
-            <div className="max-w-3xl">
-              <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">New Here? Start With What You Need</h2>
-              <p className="mt-4 text-pretty text-base leading-7 text-zinc-400 sm:text-lg">
-                Choose the path that fits what you are doing today. You can sign in, connect parent access, register a child, or begin a new school setup.
-              </p>
-            </div>
-
-            <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {gettingStartedLinks.map(({ title, description, action, href, icon: Icon }) => (
-                <Link
-                  key={title}
-                  href={href}
-                  className="group flex min-h-64 min-w-0 flex-col rounded-2xl border border-white/10 bg-[#0b0e14] p-6 transition-[background-color,border-color,transform] hover:-translate-y-0.5 hover:border-amber-300/25 hover:bg-[#10141c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
-                >
-                  <span className="flex size-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-zinc-200">
-                    <Icon aria-hidden="true" className="size-5" />
-                  </span>
-                  <span className="mt-5 block text-lg font-semibold text-white">{title}</span>
-                  <span className="mt-3 block text-sm leading-6 text-zinc-400">{description}</span>
-                  <span className="mt-auto flex items-center gap-2 pt-6 text-sm font-semibold text-amber-200">
-                    {action}
-                    <ArrowRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-1" />
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
-          <div className="mx-auto max-w-7xl rounded-[2rem] border border-white/10 bg-gradient-to-br from-white/[0.065] to-white/[0.025] p-6 sm:p-8 lg:p-10">
-            <div className="grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-start lg:gap-12">
-              <div>
-                <h2 className="text-balance text-3xl font-semibold tracking-tight">Need Help Getting In?</h2>
-                <p className="mt-4 max-w-xl text-pretty text-base leading-7 text-zinc-400">
-                  Find the right guide, contact support, or set up The BEE Suite on the device you use most.
-                </p>
+            <article className="rounded-[1.65rem] border border-white/[0.13] bg-[linear-gradient(145deg,rgba(15,27,39,0.78),rgba(5,12,20,0.92))] p-5 shadow-[inset_0_1px_rgba(255,255,255,0.05),0_26px_70px_rgba(0,0,0,0.28)] sm:p-7">
+              <div className="flex items-start gap-4">
+                <HexIcon icon={CircleHelp} hexClass="bg-amber-300/80" iconClass="text-amber-200" size="sm" />
+                <div className="min-w-0">
+                  <h2 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">Need Help Getting In?</h2>
+                  <p className="mt-1.5 text-pretty text-sm leading-6 text-zinc-400">Find the right guide, support path, or device setup.</p>
+                </div>
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
+
+              <div className="mt-6 divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
                 {helpLinks.map(({ title, description, href, action, icon: Icon }) => (
                   <Link
                     key={href}
                     href={href}
-                    className="group min-w-0 rounded-2xl border border-white/10 bg-black/20 p-5 transition-[background-color,border-color] hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
+                    className="group flex min-w-0 touch-manipulation items-center gap-4 p-4 transition-colors hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-200 sm:p-5"
                   >
-                    <Icon aria-hidden="true" className="size-5 text-amber-200" />
-                    <span className="mt-4 block font-semibold text-white">{title}</span>
-                    <span className="mt-2 block text-sm leading-6 text-zinc-400">{description}</span>
-                    <span className="mt-4 flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                    <Icon aria-hidden="true" className="size-5 shrink-0 text-amber-200" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold text-white">{title}</span>
+                      <span className="mt-1 block text-sm leading-5 text-zinc-400">{description}</span>
+                    </span>
+                    <span className="hidden shrink-0 items-center gap-2 text-sm font-semibold text-amber-200 sm:flex">
                       {action}
                       <ArrowRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-1" />
                     </span>
+                    <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-amber-200 sm:hidden" />
                   </Link>
                 ))}
               </div>
-            </div>
+            </article>
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-white/10 px-4 py-7 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-5 text-center sm:flex-row sm:text-left">
+      <footer className="border-t border-white/10 px-4 py-7 sm:px-6 lg:px-10">
+        <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-5 text-center sm:flex-row sm:text-left">
           <BrandLogo href="/" compact size="sm" />
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 text-sm text-zinc-400 sm:justify-end">
-            <Link href="/resources" className="min-h-11 content-center transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200">
+            <Link href="/resources" className="min-h-11 touch-manipulation content-center transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200">
               Help & Guides
             </Link>
-            <Link href="/support" className="min-h-11 content-center transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200">
+            <Link href="/support" className="min-h-11 touch-manipulation content-center transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200">
               Support
             </Link>
-            <Link href="/privacy" className="min-h-11 content-center transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200">
+            <Link href="/privacy" className="min-h-11 touch-manipulation content-center transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200">
               Privacy
             </Link>
           </div>

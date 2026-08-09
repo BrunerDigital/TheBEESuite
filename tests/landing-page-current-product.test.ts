@@ -36,6 +36,10 @@ test("landing page provides direct role workspace entry", () => {
     assert.ok(pageSource.includes(label), `missing role portal label: ${label}`);
     assert.ok(pageSource.includes(`href: "${href}"`), `missing role portal link: ${href}`);
   }
+
+  assert.ok(pageSource.includes('data-testid="workspace-access-rail"'));
+  assert.ok(pageSource.includes("HoneycombAccessRail"));
+  assert.ok(pageSource.includes("[clip-path:polygon"));
 });
 
 test("landing page separates new-user setup paths from portal login", () => {
@@ -69,9 +73,11 @@ test("landing page is accessible, responsive, and no longer a long sales funnel"
     'aria-label="Primary navigation"',
     'aria-hidden="true"',
     "sm:grid-cols-2",
-    "md:grid-cols-2",
-    "xl:grid-cols-4",
+    "2xl:grid-cols-4",
+    "xl:grid-cols-[1.18fr_0.82fr]",
     "min-h-11",
+    "touch-manipulation",
+    "motion-safe:",
   ]) {
     assert.ok(pageSource.includes(expected), `missing UX safeguard: ${expected}`);
   }
@@ -88,4 +94,8 @@ test("landing page is accessible, responsive, and no longer a long sales funnel"
   ]) {
     assert.ok(!pageSource.includes(removed), `sales-funnel content remains: ${removed}`);
   }
+  assert.ok(
+    !pageSource.includes('className="animate-pulse'),
+    "ambient motion must remain reduced-motion safe",
+  );
 });

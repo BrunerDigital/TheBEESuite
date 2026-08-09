@@ -3798,6 +3798,18 @@ async function renderLivePage(
     const centerNameById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
     const aiDayStart = new Date();
     aiDayStart.setHours(0, 0, 0, 0);
+    const aiCurrentFamilyWhere: Prisma.FamilyWhereInput = {
+      centerId: scopedCenterIds,
+      children: { some: currentlyEnrolledChildWhere() },
+    };
+    const aiOpenInvoiceWhere: Prisma.InvoiceWhereInput = {
+      billingAccount: { family: aiCurrentFamilyWhere },
+      status: { in: [PaymentStatus.OPEN, PaymentStatus.FAILED] },
+    };
+    const aiOverdueInvoiceWhere: Prisma.InvoiceWhereInput = {
+      ...aiOpenInvoiceWhere,
+      dueDate: { lt: new Date() },
+    };
     const [summaries, suggestions, aiLeads, aiFamilies, unreadMessages, openInvoices, overdueInvoices, pendingIncidents, upcomingTours, aiCheckLogs, aiStaff, classroomCapacity, openComplianceTasks, overdueInvoiceTotal] = await Promise.all([
       prisma.aiSummary.findMany({
         where: aiSummaryWhereForViewer({
@@ -3841,19 +3853,8 @@ async function renderLivePage(
         },
       }),
       prisma.message.count({ where: { readAt: null, family: { centerId: scopedCenterIds } } }),
-      prisma.invoice.count({
-        where: {
-          billingAccount: { family: { centerId: scopedCenterIds } },
-          status: { in: [PaymentStatus.OPEN, PaymentStatus.FAILED] },
-        },
-      }),
-      prisma.invoice.count({
-        where: {
-          billingAccount: { family: { centerId: scopedCenterIds } },
-          status: { in: [PaymentStatus.OPEN, PaymentStatus.FAILED] },
-          dueDate: { lt: new Date() },
-        },
-      }),
+      prisma.invoice.count({ where: aiOpenInvoiceWhere }),
+      prisma.invoice.count({ where: aiOverdueInvoiceWhere }),
       prisma.incidentReport.count({
         where: {
           adminReviewStatus: "pending",
@@ -3882,14 +3883,7 @@ async function renderLivePage(
       prisma.complianceTask.count({
         where: { centerId: scopedCenterIds, status: { notIn: ["completed", "closed", "cancelled"] } },
       }),
-      prisma.invoice.aggregate({
-        where: {
-          billingAccount: { family: { centerId: scopedCenterIds } },
-          status: { in: [PaymentStatus.OPEN, PaymentStatus.FAILED] },
-          dueDate: { lt: new Date() },
-        },
-        _sum: { totalCents: true },
-      }),
+      prisma.invoice.aggregate({ where: aiOverdueInvoiceWhere, _sum: { totalCents: true } }),
     ]);
 
     const aiVisibleCenterIds = new Set(centers.map((center) => center.id));

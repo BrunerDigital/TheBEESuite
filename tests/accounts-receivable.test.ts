@@ -154,6 +154,7 @@ test("executive account summary rolls family balances up by visible school", () 
 test("director and executive dashboard billing widgets use current-family balances", () => {
   const route = readFileSync("src/app/api/dashboard/accounts-receivable/route.ts", "utf8");
   const aiCommandRoute = readFileSync("src/app/api/ai/command/route.ts", "utf8");
+  const livePage = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const shell = readFileSync("src/components/app-shell.tsx", "utf8");
   const dashboardPage = readFileSync("src/app/dashboard/page.tsx", "utf8");
   const dashboard = readFileSync("src/components/dashboard.tsx", "utf8");
@@ -170,6 +171,10 @@ test("director and executive dashboard billing widgets use current-family balanc
   assert.match(
     aiCommandRoute,
     /const currentFamilyWhere:[\s\S]*children: \{ some: currentlyEnrolledChildWhere\(\) \}[\s\S]*const openInvoiceWhere:[\s\S]*billingAccount: \{ family: currentFamilyWhere \}/,
+  );
+  assert.match(
+    livePage,
+    /if \(slug === "ai-command"\)[\s\S]*const aiCurrentFamilyWhere:[\s\S]*children: \{ some: currentlyEnrolledChildWhere\(\) \}[\s\S]*const aiOpenInvoiceWhere:[\s\S]*billingAccount: \{ family: aiCurrentFamilyWhere \}[\s\S]*invoice\.aggregate\(\{ where: aiOverdueInvoiceWhere/,
   );
   assert.match(dashboard, /dashboard-director-account-balances/);
   assert.match(dashboard, /dashboard-billing-account-balances/);

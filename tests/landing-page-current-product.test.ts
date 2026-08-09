@@ -107,6 +107,8 @@ test("landing page provides real light and dark Honeyglass themes", () => {
     "text-slate-950",
     "dark:bg-[#03070d]",
     "dark:bg-transparent",
+    "dark:!bg-black/20",
+    "dark:!bg-white/[0.055]",
     "dark:text-white",
     "PublicThemeToggle",
     "[&>span:first-child]:!text-amber-700",
@@ -127,6 +129,7 @@ test("landing page provides real light and dark Honeyglass themes", () => {
     'root.style.colorScheme = nextDark ? "dark" : "light"',
     "touch-manipulation",
     "focus-visible:ring-2",
+    "dark:!bg-white/[0.055]",
   ]) {
     assert.ok(themeToggleSource.includes(expected), `missing theme toggle safeguard: ${expected}`);
   }

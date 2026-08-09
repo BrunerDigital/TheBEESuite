@@ -147,7 +147,7 @@ const primaryLinkClass =
   "inline-flex min-h-11 touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-amber-400 px-5 py-3 text-sm font-semibold text-zinc-950 shadow-[0_12px_32px_rgba(217,119,6,0.18)] transition-[background-color,box-shadow,transform] motion-safe:hover:-translate-y-0.5 hover:bg-amber-300 hover:shadow-[0_16px_38px_rgba(217,119,6,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fbf7ec] dark:bg-amber-300 dark:shadow-[0_12px_32px_rgba(251,191,36,0.18)] dark:hover:bg-amber-200 dark:hover:shadow-[0_16px_38px_rgba(251,191,36,0.28)] dark:focus-visible:ring-amber-200 dark:focus-visible:ring-offset-[#03070d]";
 
 const secondaryLinkClass =
-  "inline-flex min-h-11 touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-900/15 bg-white/70 px-5 py-3 text-sm font-semibold text-slate-900 shadow-sm transition-[background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 hover:border-amber-500/35 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fbf7ec] dark:border-white/15 dark:bg-white/[0.055] dark:text-white dark:shadow-none dark:hover:border-white/25 dark:hover:bg-white/[0.09] dark:focus-visible:ring-amber-200 dark:focus-visible:ring-offset-[#03070d]";
+  "inline-flex min-h-11 touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-900/15 bg-white/70 px-5 py-3 text-sm font-semibold text-slate-900 shadow-sm transition-[background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 hover:border-amber-500/35 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fbf7ec] dark:border-white/15 dark:!bg-white/[0.055] dark:text-white dark:shadow-none dark:hover:border-white/25 dark:hover:!bg-white/[0.09] dark:focus-visible:ring-amber-200 dark:focus-visible:ring-offset-[#03070d]";
 
 function HexIcon({
   icon: Icon,
@@ -329,7 +329,7 @@ export default function Home() {
                   <Link
                     key={title}
                     href={href}
-                    className="group flex min-h-48 min-w-0 touch-manipulation flex-col rounded-2xl border border-slate-900/10 bg-white/70 p-5 shadow-[inset_0_1px_rgba(255,255,255,0.85)] transition-[background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 hover:border-amber-500/35 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:border-white/10 dark:bg-black/20 dark:shadow-none dark:hover:border-amber-300/30 dark:hover:bg-white/[0.055] dark:focus-visible:ring-amber-200"
+                    className="group flex min-h-48 min-w-0 touch-manipulation flex-col rounded-2xl border border-slate-900/10 bg-white/70 p-5 shadow-[inset_0_1px_rgba(255,255,255,0.85)] transition-[background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 hover:border-amber-500/35 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:border-white/10 dark:!bg-black/20 dark:shadow-none dark:hover:border-amber-300/30 dark:hover:!bg-white/[0.055] dark:focus-visible:ring-amber-200"
                   >
                     <Icon aria-hidden="true" className="size-6 text-amber-700 dark:text-amber-200" />
                     <span className="mt-4 block font-semibold text-slate-950 dark:text-white">{title}</span>
@@ -352,7 +352,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="mt-6 divide-y divide-slate-900/10 overflow-hidden rounded-2xl border border-slate-900/10 bg-white/70 shadow-[inset_0_1px_rgba(255,255,255,0.85)] dark:divide-white/10 dark:border-white/10 dark:bg-black/20 dark:shadow-none">
+              <div className="mt-6 divide-y divide-slate-900/10 overflow-hidden rounded-2xl border border-slate-900/10 bg-white/70 shadow-[inset_0_1px_rgba(255,255,255,0.85)] dark:divide-white/10 dark:border-white/10 dark:!bg-black/20 dark:shadow-none">
                 {helpLinks.map(({ title, description, href, action, icon: Icon }) => (
                   <Link
                     key={href}

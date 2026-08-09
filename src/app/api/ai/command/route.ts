@@ -142,9 +142,13 @@ async function generateOperationsSummary(
   const scopeLabel = selectedCenters.length === 1 ? centerLabel(selectedCenters[0]) : `${selectedCenters.length.toLocaleString()} visible schools`;
   const scope = selectedCenters.length === 1 ? "center" : "center_group";
   const scopeId = selectedCenters.length === 1 ? selectedCenters[0].id : null;
+  const currentFamilyWhere: Prisma.FamilyWhereInput = {
+    centerId: selectedCenterFilter,
+    children: { some: currentlyEnrolledChildWhere() },
+  };
 
   const openInvoiceWhere: Prisma.InvoiceWhereInput = {
-    billingAccount: { family: { centerId: selectedCenterFilter } },
+    billingAccount: { family: currentFamilyWhere },
     status: { in: [PaymentStatus.OPEN, PaymentStatus.FAILED] },
   };
   const overdueInvoiceWhere: Prisma.InvoiceWhereInput = {

@@ -2,6 +2,40 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { discoverMarketingConnection } from "@/lib/marketing-account-discovery";
 
+test("Meta discovery resolves every Page without exposing Page tokens in candidates", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    data: [
+      {
+        id: "page-1",
+        name: "Kid City USA Sarasota",
+        access_token: "page-secret-1",
+        instagram_business_account: { id: "instagram-1", username: "kidcitysarasota" },
+      },
+      { id: "page-2", name: "Kid City USA Beach", access_token: "page-secret-2" },
+    ],
+  }), { status: 200, headers: { "Content-Type": "application/json" } })) as typeof fetch;
+  try {
+    const result = await discoverMarketingConnection({
+      provider: "meta_social",
+      credentials: { META_SOCIAL_USER_ACCESS_TOKEN: "manager-token" },
+    });
+    assert.equal(result.candidates.length, 2);
+    assert.equal(JSON.stringify(result.candidates).includes("page-secret"), false);
+    assert.deepEqual(result.selections["page-1"], {
+      config: {
+        facebookPageId: "page-1",
+        accountLabel: "Kid City USA Sarasota",
+        instagramAccountId: "instagram-1",
+        profileHandle: "@kidcitysarasota",
+      },
+      credentials: { META_SOCIAL_ACCESS_TOKEN: "page-secret-1" },
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("LinkedIn Ads OAuth discovers and selects an accessible ad account", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(JSON.stringify({

@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth";
-import { canManageExecutiveMarketingPortfolio } from "@/lib/executive-marketing";
 import {
+  canManageExecutiveMarketingPortfolio,
+  normalizeExecutiveMarketingAssignments,
+} from "@/lib/executive-marketing";
+import {
+  encryptIntegrationCredential,
   getTenantIntegrationCredentialMap,
-  upsertTenantIntegrationCredentials,
 } from "@/lib/integration-credentials";
 import { centerIntegrationScopeKey } from "@/lib/integration-scope";
 import {
@@ -35,7 +38,13 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
-  const action = body?.action === "assign" ? "assign" : body?.action === "refresh" ? "refresh" : null;
+  const action = body?.action === "assign_many"
+    ? "assign_many"
+    : body?.action === "assign"
+      ? "assign"
+      : body?.action === "refresh"
+        ? "refresh"
+        : null;
   const provider = normalizeIntegrationProvider(body?.provider);
   if (!action || !provider || !isMarketingIntegrationProvider(provider)) {
     return NextResponse.json({ ok: false, error: "Choose a supported marketing platform action." }, { status: 400 });
@@ -51,11 +60,10 @@ async function POSTHandler(request: NextRequest) {
 
   try {
     const managerCredentials = await getTenantIntegrationCredentialMap(user.tenantId, provider, null);
-    const accountId = typeof body?.accountId === "string" ? body.accountId.trim().slice(0, 300) : "";
     const discovery = await discoverMarketingConnection({
       provider,
       credentials: managerCredentials,
-      selectedId: action === "assign" ? accountId : null,
+      selectedId: null,
     });
     const managerRecord = record(managerIntegration.configPlaceholder);
     const managerOauth = record(managerRecord.oauth);
@@ -81,123 +89,195 @@ async function POSTHandler(request: NextRequest) {
       return NextResponse.json({ ok: true, accounts: discovery.candidates });
     }
 
-    if (!accountId || !discovery.candidates.some((candidate) => candidate.id === accountId)) {
+    const normalizedAssignments = normalizeExecutiveMarketingAssignments(
+      action === "assign_many"
+        ? body?.assignments
+        : [{ accountId: body?.accountId, centerId: body?.centerId }],
+    );
+    if (!normalizedAssignments.ok) {
+      return NextResponse.json({ ok: false, error: normalizedAssignments.error }, { status: 400 });
+    }
+    const assignments = normalizedAssignments.assignments;
+    const candidateById = new Map(discovery.candidates.map((candidate) => [candidate.id, candidate]));
+    if (assignments.some((assignment) => !candidateById.has(assignment.accountId))) {
       return NextResponse.json({
         ok: false,
-        error: "That profile is no longer available to the connected manager login. Refresh the list and choose again.",
+        error: "One or more profiles are no longer available to the connected manager login. Refresh the list and choose again.",
       }, { status: 403 });
     }
-    const centerId = typeof body?.centerId === "string" ? body.centerId.trim().slice(0, 200) : "";
-    const center = centerId
-      ? await prisma.center.findFirst({
-          where: {
-            id: centerId,
-            status: "active",
-            organization: { tenantId: user.tenantId },
-          },
-          select: { id: true, name: true },
-        })
-      : null;
-    if (!center) {
-      return NextResponse.json({ ok: false, error: "Choose an active school in your BEE Suite organization." }, { status: 404 });
+    const centers = await prisma.center.findMany({
+      where: {
+        id: { in: assignments.map((assignment) => assignment.centerId) },
+        status: "active",
+        organization: { tenantId: user.tenantId },
+      },
+      select: { id: true, name: true },
+    });
+    if (centers.length !== assignments.length) {
+      return NextResponse.json({
+        ok: false,
+        error: "One or more selected schools are no longer active in your BEE Suite organization.",
+      }, { status: 409 });
     }
 
-    const scopeKey = centerIntegrationScopeKey(center.id);
-    const existing = await prisma.integration.findFirst({
-      where: { tenantId: user.tenantId, provider, scopeKey },
-      orderBy: { lastSyncAt: "desc" },
+    const selectedConnections = assignments.map((assignment) => discovery.selections[assignment.accountId]);
+    if (selectedConnections.some((connection) => !connection)) {
+      return NextResponse.json({
+        ok: false,
+        error: "A selected profile is no longer available to the connected manager login.",
+      }, { status: 403 });
+    }
+    const scopeKeys = assignments.map((assignment) => centerIntegrationScopeKey(assignment.centerId));
+    const existingIntegrations = await prisma.integration.findMany({
+      where: { tenantId: user.tenantId, provider, scopeKey: { in: scopeKeys } },
     });
-    const existingRecord = record(existing?.configPlaceholder);
-    const setup = sanitizeIntegrationConfig(provider, {
-      ...readIntegrationConfig(existing?.configPlaceholder),
-      ...discovery.config,
-    });
-    const centerCredentials = { ...managerCredentials, ...discovery.credentials };
-    await upsertTenantIntegrationCredentials({
-      tenantId: user.tenantId,
-      centerId: center.id,
-      provider,
-      credentials: centerCredentials,
-      userId: user.id,
-    });
-    const runtime = getIntegrationRuntimeStatus(provider, process.env, Object.keys(centerCredentials));
-    const configured = runtime.configured && hasRequiredMarketingAccountConfig(provider, setup);
-    const selectedAccount = discovery.candidates.find((candidate) => candidate.id === accountId)!;
+    const existingByScope = new Map(existingIntegrations.map((integration) => [integration.scopeKey, integration]));
     const now = new Date();
-    const saved = await prisma.integration.upsert({
-      where: {
-        tenantId_provider_scopeKey: {
-          tenantId: user.tenantId,
-          provider,
-          scopeKey,
+    const connections = await prisma.$transaction(async (tx) => {
+      const activeCenterCount = await tx.center.count({
+        where: {
+          id: { in: assignments.map((assignment) => assignment.centerId) },
+          status: "active",
+          organization: { tenantId: user.tenantId },
         },
-      },
-      update: {
-        centerId: center.id,
-        status: configured ? "verified" : "in_progress",
-        lastSyncAt: now,
-        configPlaceholder: {
-          ...existingRecord,
-          setup,
-          oauth: {
-            ...managerOauth,
-            centerId: center.id,
-            accountSelectionRequired: false,
-            discoveryError: null,
-            assignedFromManagerScope: true,
-            assignedById: user.id,
-            assignedAt: now.toISOString(),
-            managerIntegrationId: managerIntegration.id,
+      });
+      if (activeCenterCount !== assignments.length) {
+        throw new Error("One or more selected schools changed while the profiles were being imported. Review the mappings and try again.");
+      }
+
+      const savedConnections = [];
+      for (const [index, assignment] of assignments.entries()) {
+        const selectedAccount = candidateById.get(assignment.accountId)!;
+        const selectedConnection = selectedConnections[index]!;
+        const scopeKey = centerIntegrationScopeKey(assignment.centerId);
+        const existing = existingByScope.get(scopeKey);
+        const existingRecord = record(existing?.configPlaceholder);
+        const setup = sanitizeIntegrationConfig(provider, {
+          ...readIntegrationConfig(existing?.configPlaceholder),
+          ...selectedConnection.config,
+        });
+        const centerCredentials = Object.fromEntries(
+          Object.entries({ ...managerCredentials, ...selectedConnection.credentials })
+            .filter((entry): entry is [string, string] => typeof entry[1] === "string" && Boolean(entry[1])),
+        );
+        for (const [key, value] of Object.entries(centerCredentials)) {
+          await tx.integrationCredential.upsert({
+            where: {
+              tenantId_provider_scopeKey_key: {
+                tenantId: user.tenantId,
+                provider,
+                scopeKey,
+                key,
+              },
+            },
+            update: {
+              centerId: assignment.centerId,
+              encryptedValue: encryptIntegrationCredential(value),
+              lastFour: value.slice(-4),
+              updatedById: user.id,
+            },
+            create: {
+              tenantId: user.tenantId,
+              centerId: assignment.centerId,
+              scopeKey,
+              provider,
+              key,
+              encryptedValue: encryptIntegrationCredential(value),
+              lastFour: value.slice(-4),
+              createdById: user.id,
+              updatedById: user.id,
+            },
+          });
+        }
+        const runtime = getIntegrationRuntimeStatus(provider, process.env, Object.keys(centerCredentials));
+        const configured = runtime.configured && hasRequiredMarketingAccountConfig(provider, setup);
+        const saved = await tx.integration.upsert({
+          where: {
+            tenantId_provider_scopeKey: {
+              tenantId: user.tenantId,
+              provider,
+              scopeKey,
+            },
           },
-          availableAccounts: [selectedAccount],
-        } as Prisma.InputJsonObject,
-      },
-      create: {
-        tenantId: user.tenantId,
-        centerId: center.id,
-        scopeKey,
-        provider,
-        status: configured ? "verified" : "in_progress",
-        lastSyncAt: now,
-        configPlaceholder: {
-          setup,
-          oauth: {
-            ...managerOauth,
-            centerId: center.id,
-            accountSelectionRequired: false,
-            discoveryError: null,
-            assignedFromManagerScope: true,
-            assignedById: user.id,
-            assignedAt: now.toISOString(),
-            managerIntegrationId: managerIntegration.id,
+          update: {
+            centerId: assignment.centerId,
+            status: configured ? "verified" : "in_progress",
+            lastSyncAt: now,
+            configPlaceholder: {
+              ...existingRecord,
+              setup,
+              oauth: {
+                ...managerOauth,
+                centerId: assignment.centerId,
+                accountSelectionRequired: false,
+                discoveryError: null,
+                assignedFromManagerScope: true,
+                assignedById: user.id,
+                assignedAt: now.toISOString(),
+                managerIntegrationId: managerIntegration.id,
+              },
+              availableAccounts: [selectedAccount],
+            } as Prisma.InputJsonObject,
           },
-          availableAccounts: [selectedAccount],
-        } as Prisma.InputJsonObject,
-      },
-    });
-    await writeAuditLog(user, {
-      centerId: center.id,
-      action: "integration.executive.profile_assigned",
-      resource: "Integration",
-      resourceId: saved.id,
-      metadata: {
-        provider,
-        accountId,
-        accountLabel: selectedAccount.label,
-        managerIntegrationId: managerIntegration.id,
-        configured,
-      },
-    });
+          create: {
+            tenantId: user.tenantId,
+            centerId: assignment.centerId,
+            scopeKey,
+            provider,
+            status: configured ? "verified" : "in_progress",
+            lastSyncAt: now,
+            configPlaceholder: {
+              setup,
+              oauth: {
+                ...managerOauth,
+                centerId: assignment.centerId,
+                accountSelectionRequired: false,
+                discoveryError: null,
+                assignedFromManagerScope: true,
+                assignedById: user.id,
+                assignedAt: now.toISOString(),
+                managerIntegrationId: managerIntegration.id,
+              },
+              availableAccounts: [selectedAccount],
+            } as Prisma.InputJsonObject,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            tenantId: user.tenantId,
+            centerId: assignment.centerId,
+            userId: user.id,
+            action: "integration.executive.profile_assigned",
+            resource: "Integration",
+            resourceId: saved.id,
+            metadata: {
+              provider,
+              accountId: assignment.accountId,
+              accountLabel: selectedAccount.label,
+              managerIntegrationId: managerIntegration.id,
+              configured,
+              batchSize: assignments.length,
+            },
+          },
+        });
+        savedConnections.push({
+          centerId: assignment.centerId,
+          provider,
+          configured,
+          accountId: assignment.accountId,
+          accountLabel: selectedAccount.label,
+          setupStatus: configured ? "verified" : "in_progress",
+          lastSyncAt: now.toISOString(),
+        });
+      }
+      return savedConnections;
+    }, { maxWait: 10_000, timeout: 30_000 });
+
     return NextResponse.json({
       ok: true,
       accounts: discovery.candidates,
-      connection: {
-        provider,
-        configured,
-        accountLabel: selectedAccount.label,
-        setupStatus: configured ? "verified" : "in_progress",
-        lastSyncAt: now.toISOString(),
-      },
+      connections,
+      ...(action === "assign" ? { connection: connections[0] } : {}),
     });
   } catch (error) {
     return NextResponse.json({

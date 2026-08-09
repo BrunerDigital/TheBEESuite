@@ -13,6 +13,7 @@ import {
 } from "@/lib/integration-setup";
 import { sanitizeCredentialInput, upsertTenantIntegrationCredentials } from "@/lib/integration-credentials";
 import { integrationScopeForUser } from "@/lib/integration-scope";
+import { isManagerAssignedMarketingConnection } from "@/lib/executive-marketing";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -35,6 +36,10 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function isDirectorRole(role: UserRole) {
+  return role === UserRole.CENTER_DIRECTOR || role === UserRole.ASSISTANT_DIRECTOR;
+}
+
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -49,11 +54,11 @@ async function POSTHandler(request: NextRequest) {
   if (!provider) {
     return NextResponse.json({ ok: false, error: "Unknown integration provider." }, { status: 400 });
   }
-  if ((user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR) && !isMarketingIntegrationProvider(provider)) {
+  if (isDirectorRole(user.role) && !isMarketingIntegrationProvider(provider)) {
     return NextResponse.json({ ok: false, error: "Directors can manage marketing connections only." }, { status: 403 });
   }
   const scope = integrationScopeForUser(user, provider);
-  if ((user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR) && isMarketingIntegrationProvider(provider) && !scope.centerId) {
+  if (isDirectorRole(user.role) && isMarketingIntegrationProvider(provider) && !scope.centerId) {
     return NextResponse.json({ ok: false, error: "A school assignment is required before managing marketing connections." }, { status: 403 });
   }
 
@@ -69,6 +74,12 @@ async function POSTHandler(request: NextRequest) {
       orderBy: { lastSyncAt: "desc" },
     }),
   ]);
+  if (isDirectorRole(user.role) && isManagerAssignedMarketingConnection(existing?.configPlaceholder)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Reconnect this platform with your own provider login before changing the assigned profile.",
+    }, { status: 409 });
+  }
   const runtimeStatus = getIntegrationRuntimeStatus(
     provider,
     process.env,

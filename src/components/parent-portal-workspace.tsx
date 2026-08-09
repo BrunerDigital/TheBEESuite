@@ -54,6 +54,7 @@ import { replySubject } from "@/lib/message-reply-routing";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { isParentVisiblePayment } from "@/lib/parent-billing-visibility";
 import type { ParentPortalTodayState } from "@/lib/parent-portal-today";
+import styles from "@/components/message-conversation.module.css";
 import {
   dailyReportTimedCareEvents,
   sortDailyReportsChronologically,
@@ -248,7 +249,16 @@ type Props = {
   };
   dailyReports: DailyReport[];
   incidents: Incident[];
-  messages: Array<{ id: string; subject: string | null; body: string; createdAt: string | Date; attachments?: MessageAttachmentView[] }>;
+  messages: Array<{
+    id: string;
+    subject: string | null;
+    body: string;
+    channel?: string;
+    createdAt: string | Date;
+    sender?: { name: string; role?: string } | null;
+    isFromFamily?: boolean;
+    attachments?: MessageAttachmentView[];
+  }>;
   documents: Array<{ id: string; name: string; type: string; status: string; expiresAt: string | Date | null; storageKey?: string | null; downloadUrl?: string | null }>;
   media?: ParentMedia[];
   announcements?: Array<{ id: string; title: string; body: string; sendAt: string | Date | null }>;
@@ -262,6 +272,7 @@ type Props = {
     subject?: string | null;
   } | null;
   availableFamilies?: Array<{ id: string; name: string; centerName: string | null; childNames: string[] }>;
+  centerName?: string | null;
   demoMode?: boolean;
 };
 
@@ -463,6 +474,7 @@ export function ParentPortalWorkspace({
   accountDeletionRequest: initialAccountDeletionRequest = null,
   replyDraft = null,
   availableFamilies = [],
+  centerName = null,
   demoMode,
 }: Props) {
   const timeZone = useSchoolTimeZone();
@@ -706,6 +718,7 @@ export function ParentPortalWorkspace({
       setMessageAttachments([]);
       setMessageAttachmentInputKey((current) => current + 1);
       showStatus("Message sent to the center and recorded in the family timeline.");
+      router.refresh();
     });
   }
 
@@ -1136,7 +1149,7 @@ export function ParentPortalWorkspace({
             </div>
             <div className="flex flex-wrap gap-2">
               <a href="#daily-updates" className="inline-flex min-h-10 items-center gap-2 rounded-lg border bg-background/70 px-3 text-sm font-medium transition-colors hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Camera className="size-4" aria-hidden="true" /> Updates</a>
-              <a href="#recent-messages" className="inline-flex min-h-10 items-center gap-2 rounded-lg border bg-background/70 px-3 text-sm font-medium transition-colors hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><MessageSquare className="size-4" aria-hidden="true" /> Messages</a>
+              <a href="#messages" className="inline-flex min-h-10 items-center gap-2 rounded-lg border bg-background/70 px-3 text-sm font-medium transition-colors hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><MessageSquare className="size-4" aria-hidden="true" /> Messages</a>
               <a href="#billing" className="inline-flex min-h-10 items-center gap-2 rounded-lg border bg-background/70 px-3 text-sm font-medium transition-colors hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><CreditCard className="size-4" aria-hidden="true" /> Billing</a>
             </div>
           </div>
@@ -1909,71 +1922,148 @@ export function ParentPortalWorkspace({
           </CardContent>
         </Card>
 
-        <Card id="messages" className="glass-panel scroll-mt-28">
-          <CardHeader>
-            <CardTitle>Message the Center</CardTitle>
-            <CardDescription>Send a note to your school office.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="portal-subject">Subject</Label>
-              <Input id="portal-subject" value={subject} onChange={(event) => setSubject(event.target.value)} />
-            </div>
-            {replyToMessageId ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background/40 p-3 text-sm">
-                <div>
-                  <div className="font-medium">Replying in Bee Suite</div>
-                  <div className="text-xs text-muted-foreground">{replyingToSubject || "Selected message thread"}</div>
+        <Card id="messages" className={`${styles.parentWorkspace} glass-panel scroll-mt-28`}>
+          <CardHeader className={`${styles.smokedHeader} border-b`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background" aria-hidden="true">
+                  {(centerName ?? "School").split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}
+                </span>
+                <div className="min-w-0">
+                  <CardTitle className="truncate">{centerName ?? "Your school"}</CardTitle>
+                  <CardDescription className="truncate">Family conversation · usually replies during school hours</CardDescription>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setReplyToMessageId("");
-                    setReplyingToSubject("");
-                  }}
-                >
-                  <X data-icon="inline-start" />
-                  Cancel reply
-                </Button>
               </div>
-            ) : null}
-            <div className="space-y-1">
-              <Label htmlFor="portal-message">Message</Label>
-              <Textarea id="portal-message" value={message} onChange={(event) => setMessage(event.target.value)} />
+              <Badge variant="outline" className="gap-1.5">
+                <ShieldCheck className="size-3.5" aria-hidden="true" />
+                School scoped
+              </Badge>
             </div>
-            <div className="space-y-2 rounded-lg border bg-background/40 p-3">
-              <Label htmlFor="portal-message-attachments" className="flex items-center gap-2">
-                <Paperclip className="size-4" />
-                Attach photos or files
-              </Label>
-              <Input
-                key={messageAttachmentInputKey}
-                id="portal-message-attachments"
-                type="file"
-                multiple
-                accept="image/*,.pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-                onChange={(event) => addMessageAttachments(event.target.files)}
-              />
-              {messageAttachments.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {messageAttachments.map((file, index) => (
-                    <span key={`${file.name}-${file.size}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-2 py-1 text-xs">
-                      <span className="truncate">{file.name || "attachment"}</span>
-                      <span className="shrink-0 text-muted-foreground">{formatFileSize(file.size)}</span>
-                      <Button type="button" variant="ghost" size="icon-xs" onClick={() => removeMessageAttachment(index)} title="Remove attachment">
-                        <X className="size-3" />
-                      </Button>
-                    </span>
-                  ))}
+          </CardHeader>
+          <CardContent className="p-0">
+            <ol className={styles.parentTimeline} aria-label={`Messages with ${centerName ?? "your school"}`}>
+              {messages.slice(0, 20).reverse().map((item) => {
+                const isFromFamily = Boolean(item.isFromFamily);
+                return (
+                  <li key={item.id} className={`${styles.parentMessageRow} ${isFromFamily ? styles.parentMessageRowSelf : ""}`}>
+                    <article
+                      data-message-origin={isFromFamily ? "family" : "school"}
+                      className={`${styles.parentBubble} ${isFromFamily ? styles.parentBubbleSelf : ""}`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[0.68rem] text-muted-foreground">
+                        <span className="font-semibold">{item.sender?.name ?? (isFromFamily ? "You" : centerName ?? "School")}</span>
+                        <span>{formatTime(item.createdAt)}{item.channel ? ` · ${item.channel.replaceAll("_", " ")}` : ""}</span>
+                      </div>
+                      {item.subject ? <div className="mt-1 text-sm font-semibold">{item.subject}</div> : null}
+                      <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{item.body}</p>
+                      {item.attachments?.length ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {item.attachments.map((attachment) => (
+                            <a
+                              key={attachment.id}
+                              className="inline-flex max-w-full items-center gap-2 rounded-lg border border-current/15 bg-background/35 px-2 py-1.5 text-xs font-medium transition hover:bg-background/55"
+                              href={attachment.downloadUrl ?? undefined}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {attachment.kind === "image" ? <Camera className="size-3.5 shrink-0" /> : <FileText className="size-3.5 shrink-0" />}
+                              <span className="truncate">{attachment.filename}</span>
+                              <span className="shrink-0 opacity-70">{formatFileSize(attachment.size)}</span>
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
+                      {!isFromFamily ? (
+                        <Button className="mt-2 -ml-2" variant="ghost" size="sm" onClick={() => startMessageReply(item)}>
+                          <Reply data-icon="inline-start" />
+                          Reply
+                        </Button>
+                      ) : null}
+                    </article>
+                  </li>
+                );
+              })}
+              {!messages.length ? (
+                <li className="flex min-h-64 flex-col items-center justify-center px-6 text-center text-muted-foreground">
+                  <MessageSquare className="mb-3 size-8" aria-hidden="true" />
+                  <div className="font-medium text-foreground">No messages yet</div>
+                  <p className="mt-1 max-w-sm text-sm">Start a conversation with your school using the composer below.</p>
+                </li>
+              ) : null}
+            </ol>
+
+            <div className={`${styles.parentComposer} space-y-3`}>
+              {replyToMessageId ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/55 p-3 text-sm">
+                  <div>
+                    <div className="font-medium">Replying in this conversation</div>
+                    <div className="text-xs text-muted-foreground">{replyingToSubject || "Selected school message"}</div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setReplyToMessageId("");
+                      setReplyingToSubject("");
+                    }}
+                  >
+                    <X data-icon="inline-start" />
+                    Cancel reply
+                  </Button>
                 </div>
               ) : null}
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)]">
+                <div className="space-y-1">
+                  <Label htmlFor="portal-subject">Subject</Label>
+                  <Input id="portal-subject" className="bg-background/75" value={subject} onChange={(event) => setSubject(event.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="portal-message">Message</Label>
+                  <Textarea
+                    id="portal-message"
+                    className="min-h-24 resize-y rounded-2xl bg-background/75"
+                    placeholder={`Message ${centerName ?? "your school"}`}
+                    value={message}
+                    onChange={(event) => setMessage(event.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                <div className="space-y-2 rounded-xl border bg-background/45 p-3">
+                  <Label htmlFor="portal-message-attachments" className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Paperclip className="size-3.5" aria-hidden="true" />
+                    Attach photos or files
+                  </Label>
+                  <Input
+                    key={messageAttachmentInputKey}
+                    id="portal-message-attachments"
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                    onChange={(event) => addMessageAttachments(event.target.files)}
+                  />
+                  {messageAttachments.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {messageAttachments.map((file, index) => (
+                        <span key={`${file.name}-${file.size}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-full border bg-card px-2.5 py-1 text-xs">
+                          <span className="truncate">{file.name || "attachment"}</span>
+                          <span className="shrink-0 text-muted-foreground">{formatFileSize(file.size)}</span>
+                          <Button type="button" variant="ghost" size="icon-xs" onClick={() => removeMessageAttachment(index)} title="Remove attachment">
+                            <X className="size-3" />
+                          </Button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <Button className="w-full rounded-full px-5 sm:w-auto" disabled={isPending || (!message.trim() && !messageAttachments.length)} onClick={sendMessage}>
+                  <MessageSquare data-icon="inline-start" />
+                  {isPending ? "Sending" : "Send message"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Messages stay attached to this family and school conversation.</p>
             </div>
-            <Button className="w-full sm:w-auto" disabled={isPending || (!message.trim() && !messageAttachments.length)} onClick={sendMessage}>
-              <MessageSquare data-icon="inline-start" />
-              Send Message
-            </Button>
           </CardContent>
         </Card>
       </div>
@@ -2104,46 +2194,6 @@ export function ParentPortalWorkspace({
         </Card>
         ) : null}
       </div>
-
-      <Card id="recent-messages" className="glass-panel scroll-mt-28">
-        <CardHeader>
-          <CardTitle>Recent Messages</CardTitle>
-          <CardDescription>Family communication timeline</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {messages.slice(0, 5).map((item) => (
-            <div key={item.id} className="rounded-xl border bg-background/40 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="font-medium">{item.subject ?? "Portal message"}</div>
-                <div className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</div>
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">{item.body}</p>
-              {item.attachments?.length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {item.attachments.map((attachment) => (
-                    <a
-                      key={attachment.id}
-                      className="inline-flex max-w-full items-center gap-2 rounded-md border bg-background/60 px-2 py-1.5 text-xs font-medium text-foreground transition hover:bg-accent"
-                      href={attachment.downloadUrl ?? undefined}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {attachment.kind === "image" ? <Camera className="size-3.5 shrink-0 text-primary" /> : <FileText className="size-3.5 shrink-0 text-primary" />}
-                      <span className="truncate">{attachment.filename}</span>
-                      <span className="shrink-0 text-muted-foreground">{formatFileSize(attachment.size)}</span>
-                    </a>
-                  ))}
-                </div>
-              ) : null}
-              <Button className="mt-3 w-full sm:w-auto" variant="outline" size="sm" onClick={() => startMessageReply(item)}>
-                <Reply data-icon="inline-start" />
-                Reply in Bee Suite
-              </Button>
-            </div>
-          ))}
-          {!messages.length ? <p className="text-sm text-muted-foreground">No messages have been recorded yet.</p> : null}
-        </CardContent>
-      </Card>
 
       <Card className="glass-panel">
         <CardHeader>

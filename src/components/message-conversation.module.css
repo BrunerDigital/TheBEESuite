@@ -1,0 +1,203 @@
+.staffShell,
+.parentWorkspace {
+  position: relative;
+  isolation: isolate;
+  border-color: color-mix(in oklch, var(--primary) 20%, var(--border));
+  background:
+    linear-gradient(145deg, color-mix(in oklch, var(--card) 92%, white 8%), color-mix(in oklch, var(--card) 96%, var(--primary) 4%));
+  box-shadow:
+    inset 0 1px color-mix(in oklch, white 72%, transparent),
+    0 28px 72px color-mix(in oklch, black 16%, transparent);
+  backdrop-filter: blur(22px) saturate(120%);
+}
+
+.staffShell::after,
+.parentWorkspace::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(135deg, color-mix(in oklch, white 18%, transparent), transparent 18%, transparent 76%, color-mix(in oklch, var(--primary) 5%, transparent));
+  content: "";
+  pointer-events: none;
+}
+
+.conversationList {
+  background:
+    linear-gradient(165deg, color-mix(in oklch, var(--background) 78%, white 22%), color-mix(in oklch, var(--background) 92%, var(--primary) 8%));
+  backdrop-filter: blur(18px) saturate(116%);
+}
+
+.threadButton {
+  position: relative;
+  background: color-mix(in oklch, var(--background) 28%, transparent);
+}
+
+.threadButton:hover {
+  background: color-mix(in oklch, var(--accent) 62%, transparent);
+}
+
+.threadButtonActive {
+  background:
+    linear-gradient(100deg, color-mix(in oklch, var(--primary) 20%, transparent), color-mix(in oklch, var(--card) 74%, transparent) 58%, color-mix(in oklch, var(--foreground) 4%, transparent));
+  box-shadow:
+    inset 3px 0 var(--primary),
+    inset 0 1px color-mix(in oklch, white 70%, transparent);
+  backdrop-filter: blur(14px) saturate(122%);
+}
+
+.chatPane {
+  background: color-mix(in oklch, var(--background) 66%, transparent);
+}
+
+.smokedHeader {
+  border-color: color-mix(in oklch, var(--border) 84%, var(--primary) 16%);
+  background:
+    linear-gradient(110deg, color-mix(in oklch, var(--card) 82%, white 18%), color-mix(in oklch, var(--card) 82%, var(--foreground) 3%));
+  box-shadow:
+    inset 0 1px color-mix(in oklch, white 74%, transparent),
+    0 10px 30px color-mix(in oklch, black 5%, transparent);
+  backdrop-filter: blur(20px) saturate(118%);
+}
+
+.timeline,
+.parentTimeline {
+  background:
+    radial-gradient(circle at 52% 0%, color-mix(in oklch, var(--primary) 9%, transparent), transparent 23rem),
+    linear-gradient(145deg, color-mix(in oklch, var(--background) 92%, white 8%), color-mix(in oklch, var(--background) 97%, var(--primary) 3%));
+}
+
+.bubble {
+  box-shadow:
+    inset 0 1px color-mix(in oklch, white 68%, transparent),
+    0 8px 22px color-mix(in oklch, black 7%, transparent);
+  backdrop-filter: blur(15px) saturate(116%);
+}
+
+.bubbleFamily {
+  border-color: color-mix(in oklch, var(--border) 82%, var(--primary) 18%);
+  background:
+    linear-gradient(145deg, color-mix(in oklch, var(--card) 90%, white 10%), color-mix(in oklch, var(--card) 93%, var(--primary) 7%));
+  color: var(--card-foreground);
+}
+
+.bubbleSchool {
+  border-color: color-mix(in oklch, white 14%, transparent);
+  background:
+    linear-gradient(145deg, oklch(0.25 0.027 250 / 96%), oklch(0.14 0.022 250 / 94%));
+  color: oklch(0.97 0.012 84);
+  box-shadow:
+    inset 0 1px color-mix(in oklch, white 14%, transparent),
+    0 14px 32px oklch(0.09 0.02 250 / 24%),
+    0 0 34px color-mix(in oklch, var(--primary) 4%, transparent);
+}
+
+.composerShell {
+  border-color: color-mix(in oklch, var(--border) 84%, var(--primary) 16%);
+  background:
+    linear-gradient(135deg, color-mix(in oklch, var(--card) 86%, white 14%), color-mix(in oklch, var(--card) 90%, var(--foreground) 2%));
+  box-shadow:
+    inset 0 1px color-mix(in oklch, white 74%, transparent),
+    0 -10px 30px color-mix(in oklch, black 4%, transparent);
+  backdrop-filter: blur(20px) saturate(118%);
+}
+
+.parentWorkspace {
+  overflow: hidden;
+}
+
+.parentTimeline {
+  max-height: 34rem;
+  min-height: 18rem;
+  overflow-y: auto;
+  padding: 1rem;
+  border-block: 1px solid color-mix(in oklch, var(--border) 86%, var(--primary) 14%);
+}
+
+.parentMessageRow {
+  display: flex;
+  margin-bottom: 1rem;
+}
+
+.parentMessageRowSelf {
+  justify-content: flex-end;
+}
+
+.parentBubble {
+  width: fit-content;
+  max-width: min(82%, 38rem);
+  border: 1px solid color-mix(in oklch, var(--border) 84%, var(--primary) 16%);
+  border-radius: 1rem 1rem 1rem 0.3rem;
+  padding: 0.75rem 0.9rem;
+  background: color-mix(in oklch, var(--card) 88%, transparent);
+  box-shadow:
+    inset 0 1px color-mix(in oklch, white 70%, transparent),
+    0 9px 24px color-mix(in oklch, black 7%, transparent);
+  backdrop-filter: blur(15px) saturate(116%);
+}
+
+.parentBubbleSelf {
+  border-color: color-mix(in oklch, var(--primary) 40%, var(--border));
+  border-radius: 1rem 1rem 0.3rem 1rem;
+  background:
+    linear-gradient(145deg, color-mix(in oklch, var(--primary) 23%, var(--card)), color-mix(in oklch, var(--primary) 34%, var(--card)));
+  color: color-mix(in oklch, var(--foreground) 94%, black 6%);
+}
+
+.parentComposer {
+  padding: 1rem;
+  background:
+    linear-gradient(135deg, color-mix(in oklch, var(--card) 86%, white 14%), color-mix(in oklch, var(--card) 92%, var(--foreground) 2%));
+  backdrop-filter: blur(20px) saturate(118%);
+}
+
+@media (max-width: 63.99rem) {
+  .staffShell {
+    box-shadow: 0 20px 48px color-mix(in oklch, black 12%, transparent);
+  }
+
+  .conversationList {
+    max-height: 25rem;
+  }
+}
+
+@media (max-width: 40rem) {
+  .parentTimeline {
+    min-height: 22rem;
+    padding: 0.85rem;
+  }
+
+  .parentBubble {
+    max-width: 88%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .threadButton {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .staffShell,
+  .parentWorkspace,
+  .bubble,
+  .parentBubble {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: none;
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .staffShell,
+  .parentWorkspace,
+  .conversationList,
+  .smokedHeader,
+  .composerShell,
+  .parentComposer {
+    background-color: var(--card);
+  }
+}

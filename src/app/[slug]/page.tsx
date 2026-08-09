@@ -2077,7 +2077,15 @@ async function renderLivePage(
         where: { familyId },
         orderBy: { createdAt: "desc" },
         take: 20,
-        select: { id: true, subject: true, body: true, createdAt: true, metadata: true },
+        select: {
+          id: true,
+          subject: true,
+          body: true,
+          channel: true,
+          createdAt: true,
+          metadata: true,
+          sender: { select: { name: true, role: true } },
+        },
       }),
       prisma.document.findMany({
         where: { OR: [{ familyId }, { childId: { in: childIds.length ? childIds : ["__none__"] } }] },
@@ -2141,6 +2149,10 @@ async function renderLivePage(
       signChildMediaRecords(media),
       Promise.all(messages.map(async (message) => ({
         ...message,
+        sender: message.sender
+          ? { ...message.sender, name: userViewText(message.sender.name) }
+          : null,
+        isFromFamily: message.sender?.role === UserRole.PARENT_GUARDIAN || message.sender?.role === UserRole.AUTHORIZED_PICKUP,
         attachments: await signMessageAttachmentsFromMetadata(message.metadata),
       }))),
     ]);
@@ -2342,6 +2354,7 @@ async function renderLivePage(
         dailyReports={dailyReports}
         incidents={incidents}
         messages={signedMessages}
+        centerName={parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
         documents={signedDocuments}
         media={signedMedia}
         announcements={announcements}

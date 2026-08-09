@@ -5,6 +5,7 @@ import test from "node:test";
 
 const root = process.cwd();
 const pageSource = readFileSync(path.join(root, "src/app/page.tsx"), "utf8");
+const themeToggleSource = readFileSync(path.join(root, "src/components/public-theme-toggle.tsx"), "utf8");
 
 test("landing page makes sign-in the primary action", () => {
   for (const expected of [
@@ -98,4 +99,35 @@ test("landing page is accessible, responsive, and no longer a long sales funnel"
     !pageSource.includes('className="animate-pulse'),
     "ambient motion must remain reduced-motion safe",
   );
+});
+
+test("landing page provides real light and dark Honeyglass themes", () => {
+  for (const expected of [
+    "bg-[#fbf7ec]",
+    "text-slate-950",
+    "dark:bg-[#03070d]",
+    "dark:bg-transparent",
+    "dark:text-white",
+    "PublicThemeToggle",
+    "[&>span:first-child]:!text-amber-700",
+    "dark:[&>span:first-child]:!text-amber-300",
+  ]) {
+    assert.ok(pageSource.includes(expected), `missing landing theme treatment: ${expected}`);
+  }
+
+  for (const expected of [
+    'aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}',
+    "aria-pressed={isDark}",
+    "useSyncExternalStore(subscribeToTheme, getThemeSnapshot, getServerThemeSnapshot)",
+    "new MutationObserver(onStoreChange)",
+    'event.key !== themeStorageKey || (event.newValue !== "light" && event.newValue !== "dark")',
+    'document.documentElement.classList.toggle("dark", nextDark)',
+    'localStorage.setItem(themeStorageKey, nextDark ? "dark" : "light")',
+    'root.classList.toggle("dark", nextDark)',
+    'root.style.colorScheme = nextDark ? "dark" : "light"',
+    "touch-manipulation",
+    "focus-visible:ring-2",
+  ]) {
+    assert.ok(themeToggleSource.includes(expected), `missing theme toggle safeguard: ${expected}`);
+  }
 });

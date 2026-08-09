@@ -115,6 +115,7 @@ test("provider setup config resolves back to the imported profile id", () => {
     locationId: "location-1",
   }), "business-1:location-1");
   assert.equal(marketingAccountIdFromConfig("google_ads", { customerId: "1234567890" }), "1234567890");
+  assert.equal(marketingAccountIdFromConfig("microsoft_ads", { accountId: "account-1" }), "account-1");
 });
 
 test("executive batch import revalidates tenant schools and saves atomically", () => {

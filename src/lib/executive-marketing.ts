@@ -102,6 +102,7 @@ export function marketingAccountIdFromConfig(
   if (provider === "meta_social") return configString(config, "facebookPageId");
   if (provider === "meta_ads" || provider === "linkedin_ads") return configString(config, "adAccountId");
   if (provider === "google_ads") return configString(config, "customerId");
+  if (provider === "microsoft_ads") return configString(config, "accountId");
   if (provider === "tiktok_ads") return configString(config, "advertiserId");
   if (provider === "linkedin_social") return configString(config, "organizationId");
   if (provider === "x_social") return configString(config, "userId");

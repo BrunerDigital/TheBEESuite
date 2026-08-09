@@ -1442,7 +1442,7 @@ export function TeacherMobileWorkspace({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <section className="rounded-xl border bg-background/40 p-3">
+            <section id="teacher-quick-log" className="scroll-mt-28 rounded-xl border bg-background/40 p-3">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
                   <Users className="size-4" />

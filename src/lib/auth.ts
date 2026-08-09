@@ -8,6 +8,7 @@ import { loginHrefForNextPath } from "@/lib/login-routing";
 import { defaultProfilePhotoUrlForRole, readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
 import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured } from "@/lib/supabase-storage";
+import { workspaceScopeContext, type WorkspaceScopeContext } from "@/lib/workspace-scope";
 import { readCenterLocationTimeZone } from "@/lib/attendance-state";
 
 export const SESSION_COOKIE = "bee_suite_session";
@@ -40,6 +41,7 @@ export type CurrentUser = {
   branding: WorkspaceBranding;
   timeZone?: string;
   timeZonesByCenterId?: Record<string, string>;
+  scopeContext?: WorkspaceScopeContext;
 };
 
 export function requiresPasswordResetGate(user: { mustResetPassword: boolean; role: UserRole }) {
@@ -279,7 +281,11 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
         },
       },
       staffProfile: {
-        select: { centerId: true, classroomId: true },
+        select: {
+          centerId: true,
+          classroomId: true,
+          classroom: { select: { name: true } },
+        },
       },
       accessGrants: {
         where: {
@@ -348,10 +354,11 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
   const timeZoneCenters = centerIds.length
     ? await prisma.center.findMany({
         where: { id: { in: centerIds } },
-        select: { id: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
+        select: { id: true, name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
       })
     : [];
   const timeZonesByCenterId = Object.fromEntries(timeZoneCenters.map((center) => [center.id, readCenterLocationTimeZone(center)]));
+  const primaryCenter = timeZoneCenters.find((center) => center.id === centerIds[0]) ?? null;
   const branding = resolveWorkspaceBranding({
     tenantName: user.tenant.name,
     tenantSlug: user.tenant.slug,
@@ -379,6 +386,13 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     branding,
     timeZone: timeZonesByCenterId[centerIds[0] ?? ""] || "America/New_York",
     timeZonesByCenterId,
+    scopeContext: workspaceScopeContext({
+      role: user.role,
+      accessScope,
+      centerCount: centerIds.length,
+      primaryCenterName: primaryCenter?.crmLocationId ?? primaryCenter?.name,
+      classroomName: user.staffProfile?.classroom?.name,
+    }),
   };
 }
 

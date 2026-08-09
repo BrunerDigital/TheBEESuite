@@ -19,6 +19,10 @@ test("dashboard shell adapts navigation and toolbar density by device width", ()
   assert.match(shell, /hidden rounded-lg border bg-card\/70 px-3 py-1\.5 text-right 2xl:block/);
   assert.match(shell, /flex min-h-12 touch-manipulation flex-col items-center/);
   assert.match(shell, /env\(safe-area-inset-bottom\)/);
+  assert.match(shell, /function ScopeContextLink/);
+  assert.match(shell, /grid max-w-md grid-cols-5 items-end/);
+  assert.match(shell, /More for your role/);
+  assert.match(shell, /teacher-quick-log/);
   assert.match(refresh, /text-\[0\.68rem\] 2xl:inline-flex/);
 });
 

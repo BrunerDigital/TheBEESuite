@@ -58,7 +58,10 @@ import { modules } from "@/lib/demo-data";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
-import { canManageExecutiveMarketingPortfolio } from "@/lib/executive-marketing";
+import {
+  canManageExecutiveMarketingPortfolio,
+  marketingAccountIdFromConfig,
+} from "@/lib/executive-marketing";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
 import {
   executiveAnnouncementDemoRows,
@@ -4845,6 +4848,7 @@ async function renderLivePage(
                 .map((view) => ({
                   provider: view.provider,
                   configured: view.env.configured && hasRequiredMarketingAccountConfig(view.provider, view.config),
+                  accountId: marketingAccountIdFromConfig(view.provider, view.config),
                   accountLabel: typeof view.config.accountLabel === "string" ? view.config.accountLabel : "",
                   setupStatus: view.setupStatus,
                   lastSyncAt: typeof view.lastSyncAt === "string" ? view.lastSyncAt : null,

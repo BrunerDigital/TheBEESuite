@@ -12,6 +12,12 @@ export type MarketingAccountDiscovery = {
   config: Record<string, string | boolean>;
   credentials: Record<string, string>;
   candidates: MarketingAccountCandidate[];
+  selections: Record<string, MarketingAccountSelection>;
+};
+
+export type MarketingAccountSelection = {
+  config: Record<string, string | boolean>;
+  credentials: Record<string, string>;
 };
 
 function record(value: unknown): JsonRecord {
@@ -56,6 +62,20 @@ function chosen(candidates: MarketingAccountCandidate[], selectedId?: string | n
   return candidates.length === 1 ? candidates[0] : null;
 }
 
+function discoveryResult(
+  candidates: MarketingAccountCandidate[],
+  selectedId: string | null | undefined,
+  selectionFor: (candidate: MarketingAccountCandidate) => MarketingAccountSelection,
+): MarketingAccountDiscovery {
+  const selections = Object.fromEntries(candidates.map((candidate) => [candidate.id, selectionFor(candidate)]));
+  const selected = chosen(candidates, selectedId);
+  return {
+    candidates,
+    selections,
+    ...(selected ? selections[selected.id] : { config: {}, credentials: {} }),
+  };
+}
+
 function stripResourceName(value: string) {
   return value.split("/").filter(Boolean).at(-1) ?? value;
 }
@@ -81,24 +101,25 @@ export async function discoverMarketingConnection({
       const id = stringValue(page.id);
       return id ? [{ id, label: stringValue(page.name) || id, kind: "Facebook Page" }] : [];
     });
-    const selected = chosen(candidates, selectedId);
-    const selectedPage = selected ? pages.find((page) => stringValue(page.id) === selected.id) : null;
-    const instagram = record(selectedPage?.instagram_business_account);
-    const instagramId = stringValue(instagram.id);
-    const instagramHandle = stringValue(instagram.username);
-    const pageToken = stringValue(selectedPage?.access_token);
-    return {
-      candidates,
-      config: selected
-        ? {
-            facebookPageId: selected.id,
-            accountLabel: selected.label,
-            ...(instagramId ? { instagramAccountId: instagramId } : {}),
-            ...(instagramHandle ? { profileHandle: `@${instagramHandle.replace(/^@/, "")}` } : {}),
-          }
-        : {},
-      credentials: pageToken ? { META_SOCIAL_ACCESS_TOKEN: pageToken } : {},
-    };
+    return discoveryResult(candidates, selectedId, (candidate) => {
+      const page = pages.find((item) => stringValue(item.id) === candidate.id);
+      const instagram = record(page?.instagram_business_account);
+      const instagramId = stringValue(instagram.id);
+      const instagramHandle = stringValue(instagram.username);
+      const pageToken = stringValue(page?.access_token);
+      const pageCredentials: Record<string, string> = pageToken
+        ? { META_SOCIAL_ACCESS_TOKEN: pageToken }
+        : {};
+      return {
+        config: {
+          facebookPageId: candidate.id,
+          accountLabel: candidate.label,
+          ...(instagramId ? { instagramAccountId: instagramId } : {}),
+          ...(instagramHandle ? { profileHandle: `@${instagramHandle.replace(/^@/, "")}` } : {}),
+        },
+        credentials: pageCredentials,
+      };
+    });
   }
 
   if (provider === "meta_ads") {
@@ -112,12 +133,10 @@ export async function discoverMarketingConnection({
       const id = stringValue(account.id);
       return id ? [{ id, label: stringValue(account.name) || id, kind: "Meta ad account" }] : [];
     });
-    const selected = chosen(candidates, selectedId);
-    return {
-      candidates,
-      config: selected ? { adAccountId: selected.id, accountLabel: selected.label } : {},
+    return discoveryResult(candidates, selectedId, (candidate) => ({
+      config: { adAccountId: candidate.id, accountLabel: candidate.label },
       credentials: {},
-    };
+    }));
   }
 
   if (provider === "x_social") {
@@ -126,15 +145,15 @@ export async function discoverMarketingConnection({
     const user = record(json.data);
     const id = stringValue(user.id);
     const username = stringValue(user.username);
-    return {
-      candidates: id ? [{ id, label: stringValue(user.name) || username || id, kind: "X profile" }] : [],
-      config: id ? {
-        userId: id,
-        accountLabel: stringValue(user.name) || username || id,
+    const candidates = id ? [{ id, label: stringValue(user.name) || username || id, kind: "X profile" }] : [];
+    return discoveryResult(candidates, selectedId, (candidate) => ({
+      config: {
+        userId: candidate.id,
+        accountLabel: candidate.label,
         ...(username ? { profileHandle: `@${username.replace(/^@/, "")}` } : {}),
-      } : {},
+      },
       credentials: {},
-    };
+    }));
   }
 
   if (provider === "tiktok_social") {
@@ -146,15 +165,15 @@ export async function discoverMarketingConnection({
     const user = record(record(json.data).user);
     const id = stringValue(user.open_id);
     const username = stringValue(user.username);
-    return {
-      candidates: id ? [{ id, label: stringValue(user.display_name) || username || id, kind: "TikTok profile" }] : [],
-      config: id ? {
-        openId: id,
-        accountLabel: stringValue(user.display_name) || username || id,
+    const candidates = id ? [{ id, label: stringValue(user.display_name) || username || id, kind: "TikTok profile" }] : [];
+    return discoveryResult(candidates, selectedId, (candidate) => ({
+      config: {
+        openId: candidate.id,
+        accountLabel: candidate.label,
         ...(username ? { profileHandle: `@${username.replace(/^@/, "")}` } : {}),
-      } : {},
+      },
       credentials: {},
-    };
+    }));
   }
 
   if (provider === "pinterest_social") {
@@ -167,17 +186,15 @@ export async function discoverMarketingConnection({
       const id = stringValue(board.id);
       return id ? [{ id, label: stringValue(board.name) || id, kind: "Pinterest board" }] : [];
     });
-    const selected = chosen(candidates, selectedId);
     const username = stringValue(account.username);
-    return {
-      candidates,
+    return discoveryResult(candidates, selectedId, (candidate) => ({
       config: {
         accountLabel: stringValue(account.business_name) || username || "Pinterest",
         ...(username ? { profileHandle: username } : {}),
-        ...(selected ? { boardId: selected.id } : {}),
+        boardId: candidate.id,
       },
       credentials: {},
-    };
+    }));
   }
 
   if (provider === "google_ads") {
@@ -194,12 +211,10 @@ export async function discoverMarketingConnection({
       const id = stripResourceName(resourceName);
       return id ? [{ id, label: id, kind: "Google Ads customer" }] : [];
     });
-    const selected = chosen(candidates, selectedId);
-    return {
-      candidates,
-      config: selected ? { customerId: selected.id, accountLabel: selected.label } : {},
+    return discoveryResult(candidates, selectedId, (candidate) => ({
+      config: { customerId: candidate.id, accountLabel: candidate.label },
       credentials: {},
-    };
+    }));
   }
 
   if (provider === "google_business") {
@@ -229,18 +244,14 @@ export async function discoverMarketingConnection({
       });
     }));
     const candidates = locationsByAccount.flat();
-    const selectedLocation = chosen(candidates, selectedId);
-    return {
-      candidates,
-      config: selectedLocation
-        ? {
-            accountId: selectedLocation.id.split(":")[0],
-            locationId: selectedLocation.id.split(":").slice(1).join(":"),
-            accountLabel: selectedLocation.label,
-          }
-        : {},
+    return discoveryResult(candidates, selectedId, (candidate) => ({
+      config: {
+        accountId: candidate.id.split(":")[0],
+        locationId: candidate.id.split(":").slice(1).join(":"),
+        accountLabel: candidate.label,
+      },
       credentials: {},
-    };
+    }));
   }
 
   if (provider === "tiktok_ads") {
@@ -262,12 +273,10 @@ export async function discoverMarketingConnection({
       const id = stringValue(advertiser.advertiser_id);
       return id ? [{ id, label: stringValue(advertiser.advertiser_name) || id, kind: "TikTok advertiser" }] : [];
     });
-    const selected = chosen(candidates, selectedId);
-    return {
-      candidates,
-      config: selected ? { advertiserId: selected.id, accountLabel: selected.label } : {},
+    return discoveryResult(candidates, selectedId, (candidate) => ({
+      config: { advertiserId: candidate.id, accountLabel: candidate.label },
       credentials: {},
-    };
+    }));
   }
 
   if (provider === "linkedin_ads") {
@@ -286,12 +295,10 @@ export async function discoverMarketingConnection({
         kind: account.test === true ? "LinkedIn test ad account" : "LinkedIn ad account",
       }] : [];
     });
-    const selected = chosen(candidates, selectedId);
-    return {
-      candidates,
-      config: selected ? { adAccountId: selected.id, accountLabel: selected.label } : {},
+    return discoveryResult(candidates, selectedId, (candidate) => ({
+      config: { adAccountId: candidate.id, accountLabel: candidate.label },
       credentials: {},
-    };
+    }));
   }
 
   if (provider === "microsoft_ads") {
@@ -320,12 +327,10 @@ export async function discoverMarketingConnection({
         kind: "Microsoft Advertising account",
       }] : [];
     });
-    const selected = chosen(candidates, selectedId);
-    return {
-      candidates,
-      config: selected ? { accountId: selected.id, accountLabel: selected.label } : {},
+    return discoveryResult(candidates, selectedId, (candidate) => ({
+      config: { accountId: candidate.id, accountLabel: candidate.label },
       credentials: {},
-    };
+    }));
   }
 
   if (provider === "linkedin_social") {
@@ -341,13 +346,11 @@ export async function discoverMarketingConnection({
       const id = stripResourceName(urn.replaceAll(":", "/"));
       return id ? [{ id, label: `LinkedIn organization ${id}`, kind: "LinkedIn Page" }] : [];
     });
-    const selected = chosen(candidates, selectedId);
-    return {
-      candidates,
-      config: selected ? { organizationId: selected.id, accountLabel: selected.label } : {},
+    return discoveryResult(candidates, selectedId, (candidate) => ({
+      config: { organizationId: candidate.id, accountLabel: candidate.label },
       credentials: {},
-    };
+    }));
   }
 
-  return { candidates: [], config: {}, credentials: {} };
+  return { candidates: [], config: {}, credentials: {}, selections: {} };
 }

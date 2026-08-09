@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth";
-import { getTenantIntegrationCredentialMap, upsertTenantIntegrationCredentials } from "@/lib/integration-credentials";
+import {
+  getTenantIntegrationCredentialMap,
+  replaceTenantIntegrationCredentials,
+  upsertTenantIntegrationCredentials,
+} from "@/lib/integration-credentials";
 import { integrationScopeForUser } from "@/lib/integration-scope";
+import { isManagerAssignedMarketingConnection } from "@/lib/executive-marketing";
 import {
   getIntegrationRuntimeStatus,
   hasRequiredMarketingAccountConfig,
@@ -37,6 +42,10 @@ function pkceCookieName(provider: string) {
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function isDirectorRole(role: UserRole) {
+  return role === UserRole.CENTER_DIRECTOR || role === UserRole.ASSISTANT_DIRECTOR;
 }
 
 function redirectResult(request: NextRequest, provider: string, result: string, error?: string) {
@@ -92,17 +101,25 @@ export async function GET(
   if (!code) return redirectResult(request, provider, "error", "The provider did not return an authorization code.");
 
   try {
+    const existing = await prisma.integration.findFirst({
+      where: { tenantId: user.tenantId, provider, scopeKey: scope.scopeKey },
+      orderBy: { lastSyncAt: "desc" },
+    });
+    const replacingManagerAssignment = isDirectorRole(user.role) && isManagerAssignedMarketingConnection(existing?.configPlaceholder);
     const tokenResult = await exchangeMarketingOAuthCode({
       provider,
       code,
       redirectUri: oauthCallbackUrl(request.url, provider),
       codeVerifier: request.cookies.get(pkceCookieName(provider))?.value,
     });
+    const existingCredentials = replacingManagerAssignment
+      ? {}
+      : await getTenantIntegrationCredentialMap(user.tenantId, provider, scope.centerId);
     const preliminaryCredentials = {
-      ...(await getTenantIntegrationCredentialMap(user.tenantId, provider, scope.centerId)),
+      ...existingCredentials,
       ...tokenResult.credentials,
     };
-    let discovery = { config: {}, credentials: {}, candidates: [] } as Awaited<ReturnType<typeof discoverMarketingConnection>>;
+    let discovery = { config: {}, credentials: {}, candidates: [], selections: {} } as Awaited<ReturnType<typeof discoverMarketingConnection>>;
     let discoveryError = "";
     try {
       discovery = await discoverMarketingConnection({ provider, credentials: preliminaryCredentials });
@@ -110,7 +127,10 @@ export async function GET(
       discoveryError = error instanceof Error ? error.message : "Connected, but account discovery needs to be retried.";
     }
     const credentials = { ...tokenResult.credentials, ...discovery.credentials };
-    await upsertTenantIntegrationCredentials({
+    const saveCredentials = replacingManagerAssignment
+      ? replaceTenantIntegrationCredentials
+      : upsertTenantIntegrationCredentials;
+    await saveCredentials({
       tenantId: user.tenantId,
       centerId: scope.centerId,
       provider,
@@ -118,12 +138,8 @@ export async function GET(
       userId: user.id,
     });
 
-    const existing = await prisma.integration.findFirst({
-      where: { tenantId: user.tenantId, provider, scopeKey: scope.scopeKey },
-      orderBy: { lastSyncAt: "desc" },
-    });
     const existingRecord = record(existing?.configPlaceholder);
-    const existingSetup = readIntegrationConfig(existing?.configPlaceholder);
+    const existingSetup = replacingManagerAssignment ? {} : readIntegrationConfig(existing?.configPlaceholder);
     const setup = sanitizeIntegrationConfig(provider, { ...existingSetup, ...discovery.config });
     const credentialKeys = Array.from(new Set([
       ...Object.keys(preliminaryCredentials),

@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth";
 import { getTenantIntegrationCredentialMap, upsertTenantIntegrationCredentials } from "@/lib/integration-credentials";
 import { integrationScopeForUser } from "@/lib/integration-scope";
+import { isManagerAssignedMarketingConnection } from "@/lib/executive-marketing";
 import {
   getIntegrationRuntimeStatus,
   hasRequiredMarketingAccountConfig,
@@ -30,6 +31,10 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function isDirectorRole(role: UserRole) {
+  return role === UserRole.CENTER_DIRECTOR || role === UserRole.ASSISTANT_DIRECTOR;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ provider: string }> },
@@ -53,6 +58,12 @@ export async function POST(
     orderBy: { lastSyncAt: "desc" },
   });
   if (!existing) return NextResponse.json({ ok: false, error: "Connect this provider before selecting an account." }, { status: 400 });
+  if (isDirectorRole(user.role) && isManagerAssignedMarketingConnection(existing.configPlaceholder)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Reconnect this platform with your own provider login before changing the assigned profile.",
+    }, { status: 409 });
+  }
 
   try {
     const currentCredentials = await getTenantIntegrationCredentialMap(user.tenantId, provider, scope.centerId);

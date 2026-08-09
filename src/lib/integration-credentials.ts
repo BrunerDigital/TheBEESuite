@@ -204,6 +204,42 @@ export async function upsertTenantIntegrationCredentials({
   return savedKeys;
 }
 
+export async function replaceTenantIntegrationCredentials({
+  tenantId,
+  centerId,
+  provider,
+  credentials,
+  userId,
+}: {
+  tenantId: string;
+  centerId?: string | null;
+  provider: IntegrationProvider;
+  credentials: Record<string, string>;
+  userId: string;
+}) {
+  const scopeKey = centerId ? `center:${centerId}` : "tenant";
+  const entries = Object.entries(credentials).filter((entry): entry is [string, string] => Boolean(entry[1]));
+  await prisma.$transaction(async (tx) => {
+    await tx.integrationCredential.deleteMany({ where: { tenantId, provider, scopeKey } });
+    for (const [key, value] of entries) {
+      await tx.integrationCredential.create({
+        data: {
+          tenantId,
+          centerId: centerId ?? null,
+          scopeKey,
+          provider,
+          key,
+          encryptedValue: encryptIntegrationCredential(value),
+          lastFour: value.slice(-4),
+          createdById: userId,
+          updatedById: userId,
+        },
+      });
+    }
+  });
+  return entries.map(([key]) => key);
+}
+
 export async function getTenantIntegrationCredentialMap(
   tenantId: string | null | undefined,
   provider: IntegrationProvider,

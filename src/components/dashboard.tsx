@@ -2018,7 +2018,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
       {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks", "classroomCapacity"]) ? (
         <WorkspaceBoard
           storageId="dashboard-shared-insights"
-          className="grid gap-6 lg:grid-cols-2"
+          className="grid gap-6 xl:grid-cols-2"
           items={[
             ...(isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? [{
               id: "enrollment-funnel",
@@ -2062,26 +2062,26 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   description="Capacity planning for enrollment"
                 >
                   {openSeatsByAgeGroup.length ? (
-                    <div className="grid gap-6 rounded-xl border bg-background/40 p-5 sm:grid-cols-[14rem_1fr]">
+                    <div className="grid min-w-0 gap-6 rounded-xl border bg-background/40 p-5 sm:grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)]">
                       <div className="grid aspect-square place-items-center rounded-full border bg-primary/10">
                         <div className="grid size-28 place-items-center rounded-full bg-card text-center">
                           <span className="text-3xl font-semibold">{totalOpenSeats}</span>
                           <span className="-mt-7 text-xs text-muted-foreground">open seats</span>
                         </div>
                       </div>
-                      <div className="flex flex-col justify-center gap-3">
+                      <div className="flex min-w-0 flex-col justify-center gap-3">
                         {openSeatsByAgeGroup.map((item, index) => (
                           <Link
                             key={item.label}
                             href={withQueryParam("/center-dashboard", "q", item.label)}
-                            className="group flex items-center justify-between gap-3 rounded-lg border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="group flex min-w-0 items-center justify-between gap-3 rounded-lg border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             aria-label={`Open center capacity for ${item.label}`}
                           >
-                            <span className="flex items-center gap-2 text-sm font-medium">
-                              <span className="size-3 rounded-full" style={{ background: ageGroupColors[index % ageGroupColors.length] }} />
+                            <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                              <span className="size-3 shrink-0 rounded-full" style={{ background: ageGroupColors[index % ageGroupColors.length] }} />
                               {item.label}
                             </span>
-                            <span className="flex items-center gap-2">
+                            <span className="flex shrink-0 items-center gap-2">
                               <Badge variant="secondary">{item.value} open</Badge>
                               <ArrowUpRight className="size-3.5 opacity-0 transition group-hover:opacity-100" />
                             </span>

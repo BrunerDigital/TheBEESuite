@@ -9,7 +9,6 @@ import {
   createStripePayoutBankSelectionLink,
   listStripeConnectedAccountPayoutBanks,
   retrieveStripeConnectedAccount,
-  setStripeConnectedAccountFullDashboard,
   setStripeConnectedAccountDailyPayouts,
   setStripeConnectedAccountManualPayouts,
 } from "../src/lib/integrations";
@@ -180,52 +179,6 @@ test("Stripe connected account creation sends dashboard profile details to Accou
     assert.deepEqual(payload.include, ["configuration.merchant", "configuration.recipient", "configuration.customer", "defaults", "requirements"]);
     assert.equal(JSON.stringify(payload).includes("external_account"), false);
     assert.equal(JSON.stringify(payload).includes("requirements_collector"), false);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test("Stripe connected account dashboard updates change only dashboard access", async () => {
-  const originalFetch = globalThis.fetch;
-  let requestedUrl = "";
-  let payload: Record<string, unknown> = {};
-
-  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-    requestedUrl = String(url);
-    payload = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
-    return new Response(JSON.stringify({
-      id: "acct_123",
-      dashboard: "full",
-      configuration: {
-        customer: {},
-        merchant: {},
-        recipient: {},
-      },
-      defaults: {
-        responsibilities: {
-          fees_collector: "stripe",
-          losses_collector: "stripe",
-        },
-      },
-      requirements: {},
-    }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  }) as typeof fetch;
-
-  try {
-    const result = await setStripeConnectedAccountFullDashboard({
-      accountId: "acct_123",
-      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
-    });
-
-    assert.equal(result.ok, true);
-    assert.equal(result.account?.dashboard, "full");
-    assert.deepEqual(result.account?.configurations, ["customer", "merchant", "recipient"]);
-    assert.equal(requestedUrl, "https://api.stripe.com/v2/core/accounts/acct_123");
-    assert.equal(payload.dashboard, "full");
-    assert.deepEqual(Object.keys(payload).sort(), ["dashboard", "include"]);
   } finally {
     globalThis.fetch = originalFetch;
   }

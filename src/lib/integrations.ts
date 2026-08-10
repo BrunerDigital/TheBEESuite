@@ -33,6 +33,8 @@ export type EmailAttachment = {
 const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION || "2026-07-29.dahlia";
 const STRIPE_ACCOUNTS_V2_API_VERSION = process.env.STRIPE_ACCOUNTS_V2_API_VERSION || STRIPE_API_VERSION;
 const STRIPE_CONNECTED_ACCOUNT_INCLUDES = ["configuration.merchant", "configuration.recipient", "configuration.customer", "defaults", "requirements"];
+const STRIPE_ACCOUNT_LINK_CONFIGURATION_KEYS = ["customer", "merchant", "recipient"] as const;
+type StripeAccountLinkConfiguration = (typeof STRIPE_ACCOUNT_LINK_CONFIGURATION_KEYS)[number];
 export const STRIPE_CHILD_CARE_MCC = "8351";
 export const STRIPE_KID_CITY_STATEMENT_DESCRIPTOR = "KID CITY USA";
 
@@ -125,6 +127,7 @@ export type StripeConnectedAccountSnapshot = {
   id: string;
   displayName?: string | null;
   dashboard?: string | null;
+  configurations: StripeAccountLinkConfiguration[];
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
   detailsSubmitted: boolean;
@@ -452,6 +455,10 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
   const controllerFees = asRecord(controller.fees);
   const controllerLosses = asRecord(controller.losses);
   const configuration = asRecord(account.configuration);
+  const configurations = STRIPE_ACCOUNT_LINK_CONFIGURATION_KEYS.filter((key) => {
+    const value = configuration[key];
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+  });
   const merchant = asRecord(configuration.merchant);
   const merchantCapabilities = asRecord(merchant.capabilities);
   const cardPayments = asRecord(merchantCapabilities.card_payments);
@@ -502,6 +509,7 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
     id: clean(account.id),
     displayName: clean(account.display_name) || clean(account.displayName) || null,
     dashboard: clean(account.dashboard) || null,
+    configurations,
     chargesEnabled: account.charges_enabled === true || merchantCapabilityStatus === "active",
     payoutsEnabled: account.payouts_enabled === true || recipientTransferStatus === "active",
     detailsSubmitted: account.details_submitted === true || account.detailsSubmitted === true || requirementFields.length === 0,
@@ -2457,15 +2465,38 @@ export async function createStripeAccountLink({
     return { ok: false, configured: true, provider: "stripe", error: "Payment return links must use secure HTTPS URLs." };
   }
 
+  const connectedAccountId = clean(accountId);
+  if (!connectedAccountId.startsWith("acct_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "Connected payout account id is invalid." };
+  }
+  const connectedAccount = await retrieveStripeConnectedAccount(connectedAccountId, { tenantId, credentials });
+  if (!connectedAccount.ok || !connectedAccount.account) {
+    return {
+      ok: false,
+      configured: connectedAccount.configured,
+      provider: "stripe",
+      error: connectedAccount.error || "The connected account configurations could not be verified.",
+    };
+  }
+  const configurations = connectedAccount.account.configurations;
+  if (!configurations.length) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: "The connected account does not have an applied onboarding configuration.",
+    };
+  }
+
   const response = await fetch("https://api.stripe.com/v2/core/account_links", {
     method: "POST",
     headers: stripeHeaders(apiKey, "json", STRIPE_ACCOUNTS_V2_API_VERSION),
     body: JSON.stringify({
-      account: accountId,
+      account: connectedAccountId,
       use_case: {
         type: "account_onboarding",
         account_onboarding: {
-          configurations: ["merchant", "recipient"],
+          configurations,
           collection_options: {
             fields: "eventually_due",
             future_requirements: "include",
@@ -2491,7 +2522,7 @@ export async function createStripeAccountLink({
     return { ok: false, configured: true, provider: "stripe", error: "Payment processor returned an insecure onboarding URL." };
   }
 
-  return { ok: true, configured: true, provider: "stripe", id: accountId, url: json.url };
+  return { ok: true, configured: true, provider: "stripe", id: connectedAccountId, url: json.url };
 }
 
 export async function createStripeExpressDashboardLoginLink({

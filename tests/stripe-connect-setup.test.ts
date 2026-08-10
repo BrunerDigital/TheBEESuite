@@ -9,6 +9,7 @@ import {
   listStripeConnectedAccountPayoutBanks,
   retrieveStripeConnectedAccount,
   setStripeConnectedAccountDailyPayouts,
+  setStripeConnectedAccountManualPayouts,
 } from "../src/lib/integrations";
 import {
   STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE,
@@ -216,6 +217,31 @@ test("Stripe connected account payout schedule is set to daily automatic payouts
     assert.equal(stripeAccount, "acct_123");
     assert.equal(params.get("payments[payouts][schedule][interval]"), "daily");
     assert.equal(params.get("payments[settlement_timing][delay_days_override]"), "");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe connected account payout hold uses a manual schedule without touching bank accounts", async () => {
+  const originalFetch = globalThis.fetch;
+  let body = "";
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    body = String(init?.body);
+    return new Response(JSON.stringify({ object: "balance_settings", payments: { payouts: { schedule: { interval: "manual" } } } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+  try {
+    const result = await setStripeConnectedAccountManualPayouts({
+      accountId: "acct_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+    const params = new URLSearchParams(body);
+    assert.equal(result.ok, true);
+    assert.equal(params.get("payments[payouts][schedule][interval]"), "manual");
+    assert.equal(body.includes("external_account"), false);
+    assert.equal(body.includes("bank"), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

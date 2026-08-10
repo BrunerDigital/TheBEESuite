@@ -2227,6 +2227,7 @@ export async function createStripeConnectedAccount({
   businessUrl,
   productDescription,
   idempotencyKey,
+  metadata,
   tenantId,
   credentials,
 }: {
@@ -2244,6 +2245,7 @@ export async function createStripeConnectedAccount({
   businessUrl?: string | null;
   productDescription?: string | null;
   idempotencyKey?: string | null;
+  metadata?: Record<string, string | null | undefined>;
   tenantId?: string | null;
   credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult & { account?: StripeConnectedAccountSnapshot }> {
@@ -2266,12 +2268,20 @@ export async function createStripeConnectedAccount({
     state: clean(state) || undefined,
     postal_code: clean(postalCode) || undefined,
   } : undefined;
+  const accountMetadata = metadata
+    ? Object.fromEntries(
+        Object.entries(metadata)
+          .map(([key, value]) => [clean(key).slice(0, 40), clean(value).slice(0, 500)] as const)
+          .filter(([key, value]) => key && value),
+      )
+    : undefined;
 
   const payload = {
     contact_email: contactEmail,
     contact_phone: contactPhone,
     display_name: accountDisplayName,
     dashboard: "none",
+    metadata: accountMetadata,
     identity: {
       business_details: {
         registered_name: registeredName,
@@ -2656,6 +2666,32 @@ export async function setStripeConnectedAccountDailyPayouts({
   tenantId?: string | null;
   credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult & { balanceSettings?: Record<string, unknown> }> {
+  return setStripeConnectedAccountPayoutSchedule({ accountId, interval: "daily", tenantId, credentials });
+}
+
+export async function setStripeConnectedAccountManualPayouts({
+  accountId,
+  tenantId,
+  credentials,
+}: {
+  accountId: string;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { balanceSettings?: Record<string, unknown> }> {
+  return setStripeConnectedAccountPayoutSchedule({ accountId, interval: "manual", tenantId, credentials });
+}
+
+export async function setStripeConnectedAccountPayoutSchedule({
+  accountId,
+  interval,
+  tenantId,
+  credentials,
+}: {
+  accountId: string;
+  interval: "daily" | "manual";
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { balanceSettings?: Record<string, unknown> }> {
   const apiKey = await getStripeSecretKey({ tenantId, credentials });
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
@@ -2666,10 +2702,8 @@ export async function setStripeConnectedAccountDailyPayouts({
     return { ok: false, configured: true, provider: "stripe", error: "Connected payout account id is invalid." };
   }
 
-  const body = new URLSearchParams({
-    "payments[payouts][schedule][interval]": "daily",
-    "payments[settlement_timing][delay_days_override]": "",
-  });
+  const body = new URLSearchParams({ "payments[payouts][schedule][interval]": interval });
+  if (interval === "daily") body.set("payments[settlement_timing][delay_days_override]", "");
   const response = await fetch("https://api.stripe.com/v1/balance_settings", {
     method: "POST",
     headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),

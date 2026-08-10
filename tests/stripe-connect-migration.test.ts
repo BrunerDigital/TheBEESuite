@@ -104,6 +104,8 @@ test("corporate reauthorization uses one stable portfolio entry while preserving
   assert.match(card, /returnToCorporatePortfolio/);
   assert.match(migrationRoute, /returnToCorporatePortfolio/);
   assert.match(refreshRoute, /portfolioQuery/);
+  assert.match(refreshRoute, /fallbackUrl\(baseUrl, returnToCorporatePortfolio/);
+  assert.match(refreshRoute, /returnToCorporatePortfolio \? "\/stripe-reauthorization\/corporate" : "\/billing-settings"/);
 });
 
 test("cutover is one-school-at-a-time and remains blocked behind live bank, payout, readiness, and $99 checks", () => {

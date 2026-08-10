@@ -3185,7 +3185,7 @@ async function renderLivePage(
         where: {
           billingAccount: billingAccountWhere,
         },
-        orderBy: { effectiveAt: "desc" },
+        orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
         include: {
           billingAccount: {
             select: {
@@ -3203,14 +3203,16 @@ async function renderLivePage(
       }),
       prisma.ledgerEntry.findMany({
         where: { billingAccount: currentBillingAccountWhere },
-        orderBy: { effectiveAt: "desc" },
+        orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
         take: 1000,
         select: {
+          id: true,
           billingAccountId: true,
           type: true,
           amountCents: true,
           balanceAfterCents: true,
           effectiveAt: true,
+          createdAt: true,
           invoiceId: true,
           paymentId: true,
         },

@@ -109,10 +109,12 @@ type ReceivableAgingInvoice = {
 };
 
 type ReceivableAgingLedgerEntry = {
+  id: string;
   billingAccountId: string;
   amountCents: number;
   invoiceId?: string | null;
   effectiveAt: Date | string;
+  createdAt: Date | string;
 };
 
 type AccountBalanceAccessSubject =
@@ -195,14 +197,13 @@ export function buildOutstandingNonInvoiceChargesByAccount(
     unappliedCreditCents: number;
     charges: Array<{ remainingCents: number; invoiceLinked: boolean }>;
   }>();
-  const orderedEntries = entries
-    .map((entry, index) => ({ entry, index }))
-    .sort((left, right) => (
-      new Date(left.entry.effectiveAt).getTime() - new Date(right.entry.effectiveAt).getTime()
-      || left.index - right.index
-    ));
+  const orderedEntries = [...entries].sort((left, right) => (
+    new Date(left.effectiveAt).getTime() - new Date(right.effectiveAt).getTime()
+    || new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+    || left.id.localeCompare(right.id)
+  ));
 
-  for (const { entry } of orderedEntries) {
+  for (const entry of orderedEntries) {
     const state = states.get(entry.billingAccountId) ?? { unappliedCreditCents: 0, charges: [] };
     if (entry.amountCents > 0) {
       const creditAppliedCents = Math.min(state.unappliedCreditCents, entry.amountCents);

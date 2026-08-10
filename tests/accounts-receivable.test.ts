@@ -13,6 +13,14 @@ import {
 } from "../src/lib/accounts-receivable";
 
 const asOf = new Date("2026-07-28T16:00:00.000Z");
+const ledgerEntry = (
+  id: string,
+  billingAccountId: string,
+  amountCents: number,
+  invoiceId: string | null,
+  effectiveAt: string,
+  createdAt = effectiveAt,
+) => ({ id, billingAccountId, amountCents, invoiceId, effectiveAt, createdAt });
 const families: AccountsReceivableFamilyRow[] = [
   {
     id: "harris",
@@ -95,12 +103,12 @@ test("aging applies payments to invoices before ledger-only charges", () => {
 
 test("settled ledger-only charges do not displace later invoice aging", () => {
   const charges = buildOutstandingNonInvoiceChargesByAccount([
-    { billingAccountId: "settled", amountCents: 10_000, invoiceId: null, effectiveAt: "2026-05-01T00:00:00.000Z" },
-    { billingAccountId: "settled", amountCents: -10_000, invoiceId: null, effectiveAt: "2026-05-02T00:00:00.000Z" },
-    { billingAccountId: "settled", amountCents: 10_000, invoiceId: "invoice", effectiveAt: "2026-06-01T00:00:00.000Z" },
-    { billingAccountId: "credit-first", amountCents: -10_000, invoiceId: null, effectiveAt: "2026-05-01T00:00:00.000Z" },
-    { billingAccountId: "credit-first", amountCents: 10_000, invoiceId: null, effectiveAt: "2026-05-02T00:00:00.000Z" },
-    { billingAccountId: "credit-first", amountCents: 10_000, invoiceId: "invoice", effectiveAt: "2026-06-01T00:00:00.000Z" },
+    ledgerEntry("1", "settled", 10_000, null, "2026-05-01T00:00:00.000Z"),
+    ledgerEntry("2", "settled", -10_000, null, "2026-05-02T00:00:00.000Z"),
+    ledgerEntry("3", "settled", 10_000, "invoice", "2026-06-01T00:00:00.000Z"),
+    ledgerEntry("4", "credit-first", -10_000, null, "2026-05-01T00:00:00.000Z"),
+    ledgerEntry("5", "credit-first", 10_000, null, "2026-05-02T00:00:00.000Z"),
+    ledgerEntry("6", "credit-first", 10_000, "invoice", "2026-06-01T00:00:00.000Z"),
   ]);
 
   assert.equal(charges.get("settled"), 0);
@@ -119,9 +127,9 @@ test("settled ledger-only charges do not displace later invoice aging", () => {
 
 test("payments reduce invoice charges before older ledger-only charges", () => {
   const charges = buildOutstandingNonInvoiceChargesByAccount([
-    { billingAccountId: "mixed", amountCents: 10_000, invoiceId: null, effectiveAt: "2026-05-01T00:00:00.000Z" },
-    { billingAccountId: "mixed", amountCents: 10_000, invoiceId: "invoice", effectiveAt: "2026-06-01T00:00:00.000Z" },
-    { billingAccountId: "mixed", amountCents: -5_000, invoiceId: null, effectiveAt: "2026-06-02T00:00:00.000Z" },
+    ledgerEntry("payment", "mixed", -5_000, null, "2026-06-01T00:00:00.000Z", "2026-06-01T00:00:03.000Z"),
+    ledgerEntry("invoice", "mixed", 10_000, "invoice", "2026-06-01T00:00:00.000Z", "2026-06-01T00:00:02.000Z"),
+    ledgerEntry("manual", "mixed", 10_000, null, "2026-06-01T00:00:00.000Z", "2026-06-01T00:00:01.000Z"),
   ]);
 
   assert.equal(charges.get("mixed"), 10_000);
@@ -281,6 +289,7 @@ test("billing, analytics, and payment readiness exclude past families from activ
   assert.match(livePage, /if \(slug === "billing-invoices"\)[\s\S]*visibleCurrentInvoiceWhere\(visibleCenterIds\)/);
   assert.match(livePage, /currentFamilyOutstandingCents[\s\S]*Math\.max\(account\.balanceCents, 0\)/);
   assert.match(livePage, /ledgerRollupRows[\s\S]*billingAccount: currentBillingAccountWhere[\s\S]*take: 1000/);
+  assert.equal((livePage.match(/orderBy: \[\{ effectiveAt: "desc" \}, \{ createdAt: "desc" \}, \{ id: "desc" \}\]/g) ?? []).length >= 2, true);
   assert.match(livePage, /buildOutstandingNonInvoiceChargesByAccount\(ledgerEntries\)/);
   assert.match(livePage, /buildLedgerReconciliationReport\(\{[\s\S]*entries: ledgerEntries/);
   assert.match(livePage, /formerFamilyBalanceSummary/);

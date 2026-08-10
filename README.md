@@ -126,11 +126,13 @@ Primary rollout checklist: [docs/KIDCITY_CORPORATE_ROLLOUT_CHECKLIST_2026-07-07.
 
 ## Documentation Index
 
+- Complete product guide: [docs/BEE_SUITE_COMPLETE_GUIDE.md](docs/BEE_SUITE_COMPLETE_GUIDE.md)
 - Product status: [docs/PRODUCT.md](docs/PRODUCT.md)
-- July 24 production release: [docs/RELEASE_NOTES_2026-07-24.md](docs/RELEASE_NOTES_2026-07-24.md)
-- Current production-readiness matrix: [docs/PRODUCTION_READINESS_AUDIT_MATRIX_2026-07-24.md](docs/PRODUCTION_READINESS_AUDIT_MATRIX_2026-07-24.md)
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Cloud/local development workflow: [docs/CLOUD_LOCAL_WORKFLOW.md](docs/CLOUD_LOCAL_WORKFLOW.md)
+- Local machine setup: [docs/LOCAL_CLOUD_SETUP.md](docs/LOCAL_CLOUD_SETUP.md)
 - Deployment: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- Production release checklist: [docs/PRODUCTION_RELEASE_CHECKLIST.md](docs/PRODUCTION_RELEASE_CHECKLIST.md)
 - Security/privacy operations: [docs/SECURITY_PRIVACY_OPERATIONS.md](docs/SECURITY_PRIVACY_OPERATIONS.md)
 - ProCare migration: [docs/PROCARE_LOCATION_MIGRATION_RUNBOOK.md](docs/PROCARE_LOCATION_MIGRATION_RUNBOOK.md)
 - ProCare export validation: [docs/PROCARE_EXPORT_VALIDATION_2026-07-24.md](docs/PROCARE_EXPORT_VALIDATION_2026-07-24.md)
@@ -143,14 +145,17 @@ Primary rollout checklist: [docs/KIDCITY_CORPORATE_ROLLOUT_CHECKLIST_2026-07-07.
 
 ## Generated Assets
 
-Committed launch assets live under:
+Current committed distribution assets live under:
 
-- `output/playwright/fresh-screenshots-2026-07-07T16-22-06/`
-- `output/playwright/bee-suite-graphics-2026-07-07/`
-- `output/pdf/`
-- `output/printables/`
+- `public/brand/the-bee-suite/explainers/current/`
+- `public/brand/the-bee-suite/sop-graphics/current/`
+- `public/brand/the-bee-suite/screenshots/current/`
+- `public/brand/the-bee-suite/marketing/current/`
+- `public/resources/current/`
+- `output/pdf/TEAM_SHARE_GUIDES_CURRENT/`
+- `output/pdf/SCHOOL_TRANSITION_EMAIL_PACKET_CURRENT/`
 
-These are retained as launch deliverables. Local runtime logs, temp files, `.next`, Supabase `.temp`, and pulled env files are ignored.
+These are retained as current launch and team-share deliverables. Playwright captures, readiness output, local runtime logs, temp files, `.next`, Supabase `.temp`, and pulled environment files are generated locally and ignored.
 
 ## AI And Safety
 

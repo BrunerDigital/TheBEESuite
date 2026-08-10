@@ -129,6 +129,8 @@ test("Full Dashboard target replacement is fingerprinted, idempotent, and preser
   assert.match(replacement, /targetBanks\.banks\.length !== 0/);
   assert.match(replacement, /targetPayoutInterval !== "manual"/);
   assert.match(replacement, /BLOCKED_MIGRATION_STATUSES/);
+  assert.match(replacement, /"onboarding_opened"/);
+  assert.match(replacement, /stripeConnectMigrationLastOnboardingAt/);
   assert.match(replacement, /bee-suite-full-dashboard-replacement-/);
   assert.match(replacement, /created\.account\.dashboard !== "full"/);
   assert.match(replacement, /stripeConnectMigrationPreviousTargetAccountId/);

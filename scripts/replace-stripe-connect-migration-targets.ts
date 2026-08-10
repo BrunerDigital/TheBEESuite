@@ -19,7 +19,7 @@ type JsonRecord = Record<string, unknown>;
 
 const CORPORATE_SCHOOLS_EMAIL = "corpschools@kidcityusa.com";
 const INACTIVE_CENTER_STATUSES = ["closed", "archived", "inactive"];
-const BLOCKED_MIGRATION_STATUSES = new Set(["ready_for_cutover", "cutover_complete"]);
+const BLOCKED_MIGRATION_STATUSES = new Set(["onboarding_opened", "ready_for_cutover", "cutover_complete"]);
 const REPLACEMENT_VERSION = "2026-08-full-dashboard-target-v1";
 
 function clean(value: unknown) {
@@ -141,7 +141,10 @@ async function main() {
       throw new Error(`${center.name}: the stored migration source does not match the active parent-payment account.`);
     }
     if (BLOCKED_MIGRATION_STATUSES.has(clean(fields.stripeConnectMigrationStatus))) {
-      throw new Error(`${center.name}: the migration is already at or past the cutover gate.`);
+      throw new Error(`${center.name}: the prepared target is no longer replaceable because onboarding started or the migration advanced.`);
+    }
+    if (clean(fields.stripeConnectMigrationLastOnboardingAt)) {
+      throw new Error(`${center.name}: Stripe onboarding has already been opened for the prepared target.`);
     }
 
     const tenantId = center.organization.tenantId;

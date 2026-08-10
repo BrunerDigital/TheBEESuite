@@ -705,23 +705,25 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
             <MoreHorizontal className="size-4" aria-hidden="true" />
             <span>More</span>
           </SheetTrigger>
-          <SheetContent side="bottom" className="max-h-[82dvh] rounded-t-3xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-            <SheetTitle className="text-left">More for your role</SheetTitle>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {moreItems.map(({ label, slug, Icon, group }) => {
-                const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
-                return (
-                  <Link
-                    key={slug}
-                    href={href}
-                    onClick={() => setMoreOpen(false)}
-                    className="flex min-h-14 items-center gap-3 rounded-xl border bg-card/70 p-3 transition-colors hover:border-primary/40 hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-5" aria-hidden="true" /></span>
-                    <span className="min-w-0"><span className="block truncate text-sm font-semibold">{label}</span><span className="block truncate text-xs text-muted-foreground">{group}</span></span>
-                  </Link>
-                );
-              })}
+          <SheetContent side="bottom" className="max-h-[82dvh] overflow-hidden overscroll-contain rounded-t-3xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+            <SheetTitle className="shrink-0 text-left">More for your role</SheetTitle>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+              <div className="grid gap-2 pb-px sm:grid-cols-2">
+                {moreItems.map(({ label, slug, Icon, group }) => {
+                  const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
+                  return (
+                    <Link
+                      key={slug}
+                      href={href}
+                      onClick={() => setMoreOpen(false)}
+                      className="flex min-h-14 items-center gap-3 rounded-xl border bg-card/70 p-3 transition-colors hover:border-primary/40 hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-5" aria-hidden="true" /></span>
+                      <span className="min-w-0"><span className="block truncate text-sm font-semibold">{label}</span><span className="block truncate text-xs text-muted-foreground">{group}</span></span>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           </SheetContent>
         </Sheet> : null}

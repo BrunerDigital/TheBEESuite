@@ -108,6 +108,7 @@ import {
 } from "@/lib/billing-guardrails";
 import { buildLedgerReconciliationReport } from "@/lib/billing-reconciliation";
 import { dashboardOptionsFromCustomFields, mergeAgeGroupOptions } from "@/lib/dashboard-options";
+import { activeClassroomWhere } from "@/lib/classroom-status";
 import {
   visibleAttendanceWhere,
   visibleBillingAccountWhere,
@@ -2424,7 +2425,7 @@ async function renderLivePage(
       },
     });
     const classroomRatios = await prisma.classroom.findMany({
-      where: classroomWhereForTeacher,
+      where: activeClassroomWhere(classroomWhereForTeacher),
       orderBy: { name: "asc" },
       take: 80,
       select: {
@@ -3302,7 +3303,7 @@ async function renderLivePage(
         take: 500,
       }),
       prisma.classroom.findMany({
-        where: { centerId: scopedCenterIds },
+        where: activeClassroomWhere({ centerId: scopedCenterIds }),
         orderBy: [{ centerId: "asc" }, { ageGroup: "asc" }, { name: "asc" }],
         select: { id: true, centerId: true, name: true, ageGroup: true },
       }),
@@ -4999,7 +5000,7 @@ async function renderLivePage(
   }
 
   if (slug === "classroom-dashboard") {
-    const classroomWhere: Prisma.ClassroomWhereInput = { centerId: scopedCenterIds };
+    const classroomWhere: Prisma.ClassroomWhereInput = activeClassroomWhere({ centerId: scopedCenterIds });
     const liveChildWhere: Prisma.ChildWhereInput = {
       AND: [
         currentlyEnrolledChildWhere(),
@@ -5480,7 +5481,7 @@ async function renderLivePage(
       },
     });
     const classrooms = await prisma.classroom.findMany({
-      where: { centerId: scopedCenterIds },
+      where: activeClassroomWhere({ centerId: scopedCenterIds }),
       orderBy: [{ centerId: "asc" }, { ageGroup: "asc" }, { name: "asc" }],
       take: 300,
       select: { id: true, centerId: true, name: true, ageGroup: true },

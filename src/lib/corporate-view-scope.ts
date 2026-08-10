@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { activeClassroomWhere } from "@/lib/classroom-status";
 
 export const NO_VISIBLE_CENTER_ID = "__no_visible_centers__";
 
@@ -37,7 +38,7 @@ export function visiblePaymentWhere(centerIds: readonly string[]): Prisma.Paymen
 }
 
 export function visibleClassroomWhere(centerIds: readonly string[]): Prisma.ClassroomWhereInput {
-  return { centerId: visibleCenterIdFilter(centerIds) };
+  return activeClassroomWhere({ centerId: visibleCenterIdFilter(centerIds) });
 }
 
 export function visibleAttendanceWhere(centerIds: readonly string[]): Prisma.AttendanceRecordWhereInput {

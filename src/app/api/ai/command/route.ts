@@ -22,6 +22,7 @@ import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
 import { defaultRecurringBillingPeriod, WEEKLY_TUITION_AUTOBILL_CADENCE, WEEKLY_TUITION_AUTOBILL_DAY } from "@/lib/billing-workflows";
 import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
+import { activeClassroomWhere } from "@/lib/classroom-status";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -626,7 +627,7 @@ async function runAiDataCommand(
   });
   const [classrooms, invoices, tuitionPlans] = await Promise.all([
     prisma.classroom.findMany({
-      where: { centerId: selectedCenterId },
+      where: activeClassroomWhere({ centerId: selectedCenterId }),
       orderBy: { name: "asc" },
       select: { id: true, name: true, ageGroup: true },
     }),

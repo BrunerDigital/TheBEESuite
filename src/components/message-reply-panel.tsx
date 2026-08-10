@@ -345,7 +345,7 @@ export function MessageReplyPanel({
 
   if (variant === "conversation") {
     return (
-      <section id={composerId} className="scroll-mt-28 border-t bg-card/90 p-3 sm:p-4" aria-label={`Reply to ${selectedFamily?.name ?? "family"}`}>
+      <section id={composerId} className="scroll-mt-28 border-t bg-transparent p-3 sm:p-4" aria-label={`Reply to ${selectedFamily?.name ?? "family"}`}>
         <div className="mx-auto max-w-4xl space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -375,7 +375,7 @@ export function MessageReplyPanel({
             id={`${composerId}-message`}
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            className="min-h-24 resize-y rounded-2xl"
+            className="min-h-24 resize-y rounded-2xl bg-background/75 shadow-inner"
             placeholder={`Message ${selectedFamily?.name ?? "this family"}`}
           />
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">

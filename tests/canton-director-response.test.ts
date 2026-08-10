@@ -47,7 +47,9 @@ test("Canton classroom repair archives only empty legacy rooms and preserves tra
 test("family intake and child writes cannot reuse archived classrooms", () => {
   const pageSource = fs.readFileSync(new URL("../src/app/[slug]/page.tsx", import.meta.url), "utf8");
   const operationsSource = fs.readFileSync(new URL("../src/app/api/operations/records/route.ts", import.meta.url), "utf8");
+  const familyIntakeSource = fs.readFileSync(new URL("../src/app/api/families/intake/route.ts", import.meta.url), "utf8");
   assert.match(pageSource, /classrooms: \{[\s\S]*where: activeClassroomWhere\(\)/);
   assert.match(operationsSource, /activeClassroomWhere\(\{ id: change\.value\.classroomId \}\)/);
   assert.match(operationsSource, /activeClassroomWhere\(\{ id: classroomId \}\)/);
+  assert.match(familyIntakeSource, /activeClassroomWhere\(\{ id: classroomId \}\)/);
 });

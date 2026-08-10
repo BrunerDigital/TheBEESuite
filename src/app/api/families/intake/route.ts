@@ -8,6 +8,7 @@ import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { prisma } from "@/lib/prisma";
 import { familyNameFromGuardian } from "@/lib/registration-packet";
 import { enrollmentClassroomValidationError } from "@/lib/enrollment-status";
+import { activeClassroomWhere } from "@/lib/classroom-status";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -93,7 +94,10 @@ async function POSTHandler(request: NextRequest) {
   }
 
   if (classroomId) {
-    const classroom = await prisma.classroom.findUnique({ where: { id: classroomId }, select: { centerId: true } });
+    const classroom = await prisma.classroom.findFirst({
+      where: activeClassroomWhere({ id: classroomId }),
+      select: { centerId: true },
+    });
     if (!classroom || classroom.centerId !== center.id) {
       return NextResponse.json({ ok: false, error: "Classroom must belong to the selected center." }, { status: 400 });
     }

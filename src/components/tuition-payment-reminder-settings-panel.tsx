@@ -37,13 +37,7 @@ function centerSettings(center: TuitionPaymentReminderCenter) {
 
 function settingSummary(settings: TuitionPaymentReminderSettings) {
   if (!settings.enabled) return "Paused";
-  const parts = [
-    settings.invoiceReadyEnabled ? "Friday billing notice for non-autopay families" : null,
-    settings.pastDueEnabled
-      ? `Past due starts after ${settings.pastDueFirstDaysAfter} day${settings.pastDueFirstDaysAfter === 1 ? "" : "s"}, repeats every ${settings.pastDueRepeatEveryDays} day${settings.pastDueRepeatEveryDays === 1 ? "" : "s"} through day ${settings.pastDueMaxDaysAfter}`
-      : null,
-  ].filter(Boolean);
-  return parts.length ? parts.join(" | ") : "No reminder points enabled";
+  return `Current-family balance reminder every ${settings.repeatEveryDays} day${settings.repeatEveryDays === 1 ? "" : "s"}`;
 }
 
 export function TuitionPaymentReminderSettingsPanel({ centers }: TuitionPaymentReminderSettingsPanelProps) {
@@ -125,7 +119,7 @@ export function TuitionPaymentReminderSettingsPanel({ centers }: TuitionPaymentR
             </Badge>
             <CardTitle>Parent tuition payment reminders</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
-              Configure Friday billing notifications for non-autopay families and past-due balance notices that ask parents to pay before or at drop-off.
+              Send one friendly family-level reminder only when a current family has a positive, parent-payable balance and the school&apos;s secure checkout is ready.
             </CardDescription>
           </div>
           <div className="rounded-xl border bg-background/50 p-3 text-sm">
@@ -158,73 +152,28 @@ export function TuitionPaymentReminderSettingsPanel({ centers }: TuitionPaymentR
           <div className="flex items-center justify-between gap-4 rounded-xl border bg-background/40 p-4">
             <div>
               <div className="text-sm font-medium">Send tuition payment notifications</div>
-              <div className="mt-1 text-xs leading-5 text-muted-foreground">Applies to open recurring tuition invoices for the selected school.</div>
+              <div className="mt-1 text-xs leading-5 text-muted-foreground">Withdrawn families, zero or credit balances, pending payments, active autopay, and subsidy responsibility reviews are excluded.</div>
             </div>
             <Switch checked={settings.enabled} onCheckedChange={(checked) => updateSettings({ enabled: Boolean(checked) })} />
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border bg-background/40 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium">Friday billing ready notice</div>
-                <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Non-autopay families are notified when the next tuition invoice is ready to view and pay.
-                </div>
-              </div>
-              <Switch checked={settings.invoiceReadyEnabled} onCheckedChange={(checked) => updateSettings({ invoiceReadyEnabled: Boolean(checked) })} />
+        <div className="rounded-xl border bg-background/40 p-4">
+          <div className="grid gap-4 sm:grid-cols-[minmax(220px,320px)_1fr] sm:items-end">
+            <div className="space-y-2">
+              <Label htmlFor="tuition-reminder-repeat">Reminder cadence</Label>
+              <Input
+                id="tuition-reminder-repeat"
+                type="number"
+                min={1}
+                max={30}
+                value={numberValue("repeatEveryDays")}
+                onChange={(event) => updateSettings({ repeatEveryDays: Number.parseInt(event.target.value, 10) })}
+                disabled={!settings.enabled}
+              />
             </div>
-            <div className="mt-4 rounded-lg border bg-background/50 p-3 text-xs leading-5 text-muted-foreground">
-              Families with active autopay are skipped for this notice because their saved method should process the invoice.
-            </div>
-          </div>
-
-          <div className="rounded-xl border bg-background/40 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium">Past due drop-off notice</div>
-                <div className="mt-1 text-xs leading-5 text-muted-foreground">Escalation after the tuition due date.</div>
-              </div>
-              <Switch checked={settings.pastDueEnabled} onCheckedChange={(checked) => updateSettings({ pastDueEnabled: Boolean(checked) })} />
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="tuition-past-due-first">First notice</Label>
-                <Input
-                  id="tuition-past-due-first"
-                  type="number"
-                  min={1}
-                  max={30}
-                  value={numberValue("pastDueFirstDaysAfter")}
-                  onChange={(event) => updateSettings({ pastDueFirstDaysAfter: Number.parseInt(event.target.value, 10) })}
-                  disabled={!settings.pastDueEnabled}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tuition-past-due-repeat">Repeat every</Label>
-                <Input
-                  id="tuition-past-due-repeat"
-                  type="number"
-                  min={1}
-                  max={30}
-                  value={numberValue("pastDueRepeatEveryDays")}
-                  onChange={(event) => updateSettings({ pastDueRepeatEveryDays: Number.parseInt(event.target.value, 10) })}
-                  disabled={!settings.pastDueEnabled}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tuition-past-due-stop">Stop after</Label>
-                <Input
-                  id="tuition-past-due-stop"
-                  type="number"
-                  min={1}
-                  max={90}
-                  value={numberValue("pastDueMaxDaysAfter")}
-                  onChange={(event) => updateSettings({ pastDueMaxDaysAfter: Number.parseInt(event.target.value, 10) })}
-                  disabled={!settings.pastDueEnabled}
-                />
-              </div>
+            <div className="rounded-lg border bg-background/50 p-3 text-xs leading-5 text-muted-foreground">
+              The default is every seven days. Each family receives at most one reminder in a cadence window, even when several invoices are open. Email links remain on <span className="font-medium text-foreground">https://thebeesuite.io</span> without tracking redirects.
             </div>
           </div>
         </div>

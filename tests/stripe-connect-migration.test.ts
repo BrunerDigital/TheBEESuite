@@ -78,6 +78,8 @@ test("migration routes protect the source bank and generate target links only af
   assert.match(migrationRoute, /authorizedRepresentative !== true/);
   assert.match(migrationRoute, /accountId: migration\.targetAccountId/);
   assert.match(migrationRoute, /stripeMigration=return/);
+  assert.match(migrationRoute, /customFields: \{ equals: fields as Prisma\.InputJsonValue \}/);
+  assert.ok(migrationRoute.indexOf("stripeConnectMigrationLastOnboardingAt") < migrationRoute.indexOf("const link = await createStripeAccountLink"));
   assert.match(oldPayoutRoute, /existing payout bank remains untouched/);
   assert.match(oldOnboardRoute, /parent payments remain on the current account until cutover/i);
   assert.match(softwareRoute, /subscriptionCreated: false/);
@@ -131,6 +133,8 @@ test("Full Dashboard target replacement is fingerprinted, idempotent, and preser
   assert.match(replacement, /BLOCKED_MIGRATION_STATUSES/);
   assert.match(replacement, /"onboarding_opened"/);
   assert.match(replacement, /stripeConnectMigrationLastOnboardingAt/);
+  assert.match(replacement, /customFields: \{ equals: beforeSwapFields as Prisma\.InputJsonValue \}/);
+  assert.match(replacement, /a concurrent migration update stopped the database swap/);
   assert.match(replacement, /bee-suite-full-dashboard-replacement-/);
   assert.match(replacement, /created\.account\.dashboard !== "full"/);
   assert.match(replacement, /stripeConnectMigrationPreviousTargetAccountId/);

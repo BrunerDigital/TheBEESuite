@@ -140,14 +140,27 @@ async function POSTHandler(request: NextRequest) {
   const portfolioQuery = returnToCorporatePortfolio ? "&portfolio=corporate" : "";
   const returnUrl = `${baseUrl}/stripe-reauthorization?stripeMigration=return&center=${encodeURIComponent(center.id)}${portfolioQuery}`;
   const refreshUrl = `${baseUrl}/api/billing/connect/migration/refresh?centerId=${encodeURIComponent(center.id)}${portfolioQuery}`;
+  const onboardingOpenedAt = new Date().toISOString();
+  const reservedFields: Prisma.JsonObject = {
+    ...fields,
+    stripeConnectMigrationStatus: "onboarding_opened",
+    stripeConnectMigrationLastOnboardingAt: onboardingOpenedAt,
+    stripeConnectMigrationLinksSent: false,
+  };
+  const reserved = await prisma.center.updateMany({
+    where: {
+      id: center.id,
+      customFields: { equals: fields as Prisma.InputJsonValue },
+    },
+    data: { customFields: reservedFields },
+  });
+  if (reserved.count !== 1) {
+    return NextResponse.json({ ok: false, error: "The school's Stripe migration changed while setup was opening. Refresh and try again." }, { status: 409 });
+  }
   const link = await createStripeAccountLink({ accountId: migration.targetAccountId, refreshUrl, returnUrl, tenantId: user.tenantId });
   if (!link.ok || !link.url) {
     return NextResponse.json({ ok: false, error: link.error || "The secure reauthorization link could not be opened." }, { status: link.configured ? 502 : 503 });
   }
-  await prisma.center.update({
-    where: { id: center.id },
-    data: { customFields: { ...fields, stripeConnectMigrationStatus: "onboarding_opened", stripeConnectMigrationLastOnboardingAt: new Date().toISOString(), stripeConnectMigrationLinksSent: false } },
-  });
   await writeAuditLog(user, {
     centerId: center.id,
     action: "billing.connect.migration.onboarding_opened",

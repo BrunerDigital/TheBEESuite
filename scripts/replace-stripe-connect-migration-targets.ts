@@ -233,6 +233,12 @@ async function main() {
     ) {
       throw new Error(`${plan.center.name}: the production mapping changed after preview.`);
     }
+    if (
+      BLOCKED_MIGRATION_STATUSES.has(clean(freshFields.stripeConnectMigrationStatus)) ||
+      clean(freshFields.stripeConnectMigrationLastOnboardingAt)
+    ) {
+      throw new Error(`${plan.center.name}: Stripe onboarding started after preview, so replacement was stopped.`);
+    }
 
     const setup = plan.setup.details;
     const created = await createStripeConnectedAccount({
@@ -316,10 +322,19 @@ async function main() {
     ) {
       throw new Error(`${plan.center.name}: the production mapping changed before the database swap.`);
     }
+    if (
+      BLOCKED_MIGRATION_STATUSES.has(clean(beforeSwapFields.stripeConnectMigrationStatus)) ||
+      clean(beforeSwapFields.stripeConnectMigrationLastOnboardingAt)
+    ) {
+      throw new Error(`${plan.center.name}: Stripe onboarding started before the database swap, so replacement was stopped.`);
+    }
 
     const now = new Date().toISOString();
-    await prisma.center.update({
-      where: { id: plan.center.id },
+    const swapped = await prisma.center.updateMany({
+      where: {
+        id: plan.center.id,
+        customFields: { equals: beforeSwapFields as Prisma.InputJsonValue },
+      },
       data: { customFields: jsonInput({
         ...beforeSwapFields,
         stripeConnectMigrationVersion: REPLACEMENT_VERSION,
@@ -343,6 +358,9 @@ async function main() {
         stripeConnectMigrationParentPaymentsRemainActive: plan.sourceAccount.chargesEnabled,
       }) },
     });
+    if (swapped.count !== 1) {
+      throw new Error(`${plan.center.name}: a concurrent migration update stopped the database swap.`);
+    }
 
     const afterSwap = await prisma.center.findUnique({ where: { id: plan.center.id }, select: { customFields: true } });
     const afterSwapFields = record(afterSwap?.customFields);

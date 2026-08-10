@@ -59,7 +59,7 @@ function jsonSummary(value: unknown) {
   return entries.length ? entries.join(" · ") : "None";
 }
 
-export function AutomationWorkflowBuilder({ data }: { data: AutomationWorkflowBuilderData }) {
+export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: AutomationWorkflowBuilderData; readOnly?: boolean }) {
   const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const firstAutomation = data.automations[0] ?? null;
@@ -113,6 +113,10 @@ export function AutomationWorkflowBuilder({ data }: { data: AutomationWorkflowBu
   }
 
   function save() {
+    if (readOnly) {
+      setMessage("Preview only — workflow changes are disabled.");
+      return;
+    }
     startTransition(async () => {
       setMessage("");
       setError("");
@@ -148,16 +152,16 @@ export function AutomationWorkflowBuilder({ data }: { data: AutomationWorkflowBu
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <Card className="glass-panel">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <Card className="glass-panel min-w-0 overflow-hidden">
         <CardHeader>
           <CardTitle>Automation Workflow Builder</CardTitle>
           <CardDescription>Configure trigger, rules, delay, review gate, and action payloads for school operations workflows.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="min-w-0 space-y-4">
           {message ? <div className="rounded-lg border bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{message}</div> : null}
           {error ? <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid min-w-0 gap-3 md:grid-cols-2">
             <div className="space-y-1">
               <Label>Saved Workflow</Label>
               <Select value={selectedId || "new"} onValueChange={(value) => {
@@ -279,14 +283,14 @@ export function AutomationWorkflowBuilder({ data }: { data: AutomationWorkflowBu
               <Textarea className="min-h-40" value={body} onChange={(event) => setBody(event.target.value)} />
             </div>
           </div>
-          <Button disabled={isPending || !name} onClick={save}>
+          <Button disabled={readOnly || isPending || !name} onClick={save}>
             <Save data-icon="inline-start" />
-            Save Workflow
+            {readOnly ? "Preview only" : "Save Workflow"}
           </Button>
         </CardContent>
       </Card>
       <div className="space-y-4">
-        <Card className="glass-panel">
+        <Card className="glass-panel min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle>Workflow Map</CardTitle>
             <CardDescription>Current automation logic before activation.</CardDescription>
@@ -312,7 +316,7 @@ export function AutomationWorkflowBuilder({ data }: { data: AutomationWorkflowBu
             })}
           </CardContent>
         </Card>
-        <Card className="glass-panel">
+        <Card className="glass-panel min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle>Recent Runs</CardTitle>
             <CardDescription>Execution snapshots for saved workflows.</CardDescription>

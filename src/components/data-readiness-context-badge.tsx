@@ -28,7 +28,7 @@ export function DataReadinessContextBadge({
   return (
     <Link
       href={dataReadinessContextHref(context)}
-      className="hidden min-h-10 items-center gap-2 rounded-xl border border-primary/20 bg-card/65 px-3 text-xs font-medium transition hover:border-primary/40 hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex"
+      className="hidden min-h-10 items-center gap-2 rounded-xl border border-primary/20 bg-card/65 px-3 text-xs font-medium transition hover:border-primary/40 hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:flex"
       aria-label={`Open ${copy?.label ?? "Data Readiness Center"} with ${summary.actionable} actionable tasks`}
     >
       <ShieldAlert className="size-4 text-primary" aria-hidden="true" />

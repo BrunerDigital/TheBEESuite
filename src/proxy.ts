@@ -8,6 +8,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(canonicalRedirectUrl, 308);
   }
 
+  if (request.nextUrl.pathname === "/device-preview") {
+    if (process.env.NODE_ENV !== "development") {
+      return new NextResponse(null, { status: 404 });
+    }
+    return NextResponse.next();
+  }
+
   return updateSession(request);
 }
 

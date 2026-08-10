@@ -535,9 +535,12 @@ function isParentFacingUser(currentUser?: ShellUser) {
   return currentUser?.role === "PARENT_GUARDIAN" || currentUser?.role === "AUTHORIZED_PICKUP";
 }
 
-function AccountMenu({ currentUser, onLogout }: { currentUser: ShellUser; onLogout: () => void }) {
+function AccountMenu({ currentUser, onLogout, previewMode = false }: { currentUser: ShellUser; onLogout: () => void; previewMode?: boolean }) {
   const displayName = removeDemoMarkersFromUserView(currentUser.name);
   const displayEmail = removeDemoMarkersFromUserView(currentUser.email);
+  if (previewMode) {
+    return <UserAvatar name={displayName} src={currentUser.profilePhotoUrl} size="md" className="border shadow-none" />;
+  }
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Open account menu" className="overflow-hidden rounded-full p-0" />}>
@@ -560,7 +563,7 @@ function AccountMenu({ currentUser, onLogout }: { currentUser: ShellUser; onLogo
   );
 }
 
-function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
+function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { currentUser?: ShellUser; previewMode?: boolean; previewHrefBase?: string }) {
   const pathname = usePathname();
   const [selectedTarget, setSelectedTarget] = useState(pathname);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -628,6 +631,23 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
     .filter((item) => canAccessShellModule(currentUser, item.slug))
     .filter((item) => !items.some((quickItem) => quickItem.slug === item.slug))
     .slice(0, 12);
+  const bottomNavItemCount = items.length + (moreItems.length ? 1 : 0);
+
+  useEffect(() => {
+    if (currentUser?.role !== "PARENT_GUARDIAN" && currentUser?.role !== "AUTHORIZED_PICKUP") return;
+
+    function syncParentPortalTarget() {
+      const hash = window.location.hash;
+      const previewBase = currentUser?.role === "PARENT_GUARDIAN" || currentUser?.role === "AUTHORIZED_PICKUP"
+        ? "/parent-portal"
+        : "/teacher-portal";
+      setSelectedTarget(previewMode ? `${previewBase}${hash}` : `${pathname}${hash}`);
+    }
+
+    syncParentPortalTarget();
+    window.addEventListener("hashchange", syncParentPortalTarget);
+    return () => window.removeEventListener("hashchange", syncParentPortalTarget);
+  }, [currentUser?.role, pathname, previewMode]);
 
   if (!items.length) return null;
 
@@ -636,19 +656,29 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
       aria-label="Role quick navigation"
       className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden"
     >
-      <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
+      <div className={cn(
+        "mx-auto grid max-w-md items-end gap-1",
+        bottomNavItemCount <= 1 ? "grid-cols-1" : bottomNavItemCount === 2 ? "grid-cols-2" : bottomNavItemCount === 3 ? "grid-cols-3" : bottomNavItemCount === 4 ? "grid-cols-4" : "grid-cols-5",
+      )}>
         {items.map((item) => {
           const { label, href, Icon } = item;
           const featured = Boolean("featured" in item && item.featured);
           const hrefPath = href.split("#")[0];
+          const previewHref = previewMode && href.includes("#")
+            ? `${previewHrefBase ?? pathname}${href.slice(href.indexOf("#"))}`
+            : previewMode
+              ? previewHrefBase ?? pathname
+              : href;
           const selectedPath = selectedTarget.split(/[?#]/)[0];
-          const active = selectedPath === pathname
+          const active = previewMode
             ? selectedTarget === href
-            : pathname === hrefPath && !href.includes("#") && !href.includes("?");
+            : selectedPath === pathname
+              ? selectedTarget === href
+              : pathname === hrefPath && !href.includes("#") && !href.includes("?");
           return (
             <Link
               key={href}
-              href={href}
+              href={previewHref}
               aria-current={active ? "page" : undefined}
               onClick={() => setSelectedTarget(href)}
               className={cn(
@@ -662,7 +692,7 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
             </Link>
           );
         })}
-        <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+        {moreItems.length ? <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
           <SheetTrigger
             render={(
               <button
@@ -694,17 +724,17 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
               })}
             </div>
           </SheetContent>
-        </Sheet>
+        </Sheet> : null}
       </div>
     </nav>
   );
 }
 
-export function AppShell({ children, currentUser }: { children: React.ReactNode; currentUser?: ShellUser }) {
+export function AppShell({ children, currentUser, previewMode = false, previewHrefBase }: { children: React.ReactNode; currentUser?: ShellUser; previewMode?: boolean; previewHrefBase?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const readinessContext = dataReadinessContextForPath(pathname);
-  const canViewDataReadiness = canAccessShellModule(currentUser, "data-readiness");
+  const canViewDataReadiness = !previewMode && canAccessShellModule(currentUser, "data-readiness");
   const readinessRequestKey = `${currentUser?.email ?? "anonymous"}:${readinessContext ?? "global"}`;
   const [readinessState, setReadinessState] = useState<{
     key: string;
@@ -723,7 +753,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchUserEmail = currentUser?.email ?? "";
+  const searchUserEmail = previewMode ? "" : currentUser?.email ?? "";
   const displayUserName = currentUser
     ? removeDemoMarkersFromUserView(currentUser.name)
     : undefined;
@@ -734,7 +764,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   const hasRoleBottomNav = Boolean(currentUser);
   const parentFacing = isParentFacingUser(currentUser);
   const showWorkspaceTools = !parentFacing;
-  const showNotificationTools = Boolean(currentUser);
+  const showNotificationTools = Boolean(currentUser && !previewMode);
   const visualDomain = workspaceVisualDomain(pathname, currentUser?.role);
   const visibleCommandItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
@@ -886,10 +916,10 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
         Skip to workspace content
       </a>
       <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-20 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl lg:block 2xl:hidden">
-        <SidebarRail currentUser={currentUser} onLogout={logout} />
+        <SidebarRail currentUser={currentUser} onLogout={previewMode ? undefined : logout} />
       </aside>
       <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl 2xl:block">
-        <SidebarNav currentUser={currentUser} onLogout={logout} />
+        <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} />
       </aside>
       <div className="min-w-0 lg:pl-20 2xl:pl-72">
         <header className="app-header sticky top-0 z-10 min-w-0 border-b bg-background/75 backdrop-blur-xl">
@@ -904,7 +934,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
               </SheetTrigger>
               <SheetContent side="left" className="w-80 p-0">
                 <SheetTitle className="sr-only">Navigation</SheetTitle>
-                <SidebarNav currentUser={currentUser} onLogout={logout} />
+                <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} />
               </SheetContent>
             </Sheet>
             {showWorkspaceTools ? <div className="hidden min-w-0 flex-1 items-center lg:flex">
@@ -1018,39 +1048,43 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                 </Badge>
               ) : null}
               {canViewDataReadiness ? <DataReadinessContextBadge summary={readinessSummary} context={readinessContext} /> : null}
-              {currentUser ? <LiveRefreshStatus role={currentUser.role} /> : null}
+              {currentUser && !previewMode ? <LiveRefreshStatus role={currentUser.role} /> : null}
               {showWorkspaceTools ? (
-                <Dialog>
-                  <Tooltip>
-                    <DialogTrigger render={<TooltipTrigger render={<Button variant="outline" size="icon" aria-label="Open command menu" />} />}>
-                      <Command />
-                    </DialogTrigger>
-                    <TooltipContent>Open command menu</TooltipContent>
-                  </Tooltip>
-                  <DialogContent className="sm:max-w-xl">
-                    <DialogHeader>
-                      <DialogTitle>Command menu</DialogTitle>
-                      <DialogDescription>Open the next workspace area for your role.</DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-2">
-                      {visibleCommandItems.map(({ label, slug, Icon, group }) => {
-                        const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
-                        return (
-                          <Link key={slug} href={href} className="flex items-center gap-3 rounded-lg border bg-background/60 p-3 transition hover:border-primary/50 hover:bg-primary/10">
-                            <Icon className="text-primary" />
-                            <span className="min-w-0">
-                              <span className="block text-sm font-medium">{label}</span>
-                              <span className="block text-xs text-muted-foreground">{group}</span>
-                            </span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <div className="hidden lg:block">
+                  <Dialog>
+                    <Tooltip>
+                      <DialogTrigger render={<TooltipTrigger render={<Button variant="outline" size="icon" aria-label="Open command menu" />} />}>
+                        <Command />
+                      </DialogTrigger>
+                      <TooltipContent>Open command menu</TooltipContent>
+                    </Tooltip>
+                    <DialogContent className="sm:max-w-xl">
+                      <DialogHeader>
+                        <DialogTitle>Command menu</DialogTitle>
+                        <DialogDescription>Open the next workspace area for your role.</DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-2">
+                        {visibleCommandItems.map(({ label, slug, Icon, group }) => {
+                          const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
+                          return (
+                            <Link key={slug} href={href} className="flex items-center gap-3 rounded-lg border bg-background/60 p-3 transition hover:border-primary/50 hover:bg-primary/10">
+                              <Icon className="text-primary" />
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium">{label}</span>
+                                <span className="block text-xs text-muted-foreground">{group}</span>
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               ) : null}
               {canViewAccountBalances(currentUser) ? (
-                <AccountsReceivableSheet executive={isExecutiveAccountBalanceView(currentUser)} />
+                <div className="hidden lg:block">
+                  <AccountsReceivableSheet executive={isExecutiveAccountBalanceView(currentUser)} />
+                </div>
               ) : null}
               {showNotificationTools ? <NotificationDropdown currentUser={currentUser} /> : null}
               <Button variant="outline" size="icon" aria-label="Toggle theme" onClick={toggleTheme}>
@@ -1060,10 +1094,10 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
               {currentUser ? (
                 <>
                   <div className="sm:hidden">
-                    <AccountMenu currentUser={currentUser} onLogout={logout} />
+                    <AccountMenu currentUser={currentUser} onLogout={logout} previewMode={previewMode} />
                   </div>
                   <div className="hidden items-center gap-2 sm:flex">
-                    <AccountMenu currentUser={currentUser} onLogout={logout} />
+                    <AccountMenu currentUser={currentUser} onLogout={logout} previewMode={previewMode} />
                     <div className="hidden rounded-lg border bg-card/70 px-3 py-1.5 text-right 2xl:block">
                       <div className="text-xs font-medium leading-none">{displayUserName}</div>
                       <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>
@@ -1092,7 +1126,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
           {children}
         </main>
       </div>
-      <RoleBottomNav currentUser={currentUser} />
+      <RoleBottomNav currentUser={currentUser} previewMode={previewMode} previewHrefBase={previewHrefBase} />
     </div>
     </SchoolTimeZoneProvider>
   );

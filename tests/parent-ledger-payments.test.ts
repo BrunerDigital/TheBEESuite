@@ -115,3 +115,23 @@ test("the parent portal keeps latest activity accurate while browsing older ledg
   assert.match(workspace, /Page \{ledgerPagination\.page\}/);
   assert.match(workspace, /ledgerPage=\$\{ledgerPagination\.page \+ 1\}/);
 });
+
+
+test("parent account payments support custom partial amounts for split-payment workflows", () => {
+  const workspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
+  const visibility = readFileSync("src/lib/parent-billing-visibility.ts", "utf8");
+
+  assert.match(workspace, /Amount to pay\{parentBalanceReviewRequired \? "" : " \(optional\)"\}/);
+  assert.match(workspace, /split the balance across payment methods/);
+  assert.match(workspace, /amountCents: accountPaymentRequestCents/);
+  assert.match(workspace, /accountPaymentAmountExceedsBalance/);
+  assert.match(visibility, /requestedAmountCents > 0[\s\S]*Math\.min\(requestedAmountCents, maximumParentPaymentCents\)/);
+});
+
+test("Stripe family-balance application atomically claims a draft payment", () => {
+  const webhook = readFileSync("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+
+  assert.match(webhook, /payment\.updateMany\(\{[\s\S]*status: PaymentStatus\.DRAFT/);
+  assert.match(webhook, /claimedPayment\.count !== 1/);
+  assert.match(webhook, /ignoredReason = "payment_already_applied"/);
+});

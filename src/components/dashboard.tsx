@@ -1681,7 +1681,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                           title={live.accountsReceivable ? "School account balances" : "Accounts receivable by school"}
                           description={live.accountsReceivable
                             ? "Current family accounts, with balances owed listed first"
-                            : "Family balances across every school visible to this executive login"}
+                            : "Current-family balances across every school visible to this executive login"}
                         >
                           {live.accountsReceivable ? (
                             <AccountsReceivablePanel snapshot={live.accountsReceivable} />

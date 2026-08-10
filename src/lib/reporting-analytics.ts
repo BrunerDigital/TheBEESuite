@@ -518,6 +518,7 @@ export function buildBillingReports({
     dueDate: Date;
     status: PaymentStatus;
     totalCents: number;
+    isCurrentFamily: boolean;
     billingAccount: { family: { centerId: string | null } };
   }>;
   payments: Array<{
@@ -557,7 +558,7 @@ export function buildBillingReports({
     const row = ensureRow(invoice.createdAt, invoice.billingAccount.family.centerId);
     row.invoiceCents = addCents(row.invoiceCents, invoice.totalCents);
     row.invoiceCount += 1;
-    if (invoice.status === PaymentStatus.OPEN || invoice.status === PaymentStatus.FAILED) {
+    if (invoice.isCurrentFamily && (invoice.status === PaymentStatus.OPEN || invoice.status === PaymentStatus.FAILED)) {
       row.openCents = addCents(row.openCents, invoice.totalCents);
       if (invoice.dueDate < now) row.overdueCents = addCents(row.overdueCents, invoice.totalCents);
     }
@@ -801,7 +802,20 @@ export async function buildAnalyticsReportData(
         dueDate: true,
         status: true,
         totalCents: true,
-        billingAccount: { select: { family: { select: { centerId: true } } } },
+        billingAccount: {
+          select: {
+            family: {
+              select: {
+                centerId: true,
+                children: {
+                  where: currentlyEnrolledChildWhere(),
+                  take: 1,
+                  select: { id: true },
+                },
+              },
+            },
+          },
+        },
       },
     }),
     prisma.payment.findMany({
@@ -856,8 +870,12 @@ export async function buildAnalyticsReportData(
   const enrollmentStatus = buildEnrollmentStatusReportRows(enrollmentChildren, centerById, endDate);
   const { leadSources, funnelStages } = buildLeadReports(leads, centerById);
   const attendanceTrends = buildAttendanceReports({ attendanceRecords, checkLogs, centerById, daily });
-  const billing = buildBillingReports({ invoices, payments, centerById, interval: daily ? "daily" : "monthly", now });
-  const weeklyBillingAndPayments = buildBillingReports({ invoices, payments, centerById, interval: "weekly", now });
+  const reportInvoices = invoices.map((invoice) => ({
+    ...invoice,
+    isCurrentFamily: invoice.billingAccount.family.children.length > 0,
+  }));
+  const billing = buildBillingReports({ invoices: reportInvoices, payments, centerById, interval: daily ? "daily" : "monthly", now });
+  const weeklyBillingAndPayments = buildBillingReports({ invoices: reportInvoices, payments, centerById, interval: "weekly", now });
   const weeklyBilling = weeklyBillingAndPayments.filter((row) => row.invoiceCount > 0);
   const weeklyPayments = weeklyBillingAndPayments.filter((row) => row.paymentCount > 0);
   const messageRows = buildMessageReports(messages, centerById);
@@ -971,7 +989,7 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
     return {
       title: "Billing Revenue And AR",
       traceability,
-      headers: ["Period", "Center", "Invoices", "Invoice total", "Paid", "Open AR", "Overdue AR", "Payments"],
+      headers: ["Period", "Center", "Invoices", "Invoice total", "Paid", "Current-family open AR", "Current-family overdue AR", "Payments"],
       rows: data.billing.map((row) => [
         row.period,
         row.centerLabel,
@@ -988,7 +1006,7 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
     return {
       title: "Weekly Billing Report",
       traceability,
-      headers: ["Week", "Center", "Invoices", "Billed", "Open AR", "Overdue AR"],
+      headers: ["Week", "Center", "Invoices", "Billed", "Current-family open AR", "Current-family overdue AR"],
       rows: data.weeklyBilling.map((row) => [
         row.period,
         row.centerLabel,

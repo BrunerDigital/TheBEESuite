@@ -101,6 +101,7 @@ test("weekly billing and payment rows use Monday-Sunday center-local periods", (
         dueDate: new Date("2026-06-10T12:00:00.000Z"),
         status: "OPEN",
         totalCents: 12500,
+        isCurrentFamily: true,
         billingAccount: { family: { centerId: "center_1" } },
       },
     ],
@@ -123,6 +124,39 @@ test("weekly billing and payment rows use Monday-Sunday center-local periods", (
   ]);
 });
 
+test("billing reports retain historical revenue while excluding past-family debt from open AR", () => {
+  const centerById = new Map([["center_1", emptyReportData.centers[0]]]);
+  const rows = buildBillingReports({
+    invoices: [
+      {
+        createdAt: new Date("2026-06-08T12:00:00.000Z"),
+        dueDate: new Date("2026-06-09T12:00:00.000Z"),
+        status: "OPEN",
+        totalCents: 12500,
+        isCurrentFamily: true,
+        billingAccount: { family: { centerId: "center_1" } },
+      },
+      {
+        createdAt: new Date("2026-06-08T12:00:00.000Z"),
+        dueDate: new Date("2026-06-09T12:00:00.000Z"),
+        status: "OPEN",
+        totalCents: 9900,
+        isCurrentFamily: false,
+        billingAccount: { family: { centerId: "center_1" } },
+      },
+    ],
+    payments: [],
+    centerById,
+    interval: "weekly",
+    now: new Date("2026-06-11T12:00:00.000Z"),
+  });
+
+  assert.equal(rows[0]?.invoiceCount, 2);
+  assert.equal(rows[0]?.invoiceCents, 22400);
+  assert.equal(rows[0]?.openCents, 12500);
+  assert.equal(rows[0]?.overdueCents, 12500);
+});
+
 test("weekly billing and payment exports stay separate", () => {
   const weeklyRow = {
     period: "2026-06-01 to 2026-06-07",
@@ -140,11 +174,11 @@ test("weekly billing and payment exports stay separate", () => {
   const billingCsv = reportRowsToCsv(rowsForReportKind(data, "weekly_billing"));
   const paymentCsv = reportRowsToCsv(rowsForReportKind(data, "weekly_payments"));
   assert.match(billingCsv, /Weekly Billing Report/);
-  assert.match(billingCsv, /"Invoices","Billed","Open AR","Overdue AR"/);
+  assert.match(billingCsv, /"Invoices","Billed","Current-family open AR","Current-family overdue AR"/);
   assert.doesNotMatch(billingCsv, /Payments,Paid/);
   assert.match(paymentCsv, /Weekly Payment Report/);
   assert.match(paymentCsv, /"Payments","Paid"/);
-  assert.doesNotMatch(paymentCsv, /Open AR/);
+  assert.doesNotMatch(paymentCsv, /open AR/);
 });
 
 test("enrollment status rows calculate age as of the report date and retain missing DOB exceptions", () => {

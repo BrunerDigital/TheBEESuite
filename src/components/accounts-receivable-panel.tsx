@@ -67,13 +67,13 @@ export function AccountsReceivablePanel({
     <div className={cn("grid min-h-0 gap-4", className)}>
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         <div className="rounded-xl border bg-background/60 p-3">
-          <div className="text-xs text-muted-foreground">Total owed</div>
+          <div className="text-xs text-muted-foreground">Current-family owed</div>
           <div className="mt-1 text-lg font-semibold text-rose-700 dark:text-rose-300">
             {money(snapshot.totalOwedCents)}
           </div>
         </div>
         <div className="rounded-xl border bg-background/60 p-3">
-          <div className="text-xs text-muted-foreground">Families owing</div>
+          <div className="text-xs text-muted-foreground">Current families owing</div>
           <div className="mt-1 text-lg font-semibold">{snapshot.owingAccountCount.toLocaleString()}</div>
         </div>
         <div className="rounded-xl border bg-background/60 p-3">
@@ -83,7 +83,7 @@ export function AccountsReceivablePanel({
           </div>
         </div>
         <div className="rounded-xl border bg-background/60 p-3">
-          <div className="text-xs text-muted-foreground">All accounts</div>
+          <div className="text-xs text-muted-foreground">Current-family accounts</div>
           <div className="mt-1 text-lg font-semibold">{snapshot.totalAccountCount.toLocaleString()}</div>
         </div>
       </div>
@@ -184,7 +184,7 @@ export function AccountsReceivablePanel({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Positive balances are owed, negative balances are family credits, and zero balances are current.
+        This view includes currently enrolled families only. Positive balances are owed, negative balances are family credits, and zero balances are current.
       </p>
     </div>
   );
@@ -213,13 +213,13 @@ export function ExecutiveAccountsReceivablePanel({
     <div className={cn("grid min-h-0 gap-4", className)}>
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         <div className="rounded-xl border bg-background/60 p-3">
-          <div className="text-xs text-muted-foreground">Total owed</div>
+          <div className="text-xs text-muted-foreground">Current-family owed</div>
           <div className="mt-1 text-lg font-semibold text-rose-700 dark:text-rose-300">
             {money(summary.totalOwedCents)}
           </div>
         </div>
         <div className="rounded-xl border bg-background/60 p-3">
-          <div className="text-xs text-muted-foreground">Families owing</div>
+          <div className="text-xs text-muted-foreground">Current families owing</div>
           <div className="mt-1 text-lg font-semibold">{summary.owingAccountCount.toLocaleString()}</div>
         </div>
         <div className="rounded-xl border bg-background/60 p-3">
@@ -227,7 +227,7 @@ export function ExecutiveAccountsReceivablePanel({
           <div className="mt-1 text-lg font-semibold">{schoolsOwing.toLocaleString()}</div>
         </div>
         <div className="rounded-xl border bg-background/60 p-3">
-          <div className="text-xs text-muted-foreground">Overdue families</div>
+          <div className="text-xs text-muted-foreground">Overdue current families</div>
           <div className="mt-1 text-lg font-semibold">{summary.overdueAccountCount.toLocaleString()}</div>
         </div>
       </div>

@@ -99,7 +99,7 @@ export const kpis = [
   { label: "Occupancy", value: "72.2%", trend: "+3.1% vs last month", tone: "amber" },
   { label: "New leads", value: "30", trend: "12 high-fit", tone: "violet" },
   { label: "Tours today", value: "5", trend: "2 need prep", tone: "sky" },
-  { label: "Outstanding balances", value: "$18.6k", trend: "8 overdue", tone: "rose" },
+  { label: "Outstanding balances", value: "$18.6k", trend: "Current family balances", tone: "rose" },
   { label: "Staff present", value: "13/14", trend: "Ratios healthy", tone: "emerald" },
   { label: "Incidents to review", value: "5", trend: "3 parent acks", tone: "amber" },
 ];

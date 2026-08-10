@@ -168,6 +168,7 @@ test("director and executive dashboard billing widgets use current-family balanc
   assert.match(dashboardPage, /accountsReceivableFamilySelect/);
   assert.match(dashboardPage, /accountsReceivableSummaryFamilySelect/);
   assert.equal((dashboardPage.match(/(?:where: |family: )currentFamilyWhere,/g) ?? []).length >= 3, true);
+  assert.match(dashboardPage, /family: currentFamilyWhere,[\s\S]*balanceCents: \{ gt: 0 \}/);
   assert.match(
     aiCommandRoute,
     /const currentFamilyWhere:[\s\S]*children: \{ some: currentlyEnrolledChildWhere\(\) \}[\s\S]*const openInvoiceWhere:[\s\S]*billingAccount: \{ family: currentFamilyWhere \}/,
@@ -180,6 +181,27 @@ test("director and executive dashboard billing widgets use current-family balanc
   assert.match(dashboard, /dashboard-billing-account-balances/);
   assert.match(dashboard, /dashboard-\$\{lens\}-executive-account-balances/);
   assert.match(dashboard, /Current family accounts, with balances owed listed first/);
+  assert.match(dashboard, /Current-family balances across every school visible to this executive login/);
   assert.match(sheet, /Current family accounts across your visible schools/);
   assert.match(sheet, /Current family accounts in your school/);
+});
+
+test("billing, analytics, and payment readiness exclude past families from active balance uses", () => {
+  const scope = readFileSync("src/lib/corporate-view-scope.ts", "utf8");
+  const livePage = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const liveUi = readFileSync("src/components/live-ops-pages.tsx", "utf8");
+  const reporting = readFileSync("src/lib/reporting-analytics.ts", "utf8");
+
+  assert.match(scope, /visibleCurrentFamilyWhere[\s\S]*children: \{ some: currentlyEnrolledChildWhere\(\) \}/);
+  assert.match(scope, /visibleFormerFamilyWhere[\s\S]*children: \{ none: currentlyEnrolledChildWhere\(\) \}/);
+  assert.match(livePage, /if \(slug === "billing-invoices"\)[\s\S]*visibleCurrentInvoiceWhere\(visibleCenterIds\)/);
+  assert.match(livePage, /currentFamilyOutstandingCents[\s\S]*Math\.max\(account\.balanceCents, 0\)/);
+  assert.match(livePage, /formerFamilyBalanceSummary/);
+  assert.match(livePage, /if \(slug === "payments"\)[\s\S]*visibleCurrentInvoiceWhere\(visibleCenterIds\)/);
+  assert.match(livePage, /if \(slug === "analytics"\)[\s\S]*visibleCurrentBillingAccountWhere\(visibleCenterIds\)/);
+  assert.match(livePage, /buildFtePrefills[\s\S]*billingAccount\.findMany\([\s\S]*children: \{ some: currentlyEnrolledChildWhere\(\) \}/);
+  assert.match(liveUi, /Past family balances — excluded from current outstanding/);
+  assert.match(liveUi, /Past family — historical account/);
+  assert.match(reporting, /invoice\.isCurrentFamily && \(invoice\.status === PaymentStatus\.OPEN/);
+  assert.match(reporting, /Current-family open AR/);
 });

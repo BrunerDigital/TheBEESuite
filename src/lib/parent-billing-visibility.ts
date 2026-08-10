@@ -71,6 +71,7 @@ export function parentPaymentAmountCents(input: {
     : Math.max(0, parentVisibleBillingBalanceCents(input));
   const requestedAmountCents = Math.max(0, Math.round(input.requestedAmountCents ?? 0));
 
+  if (input.responsibilityReviewRequired && requestedAmountCents <= 0) return 0;
   return requestedAmountCents > 0
     ? Math.min(requestedAmountCents, maximumParentPaymentCents)
     : maximumParentPaymentCents;

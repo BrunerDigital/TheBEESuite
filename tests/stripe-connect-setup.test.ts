@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   completeStripeConnectedAccountBusinessProfile,
+  createStripeAccountLink,
   createStripeConnectedAccount,
   createStripeExpressDashboardLoginLink,
   createStripePayoutBankSelectionLink,
@@ -342,6 +343,27 @@ test("Stripe payout bank selection falls back to onboarding before the Express D
       });
     }
 
+    if (requestedUrls.length === 2) {
+      return new Response(JSON.stringify({
+        id: "acct_123",
+        configuration: {
+          customer: {},
+          merchant: {},
+          recipient: {},
+        },
+        defaults: {
+          responsibilities: {
+            fees_collector: "stripe",
+            losses_collector: "stripe",
+          },
+        },
+        requirements: {},
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({
       url: "https://connect.stripe.com/setup/acct_123/secure",
     }), {
@@ -362,7 +384,61 @@ test("Stripe payout bank selection falls back to onboarding before the Express D
     assert.equal(result.mode, "onboarding");
     assert.equal(result.url, "https://connect.stripe.com/setup/acct_123/secure");
     assert.equal(requestedUrls[0], "https://api.stripe.com/v1/accounts/acct_123/login_links");
-    assert.equal(requestedUrls[1], "https://api.stripe.com/v2/core/account_links");
+    assert.match(requestedUrls[1], /^https:\/\/api\.stripe\.com\/v2\/core\/accounts\/acct_123\?/);
+    assert.equal(requestedUrls[2], "https://api.stripe.com/v2/core/account_links");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe account links match the configurations applied to the Accounts v2 account", async () => {
+  const originalFetch = globalThis.fetch;
+  let accountLinkBody: Record<string, unknown> = {};
+
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    if (String(url).startsWith("https://api.stripe.com/v2/core/accounts/acct_configured?")) {
+      return new Response(JSON.stringify({
+        id: "acct_configured",
+        configuration: {
+          customer: { capabilities: { automatic_indirect_tax: { requested: true } } },
+          merchant: { capabilities: { card_payments: { requested: true } } },
+          recipient: { capabilities: { stripe_balance: { stripe_transfers: { requested: true } } } },
+        },
+        defaults: {
+          responsibilities: {
+            fees_collector: "stripe",
+            losses_collector: "stripe",
+          },
+        },
+        requirements: {},
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    assert.equal(String(url), "https://api.stripe.com/v2/core/account_links");
+    accountLinkBody = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+    return new Response(JSON.stringify({
+      url: "https://connect.stripe.com/setup/acct_configured/secure",
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeAccountLink({
+      accountId: "acct_configured",
+      refreshUrl: "https://thebeesuite.io/api/billing/connect/refresh?centerId=center_123",
+      returnUrl: "https://thebeesuite.io/stripe-reauthorization?center=center_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+
+    assert.equal(result.ok, true);
+    const useCase = asRecord(accountLinkBody.use_case);
+    const onboarding = asRecord(useCase.account_onboarding);
+    assert.deepEqual(onboarding.configurations, ["customer", "merchant", "recipient"]);
   } finally {
     globalThis.fetch = originalFetch;
   }

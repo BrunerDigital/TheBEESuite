@@ -272,6 +272,7 @@ async function main() {
       sourceAccount: source.account,
       oldTargetAccountId: targetAccountId,
       setup,
+      storedReservationAt: storedReservationAt || null,
       failedReservationAt: hasFailedReservation ? failedReservationAt?.toISOString() || null : null,
     });
   }
@@ -286,6 +287,7 @@ async function main() {
     centerId: plan.center.id,
     sourceAccountId: plan.sourceAccountId,
     oldTargetAccountId: plan.oldTargetAccountId,
+    storedReservationAt: plan.storedReservationAt,
     failedReservationAt: plan.failedReservationAt,
   }));
   const fingerprint = createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
@@ -312,7 +314,8 @@ async function main() {
     if (
       !fresh ||
       readStripeConnectedAccountId(freshFields) !== plan.sourceAccountId ||
-      clean(freshFields.stripeConnectMigrationTargetAccountId) !== plan.oldTargetAccountId
+      clean(freshFields.stripeConnectMigrationTargetAccountId) !== plan.oldTargetAccountId ||
+      (clean(freshFields.stripeConnectMigrationLastOnboardingAt) || null) !== plan.storedReservationAt
     ) {
       throw new Error(`${plan.center.name}: the production mapping changed after preview.`);
     }
@@ -416,7 +419,8 @@ async function main() {
     if (
       !beforeSwap ||
       readStripeConnectedAccountId(beforeSwapFields) !== plan.sourceAccountId ||
-      clean(beforeSwapFields.stripeConnectMigrationTargetAccountId) !== plan.oldTargetAccountId
+      clean(beforeSwapFields.stripeConnectMigrationTargetAccountId) !== plan.oldTargetAccountId ||
+      (clean(beforeSwapFields.stripeConnectMigrationLastOnboardingAt) || null) !== plan.storedReservationAt
     ) {
       throw new Error(`${plan.center.name}: the production mapping changed before the database swap.`);
     }
@@ -453,7 +457,7 @@ async function main() {
         readStripeConnectedAccountId(transactionFields) !== plan.sourceAccountId ||
         clean(transactionFields.stripeConnectMigrationTargetAccountId) !== plan.oldTargetAccountId ||
         BLOCKED_MIGRATION_STATUSES.has(clean(transactionFields.stripeConnectMigrationStatus)) ||
-        clean(transactionFields.stripeConnectMigrationLastOnboardingAt)
+        (clean(transactionFields.stripeConnectMigrationLastOnboardingAt) || null) !== plan.storedReservationAt
       ) {
         throw new Error(`${plan.center.name}: a concurrent migration update stopped the database swap.`);
       }
@@ -468,7 +472,11 @@ async function main() {
           stripeConnectMigrationStatus: "prepared",
           stripeConnectMigrationTargetAccountId: newTargetAccountId,
           stripeConnectMigrationPreviousTargetAccountId: plan.oldTargetAccountId,
+          stripeConnectMigrationPreviousTargetLastOnboardingAt: plan.storedReservationAt,
           stripeConnectMigrationTargetReplacedAt: now,
+          stripeConnectMigrationLastOnboardingAt: null,
+          stripeConnectMigrationLastOnboardingFailureAt: null,
+          stripeConnectMigrationLastOnboardingFailureCode: null,
           stripeConnectMigrationTargetPayoutHoldStatus: "manual_confirmed",
           stripeConnectMigrationTargetPayoutBankName: null,
           stripeConnectMigrationTargetPayoutBankLast4: null,

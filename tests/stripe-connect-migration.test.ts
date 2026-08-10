@@ -144,6 +144,7 @@ test("Full Dashboard target replacement is fingerprinted, idempotent, and preser
   assert.match(replacement, /FAILED_RESERVATION_COOLDOWN_MS/);
   assert.match(replacement, /ONBOARDING_OPENED_ACTION/);
   assert.match(replacement, /stripeConnectMigrationLastOnboardingAt/);
+  assert.match(replacement, /storedReservationAt: plan\.storedReservationAt/);
   assert.match(replacement, /billing\.connect\.migration\.onboarding_reserved/);
   assert.match(replacement, /metadata: \{ path: \["targetAccountId"\], equals:/);
   assert.match(replacement, /Prisma\.TransactionIsolationLevel\.Serializable/);
@@ -154,6 +155,9 @@ test("Full Dashboard target replacement is fingerprinted, idempotent, and preser
   assert.match(replacement, /bee-suite-full-dashboard-replacement-/);
   assert.match(replacement, /created\.account\.dashboard !== "full"/);
   assert.match(replacement, /stripeConnectMigrationPreviousTargetAccountId/);
+  assert.match(replacement, /stripeConnectMigrationPreviousTargetLastOnboardingAt: plan\.storedReservationAt/);
+  assert.match(replacement, /stripeConnectMigrationLastOnboardingAt: null/);
+  assert.match(replacement, /stripeConnectMigrationLastOnboardingFailureAt: null/);
   assert.match(replacement, /stripeConnectMigrationParentPaymentsAccountId: plan\.sourceAccountId/);
   assert.match(replacement, /readStripeConnectedAccountId\(afterSwapFields\) !== plan\.sourceAccountId/);
   assert.match(replacement, /target_replaced_after_failed_link/);

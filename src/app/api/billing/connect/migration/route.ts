@@ -25,7 +25,11 @@ function jsonObject(value: unknown): Prisma.JsonObject {
 
 async function authorizedCenter(request: NextRequest, method: "GET" | "POST") {
   const user = await getCurrentUser();
-  const body = method === "POST" ? await request.json().catch(() => ({})) as { centerId?: unknown; authorizedRepresentative?: unknown } : {};
+  const body = method === "POST" ? await request.json().catch(() => ({})) as {
+    centerId?: unknown;
+    authorizedRepresentative?: unknown;
+    returnToCorporatePortfolio?: unknown;
+  } : {};
   if (!user) return { response: NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 }), user: null, center: null, body };
   if (!canManageBilling(user) && !canManageOperations(user)) {
     return { response: NextResponse.json({ ok: false, error: "Stripe migration is not allowed for this role." }, { status: 403 }), user: null, center: null, body };
@@ -132,8 +136,10 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: target.error || "The prepared Stripe account has the wrong fee or loss responsibility." }, { status: target.configured ? 409 : 503 });
   }
   const baseUrl = getSecurePaymentAppBaseUrl(request.url);
-  const returnUrl = `${baseUrl}/stripe-reauthorization?stripeMigration=return&center=${encodeURIComponent(center.id)}`;
-  const refreshUrl = `${baseUrl}/api/billing/connect/migration/refresh?centerId=${encodeURIComponent(center.id)}`;
+  const returnToCorporatePortfolio = auth.body.returnToCorporatePortfolio === true;
+  const portfolioQuery = returnToCorporatePortfolio ? "&portfolio=corporate" : "";
+  const returnUrl = `${baseUrl}/stripe-reauthorization?stripeMigration=return&center=${encodeURIComponent(center.id)}${portfolioQuery}`;
+  const refreshUrl = `${baseUrl}/api/billing/connect/migration/refresh?centerId=${encodeURIComponent(center.id)}${portfolioQuery}`;
   const link = await createStripeAccountLink({ accountId: migration.targetAccountId, refreshUrl, returnUrl, tenantId: user.tenantId });
   if (!link.ok || !link.url) {
     return NextResponse.json({ ok: false, error: link.error || "The secure reauthorization link could not be opened." }, { status: link.configured ? 502 : 503 });
@@ -147,7 +153,14 @@ async function POSTHandler(request: NextRequest) {
     action: "billing.connect.migration.onboarding_opened",
     resource: "Center",
     resourceId: center.id,
-    metadata: { sourceAccountId: migration.sourceAccountId, targetAccountId: migration.targetAccountId, authorizedRepresentativeConfirmed: true, linkStored: false, linkSent: false },
+    metadata: {
+      sourceAccountId: migration.sourceAccountId,
+      targetAccountId: migration.targetAccountId,
+      authorizedRepresentativeConfirmed: true,
+      returnToCorporatePortfolio,
+      linkStored: false,
+      linkSent: false,
+    },
   });
   return NextResponse.json({ ok: true, url: link.url, centerId: center.id });
 }

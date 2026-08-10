@@ -17,6 +17,8 @@ function settingsUrl(baseUrl: string, centerId?: string, status = "refresh_faile
 
 async function GETHandler(request: NextRequest) {
   const baseUrl = getSecurePaymentAppBaseUrl(request.url);
+  const returnToCorporatePortfolio = request.nextUrl.searchParams.get("portfolio") === "corporate";
+  const portfolioQuery = returnToCorporatePortfolio ? "&portfolio=corporate" : "";
   const user = await getCurrentUser();
   if (!user) {
     const loginUrl = new URL("/directors", baseUrl);
@@ -30,8 +32,8 @@ async function GETHandler(request: NextRequest) {
   if (!center) return NextResponse.redirect(settingsUrl(baseUrl, centerId, "not_found"));
   const migration = readStripeConnectMigration(center.customFields);
   if (!migration.targetAccountId || migration.cutoverAt) return NextResponse.redirect(settingsUrl(baseUrl, center.id, "not_prepared"));
-  const returnUrl = `${baseUrl}/stripe-reauthorization?stripeMigration=return&center=${encodeURIComponent(center.id)}`;
-  const refreshUrl = `${baseUrl}/api/billing/connect/migration/refresh?centerId=${encodeURIComponent(center.id)}`;
+  const returnUrl = `${baseUrl}/stripe-reauthorization?stripeMigration=return&center=${encodeURIComponent(center.id)}${portfolioQuery}`;
+  const refreshUrl = `${baseUrl}/api/billing/connect/migration/refresh?centerId=${encodeURIComponent(center.id)}${portfolioQuery}`;
   const link = await createStripeAccountLink({ accountId: migration.targetAccountId, refreshUrl, returnUrl, tenantId: user.tenantId });
   if (!link.ok || !link.url) return NextResponse.redirect(settingsUrl(baseUrl, center.id, link.configured ? "refresh_failed" : "stripe_missing"));
   return NextResponse.redirect(link.url);

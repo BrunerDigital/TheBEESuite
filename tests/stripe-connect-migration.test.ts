@@ -71,6 +71,7 @@ test("branded invitation accurately separates Stripe verification from program e
 
 test("migration routes protect the source bank and generate target links only after authenticated confirmation", () => {
   const migrationRoute = readFileSync("src/app/api/billing/connect/migration/route.ts", "utf8");
+  const connectStatusRoute = readFileSync("src/app/api/billing/connect/status/route.ts", "utf8");
   const oldPayoutRoute = readFileSync("src/app/api/billing/connect/payout-account/route.ts", "utf8");
   const oldOnboardRoute = readFileSync("src/app/api/billing/connect/onboard/route.ts", "utf8");
   const softwareRoute = readFileSync("src/app/api/billing/software-payment-method/route.ts", "utf8");
@@ -81,6 +82,8 @@ test("migration routes protect the source bank and generate target links only af
   assert.match(migrationRoute, /customFields: \{ equals: fields as Prisma\.InputJsonValue \}/);
   assert.equal((migrationRoute.match(/customFields: \{ equals: fields as Prisma\.InputJsonValue \}/g) || []).length, 2);
   assert.match(migrationRoute, /Stripe migration changed while status was refreshing/);
+  assert.match(connectStatusRoute, /customFields: \{ equals: existingFields as Prisma\.InputJsonValue \}/);
+  assert.match(connectStatusRoute, /Stripe connection changed while status was refreshing/);
   assert.ok(migrationRoute.indexOf("stripeConnectMigrationLastOnboardingAt") < migrationRoute.indexOf("const link = await createStripeAccountLink"));
   assert.match(oldPayoutRoute, /existing payout bank remains untouched/);
   assert.match(oldOnboardRoute, /parent payments remain on the current account until cutover/i);

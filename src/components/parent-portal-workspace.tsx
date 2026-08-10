@@ -556,13 +556,15 @@ export function ParentPortalWorkspace({
   );
   const firstPendingOpenInvoice = pendingOpenInvoices[0] ?? null;
   const accountPaymentAmountCents = paymentAmountCents(accountPaymentAmountDollars);
+  const accountPaymentAmountEntered = accountPaymentAmountDollars.trim() !== "";
+  const accountPaymentAmountInvalid = accountPaymentAmountEntered && accountPaymentAmountCents <= 0;
   const accountPaymentAmountExceedsBalance = !parentBalanceReviewRequired
     && accountPaymentAmountCents > balanceCents;
-  const accountPaymentRequestCents = accountPaymentAmountCents > 0
+  const accountPaymentRequestCents = accountPaymentAmountEntered
     ? accountPaymentAmountCents
     : balanceCents;
-  const accountPaymentAmountRequired = parentBalanceReviewRequired && accountPaymentAmountCents <= 0;
-  const accountPaymentDisabled = accountPaymentAmountRequired || accountPaymentAmountExceedsBalance;
+  const accountPaymentAmountRequired = parentBalanceReviewRequired && !accountPaymentAmountEntered;
+  const accountPaymentDisabled = accountPaymentAmountRequired || accountPaymentAmountInvalid || accountPaymentAmountExceedsBalance;
   const showFamilyPaymentPanel = parentBalanceReviewRequired
     || Boolean(nextOpenInvoice)
     || (balanceCents > 0 && openInvoices.length === 0);
@@ -790,6 +792,9 @@ export function ParentPortalWorkspace({
     }
     if (accountPaymentAmountRequired) {
       return showError("Enter the amount you want to pay toward your account.");
+    }
+    if (accountPaymentAmountInvalid) {
+      return showError("Payment amount must be greater than zero.");
     }
     if (accountPaymentAmountExceedsBalance) {
       return showError("Payment amount cannot exceed your current family balance.");
@@ -1723,14 +1728,16 @@ export function ParentPortalWorkspace({
                       placeholder={parentBalanceReviewRequired ? "0.00" : money(balanceCents)}
                       value={accountPaymentAmountDollars}
                       onChange={(event) => setAccountPaymentAmountDollars(event.target.value)}
-                      aria-invalid={accountPaymentAmountExceedsBalance}
+                      aria-invalid={accountPaymentAmountInvalid || accountPaymentAmountExceedsBalance}
                     />
                     <p className="text-xs text-muted-foreground">
                       {parentBalanceReviewRequired
                         ? "Enter the family portion you want to pay."
                         : "Enter a custom amount to split the balance across payment methods, or leave blank to pay the full balance."}
                     </p>
-                    {accountPaymentAmountExceedsBalance ? (
+                    {accountPaymentAmountInvalid ? (
+                      <p className="text-xs text-destructive">Payment amount must be greater than zero.</p>
+                    ) : accountPaymentAmountExceedsBalance ? (
                       <p className="text-xs text-destructive">Amount cannot exceed {money(balanceCents)}.</p>
                     ) : null}
                   </div>

@@ -18,6 +18,7 @@ const CLASSROOM_MERGES = [
 ] as const;
 
 type JsonRecord = Record<string, Prisma.JsonValue>;
+type PlanClient = Pick<Prisma.TransactionClient, "center" | "invoice" | "classroom" | "payment" | "billingAccount">;
 
 function record(value: Prisma.JsonValue | null | undefined): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -71,8 +72,8 @@ function option(argv: string[], name: string) {
   return index >= 0 ? String(argv[index + 1] ?? "").trim() : "";
 }
 
-async function buildPlan() {
-  const center = await prisma.center.findUnique({
+async function buildPlan(db: PlanClient = prisma) {
+  const center = await db.center.findUnique({
     where: { id: CENTER_ID },
     select: {
       id: true,
@@ -85,7 +86,7 @@ async function buildPlan() {
   invariant(center.status === "active", `Expected an active center; found ${center.status}.`);
 
   const [invoices, classrooms, paymentCount, accountBalances] = await Promise.all([
-    prisma.invoice.findMany({
+    db.invoice.findMany({
       where: {
         billingAccount: { family: { centerId: CENTER_ID } },
         sourceSystem: "procare",
@@ -105,7 +106,7 @@ async function buildPlan() {
         ledgerEntries: { select: { id: true, type: true, amountCents: true }, orderBy: { id: "asc" } },
       },
     }),
-    prisma.classroom.findMany({
+    db.classroom.findMany({
       where: { centerId: CENTER_ID },
       orderBy: { id: "asc" },
       select: {
@@ -125,8 +126,8 @@ async function buildPlan() {
         },
       },
     }),
-    prisma.payment.count({ where: { billingAccount: { family: { centerId: CENTER_ID } } } }),
-    prisma.billingAccount.findMany({
+    db.payment.count({ where: { billingAccount: { family: { centerId: CENTER_ID } } } }),
+    db.billingAccount.findMany({
       where: { family: { centerId: CENTER_ID } },
       orderBy: { id: "asc" },
       select: { id: true, balanceCents: true },
@@ -211,7 +212,10 @@ async function applyPlan(initial: Awaited<ReturnType<typeof buildPlan>>) {
   const paymentCountBefore = initial.paymentCount;
 
   await prisma.$transaction(async (tx) => {
-    for (const invoice of initial.invoices) {
+    const current = await buildPlan(tx);
+    invariant(current.fingerprint === initial.fingerprint, "Canton state changed inside the apply transaction; rerun the dry run and review the new fingerprint.");
+
+    for (const invoice of current.invoices) {
       if (invoice.status === PaymentStatus.VOID) continue;
       invariant(invoice.status === PaymentStatus.OPEN, `${invoice.number} changed to ${invoice.status}.`);
       const update = await tx.invoice.updateMany({
@@ -235,7 +239,7 @@ async function applyPlan(initial: Awaited<ReturnType<typeof buildPlan>>) {
       invariant(update.count === 1, `${invoice.number} changed during the apply transaction.`);
       await tx.auditLog.create({
         data: {
-          tenantId: initial.center.organization.tenantId,
+          tenantId: current.center.organization.tenantId,
           centerId: CENTER_ID,
           action: "billing.stale_imported_opening_invoice_voided",
           resource: "Invoice",
@@ -252,7 +256,7 @@ async function applyPlan(initial: Awaited<ReturnType<typeof buildPlan>>) {
       });
     }
 
-    for (const classroom of initial.classroomPlans) {
+    for (const classroom of current.classroomPlans) {
       if (classroom.alreadyApplied) continue;
       const source = await tx.classroom.findFirst({
         where: { id: classroom.archivedId, centerId: CENTER_ID },
@@ -291,7 +295,7 @@ async function applyPlan(initial: Awaited<ReturnType<typeof buildPlan>>) {
       });
       await tx.auditLog.create({
         data: {
-          tenantId: initial.center.organization.tenantId,
+          tenantId: current.center.organization.tenantId,
           centerId: CENTER_ID,
           action: "classroom.archived_merged",
           resource: "Classroom",

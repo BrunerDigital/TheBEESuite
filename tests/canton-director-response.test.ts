@@ -29,6 +29,7 @@ test("active classroom scope excludes archived records", () => {
 
 test("Canton repair is fingerprinted, preserves balances and payments, and never activates tuition", () => {
   assert.match(source, /--confirm-fingerprint/);
+  assert.match(source, /await prisma\.\$transaction\(async \(tx\) => \{\s*const current = await buildPlan\(tx\);\s*invariant\(current\.fingerprint === initial\.fingerprint/);
   assert.match(source, /accountBalancePreserved: true/);
   assert.match(source, /paymentsPreserved: true/);
   assert.match(source, /stableJson\(verified\.accountBalances\) === balancesBefore/);
@@ -48,6 +49,11 @@ test("Canton classroom repair archives only empty legacy rooms and preserves tra
 test("later ProCare imports preserve reconciled invoices and redirect archived classroom matches", () => {
   assert.match(procareImportSource, /staleImportedOpeningBalanceVoidedAt === "string"/);
   assert.match(procareImportSource, /if \(reconciliationProtectedInvoice\)[\s\S]*billingAccountId: account\.id[\s\S]*externalId: invoiceExternalId/);
+  assert.doesNotMatch(
+    procareImportSource.match(/if \(reconciliationProtectedInvoice\)[\s\S]*?else if \(balanceCents > 0\)/)?.[0] ?? "",
+    /importedInvoiceId\s*=/,
+  );
+  assert.match(procareImportSource, /ledgerEntry\.upsert\([\s\S]*invoiceId: importedInvoiceId/);
   assert.doesNotMatch(
     procareImportSource.match(/if \(reconciliationProtectedInvoice\)[\s\S]*?else if \(balanceCents > 0\)/)?.[0] ?? "",
     /status: PaymentStatus\.OPEN|totalCents: balanceCents|deleteMany/,

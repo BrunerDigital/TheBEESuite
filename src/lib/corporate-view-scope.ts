@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { activeClassroomWhere } from "@/lib/classroom-status";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 
 export const NO_VISIBLE_CENTER_ID = "__no_visible_centers__";
 
@@ -21,6 +22,20 @@ export function visibleFamilyWhere(centerIds: readonly string[]): Prisma.FamilyW
   return { centerId: visibleCenterIdFilter(centerIds) };
 }
 
+export function visibleCurrentFamilyWhere(centerIds: readonly string[]): Prisma.FamilyWhereInput {
+  return {
+    ...visibleFamilyWhere(centerIds),
+    children: { some: currentlyEnrolledChildWhere() },
+  };
+}
+
+export function visibleFormerFamilyWhere(centerIds: readonly string[]): Prisma.FamilyWhereInput {
+  return {
+    ...visibleFamilyWhere(centerIds),
+    children: { none: currentlyEnrolledChildWhere() },
+  };
+}
+
 export function visibleEnrollmentWhere(centerIds: readonly string[]): Prisma.EnrollmentWhereInput {
   return { child: { is: { family: { is: visibleFamilyWhere(centerIds) } } } };
 }
@@ -29,8 +44,20 @@ export function visibleBillingAccountWhere(centerIds: readonly string[]): Prisma
   return { family: { is: visibleFamilyWhere(centerIds) } };
 }
 
+export function visibleCurrentBillingAccountWhere(centerIds: readonly string[]): Prisma.BillingAccountWhereInput {
+  return { family: { is: visibleCurrentFamilyWhere(centerIds) } };
+}
+
+export function visibleFormerBillingAccountWhere(centerIds: readonly string[]): Prisma.BillingAccountWhereInput {
+  return { family: { is: visibleFormerFamilyWhere(centerIds) } };
+}
+
 export function visibleInvoiceWhere(centerIds: readonly string[]): Prisma.InvoiceWhereInput {
   return { billingAccount: { is: visibleBillingAccountWhere(centerIds) } };
+}
+
+export function visibleCurrentInvoiceWhere(centerIds: readonly string[]): Prisma.InvoiceWhereInput {
+  return { billingAccount: { is: visibleCurrentBillingAccountWhere(centerIds) } };
 }
 
 export function visiblePaymentWhere(centerIds: readonly string[]): Prisma.PaymentWhereInput {

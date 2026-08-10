@@ -89,6 +89,34 @@ export type AccountsReceivableSnapshot = AccountsReceivableSummary & {
   accounts: SchoolAccountBalance[];
 };
 
+export type ReceivableAgingReport = {
+  currentCents: number;
+  oneToThirtyCents: number;
+  thirtyOneToSixtyCents: number;
+  sixtyOnePlusCents: number;
+};
+
+type ReceivableAgingAccount = {
+  id: string;
+  balanceCents: number;
+  nonInvoiceChargeCents?: number;
+};
+
+type ReceivableAgingInvoice = {
+  billingAccountId: string;
+  totalCents: number;
+  dueDate: Date;
+};
+
+type ReceivableAgingLedgerEntry = {
+  id: string;
+  billingAccountId: string;
+  amountCents: number;
+  invoiceId?: string | null;
+  effectiveAt: Date | string;
+  createdAt: Date | string;
+};
+
 type AccountBalanceAccessSubject =
   | string
   | null
@@ -160,6 +188,113 @@ const statusOrder: Record<SchoolAccountBalanceStatus, number> = {
 
 function isOverdue(dueDate: Date, asOf: Date) {
   return dueDate.toISOString().slice(0, 10) < asOf.toISOString().slice(0, 10);
+}
+
+export function buildOutstandingNonInvoiceChargesByAccount(
+  entries: readonly ReceivableAgingLedgerEntry[],
+) {
+  const states = new Map<string, {
+    unappliedCreditCents: number;
+    charges: Array<{ remainingCents: number; invoiceLinked: boolean }>;
+  }>();
+  const orderedEntries = [...entries].sort((left, right) => (
+    new Date(left.effectiveAt).getTime() - new Date(right.effectiveAt).getTime()
+    || new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+    || left.id.localeCompare(right.id)
+  ));
+
+  for (const entry of orderedEntries) {
+    const state = states.get(entry.billingAccountId) ?? { unappliedCreditCents: 0, charges: [] };
+    if (entry.amountCents > 0) {
+      const creditAppliedCents = Math.min(state.unappliedCreditCents, entry.amountCents);
+      state.unappliedCreditCents -= creditAppliedCents;
+      const remainingCents = entry.amountCents - creditAppliedCents;
+      if (remainingCents) state.charges.push({ remainingCents, invoiceLinked: Boolean(entry.invoiceId) });
+    } else if (entry.amountCents < 0) {
+      let creditCents = Math.abs(entry.amountCents);
+      const chargesByPaymentPriority = [
+        ...state.charges.filter((charge) => charge.invoiceLinked),
+        ...state.charges.filter((charge) => !charge.invoiceLinked),
+      ];
+      for (const charge of chargesByPaymentPriority) {
+        if (!creditCents) break;
+        const appliedCents = Math.min(creditCents, charge.remainingCents);
+        charge.remainingCents -= appliedCents;
+        creditCents -= appliedCents;
+      }
+      state.unappliedCreditCents += creditCents;
+    }
+    states.set(entry.billingAccountId, state);
+  }
+
+  return new Map(
+    [...states].map(([billingAccountId, state]) => [
+      billingAccountId,
+      state.charges.reduce(
+        (sum, charge) => sum + (charge.invoiceLinked ? 0 : charge.remainingCents),
+        0,
+      ),
+    ]),
+  );
+}
+
+export function buildNetReceivableAging(
+  accounts: readonly ReceivableAgingAccount[],
+  invoices: readonly ReceivableAgingInvoice[],
+  asOf = new Date(),
+): ReceivableAgingReport {
+  const report: ReceivableAgingReport = {
+    currentCents: 0,
+    oneToThirtyCents: 0,
+    thirtyOneToSixtyCents: 0,
+    sixtyOnePlusCents: 0,
+  };
+  const invoicesByAccountId = new Map<string, ReceivableAgingInvoice[]>();
+
+  for (const invoice of invoices) {
+    const accountInvoices = invoicesByAccountId.get(invoice.billingAccountId) ?? [];
+    accountInvoices.push(invoice);
+    invoicesByAccountId.set(invoice.billingAccountId, accountInvoices);
+  }
+
+  for (const account of accounts) {
+    const receivableCents = Math.max(account.balanceCents, 0);
+    if (!receivableCents) continue;
+
+    const accountInvoices = (invoicesByAccountId.get(account.id) ?? [])
+      .filter((invoice) => invoice.totalCents > 0)
+      .sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime());
+    const openInvoiceTotalCents = accountInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);
+    const invoiceReceivableCents = Math.max(
+      receivableCents - Math.max(account.nonInvoiceChargeCents ?? 0, 0),
+      0,
+    );
+    // Account-level payments are applied to the oldest open invoices first. Partial
+    // payments can leave those invoices OPEN at face value, so remove that paid
+    // portion before assigning the remaining receivable to aging buckets.
+    let paidAgainstOpenInvoicesCents = Math.max(openInvoiceTotalCents - invoiceReceivableCents, 0);
+    let agedReceivableCents = 0;
+
+    for (const invoice of accountInvoices) {
+      const paidInvoiceCents = Math.min(paidAgainstOpenInvoicesCents, invoice.totalCents);
+      paidAgainstOpenInvoicesCents -= paidInvoiceCents;
+      const remainingInvoiceCents = invoice.totalCents - paidInvoiceCents;
+      if (!remainingInvoiceCents) continue;
+
+      const daysPastDue = Math.floor((asOf.getTime() - invoice.dueDate.getTime()) / 86_400_000);
+      if (daysPastDue <= 0) report.currentCents += remainingInvoiceCents;
+      else if (daysPastDue <= 30) report.oneToThirtyCents += remainingInvoiceCents;
+      else if (daysPastDue <= 60) report.thirtyOneToSixtyCents += remainingInvoiceCents;
+      else report.sixtyOnePlusCents += remainingInvoiceCents;
+      agedReceivableCents += remainingInvoiceCents;
+    }
+
+    // Ledger-only charges have no invoice due date; keep them visible as current
+    // receivables so the aging buckets always reconcile to the account balance.
+    report.currentCents += Math.max(receivableCents - agedReceivableCents, 0);
+  }
+
+  return report;
 }
 
 export function buildAccountsReceivableSummary(

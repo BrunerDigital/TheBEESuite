@@ -55,6 +55,7 @@ import {
 } from "@/components/school-setup-command-center";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { modules } from "@/lib/demo-data";
+import { buildNetReceivableAging, buildOutstandingNonInvoiceChargesByAccount } from "@/lib/accounts-receivable";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
@@ -116,6 +117,8 @@ import {
   visibleCheckLogWhere,
   visibleChildWhere,
   visibleClassroomWhere,
+  visibleCurrentBillingAccountWhere,
+  visibleCurrentInvoiceWhere,
   visibleEnrollmentWhere,
   visibleFamilyWhere,
   visibleFormSubmissionWhere,
@@ -620,7 +623,12 @@ async function buildFtePrefills(
       billingAccount: { select: { family: { select: { centerId: true } } } },
     },
   }), prisma.billingAccount.findMany({
-    where: { family: { centerId: centerIdFilter(centerIds) } },
+    where: {
+      family: {
+        centerId: centerIdFilter(centerIds),
+        children: { some: currentlyEnrolledChildWhere() },
+      },
+    },
     select: { balanceCents: true, family: { select: { centerId: true } } },
   }), prisma.staffProfile.findMany({
     where: { centerId: centerIdFilter(centerIds), user: { isActive: true } },
@@ -3124,7 +3132,9 @@ async function renderLivePage(
 
   if (slug === "billing-invoices") {
     const billingAccountWhere = visibleBillingAccountWhere(visibleCenterIds);
+    const currentBillingAccountWhere = visibleCurrentBillingAccountWhere(visibleCenterIds);
     const invoiceWhere = visibleInvoiceWhere(visibleCenterIds);
+    const currentInvoiceWhere = visibleCurrentInvoiceWhere(visibleCenterIds);
     const workbenchFamilyWhere: Prisma.FamilyWhereInput = {
       centerId: scopedCenterIds,
       children: { some: currentlyEnrolledChildWhere() },
@@ -3157,7 +3167,15 @@ async function renderLivePage(
               balanceCents: true,
               autopayPlaceholder: true,
               customFields: true,
-              family: { select: { id: true, name: true, billingEmail: true, centerId: true } },
+              family: {
+                select: {
+                  id: true,
+                  name: true,
+                  billingEmail: true,
+                  centerId: true,
+                  _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
+                },
+              },
             },
           },
           _count: { select: { items: true } },
@@ -3167,7 +3185,7 @@ async function renderLivePage(
         where: {
           billingAccount: billingAccountWhere,
         },
-        orderBy: { effectiveAt: "desc" },
+        orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
         include: {
           billingAccount: {
             select: {
@@ -3177,19 +3195,24 @@ async function renderLivePage(
         },
       }),
       prisma.invoice.count({ where: invoiceWhere }),
-      prisma.invoice.count({ where: { ...invoiceWhere, status: PaymentStatus.OPEN } }),
+      prisma.invoice.count({ where: { ...currentInvoiceWhere, status: PaymentStatus.OPEN } }),
       prisma.invoice.count({ where: { ...invoiceWhere, status: PaymentStatus.PAID } }),
-      prisma.invoice.findMany({ where: { ...invoiceWhere, status: PaymentStatus.OPEN }, select: { totalCents: true, dueDate: true } }),
+      prisma.invoice.findMany({
+        where: { ...currentInvoiceWhere, status: PaymentStatus.OPEN },
+        select: { billingAccountId: true, totalCents: true, dueDate: true },
+      }),
       prisma.ledgerEntry.findMany({
-        where: { billingAccount: billingAccountWhere },
-        orderBy: { effectiveAt: "desc" },
+        where: { billingAccount: currentBillingAccountWhere },
+        orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
         take: 1000,
         select: {
+          id: true,
           billingAccountId: true,
           type: true,
           amountCents: true,
           balanceAfterCents: true,
           effectiveAt: true,
+          createdAt: true,
           invoiceId: true,
           paymentId: true,
         },
@@ -3200,7 +3223,12 @@ async function renderLivePage(
         select: {
           id: true,
           balanceCents: true,
-          family: { select: { name: true } },
+          family: {
+            select: {
+              name: true,
+              _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
+            },
+          },
         },
       }),
       prisma.family.findMany({
@@ -3312,27 +3340,30 @@ async function renderLivePage(
       getStripeWebhookSecret({ tenantId: user.tenantId }).then(Boolean),
     ]);
     const allowPlatformOnlyPayments = process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true";
-    const arReport = openRows.reduce(
-      (report, invoice) => {
-        const daysPastDue = Math.floor((startOfDay.getTime() - new Date(invoice.dueDate).getTime()) / 86_400_000);
-        if (daysPastDue <= 0) report.currentCents += invoice.totalCents;
-        else if (daysPastDue <= 30) report.oneToThirtyCents += invoice.totalCents;
-        else if (daysPastDue <= 60) report.thirtyOneToSixtyCents += invoice.totalCents;
-        else report.sixtyOnePlusCents += invoice.totalCents;
-        return report;
-      },
-      {
-        currentCents: 0,
-        oneToThirtyCents: 0,
-        thirtyOneToSixtyCents: 0,
-        sixtyOnePlusCents: 0,
-        chargesCents: 0,
-        paymentsCents: 0,
-        agencyPaymentsCents: 0,
-        creditsCents: 0,
-      },
+    const currentBillingAccountIds = new Set(
+      billingAccountRows
+        .filter((account) => account.family._count.children > 0)
+        .map((account) => account.id),
     );
+    const nonInvoiceChargeCentsByAccountId = buildOutstandingNonInvoiceChargesByAccount(ledgerEntries);
+    const arReport = {
+      ...buildNetReceivableAging(
+        billingAccountRows
+          .filter((account) => currentBillingAccountIds.has(account.id))
+          .map((account) => ({
+            ...account,
+            nonInvoiceChargeCents: nonInvoiceChargeCentsByAccountId.get(account.id) ?? 0,
+          })),
+        openRows,
+        startOfDay,
+      ),
+      chargesCents: 0,
+      paymentsCents: 0,
+      agencyPaymentsCents: 0,
+      creditsCents: 0,
+    };
     for (const entry of ledgerRollupRows) {
+      if (!currentBillingAccountIds.has(entry.billingAccountId)) continue;
       if (entry.amountCents > 0) arReport.chargesCents += entry.amountCents;
       if (entry.type === "payment" || entry.type === "agency_payment") arReport.paymentsCents += Math.abs(entry.amountCents);
       if (entry.type === "agency_payment") arReport.agencyPaymentsCents += Math.abs(entry.amountCents);
@@ -3344,8 +3375,23 @@ async function renderLivePage(
         balanceCents: account.balanceCents,
         familyName: account.family.name,
       })),
-      entries: ledgerRollupRows,
+      entries: ledgerEntries,
     });
+    const currentFamilyOutstandingCents = billingAccountRows.reduce(
+      (sum, account) => account.family._count.children > 0
+        ? sum + Math.max(account.balanceCents, 0)
+        : sum,
+      0,
+    );
+    const formerFamilyBalanceSummary = billingAccountRows.reduce(
+      (summary, account) => {
+        if (account.family._count.children > 0 || account.balanceCents <= 0) return summary;
+        summary.owingAccountCount += 1;
+        summary.totalOwedCents += account.balanceCents;
+        return summary;
+      },
+      { owingAccountCount: 0, totalOwedCents: 0 },
+    );
     const schedulerDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 12));
     const currentMonthlyPeriod = normalizeRecurringBillingPeriod(null, schedulerDate, "monthly");
     const currentWeeklyPeriod = defaultRecurringBillingPeriod(null, schedulerDate, "weekly");
@@ -3504,12 +3550,19 @@ async function renderLivePage(
                 autopayPlaceholder: invoice.billingAccount.autopayPlaceholder,
                 customFields: invoice.billingAccount.customFields,
               }),
-              family: invoice.billingAccount.family,
+              family: {
+                id: invoice.billingAccount.family.id,
+                name: invoice.billingAccount.family.name,
+                billingEmail: invoice.billingAccount.family.billingEmail,
+                centerId: invoice.billingAccount.family.centerId,
+                accountCategory: invoice.billingAccount.family._count.children > 0 ? "current" as const : "past" as const,
+              },
             },
             _count: invoice._count,
           })),
           ledgerEntries,
-          stats: { total, open, paid, outstandingCents: openRows.reduce((sum, invoice) => sum + invoice.totalCents, 0) },
+          stats: { total, open, paid, outstandingCents: currentFamilyOutstandingCents },
+          formerFamilyBalanceSummary,
           arReport,
           reconciliation,
           recurringScheduler,
@@ -3519,9 +3572,9 @@ async function renderLivePage(
   }
 
   if (slug === "payments") {
-    const billingAccountWhere = visibleBillingAccountWhere(visibleCenterIds);
+    const currentBillingAccountWhere = visibleCurrentBillingAccountWhere(visibleCenterIds);
     const paymentWhere = visiblePaymentWhere(visibleCenterIds);
-    const invoiceWhere = visibleInvoiceWhere(visibleCenterIds);
+    const currentInvoiceWhere = visibleCurrentInvoiceWhere(visibleCenterIds);
     const [paymentRows, total, paid, failed, draft, payoutCenters, paymentMethodAccounts, dueOpenInvoices] = await Promise.all([
       prisma.payment.findMany({
         where: paymentWhere,
@@ -3544,7 +3597,7 @@ async function renderLivePage(
         select: { id: true, customFields: true },
       }),
       prisma.billingAccount.findMany({
-        where: billingAccountWhere,
+        where: currentBillingAccountWhere,
         select: {
           id: true,
           autopayPlaceholder: true,
@@ -3553,7 +3606,7 @@ async function renderLivePage(
       }),
       prisma.invoice.findMany({
         where: {
-          ...invoiceWhere,
+          ...currentInvoiceWhere,
           status: PaymentStatus.OPEN,
           totalCents: { gt: 0 },
           dueDate: { lte: today },
@@ -3707,17 +3760,21 @@ async function renderLivePage(
       centerId: requestedCenterId,
     }, today);
     const messageWhere: Prisma.MessageWhereInput = { family: { is: visibleFamilyWhere(visibleCenterIds) } };
-    const invoiceWhere = visibleInvoiceWhere(visibleCenterIds);
+    const currentInvoiceWhere = visibleCurrentInvoiceWhere(visibleCenterIds);
+    const currentBillingAccountWhere = visibleCurrentBillingAccountWhere(visibleCenterIds);
     const incidentWhere: Prisma.IncidentReportWhereInput = {
       AND: [visibleIncidentWhere(visibleCenterIds), { adminReviewStatus: "pending" }],
     };
-    const [leads, enrolled, waitlisted, tours, openInvoices, openRows, incidentsPending, unreadMessages, stageCounts, fte, reports] = await Promise.all([
+    const [leads, enrolled, waitlisted, tours, openInvoices, currentBalance, incidentsPending, unreadMessages, stageCounts, fte, reports] = await Promise.all([
       prisma.lead.count({ where: leadWhere }),
       prisma.lead.count({ where: { ...leadWhere, stage: EnrollmentStage.ENROLLED } }),
       prisma.lead.count({ where: { ...leadWhere, stage: EnrollmentStage.WAITLISTED } }),
       prisma.tour.count({ where: { centerId: scopedCenterIds } }),
-      prisma.invoice.count({ where: { ...invoiceWhere, status: PaymentStatus.OPEN } }),
-      prisma.invoice.findMany({ where: { ...invoiceWhere, status: PaymentStatus.OPEN }, select: { totalCents: true } }),
+      prisma.invoice.count({ where: { ...currentInvoiceWhere, status: PaymentStatus.OPEN } }),
+      prisma.billingAccount.aggregate({
+        where: { ...currentBillingAccountWhere, balanceCents: { gt: 0 } },
+        _sum: { balanceCents: true },
+      }),
       prisma.incidentReport.count({ where: incidentWhere }),
       prisma.message.count({ where: { ...messageWhere, readAt: null } }),
       prisma.lead.groupBy({ by: ["stage"], where: leadWhere, _count: { _all: true } }),
@@ -3742,7 +3799,7 @@ async function renderLivePage(
             waitlisted,
             tours,
             openInvoices,
-            outstandingCents: openRows.reduce((sum, invoice) => sum + invoice.totalCents, 0),
+            outstandingCents: currentBalance._sum.balanceCents ?? 0,
             incidentsPending,
             unreadMessages,
           },

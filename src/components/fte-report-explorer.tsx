@@ -732,7 +732,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
                             </div>
                             <div className="grid gap-3 md:grid-cols-4">
                               <InlineTextField label="Location data" value={correction.locationData} onChange={(value) => setCorrectionField("locationData", value)} />
-                              <InlineNumberField label="Accounts receivable" value={correction.accountReceivableAmount} onChange={(value) => setCorrectionField("accountReceivableAmount", value)} />
+                              <InlineNumberField label="Current-family accounts receivable" value={correction.accountReceivableAmount} onChange={(value) => setCorrectionField("accountReceivableAmount", value)} />
                               <InlineNumberField label="Self-payer billed" value={correction.selfPayerBillAmount} onChange={(value) => setCorrectionField("selfPayerBillAmount", value)} />
                               <InlineNumberField label="Subsidy billed" value={correction.subsidyBillAmount} onChange={(value) => setCorrectionField("subsidyBillAmount", value)} />
                               <InlineNumberField label="Total billed" value={correction.totalBilledAmount} onChange={(value) => setCorrectionField("totalBilledAmount", value)} />

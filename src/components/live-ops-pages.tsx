@@ -5002,7 +5002,13 @@ export type BillingInvoicesPageData = {
     billingAccount: {
       id: string;
       balanceCents: number;
-      family: { id: string; name: string; billingEmail: string | null; centerId: string | null };
+      family: {
+        id: string;
+        name: string;
+        billingEmail: string | null;
+        centerId: string | null;
+        accountCategory: "current" | "past";
+      };
       paymentMethodManagement: InvoiceStoredPaymentActionData["billingAccount"]["paymentMethodManagement"];
     };
     _count: { items: number };
@@ -5023,6 +5029,10 @@ export type BillingInvoicesPageData = {
     open: number;
     paid: number;
     outstandingCents: number;
+  };
+  formerFamilyBalanceSummary: {
+    owingAccountCount: number;
+    totalOwedCents: number;
   };
   arReport: {
     currentCents: number;
@@ -5106,10 +5116,10 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Invoices" value={data.stats.total} />
-        <StatCard label="Open" value={data.stats.open} />
-        <StatCard label="Paid" value={data.stats.paid} />
-        <StatCard label="Outstanding" value={money(data.stats.outstandingCents)} />
+        <StatCard label="All invoices" value={data.stats.total} />
+        <StatCard label="Current-family open" value={data.stats.open} />
+        <StatCard label="Paid invoices" value={data.stats.paid} />
+        <StatCard label="Current-family outstanding" value={money(data.stats.outstandingCents)} />
       </div>
       <Card className="glass-panel">
         <CardHeader>
@@ -5130,8 +5140,8 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       </Card>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Accounts Receivable Aging</CardTitle>
-          <CardDescription>Open balance by due-date bucket and recent ledger movement.</CardDescription>
+          <CardTitle>Current-family Accounts Receivable Aging</CardTitle>
+          <CardDescription>Open invoices for currently enrolled families by due-date bucket. Past-family balances are excluded.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-4">
@@ -5148,10 +5158,24 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
           </div>
         </CardContent>
       </Card>
+      <Card className="glass-panel border-amber-500/30">
+        <CardHeader>
+          <CardTitle>Past family balances — excluded from current outstanding</CardTitle>
+          <CardDescription>
+            Historical debt is retained for account review, but it is not included in current-family outstanding totals, active AR aging, report AR fields, or dashboards.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-2">
+            <MetricTile label="Past families owing" value={data.formerFamilyBalanceSummary.owingAccountCount} />
+            <MetricTile label="Historical amount owed" value={money(data.formerFamilyBalanceSummary.totalOwedCents)} />
+          </div>
+        </CardContent>
+      </Card>
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Ledger Reconciliation Report</CardTitle>
-          <CardDescription>Compares current billing account balances to the latest ledger balance posted per account.</CardDescription>
+          <CardDescription>Control report across current and historical accounts; it is separate from current-family outstanding reporting.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-4">
@@ -5283,6 +5307,11 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                       {invoice.billingAccount.family.name}
                     </Link>
                     <div className="text-xs text-muted-foreground">{invoice.billingAccount.family.billingEmail ?? "No billing email"}</div>
+                    {invoice.billingAccount.family.accountCategory === "past" ? (
+                      <Badge variant="outline" className="mt-1 border-amber-500/40 text-amber-800 dark:text-amber-200">
+                        Past family — historical account
+                      </Badge>
+                    ) : null}
                   </TableCell>
                   <TableCell><Badge variant={invoice.status === "OPEN" ? "outline" : "default"}>{invoice.status}</Badge></TableCell>
                   <TableCell>{formatDate(invoice.dueDate)}</TableCell>
@@ -5512,8 +5541,8 @@ export function AnalyticsPage({ data }: { data: AnalyticsPageData }) {
         <StatCard label="Enrolled" value={data.stats.enrolled.toLocaleString()} />
         <StatCard label="Waitlisted" value={data.stats.waitlisted.toLocaleString()} />
         <StatCard label="Tours" value={data.stats.tours.toLocaleString()} />
-        <StatCard label="Open invoices" value={data.stats.openInvoices.toLocaleString()} />
-        <StatCard label="Outstanding" value={money(data.stats.outstandingCents)} />
+        <StatCard label="Current-family open invoices" value={data.stats.openInvoices.toLocaleString()} />
+        <StatCard label="Current-family outstanding" value={money(data.stats.outstandingCents)} />
         <StatCard label="Incidents pending" value={data.stats.incidentsPending.toLocaleString()} />
         <StatCard label="Unread messages" value={data.stats.unreadMessages.toLocaleString()} />
       </div>

@@ -231,8 +231,8 @@ export function AnalyticsReportBuilder({
                 {report !== "weekly_payments" ? <tr><th>Billed</th><td>{money(filteredBillingTotals.invoiceCents)}</td></tr> : null}
                 {report !== "weekly_billing" ? <tr><th>Payments</th><td>{filteredBillingTotals.paymentCount.toLocaleString()}</td></tr> : null}
                 {report !== "weekly_billing" ? <tr><th>Paid</th><td>{money(filteredBillingTotals.paidCents)}</td></tr> : null}
-                {report !== "weekly_payments" ? <tr><th>Open AR</th><td>{money(filteredBillingTotals.openCents)}</td></tr> : null}
-                {report !== "weekly_payments" ? <tr><th>Overdue AR</th><td>{money(filteredBillingTotals.overdueCents)}</td></tr> : null}
+                {report !== "weekly_payments" ? <tr><th>Current-family open AR</th><td>{money(filteredBillingTotals.openCents)}</td></tr> : null}
+                {report !== "weekly_payments" ? <tr><th>Current-family overdue AR</th><td>{money(filteredBillingTotals.overdueCents)}</td></tr> : null}
               </tbody>
             </table>
           </>
@@ -352,7 +352,7 @@ export function AnalyticsReportBuilder({
             <h2>Billing, Revenue, And AR</h2>
             <table>
               <thead>
-                <tr><th>Period</th><th>Center</th><th>Invoices</th><th>Invoiced</th><th>Paid</th><th>Open AR</th><th>Overdue</th></tr>
+                <tr><th>Period</th><th>Center</th><th>Invoices</th><th>Invoiced</th><th>Paid</th><th>Current-family open AR</th><th>Current-family overdue</th></tr>
               </thead>
               <tbody>
                 {filteredBilling.map((row) => (
@@ -377,7 +377,7 @@ export function AnalyticsReportBuilder({
             <h2>Weekly Billing</h2>
             <table>
               <thead>
-                <tr><th>Week</th><th>Center</th><th>Invoices</th><th>Billed</th><th>Open AR</th><th>Overdue</th></tr>
+                <tr><th>Week</th><th>Center</th><th>Invoices</th><th>Billed</th><th>Current-family open AR</th><th>Current-family overdue</th></tr>
               </thead>
               <tbody>
                 {filteredBilling.map((row) => (
@@ -770,7 +770,7 @@ export function AnalyticsReportBuilder({
           <Card className="glass-panel">
             <CardHeader>
               <CardTitle>Billing, Revenue, And AR</CardTitle>
-              <CardDescription>Invoice totals, paid revenue, open AR, and overdue AR by center and period.</CardDescription>
+              <CardDescription>Invoice and payment history for the period; open and overdue AR include currently enrolled families only.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -781,8 +781,8 @@ export function AnalyticsReportBuilder({
                     <TableHead>Invoices</TableHead>
                     <TableHead>Invoiced</TableHead>
                     <TableHead>Paid</TableHead>
-                    <TableHead>Open AR</TableHead>
-                    <TableHead>Overdue</TableHead>
+                    <TableHead>Current-family open AR</TableHead>
+                    <TableHead>Current-family overdue</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -809,11 +809,11 @@ export function AnalyticsReportBuilder({
           <Card className="glass-panel">
             <CardHeader>
               <CardTitle>Weekly Billing</CardTitle>
-              <CardDescription>Invoices billed, open AR, and overdue AR by center for each Monday-Sunday week.</CardDescription>
+              <CardDescription>Invoices billed for the period; open and overdue AR include currently enrolled families only.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
-                <TableHeader><TableRow><TableHead>Week</TableHead><TableHead>Center</TableHead><TableHead>Invoices</TableHead><TableHead>Billed</TableHead><TableHead>Open AR</TableHead><TableHead>Overdue</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Week</TableHead><TableHead>Center</TableHead><TableHead>Invoices</TableHead><TableHead>Billed</TableHead><TableHead>Current-family open AR</TableHead><TableHead>Current-family overdue</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {filteredBilling.map((row) => (
                     <TableRow key={`${row.period}:${row.centerId}`}>

@@ -553,12 +553,12 @@ export function FteReportForm({
           <div>
             <div className="text-sm font-semibold">Legacy FTE report fields</div>
             <p className="text-xs text-muted-foreground">
-              These match the pre-Bee Suite report columns: receivables, billed amounts, capacity, occupancy, payroll, starts, withdrawals, and preregistration.
+              These match the pre-Bee Suite report columns. Accounts receivable is prefilled from currently enrolled families only; past-family debt stays in historical billing review.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">
-              <Label>Accounts receivable</Label>
+              <Label>Current-family accounts receivable</Label>
               <Input value={form.accountReceivableAmount} onChange={(event) => setField("accountReceivableAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
             </div>
             <div className="space-y-1">

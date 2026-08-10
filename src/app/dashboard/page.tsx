@@ -244,6 +244,7 @@ export default async function DashboardPage() {
     prisma.billingAccount.aggregate({
       where: {
         family: currentFamilyWhere,
+        balanceCents: { gt: 0 },
       },
       _sum: {
         balanceCents: true,

@@ -329,12 +329,18 @@ type ProcareClassroomMatch = {
   customFields: Prisma.JsonValue | null;
 };
 
+type ActiveProcareClassroomMatch = ProcareClassroomMatch & {
+  redirectedFromArchived: boolean;
+};
+
 async function activeProcareClassroomMatches(
   matches: ProcareClassroomMatch[],
   centerId: string,
   db: ProcareClassroomDb,
 ) {
-  const activeMatches = matches.filter((match) => !classroomIsArchived(match.customFields));
+  const activeMatches: ActiveProcareClassroomMatch[] = matches
+    .filter((match) => !classroomIsArchived(match.customFields))
+    .map((match) => ({ ...match, redirectedFromArchived: false }));
   const mergedIntoIds = matches.flatMap((match) => {
     if (!classroomIsArchived(match.customFields)) return [];
     const mergedIntoClassroomId = jsonObject(match.customFields).mergedIntoClassroomId;
@@ -346,9 +352,11 @@ async function activeProcareClassroomMatches(
         select: { id: true, capacity: true, ratioRule: true, customFields: true },
       })
     : [];
-  return Array.from(
-    new Map([...activeMatches, ...redirectedMatches].map((match) => [match.id, match])).values(),
-  );
+  const resolved = new Map(activeMatches.map((match) => [match.id, match]));
+  for (const match of redirectedMatches) {
+    if (!resolved.has(match.id)) resolved.set(match.id, { ...match, redirectedFromArchived: true });
+  }
+  return Array.from(resolved.values());
 }
 
 async function findOrCreateClassroom({
@@ -396,12 +404,12 @@ async function findOrCreateClassroom({
     await db.classroom.update({
       where: { id: existing.id },
       data: {
-        name,
+        ...(existing.redirectedFromArchived
+          ? {}
+          : { name, sourceSystem: "procare", externalId: classroomExternalId }),
         ageGroup,
         capacity: nextCapacity,
         ratioRule: nextRatioRule,
-        sourceSystem: "procare",
-        externalId: classroomExternalId,
         customFields: mergeCustomFields(
           existing.customFields,
           metadataFromRow(rawData, {

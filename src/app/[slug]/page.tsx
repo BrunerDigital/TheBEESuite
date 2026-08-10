@@ -250,7 +250,7 @@ async function getVisibleCenters(user: CurrentUser) {
         select: {
           leads: true,
           staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } },
-          classrooms: true,
+          classrooms: { where: activeClassroomWhere() },
           calendarEvents: true,
         },
       },
@@ -3892,7 +3892,7 @@ async function renderLivePage(
         select: { customFields: true },
       }),
       prisma.classroom.aggregate({
-        where: { centerId: scopedCenterIds },
+        where: activeClassroomWhere({ centerId: scopedCenterIds }),
         _sum: { capacity: true },
       }),
       prisma.complianceTask.count({
@@ -4506,7 +4506,7 @@ async function renderLivePage(
           licensedCapacity: true,
           ownerGroupId: true,
           ownerGroup: { select: { name: true, ownerType: true } },
-          _count: { select: { leads: true, staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } }, classrooms: true } },
+          _count: { select: { leads: true, staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } }, classrooms: { where: activeClassroomWhere() } } },
         },
       }),
       prisma.user.findMany({
@@ -4908,7 +4908,7 @@ async function renderLivePage(
       prisma.lead.count({ where: centerWhere }),
       prisma.lead.count({ where: { ...centerWhere, score: { gte: 75 } } }),
       center ? prisma.staffProfile.count({ where: { centerId: center.id, user: { role: UserRole.TEACHER, isActive: true } } }) : 0,
-      center ? prisma.classroom.count({ where: { centerId: center.id } }) : 0,
+      center ? prisma.classroom.count({ where: activeClassroomWhere({ centerId: center.id }) }) : 0,
       center
         ? prisma.tour.count({
             where: {

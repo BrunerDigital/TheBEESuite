@@ -54,6 +54,7 @@ test("later ProCare imports preserve reconciled invoices and redirect archived c
   );
   assert.match(procareImportSource, /activeProcareClassroomMatches\(rawMatches, centerId, db\)/);
   assert.match(procareImportSource, /mergedIntoClassroomId[\s\S]*activeClassroomWhere\(\{ centerId, id: \{ in: mergedIntoIds \} \}\)/);
+  assert.match(procareImportSource, /redirectedFromArchived[\s\S]*\? \{\}[\s\S]*: \{ name, sourceSystem: "procare", externalId: classroomExternalId \}/);
 });
 
 test("family intake and child writes cannot reuse archived classrooms", () => {
@@ -71,4 +72,7 @@ test("family intake and child writes cannot reuse archived classrooms", () => {
   assert.match(familyIntakeSource, /activeClassroomWhere\(\{ id: classroomId \}\)/);
   assert.match(aiCommandSource, /activeClassroomWhere\(\{ id: change\.value\.classroomId, centerId: selectedCenterId \}\)/);
   assert.match(childLocationSource, /activeClassroomWhere\(\{ id: target\.classroomId \}\)/);
+  assert.match(pageSource, /classrooms: \{ where: activeClassroomWhere\(\) \}/);
+  assert.match(pageSource, /classroom\.aggregate\(\{[\s\S]*where: activeClassroomWhere\(\{ centerId: scopedCenterIds \}\)/);
+  assert.match(pageSource, /classroom\.count\(\{ where: activeClassroomWhere\(\{ centerId: center\.id \}\) \}\)/);
 });

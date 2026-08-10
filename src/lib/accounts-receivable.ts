@@ -99,6 +99,7 @@ export type ReceivableAgingReport = {
 type ReceivableAgingAccount = {
   id: string;
   balanceCents: number;
+  nonInvoiceChargeCents?: number;
 };
 
 type ReceivableAgingInvoice = {
@@ -207,10 +208,14 @@ export function buildNetReceivableAging(
       .filter((invoice) => invoice.totalCents > 0)
       .sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime());
     const openInvoiceTotalCents = accountInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);
+    const invoiceReceivableCents = Math.max(
+      receivableCents - Math.max(account.nonInvoiceChargeCents ?? 0, 0),
+      0,
+    );
     // Account-level payments are applied to the oldest open invoices first. Partial
     // payments can leave those invoices OPEN at face value, so remove that paid
     // portion before assigning the remaining receivable to aging buckets.
-    let paidAgainstOpenInvoicesCents = Math.max(openInvoiceTotalCents - receivableCents, 0);
+    let paidAgainstOpenInvoicesCents = Math.max(openInvoiceTotalCents - invoiceReceivableCents, 0);
     let agedReceivableCents = 0;
 
     for (const invoice of accountInvoices) {

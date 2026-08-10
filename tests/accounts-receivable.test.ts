@@ -77,6 +77,21 @@ test("aging reconciles partial account payments to the remaining receivable", ()
   assert.equal(Object.values(aging).reduce((sum, cents) => sum + cents, 0), 18_000);
 });
 
+test("aging applies payments to invoices before ledger-only charges", () => {
+  const aging = buildNetReceivableAging(
+    [{ id: "mixed", balanceCents: 15_000, nonInvoiceChargeCents: 10_000 }],
+    [{ billingAccountId: "mixed", totalCents: 10_000, dueDate: new Date("2026-05-01T00:00:00.000Z") }],
+    new Date("2026-08-10T00:00:00.000Z"),
+  );
+
+  assert.deepEqual(aging, {
+    currentCents: 10_000,
+    oneToThirtyCents: 0,
+    thirtyOneToSixtyCents: 0,
+    sixtyOnePlusCents: 5_000,
+  });
+});
+
 test("school account snapshot puts the supplied current families with balances owed first", () => {
   const snapshot = buildAccountsReceivableSnapshot(
     families,
@@ -220,6 +235,8 @@ test("billing, analytics, and payment readiness exclude past families from activ
   assert.match(scope, /visibleFormerFamilyWhere[\s\S]*children: \{ none: currentlyEnrolledChildWhere\(\) \}/);
   assert.match(livePage, /if \(slug === "billing-invoices"\)[\s\S]*visibleCurrentInvoiceWhere\(visibleCenterIds\)/);
   assert.match(livePage, /currentFamilyOutstandingCents[\s\S]*Math\.max\(account\.balanceCents, 0\)/);
+  assert.match(livePage, /ledgerRollupRows[\s\S]*billingAccount: currentBillingAccountWhere[\s\S]*take: 1000/);
+  assert.match(livePage, /nonInvoiceChargeRows[\s\S]*invoiceId: null[\s\S]*amountCents: \{ gt: 0 \}/);
   assert.match(livePage, /formerFamilyBalanceSummary/);
   assert.match(livePage, /if \(slug === "payments"\)[\s\S]*visibleCurrentInvoiceWhere\(visibleCenterIds\)/);
   assert.match(livePage, /if \(slug === "analytics"\)[\s\S]*visibleCurrentBillingAccountWhere\(visibleCenterIds\)/);

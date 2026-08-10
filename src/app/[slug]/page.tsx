@@ -3132,6 +3132,7 @@ async function renderLivePage(
 
   if (slug === "billing-invoices") {
     const billingAccountWhere = visibleBillingAccountWhere(visibleCenterIds);
+    const currentBillingAccountWhere = visibleCurrentBillingAccountWhere(visibleCenterIds);
     const invoiceWhere = visibleInvoiceWhere(visibleCenterIds);
     const currentInvoiceWhere = visibleCurrentInvoiceWhere(visibleCenterIds);
     const workbenchFamilyWhere: Prisma.FamilyWhereInput = {
@@ -3146,6 +3147,7 @@ async function renderLivePage(
       paid,
       openRows,
       ledgerRollupRows,
+      nonInvoiceChargeRows,
       billingAccountRows,
       billingFamilies,
       needsEnrollmentSetupFamilies,
@@ -3201,7 +3203,7 @@ async function renderLivePage(
         select: { billingAccountId: true, totalCents: true, dueDate: true },
       }),
       prisma.ledgerEntry.findMany({
-        where: { billingAccount: billingAccountWhere },
+        where: { billingAccount: currentBillingAccountWhere },
         orderBy: { effectiveAt: "desc" },
         take: 1000,
         select: {
@@ -3213,6 +3215,15 @@ async function renderLivePage(
           invoiceId: true,
           paymentId: true,
         },
+      }),
+      prisma.ledgerEntry.groupBy({
+        by: ["billingAccountId"],
+        where: {
+          billingAccount: currentBillingAccountWhere,
+          invoiceId: null,
+          amountCents: { gt: 0 },
+        },
+        _sum: { amountCents: true },
       }),
       prisma.billingAccount.findMany({
         where: billingAccountWhere,
@@ -3342,9 +3353,17 @@ async function renderLivePage(
         .filter((account) => account.family._count.children > 0)
         .map((account) => account.id),
     );
+    const nonInvoiceChargeCentsByAccountId = new Map(
+      nonInvoiceChargeRows.map((row) => [row.billingAccountId, row._sum.amountCents ?? 0]),
+    );
     const arReport = {
       ...buildNetReceivableAging(
-        billingAccountRows.filter((account) => currentBillingAccountIds.has(account.id)),
+        billingAccountRows
+          .filter((account) => currentBillingAccountIds.has(account.id))
+          .map((account) => ({
+            ...account,
+            nonInvoiceChargeCents: nonInvoiceChargeCentsByAccountId.get(account.id) ?? 0,
+          })),
         openRows,
         startOfDay,
       ),

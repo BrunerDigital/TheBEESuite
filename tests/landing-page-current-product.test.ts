@@ -5,27 +5,66 @@ import test from "node:test";
 
 const root = process.cwd();
 const pageSource = readFileSync(path.join(root, "src/app/page.tsx"), "utf8");
+const showcaseSource = readFileSync(path.join(root, "src/components/landing-hero-showcase.tsx"), "utf8");
 const themeToggleSource = readFileSync(path.join(root, "src/components/public-theme-toggle.tsx"), "utf8");
 
-test("landing page makes sign-in the primary action", () => {
+test("landing page leads with the product and keeps sign-in primary", () => {
   for (const expected of [
-    "Welcome to The BEE Suite",
+    "The school day, connected.",
+    "One secure suite for enrollment, classrooms, family communication, billing, and multi-location oversight.",
     "Sign In to The BEE Suite",
-    "Choose Your Workspace",
-    "Already signed in?",
+    "See the product",
+    "Built for directors, teachers, families, and multi-school teams.",
   ]) {
-    assert.ok(pageSource.includes(expected), `missing entry-first copy: ${expected}`);
+    assert.ok(pageSource.includes(expected), `missing product-first copy: ${expected}`);
   }
 
   assert.ok(pageSource.includes('href="/login"'), "missing generic sign-in link");
-  assert.ok(pageSource.includes('href="#get-started"'), "missing new-user shortcut");
+  assert.ok(pageSource.includes('href="#product"'), "missing product shortcut");
   assert.ok(
-    pageSource.indexOf('<Link href="/login"') < pageSource.indexOf('<section id="get-started"'),
-    "the sign-in action should render before the new-user setup section",
+    pageSource.indexOf('href="/login"') < pageSource.indexOf('id="product"'),
+    "the sign-in action should render before the product detail",
   );
 });
 
-test("landing page provides direct role workspace entry", () => {
+test("landing page presents real product screens in device mockups", () => {
+  for (const expected of [
+    "LandingHeroShowcase",
+    "LandingRoleShowcase",
+    'data-device="laptop"',
+    'data-device="tablet"',
+    'data-device="phone"',
+    "/brand/the-bee-suite/screenshots/current/director-desktop-dashboard-light.png",
+    "/brand/the-bee-suite/screenshots/current/teacher-ipad-daily-report-light.png",
+    "/brand/the-bee-suite/screenshots/current/parent-iphone-overview-light.png",
+    "/brand/the-bee-suite/screenshots/current/executive-desktop-dashboard-light.png",
+  ]) {
+    assert.ok(pageSource.includes(expected) || showcaseSource.includes(expected), `missing product showcase detail: ${expected}`);
+  }
+
+  assert.ok(showcaseSource.includes('loading={preload ? "eager" : undefined}'), "hero LCP image should load eagerly");
+  assert.ok(showcaseSource.includes('fetchPriority={preload ? "high" : undefined}'), "hero LCP image should receive high fetch priority");
+  assert.ok(showcaseSource.includes("sizes="), "device images should provide responsive sizes");
+});
+
+test("landing page uses the existing in-school imagery as editorial product proof", () => {
+  for (const expected of [
+    "/brand/the-bee-suite/usage/bee-suite-lobby-check-in.png",
+    "/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png",
+    "/brand/the-bee-suite/usage/bee-suite-director-operations.png",
+    "Built for the way schools actually work.",
+    "Welcome families with a smoother front desk.",
+    "Keep classroom updates close at hand.",
+    "Give leaders one clear operating picture.",
+  ]) {
+    assert.ok(pageSource.includes(expected) || showcaseSource.includes(expected), `missing school-use proof: ${expected}`);
+  }
+
+  assert.ok(pageSource.includes('id="in-schools"'));
+  assert.ok(!pageSource.includes("bg-gradient-to-t"), "school photography should not receive a color overlay");
+});
+
+test("landing page preserves every role workspace entry", () => {
   const rolePortals = [
     ["Director Workspace", "/directors"],
     ["Executive Workspace", "/executives"],
@@ -38,83 +77,73 @@ test("landing page provides direct role workspace entry", () => {
     assert.ok(pageSource.includes(`href: "${href}"`), `missing role portal link: ${href}`);
   }
 
-  assert.ok(pageSource.includes('data-testid="workspace-access-rail"'));
-  assert.ok(pageSource.includes("HoneycombAccessRail"));
-  assert.ok(pageSource.includes("[clip-path:polygon"));
+  assert.ok(pageSource.includes('id="workspaces"'));
+  assert.ok(pageSource.includes("Your workspace is ready."));
 });
 
-test("landing page separates new-user setup paths from portal login", () => {
-  const setupPaths = [
-    ["I Received an Invitation", "/login"],
-    ["I’m Setting Up Parent Access", "/parents/setup"],
-    ["I’m Registering a Child", "/registration"],
-    ["I’m Setting Up a School", "/onboarding"],
+test("landing page preserves setup, support, and device paths", () => {
+  const paths = [
+    ["Use an invitation", "/login"],
+    ["Set up parent access", "/parents/setup"],
+    ["Register a child", "/registration"],
+    ["Set up a school", "/onboarding"],
+    ["Help &amp; Guides", "/resources"],
+    ["Support", "/support"],
+    ["Use on your device", "/app"],
   ];
 
-  for (const [label, href] of setupPaths) {
-    assert.ok(pageSource.includes(label), `missing setup choice: ${label}`);
-    assert.ok(pageSource.includes(`href: "${href}"`), `missing setup route: ${href}`);
+  for (const [label, href] of paths) {
+    assert.ok(pageSource.includes(label), `missing setup or support label: ${label}`);
+    assert.ok(pageSource.includes(`href: "${href}"`) || pageSource.includes(`href="${href}"`), `missing route: ${href}`);
   }
+
+  assert.ok(pageSource.includes('id="get-started"'));
 });
 
-test("landing page keeps support and device guidance visible", () => {
-  for (const href of ["/resources", "/support", "/app"]) {
-    assert.ok(pageSource.includes(`href: "${href}"`) || pageSource.includes(`href="${href}"`), `missing help link: ${href}`);
-  }
-
-  for (const expected of ["Help & Guides", "Need Help Getting In?", "Use The BEE Suite on Your Device"]) {
-    assert.ok(pageSource.includes(expected), `missing support content: ${expected}`);
-  }
-});
-
-test("landing page is accessible, responsive, and no longer a long sales funnel", () => {
+test("landing page remains accessible, responsive, and motion-conscious", () => {
   for (const expected of [
     'href="#main-content"',
-    '<main id="main-content">',
+    'id="main-content"',
     'aria-label="Primary navigation"',
     'aria-hidden="true"',
-    "sm:grid-cols-2",
-    "2xl:grid-cols-4",
-    "xl:grid-cols-[1.18fr_0.82fr]",
     "min-h-11",
+    "min-h-12",
     "touch-manipulation",
+    "sm:grid-cols-2",
+    "lg:grid-cols-2",
     "motion-safe:",
   ]) {
-    assert.ok(pageSource.includes(expected), `missing UX safeguard: ${expected}`);
+    assert.ok(pageSource.includes(expected) || showcaseSource.includes(expected), `missing UX safeguard: ${expected}`);
   }
 
-  for (const removed of [
-    "LandingHeroShowcase",
-    "Current product proof",
-    "Request a workspace",
-    "A CRM built around childcare enrollment",
-    "Ready to connect the whole school day?",
-    'id="billing"',
-    'id="product-maps"',
-    "transition-all",
+  for (const expected of [
+    'role="tablist"',
+    'role="tab"',
+    'role="tabpanel"',
+    "aria-selected",
+    "aria-controls",
+    "aria-labelledby",
   ]) {
-    assert.ok(!pageSource.includes(removed), `sales-funnel content remains: ${removed}`);
+    assert.ok(showcaseSource.includes(expected), `missing accessible product tab behavior: ${expected}`);
   }
-  assert.ok(
-    !pageSource.includes('className="animate-pulse'),
-    "ambient motion must remain reduced-motion safe",
-  );
+
+  assert.ok(!pageSource.includes("animate-pulse"), "ambient motion must not run continuously");
+  assert.ok(!showcaseSource.includes("setInterval"), "product screens must not auto-advance");
 });
 
-test("landing page provides real light and dark Honeyglass themes", () => {
+test("landing page follows the modern ink, white, and honey visual system in both themes", () => {
   for (const expected of [
-    "bg-[#fbf7ec]",
-    "text-slate-950",
-    "dark:bg-[#03070d]",
-    "dark:bg-transparent",
-    "dark:!bg-black/20",
-    "dark:!bg-white/[0.055]",
-    "dark:text-white",
+    "bg-[#071018]",
+    "bg-white",
+    "bg-[#f5f3ee]",
+    "bg-[#f6bd2c]",
+    "dark:bg-[#071018]",
+    "dark:bg-[#0a151f]",
+    "dark:bg-[#0d1b26]",
     "PublicThemeToggle",
-    "[&>span:first-child]:!text-amber-700",
-    "dark:[&>span:first-child]:!text-amber-300",
+    "tracking-[-0.065em]",
   ]) {
-    assert.ok(pageSource.includes(expected), `missing landing theme treatment: ${expected}`);
+    assert.ok(pageSource.includes(expected), `missing landing visual treatment: ${expected}`);
   }
 
   for (const expected of [
@@ -122,15 +151,27 @@ test("landing page provides real light and dark Honeyglass themes", () => {
     "aria-pressed={isDark}",
     "useSyncExternalStore(subscribeToTheme, getThemeSnapshot, getServerThemeSnapshot)",
     "new MutationObserver(onStoreChange)",
-    'event.key !== themeStorageKey || (event.newValue !== "light" && event.newValue !== "dark")',
     'document.documentElement.classList.toggle("dark", nextDark)',
     'localStorage.setItem(themeStorageKey, nextDark ? "dark" : "light")',
-    'root.classList.toggle("dark", nextDark)',
-    'root.style.colorScheme = nextDark ? "dark" : "light"',
     "touch-manipulation",
     "focus-visible:ring-2",
-    "dark:!bg-white/[0.055]",
   ]) {
     assert.ok(themeToggleSource.includes(expected), `missing theme toggle safeguard: ${expected}`);
+  }
+});
+
+test("landing page avoids the previous access-directory and long-funnel treatments", () => {
+  for (const removed of [
+    "HoneycombAccessRail",
+    "Choose Your Workspace",
+    "Current product proof",
+    "A CRM built around childcare enrollment",
+    "Ready to connect the whole school day?",
+    'id="billing"',
+    'id="product-maps"',
+    "hive-texture",
+    "transition-all",
+  ]) {
+    assert.ok(!pageSource.includes(removed), `outdated landing treatment remains: ${removed}`);
   }
 });

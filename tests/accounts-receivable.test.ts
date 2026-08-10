@@ -5,6 +5,7 @@ import {
   accountBalanceCenterIds,
   buildAccountsReceivableSnapshot,
   buildAccountsReceivableSummary,
+  buildNetReceivableAging,
   canViewAccountBalances,
   isExecutiveAccountBalanceView,
   type AccountsReceivableFamilyRow,
@@ -52,6 +53,29 @@ const families: AccountsReceivableFamilyRow[] = [
     billingAccount: null,
   },
 ];
+
+test("aging reconciles partial account payments to the remaining receivable", () => {
+  const aging = buildNetReceivableAging(
+    [
+      { id: "partial", balanceCents: 15_000 },
+      { id: "ledger-only", balanceCents: 3_000 },
+      { id: "credit", balanceCents: -2_000 },
+    ],
+    [
+      { billingAccountId: "partial", totalCents: 10_000, dueDate: new Date("2026-05-01T00:00:00.000Z") },
+      { billingAccountId: "partial", totalCents: 10_000, dueDate: new Date("2026-08-15T00:00:00.000Z") },
+    ],
+    new Date("2026-08-10T00:00:00.000Z"),
+  );
+
+  assert.deepEqual(aging, {
+    currentCents: 13_000,
+    oneToThirtyCents: 0,
+    thirtyOneToSixtyCents: 0,
+    sixtyOnePlusCents: 5_000,
+  });
+  assert.equal(Object.values(aging).reduce((sum, cents) => sum + cents, 0), 18_000);
+});
 
 test("school account snapshot puts the supplied current families with balances owed first", () => {
   const snapshot = buildAccountsReceivableSnapshot(

@@ -55,6 +55,7 @@ import {
 } from "@/components/school-setup-command-center";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { modules } from "@/lib/demo-data";
+import { buildNetReceivableAging } from "@/lib/accounts-receivable";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
@@ -3195,7 +3196,10 @@ async function renderLivePage(
       prisma.invoice.count({ where: invoiceWhere }),
       prisma.invoice.count({ where: { ...currentInvoiceWhere, status: PaymentStatus.OPEN } }),
       prisma.invoice.count({ where: { ...invoiceWhere, status: PaymentStatus.PAID } }),
-      prisma.invoice.findMany({ where: { ...currentInvoiceWhere, status: PaymentStatus.OPEN }, select: { totalCents: true, dueDate: true } }),
+      prisma.invoice.findMany({
+        where: { ...currentInvoiceWhere, status: PaymentStatus.OPEN },
+        select: { billingAccountId: true, totalCents: true, dueDate: true },
+      }),
       prisma.ledgerEntry.findMany({
         where: { billingAccount: billingAccountWhere },
         orderBy: { effectiveAt: "desc" },
@@ -3333,31 +3337,22 @@ async function renderLivePage(
       getStripeWebhookSecret({ tenantId: user.tenantId }).then(Boolean),
     ]);
     const allowPlatformOnlyPayments = process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true";
-    const arReport = openRows.reduce(
-      (report, invoice) => {
-        const daysPastDue = Math.floor((startOfDay.getTime() - new Date(invoice.dueDate).getTime()) / 86_400_000);
-        if (daysPastDue <= 0) report.currentCents += invoice.totalCents;
-        else if (daysPastDue <= 30) report.oneToThirtyCents += invoice.totalCents;
-        else if (daysPastDue <= 60) report.thirtyOneToSixtyCents += invoice.totalCents;
-        else report.sixtyOnePlusCents += invoice.totalCents;
-        return report;
-      },
-      {
-        currentCents: 0,
-        oneToThirtyCents: 0,
-        thirtyOneToSixtyCents: 0,
-        sixtyOnePlusCents: 0,
-        chargesCents: 0,
-        paymentsCents: 0,
-        agencyPaymentsCents: 0,
-        creditsCents: 0,
-      },
-    );
     const currentBillingAccountIds = new Set(
       billingAccountRows
         .filter((account) => account.family._count.children > 0)
         .map((account) => account.id),
     );
+    const arReport = {
+      ...buildNetReceivableAging(
+        billingAccountRows.filter((account) => currentBillingAccountIds.has(account.id)),
+        openRows,
+        startOfDay,
+      ),
+      chargesCents: 0,
+      paymentsCents: 0,
+      agencyPaymentsCents: 0,
+      creditsCents: 0,
+    };
     for (const entry of ledgerRollupRows) {
       if (!currentBillingAccountIds.has(entry.billingAccountId)) continue;
       if (entry.amountCents > 0) arReport.chargesCents += entry.amountCents;

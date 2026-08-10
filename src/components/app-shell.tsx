@@ -535,9 +535,12 @@ function isParentFacingUser(currentUser?: ShellUser) {
   return currentUser?.role === "PARENT_GUARDIAN" || currentUser?.role === "AUTHORIZED_PICKUP";
 }
 
-function AccountMenu({ currentUser, onLogout }: { currentUser: ShellUser; onLogout: () => void }) {
+function AccountMenu({ currentUser, onLogout, previewMode = false }: { currentUser: ShellUser; onLogout: () => void; previewMode?: boolean }) {
   const displayName = removeDemoMarkersFromUserView(currentUser.name);
   const displayEmail = removeDemoMarkersFromUserView(currentUser.email);
+  if (previewMode) {
+    return <UserAvatar name={displayName} src={currentUser.profilePhotoUrl} size="md" className="border shadow-none" />;
+  }
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Open account menu" className="overflow-hidden rounded-full p-0" />}>
@@ -750,7 +753,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchUserEmail = currentUser?.email ?? "";
+  const searchUserEmail = previewMode ? "" : currentUser?.email ?? "";
   const displayUserName = currentUser
     ? removeDemoMarkersFromUserView(currentUser.name)
     : undefined;
@@ -913,10 +916,10 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
         Skip to workspace content
       </a>
       <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-20 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl lg:block 2xl:hidden">
-        <SidebarRail currentUser={currentUser} onLogout={logout} />
+        <SidebarRail currentUser={currentUser} onLogout={previewMode ? undefined : logout} />
       </aside>
       <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl 2xl:block">
-        <SidebarNav currentUser={currentUser} onLogout={logout} />
+        <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} />
       </aside>
       <div className="min-w-0 lg:pl-20 2xl:pl-72">
         <header className="app-header sticky top-0 z-10 min-w-0 border-b bg-background/75 backdrop-blur-xl">
@@ -931,7 +934,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
               </SheetTrigger>
               <SheetContent side="left" className="w-80 p-0">
                 <SheetTitle className="sr-only">Navigation</SheetTitle>
-                <SidebarNav currentUser={currentUser} onLogout={logout} />
+                <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} />
               </SheetContent>
             </Sheet>
             {showWorkspaceTools ? <div className="hidden min-w-0 flex-1 items-center lg:flex">
@@ -1091,10 +1094,10 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
               {currentUser ? (
                 <>
                   <div className="sm:hidden">
-                    <AccountMenu currentUser={currentUser} onLogout={logout} />
+                    <AccountMenu currentUser={currentUser} onLogout={logout} previewMode={previewMode} />
                   </div>
                   <div className="hidden items-center gap-2 sm:flex">
-                    <AccountMenu currentUser={currentUser} onLogout={logout} />
+                    <AccountMenu currentUser={currentUser} onLogout={logout} previewMode={previewMode} />
                     <div className="hidden rounded-lg border bg-card/70 px-3 py-1.5 text-right 2xl:block">
                       <div className="text-xs font-medium leading-none">{displayUserName}</div>
                       <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>

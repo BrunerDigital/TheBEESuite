@@ -59,7 +59,7 @@ function jsonSummary(value: unknown) {
   return entries.length ? entries.join(" · ") : "None";
 }
 
-export function AutomationWorkflowBuilder({ data }: { data: AutomationWorkflowBuilderData }) {
+export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: AutomationWorkflowBuilderData; readOnly?: boolean }) {
   const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const firstAutomation = data.automations[0] ?? null;
@@ -113,6 +113,10 @@ export function AutomationWorkflowBuilder({ data }: { data: AutomationWorkflowBu
   }
 
   function save() {
+    if (readOnly) {
+      setMessage("Preview only — workflow changes are disabled.");
+      return;
+    }
     startTransition(async () => {
       setMessage("");
       setError("");
@@ -279,9 +283,9 @@ export function AutomationWorkflowBuilder({ data }: { data: AutomationWorkflowBu
               <Textarea className="min-h-40" value={body} onChange={(event) => setBody(event.target.value)} />
             </div>
           </div>
-          <Button disabled={isPending || !name} onClick={save}>
+          <Button disabled={readOnly || isPending || !name} onClick={save}>
             <Save data-icon="inline-start" />
-            Save Workflow
+            {readOnly ? "Preview only" : "Save Workflow"}
           </Button>
         </CardContent>
       </Card>

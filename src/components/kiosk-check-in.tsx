@@ -67,6 +67,7 @@ type VerifiedCredential =
 
 type Props = {
   initialMode?: KioskMode;
+  previewMode?: boolean;
   center: {
     id: string;
     name: string;
@@ -96,7 +97,7 @@ function shortDate(value?: string | Date | null) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
 }
 
-export function KioskCheckIn({ center, initialMode = "family" }: Props) {
+export function KioskCheckIn({ center, initialMode = "family", previewMode = false }: Props) {
   const [kioskMode, setKioskMode] = useState<KioskMode>(initialMode);
   const [credentialMode, setCredentialMode] = useState<VerificationMethod>("pin");
   const [pin, setPin] = useState("");
@@ -212,6 +213,10 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
 
   function lookupCredential(scannedQrToken?: string) {
     markActivity();
+    if (previewMode) {
+      setStatus("Preview only — credential lookup is disabled.");
+      return;
+    }
     const normalizedQrToken = typeof scannedQrToken === "string" ? scannedQrToken.trim() : qrToken.trim();
     const credential: VerifiedCredential = credentialMode === "qr"
       ? { method: "qr", qrToken: normalizedQrToken }
@@ -245,7 +250,7 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
   }
 
   useEffect(() => {
-    if (kioskMode !== "family" || credentialMode !== "qr" || lookup) return undefined;
+    if (previewMode || kioskMode !== "family" || credentialMode !== "qr" || lookup) return undefined;
     let active = true;
     qrScanHandledRef.current = false;
 
@@ -307,10 +312,14 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
     };
   // The lookup function intentionally uses the current kiosk state when a scan completes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [credentialMode, kioskMode, lookup]);
+  }, [credentialMode, kioskMode, lookup, previewMode]);
 
   function submit(type: "check_in" | "check_out") {
     markActivity();
+    if (previewMode) {
+      setStatus("Preview only — check-in and check-out are disabled.");
+      return;
+    }
     if (!verifiedCredential) {
       setError("Find the family before completing check-in or check-out.");
       return;
@@ -342,6 +351,10 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
 
   function lookupStaffCredential() {
     markActivity();
+    if (previewMode) {
+      setStatus("Preview only — staff lookup is disabled.");
+      return;
+    }
     if (!staffCredentialReady) {
       setError("Enter your 4 digit staff code.");
       return;
@@ -371,6 +384,10 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
 
   function submitStaff(action: "clock_in" | "clock_out") {
     markActivity();
+    if (previewMode) {
+      setStatus("Preview only — staff clock actions are disabled.");
+      return;
+    }
     if (!staffCredentialReady) {
       setError("Enter your 4 digit staff code.");
       return;

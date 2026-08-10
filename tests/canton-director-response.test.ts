@@ -6,6 +6,7 @@ import { activeClassroomWhere, classroomIsArchived } from "../src/lib/classroom-
 
 const source = fs.readFileSync(new URL("../scripts/reconcile-canton-stale-invoices-and-classrooms.ts", import.meta.url), "utf8");
 const classroomScopeSource = fs.readFileSync(new URL("../src/lib/corporate-view-scope.ts", import.meta.url), "utf8");
+const procareImportSource = fs.readFileSync(new URL("../src/app/api/imports/procare/route.ts", import.meta.url), "utf8");
 
 test("active classroom scope excludes archived records", () => {
   assert.deepEqual(activeClassroomWhere({ centerId: "center-1" }), {
@@ -42,6 +43,17 @@ test("Canton classroom repair archives only empty legacy rooms and preserves tra
   assert.match(source, /classroomId: classroom\.retainedId/);
   assert.match(source, /historicalTransitionsPreserved/);
   assert.doesNotMatch(source, /classroom\.delete/);
+});
+
+test("later ProCare imports preserve reconciled invoices and redirect archived classroom matches", () => {
+  assert.match(procareImportSource, /staleImportedOpeningBalanceVoidedAt === "string"/);
+  assert.match(procareImportSource, /if \(reconciliationProtectedInvoice\)[\s\S]*billingAccountId: account\.id[\s\S]*externalId: invoiceExternalId/);
+  assert.doesNotMatch(
+    procareImportSource.match(/if \(reconciliationProtectedInvoice\)[\s\S]*?else if \(balanceCents > 0\)/)?.[0] ?? "",
+    /status: PaymentStatus\.OPEN|totalCents: balanceCents|deleteMany/,
+  );
+  assert.match(procareImportSource, /activeProcareClassroomMatches\(rawMatches, centerId, db\)/);
+  assert.match(procareImportSource, /mergedIntoClassroomId[\s\S]*activeClassroomWhere\(\{ centerId, id: \{ in: mergedIntoIds \} \}\)/);
 });
 
 test("family intake and child writes cannot reuse archived classrooms", () => {

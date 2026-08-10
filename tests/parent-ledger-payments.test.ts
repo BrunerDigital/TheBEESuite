@@ -48,7 +48,7 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(workspace, /payProductInvoice/);
   assert.match(workspace, /parentBalanceReviewRequired \? "Agency split under review"/);
   assert.match(workspace, /Amount to pay/);
-  assert.match(workspace, /amountCents: accountPaymentAmountCents/);
+  assert.match(workspace, /amountCents: accountPaymentRequestCents/);
   assert.doesNotMatch(workspace, /Payment is blocked until the school separates agency and family responsibility/);
   assert.match(workspace, /Pay Product by Card/);
 });

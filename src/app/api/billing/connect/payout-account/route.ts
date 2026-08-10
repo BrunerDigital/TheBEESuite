@@ -11,6 +11,7 @@ import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { verifyStripeConnectAccountBinding } from "@/lib/stripe-connect-setup";
+import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,13 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const accountId = readStripeConnectedAccountId(center.customFields);
+  const migration = readStripeConnectMigration(center.customFields);
+  if (migration.targetAccountId && !migration.cutoverAt) {
+    return NextResponse.json(
+      { ok: false, error: "This school is being migrated. Use Reauthorize new Stripe account so the existing payout bank remains untouched." },
+      { status: 409 },
+    );
+  }
   if (!accountId) {
     return NextResponse.json(
       { ok: false, error: "Start this school's secure payout onboarding before choosing its bank account." },

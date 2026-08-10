@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { createStripeAccountLink, readStripeConnectedAccountId } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
+import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -50,6 +51,10 @@ async function GETHandler(request: NextRequest) {
   }
 
   const accountId = readStripeConnectedAccountId(center.customFields);
+  const migration = readStripeConnectMigration(center.customFields);
+  if (migration.targetAccountId && !migration.cutoverAt) {
+    return NextResponse.redirect(settingsUrl(baseUrl, center.id, "migration_prepared"));
+  }
   if (!accountId) {
     return NextResponse.redirect(settingsUrl(baseUrl, center.id, "not_started"));
   }

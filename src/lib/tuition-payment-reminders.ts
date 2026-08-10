@@ -1,36 +1,29 @@
+import { isCurrentlyEnrolledChildRecord } from "./enrollment-status";
 import { notificationDedupeKey } from "./notification-policy";
 
 const dayMs = 86_400_000;
 
+export const BEE_SUITE_PARENT_PORTAL_URL = "https://thebeesuite.io/parents";
+export const TUITION_PAYMENT_REMINDER_VERSION = "current-family-balance-v2";
 export const TUITION_PAYMENT_REMINDER_SETTINGS_KEY = "tuitionPaymentReminderSettings";
 export const TUITION_PAYMENT_REMINDER_NOTIFICATION_RETENTION_DAYS = 120;
-export const TUITION_PAYMENT_REMINDER_MAX_PAST_DUE_DAYS = 90;
 
 export type TuitionPaymentReminderSettings = {
   enabled: boolean;
-  invoiceReadyEnabled: boolean;
-  pastDueEnabled: boolean;
-  pastDueFirstDaysAfter: number;
-  pastDueRepeatEveryDays: number;
-  pastDueMaxDaysAfter: number;
+  repeatEveryDays: number;
 };
 
-export type TuitionPaymentReminderPhase = "ready_to_pay" | "past_due_dropoff";
+export type TuitionPaymentReminderPhase = "balance_available";
 
 export type TuitionPaymentReminderDecision = {
   phase: TuitionPaymentReminderPhase;
   bucket: string;
-  daysPastDue: number;
-  priority: "normal" | "high";
+  priority: "normal";
 };
 
 export const DEFAULT_TUITION_PAYMENT_REMINDER_SETTINGS: TuitionPaymentReminderSettings = {
   enabled: true,
-  invoiceReadyEnabled: true,
-  pastDueEnabled: true,
-  pastDueFirstDaysAfter: 3,
-  pastDueRepeatEveryDays: 2,
-  pastDueMaxDaysAfter: 30,
+  repeatEveryDays: 7,
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -61,35 +54,23 @@ function startOfUtcDay(date: Date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
-function endOfUtcDay(date: Date) {
-  const end = startOfUtcDay(date);
-  end.setUTCHours(23, 59, 59, 999);
-  return end;
-}
-
-function ymd(date: Date) {
-  return startOfUtcDay(date).toISOString().slice(0, 10);
+function cadenceBucket(now: Date, repeatEveryDays: number) {
+  const mondayAnchor = Date.UTC(1970, 0, 5);
+  const period = Math.floor((startOfUtcDay(now).getTime() - mondayAnchor) / (repeatEveryDays * dayMs));
+  return `balance-${repeatEveryDays}d-${period}`;
 }
 
 export function normalizeTuitionPaymentReminderSettings(value: unknown): TuitionPaymentReminderSettings {
   const input = record(value);
   const defaults = DEFAULT_TUITION_PAYMENT_REMINDER_SETTINGS;
-  const pastDueFirstDaysAfter = integer(input.pastDueFirstDaysAfter, defaults.pastDueFirstDaysAfter, 1, 30);
 
   return {
     enabled: bool(input.enabled, defaults.enabled),
-    invoiceReadyEnabled: bool(input.invoiceReadyEnabled, defaults.invoiceReadyEnabled),
-    pastDueEnabled: bool(input.pastDueEnabled, defaults.pastDueEnabled),
-    pastDueFirstDaysAfter,
-    pastDueRepeatEveryDays: integer(input.pastDueRepeatEveryDays, defaults.pastDueRepeatEveryDays, 1, 30),
-    pastDueMaxDaysAfter: Math.max(
-      pastDueFirstDaysAfter,
-      integer(
-        input.pastDueMaxDaysAfter,
-        defaults.pastDueMaxDaysAfter,
-        pastDueFirstDaysAfter,
-        TUITION_PAYMENT_REMINDER_MAX_PAST_DUE_DAYS,
-      ),
+    repeatEveryDays: integer(
+      input.repeatEveryDays,
+      defaults.repeatEveryDays,
+      1,
+      30,
     ),
   };
 }
@@ -98,120 +79,77 @@ export function tuitionPaymentReminderSettingsFromCustomFields(customFields: unk
   return normalizeTuitionPaymentReminderSettings(record(customFields)[TUITION_PAYMENT_REMINDER_SETTINGS_KEY]);
 }
 
-export function daysPastTuitionDue(dueDate: Date, now = new Date()) {
-  const diff = startOfUtcDay(now).getTime() - startOfUtcDay(dueDate).getTime();
-  return Math.max(0, Math.round(diff / dayMs));
-}
-
-export function daysSinceInvoiceCreated(createdAt: Date, now = new Date()) {
-  const diff = startOfUtcDay(now).getTime() - startOfUtcDay(createdAt).getTime();
-  return Math.round(diff / dayMs);
-}
-
 export function tuitionPaymentReminderDecision({
-  dueDate,
-  invoiceCreatedAt,
   hasActiveAutopay,
+  hasPendingPayment,
   now = new Date(),
   settings = DEFAULT_TUITION_PAYMENT_REMINDER_SETTINGS,
 }: {
-  dueDate: Date;
-  invoiceCreatedAt: Date;
   hasActiveAutopay?: boolean;
+  hasPendingPayment?: boolean;
   now?: Date;
   settings?: TuitionPaymentReminderSettings;
 }): TuitionPaymentReminderDecision | null {
   const normalized = normalizeTuitionPaymentReminderSettings(settings);
-  if (!normalized.enabled) return null;
-
-  if (normalized.invoiceReadyEnabled && !hasActiveAutopay && daysSinceInvoiceCreated(invoiceCreatedAt, now) === 0) {
-    return {
-      phase: "ready_to_pay",
-      bucket: `ready-${ymd(invoiceCreatedAt)}`,
-      daysPastDue: 0,
-      priority: "normal",
-    };
-  }
-
-  const pastDueDays = daysPastTuitionDue(dueDate, now);
-  if (!normalized.pastDueEnabled || pastDueDays < normalized.pastDueFirstDaysAfter) return null;
-  if (pastDueDays > normalized.pastDueMaxDaysAfter) return null;
-
-  const daysSinceFirstNotice = pastDueDays - normalized.pastDueFirstDaysAfter;
-  if (daysSinceFirstNotice % normalized.pastDueRepeatEveryDays !== 0) return null;
+  if (!normalized.enabled || hasActiveAutopay || hasPendingPayment) return null;
 
   return {
-    phase: "past_due_dropoff",
-    bucket: `past-due-${ymd(dueDate)}-${pastDueDays}`,
-    daysPastDue: pastDueDays,
-    priority: "high",
+    phase: "balance_available",
+    bucket: cadenceBucket(now, normalized.repeatEveryDays),
+    priority: "normal",
   };
-}
-
-export function tuitionPaymentReminderWindow(now = new Date()) {
-  const createdStart = startOfUtcDay(now);
-  const createdEnd = endOfUtcDay(now);
-  const pastDueStart = startOfUtcDay(now);
-  pastDueStart.setUTCDate(pastDueStart.getUTCDate() - TUITION_PAYMENT_REMINDER_MAX_PAST_DUE_DAYS);
-  return { createdStart, createdEnd, pastDueStart, pastDueEnd: createdStart };
 }
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
-function shortDate(date: Date) {
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
-}
-
-function invoiceLabel(invoiceNumber?: string | null) {
-  return invoiceNumber ? `invoice ${invoiceNumber}` : "your tuition invoice";
-}
-
 export function tuitionPaymentReminderCopy(input: {
-  phase: TuitionPaymentReminderPhase;
   familyName: string;
-  centerName?: string | null;
-  invoiceNumber?: string | null;
-  dueDate: Date;
-  amountCents: number;
-  balanceCents?: number | null;
+  centerName: string;
+  balanceCents: number;
 }) {
-  const amount = money(input.amountCents);
-  const balance = money(Math.max(input.balanceCents ?? input.amountCents, input.amountCents));
-  const dueDate = shortDate(input.dueDate);
-  const schoolPrefix = input.centerName ? `${input.centerName}: ` : "";
-  const invoice = invoiceLabel(input.invoiceNumber);
-
-  if (input.phase === "past_due_dropoff") {
-    return {
-      title: `Past due tuition balance: ${balance}`,
-      body: `${schoolPrefix}${input.familyName}'s tuition balance is past due. Please pay ${balance} in the parent portal before or at your next drop-off. ${invoice} was due ${dueDate}.`,
-      priority: "high" as const,
-    };
-  }
-
+  const balance = money(Math.max(0, input.balanceCents));
   return {
-    title: `Tuition ready to view/pay: ${amount}`,
-    body: `${schoolPrefix}${input.familyName}'s ${invoice} for ${amount} is ready to view and pay in the parent portal.`,
+    title: "Friendly reminder: your tuition balance is available",
+    body: [
+      "Hello,",
+      `This is a friendly reminder from ${input.centerName} that ${input.familyName}'s current tuition balance of ${balance} is available to review and pay in The BEE Suite Parent Portal.`,
+      `Sign in securely: ${BEE_SUITE_PARENT_PORTAL_URL}\nAfter signing in, open Billing to review your balance and payment options.`,
+      "If you recently submitted a payment or one is processing, no action is needed. Bank payments can take several business days to appear on your account.",
+      "Want easier access? Install the Parent Portal on your device:\n- iPhone or iPad: open the portal in Safari, tap Share, then Add to Home Screen.\n- Android: open it in Chrome, tap the menu, then Install app or Add to Home screen.\n- Computer: open it in Chrome or Edge and select the browser's Install option.",
+      `For your security, always use ${BEE_SUITE_PARENT_PORTAL_URL} and never send card, bank, or password information through email or text. For questions about your balance, subsidies, credits, or payment arrangements, contact ${input.centerName} directly.`,
+    ].join("\n\n"),
     priority: "normal" as const,
   };
 }
 
+export function isCurrentFamilyBalanceReminderEligible(input: {
+  balanceCents: number;
+  parentVisibleBalanceCents: number;
+  responsibilityReviewRequired: boolean;
+  checkoutReady: boolean;
+  billingApproved: boolean;
+  children: Array<{ enrollmentStatus?: string | null; classroomId?: string | null }>;
+}) {
+  return input.balanceCents > 0
+    && input.parentVisibleBalanceCents > 0
+    && !input.responsibilityReviewRequired
+    && input.checkoutReady
+    && input.billingApproved
+    && input.children.some(isCurrentlyEnrolledChildRecord);
+}
+
 export function tuitionPaymentReminderDedupeKey(input: {
-  invoiceId: string;
+  billingAccountId: string;
   phase: TuitionPaymentReminderPhase;
   bucket: string;
   userId: string;
 }) {
   return notificationDedupeKey([
     "tuition_payment_reminder",
-    input.invoiceId,
+    TUITION_PAYMENT_REMINDER_VERSION,
+    input.billingAccountId,
     input.phase,
     input.bucket,
     input.userId,
@@ -219,29 +157,16 @@ export function tuitionPaymentReminderDedupeKey(input: {
 }
 
 export function tuitionPaymentReminderDeliveryDedupeKey(input: {
-  invoiceId: string;
+  billingAccountId: string;
   phase: TuitionPaymentReminderPhase;
   bucket: string;
 }) {
   return notificationDedupeKey([
     "tuition_payment_reminder",
-    input.invoiceId,
+    TUITION_PAYMENT_REMINDER_VERSION,
+    input.billingAccountId,
     input.phase,
     input.bucket,
     "external",
   ]);
-}
-
-export function isTuitionInvoiceLike(input: {
-  customFields: unknown;
-  items?: Array<{ description: string | null }>;
-}) {
-  const fields = record(input.customFields);
-  const chargeSource = String(fields.chargeSource ?? "").trim().toLowerCase();
-  const mode = String(fields.mode ?? "").trim().toLowerCase();
-  if (chargeSource === "tuitionplan" || mode === "recurring" || typeof fields.tuitionPlanName === "string") {
-    return true;
-  }
-
-  return Boolean(input.items?.some((item) => (item.description ?? "").toLowerCase().includes("tuition")));
 }

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  BEE_SUITE_PARENT_PORTAL_URL,
   DEFAULT_TUITION_PAYMENT_REMINDER_SETTINGS,
-  isTuitionInvoiceLike,
+  isCurrentFamilyBalanceReminderEligible,
   normalizeTuitionPaymentReminderSettings,
   tuitionPaymentReminderCopy,
   tuitionPaymentReminderDecision,
@@ -10,143 +11,108 @@ import {
   tuitionPaymentReminderSettingsFromCustomFields,
 } from "../src/lib/tuition-payment-reminders";
 
-test("tuition payment reminder settings default to bill-ready plus past-due cadence", () => {
+test("tuition balance reminders default to a weekly current-family cadence", () => {
   const settings = normalizeTuitionPaymentReminderSettings(null);
 
   assert.deepEqual(settings, DEFAULT_TUITION_PAYMENT_REMINDER_SETTINGS);
-  assert.equal(settings.invoiceReadyEnabled, true);
-  assert.equal(settings.pastDueFirstDaysAfter, 3);
-  assert.equal(settings.pastDueRepeatEveryDays, 2);
-  assert.equal(settings.pastDueMaxDaysAfter, 30);
+  assert.equal(settings.enabled, true);
+  assert.equal(settings.repeatEveryDays, 7);
 });
 
-test("tuition payment reminders do not send before an invoice is created", () => {
-  const dueDate = new Date("2026-06-22T12:00:00.000Z");
-  const invoiceCreatedAt = new Date("2026-06-19T23:00:00.000Z");
-
-  assert.equal(
-    tuitionPaymentReminderDecision({
-      dueDate,
-      invoiceCreatedAt,
-      now: new Date("2026-06-18T12:00:00.000Z"),
-    }),
-    null,
-  );
-});
-
-test("tuition payment reminders send invoice-ready notices on billing day for non-autopay families", () => {
-  const decision = tuitionPaymentReminderDecision({
-    dueDate: new Date("2026-06-22T12:00:00.000Z"),
-    invoiceCreatedAt: new Date("2026-06-19T23:00:00.000Z"),
-    now: new Date("2026-06-19T23:15:00.000Z"),
+test("legacy invoice cadence resets to the friendly weekly family-level cadence", () => {
+  assert.deepEqual(normalizeTuitionPaymentReminderSettings({
+    enabled: true,
+    invoiceReadyEnabled: true,
+    pastDueEnabled: true,
+    pastDueRepeatEveryDays: 5,
+  }), {
+    enabled: true,
+    repeatEveryDays: 7,
   });
-
-  assert.equal(decision?.phase, "ready_to_pay");
-  assert.equal(decision?.bucket, "ready-2026-06-19");
 });
 
-test("tuition payment reminders skip invoice-ready notices for active autopay", () => {
-  const decision = tuitionPaymentReminderDecision({
-    dueDate: new Date("2026-06-22T12:00:00.000Z"),
-    invoiceCreatedAt: new Date("2026-06-19T23:00:00.000Z"),
-    hasActiveAutopay: true,
-    now: new Date("2026-06-19T23:15:00.000Z"),
-  });
+test("tuition balance reminders use one stable cadence bucket", () => {
+  const first = tuitionPaymentReminderDecision({ now: new Date("2026-08-10T12:00:00.000Z") });
+  const sameWindow = tuitionPaymentReminderDecision({ now: new Date("2026-08-16T23:59:59.000Z") });
+  const nextWindow = tuitionPaymentReminderDecision({ now: new Date("2026-08-17T00:00:00.000Z") });
 
-  assert.equal(decision, null);
+  assert.equal(first?.phase, "balance_available");
+  assert.equal(first?.bucket, sameWindow?.bucket);
+  assert.notEqual(first?.bucket, nextWindow?.bucket);
 });
 
-test("past-due drop-off reminders start on the next drop-off cadence and repeat", () => {
-  const dueDate = new Date("2026-06-19T12:00:00.000Z");
-  const invoiceCreatedAt = new Date("2026-06-19T23:00:00.000Z");
-
-  assert.equal(
-    tuitionPaymentReminderDecision({
-      dueDate,
-      invoiceCreatedAt,
-      now: new Date("2026-06-21T12:00:00.000Z"),
-    }),
-    null,
-  );
-  assert.equal(
-    tuitionPaymentReminderDecision({
-      dueDate,
-      invoiceCreatedAt,
-      now: new Date("2026-06-22T12:00:00.000Z"),
-    })?.phase,
-    "past_due_dropoff",
-  );
-  assert.equal(
-    tuitionPaymentReminderDecision({
-      dueDate,
-      invoiceCreatedAt,
-      now: new Date("2026-06-23T12:00:00.000Z"),
-    }),
-    null,
-  );
-  assert.equal(
-    tuitionPaymentReminderDecision({
-      dueDate,
-      invoiceCreatedAt,
-      now: new Date("2026-06-24T12:00:00.000Z"),
-    })?.phase,
-    "past_due_dropoff",
-  );
+test("tuition balance reminders stop for autopay and pending payments", () => {
+  assert.equal(tuitionPaymentReminderDecision({ hasActiveAutopay: true }), null);
+  assert.equal(tuitionPaymentReminderDecision({ hasPendingPayment: true }), null);
+  assert.equal(tuitionPaymentReminderDecision({ settings: { enabled: false, repeatEveryDays: 7 } }), null);
 });
 
-test("tuition payment reminder copy uses ready-to-view/pay and drop-off language", () => {
-  const ready = tuitionPaymentReminderCopy({
-    phase: "ready_to_pay",
+test("eligibility requires a current classroom child and a payable reviewed balance", () => {
+  const ready = {
+    balanceCents: 25_000,
+    parentVisibleBalanceCents: 25_000,
+    responsibilityReviewRequired: false,
+    checkoutReady: true,
+    billingApproved: true,
+  };
+
+  assert.equal(isCurrentFamilyBalanceReminderEligible({
+    ...ready,
+    children: [{ enrollmentStatus: "active", classroomId: "classroom_1" }],
+  }), true);
+  assert.equal(isCurrentFamilyBalanceReminderEligible({
+    ...ready,
+    children: [{ enrollmentStatus: "withdrawn", classroomId: "classroom_1" }],
+  }), false);
+  assert.equal(isCurrentFamilyBalanceReminderEligible({
+    ...ready,
+    children: [{ enrollmentStatus: "active", classroomId: null }],
+  }), false);
+  assert.equal(isCurrentFamilyBalanceReminderEligible({
+    ...ready,
+    parentVisibleBalanceCents: 0,
+    children: [{ enrollmentStatus: "active", classroomId: "classroom_1" }],
+  }), false);
+  assert.equal(isCurrentFamilyBalanceReminderEligible({
+    ...ready,
+    responsibilityReviewRequired: true,
+    children: [{ enrollmentStatus: "active", classroomId: "classroom_1" }],
+  }), false);
+});
+
+test("friendly reminder copy uses only the canonical secure parent portal", () => {
+  const reminder = tuitionPaymentReminderCopy({
     familyName: "Anderson Family",
     centerName: "FL | Sarasota",
-    invoiceNumber: "INV-100",
-    dueDate: new Date("2026-06-22T12:00:00.000Z"),
-    amountCents: 25000,
-  });
-  const pastDue = tuitionPaymentReminderCopy({
-    phase: "past_due_dropoff",
-    familyName: "Anderson Family",
-    centerName: "FL | Sarasota",
-    invoiceNumber: "INV-100",
-    dueDate: new Date("2026-06-19T12:00:00.000Z"),
-    amountCents: 25000,
-    balanceCents: 37500,
+    balanceCents: 37_500,
   });
 
-  assert.equal(ready.title, "Tuition ready to view/pay: $250.00");
-  assert.match(ready.body, /ready to view and pay in the parent portal/);
-  assert.equal(pastDue.title, "Past due tuition balance: $375.00");
-  assert.match(pastDue.body, /before or at your next drop-off/);
+  assert.equal(reminder.title, "Friendly reminder: your tuition balance is available");
+  assert.match(reminder.body, /current tuition balance of \$375\.00/);
+  assert.match(reminder.body, /iPhone or iPad/);
+  assert.match(reminder.body, /Android/);
+  assert.match(reminder.body, /Computer/);
+  assert.equal(BEE_SUITE_PARENT_PORTAL_URL, "https://thebeesuite.io/parents");
+  assert.doesNotMatch(reminder.body, /http:\/\//);
 });
 
-test("tuition invoice detection uses recurring tuition metadata and tuition item fallback", () => {
-  assert.equal(isTuitionInvoiceLike({ customFields: { chargeSource: "tuitionPlan" } }), true);
-  assert.equal(isTuitionInvoiceLike({ customFields: { mode: "recurring" } }), true);
-  assert.equal(isTuitionInvoiceLike({ customFields: {}, items: [{ description: "Weekly tuition - Avery" }] }), true);
-  assert.equal(isTuitionInvoiceLike({ customFields: { checkoutPurpose: "registration_fee" }, items: [{ description: "Registration fee" }] }), false);
-});
-
-test("tuition reminder settings read from center custom fields and dedupe by invoice, bucket, and user", () => {
+test("settings remain school-scoped and dedupe remains account, cadence, and user scoped", () => {
   const settings = tuitionPaymentReminderSettingsFromCustomFields({
-    tuitionPaymentReminderSettings: {
-      invoiceReadyEnabled: false,
-      pastDueRepeatEveryDays: 7,
-    },
+    tuitionPaymentReminderSettings: { enabled: true, repeatEveryDays: 14 },
   });
   const first = tuitionPaymentReminderDedupeKey({
-    invoiceId: "invoice_1",
-    phase: "ready_to_pay",
-    bucket: "ready-2026-06-19",
+    billingAccountId: "account_1",
+    phase: "balance_available",
+    bucket: "balance-14d-1",
     userId: "user_1",
   });
   const second = tuitionPaymentReminderDedupeKey({
-    invoiceId: "invoice_1",
-    phase: "ready_to_pay",
-    bucket: "ready-2026-06-19",
+    billingAccountId: "account_1",
+    phase: "balance_available",
+    bucket: "balance-14d-1",
     userId: "user_2",
   });
 
-  assert.equal(settings.invoiceReadyEnabled, false);
-  assert.equal(settings.pastDueRepeatEveryDays, 7);
+  assert.equal(settings.repeatEveryDays, 14);
   assert.notEqual(first, second);
 });

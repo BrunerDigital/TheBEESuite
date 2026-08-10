@@ -48,8 +48,15 @@ test("family intake and child writes cannot reuse archived classrooms", () => {
   const pageSource = fs.readFileSync(new URL("../src/app/[slug]/page.tsx", import.meta.url), "utf8");
   const operationsSource = fs.readFileSync(new URL("../src/app/api/operations/records/route.ts", import.meta.url), "utf8");
   const familyIntakeSource = fs.readFileSync(new URL("../src/app/api/families/intake/route.ts", import.meta.url), "utf8");
+  const aiCommandSource = fs.readFileSync(new URL("../src/app/api/ai/command/route.ts", import.meta.url), "utf8");
+  const childLocationSource = fs.readFileSync(new URL("../src/app/api/children/location/route.ts", import.meta.url), "utf8");
   assert.match(pageSource, /classrooms: \{[\s\S]*where: activeClassroomWhere\(\)/);
   assert.match(operationsSource, /activeClassroomWhere\(\{ id: change\.value\.classroomId \}\)/);
   assert.match(operationsSource, /activeClassroomWhere\(\{ id: classroomId \}\)/);
+  assert.match(operationsSource, /entity === "staff"[\s\S]*activeClassroomWhere\(\{ id: clean\(body\.classroomId\) \}\)/);
+  assert.match(operationsSource, /entity === "staffAssignment"[\s\S]*activeClassroomWhere\(\{ id: classroomId \}\)/);
+  assert.match(operationsSource, /entity === "staffScheduleBatch"[\s\S]*activeClassroomWhere\(\{ id: classroomId \}\)/);
   assert.match(familyIntakeSource, /activeClassroomWhere\(\{ id: classroomId \}\)/);
+  assert.match(aiCommandSource, /activeClassroomWhere\(\{ id: change\.value\.classroomId, centerId: selectedCenterId \}\)/);
+  assert.match(childLocationSource, /activeClassroomWhere\(\{ id: target\.classroomId \}\)/);
 });

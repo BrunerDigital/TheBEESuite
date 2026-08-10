@@ -483,7 +483,9 @@ async function applyAiProfileChange(
     const change = buildBulkEnrollmentChange({ childIds: [child.id], enrollmentStatus: values.enrollmentStatus, classroomId: values.classroomId });
     if (!change.ok) throw new Error(change.error);
     if (change.value.classroomId) {
-      const classroom = await prisma.classroom.findFirst({ where: { id: change.value.classroomId, centerId: selectedCenterId } });
+      const classroom = await prisma.classroom.findFirst({
+        where: activeClassroomWhere({ id: change.value.classroomId, centerId: selectedCenterId }),
+      });
       if (!classroom) throw new Error("Classroom not found in the selected school.");
     }
     await prisma.child.update({ where: { id: child.id }, data: { enrollmentStatus: change.value.enrollmentStatus, classroomId: change.value.classroomId } });

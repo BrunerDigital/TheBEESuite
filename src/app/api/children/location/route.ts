@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canAccessAllCenters, canAccessCenter, canManageChildInClassroom, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { childLocationStatusForTarget, validateChildLocationTarget } from "@/lib/child-location";
+import { activeClassroomWhere } from "@/lib/classroom-status";
 import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
@@ -59,8 +60,8 @@ async function POSTHandler(request: NextRequest) {
 
   const assignedCenterId = child.classroom?.centerId ?? child.family.centerId;
   const destinationClassroom = target.classroomId
-    ? await prisma.classroom.findUnique({
-        where: { id: target.classroomId },
+    ? await prisma.classroom.findFirst({
+        where: activeClassroomWhere({ id: target.classroomId }),
         select: { id: true, name: true, centerId: true },
       })
     : null;

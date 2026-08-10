@@ -1250,7 +1250,10 @@ async function POSTHandler(request: NextRequest) {
       }
     }
     if (clean(body.classroomId)) {
-      const classroom = await prisma.classroom.findUnique({ where: { id: clean(body.classroomId) }, select: { centerId: true } });
+      const classroom = await prisma.classroom.findFirst({
+        where: activeClassroomWhere({ id: clean(body.classroomId) }),
+        select: { centerId: true },
+      });
       const guard = scopedUpdateGuard({ entity: "Classroom", expectedScopeId: centerId, actualScopeId: classroom?.centerId, scopeLabel: "center" });
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
@@ -1391,7 +1394,10 @@ async function POSTHandler(request: NextRequest) {
     centerId = staff.centerId;
     const classroomId = clean(body.classroomId) || null;
     if (classroomId) {
-      const classroom = await prisma.classroom.findUnique({ where: { id: classroomId }, select: { centerId: true } });
+      const classroom = await prisma.classroom.findFirst({
+        where: activeClassroomWhere({ id: classroomId }),
+        select: { centerId: true },
+      });
       const guard = scopedUpdateGuard({ entity: "Classroom", expectedScopeId: staff.centerId, actualScopeId: classroom?.centerId, scopeLabel: "center" });
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
@@ -1480,7 +1486,10 @@ async function POSTHandler(request: NextRequest) {
   } else if (entity === "staffScheduleBatch") {
     const classroomId = clean(body.classroomId);
     if (!classroomId) return NextResponse.json({ ok: false, error: "Classroom ID is required." }, { status: 400 });
-    const classroom = await prisma.classroom.findUnique({ where: { id: classroomId }, select: { id: true, centerId: true } });
+    const classroom = await prisma.classroom.findFirst({
+      where: activeClassroomWhere({ id: classroomId }),
+      select: { id: true, centerId: true },
+    });
     if (!classroom) return NextResponse.json({ ok: false, error: "Classroom not found." }, { status: 404 });
     if (!canAccessCenter(user, classroom.centerId)) {
       return NextResponse.json({ ok: false, error: "You do not have access to this classroom." }, { status: 403 });

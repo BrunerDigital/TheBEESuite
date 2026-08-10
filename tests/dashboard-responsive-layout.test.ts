@@ -20,10 +20,19 @@ test("dashboard shell adapts navigation and toolbar density by device width", ()
   assert.match(shell, /flex min-h-12 touch-manipulation flex-col items-center/);
   assert.match(shell, /env\(safe-area-inset-bottom\)/);
   assert.match(shell, /function ScopeContextLink/);
-  assert.match(shell, /grid max-w-md grid-cols-5 items-end/);
+  assert.match(shell, /"mx-auto grid max-w-md items-end gap-1"/);
+  assert.match(shell, /bottomNavItemCount === 4 \? "grid-cols-4"/);
   assert.match(shell, /More for your role/);
   assert.match(shell, /teacher-quick-log/);
   assert.match(refresh, /text-\[0\.68rem\] 2xl:inline-flex/);
+});
+
+test("role bottom navigation only renders overflow navigation when destinations remain", () => {
+  const shell = source("src/components/app-shell.tsx");
+
+  assert.match(shell, /const bottomNavItemCount = items\.length \+ \(moreItems\.length \? 1 : 0\)/);
+  assert.match(shell, /\{moreItems\.length \? <Sheet/);
+  assert.match(shell, /bottomNavItemCount === 4 \? "grid-cols-4"/);
 });
 
 test("dashboard content reflows before constrained laptop and touch layouts", () => {

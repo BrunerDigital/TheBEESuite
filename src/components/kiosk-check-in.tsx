@@ -402,30 +402,32 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
   }
 
   return (
-    <main className="kiosk-halo-shell min-h-dvh select-none bg-background p-2 text-foreground sm:p-3 lg:p-4">
-      <div className="mx-auto flex min-h-[calc(100dvh-1rem)] max-w-6xl flex-col gap-3 sm:min-h-[calc(100dvh-1.5rem)] lg:min-h-[calc(100dvh-2rem)]">
-        <section className="kiosk-halo-header rounded-2xl border bg-card/90 p-3 shadow-2xl shadow-black/20 sm:p-4">
+    <main className="kiosk-halo-shell min-h-dvh select-none bg-background p-2 text-foreground sm:p-3 2xl:p-4">
+      <div className="mx-auto flex min-h-[calc(100dvh-1rem)] max-w-6xl flex-col gap-3 sm:min-h-[calc(100dvh-1.5rem)] lg:gap-2 2xl:min-h-[calc(100dvh-2rem)] 2xl:gap-3">
+        <section className="kiosk-halo-header rounded-2xl border bg-card/90 p-3 shadow-2xl shadow-black/20 sm:p-4 lg:p-3 2xl:p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+            <div className="min-w-0">
               <Badge className="mb-2">
                 <ShieldCheck data-icon="inline-start" />
                 Secure lobby kiosk
               </Badge>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl lg:text-4xl">{center.name}</h1>
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl 2xl:text-4xl">{center.name}</h1>
               <p className="mt-1 text-sm text-muted-foreground">{center.place || "Family check-in/out and staff clock-in/out"}</p>
             </div>
-            <div className="grid gap-2 rounded-2xl border bg-background/60 p-3 text-right sm:min-w-48 lg:hidden 2xl:grid">
-              <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
-                <Clock className="size-4" />
-                Today
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-background/60 p-2.5 sm:min-w-48 sm:justify-end">
+              <div className="mr-auto hidden text-left xl:block sm:mr-0 sm:text-right">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground sm:justify-end">
+                  <Clock className="size-3.5" aria-hidden="true" />
+                  Today
+                </div>
+                <div className="mt-0.5 text-sm font-semibold">
+                  {formatZonedDateTime(new Date(), center.timeZone, { weekday: "short", month: "short", day: "numeric" })}
+                </div>
               </div>
-              <div className="text-xl font-semibold">
-                {formatZonedDateTime(new Date(), center.timeZone, { weekday: "short", month: "short", day: "numeric" })}
-              </div>
-              <Badge variant="outline" className="justify-center">
+              <Badge variant="outline" className="min-h-9 justify-center px-3">
                 Auto-reset {idleSecondsRemaining}s
               </Badge>
-              <Button variant="outline" size="sm" onClick={() => reset()}>
+              <Button variant="outline" size="sm" className="min-h-9" onClick={() => reset()}>
                 Start over
               </Button>
             </div>
@@ -447,9 +449,9 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
           </Alert>
         ) : null}
 
-        <div className="grid flex-1 gap-3 lg:grid-cols-[20rem_1fr] 2xl:grid-cols-[24rem_1fr]">
-          <Card className="kiosk-halo-panel glass-panel">
-            <CardHeader className="p-4 pb-2">
+        <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-[18rem_minmax(0,1fr)] lg:grid-cols-[20rem_minmax(0,1fr)] lg:gap-2 2xl:grid-cols-[24rem_minmax(0,1fr)] 2xl:gap-3">
+          <Card className="kiosk-halo-panel glass-panel min-w-0 overflow-hidden">
+            <CardHeader className="p-4 pb-2 lg:p-3 lg:pb-1 2xl:p-4 2xl:pb-2">
               <CardTitle>{kioskMode === "family" ? (credentialMode === "pin" ? "Enter 4 digit PIN" : "Scan QR code") : "Staff clock-in/out"}</CardTitle>
               <CardDescription>
                 {kioskMode === "family"
@@ -459,7 +461,7 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
                   : "Use your staff kiosk code to clock in or clock out. Add work email only if the kiosk asks for it."}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 p-4 pt-2">
+            <CardContent className="space-y-3 p-4 pt-2 lg:space-y-2 lg:p-3 lg:pt-1 2xl:space-y-3 2xl:p-4 2xl:pt-2">
               <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/60 p-1">
                 <Button type="button" variant={kioskMode === "family" ? "default" : "ghost"} onClick={() => selectKioskMode("family")}>
                   <ShieldCheck data-icon="inline-start" />
@@ -556,7 +558,7 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
                     <Label htmlFor="staff-email" className="text-base">Work email (optional)</Label>
                     <Input
                       id="staff-email"
-                      className="h-14 text-lg"
+                      className="h-14 text-lg lg:h-12 2xl:h-14"
                       value={staffEmail}
                       onChange={(event) => {
                         markActivity();
@@ -603,8 +605,8 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
             </CardContent>
           </Card>
 
-          <Card className="kiosk-halo-panel glass-panel">
-            <CardHeader className="p-4 pb-2">
+          <Card className="kiosk-halo-panel glass-panel min-w-0 overflow-hidden">
+            <CardHeader className="p-4 pb-2 lg:p-3 lg:pb-1 2xl:p-4 2xl:pb-2">
               <CardTitle>
                 {kioskMode === "staff"
                   ? staffLookup
@@ -624,7 +626,7 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
                     : "Your children will appear after PIN or QR verification."}
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex min-h-72 flex-col gap-4 p-4 pt-2 lg:min-h-0">
+            <CardContent className="flex min-h-72 min-w-0 flex-col gap-4 p-4 pt-2 md:min-h-0 lg:gap-3 lg:p-3 lg:pt-1 2xl:gap-4 2xl:p-4 2xl:pt-2">
               {kioskMode === "staff" ? (
                 staffLookup ? (
                   <>

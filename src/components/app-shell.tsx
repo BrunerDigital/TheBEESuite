@@ -1081,7 +1081,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                   </Dialog>
                 </div>
               ) : null}
-              {canViewAccountBalances(currentUser) ? (
+              {!previewMode && canViewAccountBalances(currentUser) ? (
                 <div className="hidden lg:block">
                   <AccountsReceivableSheet executive={isExecutiveAccountBalanceView(currentUser)} />
                 </div>
@@ -1102,9 +1102,11 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                       <div className="text-xs font-medium leading-none">{displayUserName}</div>
                       <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>
                     </div>
-                    <Button variant="outline" size="icon" className="hidden 2xl:inline-flex" aria-label="Sign out" onClick={logout}>
-                      <LogOut aria-hidden="true" />
-                    </Button>
+                    {!previewMode ? (
+                      <Button variant="outline" size="icon" className="hidden 2xl:inline-flex" aria-label="Sign out" onClick={logout}>
+                        <LogOut aria-hidden="true" />
+                      </Button>
+                    ) : null}
                   </div>
                 </>
               ) : (

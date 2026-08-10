@@ -119,3 +119,16 @@ test("cutover is one-school-at-a-time and remains blocked behind live bank, payo
   assert.match(cutover, /stripeConnectAccountId: targetAccountId/);
   assert.match(cutover, /stripeConnectMigrationSourceAccountRetainedForReconciliation: true/);
 });
+
+test("full-dashboard migration updates stay exact-target, guarded, and bank-preserving", () => {
+  const dashboardUpdate = readFileSync("scripts/set-stripe-migration-targets-full-dashboard.ts", "utf8");
+
+  assert.match(dashboardUpdate, /CORPORATE_SCHOOLS_EMAIL = "corpschools@kidcityusa\.com"/);
+  assert.match(dashboardUpdate, /EXPECTED_TARGET_COUNT = 12/);
+  assert.match(dashboardUpdate, /--acknowledge-full-dashboard-access/);
+  assert.match(dashboardUpdate, /readStripeConnectedAccountId\(fields\) !== migration\.sourceAccountId/);
+  assert.match(dashboardUpdate, /setStripeConnectedAccountFullDashboard/);
+  assert.match(dashboardUpdate, /payoutBankFingerprint/);
+  assert.match(dashboardUpdate, /before\.payoutInterval !== afterPayoutInterval/);
+  assert.doesNotMatch(dashboardUpdate, /prisma\.center\.update|external_accounts|bank_accounts/);
+});

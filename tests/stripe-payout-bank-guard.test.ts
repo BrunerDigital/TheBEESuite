@@ -51,7 +51,7 @@ test("new connected accounts follow Kokomo fee and loss responsibility without c
     integrations.indexOf("export async function completeStripeConnectedAccountBusinessProfile"),
   );
 
-  assert.match(createAccount, /dashboard: "none"/);
+  assert.match(createAccount, /dashboard: "full"/);
   assert.match(createAccount, /fees_collector: "stripe"/);
   assert.match(createAccount, /losses_collector: "stripe"/);
   assert.match(createAccount, /customer:/);

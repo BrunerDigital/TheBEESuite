@@ -9,16 +9,17 @@ import {
   BadgeDollarSign,
   Bell,
   Building2,
+  Camera,
   CheckCheck,
   ChevronDown,
   ClipboardList,
   Command,
-  FileText,
   Home,
   Menu,
   Moon,
   LogOut,
   MessageSquare,
+  MoreHorizontal,
   Search,
   ShieldCheck,
   Sparkles,
@@ -67,6 +68,7 @@ import { DataReadinessContextBadge, type CountSummary } from "@/components/data-
 import { DataReadinessContextPanel } from "@/components/data-readiness-context-panel";
 import { dataReadinessContextForPath } from "@/lib/data-readiness-context";
 import { dataReadinessCenterEnabled, honeyglassUiEnabled } from "@/lib/honeyglass";
+import type { WorkspaceScopeContext } from "@/lib/workspace-scope";
 
 type ShellUser = {
   name: string;
@@ -78,6 +80,7 @@ type ShellUser = {
   branding?: WorkspaceBranding;
   timeZone?: string;
   timeZonesByCenterId?: Record<string, string>;
+  scopeContext?: WorkspaceScopeContext;
 };
 
 function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) {
@@ -89,7 +92,63 @@ function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) 
   return canAccessModule(currentUser, slug);
 }
 
-function SidebarRail({ currentUser }: { currentUser?: ShellUser }) {
+function ScopeIcon({ kind, className }: { kind: WorkspaceScopeContext["kind"]; className?: string }) {
+  if (kind === "family") return <Users className={className} aria-hidden="true" />;
+  if (kind === "classroom") return <ClipboardList className={className} aria-hidden="true" />;
+  if (kind === "portfolio" || kind === "school") return <Building2 className={className} aria-hidden="true" />;
+  return <ShieldCheck className={className} aria-hidden="true" />;
+}
+
+function ScopeContextLink({ currentUser, compact = false, mobile = false }: { currentUser?: ShellUser; compact?: boolean; mobile?: boolean }) {
+  const context = currentUser?.scopeContext;
+  if (!context) return null;
+  const label = shellUserViewText(context.label, currentUser);
+  const detail = shellUserViewText(context.detail, currentUser);
+
+  if (compact) {
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={(
+            <Link
+              href={context.href}
+              aria-label={`${label}. ${detail}`}
+              className="grid size-11 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary transition-colors hover:border-primary/50 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          )}
+        >
+          <ScopeIcon kind={context.kind} className="size-5" />
+        </TooltipTrigger>
+        <TooltipContent side="right" className="flex max-w-72 flex-col items-start">
+          <span className="font-semibold">{label}</span>
+          <span className="opacity-80">{detail}</span>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Link
+      href={context.href}
+      aria-label={`${label}. ${detail}`}
+      className={cn(
+        "group flex min-w-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/[0.07] p-3 transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        mobile && "mx-auto w-full max-w-xl border-border/70 bg-card/75 px-3 py-2 shadow-sm",
+      )}
+    >
+      <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
+        <ScopeIcon kind={context.kind} className="size-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold">{label}</span>
+        <span className="block truncate text-xs text-muted-foreground">{detail}</span>
+      </span>
+      <ChevronDown className="size-4 -rotate-90 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+    </Link>
+  );
+}
+
+function SidebarRail({ currentUser, onLogout }: { currentUser?: ShellUser; onLogout?: () => void }) {
   const pathname = usePathname();
   const visibleItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
@@ -100,6 +159,7 @@ function SidebarRail({ currentUser }: { currentUser?: ShellUser }) {
       <Link href="/" aria-label={`${currentUser?.branding?.name ?? "The BEE Suite"} home`}>
         <BrandIcon branding={currentUser?.branding} className="size-10" />
       </Link>
+      <ScopeContextLink currentUser={currentUser} compact />
       <ScrollArea className="min-h-0 w-full flex-1 px-2">
         <nav className="flex flex-col items-center gap-2 py-2" aria-label="Tablet navigation rail">
           {visibleItems.map(({ label, slug, Icon, group }) => {
@@ -128,6 +188,7 @@ function SidebarRail({ currentUser }: { currentUser?: ShellUser }) {
           })}
         </nav>
       </ScrollArea>
+      {currentUser && onLogout ? <AccountMenu currentUser={currentUser} onLogout={onLogout} /> : null}
     </div>
   );
 }
@@ -379,7 +440,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   );
 }
 
-function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: ShellUser }) {
+function SidebarNav({ close, currentUser, onLogout }: { close?: () => void; currentUser?: ShellUser; onLogout?: () => void }) {
   const pathname = usePathname();
   const descriptionBySlug = new Map(modules.map((module) => [module.slug, module.description]));
   const visibleNavGroups = navGroups
@@ -393,6 +454,9 @@ function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: 
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="shrink-0 p-5">
         <BrandMark branding={currentUser?.branding} />
+        <div className="mt-4">
+          <ScopeContextLink currentUser={currentUser} />
+        </div>
       </div>
       <ScrollArea className="min-h-0 flex-1 px-3">
         <nav className="flex flex-col gap-5 pb-4">
@@ -448,6 +512,17 @@ function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: 
           </div>
         </div>
       </ScrollArea>
+      {currentUser && onLogout ? (
+        <div className="shrink-0 border-t p-3">
+          <div className="flex min-w-0 items-center gap-3 rounded-xl border bg-background/55 p-2.5">
+            <AccountMenu currentUser={currentUser} onLogout={onLogout} />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">{shellUserViewText(currentUser.name, currentUser)}</div>
+              <div className="truncate text-xs text-muted-foreground">{currentUser.role.replaceAll("_", " ").toLocaleLowerCase()}</div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -487,41 +562,59 @@ function AccountMenu({ currentUser, onLogout }: { currentUser: ShellUser; onLogo
 
 function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
   const pathname = usePathname();
+  const [selectedTarget, setSelectedTarget] = useState(pathname);
+  const [moreOpen, setMoreOpen] = useState(false);
   const teacherItems = [
-    { label: "Home", href: "/dashboard", slug: "dashboard", Icon: Home },
-    { label: "Classroom", href: "/teacher-portal", slug: "teacher-portal", Icon: ClipboardList },
+    { label: "Today", href: "/teacher-portal", slug: "teacher-portal", Icon: Home },
+    { label: "Roster", href: "/teacher-portal#teacher-roster", slug: "teacher-portal", Icon: Users },
+    { label: "Log", href: "/teacher-portal#teacher-quick-log", slug: "teacher-portal", Icon: ClipboardList, featured: true },
     { label: "Messages", href: "/messages", slug: "messages", Icon: MessageSquare },
-    { label: "Docs", href: "/documents", slug: "documents", Icon: FileText },
   ];
   const parentItems = [
     { label: "Home", href: "/parent-portal", slug: "parent-portal", Icon: Home },
-    { label: "Updates", href: "/parent-portal#daily-reports", slug: "parent-portal", Icon: Activity },
-    { label: "Billing", href: "/parent-portal#billing", slug: "parent-portal", Icon: BadgeDollarSign },
+    { label: "Day", href: "/parent-portal#today", slug: "parent-portal", Icon: Activity },
     { label: "Messages", href: "/parent-portal#messages", slug: "parent-portal", Icon: MessageSquare },
+    { label: "Payments", href: "/parent-portal#billing", slug: "parent-portal", Icon: BadgeDollarSign },
+  ];
+  const pickupItems = [
+    { label: "Home", href: "/parent-portal", slug: "parent-portal", Icon: Home },
+    { label: "Day", href: "/parent-portal#today", slug: "parent-portal", Icon: Activity },
+    { label: "Photos", href: "/parent-portal#photos", slug: "parent-portal", Icon: Camera },
+    { label: "Updates", href: "/parent-portal#daily-updates", slug: "parent-portal", Icon: ClipboardList },
   ];
   const directorItems = [
-    { label: "Home", href: "/dashboard", slug: "dashboard", Icon: Home },
-    { label: "Families", href: "/family-detail", slug: "family-detail", Icon: Users },
-    { label: "School day", href: "/classroom-dashboard", slug: "classroom-dashboard", Icon: Activity },
-    { label: "Readiness", href: "/data-readiness", slug: "data-readiness", Icon: ShieldCheck },
+    { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
+    { label: "School", href: "/classroom-dashboard", slug: "classroom-dashboard", Icon: Building2 },
+    { label: "Actions", href: "/notifications", slug: "notifications", Icon: ClipboardList, featured: true },
+    { label: "Inbox", href: "/messages", slug: "messages", Icon: MessageSquare },
   ];
   const executiveItems = [
-    { label: "Home", href: "/dashboard", slug: "dashboard", Icon: Home },
-    { label: "Locations", href: "/multi-location-dashboard", slug: "multi-location-dashboard", Icon: Building2 },
-    { label: "Families", href: "/family-detail", slug: "family-detail", Icon: Users },
-    { label: "Readiness", href: "/data-readiness", slug: "data-readiness", Icon: ShieldCheck },
+    { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
+    { label: "Schools", href: "/multi-location-dashboard", slug: "multi-location-dashboard", Icon: Building2 },
+    { label: "Actions", href: "/notifications", slug: "notifications", Icon: ClipboardList, featured: true },
+    { label: "Inbox", href: "/messages", slug: "messages", Icon: MessageSquare },
   ];
   const billingItems = [
-    { label: "Home", href: "/dashboard", slug: "dashboard", Icon: Home },
+    { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
     { label: "Billing", href: "/billing-invoices", slug: "billing-invoices", Icon: BadgeDollarSign },
-    { label: "Payments", href: "/billing-invoices?view=payments", slug: "payments", Icon: Activity },
-    { label: "Messages", href: "/messages", slug: "messages", Icon: MessageSquare },
+    { label: "Payments", href: "/billing-invoices?view=payments", slug: "payments", Icon: Activity, featured: true },
+    { label: "Inbox", href: "/messages", slug: "messages", Icon: MessageSquare },
+  ];
+  const auditorItems = [
+    { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
+    { label: "Schools", href: "/multi-location-dashboard", slug: "multi-location-dashboard", Icon: Building2 },
+    { label: "Reports", href: "/analytics", slug: "analytics", Icon: Activity, featured: true },
+    { label: "Audit", href: "/audit-logs", slug: "audit-logs", Icon: ShieldCheck },
   ];
   const executiveRole = ["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER"].includes(currentUser?.role ?? "");
   const sourceItems = isTeacherUser(currentUser)
     ? teacherItems
-    : isParentFacingUser(currentUser)
+    : currentUser?.role === "PARENT_GUARDIAN"
       ? parentItems
+      : currentUser?.role === "AUTHORIZED_PICKUP"
+        ? pickupItems
+      : currentUser?.role === "READ_ONLY_AUDITOR"
+        ? auditorItems
       : currentUser?.role === "BILLING_ADMIN"
         ? billingItems
         : executiveRole
@@ -530,6 +623,12 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
             ? directorItems
             : [];
   const items = sourceItems.filter((item) => canAccessShellModule(currentUser, item.slug));
+  const moreItems = navGroups
+    .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
+    .filter((item) => canAccessShellModule(currentUser, item.slug))
+    .filter((item) => !items.some((quickItem) => quickItem.slug === item.slug))
+    .slice(0, 12);
+
   if (!items.length) return null;
 
   return (
@@ -537,24 +636,65 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
       aria-label="Role quick navigation"
       className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden"
     >
-      <div className={cn("mx-auto grid max-w-md gap-1", items.length === 1 ? "grid-cols-1" : items.length === 2 ? "grid-cols-2" : items.length === 3 ? "grid-cols-3" : items.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
-        {items.map(({ label, href, Icon }) => {
+      <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
+        {items.map((item) => {
+          const { label, href, Icon } = item;
+          const featured = Boolean("featured" in item && item.featured);
           const hrefPath = href.split("#")[0];
-          const active = pathname === hrefPath;
+          const selectedPath = selectedTarget.split(/[?#]/)[0];
+          const active = selectedPath === pathname
+            ? selectedTarget === href
+            : pathname === hrefPath && !href.includes("#") && !href.includes("?");
           return (
             <Link
               key={href}
               href={href}
+              aria-current={active ? "page" : undefined}
+              onClick={() => setSelectedTarget(href)}
               className={cn(
-                "flex min-h-12 touch-manipulation flex-col items-center justify-center gap-1 rounded-xl px-2 text-[0.68rem] font-medium text-muted-foreground transition",
-                active && "bg-primary/12 text-primary",
+                "relative flex min-h-12 touch-manipulation flex-col items-center justify-center gap-1 rounded-xl px-1.5 text-[0.68rem] font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                active && "bg-primary/12 text-primary shadow-sm",
+                featured && "-mt-5 min-h-16 rounded-2xl border border-primary/35 bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90",
               )}
             >
-              <Icon className="size-4" aria-hidden="true" />
+              <Icon className={cn("size-4", featured && "size-5")} aria-hidden="true" />
               <span className="truncate">{label}</span>
             </Link>
           );
         })}
+        <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+          <SheetTrigger
+            render={(
+              <button
+                type="button"
+                className="flex min-h-12 touch-manipulation flex-col items-center justify-center gap-1 rounded-xl px-1.5 text-[0.68rem] font-medium text-muted-foreground transition-colors hover:bg-primary/[0.08] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Open more navigation"
+              />
+            )}
+          >
+            <MoreHorizontal className="size-4" aria-hidden="true" />
+            <span>More</span>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[82dvh] rounded-t-3xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+            <SheetTitle className="text-left">More for your role</SheetTitle>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {moreItems.map(({ label, slug, Icon, group }) => {
+                const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
+                return (
+                  <Link
+                    key={slug}
+                    href={href}
+                    onClick={() => setMoreOpen(false)}
+                    className="flex min-h-14 items-center gap-3 rounded-xl border bg-card/70 p-3 transition-colors hover:border-primary/40 hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-5" aria-hidden="true" /></span>
+                    <span className="min-w-0"><span className="block truncate text-sm font-semibold">{label}</span><span className="block truncate text-xs text-muted-foreground">{group}</span></span>
+                  </Link>
+                );
+              })}
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </nav>
   );
@@ -746,10 +886,10 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
         Skip to workspace content
       </a>
       <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-20 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl lg:block 2xl:hidden">
-        <SidebarRail currentUser={currentUser} />
+        <SidebarRail currentUser={currentUser} onLogout={logout} />
       </aside>
       <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl 2xl:block">
-        <SidebarNav currentUser={currentUser} />
+        <SidebarNav currentUser={currentUser} onLogout={logout} />
       </aside>
       <div className="min-w-0 lg:pl-20 2xl:pl-72">
         <header className="app-header sticky top-0 z-10 min-w-0 border-b bg-background/75 backdrop-blur-xl">
@@ -764,7 +904,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
               </SheetTrigger>
               <SheetContent side="left" className="w-80 p-0">
                 <SheetTitle className="sr-only">Navigation</SheetTitle>
-                <SidebarNav currentUser={currentUser} />
+                <SidebarNav currentUser={currentUser} onLogout={logout} />
               </SheetContent>
             </Sheet>
             {showWorkspaceTools ? <div className="hidden min-w-0 flex-1 items-center lg:flex">
@@ -941,6 +1081,11 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
               )}
             </div>
           </div>
+          {currentUser?.scopeContext ? (
+            <div className="border-t border-border/60 px-3 py-2 lg:hidden">
+              <ScopeContextLink currentUser={currentUser} mobile />
+            </div>
+          ) : null}
         </header>
         <main id="workspace-main" className={cn("dashboard-workspace min-h-[calc(100vh-4rem)] min-w-0 scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 lg:pb-6 xl:pb-8")}>
           {canViewDataReadiness && readinessContext ? <DataReadinessContextPanel context={readinessContext} summary={readinessSummary} loading={readinessLoading} /> : null}

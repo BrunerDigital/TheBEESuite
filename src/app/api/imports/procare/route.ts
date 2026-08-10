@@ -3078,7 +3078,6 @@ async function POSTHandler(request: NextRequest) {
               customFields: mergeCustomFields(existingInvoice.customFields, importedInvoiceFields),
             },
           });
-          importedInvoiceId = existingInvoice.id;
         } else if (balanceCents > 0) {
           const invoiceNumberKey = (accountExternalId || family.id).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 40);
           if (existingInvoice) {

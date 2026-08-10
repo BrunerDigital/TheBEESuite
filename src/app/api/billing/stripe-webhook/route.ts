@@ -353,12 +353,31 @@ async function findPaymentForStripeObject(
     ? object.id
     : clean(object.payment_intent);
   if (paymentIntentId) {
-    return tx.payment.findFirst({
+    const payment = await tx.payment.findFirst({
       where: {
         provider: "stripe",
         customFields: {
           path: ["stripePaymentIntentId"],
           equals: paymentIntentId,
+        },
+      },
+      include: { billingAccount: true },
+    });
+    if (payment) return payment;
+  }
+
+  const chargeId = object.object === "charge"
+    ? object.id
+    : object.object === "dispute"
+      ? clean(object.charge)
+      : "";
+  if (chargeId) {
+    return tx.payment.findFirst({
+      where: {
+        provider: "stripe",
+        customFields: {
+          path: ["stripeChargeId"],
+          equals: chargeId,
         },
       },
       include: { billingAccount: true },
@@ -1481,7 +1500,7 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
   return NextResponse.json({ ok: true });
 }
 
-async function handleDisputeCreated(event: StripeWebhookEvent, dispute: StripeDisputeObject) {
+async function handleDisputeLifecycle(event: StripeWebhookEvent, dispute: StripeDisputeObject) {
   const metadata = metadataOf(dispute);
 
   try {
@@ -1490,19 +1509,84 @@ async function handleDisputeCreated(event: StripeWebhookEvent, dispute: StripeDi
       const payment = await findPaymentForStripeObject(tx, dispute);
       if (!payment) return;
       const currentFields = jsonObject(payment.customFields);
+      const disputeAmountCents = numeric(dispute.amount);
+      const ledgerActive = currentFields.stripeDisputeLedgerActive === true;
+      const assessParentBalance = (event.type === "charge.dispute.created" || event.type === "charge.dispute.funds_withdrawn") && !ledgerActive;
+      const reverseParentBalance = (
+        event.type === "charge.dispute.funds_reinstated" ||
+        (event.type === "charge.dispute.closed" && dispute.status === "won")
+      ) && ledgerActive;
+      const invoiceId = await invoiceIdForPayment(tx, payment.id, metadata);
+      let ledgerActiveAfterEvent = ledgerActive;
+
+      if (assessParentBalance && disputeAmountCents > 0) {
+        const updatedAccount = await tx.billingAccount.update({
+          where: { id: payment.billingAccountId },
+          data: { balanceCents: { increment: disputeAmountCents } },
+        });
+        await tx.ledgerEntry.create({
+          data: {
+            billingAccountId: payment.billingAccountId,
+            invoiceId,
+            paymentId: payment.id,
+            type: "chargeback",
+            description: "Chargeback added back to parent balance",
+            amountCents: disputeAmountCents,
+            balanceAfterCents: updatedAccount.balanceCents,
+            sourceSystem: "stripe",
+            externalId: `stripe-dispute:${dispute.id}:assessment`,
+            metadata: {
+              stripeEventId: event.id,
+              stripeDisputeId: dispute.id,
+              stripeChargeId: clean(dispute.charge) || null,
+              stripePaymentIntentId: clean(dispute.payment_intent) || null,
+              reason: dispute.reason || null,
+            },
+          },
+        });
+        ledgerActiveAfterEvent = true;
+      } else if (reverseParentBalance && disputeAmountCents > 0) {
+        const updatedAccount = await tx.billingAccount.update({
+          where: { id: payment.billingAccountId },
+          data: { balanceCents: { decrement: disputeAmountCents } },
+        });
+        await tx.ledgerEntry.create({
+          data: {
+            billingAccountId: payment.billingAccountId,
+            invoiceId,
+            paymentId: payment.id,
+            type: "chargeback_reversal",
+            description: "Chargeback reversed after Stripe returned the funds",
+            amountCents: -disputeAmountCents,
+            balanceAfterCents: updatedAccount.balanceCents,
+            sourceSystem: "stripe",
+            externalId: `stripe-dispute:${dispute.id}:reversal`,
+            metadata: {
+              stripeEventId: event.id,
+              stripeDisputeId: dispute.id,
+              stripeChargeId: clean(dispute.charge) || null,
+              stripePaymentIntentId: clean(dispute.payment_intent) || null,
+              status: dispute.status || null,
+            },
+          },
+        });
+        ledgerActiveAfterEvent = false;
+      }
+
       await tx.payment.update({
         where: { id: payment.id },
         data: {
           customFields: {
             ...currentFields,
             stripeDisputeId: dispute.id,
-            stripeDisputeAmountCents: numeric(dispute.amount),
+            stripeDisputeAmountCents: disputeAmountCents,
             stripeDisputeReason: dispute.reason || null,
             stripeDisputeStatus: dispute.status || null,
             stripeDisputeChargeId: clean(dispute.charge) || null,
             stripePaymentIntentId: clean(dispute.payment_intent) || currentFields.stripePaymentIntentId || null,
             stripeEventId: event.id,
-            status: "disputed",
+            stripeDisputeLedgerActive: ledgerActiveAfterEvent,
+            status: ledgerActiveAfterEvent ? "disputed" : dispute.status === "won" ? "paid" : "dispute_closed",
           },
         },
       });
@@ -1515,7 +1599,7 @@ async function handleDisputeCreated(event: StripeWebhookEvent, dispute: StripeDi
   }
 
   if (metadata.invoiceId) {
-    await writeSystemAudit(metadata.invoiceId, event.id, dispute.id, "billing.dispute.created");
+    await writeSystemAudit(metadata.invoiceId, event.id, dispute.id, `billing.${event.type.replaceAll(".", "_")}`);
   }
   return NextResponse.json({ ok: true });
 }
@@ -1664,8 +1748,8 @@ async function dispatchAuthenticatedEvent(event: StripeWebhookEvent, matchedTena
     return handleChargeRefunded(event, event.data.object as StripeChargeObject);
   }
 
-  if (event.type === "charge.dispute.created") {
-    return handleDisputeCreated(event, event.data.object as StripeDisputeObject);
+  if (event.type.startsWith("charge.dispute.")) {
+    return handleDisputeLifecycle(event, event.data.object as StripeDisputeObject);
   }
 
   const session = event.data.object as StripeCheckoutSessionCompleted;

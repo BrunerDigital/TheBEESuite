@@ -55,6 +55,7 @@
     "kidcity:ensure-executives": "tsx -r tsconfig-paths/register scripts/ensure-kidcity-executives.ts",
     "kidcity:audit-executives": "tsx -r tsconfig-paths/register scripts/audit-kidcity-executive-access.ts",
     "kidcity:audit-payout-bindings": "tsx -r tsconfig-paths/register scripts/audit-kidcity-payout-bindings.ts",
+    "stripe:fingerprint-payout-banks": "tsx -r tsconfig-paths/register scripts/fingerprint-stripe-payout-banks.ts",
     "kidcity:ensure-accounting": "tsx -r tsconfig-paths/register scripts/ensure-kidcity-accounting-user.ts",
     "kidcity:ensure-corporate-schools": "tsx -r tsconfig-paths/register scripts/ensure-kidcity-corporate-schools-user.ts",
     "kidcity:audit-rollout-access": "tsx -r tsconfig-paths/register scripts/audit-kidcity-rollout-access.ts",

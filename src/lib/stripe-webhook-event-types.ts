@@ -22,6 +22,10 @@ export const STRIPE_WEBHOOK_PAYMENT_EVENT_TYPES = [
   "payment_intent.payment_failed",
   "charge.refunded",
   "charge.dispute.created",
+  "charge.dispute.updated",
+  "charge.dispute.closed",
+  "charge.dispute.funds_withdrawn",
+  "charge.dispute.funds_reinstated",
 ] as const;
 
 export const STRIPE_WEBHOOK_SUPPORTED_EVENT_TYPES = [

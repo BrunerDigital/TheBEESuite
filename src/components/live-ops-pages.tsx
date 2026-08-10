@@ -5870,7 +5870,7 @@ export function CorporateBillingPage({ data }: { data: CorporateBillingPageData 
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Kid City USA Enterprises Software Invoice</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          View and pay the monthly The BEE Suite software access invoice for Kid City USA Enterprises. The amount is calculated as $49 times the number of active school users.
+          Review the monthly The BEE Suite software access fees for Kid City USA Enterprises. Each active school is billed $99 through its separately authorized school subscription.
         </p>
       </section>
 
@@ -5897,7 +5897,7 @@ export function CorporateBillingPage({ data }: { data: CorporateBillingPageData 
           <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
             <div className="font-medium text-foreground">Monthly software access</div>
             <p className="mt-2">
-              Kid City USA Enterprises is billed for active school users at the corporate level. This invoice is separate from parent tuition billing, parent card processing recovery, and school tuition payout fees.
+              Each active school is billed $99 per month. This fee is separate from parent tuition billing, school Stripe processing fees, and the BEE Suite payment operations fee.
             </p>
             <p className="mt-2">Payment terms: due {invoice.daysUntilDue} day(s) after the hosted invoice is sent.</p>
           </div>

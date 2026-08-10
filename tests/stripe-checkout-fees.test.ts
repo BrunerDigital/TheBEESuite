@@ -80,6 +80,20 @@ test("card checkout charges only principal while the school pays Stripe costs an
   assert.equal(amounts.applicationFeeAmountCents, 3_130);
 });
 
+test("Kokomo-style accounts pay Stripe directly and transfer only the BEE Suite fee", () => {
+  for (const key of managedEnvKeys) delete process.env[key];
+
+  const amounts = getStripeCheckoutAmounts(100_000, {
+    paymentMethodCategory: "card",
+    schoolPaysStripeFeesDirectly: true,
+  });
+
+  assert.equal(amounts.invoiceAmountCents, 100_000);
+  assert.equal(amounts.schoolProcessingFeeAmountCents, 0);
+  assert.equal(amounts.beeSuitePaymentOperationsFeeAmountCents, 1_000);
+  assert.equal(amounts.applicationFeeAmountCents, 1_000);
+});
+
 test("instant bank checkout ignores legacy link-bank recovery defaults", () => {
   for (const key of managedEnvKeys) delete process.env[key];
   process.env.STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED = "true";

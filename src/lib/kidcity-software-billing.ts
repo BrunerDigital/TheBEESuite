@@ -27,7 +27,7 @@ function yyyymm(date: Date) {
 }
 
 export function getKidCitySoftwareFeeUnitAmountCents() {
-  return nonNegativeIntEnv("STRIPE_KIDCITY_SOFTWARE_FEE_PER_SCHOOL_USER_CENTS", 4_900);
+  return nonNegativeIntEnv("STRIPE_SCHOOL_SOFTWARE_FEE_CENTS", 9_900);
 }
 
 export function getKidCitySoftwareInvoiceDaysUntilDue() {
@@ -38,8 +38,8 @@ export function getKidCitySoftwareInvoicePeriod(date = new Date()) {
   return yyyymm(date);
 }
 
-export function getKidCitySoftwareInvoiceAmount(userCount: number, unitAmountCents = getKidCitySoftwareFeeUnitAmountCents()) {
-  return Math.max(0, Math.floor(userCount)) * Math.max(0, unitAmountCents);
+export function getKidCitySoftwareInvoiceAmount(schoolCount: number, unitAmountCents = getKidCitySoftwareFeeUnitAmountCents()) {
+  return Math.max(0, Math.floor(schoolCount)) * Math.max(0, unitAmountCents);
 }
 
 export function getKidCitySoftwareInvoiceNumber(period = getKidCitySoftwareInvoicePeriod()) {
@@ -48,14 +48,14 @@ export function getKidCitySoftwareInvoiceNumber(period = getKidCitySoftwareInvoi
 
 export function getKidCitySoftwareInvoiceDescription({
   period = getKidCitySoftwareInvoicePeriod(),
-  userCount,
+  schoolCount,
   unitAmountCents = getKidCitySoftwareFeeUnitAmountCents(),
 }: {
   period?: string;
-  userCount: number;
+  schoolCount: number;
   unitAmountCents?: number;
 }) {
-  return `The BEE Suite monthly software access fee for Kid City USA Enterprises - ${period} - ${userCount} active school user(s) at $${(unitAmountCents / 100).toFixed(2)} each`;
+  return `The BEE Suite monthly software access fee for Kid City USA Enterprises - ${period} - ${schoolCount} active school(s) at $${(unitAmountCents / 100).toFixed(2)} each`;
 }
 
 export function kidCitySchoolUserWhere(now = new Date()): Prisma.UserWhereInput {
@@ -167,8 +167,24 @@ export async function getKidCitySoftwareInvoiceSnapshot(db: PrismaLike, date = n
       },
     },
   });
+  const activeSchools = await db.center.findMany({
+    where: {
+      status: { notIn: ["closed", "archived", "inactive"] },
+      organization: {
+        tenant: {
+          OR: [
+            { slug: "kid-city-usa" },
+            { name: { contains: "Kid City", mode: "insensitive" } },
+          ],
+        },
+      },
+    },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, crmLocationId: true },
+  });
   const activeSchoolUserCount = schoolUsers.length;
-  const totalAmountCents = getKidCitySoftwareInvoiceAmount(activeSchoolUserCount, unitAmountCents);
+  const activeSchoolCount = activeSchools.length;
+  const totalAmountCents = getKidCitySoftwareInvoiceAmount(activeSchoolCount, unitAmountCents);
   const customerId = clean(process.env.STRIPE_KIDCITY_ENTERPRISES_CUSTOMER_ID) ||
     readStoredStripeCustomerId(billingOwnerGroup?.customFields);
 
@@ -176,9 +192,10 @@ export async function getKidCitySoftwareInvoiceSnapshot(db: PrismaLike, date = n
     period,
     invoiceNumber: getKidCitySoftwareInvoiceNumber(period),
     unitAmountCents,
+    activeSchoolCount,
     activeSchoolUserCount,
     totalAmountCents,
-    description: getKidCitySoftwareInvoiceDescription({ period, userCount: activeSchoolUserCount, unitAmountCents }),
+    description: getKidCitySoftwareInvoiceDescription({ period, schoolCount: activeSchoolCount, unitAmountCents }),
     daysUntilDue: getKidCitySoftwareInvoiceDaysUntilDue(),
     stripeCustomerId: customerId || null,
     stripeCustomerConfigured: Boolean(customerId),
@@ -193,5 +210,6 @@ export async function getKidCitySoftwareInvoiceSnapshot(db: PrismaLike, date = n
         ...user.accessGrants.map((grant) => grant.center),
       ].filter((center): center is NonNullable<typeof center> => Boolean(center)),
     })),
+    activeSchools,
   };
 }

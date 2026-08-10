@@ -4691,7 +4691,7 @@ async function renderLivePage(
         id: school.id,
         name: school.name,
         activeUsers,
-        monthlyAmountCents: activeUsers * unitAmountCents,
+        monthlyAmountCents: unitAmountCents,
         customerReady: typeof fields.stripeSoftwareCustomerId === "string" && fields.stripeSoftwareCustomerId.startsWith("cus_"),
         paymentMethodReady: typeof fields.stripeSoftwareDefaultPaymentMethodId === "string" && fields.stripeSoftwareDefaultPaymentMethodId.startsWith("pm_"),
         subscriptionId: typeof fields.stripeSoftwareSubscriptionId === "string" ? fields.stripeSoftwareSubscriptionId : null,

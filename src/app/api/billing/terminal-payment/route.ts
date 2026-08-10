@@ -15,6 +15,7 @@ import {
   retrieveStripePaymentIntent,
   retrieveStripeTerminalReader,
   shouldWaiveStripePaymentOperationsFee,
+  stripeConnectedAccountPaysFeesDirectly,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -135,7 +136,7 @@ async function verifyConnectedAccount(tenantId: string, connectedAccountId: stri
       ),
     };
   }
-  return { ok: true as const };
+  return { ok: true as const, account: accountStatus.account };
 }
 
 async function GETHandler(request: NextRequest) {
@@ -154,6 +155,7 @@ async function GETHandler(request: NextRequest) {
     ? getStripeCheckoutAmounts(amountCents, {
         paymentMethodCategory: "card",
         waiveBeeSuitePaymentOperationsFee,
+        schoolPaysStripeFeesDirectly: jsonRecord(context.center.customFields).stripeFeesCollector === "stripe",
       })
     : null;
   if (!locationId) {
@@ -357,6 +359,7 @@ async function processPayment(body: Record<string, unknown>) {
   const amounts = getStripeCheckoutAmounts(amountCents, {
     paymentMethodCategory: "card_present",
     waiveBeeSuitePaymentOperationsFee,
+    schoolPaysStripeFeesDirectly: stripeConnectedAccountPaysFeesDirectly(readiness.account),
   });
   const description = clean(body.description) || "In-person tuition payment";
   const payment = await prisma.payment.create({

@@ -17,6 +17,7 @@ import {
   requiresStripePaymentMethodConfiguration,
   retrieveStripeConnectedAccount,
   shouldWaiveStripePaymentOperationsFee,
+  stripeConnectedAccountPaysFeesDirectly,
   type StripePaymentMethodCategory,
 } from "@/lib/integrations";
 import {
@@ -177,6 +178,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const connectedAccountId = readStripeConnectedAccountId(center.customFields);
+  let schoolPaysStripeFeesDirectly = jsonRecord(center.customFields).stripeFeesCollector === "stripe";
   const allowPlatformOnlyPayments = process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true";
   const billingApproval = stripeSchoolBillingApproval({ customFields: center.customFields, centerName: center.name });
   if (!billingApproval.approved) {
@@ -198,6 +200,7 @@ async function POSTHandler(request: NextRequest) {
       );
     }
     const readiness = stripeConnectReadinessFromSnapshot(accountStatus.account);
+    schoolPaysStripeFeesDirectly = stripeConnectedAccountPaysFeesDirectly(accountStatus.account);
     await prisma.center.update({
       where: { id: center.id },
       data: {
@@ -206,6 +209,8 @@ async function POSTHandler(request: NextRequest) {
           ...stripeConnectCustomFieldPatch(readiness),
           stripeMerchantCapabilityStatus: accountStatus.account.merchantCapabilityStatus || null,
           stripeRecipientTransferStatus: accountStatus.account.recipientTransferStatus || null,
+          stripeFeesCollector: accountStatus.account.feesCollector || null,
+          stripeLossesCollector: accountStatus.account.lossesCollector || null,
         },
       },
     });
@@ -318,6 +323,7 @@ async function POSTHandler(request: NextRequest) {
   const amounts = getStripeCheckoutAmounts(invoice.totalCents, {
     paymentMethodCategory: requestedPaymentMethodCategory,
     waiveBeeSuitePaymentOperationsFee,
+    schoolPaysStripeFeesDirectly,
   });
   const payment = await prisma.payment.create({
     data: {

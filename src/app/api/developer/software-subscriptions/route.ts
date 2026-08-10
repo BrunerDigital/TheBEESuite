@@ -4,7 +4,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { createStripeCustomer, createStripeSoftwareSubscription, ensureStripeSoftwareRecurringPrice, updateStripeSoftwareSubscription } from "@/lib/integrations";
 import { getKidCitySoftwareFeeUnitAmountCents } from "@/lib/kidcity-software-billing";
 import { prisma } from "@/lib/prisma";
-import { countCenterBillableUsers, record, saveSoftwareSubscriptionSnapshot, textField } from "@/lib/school-software-subscriptions";
+import { record, saveSoftwareSubscriptionSnapshot, textField } from "@/lib/school-software-subscriptions";
 import { withApiLogging } from "@/lib/request-response-logging";
 
 export const runtime = "nodejs";
@@ -23,8 +23,7 @@ async function POSTHandler(request: NextRequest) {
   const fields = record(center.customFields);
   const subscriptionId = textField(fields, "stripeSoftwareSubscriptionId");
   const itemId = textField(fields, "stripeSoftwareSubscriptionItemId");
-  const quantity = await countCenterBillableUsers(prisma, center.id);
-  if (quantity < 1) return NextResponse.json({ ok: false, error: "Add at least one active director, assistant director, or billing administrator before starting billing." }, { status: 400 });
+  const quantity = 1;
 
   let result;
   if (action === "start") {
@@ -49,7 +48,7 @@ async function POSTHandler(request: NextRequest) {
   } else return NextResponse.json({ ok: false, error: "Unsupported subscription action." }, { status: 400 });
 
   if (!result.ok || !result.subscription) return NextResponse.json({ ok: false, error: result.error || "Subscription update failed." }, { status: result.configured ? 502 : 503 });
-  await saveSoftwareSubscriptionSnapshot(prisma, center.id, result.subscription, { stripeSoftwareMonthlyAmountCents: quantity * getKidCitySoftwareFeeUnitAmountCents() });
+  await saveSoftwareSubscriptionSnapshot(prisma, center.id, result.subscription, { stripeSoftwareMonthlyAmountCents: getKidCitySoftwareFeeUnitAmountCents(), stripeSoftwareBillingBasis: "per_school" });
   await writeAuditLog(user, { centerId: center.id, action: `billing.software_subscription.${action}`, resource: "Center", resourceId: center.id, metadata: { subscriptionId: result.subscription.id, quantity, status: result.subscription.status } });
   return NextResponse.json({ ok: true, subscription: result.subscription });
 }

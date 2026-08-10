@@ -530,8 +530,8 @@ async function handleFamilyBalancePaymentSucceeded(
       const paidAt = new Date();
       const currentFields = jsonObject(currentPayment.customFields);
       const stripePaymentIntentId = input.stripePaymentIntentId || clean(currentFields.stripePaymentIntentId) || null;
-      const payment = await tx.payment.update({
-        where: { id: input.paymentId },
+      const claimedPayment = await tx.payment.updateMany({
+        where: { id: input.paymentId, status: PaymentStatus.DRAFT },
         data: {
           status: PaymentStatus.PAID,
           paidAt,
@@ -559,6 +559,13 @@ async function handleFamilyBalancePaymentSucceeded(
             status: "paid",
           },
         },
+      });
+      if (claimedPayment.count !== 1) {
+        ignoredReason = "payment_already_applied";
+        return;
+      }
+      const payment = await tx.payment.findUniqueOrThrow({
+        where: { id: input.paymentId },
       });
       const updatedAccount = await tx.billingAccount.update({
         where: { id: payment.billingAccountId },

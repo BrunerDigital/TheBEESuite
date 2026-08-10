@@ -556,6 +556,15 @@ export function ParentPortalWorkspace({
   );
   const firstPendingOpenInvoice = pendingOpenInvoices[0] ?? null;
   const accountPaymentAmountCents = paymentAmountCents(accountPaymentAmountDollars);
+  const accountPaymentAmountEntered = accountPaymentAmountDollars.trim() !== "";
+  const accountPaymentAmountInvalid = accountPaymentAmountEntered && accountPaymentAmountCents <= 0;
+  const accountPaymentAmountExceedsBalance = !parentBalanceReviewRequired
+    && accountPaymentAmountCents > balanceCents;
+  const accountPaymentRequestCents = accountPaymentAmountEntered
+    ? accountPaymentAmountCents
+    : balanceCents;
+  const accountPaymentAmountRequired = parentBalanceReviewRequired && !accountPaymentAmountEntered;
+  const accountPaymentDisabled = accountPaymentAmountRequired || accountPaymentAmountInvalid || accountPaymentAmountExceedsBalance;
   const showFamilyPaymentPanel = parentBalanceReviewRequired
     || Boolean(nextOpenInvoice)
     || (balanceCents > 0 && openInvoices.length === 0);
@@ -781,8 +790,14 @@ export function ParentPortalWorkspace({
     if (balanceCents <= 0 && !parentBalanceReviewRequired) {
       return showError("There is no family balance to pay.");
     }
-    if (parentBalanceReviewRequired && accountPaymentAmountCents <= 0) {
+    if (accountPaymentAmountRequired) {
       return showError("Enter the amount you want to pay toward your account.");
+    }
+    if (accountPaymentAmountInvalid) {
+      return showError("Payment amount must be greater than zero.");
+    }
+    if (accountPaymentAmountExceedsBalance) {
+      return showError("Payment amount cannot exceed your current family balance.");
     }
     startTransition(async () => {
       const method = paymentMethodCategory === "card"
@@ -796,7 +811,7 @@ export function ParentPortalWorkspace({
           familyId: family.id,
           method,
           returnPath: "/parent-portal",
-          ...(parentBalanceReviewRequired ? { amountCents: accountPaymentAmountCents } : {}),
+          amountCents: accountPaymentRequestCents,
         }),
       });
       const json = await response.json().catch(() => null) as { error?: string; url?: string; configured?: boolean } | null;
@@ -1699,31 +1714,43 @@ export function ParentPortalWorkspace({
                           : <>Family balance {money(balanceCents)} · available for secure account payment</>}
                     </div>
                   </div>
-                  {parentBalanceReviewRequired ? (
-                    <div className="w-full space-y-1 sm:w-48">
-                      <Label htmlFor="account-payment-amount">Amount to pay</Label>
-                      <Input
-                        id="account-payment-amount"
-                        type="number"
-                        inputMode="decimal"
-                        min="0.01"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={accountPaymentAmountDollars}
-                        onChange={(event) => setAccountPaymentAmountDollars(event.target.value)}
-                      />
-                    </div>
-                  ) : null}
+                  <div className="w-full space-y-1 sm:w-56">
+                    <Label htmlFor="account-payment-amount">
+                      Amount to pay{parentBalanceReviewRequired ? "" : " (optional)"}
+                    </Label>
+                    <Input
+                      id="account-payment-amount"
+                      type="number"
+                      inputMode="decimal"
+                      min="0.01"
+                      max={parentBalanceReviewRequired ? undefined : (balanceCents / 100).toFixed(2)}
+                      step="0.01"
+                      placeholder={parentBalanceReviewRequired ? "0.00" : money(balanceCents)}
+                      value={accountPaymentAmountDollars}
+                      onChange={(event) => setAccountPaymentAmountDollars(event.target.value)}
+                      aria-invalid={accountPaymentAmountInvalid || accountPaymentAmountExceedsBalance}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {parentBalanceReviewRequired
+                        ? "Enter the family portion you want to pay."
+                        : "Enter a custom amount to split the balance across payment methods, or leave blank to pay the full balance."}
+                    </p>
+                    {accountPaymentAmountInvalid ? (
+                      <p className="text-xs text-destructive">Payment amount must be greater than zero.</p>
+                    ) : accountPaymentAmountExceedsBalance ? (
+                      <p className="text-xs text-destructive">Amount cannot exceed {money(balanceCents)}.</p>
+                    ) : null}
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || (parentBalanceReviewRequired && accountPaymentAmountCents <= 0)} onClick={() => payBalance("card")}>
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || accountPaymentDisabled} onClick={() => payBalance("card")}>
                       <CreditCard data-icon="inline-start" />
                       Debit/Credit Card
                     </Button>
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || (parentBalanceReviewRequired && accountPaymentAmountCents <= 0)} onClick={() => payBalance("link_bank")} variant="outline">
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || accountPaymentDisabled} onClick={() => payBalance("link_bank")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       Instant Bank
                     </Button>
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || (parentBalanceReviewRequired && accountPaymentAmountCents <= 0)} onClick={() => payBalance("ach")} variant="outline">
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || accountPaymentDisabled} onClick={() => payBalance("ach")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       Pay by Bank
                     </Button>

@@ -27,4 +27,7 @@ test("device preview is development-only and uses fake identifiers", () => {
   assert.match(kioskSource, /if \(previewMode \|\| kioskMode/);
   assert.match(appShellSource, /const searchUserEmail = previewMode \? ""/);
   assert.match(appShellSource, /if \(previewMode\) \{\s*return <UserAvatar/);
+  assert.match(appShellSource, /!previewMode && canViewAccountBalances\(currentUser\)/);
+  assert.match(appShellSource, /\{!previewMode \? \([\s\S]*aria-label="Sign out"/);
 });
+

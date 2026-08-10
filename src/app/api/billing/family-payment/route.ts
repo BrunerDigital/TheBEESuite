@@ -208,6 +208,15 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const requestedAmountCents = parseAmountCents(body);
+  const parentAmountProvided = typeof body.amountCents === "number"
+    || clean(body.amountCents) !== ""
+    || clean(body.amountDollars) !== "";
+  if (parentCheckout && parentAmountProvided && requestedAmountCents <= 0) {
+    return NextResponse.json(
+      { ok: false, error: "Payment amount must be greater than zero.", code: "parent_account_payment_amount_invalid" },
+      { status: 400 },
+    );
+  }
   const agencyLedgerEntries = parentCheckout
     ? await prisma.ledgerEntry.findMany({
         where: {

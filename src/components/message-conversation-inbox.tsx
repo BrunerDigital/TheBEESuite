@@ -1,7 +1,7 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
-import { FileText, Image as ImageIcon, Inbox, MessageCircle, Search, UserRound } from "lucide-react";
+import { CheckCheck, FileText, Image as ImageIcon, Inbox, MessageCircle, Search, ShieldCheck, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,6 +13,7 @@ import {
   type MessageTemplateOption,
 } from "@/components/message-reply-panel";
 import type { MessageAttachmentView } from "@/lib/message-attachments";
+import styles from "@/components/message-conversation.module.css";
 
 export type MessageConversationThread = {
   key: string;
@@ -134,9 +135,9 @@ export function MessageConversationInbox({
     : null;
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-2xl border bg-card/85 shadow-2xl shadow-black/10" aria-label="Parent conversations">
+    <section className={`${styles.staffShell} min-w-0 overflow-hidden rounded-3xl border`} aria-label="Parent conversations">
       <div className="grid min-h-[42rem] min-w-0 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(17rem,21rem)_minmax(0,1fr)]">
-        <aside className="min-w-0 border-b bg-background/45 lg:border-r lg:border-b-0" aria-label="Family conversation list">
+        <aside className={`${styles.conversationList} min-w-0 border-b lg:border-r lg:border-b-0`} aria-label="Family conversation list">
           <div className="border-b p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -166,7 +167,7 @@ export function MessageConversationInbox({
                 <button
                   key={thread.key}
                   type="button"
-                  className={`flex w-full gap-3 border-b px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${isSelected ? "bg-primary/10" : "hover:bg-accent/60"}`}
+                  className={`${styles.threadButton} ${isSelected ? styles.threadButtonActive : ""} flex w-full gap-3 border-b px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset`}
                   aria-pressed={isSelected}
                   onClick={() => setSelectedThreadKey(thread.key)}
                 >
@@ -199,10 +200,10 @@ export function MessageConversationInbox({
           </div>
         </aside>
 
-        <div className="flex min-w-0 flex-col bg-background/20">
+        <div className={`${styles.chatPane} flex min-w-0 flex-col`}>
           {selectedThread ? (
             <>
-              <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-card/80 px-4 py-3 sm:px-5">
+              <header className={`${styles.smokedHeader} flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5`}>
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground" aria-hidden="true">
                     {initials(selectedThread.familyName)}
@@ -214,13 +215,17 @@ export function MessageConversationInbox({
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Badge variant="outline" className="gap-1.5">
+                    <ShieldCheck className="size-3" aria-hidden="true" />
+                    {selectedThread.familyId ? "Family thread · school scoped" : "Internal thread · tenant scoped"}
+                  </Badge>
                   {selectedThread.unread ? <Badge>{selectedThread.unread} unread</Badge> : <Badge variant="outline">Up to date</Badge>}
                   {selectedThread.priority ? <Badge variant="destructive">Priority</Badge> : null}
                 </div>
               </header>
 
-              <ol className="flex-1 space-y-4 overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_top,_color-mix(in_oklch,var(--primary)_7%,transparent),_transparent_26rem)] p-4 sm:p-6" aria-label={`Messages with ${selectedThread.familyName}`}>
+              <ol className={`${styles.timeline} flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4 sm:p-6`} aria-label={`Messages with ${selectedThread.familyName}`}>
                 {selectedThread.messages.map((message) => (
                   <li key={message.id} className={`flex ${message.isFromFamily ? "justify-start" : "justify-end"}`}>
                     <div className={`flex min-w-0 max-w-[88%] items-end gap-2 sm:max-w-[76%] ${message.isFromFamily ? "" : "flex-row-reverse"}`}>
@@ -229,9 +234,9 @@ export function MessageConversationInbox({
                       </span>
                       <article
                         data-message-origin={message.isFromFamily ? "family" : "school"}
-                        className={`min-w-0 break-words rounded-2xl px-3.5 py-2.5 shadow-sm ${message.isFromFamily ? "rounded-bl-sm border bg-card text-card-foreground" : "rounded-br-sm bg-primary text-primary-foreground"}`}
+                        className={`${styles.bubble} ${message.isFromFamily ? styles.bubbleFamily : styles.bubbleSchool} min-w-0 break-words rounded-2xl border px-3.5 py-2.5 ${message.isFromFamily ? "rounded-bl-sm" : "rounded-br-sm"}`}
                       >
-                        <div className={`mb-1 flex flex-wrap items-center gap-x-2 text-[0.68rem] ${message.isFromFamily ? "text-muted-foreground" : "text-primary-foreground/75"}`}>
+                        <div className={`mb-1 flex flex-wrap items-center gap-x-2 text-[0.68rem] ${message.isFromFamily ? "text-muted-foreground" : "text-white/65"}`}>
                           <span className="font-medium">{message.isFromFamily ? message.sender?.name ?? "Parent" : message.sender?.name ?? "School"}</span>
                           <span>{formatConversationTime(message.createdAt)}</span>
                           <span className="capitalize">{message.channel.replaceAll("_", " ")}</span>
@@ -239,6 +244,12 @@ export function MessageConversationInbox({
                         {message.subject ? <div className="mb-1 text-sm font-semibold">{message.subject}</div> : null}
                         <p className="whitespace-pre-wrap break-words text-sm leading-5">{message.body}</p>
                         <MessageAttachments attachments={message.attachments} />
+                        {!message.isFromFamily ? (
+                          <div className="mt-2 flex items-center justify-end gap-1 text-[0.65rem] text-white/60">
+                            <CheckCheck className="size-3" aria-hidden="true" />
+                            School reply recorded
+                          </div>
+                        ) : null}
                       </article>
                     </div>
                   </li>
@@ -246,13 +257,15 @@ export function MessageConversationInbox({
               </ol>
 
               {replyTarget ? (
-                <MessageReplyPanel
-                  key={`${selectedThread.key}-${replyTarget.replyToMessageId}`}
-                  {...composer}
-                  replyDraft={replyTarget}
-                  variant="conversation"
-                  composerId="message-composer"
-                />
+                <div className={styles.composerShell}>
+                  <MessageReplyPanel
+                    key={`${selectedThread.key}-${replyTarget.replyToMessageId}`}
+                    {...composer}
+                    replyDraft={replyTarget}
+                    variant="conversation"
+                    composerId="message-composer"
+                  />
+                </div>
               ) : (
                 <div className="border-t bg-card/80 p-4 text-sm text-muted-foreground">
                   This thread does not have a family reply target. Use the full composer below.

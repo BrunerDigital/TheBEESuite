@@ -96,8 +96,11 @@ async function GETHandler(request: NextRequest) {
       }
     : {};
 
-  await prisma.center.update({
-    where: { id: center.id },
+  const synced = await prisma.center.updateMany({
+    where: {
+      id: center.id,
+      customFields: { equals: existingFields as Prisma.InputJsonValue },
+    },
     data: {
       customFields: {
         ...existingFields,
@@ -108,6 +111,9 @@ async function GETHandler(request: NextRequest) {
       },
     },
   });
+  if (synced.count !== 1) {
+    return NextResponse.json({ ok: false, error: "The school's Stripe connection changed while status was refreshing. Refresh and try again." }, { status: 409 });
+  }
 
   await writeAuditLog(user, {
     centerId: center.id,

@@ -124,7 +124,10 @@ test("parent account payments support custom partial amounts for split-payment w
   assert.match(workspace, /Amount to pay\{parentBalanceReviewRequired \? "" : " \(optional\)"\}/);
   assert.match(workspace, /split the balance across payment methods/);
   assert.match(workspace, /amountCents: accountPaymentRequestCents/);
+  assert.match(workspace, /accountPaymentAmountEntered/);
+  assert.match(workspace, /accountPaymentAmountInvalid/);
   assert.match(workspace, /accountPaymentAmountExceedsBalance/);
+  assert.match(visibility, /responsibilityReviewRequired && requestedAmountCents <= 0/);
   assert.match(visibility, /requestedAmountCents > 0[\s\S]*Math\.min\(requestedAmountCents, maximumParentPaymentCents\)/);
 });
 

@@ -66,11 +66,14 @@ export function parentPaymentAmountCents(input: {
   requestedAmountCents?: number;
   responsibilityReviewRequired?: boolean;
 }) {
-  if (input.responsibilityReviewRequired) {
-    const requestedAmountCents = Math.max(0, Math.round(input.requestedAmountCents ?? 0));
-    return Math.min(requestedAmountCents, Math.max(0, input.accountBalanceCents));
-  }
-  return Math.max(0, parentVisibleBillingBalanceCents(input));
+  const maximumParentPaymentCents = input.responsibilityReviewRequired
+    ? Math.max(0, input.accountBalanceCents)
+    : Math.max(0, parentVisibleBillingBalanceCents(input));
+  const requestedAmountCents = Math.max(0, Math.round(input.requestedAmountCents ?? 0));
+
+  return requestedAmountCents > 0
+    ? Math.min(requestedAmountCents, maximumParentPaymentCents)
+    : maximumParentPaymentCents;
 }
 
 export function isParentVisiblePayment(payment: { provider: string }) {

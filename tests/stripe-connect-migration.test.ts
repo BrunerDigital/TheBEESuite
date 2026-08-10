@@ -138,7 +138,11 @@ test("Full Dashboard target replacement is fingerprinted, idempotent, and preser
   assert.match(replacement, /targetBanks\.banks\.length !== 0/);
   assert.match(replacement, /targetPayoutInterval !== "manual"/);
   assert.match(replacement, /BLOCKED_MIGRATION_STATUSES/);
-  assert.match(replacement, /"onboarding_opened"/);
+  assert.match(replacement, /--center-id/);
+  assert.match(replacement, /--allow-failed-reservation-replacement/);
+  assert.match(replacement, /--allow-same-tenant-nonportfolio-center/);
+  assert.match(replacement, /FAILED_RESERVATION_COOLDOWN_MS/);
+  assert.match(replacement, /ONBOARDING_OPENED_ACTION/);
   assert.match(replacement, /stripeConnectMigrationLastOnboardingAt/);
   assert.match(replacement, /billing\.connect\.migration\.onboarding_reserved/);
   assert.match(replacement, /metadata: \{ path: \["targetAccountId"\], equals:/);
@@ -152,4 +156,16 @@ test("Full Dashboard target replacement is fingerprinted, idempotent, and preser
   assert.match(replacement, /stripeConnectMigrationPreviousTargetAccountId/);
   assert.match(replacement, /stripeConnectMigrationParentPaymentsAccountId: plan\.sourceAccountId/);
   assert.match(replacement, /readStripeConnectedAccountId\(afterSwapFields\) !== plan\.sourceAccountId/);
+  assert.match(replacement, /target_replaced_after_failed_link/);
+});
+
+test("definitive Stripe link failures release the onboarding reservation", () => {
+  const integrations = readFileSync("src/lib/integrations.ts", "utf8");
+  const route = readFileSync("src/app/api/billing/connect/migration/route.ts", "utf8");
+  assert.match(integrations, /providerStatus\?: number/);
+  assert.match(integrations, /providerStatus: response\.status/);
+  assert.match(route, /link\.providerStatus >= 400 && link\.providerStatus < 500/);
+  assert.match(route, /stripeConnectMigrationLastOnboardingFailureCode/);
+  assert.match(route, /billing\.connect\.migration\.onboarding_reservation_released/);
+  assert.match(route, /customFields: \{ equals: reservedFields as Prisma\.InputJsonValue \}/);
 });

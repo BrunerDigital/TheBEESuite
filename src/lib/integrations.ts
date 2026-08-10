@@ -21,6 +21,7 @@ export type IntegrationSendResult = {
   id?: string;
   url?: string;
   error?: string;
+  providerStatus?: number;
 };
 
 export type EmailAttachment = {
@@ -2516,6 +2517,7 @@ export async function createStripeAccountLink({
       configured: true,
       provider: "stripe",
       error: json?.error?.message || `Payment processor returned ${response.status}.`,
+      providerStatus: response.status,
     };
   }
   if (!isSecurePaymentUrl(json.url)) {

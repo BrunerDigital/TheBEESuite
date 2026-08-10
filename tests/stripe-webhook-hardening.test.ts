@@ -75,7 +75,11 @@ test("unrelated unique conflicts are never mislabeled as webhook duplicates", as
 test("supported reconciliation matrix includes payment, invoice, subscription, dispute, and Accounts v2 events", () => {
   assert.deepEqual([...STRIPE_WEBHOOK_SUPPORTED_EVENT_TYPES].sort(), [
     "account.updated",
+    "charge.dispute.closed",
     "charge.dispute.created",
+    "charge.dispute.funds_reinstated",
+    "charge.dispute.funds_withdrawn",
+    "charge.dispute.updated",
     "charge.refunded",
     "checkout.session.async_payment_failed",
     "checkout.session.async_payment_succeeded",
@@ -118,4 +122,17 @@ test("route reads raw text before verification/parsing and reserves before dispa
   assert.ok(reserve < dispatch);
   assert.doesNotMatch(postHandler, /request\.json\s*\(/);
   assert.match(postHandler, /omitRequestBody:\s*true/);
+});
+
+test("disputes add the chargeback to the parent ledger and reverse it only when funds return", async () => {
+  const source = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  const lifecycle = source.slice(source.indexOf("async function handleDisputeLifecycle"), source.indexOf("async function writeSystemAudit"));
+
+  assert.match(lifecycle, /type: "chargeback"/);
+  assert.match(lifecycle, /balanceCents: \{ increment: disputeAmountCents \}/);
+  assert.match(lifecycle, /type: "chargeback_reversal"/);
+  assert.match(lifecycle, /balanceCents: \{ decrement: disputeAmountCents \}/);
+  assert.match(lifecycle, /stripeDisputeLedgerActive/);
+  assert.match(lifecycle, /stripe-dispute:\$\{dispute\.id\}:assessment/);
+  assert.match(lifecycle, /stripe-dispute:\$\{dispute\.id\}:reversal/);
 });

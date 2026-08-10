@@ -17,6 +17,7 @@ import {
   readStripeConnectedAccountId,
   retrieveStripeConnectedAccount,
   shouldWaiveStripePaymentOperationsFee,
+  stripeConnectedAccountPaysFeesDirectly,
 } from "@/lib/integrations";
 import {
   canChargeSavedPaymentMethod,
@@ -283,6 +284,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     ok: boolean;
     accountId: string | null;
     reason: string | null;
+    schoolPaysStripeFeesDirectly: boolean;
   }>();
   const results: AutopayRunInvoiceResult[] = [];
   const blockedBillingAccountIds = new Set<string>();
@@ -489,6 +491,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     }
 
     const connectedAccountId = readStripeConnectedAccountId(center.customFields);
+    let schoolPaysStripeFeesDirectly = jsonRecord(center.customFields).stripeFeesCollector === "stripe";
     if (!connectedAccountId && !allowPlatformOnlyPayments) {
       results.push({ ...baseResult, status: "skipped", reason: "School payout account is not connected." });
       continue;
@@ -503,6 +506,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
             ok: readiness.canAcceptParentPayments,
             accountId: readiness.accountId,
             reason: readiness.blockingReason,
+            schoolPaysStripeFeesDirectly: jsonRecord(center.customFields).stripeFeesCollector === "stripe",
           };
         } else {
           const retrieved = await retrieveStripeConnectedAccount(connectedAccountId, { tenantId });
@@ -516,6 +520,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
                   ...stripeConnectCustomFieldPatch(readiness),
                   stripeMerchantCapabilityStatus: retrieved.account.merchantCapabilityStatus || null,
                   stripeRecipientTransferStatus: retrieved.account.recipientTransferStatus || null,
+                  stripeFeesCollector: retrieved.account.feesCollector || null,
+                  stripeLossesCollector: retrieved.account.lossesCollector || null,
                 }),
               },
             });
@@ -523,12 +529,14 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
               ok: readiness.canAcceptParentPayments,
               accountId: readiness.accountId,
               reason: readiness.blockingReason,
+              schoolPaysStripeFeesDirectly: stripeConnectedAccountPaysFeesDirectly(retrieved.account),
             };
           } else {
             accountReadiness = {
               ok: false,
               accountId: connectedAccountId,
               reason: retrieved.error || "School payout status could not be confirmed.",
+              schoolPaysStripeFeesDirectly: false,
             };
           }
         }
@@ -538,6 +546,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         results.push({ ...baseResult, status: "skipped", reason: accountReadiness.reason || "School payout account is not ready." });
         continue;
       }
+      schoolPaysStripeFeesDirectly = accountReadiness.schoolPaysStripeFeesDirectly;
     }
     const scopedStripeCustomerId = stripeCustomerIdForAccount(billingAccountFields, connectedAccountId);
     if (!scopedStripeCustomerId) {
@@ -560,6 +569,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     const amounts = getStripeCheckoutAmounts(creditAllocation.stripeChargePrincipalCents, {
       paymentMethodCategory: autopayPaymentMethodCategory,
       waiveBeeSuitePaymentOperationsFee,
+      schoolPaysStripeFeesDirectly,
     });
 
     if (dryRun) {

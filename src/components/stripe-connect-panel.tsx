@@ -196,18 +196,26 @@ export function StripeConnectPanel({
     }
   }
 
-  async function startSoftwarePaymentSetup(centerId: string, method: "ach" | "card" | "default") {
+  async function startSoftwarePaymentSetup(centerId: string, method: "ach" | "card" | "default" | "stripe_balance") {
+    const approved = method !== "stripe_balance" || window.confirm(
+      "By clicking OK, you authorize The BEE Suite to debit this school's Stripe account balance for the $99 monthly recurring software fee arising from its use of The BEE Suite. You can opt out by cancelling the subscription.",
+    );
+    if (!approved) return;
     setBusyCenterId(centerId);
     setMessage(null);
     try {
       const response = await fetch("/api/billing/software-payment-method", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ centerId, method }),
+        body: JSON.stringify({ centerId, method, approved }),
       });
       const json = await response.json();
-      if (!response.ok || !json.ok || !json.url) throw new Error(json.error || "Software payment setup could not be opened.");
-      window.location.assign(json.url as string);
+      if (!response.ok || !json.ok) throw new Error(json.error || "Software payment setup could not be opened.");
+      if (json.url) window.location.assign(json.url as string);
+      else {
+        setMessage(json.message || "$99 monthly billing from this school's Stripe balance is authorized.");
+        window.location.reload();
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Software payment setup could not be opened.");
       setBusyCenterId(null);
@@ -561,7 +569,9 @@ export function StripeConnectPanel({
               const softwareMethodType = text(centerFields.stripeSoftwarePaymentMethodType);
               const softwareLast4 = text(centerFields.stripeSoftwarePaymentMethodLast4);
               const hasConfirmedPayoutBank = Boolean(text(centerFields.stripePayoutBankLast4));
-              const softwareMethodLabel = softwareMethodType === "us_bank_account"
+              const softwareMethodLabel = softwareMethodType === "stripe_balance"
+                ? "$99 monthly from the school's Stripe balance"
+                : softwareMethodType === "us_bank_account"
                 ? `${text(centerFields.stripeSoftwarePaymentMethodBankName) || "Bank account"}${softwareLast4 ? ` •••• ${softwareLast4}` : ""}`
                 : softwareMethodType === "card"
                   ? `${text(centerFields.stripeSoftwarePaymentMethodBrand) || "Card"}${softwareLast4 ? ` •••• ${softwareLast4}` : ""}`
@@ -590,7 +600,16 @@ export function StripeConnectPanel({
                   </TableCell>
                   <TableCell className="max-w-xs whitespace-normal">
                     <div className="text-xs font-medium">{softwareMethodLabel}</div>
+                    {hasAccount && softwareMethodType !== "stripe_balance" ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Authorize $99 monthly from this school&apos;s Stripe balance. This does not change its payout bank.
+                      </p>
+                    ) : null}
                     <div className="mt-2 flex flex-wrap gap-1.5">
+                      <Button type="button" size="sm" variant="outline" disabled={busyCenterId === center.id || !stripeConfigured || !readiness.canAcceptParentPayments || softwareMethodType === "stripe_balance"} onClick={() => startSoftwarePaymentSetup(center.id, "stripe_balance")}>
+                        <Landmark data-icon="inline-start" />
+                        {softwareMethodType === "stripe_balance" ? "Balance authorized" : "Authorize $99 balance fee"}
+                      </Button>
                       <Button type="button" size="sm" variant="outline" disabled={busyCenterId === center.id || !stripeConfigured || !hasConfirmedPayoutBank} onClick={() => startSoftwarePaymentSetup(center.id, "ach")}>
                         <BadgeDollarSign data-icon="inline-start" />
                         {softwareMethodType ? "Change fee bank" : hasConfirmedPayoutBank ? "Authorize fee bank" : "Available after payout bank"}

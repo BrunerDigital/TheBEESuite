@@ -158,6 +158,7 @@ test("Stripe connected account creation sends dashboard profile details to Accou
     const support = asRecord(merchant.support);
     const defaults = asRecord(payload.defaults);
     const profile = asRecord(defaults.profile);
+    const responsibilities = asRecord(defaults.responsibilities);
 
     assert.equal(businessDetails.registered_name, "Kokomo School LLC");
     assert.equal(businessDetails.phone, "+17655551234");
@@ -169,7 +170,11 @@ test("Stripe connected account creation sends dashboard profile details to Accou
     assert.equal(support.url, "https://kidcityusa.example/kokomo");
     assert.equal(profile.business_url, "https://kidcityusa.example/kokomo");
     assert.equal(profile.product_description, "Childcare tuition and registration fees.");
-    assert.deepEqual(payload.include, ["configuration.merchant", "configuration.recipient", "requirements"]);
+    assert.equal(payload.dashboard, "none");
+    assert.equal(responsibilities.fees_collector, "stripe");
+    assert.equal(responsibilities.losses_collector, "stripe");
+    assert.ok(asRecord(configuration.customer));
+    assert.deepEqual(payload.include, ["configuration.merchant", "configuration.recipient", "configuration.customer", "defaults", "requirements"]);
     assert.equal(JSON.stringify(payload).includes("external_account"), false);
     assert.equal(JSON.stringify(payload).includes("requirements_collector"), false);
   } finally {
@@ -402,6 +407,7 @@ test("Stripe connected account retrieval uses indexed Accounts v2 include params
         merchant: { capabilities: { card_payments: { status: "active" } } },
         recipient: { capabilities: { stripe_balance: { stripe_transfers: { status: "active" } } } },
       },
+      defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
       requirements: { entries: [] },
     }), {
       status: 200,
@@ -418,9 +424,13 @@ test("Stripe connected account retrieval uses indexed Accounts v2 include params
     assert.equal(result.ok, true);
     assert.equal(result.account?.chargesEnabled, true);
     assert.equal(result.account?.payoutsEnabled, true);
+    assert.equal(result.account?.feesCollector, "stripe");
+    assert.equal(result.account?.lossesCollector, "stripe");
     assert.equal(url.searchParams.get("include[0]"), "configuration.merchant");
     assert.equal(url.searchParams.get("include[1]"), "configuration.recipient");
-    assert.equal(url.searchParams.get("include[2]"), "requirements");
+    assert.equal(url.searchParams.get("include[2]"), "configuration.customer");
+    assert.equal(url.searchParams.get("include[3]"), "defaults");
+    assert.equal(url.searchParams.get("include[4]"), "requirements");
     assert.equal(url.searchParams.has("include[]"), false);
   } finally {
     globalThis.fetch = originalFetch;

@@ -211,7 +211,11 @@ export function buildOutstandingNonInvoiceChargesByAccount(
       if (remainingCents) state.charges.push({ remainingCents, invoiceLinked: Boolean(entry.invoiceId) });
     } else if (entry.amountCents < 0) {
       let creditCents = Math.abs(entry.amountCents);
-      for (const charge of state.charges) {
+      const chargesByPaymentPriority = [
+        ...state.charges.filter((charge) => charge.invoiceLinked),
+        ...state.charges.filter((charge) => !charge.invoiceLinked),
+      ];
+      for (const charge of chargesByPaymentPriority) {
         if (!creditCents) break;
         const appliedCents = Math.min(creditCents, charge.remainingCents);
         charge.remainingCents -= appliedCents;

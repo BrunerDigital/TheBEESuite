@@ -117,6 +117,26 @@ test("settled ledger-only charges do not displace later invoice aging", () => {
   });
 });
 
+test("payments reduce invoice charges before older ledger-only charges", () => {
+  const charges = buildOutstandingNonInvoiceChargesByAccount([
+    { billingAccountId: "mixed", amountCents: 10_000, invoiceId: null, effectiveAt: "2026-05-01T00:00:00.000Z" },
+    { billingAccountId: "mixed", amountCents: 10_000, invoiceId: "invoice", effectiveAt: "2026-06-01T00:00:00.000Z" },
+    { billingAccountId: "mixed", amountCents: -5_000, invoiceId: null, effectiveAt: "2026-06-02T00:00:00.000Z" },
+  ]);
+
+  assert.equal(charges.get("mixed"), 10_000);
+  assert.deepEqual(buildNetReceivableAging(
+    [{ id: "mixed", balanceCents: 15_000, nonInvoiceChargeCents: charges.get("mixed") }],
+    [{ billingAccountId: "mixed", totalCents: 10_000, dueDate: new Date("2026-06-01T00:00:00.000Z") }],
+    new Date("2026-08-10T00:00:00.000Z"),
+  ), {
+    currentCents: 10_000,
+    oneToThirtyCents: 0,
+    thirtyOneToSixtyCents: 0,
+    sixtyOnePlusCents: 5_000,
+  });
+});
+
 test("school account snapshot puts the supplied current families with balances owed first", () => {
   const snapshot = buildAccountsReceivableSnapshot(
     families,

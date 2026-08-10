@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 export function activeClassroomWhere(
   where: Prisma.ClassroomWhereInput = {},
@@ -6,7 +6,13 @@ export function activeClassroomWhere(
   return {
     AND: [
       where,
-      { NOT: { customFields: { path: ["archived"], equals: true } } },
+      {
+        OR: [
+          { customFields: { equals: Prisma.DbNull } },
+          { customFields: { path: ["archived"], equals: Prisma.AnyNull } },
+          { customFields: { path: ["archived"], equals: false } },
+        ],
+      },
     ],
   };
 }

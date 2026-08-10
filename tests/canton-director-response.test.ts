@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { test } from "node:test";
+import { Prisma } from "@prisma/client";
 import { activeClassroomWhere, classroomIsArchived } from "../src/lib/classroom-status";
 
 const source = fs.readFileSync(new URL("../scripts/reconcile-canton-stale-invoices-and-classrooms.ts", import.meta.url), "utf8");
@@ -10,7 +11,13 @@ test("active classroom scope excludes archived records", () => {
   assert.deepEqual(activeClassroomWhere({ centerId: "center-1" }), {
     AND: [
       { centerId: "center-1" },
-      { NOT: { customFields: { path: ["archived"], equals: true } } },
+      {
+        OR: [
+          { customFields: { equals: Prisma.DbNull } },
+          { customFields: { path: ["archived"], equals: Prisma.AnyNull } },
+          { customFields: { path: ["archived"], equals: false } },
+        ],
+      },
     ],
   });
   assert.equal(classroomIsArchived({ archived: true }), true);
@@ -35,4 +42,12 @@ test("Canton classroom repair archives only empty legacy rooms and preserves tra
   assert.match(source, /classroomId: classroom\.retainedId/);
   assert.match(source, /historicalTransitionsPreserved/);
   assert.doesNotMatch(source, /classroom\.delete/);
+});
+
+test("family intake and child writes cannot reuse archived classrooms", () => {
+  const pageSource = fs.readFileSync(new URL("../src/app/[slug]/page.tsx", import.meta.url), "utf8");
+  const operationsSource = fs.readFileSync(new URL("../src/app/api/operations/records/route.ts", import.meta.url), "utf8");
+  assert.match(pageSource, /classrooms: \{[\s\S]*where: activeClassroomWhere\(\)/);
+  assert.match(operationsSource, /activeClassroomWhere\(\{ id: change\.value\.classroomId \}\)/);
+  assert.match(operationsSource, /activeClassroomWhere\(\{ id: classroomId \}\)/);
 });

@@ -35,6 +35,7 @@ import {
   parentPortalAccessFields,
 } from "@/lib/parent-portal-logins";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
+import { activeClassroomWhere } from "@/lib/classroom-status";
 import {
   enrollmentClassroomValidationError,
   isCurrentlyEnrolledChildRecord,
@@ -351,8 +352,8 @@ async function POSTHandler(request: NextRequest) {
 
     const centerIds = [...new Set(children.map((child) => child.family.centerId).filter((value): value is string => Boolean(value)))];
     if (change.value.classroomId) {
-      const classroom = await prisma.classroom.findUnique({
-        where: { id: change.value.classroomId },
+      const classroom = await prisma.classroom.findFirst({
+        where: activeClassroomWhere({ id: change.value.classroomId }),
         select: { id: true, centerId: true },
       });
       if (!classroom || !canAccessCenter(user, classroom.centerId)) {
@@ -891,7 +892,10 @@ async function POSTHandler(request: NextRequest) {
     centerId = access.centerId;
     const classroomId = clean(body.classroomId) || null;
     if (classroomId) {
-      const classroom = await prisma.classroom.findUnique({ where: { id: classroomId }, select: { centerId: true } });
+      const classroom = await prisma.classroom.findFirst({
+        where: activeClassroomWhere({ id: classroomId }),
+        select: { centerId: true },
+      });
       if (!classroom || (classroom.centerId && !canAccessCenter(user, classroom.centerId))) {
         return NextResponse.json({ ok: false, error: "You do not have access to this classroom." }, { status: 403 });
       }

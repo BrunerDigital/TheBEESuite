@@ -269,6 +269,7 @@ async function getFamilyIntakeCenters(user: CurrentUser) {
       city: true,
       state: true,
       classrooms: {
+        where: activeClassroomWhere(),
         orderBy: [{ ageGroup: "asc" }, { name: "asc" }],
         select: { id: true, name: true, ageGroup: true },
       },

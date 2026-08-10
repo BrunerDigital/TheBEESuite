@@ -2444,48 +2444,6 @@ export async function completeStripeConnectedAccountBusinessProfile({
   return { ok: true, configured: true, provider: "stripe", id: json.id, account: normalizeStripeAccount(json) };
 }
 
-export async function setStripeConnectedAccountFullDashboard({
-  accountId,
-  tenantId,
-  credentials,
-}: {
-  accountId: string;
-  tenantId?: string | null;
-  credentials?: Record<string, string>;
-}): Promise<IntegrationSendResult & { account?: StripeConnectedAccountSnapshot }> {
-  const apiKey = await getStripeSecretKey({ tenantId, credentials });
-  if (!apiKey) {
-    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
-  }
-
-  const connectedAccountId = clean(accountId);
-  if (!connectedAccountId.startsWith("acct_")) {
-    return { ok: false, configured: true, provider: "stripe", error: "Connected payout account id is invalid." };
-  }
-
-  const response = await fetch(`https://api.stripe.com/v2/core/accounts/${encodeURIComponent(connectedAccountId)}`, {
-    method: "POST",
-    headers: stripeHeaders(apiKey, "json", STRIPE_ACCOUNTS_V2_API_VERSION),
-    body: JSON.stringify({
-      dashboard: "full",
-      include: STRIPE_CONNECTED_ACCOUNT_INCLUDES,
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  const json = await response.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
-
-  if (!response.ok || !json?.id) {
-    return {
-      ok: false,
-      configured: true,
-      provider: "stripe",
-      error: json?.error?.message || `Payment processor returned ${response.status}.`,
-    };
-  }
-
-  return { ok: true, configured: true, provider: "stripe", id: json.id, account: normalizeStripeAccount(json) };
-}
-
 export async function createStripeAccountLink({
   accountId,
   refreshUrl,

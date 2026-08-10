@@ -119,3 +119,19 @@ test("cutover is one-school-at-a-time and remains blocked behind live bank, payo
   assert.match(cutover, /stripeConnectAccountId: targetAccountId/);
   assert.match(cutover, /stripeConnectMigrationSourceAccountRetainedForReconciliation: true/);
 });
+
+test("Full Dashboard target replacement is fingerprinted, idempotent, and preserves the active source account", () => {
+  const replacement = readFileSync("scripts/replace-stripe-connect-migration-targets.ts", "utf8");
+  assert.match(replacement, /--acknowledge-provider-mutation/);
+  assert.match(replacement, /--acknowledge-database-mutation/);
+  assert.match(replacement, /confirmation fingerprint does not match/i);
+  assert.match(replacement, /target\.account\.dashboard !== "none"/);
+  assert.match(replacement, /targetBanks\.banks\.length !== 0/);
+  assert.match(replacement, /targetPayoutInterval !== "manual"/);
+  assert.match(replacement, /BLOCKED_MIGRATION_STATUSES/);
+  assert.match(replacement, /bee-suite-full-dashboard-replacement-/);
+  assert.match(replacement, /created\.account\.dashboard !== "full"/);
+  assert.match(replacement, /stripeConnectMigrationPreviousTargetAccountId/);
+  assert.match(replacement, /stripeConnectMigrationParentPaymentsAccountId: plan\.sourceAccountId/);
+  assert.match(replacement, /readStripeConnectedAccountId\(afterSwapFields\) !== plan\.sourceAccountId/);
+});

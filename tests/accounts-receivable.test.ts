@@ -237,6 +237,7 @@ test("billing, analytics, and payment readiness exclude past families from activ
   assert.match(livePage, /currentFamilyOutstandingCents[\s\S]*Math\.max\(account\.balanceCents, 0\)/);
   assert.match(livePage, /ledgerRollupRows[\s\S]*billingAccount: currentBillingAccountWhere[\s\S]*take: 1000/);
   assert.match(livePage, /nonInvoiceChargeRows[\s\S]*invoiceId: null[\s\S]*amountCents: \{ gt: 0 \}/);
+  assert.match(livePage, /buildLedgerReconciliationReport\(\{[\s\S]*entries: ledgerEntries/);
   assert.match(livePage, /formerFamilyBalanceSummary/);
   assert.match(livePage, /if \(slug === "payments"\)[\s\S]*visibleCurrentInvoiceWhere\(visibleCenterIds\)/);
   assert.match(livePage, /if \(slug === "analytics"\)[\s\S]*visibleCurrentBillingAccountWhere\(visibleCenterIds\)/);

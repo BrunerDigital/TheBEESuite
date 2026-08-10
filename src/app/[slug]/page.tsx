@@ -3385,7 +3385,7 @@ async function renderLivePage(
         balanceCents: account.balanceCents,
         familyName: account.family.name,
       })),
-      entries: ledgerRollupRows,
+      entries: ledgerEntries,
     });
     const currentFamilyOutstandingCents = billingAccountRows.reduce(
       (sum, account) => account.family._count.children > 0

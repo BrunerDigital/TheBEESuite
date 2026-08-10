@@ -19,11 +19,11 @@ type JsonRecord = Record<string, unknown>;
 
 const CORPORATE_SCHOOLS_EMAIL = "corpschools@kidcityusa.com";
 const INACTIVE_CENTER_STATUSES = ["closed", "archived", "inactive"];
-const BLOCKED_MIGRATION_STATUSES = new Set(["onboarding_opened", "ready_for_cutover", "cutover_complete"]);
-const ONBOARDING_AUDIT_ACTIONS = [
-  "billing.connect.migration.onboarding_reserved",
-  "billing.connect.migration.onboarding_opened",
-];
+const BLOCKED_MIGRATION_STATUSES = new Set(["ready_for_cutover", "cutover_complete"]);
+const ONBOARDING_RESERVED_ACTION = "billing.connect.migration.onboarding_reserved";
+const ONBOARDING_OPENED_ACTION = "billing.connect.migration.onboarding_opened";
+const ONBOARDING_RELEASED_ACTION = "billing.connect.migration.onboarding_reservation_released";
+const FAILED_RESERVATION_COOLDOWN_MS = 15 * 60 * 1_000;
 const REPLACEMENT_VERSION = "2026-08-full-dashboard-target-v1";
 
 function clean(value: unknown) {
@@ -82,6 +82,9 @@ async function main() {
   const confirmedFingerprint = argValue("--confirm-fingerprint");
   const expectedCount = Number.parseInt(argValue("--expected-count"), 10);
   const expectedReplacedCount = Number.parseInt(argValue("--expected-replaced-count") || "0", 10);
+  const selectedCenterId = argValue("--center-id");
+  const allowFailedReservationReplacement = hasArg("--allow-failed-reservation-replacement");
+  const allowSameTenantNonportfolioCenter = hasArg("--allow-same-tenant-nonportfolio-center");
 
   if (!Number.isInteger(expectedCount) || expectedCount < 0) {
     throw new Error("Pass --expected-count with the exact previewed replacement count.");
@@ -115,10 +118,16 @@ async function main() {
   if (!portfolio) throw new Error("The corporate schools portfolio user could not be found.");
   const centerIds = Array.from(new Set(portfolio.accessGrants.map((grant) => grant.centerId).filter(Boolean))) as string[];
   if (!centerIds.length) throw new Error("The corporate schools portfolio has no active center grants.");
+  if (allowSameTenantNonportfolioCenter && !selectedCenterId) {
+    throw new Error("--allow-same-tenant-nonportfolio-center requires one explicit --center-id.");
+  }
+  if (selectedCenterId && !centerIds.includes(selectedCenterId) && !allowSameTenantNonportfolioCenter) {
+    throw new Error("The selected center is not in the active corporate schools portfolio. Use the explicit same-tenant acknowledgment only after verifying the school.");
+  }
 
   const centers = await prisma.center.findMany({
     where: {
-      id: { in: centerIds },
+      id: selectedCenterId || { in: centerIds },
       organization: { tenantId: portfolio.tenantId },
       status: { notIn: INACTIVE_CENTER_STATUSES },
     },
@@ -154,21 +163,62 @@ async function main() {
       throw new Error(`${center.name}: the stored migration source does not match the active parent-payment account.`);
     }
     if (BLOCKED_MIGRATION_STATUSES.has(clean(fields.stripeConnectMigrationStatus))) {
-      throw new Error(`${center.name}: the prepared target is no longer replaceable because onboarding started or the migration advanced.`);
+      throw new Error(`${center.name}: the migration is already at or past the cutover gate.`);
     }
-    if (clean(fields.stripeConnectMigrationLastOnboardingAt)) {
-      throw new Error(`${center.name}: Stripe onboarding has already been opened for the prepared target.`);
+    const [openedAudit, reservedAudit, releasedAudit] = await Promise.all([
+      prisma.auditLog.findFirst({
+        where: {
+          centerId: center.id,
+          action: ONBOARDING_OPENED_ACTION,
+          metadata: { path: ["targetAccountId"], equals: targetAccountId },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, createdAt: true },
+      }),
+      prisma.auditLog.findFirst({
+        where: {
+          centerId: center.id,
+          action: ONBOARDING_RESERVED_ACTION,
+          metadata: { path: ["targetAccountId"], equals: targetAccountId },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, createdAt: true },
+      }),
+      prisma.auditLog.findFirst({
+        where: {
+          centerId: center.id,
+          action: ONBOARDING_RELEASED_ACTION,
+          metadata: { path: ["targetAccountId"], equals: targetAccountId },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, createdAt: true },
+      }),
+    ]);
+    if (openedAudit) {
+      throw new Error(`${center.name}: Stripe onboarding successfully opened for the prepared target, so it cannot be replaced automatically.`);
+    }
+    const reservationPending = Boolean(reservedAudit && (!releasedAudit || releasedAudit.createdAt < reservedAudit.createdAt));
+    const storedReservationAt = clean(fields.stripeConnectMigrationLastOnboardingAt);
+    const failedReservationAt = reservedAudit?.createdAt ?? (storedReservationAt ? new Date(storedReservationAt) : null);
+    const hasFailedReservation = reservationPending || clean(fields.stripeConnectMigrationStatus) === "onboarding_opened" || Boolean(storedReservationAt);
+    if (hasFailedReservation) {
+      if (!allowFailedReservationReplacement) {
+        throw new Error(`${center.name}: a failed onboarding reservation exists. Re-run with --allow-failed-reservation-replacement only after verifying no Stripe link opened.`);
+      }
+      if (!failedReservationAt || Number.isNaN(failedReservationAt.getTime()) || Date.now() - failedReservationAt.getTime() < FAILED_RESERVATION_COOLDOWN_MS) {
+        throw new Error(`${center.name}: the failed onboarding reservation has not completed the safety cooldown.`);
+      }
     }
     const onboardingAudit = await prisma.auditLog.findFirst({
       where: {
         centerId: center.id,
-        action: { in: ONBOARDING_AUDIT_ACTIONS },
+        action: ONBOARDING_OPENED_ACTION,
         metadata: { path: ["targetAccountId"], equals: targetAccountId },
       },
       select: { id: true },
     });
     if (onboardingAudit) {
-      throw new Error(`${center.name}: Stripe onboarding was durably reserved for the prepared target.`);
+      throw new Error(`${center.name}: Stripe onboarding successfully opened for the prepared target.`);
     }
 
     const tenantId = center.organization.tenantId;
@@ -215,7 +265,15 @@ async function main() {
     const setup = normalizeStripeConnectSetupInput(buildSchoolPayoutSetupInput({}, center), center);
     if (!setup.ok) throw new Error(`${center.name}: the saved school profile is incomplete: ${JSON.stringify(setup.errors)}.`);
 
-    plans.push({ center, fields, sourceAccountId, sourceAccount: source.account, oldTargetAccountId: targetAccountId, setup });
+    plans.push({
+      center,
+      fields,
+      sourceAccountId,
+      sourceAccount: source.account,
+      oldTargetAccountId: targetAccountId,
+      setup,
+      failedReservationAt: hasFailedReservation ? failedReservationAt?.toISOString() || null : null,
+    });
   }
 
   if (plans.length !== expectedCount) {
@@ -228,6 +286,7 @@ async function main() {
     centerId: plan.center.id,
     sourceAccountId: plan.sourceAccountId,
     oldTargetAccountId: plan.oldTargetAccountId,
+    failedReservationAt: plan.failedReservationAt,
   }));
   const fingerprint = createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
   if (apply && confirmedFingerprint !== fingerprint) {
@@ -257,22 +316,25 @@ async function main() {
     ) {
       throw new Error(`${plan.center.name}: the production mapping changed after preview.`);
     }
-    if (
-      BLOCKED_MIGRATION_STATUSES.has(clean(freshFields.stripeConnectMigrationStatus)) ||
-      clean(freshFields.stripeConnectMigrationLastOnboardingAt)
-    ) {
-      throw new Error(`${plan.center.name}: Stripe onboarding started after preview, so replacement was stopped.`);
+    if (BLOCKED_MIGRATION_STATUSES.has(clean(freshFields.stripeConnectMigrationStatus))) {
+      throw new Error(`${plan.center.name}: the migration advanced after preview, so replacement was stopped.`);
     }
     const freshOnboardingAudit = await prisma.auditLog.findFirst({
       where: {
         centerId: plan.center.id,
-        action: { in: ONBOARDING_AUDIT_ACTIONS },
+        action: { in: [ONBOARDING_RESERVED_ACTION, ONBOARDING_OPENED_ACTION, ONBOARDING_RELEASED_ACTION] },
         metadata: { path: ["targetAccountId"], equals: plan.oldTargetAccountId },
       },
-      select: { id: true },
+      orderBy: { createdAt: "desc" },
+      select: { action: true, createdAt: true },
     });
-    if (freshOnboardingAudit) {
-      throw new Error(`${plan.center.name}: Stripe onboarding was reserved after preview, so replacement was stopped.`);
+    if (
+      freshOnboardingAudit && !(
+        freshOnboardingAudit.action === ONBOARDING_RESERVED_ACTION && freshOnboardingAudit.createdAt.toISOString() === plan.failedReservationAt ||
+        freshOnboardingAudit.action === ONBOARDING_RELEASED_ACTION && !plan.failedReservationAt
+      )
+    ) {
+      throw new Error(`${plan.center.name}: Stripe onboarding activity changed after preview, so replacement was stopped.`);
     }
 
     const setup = plan.setup.details;
@@ -358,11 +420,8 @@ async function main() {
     ) {
       throw new Error(`${plan.center.name}: the production mapping changed before the database swap.`);
     }
-    if (
-      BLOCKED_MIGRATION_STATUSES.has(clean(beforeSwapFields.stripeConnectMigrationStatus)) ||
-      clean(beforeSwapFields.stripeConnectMigrationLastOnboardingAt)
-    ) {
-      throw new Error(`${plan.center.name}: Stripe onboarding started before the database swap, so replacement was stopped.`);
+    if (BLOCKED_MIGRATION_STATUSES.has(clean(beforeSwapFields.stripeConnectMigrationStatus))) {
+      throw new Error(`${plan.center.name}: the migration advanced before the database swap, so replacement was stopped.`);
     }
 
     const now = new Date().toISOString();
@@ -370,13 +429,19 @@ async function main() {
       const onboardingAudit = await transaction.auditLog.findFirst({
         where: {
           centerId: plan.center.id,
-          action: { in: ONBOARDING_AUDIT_ACTIONS },
+          action: { in: [ONBOARDING_RESERVED_ACTION, ONBOARDING_OPENED_ACTION, ONBOARDING_RELEASED_ACTION] },
           metadata: { path: ["targetAccountId"], equals: plan.oldTargetAccountId },
         },
-        select: { id: true },
+        orderBy: { createdAt: "desc" },
+        select: { action: true, createdAt: true },
       });
-      if (onboardingAudit) {
-        throw new Error(`${plan.center.name}: Stripe onboarding was reserved before the database swap, so replacement was stopped.`);
+      if (
+        onboardingAudit && !(
+          onboardingAudit.action === ONBOARDING_RESERVED_ACTION && onboardingAudit.createdAt.toISOString() === plan.failedReservationAt ||
+          onboardingAudit.action === ONBOARDING_RELEASED_ACTION && !plan.failedReservationAt
+        )
+      ) {
+        throw new Error(`${plan.center.name}: Stripe onboarding activity changed before the database swap, so replacement was stopped.`);
       }
       const transactionCenter = await transaction.center.findUnique({
         where: { id: plan.center.id },
@@ -392,7 +457,7 @@ async function main() {
       ) {
         throw new Error(`${plan.center.name}: a concurrent migration update stopped the database swap.`);
       }
-      return transaction.center.updateMany({
+      const updated = await transaction.center.updateMany({
         where: {
           id: plan.center.id,
           customFields: { equals: transactionFields as Prisma.InputJsonValue },
@@ -420,6 +485,28 @@ async function main() {
           stripeConnectMigrationParentPaymentsRemainActive: plan.sourceAccount.chargesEnabled,
         }) },
       });
+      if (updated.count === 1) {
+        await transaction.auditLog.create({
+          data: {
+            tenantId: plan.center.organization.tenantId,
+            centerId: plan.center.id,
+            action: plan.failedReservationAt
+              ? "billing.connect.migration.target_replaced_after_failed_link"
+              : "billing.connect.migration.target_replaced",
+            resource: "Center",
+            resourceId: plan.center.id,
+            metadata: {
+              sourceAccountId: plan.sourceAccountId,
+              previousTargetAccountId: plan.oldTargetAccountId,
+              replacementTargetAccountId: newTargetAccountId,
+              failedReservationAt: plan.failedReservationAt,
+              payoutBankCount: banks.banks.length,
+              payoutInterval,
+            },
+          },
+        });
+      }
+      return updated;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     if (swapped.count !== 1) {
       throw new Error(`${plan.center.name}: a concurrent migration update stopped the database swap.`);

@@ -192,6 +192,43 @@ async function POSTHandler(request: NextRequest) {
   }
   const link = await createStripeAccountLink({ accountId: migration.targetAccountId, refreshUrl, returnUrl, tenantId: user.tenantId });
   if (!link.ok || !link.url) {
+    const providerRejectedLink = Boolean(link.providerStatus && link.providerStatus >= 400 && link.providerStatus < 500);
+    if (providerRejectedLink) {
+      const failedAt = new Date().toISOString();
+      const restoredStatus = migration.status === "onboarding_opened"
+        ? migration.targetRequirementFields.length ? "requirements_due" : "prepared"
+        : migration.status;
+      const releasedFields: Prisma.JsonObject = {
+        ...fields,
+        stripeConnectMigrationStatus: restoredStatus,
+        stripeConnectMigrationLastOnboardingAt: null,
+        stripeConnectMigrationLastOnboardingFailureAt: failedAt,
+        stripeConnectMigrationLastOnboardingFailureCode: `provider_${link.providerStatus}`,
+        stripeConnectMigrationLinksSent: false,
+      };
+      const released = await prisma.center.updateMany({
+        where: {
+          id: center.id,
+          customFields: { equals: reservedFields as Prisma.InputJsonValue },
+        },
+        data: { customFields: releasedFields },
+      });
+      if (released.count === 1) {
+        await writeAuditLog(user, {
+          centerId: center.id,
+          action: "billing.connect.migration.onboarding_reservation_released",
+          resource: "Center",
+          resourceId: center.id,
+          metadata: {
+            sourceAccountId: migration.sourceAccountId,
+            targetAccountId: migration.targetAccountId,
+            providerStatus: link.providerStatus,
+            linkStored: false,
+            linkSent: false,
+          },
+        });
+      }
+    }
     return NextResponse.json({ ok: false, error: link.error || "The secure reauthorization link could not be opened." }, { status: link.configured ? 502 : 503 });
   }
   await writeAuditLog(user, {

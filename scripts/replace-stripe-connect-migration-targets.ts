@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import {
   completeStripeConnectedAccountBusinessProfile,
   createStripeConnectedAccount,
@@ -20,6 +20,10 @@ type JsonRecord = Record<string, unknown>;
 const CORPORATE_SCHOOLS_EMAIL = "corpschools@kidcityusa.com";
 const INACTIVE_CENTER_STATUSES = ["closed", "archived", "inactive"];
 const BLOCKED_MIGRATION_STATUSES = new Set(["onboarding_opened", "ready_for_cutover", "cutover_complete"]);
+const ONBOARDING_AUDIT_ACTIONS = [
+  "billing.connect.migration.onboarding_reserved",
+  "billing.connect.migration.onboarding_opened",
+];
 const REPLACEMENT_VERSION = "2026-08-full-dashboard-target-v1";
 
 function clean(value: unknown) {
@@ -89,12 +93,21 @@ async function main() {
     throw new Error("--apply requires --acknowledge-provider-mutation and --acknowledge-database-mutation.");
   }
 
+  const grantNow = new Date();
   const portfolio = await prisma.user.findFirst({
     where: { email: CORPORATE_SCHOOLS_EMAIL, isActive: true },
     select: {
       tenantId: true,
       accessGrants: {
-        where: { isActive: true, scopeType: "CENTER", centerId: { not: null } },
+        where: {
+          isActive: true,
+          scopeType: "CENTER",
+          centerId: { not: null },
+          AND: [
+            { OR: [{ startsAt: null }, { startsAt: { lte: grantNow } }] },
+            { OR: [{ endsAt: null }, { endsAt: { gte: grantNow } }] },
+          ],
+        },
         select: { centerId: true },
       },
     },
@@ -145,6 +158,17 @@ async function main() {
     }
     if (clean(fields.stripeConnectMigrationLastOnboardingAt)) {
       throw new Error(`${center.name}: Stripe onboarding has already been opened for the prepared target.`);
+    }
+    const onboardingAudit = await prisma.auditLog.findFirst({
+      where: {
+        centerId: center.id,
+        action: { in: ONBOARDING_AUDIT_ACTIONS },
+        metadata: { path: ["targetAccountId"], equals: targetAccountId },
+      },
+      select: { id: true },
+    });
+    if (onboardingAudit) {
+      throw new Error(`${center.name}: Stripe onboarding was durably reserved for the prepared target.`);
     }
 
     const tenantId = center.organization.tenantId;
@@ -239,6 +263,17 @@ async function main() {
     ) {
       throw new Error(`${plan.center.name}: Stripe onboarding started after preview, so replacement was stopped.`);
     }
+    const freshOnboardingAudit = await prisma.auditLog.findFirst({
+      where: {
+        centerId: plan.center.id,
+        action: { in: ONBOARDING_AUDIT_ACTIONS },
+        metadata: { path: ["targetAccountId"], equals: plan.oldTargetAccountId },
+      },
+      select: { id: true },
+    });
+    if (freshOnboardingAudit) {
+      throw new Error(`${plan.center.name}: Stripe onboarding was reserved after preview, so replacement was stopped.`);
+    }
 
     const setup = plan.setup.details;
     const created = await createStripeConnectedAccount({
@@ -315,6 +350,7 @@ async function main() {
     ) {
       throw new Error(`${plan.center.name}: replacement verification failed before the database swap.`);
     }
+    const verifiedAccount = verified.account;
     if (
       !beforeSwap ||
       readStripeConnectedAccountId(beforeSwapFields) !== plan.sourceAccountId ||
@@ -330,34 +366,61 @@ async function main() {
     }
 
     const now = new Date().toISOString();
-    const swapped = await prisma.center.updateMany({
-      where: {
-        id: plan.center.id,
-        customFields: { equals: beforeSwapFields as Prisma.InputJsonValue },
-      },
-      data: { customFields: jsonInput({
-        ...beforeSwapFields,
-        stripeConnectMigrationVersion: REPLACEMENT_VERSION,
-        stripeConnectMigrationStatus: "prepared",
-        stripeConnectMigrationTargetAccountId: newTargetAccountId,
-        stripeConnectMigrationPreviousTargetAccountId: plan.oldTargetAccountId,
-        stripeConnectMigrationTargetReplacedAt: now,
-        stripeConnectMigrationTargetPayoutHoldStatus: "manual_confirmed",
-        stripeConnectMigrationTargetPayoutBankName: null,
-        stripeConnectMigrationTargetPayoutBankLast4: null,
-        stripeConnectMigrationTargetPayoutBankStatus: null,
-        stripeConnectMigrationTargetPayoutBankCount: 0,
-        stripeConnectMigrationTargetChargesEnabled: verified.account.chargesEnabled,
-        stripeConnectMigrationTargetPayoutsEnabled: verified.account.payoutsEnabled,
-        stripeConnectMigrationTargetDetailsSubmitted: verified.account.detailsSubmitted,
-        stripeConnectMigrationTargetRequirementFields: verified.account.requirementFields,
-        stripeConnectMigrationTargetFeesCollector: verified.account.feesCollector,
-        stripeConnectMigrationTargetLossesCollector: verified.account.lossesCollector,
-        stripeConnectMigrationLinksSent: false,
-        stripeConnectMigrationParentPaymentsAccountId: plan.sourceAccountId,
-        stripeConnectMigrationParentPaymentsRemainActive: plan.sourceAccount.chargesEnabled,
-      }) },
-    });
+    const swapped = await prisma.$transaction(async (transaction) => {
+      const onboardingAudit = await transaction.auditLog.findFirst({
+        where: {
+          centerId: plan.center.id,
+          action: { in: ONBOARDING_AUDIT_ACTIONS },
+          metadata: { path: ["targetAccountId"], equals: plan.oldTargetAccountId },
+        },
+        select: { id: true },
+      });
+      if (onboardingAudit) {
+        throw new Error(`${plan.center.name}: Stripe onboarding was reserved before the database swap, so replacement was stopped.`);
+      }
+      const transactionCenter = await transaction.center.findUnique({
+        where: { id: plan.center.id },
+        select: { customFields: true },
+      });
+      const transactionFields = record(transactionCenter?.customFields);
+      if (
+        !transactionCenter ||
+        readStripeConnectedAccountId(transactionFields) !== plan.sourceAccountId ||
+        clean(transactionFields.stripeConnectMigrationTargetAccountId) !== plan.oldTargetAccountId ||
+        BLOCKED_MIGRATION_STATUSES.has(clean(transactionFields.stripeConnectMigrationStatus)) ||
+        clean(transactionFields.stripeConnectMigrationLastOnboardingAt)
+      ) {
+        throw new Error(`${plan.center.name}: a concurrent migration update stopped the database swap.`);
+      }
+      return transaction.center.updateMany({
+        where: {
+          id: plan.center.id,
+          customFields: { equals: transactionFields as Prisma.InputJsonValue },
+        },
+        data: { customFields: jsonInput({
+          ...transactionFields,
+          stripeConnectMigrationVersion: REPLACEMENT_VERSION,
+          stripeConnectMigrationStatus: "prepared",
+          stripeConnectMigrationTargetAccountId: newTargetAccountId,
+          stripeConnectMigrationPreviousTargetAccountId: plan.oldTargetAccountId,
+          stripeConnectMigrationTargetReplacedAt: now,
+          stripeConnectMigrationTargetPayoutHoldStatus: "manual_confirmed",
+          stripeConnectMigrationTargetPayoutBankName: null,
+          stripeConnectMigrationTargetPayoutBankLast4: null,
+          stripeConnectMigrationTargetPayoutBankStatus: null,
+          stripeConnectMigrationTargetPayoutBankCount: 0,
+          stripeConnectMigrationTargetChargesEnabled: verifiedAccount.chargesEnabled,
+          stripeConnectMigrationTargetPayoutsEnabled: verifiedAccount.payoutsEnabled,
+          stripeConnectMigrationTargetDetailsSubmitted: verifiedAccount.detailsSubmitted,
+          stripeConnectMigrationTargetRequirementFields: verifiedAccount.requirementFields,
+          stripeConnectMigrationTargetFeesCollector: verifiedAccount.feesCollector,
+          stripeConnectMigrationTargetLossesCollector: verifiedAccount.lossesCollector,
+          stripeConnectMigrationLinksSent: false,
+          stripeConnectMigrationParentPaymentsAccountId: plan.sourceAccountId,
+          stripeConnectMigrationParentPaymentsRemainActive: plan.sourceAccount.chargesEnabled,
+        }) },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     if (swapped.count !== 1) {
       throw new Error(`${plan.center.name}: a concurrent migration update stopped the database swap.`);
     }
@@ -377,7 +440,7 @@ async function main() {
       sourceAccount: maskAccountId(plan.sourceAccountId),
       previousTargetAccount: maskAccountId(plan.oldTargetAccountId),
       replacementTargetAccount: maskAccountId(newTargetAccountId),
-      dashboard: verified.account.dashboard,
+      dashboard: verifiedAccount.dashboard,
       payoutInterval,
       payoutBankCount: banks.banks.length,
       storedEinSubmitted: Boolean(schoolEin),

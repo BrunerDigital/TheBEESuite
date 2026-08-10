@@ -166,6 +166,30 @@ async function POSTHandler(request: NextRequest) {
   if (reserved.count !== 1) {
     return NextResponse.json({ ok: false, error: "The school's Stripe migration changed while setup was opening. Refresh and try again." }, { status: 409 });
   }
+  await writeAuditLog(user, {
+    centerId: center.id,
+    action: "billing.connect.migration.onboarding_reserved",
+    resource: "Center",
+    resourceId: center.id,
+    metadata: {
+      sourceAccountId: migration.sourceAccountId,
+      targetAccountId: migration.targetAccountId,
+      authorizedRepresentativeConfirmed: true,
+      returnToCorporatePortfolio,
+      linkStored: false,
+      linkSent: false,
+    },
+  });
+  const stillReserved = await prisma.center.findFirst({
+    where: {
+      id: center.id,
+      customFields: { equals: reservedFields as Prisma.InputJsonValue },
+    },
+    select: { id: true },
+  });
+  if (!stillReserved) {
+    return NextResponse.json({ ok: false, error: "The school's Stripe migration changed after setup was reserved. Refresh and try again." }, { status: 409 });
+  }
   const link = await createStripeAccountLink({ accountId: migration.targetAccountId, refreshUrl, returnUrl, tenantId: user.tenantId });
   if (!link.ok || !link.url) {
     return NextResponse.json({ ok: false, error: link.error || "The secure reauthorization link could not be opened." }, { status: link.configured ? 502 : 503 });

@@ -85,6 +85,8 @@ test("migration routes protect the source bank and generate target links only af
   assert.match(connectStatusRoute, /customFields: \{ equals: existingFields as Prisma\.InputJsonValue \}/);
   assert.match(connectStatusRoute, /Stripe connection changed while status was refreshing/);
   assert.ok(migrationRoute.indexOf("stripeConnectMigrationLastOnboardingAt") < migrationRoute.indexOf("const link = await createStripeAccountLink"));
+  assert.ok(migrationRoute.indexOf("billing.connect.migration.onboarding_reserved") < migrationRoute.indexOf("const link = await createStripeAccountLink"));
+  assert.match(migrationRoute, /customFields: \{ equals: reservedFields as Prisma\.InputJsonValue \}/);
   assert.match(oldPayoutRoute, /existing payout bank remains untouched/);
   assert.match(oldOnboardRoute, /parent payments remain on the current account until cutover/i);
   assert.match(softwareRoute, /subscriptionCreated: false/);
@@ -138,7 +140,12 @@ test("Full Dashboard target replacement is fingerprinted, idempotent, and preser
   assert.match(replacement, /BLOCKED_MIGRATION_STATUSES/);
   assert.match(replacement, /"onboarding_opened"/);
   assert.match(replacement, /stripeConnectMigrationLastOnboardingAt/);
-  assert.match(replacement, /customFields: \{ equals: beforeSwapFields as Prisma\.InputJsonValue \}/);
+  assert.match(replacement, /billing\.connect\.migration\.onboarding_reserved/);
+  assert.match(replacement, /metadata: \{ path: \["targetAccountId"\], equals:/);
+  assert.match(replacement, /Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(replacement, /startsAt: \{ lte: grantNow \}/);
+  assert.match(replacement, /endsAt: \{ gte: grantNow \}/);
+  assert.match(replacement, /customFields: \{ equals: transactionFields as Prisma\.InputJsonValue \}/);
   assert.match(replacement, /a concurrent migration update stopped the database swap/);
   assert.match(replacement, /bee-suite-full-dashboard-replacement-/);
   assert.match(replacement, /created\.account\.dashboard !== "full"/);

@@ -81,8 +81,9 @@ test("ProCare balances validate currency and support accounting negatives", () =
 test("classrooms without a ProCare room ID reuse the same school classroom name", () => {
   const classroomSync = section(route, "async function findOrCreateClassroom", "type ImportCenter");
   assert.match(classroomSync, /providedClassroomExternalId/);
-  assert.match(classroomSync, /const matches = providedClassroomExternalId/);
+  assert.match(classroomSync, /const rawMatches = providedClassroomExternalId/);
   assert.match(classroomSync, /where: \{ centerId, name \}/);
+  assert.match(classroomSync, /activeProcareClassroomMatches\(rawMatches, centerId, db\)/);
 });
 
 test("all resolved ProCare payer records are synchronized as guardians", () => {

@@ -22,6 +22,7 @@ import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
 import { defaultRecurringBillingPeriod, WEEKLY_TUITION_AUTOBILL_CADENCE, WEEKLY_TUITION_AUTOBILL_DAY } from "@/lib/billing-workflows";
 import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
+import { activeClassroomWhere } from "@/lib/classroom-status";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -482,7 +483,9 @@ async function applyAiProfileChange(
     const change = buildBulkEnrollmentChange({ childIds: [child.id], enrollmentStatus: values.enrollmentStatus, classroomId: values.classroomId });
     if (!change.ok) throw new Error(change.error);
     if (change.value.classroomId) {
-      const classroom = await prisma.classroom.findFirst({ where: { id: change.value.classroomId, centerId: selectedCenterId } });
+      const classroom = await prisma.classroom.findFirst({
+        where: activeClassroomWhere({ id: change.value.classroomId, centerId: selectedCenterId }),
+      });
       if (!classroom) throw new Error("Classroom not found in the selected school.");
     }
     await prisma.child.update({ where: { id: child.id }, data: { enrollmentStatus: change.value.enrollmentStatus, classroomId: change.value.classroomId } });
@@ -626,7 +629,7 @@ async function runAiDataCommand(
   });
   const [classrooms, invoices, tuitionPlans] = await Promise.all([
     prisma.classroom.findMany({
-      where: { centerId: selectedCenterId },
+      where: activeClassroomWhere({ centerId: selectedCenterId }),
       orderBy: { name: "asc" },
       select: { id: true, name: true, ageGroup: true },
     }),

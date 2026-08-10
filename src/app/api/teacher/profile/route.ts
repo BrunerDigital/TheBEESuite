@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, getCurrentUser } from "@/lib/auth";
+import { activeClassroomWhere } from "@/lib/classroom-status";
 import { hashStaffPin } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -41,7 +42,7 @@ async function POSTHandler(request: NextRequest) {
 
   const [center, classrooms] = await Promise.all([
     prisma.center.findUnique({ where: { id: centerId }, select: { id: true, organizationId: true } }),
-    prisma.classroom.findMany({ where: { centerId }, select: { id: true }, take: 200 }),
+    prisma.classroom.findMany({ where: activeClassroomWhere({ centerId }), select: { id: true }, take: 200 }),
   ]);
   if (!center) {
     return NextResponse.json({ ok: false, error: "Assigned school was not found." }, { status: 404 });

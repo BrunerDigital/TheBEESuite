@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { activeClassroomWhere } from "@/lib/classroom-status";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { messageAttachmentKind, type StoredMessageAttachment } from "@/lib/message-attachments";
 import {
@@ -566,7 +567,7 @@ async function POSTHandler(request: NextRequest) {
 
     if (broadcastSegment.classroomIds.length) {
       const selectedClassrooms = await prisma.classroom.findMany({
-        where: { id: { in: broadcastSegment.classroomIds } },
+        where: activeClassroomWhere({ id: { in: broadcastSegment.classroomIds } }),
         select: { id: true, centerId: true },
       });
       if (selectedClassrooms.length !== broadcastSegment.classroomIds.length) {

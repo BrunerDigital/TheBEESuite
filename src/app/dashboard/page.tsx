@@ -15,6 +15,7 @@ import { stageLabels } from "@/lib/crm";
 import { buildDashboardAttendanceSnapshot } from "@/lib/dashboard-attendance-snapshot";
 import { getDashboardWidgetPreferenceValue, normalizeDashboardWidgetPreferences } from "@/lib/dashboard-widgets";
 import type { DashboardWidgetId } from "@/lib/dashboard-widgets";
+import { activeClassroomWhere } from "@/lib/classroom-status";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { dataReadinessCenterEnabled } from "@/lib/honeyglass";
@@ -256,9 +257,9 @@ export default async function DashboardPage() {
       },
     }),
     prisma.classroom.findMany({
-      where: {
+      where: activeClassroomWhere({
         centerId: scopedCenterFilter,
-      },
+      }),
       orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { name: "asc" }],
       take: 8,
       select: {
@@ -360,7 +361,7 @@ export default async function DashboardPage() {
     prisma.complianceTask.count({ where: { centerId: scopedCenterFilter } }),
     prisma.incidentReport.count({ where: { classroom: { centerId: scopedCenterFilter }, adminReviewStatus: { not: "pending" } } }),
     prisma.classroom.findMany({
-      where: attendanceClassroomWhere,
+      where: activeClassroomWhere(attendanceClassroomWhere),
       orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { name: "asc" }],
       take: 150,
       select: {
@@ -547,7 +548,7 @@ export default async function DashboardPage() {
     executiveRefundRequestRows,
   ] = await Promise.all([
     prisma.classroom.findMany({
-      where: { centerId: scopedCenterFilter },
+      where: activeClassroomWhere({ centerId: scopedCenterFilter }),
       select: {
         centerId: true,
         capacity: true,

@@ -40,7 +40,7 @@ test("AI route rechecks selected-school ownership before every record mutation",
   assert.match(route, /guardian\.findFirst\(\{ where: \{ id: recordId, family: \{ centerId: selectedCenterId \} \}/);
   assert.match(route, /child\.findFirst\(\{ where: \{ id: recordId, family: \{ centerId: selectedCenterId \} \}/);
   assert.match(route, /billingAccount: \{ family: \{ centerId: selectedCenterId \} \}/);
-  assert.match(route, /classroom\.findFirst\(\{ where: \{ id: change\.value\.classroomId, centerId: selectedCenterId \} \}/);
+  assert.match(route, /classroom\.findFirst\(\{[\s\S]*where: activeClassroomWhere\(\{ id: change\.value\.classroomId, centerId: selectedCenterId \}\)/);
   assert.match(route, /invoice\.status !== PaymentStatus\.OPEN/);
   assert.match(route, /canManageBilling\(user\)/);
   assert.match(route, /dedupeKey: `ai-command:\$\{user\.id\}:\$\{operationId\}:invoice:/);

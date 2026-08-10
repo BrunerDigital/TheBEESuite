@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { activeClassroomWhere, classroomIsArchived } from "@/lib/classroom-status";
 import {
   isActiveProcareStaffStatus,
   isActiveProcareEnrollmentStatus,
@@ -321,6 +322,43 @@ async function forEachWithConcurrency<T>(
 
 type ProcareClassroomDb = Pick<Prisma.TransactionClient, "classroom">;
 
+type ProcareClassroomMatch = {
+  id: string;
+  capacity: number;
+  ratioRule: string | null;
+  customFields: Prisma.JsonValue | null;
+};
+
+type ActiveProcareClassroomMatch = ProcareClassroomMatch & {
+  redirectedFromArchived: boolean;
+};
+
+async function activeProcareClassroomMatches(
+  matches: ProcareClassroomMatch[],
+  centerId: string,
+  db: ProcareClassroomDb,
+) {
+  const activeMatches: ActiveProcareClassroomMatch[] = matches
+    .filter((match) => !classroomIsArchived(match.customFields))
+    .map((match) => ({ ...match, redirectedFromArchived: false }));
+  const mergedIntoIds = matches.flatMap((match) => {
+    if (!classroomIsArchived(match.customFields)) return [];
+    const mergedIntoClassroomId = jsonObject(match.customFields).mergedIntoClassroomId;
+    return typeof mergedIntoClassroomId === "string" && mergedIntoClassroomId ? [mergedIntoClassroomId] : [];
+  });
+  const redirectedMatches = mergedIntoIds.length
+    ? await db.classroom.findMany({
+        where: activeClassroomWhere({ centerId, id: { in: mergedIntoIds } }),
+        select: { id: true, capacity: true, ratioRule: true, customFields: true },
+      })
+    : [];
+  const resolved = new Map(activeMatches.map((match) => [match.id, match]));
+  for (const match of redirectedMatches) {
+    if (!resolved.has(match.id)) resolved.set(match.id, { ...match, redirectedFromArchived: true });
+  }
+  return Array.from(resolved.values());
+}
+
 async function findOrCreateClassroom({
   centerId,
   name,
@@ -334,17 +372,18 @@ async function findOrCreateClassroom({
 }, db: ProcareClassroomDb = prisma) {
   const providedClassroomExternalId = externalValue(rawData, ["classroom id", "room id", "class id", "classroom key", "room key"]);
   const classroomExternalId = providedClassroomExternalId || name;
-  const matches = providedClassroomExternalId
+  const rawMatches = providedClassroomExternalId
     ? await db.classroom.findMany({
         where: { centerId, sourceSystem: "procare", externalId: classroomExternalId },
-        take: 2,
+        take: 20,
         select: { id: true, capacity: true, ratioRule: true, customFields: true },
       })
     : await db.classroom.findMany({
         where: { centerId, name },
-        take: 2,
+        take: 20,
         select: { id: true, capacity: true, ratioRule: true, customFields: true },
       });
+  const matches = await activeProcareClassroomMatches(rawMatches, centerId, db);
   if (matches.length > 1) {
     throw new Error("Multiple classrooms match this ProCare room. Resolve the duplicate classrooms before importing.");
   }
@@ -365,12 +404,12 @@ async function findOrCreateClassroom({
     await db.classroom.update({
       where: { id: existing.id },
       data: {
-        name,
+        ...(existing.redirectedFromArchived
+          ? {}
+          : { name, sourceSystem: "procare", externalId: classroomExternalId }),
         ageGroup,
         capacity: nextCapacity,
         ratioRule: nextRatioRule,
-        sourceSystem: "procare",
-        externalId: classroomExternalId,
         customFields: mergeCustomFields(
           existing.customFields,
           metadataFromRow(rawData, {
@@ -3028,7 +3067,19 @@ async function POSTHandler(request: NextRequest) {
           },
           select: { id: true, customFields: true },
         });
-        if (balanceCents > 0) {
+        const reconciliationProtectedInvoice = existingInvoice
+          && typeof jsonObject(existingInvoice.customFields).staleImportedOpeningBalanceVoidedAt === "string";
+        if (reconciliationProtectedInvoice) {
+          await prisma.invoice.update({
+            where: { id: existingInvoice.id },
+            data: {
+              billingAccountId: account.id,
+              externalId: invoiceExternalId,
+              customFields: mergeCustomFields(existingInvoice.customFields, importedInvoiceFields),
+            },
+          });
+          importedInvoiceId = existingInvoice.id;
+        } else if (balanceCents > 0) {
           const invoiceNumberKey = (accountExternalId || family.id).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 40);
           if (existingInvoice) {
             await prisma.invoice.update({

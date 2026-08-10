@@ -34,6 +34,7 @@ export type NotificationExternalDeliveryInput = {
   preferences: NotificationPreferenceRecord[];
   emailRequested?: boolean;
   smsRequested?: boolean;
+  disableEmailClickTracking?: boolean;
   replyTo?: string | null;
   fromName?: string;
   statusCallbackUrl?: string | null;
@@ -154,6 +155,7 @@ export async function deliverNotificationExternalChannels({
   preferences,
   emailRequested = true,
   smsRequested = true,
+  disableEmailClickTracking = false,
   replyTo = null,
   fromName = "The BEE Suite",
   statusCallbackUrl = null,
@@ -205,6 +207,7 @@ export async function deliverNotificationExternalChannels({
         messageId: messageId ?? undefined,
         dedupeKey: dedupeKey ?? undefined,
       },
+      disableClickTracking: disableEmailClickTracking,
       tenantId,
     });
     emailSummary.sent = email.ok ? emailRecipients.length : 0;

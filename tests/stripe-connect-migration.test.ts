@@ -79,6 +79,8 @@ test("migration routes protect the source bank and generate target links only af
   assert.match(migrationRoute, /accountId: migration\.targetAccountId/);
   assert.match(migrationRoute, /stripeMigration=return/);
   assert.match(migrationRoute, /customFields: \{ equals: fields as Prisma\.InputJsonValue \}/);
+  assert.equal((migrationRoute.match(/customFields: \{ equals: fields as Prisma\.InputJsonValue \}/g) || []).length, 2);
+  assert.match(migrationRoute, /Stripe migration changed while status was refreshing/);
   assert.ok(migrationRoute.indexOf("stripeConnectMigrationLastOnboardingAt") < migrationRoute.indexOf("const link = await createStripeAccountLink"));
   assert.match(oldPayoutRoute, /existing payout bank remains untouched/);
   assert.match(oldOnboardRoute, /parent payments remain on the current account until cutover/i);

@@ -101,7 +101,16 @@ async function GETHandler(request: NextRequest) {
     stripeConnectMigrationTargetPayoutBankCount: banks.banks.length,
     stripeConnectMigrationLastSyncedAt: syncedAt,
   };
-  await prisma.center.update({ where: { id: center.id }, data: { customFields: { ...fields, ...patch } } });
+  const synced = await prisma.center.updateMany({
+    where: {
+      id: center.id,
+      customFields: { equals: fields as Prisma.InputJsonValue },
+    },
+    data: { customFields: { ...fields, ...patch } },
+  });
+  if (synced.count !== 1) {
+    return NextResponse.json({ ok: false, error: "The school's Stripe migration changed while status was refreshing. Refresh and try again." }, { status: 409 });
+  }
   await writeAuditLog(user, {
     centerId: center.id,
     action: "billing.connect.migration.status_synced",

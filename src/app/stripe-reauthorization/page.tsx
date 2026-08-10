@@ -18,11 +18,14 @@ export const metadata: Metadata = {
 export default async function StripeReauthorizationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ center?: string; stripeMigration?: string }>;
+  searchParams: Promise<{ center?: string; stripeMigration?: string; portfolio?: string }>;
 }) {
   const params = await searchParams;
   const centerId = typeof params.center === "string" ? params.center : "";
-  const nextPath = centerId ? `/stripe-reauthorization?center=${encodeURIComponent(centerId)}` : "/stripe-reauthorization";
+  const returnToCorporatePortfolio = params.portfolio === "corporate";
+  const nextPath = centerId
+    ? `/stripe-reauthorization?center=${encodeURIComponent(centerId)}${returnToCorporatePortfolio ? "&portfolio=corporate" : ""}`
+    : "/stripe-reauthorization";
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect(loginHrefForNextPath(nextPath));
   if (requiresPasswordResetGate(user)) redirect(`/reset-password?force=1&next=${encodeURIComponent(nextPath)}`);
@@ -75,6 +78,7 @@ export default async function StripeReauthorizationPage({
               schoolName={`${center.name}${center.city || center.state ? ` — ${[center.city, center.state].filter(Boolean).join(", ")}` : ""}`}
               initialStatus={migration.status}
               returning={params.stripeMigration === "return"}
+              returnToCorporatePortfolio={returnToCorporatePortfolio}
             />
             <p className="mt-4 px-2 text-xs leading-5 text-slate-400">Full bank numbers, tax identifiers, identity details, and verification documents are entered only in Stripe&apos;s secure hosted flow and are not stored by The BEE Suite.</p>
           </aside>

@@ -9,9 +9,18 @@ type Props = {
   schoolName: string;
   initialStatus: string;
   returning: boolean;
+  returnToCorporatePortfolio?: boolean;
 };
 
-export function StripeReauthorizationCard({ centerId, schoolName, initialStatus, returning }: Props) {
+const CORPORATE_PORTFOLIO_PATH = "/stripe-reauthorization/corporate";
+
+export function StripeReauthorizationCard({
+  centerId,
+  schoolName,
+  initialStatus,
+  returning,
+  returnToCorporatePortfolio = false,
+}: Props) {
   const [status, setStatus] = useState(initialStatus);
   const [authorized, setAuthorized] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -25,6 +34,10 @@ export function StripeReauthorizationCard({ centerId, schoolName, initialStatus,
       const json = await response.json();
       if (!response.ok || !json.ok) throw new Error(json.error || "The new Stripe account could not be checked.");
       setStatus(json.status);
+      if (returnToCorporatePortfolio && (json.status === "ready_for_cutover" || json.status === "cutover_complete")) {
+        window.location.assign(CORPORATE_PORTFOLIO_PATH);
+        return;
+      }
       setMessage(json.status === "balance_authorization_required"
         ? "Business and payout reauthorization is complete. Authorize the $99 monthly BEE Suite fee from the new Stripe balance to finish readiness."
         : json.status === "ready_for_cutover"
@@ -53,7 +66,7 @@ export function StripeReauthorizationCard({ centerId, schoolName, initialStatus,
       const response = await fetch("/api/billing/connect/migration", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ centerId, authorizedRepresentative: true }),
+        body: JSON.stringify({ centerId, authorizedRepresentative: true, returnToCorporatePortfolio }),
       });
       const json = await response.json();
       if (!response.ok || !json.ok || !json.url) throw new Error(json.error || "Secure Stripe reauthorization could not be opened.");
@@ -79,6 +92,10 @@ export function StripeReauthorizationCard({ centerId, schoolName, initialStatus,
       const json = await response.json();
       if (!response.ok || !json.ok) throw new Error(json.error || "The BEE Suite balance authorization could not be recorded.");
       setStatus("ready_for_cutover");
+      if (returnToCorporatePortfolio) {
+        window.location.assign(CORPORATE_PORTFOLIO_PATH);
+        return;
+      }
       setMessage(json.message || "Thank you. This school is ready for a controlled cutover.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The BEE Suite balance authorization could not be recorded.");
@@ -125,6 +142,11 @@ export function StripeReauthorizationCard({ centerId, schoolName, initialStatus,
           </Button>
         )}
         {!complete ? <Button type="button" size="lg" variant="outline" disabled={busy} onClick={() => void syncStatus()}>Check saved progress</Button> : null}
+        {returnToCorporatePortfolio && !busy ? (
+          <Button type="button" size="lg" variant="outline" onClick={() => window.location.assign(CORPORATE_PORTFOLIO_PATH)}>
+            Corporate school progress
+          </Button>
+        ) : null}
       </div>
     </div>
   );

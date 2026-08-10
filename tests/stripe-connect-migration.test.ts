@@ -87,6 +87,27 @@ test("migration routes protect the source bank and generate target links only af
   assert.doesNotMatch(preparation, /createStripeAccountLink/);
 });
 
+test("corporate reauthorization uses one stable portfolio entry while preserving per-school Stripe links", () => {
+  const portfolioPage = readFileSync("src/app/stripe-reauthorization/corporate/page.tsx", "utf8");
+  const schoolPage = readFileSync("src/app/stripe-reauthorization/page.tsx", "utf8");
+  const card = readFileSync("src/components/stripe-reauthorization-card.tsx", "utf8");
+  const migrationRoute = readFileSync("src/app/api/billing/connect/migration/route.ts", "utf8");
+  const refreshRoute = readFileSync("src/app/api/billing/connect/migration/refresh/route.ts", "utf8");
+
+  assert.match(portfolioPage, /CORPORATE_SCHOOLS_EMAIL = "corpschools@kidcityusa\.com"/);
+  assert.match(portfolioPage, /tenantId: user\.tenantId/);
+  assert.match(portfolioPage, /canAccessCenter\(user, centerId\)/);
+  assert.match(portfolioPage, /scopeType: "CENTER"/);
+  assert.match(portfolioPage, /portfolio=corporate/);
+  assert.doesNotMatch(portfolioPage, /createStripeAccountLink|connect\.stripe\.com/);
+  assert.match(schoolPage, /returnToCorporatePortfolio/);
+  assert.match(card, /returnToCorporatePortfolio/);
+  assert.match(migrationRoute, /returnToCorporatePortfolio/);
+  assert.match(refreshRoute, /portfolioQuery/);
+  assert.match(refreshRoute, /fallbackUrl\(baseUrl, returnToCorporatePortfolio/);
+  assert.match(refreshRoute, /returnToCorporatePortfolio \? "\/stripe-reauthorization\/corporate" : "\/billing-settings"/);
+});
+
 test("cutover is one-school-at-a-time and remains blocked behind live bank, payout, readiness, and $99 checks", () => {
   const cutover = readFileSync("scripts/cutover-stripe-connect-migration.ts", "utf8");
   assert.match(cutover, /--center-id is required/);

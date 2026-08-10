@@ -55,7 +55,7 @@ import {
 } from "@/components/school-setup-command-center";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { modules } from "@/lib/demo-data";
-import { buildNetReceivableAging } from "@/lib/accounts-receivable";
+import { buildNetReceivableAging, buildOutstandingNonInvoiceChargesByAccount } from "@/lib/accounts-receivable";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
@@ -3147,7 +3147,6 @@ async function renderLivePage(
       paid,
       openRows,
       ledgerRollupRows,
-      nonInvoiceChargeRows,
       billingAccountRows,
       billingFamilies,
       needsEnrollmentSetupFamilies,
@@ -3215,15 +3214,6 @@ async function renderLivePage(
           invoiceId: true,
           paymentId: true,
         },
-      }),
-      prisma.ledgerEntry.groupBy({
-        by: ["billingAccountId"],
-        where: {
-          billingAccount: currentBillingAccountWhere,
-          invoiceId: null,
-          amountCents: { gt: 0 },
-        },
-        _sum: { amountCents: true },
       }),
       prisma.billingAccount.findMany({
         where: billingAccountWhere,
@@ -3353,9 +3343,7 @@ async function renderLivePage(
         .filter((account) => account.family._count.children > 0)
         .map((account) => account.id),
     );
-    const nonInvoiceChargeCentsByAccountId = new Map(
-      nonInvoiceChargeRows.map((row) => [row.billingAccountId, row._sum.amountCents ?? 0]),
-    );
+    const nonInvoiceChargeCentsByAccountId = buildOutstandingNonInvoiceChargesByAccount(ledgerEntries);
     const arReport = {
       ...buildNetReceivableAging(
         billingAccountRows

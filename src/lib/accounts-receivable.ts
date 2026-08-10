@@ -108,6 +108,13 @@ type ReceivableAgingInvoice = {
   dueDate: Date;
 };
 
+type ReceivableAgingLedgerEntry = {
+  billingAccountId: string;
+  amountCents: number;
+  invoiceId?: string | null;
+  effectiveAt: Date | string;
+};
+
 type AccountBalanceAccessSubject =
   | string
   | null
@@ -179,6 +186,51 @@ const statusOrder: Record<SchoolAccountBalanceStatus, number> = {
 
 function isOverdue(dueDate: Date, asOf: Date) {
   return dueDate.toISOString().slice(0, 10) < asOf.toISOString().slice(0, 10);
+}
+
+export function buildOutstandingNonInvoiceChargesByAccount(
+  entries: readonly ReceivableAgingLedgerEntry[],
+) {
+  const states = new Map<string, {
+    unappliedCreditCents: number;
+    charges: Array<{ remainingCents: number; invoiceLinked: boolean }>;
+  }>();
+  const orderedEntries = entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((left, right) => (
+      new Date(left.entry.effectiveAt).getTime() - new Date(right.entry.effectiveAt).getTime()
+      || left.index - right.index
+    ));
+
+  for (const { entry } of orderedEntries) {
+    const state = states.get(entry.billingAccountId) ?? { unappliedCreditCents: 0, charges: [] };
+    if (entry.amountCents > 0) {
+      const creditAppliedCents = Math.min(state.unappliedCreditCents, entry.amountCents);
+      state.unappliedCreditCents -= creditAppliedCents;
+      const remainingCents = entry.amountCents - creditAppliedCents;
+      if (remainingCents) state.charges.push({ remainingCents, invoiceLinked: Boolean(entry.invoiceId) });
+    } else if (entry.amountCents < 0) {
+      let creditCents = Math.abs(entry.amountCents);
+      for (const charge of state.charges) {
+        if (!creditCents) break;
+        const appliedCents = Math.min(creditCents, charge.remainingCents);
+        charge.remainingCents -= appliedCents;
+        creditCents -= appliedCents;
+      }
+      state.unappliedCreditCents += creditCents;
+    }
+    states.set(entry.billingAccountId, state);
+  }
+
+  return new Map(
+    [...states].map(([billingAccountId, state]) => [
+      billingAccountId,
+      state.charges.reduce(
+        (sum, charge) => sum + (charge.invoiceLinked ? 0 : charge.remainingCents),
+        0,
+      ),
+    ]),
+  );
 }
 
 export function buildNetReceivableAging(

@@ -6,6 +6,7 @@ import {
   buildAccountsReceivableSnapshot,
   buildAccountsReceivableSummary,
   buildNetReceivableAging,
+  buildOutstandingNonInvoiceChargesByAccount,
   canViewAccountBalances,
   isExecutiveAccountBalanceView,
   type AccountsReceivableFamilyRow,
@@ -89,6 +90,30 @@ test("aging applies payments to invoices before ledger-only charges", () => {
     oneToThirtyCents: 0,
     thirtyOneToSixtyCents: 0,
     sixtyOnePlusCents: 5_000,
+  });
+});
+
+test("settled ledger-only charges do not displace later invoice aging", () => {
+  const charges = buildOutstandingNonInvoiceChargesByAccount([
+    { billingAccountId: "settled", amountCents: 10_000, invoiceId: null, effectiveAt: "2026-05-01T00:00:00.000Z" },
+    { billingAccountId: "settled", amountCents: -10_000, invoiceId: null, effectiveAt: "2026-05-02T00:00:00.000Z" },
+    { billingAccountId: "settled", amountCents: 10_000, invoiceId: "invoice", effectiveAt: "2026-06-01T00:00:00.000Z" },
+    { billingAccountId: "credit-first", amountCents: -10_000, invoiceId: null, effectiveAt: "2026-05-01T00:00:00.000Z" },
+    { billingAccountId: "credit-first", amountCents: 10_000, invoiceId: null, effectiveAt: "2026-05-02T00:00:00.000Z" },
+    { billingAccountId: "credit-first", amountCents: 10_000, invoiceId: "invoice", effectiveAt: "2026-06-01T00:00:00.000Z" },
+  ]);
+
+  assert.equal(charges.get("settled"), 0);
+  assert.equal(charges.get("credit-first"), 0);
+  assert.deepEqual(buildNetReceivableAging(
+    [{ id: "settled", balanceCents: 10_000, nonInvoiceChargeCents: charges.get("settled") }],
+    [{ billingAccountId: "settled", totalCents: 10_000, dueDate: new Date("2026-06-01T00:00:00.000Z") }],
+    new Date("2026-08-10T00:00:00.000Z"),
+  ), {
+    currentCents: 0,
+    oneToThirtyCents: 0,
+    thirtyOneToSixtyCents: 0,
+    sixtyOnePlusCents: 10_000,
   });
 });
 
@@ -236,7 +261,7 @@ test("billing, analytics, and payment readiness exclude past families from activ
   assert.match(livePage, /if \(slug === "billing-invoices"\)[\s\S]*visibleCurrentInvoiceWhere\(visibleCenterIds\)/);
   assert.match(livePage, /currentFamilyOutstandingCents[\s\S]*Math\.max\(account\.balanceCents, 0\)/);
   assert.match(livePage, /ledgerRollupRows[\s\S]*billingAccount: currentBillingAccountWhere[\s\S]*take: 1000/);
-  assert.match(livePage, /nonInvoiceChargeRows[\s\S]*invoiceId: null[\s\S]*amountCents: \{ gt: 0 \}/);
+  assert.match(livePage, /buildOutstandingNonInvoiceChargesByAccount\(ledgerEntries\)/);
   assert.match(livePage, /buildLedgerReconciliationReport\(\{[\s\S]*entries: ledgerEntries/);
   assert.match(livePage, /formerFamilyBalanceSummary/);
   assert.match(livePage, /if \(slug === "payments"\)[\s\S]*visibleCurrentInvoiceWhere\(visibleCenterIds\)/);

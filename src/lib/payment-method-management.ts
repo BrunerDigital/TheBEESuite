@@ -18,6 +18,24 @@ function clean(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function timestampMs(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value > 10_000_000_000 ? value : value * 1000;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric > 10_000_000_000 ? numeric : numeric * 1000;
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function isExpired(value: unknown) {
+  const ms = timestampMs(value);
+  return ms !== null && ms <= Date.now();
+}
+
 function displayBrand(value: string | null) {
   if (!value) return null;
   if (value.toLowerCase() === "amex") return "American Express";
@@ -52,7 +70,10 @@ export function paymentMethodManagementSummary(input: {
   const savedAt = clean(custom.stripePaymentMethodSavedAt);
   const status = clean(custom.autopayStatus);
   const enabled = custom.autopayEnabled === true || input.autopayPlaceholder === true;
-  const pending = status === "pending";
+  const setupSessionId = clean(custom.stripeSetupCheckoutSessionId);
+  const pending = status === "pending" && (
+    setupSessionId === null || !isExpired(custom.stripeSetupCheckoutSessionExpiresAt)
+  );
 
   return {
     autopayEnabled: enabled,

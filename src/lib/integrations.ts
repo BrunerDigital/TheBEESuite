@@ -20,6 +20,10 @@ export type IntegrationSendResult = {
   provider: string;
   id?: string;
   url?: string;
+  createdAt?: number | null;
+  expiresAt?: number | null;
+  status?: string | null;
+  paymentStatus?: string | null;
   error?: string;
   providerStatus?: number;
   acceptanceUnknown?: boolean;
@@ -870,7 +874,15 @@ export async function createStripeCheckoutSession({
       body,
       signal: AbortSignal.timeout(10_000),
     });
-    const json = await response.json().catch(() => null) as { id?: string; url?: string; error?: { message?: string; param?: string } } | null;
+    const json = await response.json().catch(() => null) as {
+      id?: string;
+      url?: string;
+      created?: number | null;
+      expires_at?: number | null;
+      status?: string | null;
+      payment_status?: string | null;
+      error?: { message?: string; param?: string };
+    } | null;
     return { response, json };
   }
 
@@ -880,7 +892,15 @@ export async function createStripeCheckoutSession({
     "dynamic",
   ];
   let response: Response | null = null;
-  let json: { id?: string; url?: string; error?: { message?: string; param?: string } } | null = null;
+  let json: {
+    id?: string;
+    url?: string;
+    created?: number | null;
+    expires_at?: number | null;
+    status?: string | null;
+    payment_status?: string | null;
+    error?: { message?: string; param?: string };
+  } | null = null;
 
   for (const paymentMethodMode of paymentMethodModes) {
     ({ response, json } = await createSession(buildBody(paymentMethodMode), paymentMethodMode));
@@ -903,7 +923,17 @@ export async function createStripeCheckoutSession({
     return { ok: false, configured: true, provider: "stripe", error: "Payment processor returned an insecure checkout URL." };
   }
 
-  return { ok: true, configured: true, provider: "stripe", id: json.id, url: json.url };
+  return {
+    ok: true,
+    configured: true,
+    provider: "stripe",
+    id: json.id,
+    url: json.url,
+    createdAt: json.created ?? null,
+    expiresAt: json.expires_at ?? null,
+    status: json.status ?? null,
+    paymentStatus: json.payment_status ?? null,
+  };
 }
 
 function unixTimeToIso(value: unknown) {
@@ -2058,7 +2088,15 @@ export async function createStripeSetupCheckoutSession({
       body,
       signal: AbortSignal.timeout(10_000),
     });
-    const json = await response.json().catch(() => null) as { id?: string; url?: string; error?: { message?: string; param?: string } } | null;
+    const json = await response.json().catch(() => null) as {
+      id?: string;
+      url?: string;
+      created?: number | null;
+      expires_at?: number | null;
+      status?: string | null;
+      payment_status?: string | null;
+      error?: { message?: string; param?: string };
+    } | null;
     return { response, json };
   }
 
@@ -2068,7 +2106,15 @@ export async function createStripeSetupCheckoutSession({
     "dynamic",
   ];
   let response: Response | null = null;
-  let json: { id?: string; url?: string; error?: { message?: string; param?: string } } | null = null;
+  let json: {
+    id?: string;
+    url?: string;
+    created?: number | null;
+    expires_at?: number | null;
+    status?: string | null;
+    payment_status?: string | null;
+    error?: { message?: string; param?: string };
+  } | null = null;
 
   for (const paymentMethodMode of paymentMethodModes) {
     ({ response, json } = await createSession(buildBody(paymentMethodMode)));
@@ -2091,7 +2137,17 @@ export async function createStripeSetupCheckoutSession({
     return { ok: false, configured: true, provider: "stripe", error: "Payment processor returned an insecure checkout URL." };
   }
 
-  return { ok: true, configured: true, provider: "stripe", id: json.id, url: json.url };
+  return {
+    ok: true,
+    configured: true,
+    provider: "stripe",
+    id: json.id,
+    url: json.url,
+    createdAt: json.created ?? null,
+    expiresAt: json.expires_at ?? null,
+    status: json.status ?? null,
+    paymentStatus: json.payment_status ?? null,
+  };
 }
 
 export async function retrieveStripePaymentMethod(paymentMethodId: string, input: TenantCredentialRuntimeInput = {}): Promise<{

@@ -197,11 +197,26 @@ test("billing guard applies a checkout payment only once per invoice", () => {
 });
 
 test("active Stripe checkout detection only blocks draft checkout sessions", () => {
+  const expired = Math.floor(Date.now() / 1000) - 60;
+  const future = Math.floor(Date.now() / 1000) + 60;
+
   assert.equal(isActiveStripeCheckoutPayment({
     status: PaymentStatus.DRAFT,
     provider: "stripe",
     customFields: { status: "checkout_created" },
   }), true);
+
+  assert.equal(isActiveStripeCheckoutPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "checkout_created", stripeCheckoutSessionExpiresAt: future },
+  }), true);
+
+  assert.equal(isActiveStripeCheckoutPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "checkout_created", stripeCheckoutSessionExpiresAt: expired },
+  }), false);
 
   assert.equal(isActiveStripeCheckoutPayment({
     status: PaymentStatus.FAILED,

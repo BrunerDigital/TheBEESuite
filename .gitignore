@@ -18,6 +18,9 @@ next-env.d.ts
 
 # Test and coverage outputs
 /coverage/
+/.playwright-cli/
+/output/playwright/
+/output/audit/
 
 # Local runtime logs and temporary files
 /logs/

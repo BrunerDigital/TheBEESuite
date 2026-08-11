@@ -92,20 +92,21 @@ test("corporate Stripe verification is pinned to the eight approved school accou
   assert.equal(readCorporateStripeVerificationTarget("center_not_approved"), null);
 });
 
-test("corporate Stripe verification is limited to platform and brand administrators", () => {
-  assert.equal(canUseCorporateStripeVerification({ role: UserRole.PLATFORM_OWNER }), true);
-  assert.equal(canUseCorporateStripeVerification({ role: UserRole.BRAND_ADMIN }), true);
+test("corporate Stripe verification is limited to platform, brand, and the exact corporate billing operator", () => {
+  assert.equal(canUseCorporateStripeVerification({ role: UserRole.PLATFORM_OWNER, email: "owner@example.com" }), true);
+  assert.equal(canUseCorporateStripeVerification({ role: UserRole.BRAND_ADMIN, email: "brand@example.com" }), true);
+  assert.equal(canUseCorporateStripeVerification({ role: UserRole.BILLING_ADMIN, email: "corpschools@kidcityusa.com" }), true);
+  assert.equal(canUseCorporateStripeVerification({ role: UserRole.BILLING_ADMIN, email: "billing@example.com" }), false);
   for (const role of [
     UserRole.REGIONAL_MANAGER,
     UserRole.CENTER_DIRECTOR,
     UserRole.ASSISTANT_DIRECTOR,
     UserRole.TEACHER,
-    UserRole.BILLING_ADMIN,
     UserRole.PARENT_GUARDIAN,
     UserRole.AUTHORIZED_PICKUP,
     UserRole.READ_ONLY_AUDITOR,
   ]) {
-    assert.equal(canUseCorporateStripeVerification({ role }), false, role);
+    assert.equal(canUseCorporateStripeVerification({ role, email: "user@example.com" }), false, role);
   }
 });
 
@@ -302,7 +303,8 @@ test("approved corporate verification links are current-due only and cannot invo
   const refreshRoute = readFileSync("src/app/api/billing/connect/migration/refresh/route.ts", "utf8");
 
   assert.match(verification, /PLATFORM_OWNER[\s\S]*BRAND_ADMIN/);
-  assert.doesNotMatch(verification, /REGIONAL_MANAGER|CENTER_DIRECTOR|ASSISTANT_DIRECTOR|BILLING_ADMIN/);
+  assert.match(verification, /BILLING_ADMIN[\s\S]*CORPORATE_SCHOOLS_EMAIL/);
+  assert.doesNotMatch(verification, /REGIONAL_MANAGER|CENTER_DIRECTOR|ASSISTANT_DIRECTOR/);
   assert.match(verification, /scopeType: "CENTER"/);
   assert.match(verification, /canAccessCenter\(user, center\.id\)/);
   assert.match(verification, /center\.organization\.tenantId !== user\.tenantId/);

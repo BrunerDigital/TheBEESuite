@@ -7,6 +7,7 @@ import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { AlertCircle, ArrowUpRight, Building2, CheckCircle2, CreditCard, GitMerge, Mail, Save, Trash2, UserPen } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
+import { confirmRelationshipRecordSwitch, FamilyRelationshipMap } from "@/components/family-relationship-map";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -181,6 +182,7 @@ const enrollmentStatuses = ["enrolled", "pending", "waitlisted", "tour_scheduled
 const communicationMethods = ["email", "phone", "sms"];
 const documentStatuses = ["REQUESTED", "SUBMITTED", "APPROVED", "REJECTED", "EXPIRED"];
 const profileSectionLinks = [
+  ["Relationships", "family-relationships"],
   ["Overview", "family-overview"],
   ["Guardians", "family-guardians"],
   ["Pickups", "family-contacts"],
@@ -710,6 +712,50 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     loadEmergencyContact(selectedFamily?.emergencyContacts.find((contact) => contact.id === contactId) ?? null);
   }
 
+  function selectGuardianFromRelationshipMap(guardianId: string) {
+    return confirmRelationshipRecordSwitch({
+      currentId: selectedGuardianId,
+      targetId: guardianId,
+      targetLabel: "parent or guardian",
+      draftLabel: "parent or guardian",
+      confirmDiscard: (message) => window.confirm(message),
+      onSelect: loadGuardianById,
+    });
+  }
+
+  function selectChildFromRelationshipMap(childId: string) {
+    return confirmRelationshipRecordSwitch({
+      currentId: selectedChildId,
+      targetId: childId,
+      targetLabel: "child",
+      draftLabel: "child, allergy, medical note, or document",
+      confirmDiscard: (message) => window.confirm(message),
+      onSelect: loadChildById,
+    });
+  }
+
+  function selectPickupFromRelationshipMap(pickupId: string) {
+    return confirmRelationshipRecordSwitch({
+      currentId: selectedPickupId,
+      targetId: pickupId,
+      targetLabel: "authorized pickup",
+      draftLabel: "authorized pickup",
+      confirmDiscard: (message) => window.confirm(message),
+      onSelect: loadPickupById,
+    });
+  }
+
+  function selectEmergencyContactFromRelationshipMap(contactId: string) {
+    return confirmRelationshipRecordSwitch({
+      currentId: selectedEmergencyContactId,
+      targetId: contactId,
+      targetLabel: "emergency contact",
+      draftLabel: "emergency contact",
+      confirmDiscard: (message) => window.confirm(message),
+      onSelect: loadEmergencyContactById,
+    });
+  }
+
   function loadAllergyById(allergyId: string) {
     loadAllergy(selectedChild?.allergies.find((allergy) => allergy.id === allergyId) ?? null);
   }
@@ -1159,6 +1205,21 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           ))}
         </nav>
 
+        {selectedFamily ? (
+          <FamilyRelationshipMap
+            family={selectedFamily}
+            duplicateCounts={{
+              families: duplicateCandidates.length,
+              guardians: guardianDuplicateCandidates.length,
+              children: childDuplicateCandidates.length,
+            }}
+            onSelectGuardian={selectGuardianFromRelationshipMap}
+            onSelectChild={selectChildFromRelationshipMap}
+            onSelectPickup={selectPickupFromRelationshipMap}
+            onSelectEmergencyContact={selectEmergencyContactFromRelationshipMap}
+          />
+        ) : null}
+
         <section id="family-overview" className="scroll-mt-36 space-y-3">
           <div className="text-sm font-medium">Family account</div>
           {hasCustodyWarning({ custodyNotes }) ? (
@@ -1386,10 +1447,10 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
-              <Label>Parent / guardian</Label>
+              <Label htmlFor="family-guardian-selector">Parent / guardian</Label>
               <div className="flex gap-2">
                 <Select value={selectedGuardian?.id ?? ""} onValueChange={(value) => value && loadGuardianById(value)}>
-                  <SelectTrigger><SelectValue placeholder="Choose parent" /></SelectTrigger>
+                  <SelectTrigger id="family-guardian-selector"><SelectValue placeholder="Choose parent" /></SelectTrigger>
                   <SelectContent>
                     {selectedFamily?.guardians.map((guardian) => (
                       <SelectItem key={guardian.id} value={guardian.id}>{guardian.fullName}</SelectItem>
@@ -1539,9 +1600,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
-                  <Label>Pickup record</Label>
+                  <Label htmlFor="family-pickup-selector">Pickup record</Label>
                   <Select value={selectedPickup?.id ?? ""} onValueChange={(value) => value && loadPickupById(value)}>
-                    <SelectTrigger><SelectValue placeholder="Choose pickup" /></SelectTrigger>
+                    <SelectTrigger id="family-pickup-selector"><SelectValue placeholder="Choose pickup" /></SelectTrigger>
                     <SelectContent>
                       {selectedFamily?.pickups.map((pickup) => (
                         <SelectItem key={pickup.id} value={pickup.id}>{pickup.fullName}</SelectItem>
@@ -1611,9 +1672,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
-                  <Label>Contact record</Label>
+                  <Label htmlFor="family-emergency-contact-selector">Contact record</Label>
                   <Select value={selectedEmergencyContact?.id ?? ""} onValueChange={(value) => value && loadEmergencyContactById(value)}>
-                    <SelectTrigger><SelectValue placeholder="Choose contact" /></SelectTrigger>
+                    <SelectTrigger id="family-emergency-contact-selector"><SelectValue placeholder="Choose contact" /></SelectTrigger>
                     <SelectContent>
                       {selectedFamily?.emergencyContacts.map((contact) => (
                         <SelectItem key={contact.id} value={contact.id}>{contact.fullName}</SelectItem>
@@ -1681,10 +1742,10 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
-              <Label>Child</Label>
+              <Label htmlFor="family-child-selector">Child</Label>
               <div className="flex gap-2">
                 <Select value={selectedChild?.id ?? ""} onValueChange={(value) => value && loadChildById(value)}>
-                  <SelectTrigger><SelectValue placeholder="Choose child" /></SelectTrigger>
+                  <SelectTrigger id="family-child-selector"><SelectValue placeholder="Choose child" /></SelectTrigger>
                   <SelectContent>
                     {selectedFamily?.children.map((child) => (
                       <SelectItem key={child.id} value={child.id}>{child.fullName}</SelectItem>

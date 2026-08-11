@@ -90,6 +90,7 @@ import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
 import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
+import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
 import { buildParentPortalTodayState } from "@/lib/parent-portal-today";
 import { AD_INTEGRATION_PROVIDERS, buildIntegrationSetupViews, getIntegrationRuntimeStatus, hasRequiredMarketingAccountConfig, MARKETING_INTEGRATION_PROVIDERS, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
 import { integrationScopeForUser } from "@/lib/integration-scope";
@@ -165,8 +166,8 @@ import { homePathForRole, loginHrefForNextPath } from "@/lib/login-routing";
 import { canAccessModule, canAccessResolvedModuleRoute } from "@/lib/rbac";
 import { assetKind, canManageAssetHub, CORPORATE_ASSET_TYPE, readAssetMetadata } from "@/lib/asset-hub";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
-import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
-import { stripeCheckoutReadiness, stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
+import { directorLaunchChecklistTasksForPayoutSetup, readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
+import { stripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { terminalStoreCatalog } from "@/lib/terminal-store";
 import { terminalStoreEnabled, terminalStoreReturnState } from "@/lib/feature-availability";
 import { readSchoolEin } from "@/lib/school-tax-id";
@@ -1046,6 +1047,7 @@ async function renderLivePage(
     const completedSections = sections.filter((section) => section.status === "complete").length;
     const blockingSections = sections.filter((section) => section.status === "missing").length;
     const progress = sections.length ? Math.round((completedSections / sections.length) * 100) : 0;
+    const payoutSetupFlow = stripePayoutSetupFlowForCenters(selectedCenter ? [selectedCenter] : [], { userEmail: user.email });
     const directorChecklistAutomaticCompletedIds = deriveDirectorLaunchAutoCompletedIds({
       centerCount: selectedCenter ? 1 : 0,
       schoolProfileReady: Boolean(selectedCenter?.email && selectedCenter?.state && selectedCenter.licensedCapacity > 0),
@@ -1065,7 +1067,7 @@ async function renderLivePage(
       licensingReady: licensingConfiguration?.status === "ready_for_review",
       leadCount,
       dashboardConfigured: true,
-      payoutReady: selectedCenter ? stripeConnectReadinessFromFields(selectedCenter.customFields).status === "ready" : false,
+      payoutReady: payoutSetupFlow.complete,
     });
     const externalNeeds = [
       selectedCenter && readSchoolEin(selectedCenter.customFields) ? null : "School EIN for customer payment receipts and ledger printouts.",
@@ -1099,6 +1101,7 @@ async function renderLivePage(
       externalNeeds,
       directorChecklistCompletedIds: readCompletedSetupChecklistIds(setupChecklistUser?.customFields, "director_launch"),
       directorChecklistAutomaticCompletedIds,
+      directorChecklistTasks: directorLaunchChecklistTasksForPayoutSetup(payoutSetupFlow),
     };
 
     return <SchoolSetupCommandCenter key={data.centerId ?? "no-school"} data={data} />;

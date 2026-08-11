@@ -47,7 +47,7 @@ import type { DashboardWidgetId, DashboardWidgetView } from "@/lib/dashboard-wid
 import { prioritizeFteFollowUp } from "@/lib/corporate-dashboard";
 import { formatMoneyCents } from "@/lib/staff-compensation";
 import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
-import { directorLaunchChecklistTasks, teacherProfileChecklistTasks, type SetupChecklistKey } from "@/lib/setup-checklists";
+import { directorLaunchChecklistTasks, teacherProfileChecklistTasks, type SetupChecklistKey, type SetupChecklistTask } from "@/lib/setup-checklists";
 import { formatStaffDecimalHours } from "@/lib/staff-kiosk";
 import { cn } from "@/lib/utils";
 
@@ -117,6 +117,7 @@ export type LiveDashboardData = {
     description: string;
     completedIds: string[];
     automaticCompletedIds?: string[];
+    tasks?: SetupChecklistTask[];
     graphicHref: string;
   }>;
   dataReadiness?: {
@@ -1563,7 +1564,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               checklistKey={checklist.key}
               title={checklist.title}
               description={checklist.description}
-              tasks={checklist.key === "director_launch" ? directorLaunchChecklistTasks : teacherProfileChecklistTasks}
+              tasks={checklist.tasks ?? (checklist.key === "director_launch" ? directorLaunchChecklistTasks : teacherProfileChecklistTasks)}
               initialCompletedIds={checklist.completedIds}
               automaticCompletedIds={checklist.automaticCompletedIds}
               graphicHref={checklist.graphicHref}

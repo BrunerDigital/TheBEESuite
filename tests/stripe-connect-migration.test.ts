@@ -18,6 +18,13 @@ import {
   stripeConnectSavedMethodAccount,
 } from "../src/lib/stripe-connect-migration";
 import { buildStripeReauthorizationInvite } from "../src/lib/stripe-reauthorization-invite";
+import {
+  CORPORATE_STRIPE_PORTFOLIO_PATH,
+  PAYOUT_SETUP_SETTINGS_PATH,
+  stripePayoutSetupFlowForCenters,
+  stripePayoutSetupIsComplete,
+  stripeReauthorizationHref,
+} from "../src/lib/stripe-payout-setup-flow";
 
 test("prepared migration never changes the active parent-payment account", () => {
   const fields = {
@@ -281,7 +288,7 @@ test("corporate reauthorization uses one stable portfolio entry while preserving
   const migrationRoute = readFileSync("src/app/api/billing/connect/migration/route.ts", "utf8");
   const refreshRoute = readFileSync("src/app/api/billing/connect/migration/refresh/route.ts", "utf8");
 
-  assert.match(portfolioPage, /CORPORATE_SCHOOLS_EMAIL = "corpschools@kidcityusa\.com"/);
+  assert.match(portfolioPage, /CORPORATE_STRIPE_PORTFOLIO_EMAIL/);
   assert.match(portfolioPage, /tenantId: user\.tenantId/);
   assert.match(portfolioPage, /canAccessCenter\(user, centerId\)/);
   assert.match(portfolioPage, /scopeType: "CENTER"/);
@@ -293,6 +300,63 @@ test("corporate reauthorization uses one stable portfolio entry while preserving
   assert.match(refreshRoute, /portfolioQuery/);
   assert.match(refreshRoute, /fallbackUrl\(baseUrl, returnToCorporatePortfolio/);
   assert.match(refreshRoute, /returnToCorporatePortfolio \? "\/stripe-reauthorization\/corporate" : "\/billing-settings"/);
+});
+
+test("dashboard payout entry uses the same stable school-specific reauthorization flow", () => {
+  const activeSource = {
+    stripeConnectAccountId: "acct_source",
+    stripeChargesEnabled: true,
+    stripePayoutsEnabled: true,
+    stripeDetailsSubmitted: true,
+    stripeConnectMigrationSourceAccountId: "acct_source",
+    stripeConnectMigrationTargetAccountId: "acct_target",
+    stripeConnectMigrationStatus: "prepared",
+  };
+  const pendingFlow = stripePayoutSetupFlowForCenters([{ id: "center one", customFields: activeSource }]);
+
+  assert.equal(pendingFlow.href, stripeReauthorizationHref("center one"));
+  assert.equal(pendingFlow.href, "/stripe-reauthorization?center=center%20one");
+  assert.equal(pendingFlow.complete, false);
+  assert.equal(pendingFlow.replacementInProgress, true);
+  assert.equal(stripePayoutSetupIsComplete(activeSource), false);
+
+  const readyTarget = {
+    ...activeSource,
+    stripeConnectMigrationTargetChargesEnabled: true,
+    stripeConnectMigrationTargetPayoutsEnabled: true,
+    stripeConnectMigrationTargetDetailsSubmitted: true,
+    stripeConnectMigrationTargetRequirementFields: [],
+    stripeConnectMigrationTargetFeesCollector: "stripe",
+    stripeConnectMigrationTargetLossesCollector: "stripe",
+    stripeConnectMigrationTargetPayoutBankLast4: "4242",
+  };
+  assert.equal(stripePayoutSetupIsComplete(readyTarget), true);
+
+  const corporateFlow = stripePayoutSetupFlowForCenters([
+    { id: "center_1", customFields: activeSource },
+    { id: "center_2", customFields: { ...activeSource, stripeConnectMigrationTargetAccountId: "acct_target_2" } },
+  ], { userEmail: "CORPSCHOOLS@KIDCITYUSA.COM" });
+  assert.equal(corporateFlow.href, CORPORATE_STRIPE_PORTFOLIO_PATH);
+
+  const ordinaryMultiSchoolFlow = stripePayoutSetupFlowForCenters([
+    { id: "center_1", customFields: activeSource },
+    { id: "center_2", customFields: { ...activeSource, stripeConnectMigrationTargetAccountId: "acct_target_2" } },
+  ]);
+  assert.equal(ordinaryMultiSchoolFlow.href, PAYOUT_SETUP_SETTINGS_PATH);
+});
+
+test("dashboard and setup checklists route prepared schools through secure reauthorization", () => {
+  const dashboardPage = readFileSync("src/app/dashboard/page.tsx", "utf8");
+  const dashboard = readFileSync("src/components/dashboard.tsx", "utf8");
+  const schoolSetup = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const payoutPanel = readFileSync("src/components/stripe-connect-panel.tsx", "utf8");
+
+  assert.match(dashboardPage, /stripePayoutSetupFlowForCenters/);
+  assert.match(dashboardPage, /directorLaunchChecklistTasksForPayoutSetup/);
+  assert.match(dashboard, /checklist\.tasks/);
+  assert.match(schoolSetup, /directorChecklistTasks: directorLaunchChecklistTasksForPayoutSetup/);
+  assert.match(payoutPanel, /id="payout-setup"/);
+  assert.match(payoutPanel, /stripeReauthorizationHref\(center\.id\)/);
 });
 
 test("approved corporate verification links are current-due only and cannot invoke the software-fee action", () => {

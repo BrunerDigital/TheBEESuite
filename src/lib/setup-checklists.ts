@@ -7,6 +7,11 @@ export type SetupChecklistTask = {
   href?: string;
 };
 
+export type PayoutSetupChecklistFlow = {
+  href: string;
+  replacementInProgress: boolean;
+};
+
 export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
   {
     id: "login-school-profile",
@@ -48,7 +53,7 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
     id: "payout-bank-account",
     title: "Connect the school bank account",
     description: "Directors and executives open Billing Settings to complete payout processor onboarding so tuition funds can route to the school account once parent payments are enabled.",
-    href: "/billing-settings",
+    href: "/billing-settings#payout-setup",
   },
   {
     id: "parent-portal",
@@ -99,6 +104,20 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
     href: "/dashboard",
   },
 ];
+
+export function directorLaunchChecklistTasksForPayoutSetup(flow?: PayoutSetupChecklistFlow) {
+  if (!flow) return directorLaunchChecklistTasks;
+  return directorLaunchChecklistTasks.map((task) => task.id === "payout-bank-account"
+    ? {
+        ...task,
+        title: flow.replacementInProgress ? "Complete secure Stripe reauthorization" : task.title,
+        description: flow.replacementInProgress
+          ? "Open the authenticated BEE Suite payout flow, confirm the school and terms, then continue to a fresh school-specific Stripe session. Parent payments remain on the current verified account until a controlled cutover."
+          : task.description,
+        href: flow.href,
+      }
+    : task);
+}
 
 export const teacherProfileChecklistTasks: SetupChecklistTask[] = [
   {

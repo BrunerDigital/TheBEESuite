@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { readStripeConnectMigration, type StripeConnectMigrationStatus } from "@/lib/stripe-connect-migration";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CORPORATE_STRIPE_PORTFOLIO_EMAIL, CORPORATE_STRIPE_PORTFOLIO_PATH } from "@/lib/stripe-payout-setup-flow";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +18,6 @@ export const metadata: Metadata = {
   description: "Complete Stripe reauthorization for the Kid City USA corporate school portfolio.",
 };
 
-const CORPORATE_PORTFOLIO_PATH = "/stripe-reauthorization/corporate";
-const CORPORATE_SCHOOLS_EMAIL = "corpschools@kidcityusa.com";
 const inactiveCenterStatuses = ["closed", "archived", "inactive"];
 const completedStatuses = new Set<StripeConnectMigrationStatus>(["ready_for_cutover", "cutover_complete"]);
 
@@ -34,13 +33,13 @@ function statusContent(status: StripeConnectMigrationStatus) {
 
 export default async function CorporateStripeReauthorizationPage() {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
-  if (!user) redirect(loginHrefForNextPath(CORPORATE_PORTFOLIO_PATH));
-  if (requiresPasswordResetGate(user)) redirect(`/reset-password?force=1&next=${encodeURIComponent(CORPORATE_PORTFOLIO_PATH)}`);
+  if (!user) redirect(loginHrefForNextPath(CORPORATE_STRIPE_PORTFOLIO_PATH));
+  if (requiresPasswordResetGate(user)) redirect(`/reset-password?force=1&next=${encodeURIComponent(CORPORATE_STRIPE_PORTFOLIO_PATH)}`);
   if (!canManageBilling(user) && !canManageOperations(user)) notFound();
 
   const now = new Date();
   const portfolio = await prisma.user.findFirst({
-    where: { email: CORPORATE_SCHOOLS_EMAIL, tenantId: user.tenantId, isActive: true },
+    where: { email: CORPORATE_STRIPE_PORTFOLIO_EMAIL, tenantId: user.tenantId, isActive: true },
     select: {
       accessGrants: {
         where: {

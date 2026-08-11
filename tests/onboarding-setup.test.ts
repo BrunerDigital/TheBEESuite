@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections, type SchoolOnboardingSetupInput } from "../src/lib/onboarding-setup";
-import { directorLaunchChecklistTasks } from "../src/lib/setup-checklists";
+import { directorLaunchChecklistTasks, directorLaunchChecklistTasksForPayoutSetup } from "../src/lib/setup-checklists";
 
 function completeSetupInput(overrides: SchoolOnboardingSetupInput = {}) {
   return {
@@ -50,7 +50,20 @@ test("director launch checklist opens payout bank setup in billing settings", ()
   const payoutTask = directorLaunchChecklistTasks.find((task) => task.id === "payout-bank-account");
 
   assert.ok(payoutTask);
-  assert.equal(payoutTask.href, "/billing-settings");
+  assert.equal(payoutTask.href, "/billing-settings#payout-setup");
   assert.match(payoutTask.description, /Directors and executives/i);
   assert.match(payoutTask.description, /payout processor onboarding/i);
+});
+
+test("director payout checklist can open the stable school reauthorization page", () => {
+  const tasks = directorLaunchChecklistTasksForPayoutSetup({
+    href: "/stripe-reauthorization?center=center_1",
+    replacementInProgress: true,
+  });
+  const payoutTask = tasks.find((task) => task.id === "payout-bank-account");
+
+  assert.ok(payoutTask);
+  assert.equal(payoutTask.href, "/stripe-reauthorization?center=center_1");
+  assert.match(payoutTask.title, /reauthorization/i);
+  assert.match(payoutTask.description, /Parent payments remain/i);
 });

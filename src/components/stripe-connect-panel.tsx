@@ -17,6 +17,7 @@ import {
 } from "@/lib/payment-disclosures";
 import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { maskStripeAccountId, readStripeConnectMigration } from "@/lib/stripe-connect-migration";
+import { stripeReauthorizationHref } from "@/lib/stripe-payout-setup-flow";
 import {
   normalizeStripeConnectSetupInput,
   type StripeConnectSetupDetails,
@@ -33,6 +34,7 @@ export type StripeConnectCenter = {
   state: string | null;
   postalCode: string | null;
   customFields: unknown;
+  stripeReauthorizationAvailable?: boolean;
 };
 
 type StripeConnectPanelProps = {
@@ -114,7 +116,10 @@ export function StripeConnectPanel({
     };
   }, [localCenters]);
   const migrationCount = useMemo(
-    () => localCenters.filter((center) => Boolean(readStripeConnectMigration(center.customFields).targetAccountId)).length,
+    () => localCenters.filter((center) => {
+      const migration = readStripeConnectMigration(center.customFields);
+      return Boolean(migration.targetAccountId && !migration.cutoverAt);
+    }).length,
     [localCenters],
   );
 
@@ -358,7 +363,7 @@ export function StripeConnectPanel({
   }
 
   return (
-    <Card className="glass-panel">
+    <Card id="payout-setup" className="glass-panel scroll-mt-24">
       <CardHeader>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -575,16 +580,20 @@ export function StripeConnectPanel({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap justify-end gap-2">
-                      {migrationInProgress ? (
+                      {migrationInProgress && center.stripeReauthorizationAvailable !== false ? (
                         <Button
                           type="button"
                           size="sm"
-                          onClick={() => window.location.assign(`/stripe-reauthorization?center=${encodeURIComponent(center.id)}`)}
+                          onClick={() => window.location.assign(stripeReauthorizationHref(center.id))}
                           disabled={busyCenterId === center.id || !stripeConfigured}
                         >
                           <ShieldCheck data-icon="inline-start" />
-                          Reauthorize new account
+                          Continue secure setup
                         </Button>
+                      ) : migrationInProgress ? (
+                        <span className="max-w-52 text-right text-xs leading-5 text-muted-foreground">
+                          An authorized corporate representative completes this setup from the secure corporate portfolio.
+                        </span>
                       ) : hasAccount ? (
                         <Button
                           type="button"

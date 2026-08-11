@@ -17,7 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { EditableDisplayField } from "@/components/ui/editable-display-field";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { CollapsibleCard } from "@/components/workspace-preferences";
-import { directorLaunchChecklistTasks } from "@/lib/setup-checklists";
+import { directorLaunchChecklistTasks, type SetupChecklistTask } from "@/lib/setup-checklists";
 import { cn } from "@/lib/utils";
 
 export type SchoolSetupStatus = "complete" | "in_progress" | "missing";
@@ -58,6 +58,7 @@ export type SchoolSetupCommandCenterData = {
   externalNeeds: string[];
   directorChecklistCompletedIds: string[];
   directorChecklistAutomaticCompletedIds?: string[];
+  directorChecklistTasks?: SetupChecklistTask[];
 };
 
 const emptySections: SchoolSetupCommandSection[] = [];
@@ -203,7 +204,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
         checklistKey="director_launch"
         title="School setup checklist"
         description="Mark each task complete as your school finishes setup."
-        tasks={directorLaunchChecklistTasks}
+        tasks={data.directorChecklistTasks ?? directorLaunchChecklistTasks}
         initialCompletedIds={data.directorChecklistCompletedIds}
         automaticCompletedIds={data.directorChecklistAutomaticCompletedIds}
         graphicHref="/brand/the-bee-suite/explainers/current/school-launch-gates.png"

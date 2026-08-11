@@ -17,6 +17,7 @@ import { getDashboardWidgetPreferenceValue, normalizeDashboardWidgetPreferences 
 import type { DashboardWidgetId } from "@/lib/dashboard-widgets";
 import { activeClassroomWhere } from "@/lib/classroom-status";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
+import { canUseCorporateStripeVerification, readCorporateStripeVerificationTarget } from "@/lib/corporate-stripe-verification";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { dataReadinessCenterEnabled } from "@/lib/honeyglass";
 import { loadDataReadinessWorkspace } from "@/lib/data-readiness-server";
@@ -26,8 +27,8 @@ import { buildRegistrationShareUrl } from "@/lib/registration-sharing";
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { dashboardLensesForRole } from "@/lib/rbac";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
-import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
-import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
+import { directorLaunchChecklistTasksForPayoutSetup, readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
+import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 
@@ -514,6 +515,11 @@ export default async function DashboardPage() {
     enrolled: bucket.enrolled,
     revenue: bucket.revenue,
   }));
+  const canUseCorporateVerification = canUseCorporateStripeVerification(user);
+  const payoutSetupFlow = stripePayoutSetupFlowForCenters(centers.map((center) => ({
+    ...center,
+    stripeReauthorizationAvailable: !readCorporateStripeVerificationTarget(center.id) || canUseCorporateVerification,
+  })), { userEmail: user.email });
   const directorChecklistAutomaticCompletedIds = deriveDirectorLaunchAutoCompletedIds({
     centerCount: centers.length,
     classroomCount: classroomSnapshotRows.length,
@@ -533,7 +539,7 @@ export default async function DashboardPage() {
     incidentReviewCount,
     leadCount: newLeadCount + highIntentLeadCount,
     dashboardConfigured: dashboardWidgetConfig.widgets.some((widget) => widget.visible),
-    payoutReady: centers.some((center) => stripeConnectReadinessFromFields(center.customFields).status === "ready"),
+    payoutReady: payoutSetupFlow.complete,
   });
   const fteDueState = getFteDueState(today);
   const [
@@ -1016,6 +1022,7 @@ export default async function DashboardPage() {
         description: "Track the school-level setup work required before all BEE Suite features go live.",
         completedIds: directorChecklistCompletedIds,
         automaticCompletedIds: directorChecklistAutomaticCompletedIds,
+        tasks: directorLaunchChecklistTasksForPayoutSetup(payoutSetupFlow),
         graphicHref: "/brand/the-bee-suite/explainers/current/school-launch-gates.png",
       }] : []),
     ],

@@ -32,6 +32,7 @@ import {
 import {
   disableParentPortalLoginForGuardian,
   ensureParentPortalLoginForGuardian,
+  hasConflictingGuardianFamilyLinks,
   parentPortalAccessFields,
 } from "@/lib/parent-portal-logins";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
@@ -845,6 +846,23 @@ async function POSTHandler(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Guardian records must belong to the same school before merging." }, { status: 400 });
     }
 
+    const linkedUserId = primary.userId ?? duplicate.userId ?? null;
+    if (linkedUserId) {
+      const remainingLinks = await prisma.guardian.findMany({
+        where: {
+          userId: linkedUserId,
+          id: { notIn: [primaryGuardianId, duplicateGuardianId] },
+        },
+        select: { familyId: true },
+      });
+      if (hasConflictingGuardianFamilyLinks(primary.familyId, remainingLinks)) {
+        return NextResponse.json(
+          { ok: false, error: "This merge would connect one parent login to multiple families. Review the parent account first." },
+          { status: 409 },
+        );
+      }
+    }
+
     centerId = primaryAccess.centerId;
     const mergedAt = new Date();
     result = await prisma.$transaction(async (tx) => {
@@ -855,7 +873,7 @@ async function POSTHandler(request: NextRequest) {
       const mergedGuardian = await tx.guardian.update({
         where: { id: primaryGuardianId },
         data: {
-          userId: primary.userId ?? duplicate.userId ?? null,
+          userId: linkedUserId,
           email: fillBlank(primary.email, duplicate.email),
           phone: fillBlank(primary.phone, duplicate.phone),
           employer: fillBlank(primary.employer, duplicate.employer),

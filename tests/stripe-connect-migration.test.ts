@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { UserRole } from "@prisma/client";
+import {
+  canUseCorporateStripeVerification,
+  corporateStripePayoutBankIsConfirmed,
+  corporateStripeVerificationBindingIsValid,
+  CORPORATE_STRIPE_VERIFICATION_TARGETS,
+  readCorporateStripeVerificationTarget,
+  stripeVerificationState,
+} from "../src/lib/corporate-stripe-verification";
 import { readStripeConnectAccountId } from "../src/lib/stripe-connect-readiness";
 import { readStripeConnectMigration, stripeConnectMigrationTargetIsReady } from "../src/lib/stripe-connect-migration";
 import { buildStripeReauthorizationInvite } from "../src/lib/stripe-reauthorization-invite";
@@ -21,6 +30,128 @@ test("prepared migration never changes the active parent-payment account", () =>
   assert.equal(migration.status, "prepared");
   assert.equal(migration.sourcePayoutsHeld, true);
   assert.equal(migration.targetPayoutsHeld, true);
+});
+
+test("corporate Stripe verification is pinned to the eight approved school accounts", () => {
+  const expected = {
+    cmp4ew5yx00046alw8i1yf63m: { school: "Cordera", accountId: "acct_1U2zAXGZOiFVCaG2" },
+    cmp4ewd6p00386alw2ngcihed: { school: "Avon", accountId: "acct_1U31bWGpss446orz" },
+    cmp4ewhbt00506alwam35am12: { school: "North Richland Hills", accountId: "acct_1U2zDmGoyxd1QwIu" },
+    "85f871b5-b20d-4107-b5de-91d3014a1fb0": { school: "Corpus Christi", accountId: "acct_1U2zCsGlcTEcSaA2" },
+    cmp4ewg8w004k6alwid0bwiur: { school: "Pisgah Forest", accountId: "acct_1U2zCaKIZA7QoGgs" },
+    cmp4ewg4a004i6alwl5c6i3w4: { school: "Canton", accountId: "acct_1U2zCH2chpYNb3qS" },
+    cmp4ew9h2001m6alwxssr4wr6: { school: "Oakleaf", accountId: "acct_1U2zBgK7L6OX7cUR" },
+    cmp4ew8yo001e6alw32jneo3w: { school: "Beach Blvd", accountId: "acct_1U2zBOGetOO7UdiA" },
+  };
+  assert.deepEqual(CORPORATE_STRIPE_VERIFICATION_TARGETS, expected);
+  for (const [centerId, target] of Object.entries(expected)) {
+    assert.deepEqual(readCorporateStripeVerificationTarget(centerId), target);
+  }
+  assert.equal(readCorporateStripeVerificationTarget("center_not_approved"), null);
+});
+
+test("corporate Stripe verification is limited to platform and brand administrators", () => {
+  assert.equal(canUseCorporateStripeVerification({ role: UserRole.PLATFORM_OWNER }), true);
+  assert.equal(canUseCorporateStripeVerification({ role: UserRole.BRAND_ADMIN }), true);
+  for (const role of [
+    UserRole.REGIONAL_MANAGER,
+    UserRole.CENTER_DIRECTOR,
+    UserRole.ASSISTANT_DIRECTOR,
+    UserRole.TEACHER,
+    UserRole.BILLING_ADMIN,
+    UserRole.PARENT_GUARDIAN,
+    UserRole.AUTHORIZED_PICKUP,
+    UserRole.READ_ONLY_AUDITOR,
+  ]) {
+    assert.equal(canUseCorporateStripeVerification({ role }), false, role);
+  }
+});
+
+test("corporate Stripe verification live state short-circuits complete and pending accounts", () => {
+  assert.equal(stripeVerificationState({
+    livemode: true,
+    chargesEnabled: true,
+    payoutsEnabled: true,
+    feesCollector: "stripe",
+    lossesCollector: "stripe",
+    currentlyDueRequirementFields: [],
+    pendingVerificationFields: [],
+  }, true), "stripe_verification_complete");
+  assert.equal(stripeVerificationState({
+    livemode: true,
+    chargesEnabled: false,
+    payoutsEnabled: false,
+    feesCollector: "stripe",
+    lossesCollector: "stripe",
+    currentlyDueRequirementFields: [],
+    pendingVerificationFields: ["identity.business_details.address"],
+  }, false), "stripe_verification_pending");
+  assert.equal(stripeVerificationState({
+    livemode: true,
+    chargesEnabled: false,
+    payoutsEnabled: false,
+    feesCollector: "stripe",
+    lossesCollector: "stripe",
+    currentlyDueRequirementFields: ["external_account"],
+    pendingVerificationFields: [],
+  }, false), "stripe_verification_required");
+  assert.equal(stripeVerificationState({
+    livemode: true,
+    chargesEnabled: false,
+    payoutsEnabled: false,
+    feesCollector: "stripe",
+    lossesCollector: "stripe",
+    currentlyDueRequirementFields: [],
+    pendingVerificationFields: [],
+  }, false), "stripe_verification_blocked");
+  assert.equal(stripeVerificationState({
+    livemode: false,
+    chargesEnabled: true,
+    payoutsEnabled: true,
+    feesCollector: "stripe",
+    lossesCollector: "stripe",
+    currentlyDueRequirementFields: [],
+    pendingVerificationFields: [],
+  }, true), "stripe_verification_blocked");
+  assert.equal(stripeVerificationState({
+    livemode: true,
+    chargesEnabled: true,
+    payoutsEnabled: true,
+    feesCollector: "application",
+    lossesCollector: "stripe",
+    currentlyDueRequirementFields: [],
+    pendingVerificationFields: [],
+  }, true), "stripe_verification_blocked");
+});
+
+test("corporate Stripe verification requires the correct active mapping and a default USD bank", () => {
+  assert.equal(corporateStripeVerificationBindingIsValid({
+    activeAccountId: "acct_source",
+    sourceAccountId: "acct_source",
+    targetAccountId: "acct_target",
+    cutoverAt: null,
+  }), true);
+  assert.equal(corporateStripeVerificationBindingIsValid({
+    activeAccountId: "acct_target",
+    sourceAccountId: "acct_source",
+    targetAccountId: "acct_target",
+    cutoverAt: "2026-08-11T12:00:00.000Z",
+  }), true);
+  assert.equal(corporateStripeVerificationBindingIsValid({
+    activeAccountId: "acct_other",
+    sourceAccountId: "acct_source",
+    targetAccountId: "acct_target",
+    cutoverAt: null,
+  }), false);
+  assert.equal(corporateStripePayoutBankIsConfirmed([
+    { currency: "usd", defaultForCurrency: true, last4: "4242" },
+  ]), true);
+  assert.equal(corporateStripePayoutBankIsConfirmed([
+    { currency: "usd", defaultForCurrency: false, last4: "4242" },
+  ]), false);
+  assert.equal(corporateStripePayoutBankIsConfirmed([
+    { currency: "usd", defaultForCurrency: true, last4: null },
+  ]), false);
 });
 
 test("migration target requires Stripe-owned fees and losses, a bank, and active capabilities", () => {
@@ -115,6 +246,49 @@ test("corporate reauthorization uses one stable portfolio entry while preserving
   assert.match(refreshRoute, /portfolioQuery/);
   assert.match(refreshRoute, /fallbackUrl\(baseUrl, returnToCorporatePortfolio/);
   assert.match(refreshRoute, /returnToCorporatePortfolio \? "\/stripe-reauthorization\/corporate" : "\/billing-settings"/);
+});
+
+test("approved corporate verification links are current-due only and cannot invoke the software-fee action", () => {
+  const verification = readFileSync("src/lib/corporate-stripe-verification.ts", "utf8");
+  const schoolPage = readFileSync("src/app/stripe-reauthorization/page.tsx", "utf8");
+  const card = readFileSync("src/components/corporate-stripe-verification-card.tsx", "utf8");
+  const migrationRoute = readFileSync("src/app/api/billing/connect/migration/route.ts", "utf8");
+  const refreshRoute = readFileSync("src/app/api/billing/connect/migration/refresh/route.ts", "utf8");
+
+  assert.match(verification, /PLATFORM_OWNER[\s\S]*BRAND_ADMIN/);
+  assert.doesNotMatch(verification, /REGIONAL_MANAGER|CENTER_DIRECTOR|ASSISTANT_DIRECTOR|BILLING_ADMIN/);
+  assert.match(verification, /scopeType: "CENTER"/);
+  assert.match(verification, /canAccessCenter\(user, center\.id\)/);
+  assert.match(verification, /center\.organization\.tenantId !== user\.tenantId/);
+  assert.match(verification, /isActive: true/);
+  assert.match(verification, /startsAt: \{ lte: now \}/);
+  assert.match(verification, /endsAt: \{ gte: now \}/);
+  assert.match(verification, /migration\.targetAccountId !== expected\.accountId/);
+  assert.match(schoolPage, /retrieveStripeConnectedAccount/);
+  assert.match(schoolPage, /stripeVerificationState/);
+  assert.match(schoolPage, /CorporateStripeVerificationCard/);
+  assert.match(card, /autoStart/);
+  assert.match(card, /JSON\.stringify\(\{ centerId \}\)/);
+  assert.doesNotMatch(card, /authorizedRepresentative/);
+  assert.doesNotMatch(card, /\$99|software-payment-method|stripe_balance/);
+  assert.match(migrationRoute, /collectionFields: corporateVerification \? "currently_due" : "eventually_due"/);
+  assert.match(migrationRoute, /includeFutureRequirements: !corporateVerification/);
+  assert.match(refreshRoute, /collectionFields: corporateVerification \? "currently_due" : "eventually_due"/);
+  assert.match(refreshRoute, /includeFutureRequirements: !corporateVerification/);
+  assert.match(refreshRoute, /portfolio=corporate&start=1/);
+  assert.match(migrationRoute, /corporateStripeVerificationBindingIsValid/);
+  assert.match(refreshRoute, /corporateStripeVerificationBindingIsValid/);
+  assert.match(migrationRoute, /corporateStripePayoutBankIsConfirmed/);
+  assert.match(refreshRoute, /corporateStripePayoutBankIsConfirmed/);
+  assert.ok(migrationRoute.indexOf("if (corporateVerification)") < migrationRoute.indexOf("const [target, banks]"));
+  const postStatusCheck = migrationRoute.indexOf("const verificationStatus = stripeVerificationState(target.account,");
+  const reservationWrite = migrationRoute.indexOf("stripeConnectMigrationStatus: \"onboarding_opened\"");
+  assert.ok(postStatusCheck >= 0);
+  assert.ok(reservationWrite >= 0);
+  assert.ok(postStatusCheck < reservationWrite);
+  assert.match(migrationRoute, /authorizedRepresentativeConfirmed: corporateVerification \? false : true/);
+  assert.doesNotMatch(migrationRoute, /stripeConnectAccountId\s*:/);
+  assert.doesNotMatch(refreshRoute, /stripeConnectAccountId\s*:/);
 });
 
 test("cutover is one-school-at-a-time and remains blocked behind live bank, payout, readiness, and $99 checks", () => {

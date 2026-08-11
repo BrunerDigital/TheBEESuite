@@ -101,7 +101,7 @@ test("guardian kiosk credential summary hides hashes and reports QR readiness", 
     assert.equal(readyCredential.hasPin, true);
     assert.equal(Boolean(readyCredential.qrToken), true);
     assert.equal(readyCredential.pinSetAt, pinSetAt.toISOString());
-    assert.equal(readyCredential.kioskPath, "/check-in/center_1");
+    assert.equal(readyCredential.kioskPath, "/check-in/center_1/family");
     assert.equal(Object.hasOwn(readyCredential, "checkInPinHash"), false);
     assert.deepEqual(missingCredential, {
       guardianId: "guardian_missing",
@@ -113,7 +113,7 @@ test("guardian kiosk credential summary hides hashes and reports QR readiness", 
       hasPin: false,
       pinSetAt: null,
       qrToken: null,
-      kioskPath: "/check-in/center_1",
+      kioskPath: "/check-in/center_1/family",
     });
     assert.deepEqual(summarizeGuardianKioskCredentials([readyCredential, missingCredential]), {
       total: 2,
@@ -122,6 +122,7 @@ test("guardian kiosk credential summary hides hashes and reports QR readiness", 
       missingPin: 1,
     });
     assert.equal(kioskPathForCenter(null), "/check-in");
+    assert.equal(kioskPathForCenter("center_1", "family"), "/check-in/center_1/family");
     assert.equal(kioskPathForCenter("center_1", "staff"), "/check-in/center_1?mode=staff");
   } finally {
     if (originalPinSecret === undefined) delete mutableEnv.PIN_HASH_SECRET;

@@ -424,7 +424,7 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="disabled">Disabled</SelectItem>
-                          <SelectItem value="pilot">Pilot only</SelectItem>
+                          <SelectItem value="pilot">Limited rollout</SelectItem>
                           <SelectItem value="school">Selected schools</SelectItem>
                           <SelectItem value="all">All schools</SelectItem>
                         </SelectContent>

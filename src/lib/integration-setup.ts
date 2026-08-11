@@ -385,7 +385,7 @@ export const INTEGRATION_SETUP_DEFINITIONS: IntegrationSetupDefinition[] = [
         label: "Review mode",
         type: "select",
         options: [
-          { value: "human_required", label: "Human review required" },
+          { value: "human_required", label: "Staff review required" },
           { value: "internal_only", label: "Internal drafting only" },
         ],
       },

@@ -31,6 +31,10 @@ import {
   paymentMethodRequestRecipientOptions,
   validatePaymentMethodRequestToken,
 } from "@/lib/payment-method-request-forms";
+import {
+  PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+  paymentServiceError,
+} from "@/lib/parent-payment-errors";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -166,13 +170,30 @@ async function POSTHandler(request: NextRequest) {
   const stripeWebhookConfigured = Boolean(await getStripeWebhookSecret({ tenantId: payload.tenantId }));
   if (!stripeSecretConfigured) {
     return NextResponse.json(
-      { ok: false, configured: false, error: "Payment processor keys are missing, so checkout is disabled." },
+      {
+        ok: false,
+        configured: false,
+        error: paymentServiceError({
+          parentFacing: true,
+          providerError: "Payment processor keys are missing, so checkout is disabled.",
+          fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+        }),
+      },
       { status: 503 },
     );
   }
   if (process.env.STRIPE_REQUIRE_WEBHOOK_FOR_CHECKOUT !== "false" && !stripeWebhookConfigured) {
     return NextResponse.json(
-      { ok: false, configured: false, error: "Payment processor webhook signing secret is missing, so payment reconciliation is disabled." },
+      {
+        ok: false,
+        configured: false,
+        error: paymentServiceError({
+          parentFacing: true,
+          providerError:
+            "Payment processor webhook signing secret is missing, so payment reconciliation is disabled.",
+          fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+        }),
+      },
       { status: 503 },
     );
   }
@@ -182,11 +203,28 @@ async function POSTHandler(request: NextRequest) {
   const allowPlatformOnlyPayments = process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true";
   const billingApproval = stripeSchoolBillingApproval({ customFields: center.customFields, centerName: center.name });
   if (!billingApproval.approved) {
-    return NextResponse.json({ ok: false, error: billingApproval.blockingReason, billingApproval }, { status: 403 });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: paymentServiceError({
+          parentFacing: true,
+          providerError: billingApproval.blockingReason || "Online billing is not approved for this school.",
+          fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+        }),
+      },
+      { status: 403 },
+    );
   }
   if (!connectedAccountId && !allowPlatformOnlyPayments) {
     return NextResponse.json(
-      { ok: false, error: "This school needs a payout account before parent payments can be accepted." },
+      {
+        ok: false,
+        error: paymentServiceError({
+          parentFacing: true,
+          providerError: "This school needs a payout account before parent payments can be accepted.",
+          fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+        }),
+      },
       { status: 400 },
     );
   }
@@ -195,7 +233,15 @@ async function POSTHandler(request: NextRequest) {
     const accountStatus = await retrieveStripeConnectedAccount(connectedAccountId, { tenantId: payload.tenantId });
     if (!accountStatus.ok || !accountStatus.account) {
       return NextResponse.json(
-        { ok: false, configured: accountStatus.configured, error: accountStatus.error || "Payout status could not be confirmed." },
+        {
+          ok: false,
+          configured: accountStatus.configured,
+          error: paymentServiceError({
+            parentFacing: true,
+            providerError: accountStatus.error || "Payout status could not be confirmed.",
+            fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+          }),
+        },
         { status: accountStatus.configured ? 502 : 503 },
       );
     }
@@ -216,7 +262,14 @@ async function POSTHandler(request: NextRequest) {
     });
     if (!readiness.canAcceptParentPayments) {
       return NextResponse.json(
-        { ok: false, error: readiness.blockingReason || "This school's payout account is not ready yet." },
+        {
+          ok: false,
+          error: paymentServiceError({
+            parentFacing: true,
+            providerError: readiness.blockingReason || "This school's payout account is not ready yet.",
+            fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+          }),
+        },
         { status: 400 },
       );
     }
@@ -227,7 +280,14 @@ async function POSTHandler(request: NextRequest) {
   const requirePaymentMethodConfiguration = process.env.STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES === "true";
   if (usesSpecificFeePolicy && requirePaymentMethodConfiguration && !paymentMethodConfigurationId) {
     return NextResponse.json(
-      { ok: false, error: "This payment method is not configured yet." },
+      {
+        ok: false,
+        error: paymentServiceError({
+          parentFacing: true,
+          providerError: "This payment method is not configured yet.",
+          fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+        }),
+      },
       { status: 400 },
     );
   }
@@ -252,7 +312,15 @@ async function POSTHandler(request: NextRequest) {
     });
     if (!customer.ok || !customer.id) {
       return NextResponse.json(
-        { ok: false, configured: customer.configured, error: customer.error || "Family payment profile could not be created." },
+        {
+          ok: false,
+          configured: customer.configured,
+          error: paymentServiceError({
+            parentFacing: true,
+            providerError: customer.error || "Family payment profile could not be created.",
+            fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+          }),
+        },
         { status: customer.configured ? 502 : 503 },
       );
     }
@@ -438,7 +506,15 @@ async function POSTHandler(request: NextRequest) {
       },
     });
     return NextResponse.json(
-      { ok: false, configured: session.configured, error: session.error || "Payment checkout could not be created." },
+      {
+        ok: false,
+        configured: session.configured,
+        error: paymentServiceError({
+          parentFacing: true,
+          providerError: session.error || "Payment checkout could not be created.",
+          fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+        }),
+      },
       { status: session.configured ? 502 : 503 },
     );
   }

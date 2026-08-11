@@ -30,10 +30,10 @@ const graphics = [
     id: "parent-access-install",
     eyebrow: "PARENT ACCESS",
     title: "Invite, sign in, then install",
-    subtitle: "Use the verified guardian email, school-issued first-login password, and secure BEE Suite address.",
+    subtitle: "Use the verified guardian email, temporary password from the invitation, and secure BEE Suite address.",
     steps: [
       ["1", "Confirm guardian", "Verify email, phone, family link, children, and pickup access."],
-      ["2", "Send invitation", "Use the approved invite with the secure URL, email, and first-login password."],
+      ["2", "Send invitation", "Use the approved invite with the secure URL, email, and temporary password."],
       ["3", "Open secure site", "Use thebeesuite.io/parents. Stop if Safari says Not Secure."],
       ["4", "Sign in", "Enter the guardian email and issued password."],
       ["5", "Install", "Use Add to Home Screen on iPhone or Install app on Android or Fire."],
@@ -84,7 +84,7 @@ const graphics = [
       ["5", "Message carefully", "Use the smallest correct audience and review drafts before sending."],
       ["6", "Close exceptions", "Assign every unresolved item to a named follow-up owner."],
     ],
-    warning: "Custody, pickup, medical, incident, billing, and compliance decisions remain human-reviewed.",
+    warning: "School staff must review custody, pickup, medical, incident, billing, and compliance decisions.",
   },
   {
     id: "teacher-daily-flow",

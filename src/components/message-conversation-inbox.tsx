@@ -77,19 +77,25 @@ function MessageAttachments({ attachments }: { attachments?: MessageAttachmentVi
 
   return (
     <div className="mt-2 flex flex-wrap gap-2">
-      {attachments.map((attachment) => (
+      {attachments.map((attachment) => attachment.downloadUrl ? (
         <a
           key={attachment.id}
-          className="inline-flex max-w-full items-center gap-2 rounded-lg border border-current/15 bg-background/30 px-2.5 py-1.5 text-xs font-medium transition hover:bg-background/55"
-          href={attachment.downloadUrl ?? undefined}
+          className="inline-flex max-w-full items-center gap-2 rounded-lg border border-current/15 bg-background/30 px-2.5 py-1.5 text-xs font-medium transition hover:bg-background/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          href={attachment.downloadUrl}
           target="_blank"
           rel="noreferrer"
-          aria-disabled={!attachment.downloadUrl}
         >
-          {attachment.kind === "image" ? <ImageIcon className="size-3.5 shrink-0" /> : <FileText className="size-3.5 shrink-0" />}
+          {attachment.kind === "image" ? <ImageIcon className="size-3.5 shrink-0" aria-hidden="true" /> : <FileText className="size-3.5 shrink-0" aria-hidden="true" />}
           <span className="truncate">{attachment.filename}</span>
           <span className="shrink-0 opacity-70">{attachmentSize(attachment.size)}</span>
         </a>
+      ) : (
+        <span key={attachment.id} className="inline-flex max-w-full items-center gap-2 text-xs opacity-70">
+          {attachment.kind === "image" ? <ImageIcon className="size-3.5 shrink-0" aria-hidden="true" /> : <FileText className="size-3.5 shrink-0" aria-hidden="true" />}
+          <span className="truncate">{attachment.filename}</span>
+          <span className="shrink-0">{attachmentSize(attachment.size)}</span>
+          <span className="shrink-0">Attachment unavailable</span>
+        </span>
       ))}
     </div>
   );
@@ -218,7 +224,7 @@ export function MessageConversationInbox({
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <Badge variant="outline" className="gap-1.5">
                     <ShieldCheck className="size-3" aria-hidden="true" />
-                    {selectedThread.familyId ? "Family thread · school scoped" : "Internal thread · tenant scoped"}
+                    {selectedThread.familyId ? "Family conversation" : "Staff conversation"}
                   </Badge>
                   {selectedThread.unread ? <Badge>{selectedThread.unread} unread</Badge> : <Badge variant="outline">Up to date</Badge>}
                   {selectedThread.priority ? <Badge variant="destructive">Priority</Badge> : null}

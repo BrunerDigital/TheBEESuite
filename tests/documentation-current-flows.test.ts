@@ -54,10 +54,11 @@ test("school transition announcement preserves per-school launch and billing gat
 test("public resources describe current parent, tuition, FTE, and launch flows", () => {
   const resources = readFileSync("src/app/resources/page.tsx", "utf8");
 
-  assert.match(resources, /school-issued first-login password/);
+  assert.match(resources, /temporary password from your school invitation/);
+  assert.doesNotMatch(resources, /school-issued first-login password/);
   assert.match(resources, /id: "director-parent-invites"/);
   assert.match(resources, /Add Family, Parent \+ Child/);
-  assert.match(resources, /Accepted means the email provider accepted it/);
+  assert.match(resources, /Accepted means the email service received it for delivery/);
   assert.match(resources, /does not require a ProCare import batch/);
   assert.match(resources, /School Operations > Enrollment status/);
   assert.match(resources, /presents card first/);
@@ -106,6 +107,25 @@ test("role screenshot coverage matches the approved device mix", () => {
     assert.match(path, /screenshots\/current\/.+-light\.png$/);
     assert.equal(existsSync(path), true, path);
   }
+});
+
+test("parent screenshots are reproducible from the current inert portal views", () => {
+  const captureScript = readFileSync(
+    "scripts/capture-current-parent-portal-screenshots.mjs",
+    "utf8",
+  );
+
+  assert.equal(
+    [...captureScript.matchAll(/name: "parent-[^"]+-light\.png"/g)].length,
+    6,
+  );
+  assert.match(captureScript, /screen=home/);
+  assert.match(captureScript, /screen=updates/);
+  assert.match(captureScript, /screen=payments/);
+  assert.match(captureScript, /apiRequests\.length/);
+  assert.match(captureScript, /has horizontal overflow/);
+  assert.match(captureScript, /browser errors/);
+  assert.match(captureScript, /Preview only/);
 });
 
 test("screenshot-derived role SOP graphics are current and complete", () => {

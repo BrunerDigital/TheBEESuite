@@ -35,9 +35,9 @@ const collectedData = [
 
 const privacyPractices = [
   "Parent and guardian accounts only show records linked to their family through school-managed guardian records.",
-  "School staff and administrators see records according to role, center, organization, and tenant access rules.",
-  "Private files and child media are stored in restricted storage and served through signed links when configured.",
-  "The app uses audit logging for sensitive operational changes and redacts sensitive details from operational logs where practical.",
+  "School staff and administrators see records allowed by their account and assigned location.",
+  "The BEE Suite restricts access to private files and child media and may use time-limited access links.",
+  "The BEE Suite keeps a history of sensitive account changes and limits sensitive details in system logs where practical.",
   "The app does not sell parent, child, or school data.",
   "The app is not intended for child self-service accounts.",
 ];
@@ -75,9 +75,9 @@ export default function PrivacyPage() {
                 How The BEE Suite handles parent portal data.
               </h1>
               <p className="mt-5 text-base leading-7 text-slate-300">
-                The BEE Suite is a role-based childcare operations platform. This policy describes how the platform handles data for the BEE Suite Parent Portal and related school workflows.
+                 The BEE Suite is a childcare operations platform. This policy describes how it handles data for the BEE Suite Parent Portal and connected school services.
               </p>
-              <p className="mt-3 text-sm leading-6 text-slate-400">Last updated: July 7, 2026</p>
+              <p className="mt-3 text-sm leading-6 text-slate-400">Last updated: August 11, 2026</p>
             </div>
 
             <div className="mt-10 grid gap-4 md:grid-cols-2">
@@ -102,9 +102,9 @@ export default function PrivacyPage() {
                   <CardTitle>How Data Is Used</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-                  <p>We use data to provide secure school operations, parent portal access, family communication, document workflows, child updates, billing views, payment handoff, support, security, auditing, and service reliability.</p>
+                  <p>We use data to provide secure school operations, Parent Portal access, family communication, document handling, child updates, billing views, payment handoff, support, security, change history, and service reliability.</p>
                   <p>Schools use The BEE Suite to manage childcare operations. Some records, retention periods, approvals, and corrections are controlled by the school, state licensing obligations, accounting requirements, or school policy.</p>
-                  <p>Payment checkout and saved payment method workflows may use Stripe. Email or SMS workflows may use configured communication providers. These vendors process data needed to provide their services.</p>
+                  <p>Payment checkout and saved payment methods may use Stripe. Email and text messages may be delivered by third-party communication services. These companies process only the data needed to provide those services.</p>
                 </CardContent>
               </Card>
 
@@ -131,8 +131,8 @@ export default function PrivacyPage() {
                   <CardTitle>Parent Choices</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-                  <p>Parents can update notification preferences where enabled, change their password, submit contact change requests, request account deletion in Profile Settings, and ask their school to review incorrect family or child records.</p>
-                  <p>Deletion or correction requests may need school approval when records are required for licensing, safety, accounting, payment, audit, or legal reasons.</p>
+                  <p>Parents can update notification preferences where available, change their password, submit contact change requests, request account deletion under Family → Profile &amp; Security, and ask their school to review incorrect family or child records.</p>
+                  <p>Deletion or correction requests may need school approval when records are required for licensing, safety, accounting, payment, account-history, or legal reasons.</p>
                 </CardContent>
               </Card>
 
@@ -141,8 +141,8 @@ export default function PrivacyPage() {
                   <CardTitle>Children&apos;s Privacy</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-                  <p>The parent portal is for parents, guardians, school staff, and authorized operational users. The platform does not create child self-service accounts for the parent portal.</p>
-                  <p>Child records are handled through school-managed access, guardian links, and role-based controls.</p>
+                  <p>The Parent Portal is for parents and guardians. Authorized school staff use separate school workspaces. The platform does not create child self-service accounts for the Parent Portal.</p>
+                  <p>Schools control which guardian accounts are connected to each child and family.</p>
                 </CardContent>
               </Card>
 

@@ -563,7 +563,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                     <TableRow key={campaign.id}>
                       <TableCell>
                         <div className="font-medium">{campaign.name}</div>
-                        <div className="text-xs text-muted-foreground">{campaign.brand?.name ?? "Tenant-wide"} · {campaign.type}</div>
+                        <div className="text-xs text-muted-foreground">{campaign.brand?.name ?? "All locations"} · {campaign.type}</div>
                       </TableCell>
                       <TableCell>{textValue(asRecord(campaign.audience).label) || "All eligible"}</TableCell>
                       <TableCell>{formatDate(campaign.scheduledAt, timeZone)}</TableCell>
@@ -579,7 +579,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                   ))}
                   {!data.campaigns.length ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-muted-foreground">No tenant campaigns have been configured yet.</TableCell>
+                      <TableCell colSpan={8} className="text-muted-foreground">No campaigns have been set up yet.</TableCell>
                     </TableRow>
                   ) : null}
                 </TableBody>

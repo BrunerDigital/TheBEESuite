@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Download, ListChecks, Share2, ShieldAlert, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { securePublicAppUrlForPath } from "@/lib/public-app-url";
 
 type BeforeInstallPromptEvent = Event & {
@@ -24,35 +24,35 @@ function installContextFromPathname(pathname: string): InstallContext | null {
     return {
       key: "launcher",
       appName: "The BEE Suite",
-      body: "Add the app to this device so kiosk, parent, teacher, and admin workflows open like a local app.",
+      body: "Add The BEE Suite to this device for quick access from one icon.",
     };
   }
   if (pathname === "/parents" || pathname.startsWith("/parents/")) {
     return {
       key: "parents",
       appName: "BEE Suite Parent Portal",
-      body: "Add the parent portal to this phone so child updates, messages, documents, and tuition open from one icon.",
+      body: "Add the Parent Portal to this device for quick access to child updates, messages, documents, and payments.",
     };
   }
   if (pathname === "/teachers" || pathname.startsWith("/teachers/")) {
     return {
       key: "teachers",
       appName: "BEE Suite Teacher",
-      body: "Add the teacher portal to this classroom device for attendance, reports, messages, and media.",
+      body: "Add the teacher page to this classroom device for attendance, daily reports, messages, and photos.",
     };
   }
   if (pathname === "/directors" || pathname.startsWith("/directors/")) {
     return {
       key: "directors",
       appName: "BEE Suite Director",
-      body: "Add the director workspace to this device for school operations, billing, staffing, and parent support.",
+      body: "Add the director page to this device for enrollment, billing, staff schedules, reports, and family support.",
     };
   }
   if (pathname === "/executives" || pathname.startsWith("/executives/")) {
     return {
       key: "executives",
       appName: "BEE Suite Executive",
-      body: "Add the executive workspace to this device for multi-location reporting, setup, and controls.",
+      body: "Add the executive page to this device for location summaries, reports, and account settings.",
     };
   }
   return null;
@@ -94,9 +94,9 @@ function readDeviceKind(): DeviceKind {
 function installCopy(deviceKind: DeviceKind, canPrompt: boolean, context: InstallContext) {
   if (canPrompt) {
     return {
-      title: `Install ${context.appName}`,
+      title: `Add ${context.appName} to this device`,
       body: context.body,
-      button: "Install app",
+      button: "Add to device",
       Icon: Download,
     };
   }
@@ -104,34 +104,34 @@ function installCopy(deviceKind: DeviceKind, canPrompt: boolean, context: Instal
   if (deviceKind === "ios") {
     return {
       title: "Add to Home Screen",
-      body: `On iPhone or iPad, first confirm Safari shows thebeesuite.io with a secure connection. Then tap Share and choose Add to Home Screen for ${context.appName}.`,
-      button: "Show steps",
+      body: `In Safari, tap Share, then choose Add to Home Screen for ${context.appName}.`,
+      button: "View steps",
       Icon: Share2,
     };
   }
 
   if (deviceKind === "fire") {
     return {
-      title: "Install on this Fire tablet",
-      body: `Amazon Silk does not always open the install prompt from a page button. Use the tablet browser menu to add ${context.appName} to the home screen.`,
-      button: "Show steps",
+      title: "Add to this Fire tablet",
+      body: `In Silk, open the browser menu and choose Add to Home screen or Install app for ${context.appName}.`,
+      button: "View steps",
       Icon: ListChecks,
     };
   }
 
   if (deviceKind === "android") {
     return {
-      title: "Install on this tablet",
-      body: `Use the browser menu in Chrome or Silk, then choose Install app or Add to Home screen for ${context.appName}.`,
-      button: "Show steps",
+      title: "Add to this Android device",
+      body: `In Chrome or Silk, open the browser menu and choose Install app or Add to Home screen for ${context.appName}.`,
+      button: "View steps",
       Icon: Download,
     };
   }
 
   return {
-    title: `Install ${context.appName}`,
-    body: `Use your browser install icon or menu to keep ${context.appName} available from this device.`,
-    button: "Show steps",
+    title: `Add ${context.appName} to this computer`,
+    body: `In Chrome or Edge, use the install icon or browser menu to add ${context.appName}.`,
+    button: "View steps",
     Icon: Download,
   };
 }
@@ -140,10 +140,10 @@ function installSteps(deviceKind: DeviceKind, context: InstallContext) {
   if (deviceKind === "ios") {
     return [
       "Open this page in Safari.",
-      "Confirm the address begins with https://thebeesuite.io and Safari does not say Not Secure.",
+      "Check that the address is thebeesuite.io.",
       "Tap Share.",
       "Choose Add to Home Screen.",
-      `Confirm the ${context.appName} icon.`,
+      `Tap Add to place the ${context.appName} icon on your Home Screen.`,
     ];
   }
 
@@ -297,11 +297,9 @@ export function PwaInstallManager() {
               This connection is not secure. Do not enter a password or add this page to your iPhone Home Screen.
               Open the official secure BEE Suite address below instead.
             </p>
-            <Button
-              className="mt-3 h-8 px-3"
-              nativeButton={false}
-              render={<a href={secureUrl}>Open secure BEE Suite</a>}
-            />
+            <a href={secureUrl} className={buttonVariants({ className: "mt-3 min-h-11 px-3" })}>
+              Open secure BEE Suite
+            </a>
           </div>
         </div>
       </div>
@@ -312,7 +310,7 @@ export function PwaInstallManager() {
 
   const copy = installCopy(deviceKind, Boolean(installPrompt), installContext);
   const steps = showManualSteps ? installSteps(deviceKind, installContext) : [];
-  const primaryButtonLabel = showManualSteps ? "Done" : isPrompting ? "Opening..." : copy.button;
+  const primaryButtonLabel = showManualSteps ? "Done" : isPrompting ? "Adding…" : copy.button;
 
   return (
     <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-2xl rounded-lg border border-white/15 bg-slate-950/95 p-3 text-white shadow-2xl shadow-black/40 backdrop-blur-xl sm:bottom-5 sm:p-4">
@@ -334,10 +332,10 @@ export function PwaInstallManager() {
             </ol>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button className="h-8 px-3" disabled={isPrompting} onClick={handleInstall} type="button">
+            <Button className="min-h-11 px-3" disabled={isPrompting} onClick={handleInstall} type="button">
               {primaryButtonLabel}
             </Button>
-            <Button variant="outline" className="h-8 border-white/15 bg-transparent px-3 text-white hover:bg-white/10" onClick={dismiss} type="button">
+            <Button variant="outline" className="min-h-11 border-white/15 bg-transparent px-3 text-white hover:bg-white/10" onClick={dismiss} type="button">
               Later
             </Button>
           </div>
@@ -345,7 +343,7 @@ export function PwaInstallManager() {
         <button
           type="button"
           aria-label="Dismiss install prompt"
-          className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white"
+          className="grid size-11 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white"
           onClick={dismiss}
         >
           <X className="size-4" />

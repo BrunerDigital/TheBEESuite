@@ -205,7 +205,7 @@ export function NotificationPreferencesPanel({
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle>Notification Preferences</CardTitle>
-            <CardDescription>Email, SMS, and app-alert defaults by role plus user-specific overrides.</CardDescription>
+            <CardDescription>Email, text message, and app-alert defaults by role, with settings for individual users.</CardDescription>
           </div>
           <Badge variant="outline">
             <Bell data-icon="inline-start" />
@@ -230,7 +230,7 @@ export function NotificationPreferencesPanel({
           <Select value={targetMode} onValueChange={(value) => setTargetMode(value === "role" ? "role" : "user")}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="user">{canManageRoleDefaults ? "User override" : "My user settings"}</SelectItem>
+              <SelectItem value="user">{canManageRoleDefaults ? "User settings" : "My user settings"}</SelectItem>
               {canManageRoleDefaults ? <SelectItem value="role">Role default</SelectItem> : null}
             </SelectContent>
           </Select>
@@ -273,8 +273,8 @@ export function NotificationPreferencesPanel({
           <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("smsEnabled", false)}>SMS off</Button>
           <span>
             {targetMode === "role"
-              ? "Role defaults apply tenant-wide unless a user has an override."
-              : "User overrides win over role defaults for the selected person."} App alerts always appear in the app; enabled devices also receive Web Push.
+              ? "Role defaults apply across this account unless a user has saved different settings."
+              : "These settings take priority over the role defaults for the selected person."} Alerts always appear in The BEE Suite. Devices with alerts turned on can also show them in the device notification center.
           </span>
         </div>
         <Table>
@@ -294,7 +294,7 @@ export function NotificationPreferencesPanel({
                 <TableCell>
                   <Badge variant={preference.source === "user" ? "default" : "outline"}>
                     {preference.source === "user"
-                      ? "User override"
+                      ? "User settings"
                       : preference.source === "role"
                         ? "Role default"
                         : "System default"}

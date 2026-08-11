@@ -81,7 +81,7 @@ export const dashboardWidgetCatalog: readonly DashboardWidgetDefinition[] = [
   {
     id: "aiBrief",
     title: "AI daily brief",
-    description: "Human-reviewed operating summary and suggested focus areas.",
+    description: "Operating summary and suggested focus areas for staff review.",
     category: "Overview",
     roles: [...staffAdminRoles, ...billingRoles, ...teacherRoles],
   },

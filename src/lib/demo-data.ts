@@ -645,7 +645,7 @@ export const modules: ModuleDefinition[] = [
       "Director and executive storefront for card readers, docks, hubs, cases, and mounts purchased through The BEE Suite platform account.",
     owner: "Center director, assistant director, executive team",
     metrics: ["20% Bee Suite markup", "Platform checkout", "Shipping collected", "Processor receipt"],
-    features: ["Role-gated hardware catalog", "Quantity-based cart", "Bee Suite-branded hosted checkout", "Audit trail for created purchases"],
+    features: ["Hardware catalog for authorized users", "Quantity-based cart", "Bee Suite-branded hosted checkout", "Audit trail for created purchases"],
     records: ["Terminal catalog", "Checkout session", "Purchaser metadata", "School association"],
     sensitive: true,
   },
@@ -722,7 +722,7 @@ export const modules: ModuleDefinition[] = [
   {
     slug: "ai-command",
     title: "AI Command Center",
-    eyebrow: "Human-reviewed assistance",
+    eyebrow: "AI assistance",
     description:
       "AI summaries, contact briefs, lead scoring, next steps, reply suggestions, announcement/campaign copy, workflow recommendations, task prioritization, incident wording, review responses, and compliance reminders.",
     owner: "All roles with scoped permissions",

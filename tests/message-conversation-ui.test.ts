@@ -17,7 +17,8 @@ test("director messaging uses a searchable, accessible conversation inbox", () =
   assert.match(inbox, /Messages with \$\{selectedThread\.familyName\}/);
   assert.match(messagesPage, /<MessageConversationInbox/);
   assert.match(inbox, /styles\.staffShell/);
-  assert.match(inbox, /Family thread · school scoped/);
+  assert.match(inbox, /Family conversation/);
+  assert.match(inbox, /Staff conversation/);
   assert.match(conversationStyles, /\.bubbleSchool/);
   assert.match(conversationStyles, /backdrop-filter: blur\(22px\)/);
 });
@@ -44,8 +45,8 @@ test("parent portal presents messaging as one responsive school conversation", (
   assert.match(parentPortal, /styles\.parentWorkspace/);
   assert.match(parentPortal, /Messages with \$\{centerName \?\? "your school"\}/);
   assert.match(parentPortal, /data-message-origin=\{isFromFamily \? "family" : "school"\}/);
-  assert.match(parentPortal, /messages\.slice\(0, 20\)\.reverse\(\)/);
-  assert.match(parentPortal, /Messages stay attached to this family and school conversation/);
+  assert.match(parentPortal, /messages\s*\.slice\(0, 20\)\s*\.reverse\(\)/);
+  assert.match(parentPortal, /Only your family and school can see this conversation\./);
   assert.match(parentPortal, /router\.refresh\(\)/);
   assert.doesNotMatch(parentPortal, /id="recent-messages"/);
 });

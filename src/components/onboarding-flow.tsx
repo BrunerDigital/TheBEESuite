@@ -388,7 +388,7 @@ export function OnboardingFlow() {
                           <SelectValue placeholder="Choose plan model" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Multi-location pilot - all features included">Multi-location pilot - all features included</SelectItem>
+                          <SelectItem value="Multi-location pilot - all features included">Multi-location plan - all features included</SelectItem>
                           <SelectItem value="Per-location monthly platform fee">Per-location monthly platform fee</SelectItem>
                           <SelectItem value="Enterprise franchise agreement">Enterprise franchise agreement</SelectItem>
                           <SelectItem value="Usage-based plus platform fee">Usage-based plus platform fee</SelectItem>
@@ -405,7 +405,7 @@ export function OnboardingFlow() {
                           <SelectItem value="CRM and enrollment only">CRM and enrollment only</SelectItem>
                           <SelectItem value="CRM + operations + parent engagement">CRM + operations + parent engagement</SelectItem>
                           <SelectItem value="Full platform with billing">Full platform with billing</SelectItem>
-                          <SelectItem value="Enterprise pilot configuration">Enterprise pilot configuration</SelectItem>
+                          <SelectItem value="Enterprise pilot configuration">Enterprise launch configuration</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

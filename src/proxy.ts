@@ -2,6 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { canonicalPublicRequestRedirectUrl } from "@/lib/public-app-url";
 import { updateSession } from "@/utils/supabase/middleware";
 
+const PUBLIC_SESSIONLESS_PATHS = new Set([
+  "/app",
+  "/eula",
+  "/privacy",
+  "/resources",
+  "/support",
+  "/terms",
+]);
+
 export async function proxy(request: NextRequest) {
   const canonicalRedirectUrl = canonicalPublicRequestRedirectUrl(request.url);
   if (canonicalRedirectUrl) {
@@ -15,11 +24,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (PUBLIC_SESSIONLESS_PATHS.has(request.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
   return updateSession(request);
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest)$).*)",
   ],
 };

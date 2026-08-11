@@ -51,16 +51,16 @@ function pinDigits(value: string) {
 
 const setupSteps = [
   {
-    title: "Use your school login",
-    body: "Sign in with your guardian email and the BusyBees first-login password from your school invitation. You can change it anytime in Parent Portal settings.",
+    title: "Review Your Family",
+    body: "Confirm that the school, family, and children shown on this page are correct before saving.",
   },
   {
-    title: "Confirm this profile",
-    body: "Check your name, phone, relationship, and the email used for your login.",
+    title: "Confirm Your Information",
+    body: "Check the family, school, name, phone number, relationship, and login email shown here.",
   },
   {
-    title: "Set your PIN",
-    body: "Your first kiosk PIN is the last 4 digits of your phone number. You can replace it here or later in the portal.",
+    title: "Choose Your Check-In PIN",
+    body: "Choose 4 digits that only authorized adults know. Do not share the PIN outside your family’s approved pickup list.",
   },
 ];
 
@@ -71,27 +71,27 @@ const homeScreenSteps = [
 
 const portalPreviews = [
   {
-    title: "Daily report",
-    meta: "Today",
-    body: "Meals, naps, activity notes, photos, and classroom updates appear in one family timeline.",
+    title: "Updates",
+    meta: "Meals, naps & care",
+    body: "See meals, naps, activities, notes, photos, and classroom updates for each child.",
     Icon: Camera,
   },
   {
     title: "Messages",
-    meta: "Family inbox",
-    body: "Reply to school messages, review requests, and follow up on documents from the same portal.",
+    meta: "School conversation",
+    body: "Read and reply to school messages without searching through separate sections.",
     Icon: MessageSquare,
   },
   {
     title: "Check-in PIN",
-    meta: "Lobby ready",
-    body: "Use your 4 digit PIN for authorized sign-in and sign-out at your school's kiosk.",
+    meta: "At your school",
+    body: "Use your 4-digit PIN when an authorized adult checks a child in or out at the school kiosk.",
     Icon: KeyRound,
   },
   {
-    title: "Documents & billing",
-    meta: "When enabled",
-    body: "Review forms, sign requests, invoices, balances, and secure payment options from your account.",
+    title: "Documents & Billing",
+    meta: "When available",
+    body: "Review forms, signature requests, invoices, balances, and available payment options.",
     Icon: FileText,
   },
 ];
@@ -146,7 +146,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
         const data = (await response.json().catch(() => null)) as SetupResponse | null;
 
         if (!response.ok) {
-          setError(data?.error ?? "Parent portal setup could not be saved.");
+          setError(data?.error ?? "Parent portal setup could not be saved. Review the form and try again.");
           return;
         }
 
@@ -167,7 +167,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Parent Portal Setup</CardTitle>
-            <CardDescription>No guardian profile is linked to this login yet. Please contact the school office.</CardDescription>
+            <CardDescription>No parent or guardian profile is connected to this account. Contact your school office and ask them to review your Parent Portal access.</CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -179,12 +179,12 @@ export function ParentPortalSetupForm({ guardians }: Props) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Badge variant="secondary" className="mb-3">
-            Parent portal invite
+            School invitation
           </Badge>
           <h1 className="text-3xl font-semibold tracking-normal">Finish Parent Portal Setup</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Confirm the parent login connected to your school invite, update your contact details, and create the PIN you will use
-            for child sign-in and sign-out.
+            Review the family and school connected to this account, confirm your contact information, and choose the 4-digit PIN
+            you will use at your school’s check-in kiosk.
           </p>
         </div>
       </div>
@@ -202,12 +202,14 @@ export function ParentPortalSetupForm({ guardians }: Props) {
       </section>
 
       {guardians.length > 1 ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Choose the parent or guardian profile to review">
           {guardians.map((guardian) => (
             <Button
               key={guardian.id}
               type="button"
+              className="min-h-11"
               variant={guardian.id === selectedGuardian.id ? "default" : "outline"}
+              aria-pressed={guardian.id === selectedGuardian.id}
               onClick={() => selectGuardian(guardian)}
             >
               {guardian.fullName}
@@ -219,17 +221,17 @@ export function ParentPortalSetupForm({ guardians }: Props) {
       <div className="grid gap-5 xl:grid-cols-[0.92fr_1.08fr]">
         <div className="space-y-5">
           <section className="space-y-3 rounded-lg border bg-card p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
               <ShieldCheck className="size-4 text-primary" />
-              Family access
-            </div>
+              Your Family & School
+            </h2>
             <div>
               <div className="text-sm text-muted-foreground">Family</div>
               <div className="font-medium">{selectedGuardian.familyName}</div>
             </div>
             <div>
               <div className="text-sm text-muted-foreground">School</div>
-              <div className="font-medium">{selectedGuardian.centerName ?? "School record pending"}</div>
+              <div className="font-medium">{selectedGuardian.centerName ?? "School not shown — contact your school office"}</div>
             </div>
             <div>
               <div className="text-sm text-muted-foreground">Children</div>
@@ -241,20 +243,20 @@ export function ParentPortalSetupForm({ guardians }: Props) {
                     </Badge>
                   ))
                 ) : (
-                  <span className="text-sm text-muted-foreground">Child records are still being prepared.</span>
+                  <span className="text-sm text-muted-foreground">No children are connected to this account. Contact your school office before continuing.</span>
                 )}
               </div>
             </div>
           </section>
 
           <section className="rounded-lg border bg-card p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
               <Smartphone className="size-4 text-primary" />
-              Open from your phone
-            </div>
+              Add to Your Home Screen
+            </h2>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              Add the web portal to your home screen now. The iOS App Store app is expected within about a week; until then,
-              the home-screen web app uses this same parent login.
+              Add the Parent Portal to your Home Screen for one-tap access. It uses the same sign-in and family information as
+              the browser.
             </p>
             <ol className="mt-3 space-y-2 text-xs leading-5 text-muted-foreground">
               {homeScreenSteps.map((step, index) => (
@@ -267,10 +269,10 @@ export function ParentPortalSetupForm({ guardians }: Props) {
           </section>
 
           <section className="rounded-lg border bg-card p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
               <Home className="size-4 text-primary" />
-              What you will use here
-            </div>
+              What’s in the Parent Portal
+            </h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {portalPreviews.map(({ title, meta, body, Icon }) => (
                 <div key={title} className="rounded-lg border bg-background/70 p-3">
@@ -296,14 +298,14 @@ export function ParentPortalSetupForm({ guardians }: Props) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UserRound className="text-primary" />
-              Confirm your details
+              Confirm Your Information
             </CardTitle>
-            <CardDescription>These details are used for your family portal and lobby check-in/out access.</CardDescription>
+            <CardDescription>Review the contact information your school has connected to this account.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="space-y-4" onSubmit={submit}>
+            <form className="space-y-4" onSubmit={submit} aria-busy={isPending}>
               {status ? (
-                <Alert>
+                <Alert role="status">
                   <CheckCircle2 className="size-4" />
                   <AlertTitle>Saved</AlertTitle>
                   <AlertDescription>{status}</AlertDescription>
@@ -322,7 +324,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
                   <ShieldCheck className="size-4 text-primary" />
                   Parent login email
                 </div>
-                <div className="mt-2 break-words text-sm font-medium">{selectedGuardian.email ?? "Email pending"}</div>
+                <div className="mt-2 break-words text-sm font-medium">{selectedGuardian.email ?? "No login email shown — contact your school office"}</div>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   Use this email any time you sign in. If it is not correct, ask your school office to update the guardian email
                   before continuing.
@@ -332,42 +334,48 @@ export function ParentPortalSetupForm({ guardians }: Props) {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="parent-setup-name">Full name</Label>
-                  <Input id="parent-setup-name" className="h-11" value={fullName} onChange={(event) => setFullName(event.target.value)} required />
+                  <Input id="parent-setup-name" name="fullName" className="h-11" value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="parent-setup-phone">Mobile phone</Label>
-                  <Input id="parent-setup-phone" className="h-11" value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" autoComplete="tel" />
+                  <Input id="parent-setup-phone" name="phone" className="h-11" value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" inputMode="tel" autoComplete="tel" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="parent-setup-relation">Relationship</Label>
-                  <Input id="parent-setup-relation" className="h-11" value={relation} onChange={(event) => setRelation(event.target.value)} required />
+                  <Input id="parent-setup-relation" name="relation" className="h-11" value={relation} onChange={(event) => setRelation(event.target.value)} autoComplete="off" required />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="parent-setup-communication">Preferred communication</Label>
+                  <Label htmlFor="parent-setup-communication">Preferred contact method</Label>
                   <Input
                     id="parent-setup-communication"
+                    name="preferredCommunication"
                     className="h-11"
                     value={preferredCommunication}
                     onChange={(event) => setPreferredCommunication(event.target.value)}
-                    placeholder="email, sms, or portal"
+                    placeholder="Email, text message, or portal"
+                    autoComplete="off"
+                    aria-describedby="parent-setup-communication-help"
                   />
+                  <p id="parent-setup-communication-help" className="text-xs leading-5 text-muted-foreground">
+                    Your school can use this preference for routine communication. Choose detailed alert settings in Notifications after setup.
+                  </p>
                 </div>
               </div>
 
               <div className="rounded-lg border bg-background/50 p-4">
                 <Label htmlFor="parent-setup-pin" className="flex items-center gap-2">
                   <KeyRound className="size-4 text-primary" />
-                  4 digit sign-in/out PIN
+                  4-Digit Check-In PIN
                 </Label>
                 <Input
                   id="parent-setup-pin"
+                  name="checkInPin"
                   className="mt-2 h-11 max-w-xs"
                   value={pin}
                   onChange={(event) => setPin(pinDigits(event.target.value))}
                   inputMode="numeric"
                   type="password"
                   autoComplete="one-time-code"
-                  placeholder={selectedGuardian.hasPin ? "Optional reset PIN" : "Required"}
                   maxLength={4}
                   minLength={pin || !selectedGuardian.hasPin ? 4 : undefined}
                   pattern="[0-9]{4}"
@@ -376,13 +384,13 @@ export function ParentPortalSetupForm({ guardians }: Props) {
                 />
                 <p id="parent-setup-pin-help" className="mt-2 text-xs leading-5 text-muted-foreground">
                   {selectedGuardian.hasPin
-                    ? "A kiosk PIN is already on file. Enter a new one only if you want to reset it."
-                    : "This PIN is required before you can sign a child in or out from the lobby kiosk."}
+                    ? "A check-in PIN is already on file. Leave this blank to keep it, or enter a new 4-digit PIN that only authorized adults know."
+                    : "Enter a 4-digit PIN that only authorized adults know. You will use it when checking a child in or out at your school’s kiosk."}
                 </p>
               </div>
 
               <Button className="h-11" type="submit" disabled={isPending}>
-                {isPending ? "Saving..." : "Finish setup and open portal"}
+                {isPending ? "Saving…" : "Finish Setup & Open Parent Portal"}
                 <ArrowRight data-icon="inline-end" />
               </Button>
             </form>

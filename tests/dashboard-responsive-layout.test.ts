@@ -14,8 +14,14 @@ test("dashboard shell adapts navigation and toolbar density by device width", ()
   assert.match(shell, /2xl:block/);
   assert.match(shell, /lg:pl-20 2xl:pl-72/);
   assert.match(shell, /hidden min-w-0 flex-1 items-center lg:flex/);
+  assert.match(shell, /aria-label="Search workspace"[\s\S]*name="workspace-search"/);
+  assert.match(shell, /aria-label="Search workspace"[\s\S]*name="mobile-workspace-search"/);
+  assert.match(shell, /aria-current=\{active \? "page" : undefined\}[\s\S]*aria-description=\{description\}/);
+  assert.match(shell, /isTeacherUser\(currentUser\)[\s\S]*href="\/teacher-portal#teacher-profile-setup"[\s\S]*Profile settings/);
+  assert.match(shell, /accessibleModuleRouteSlug\(currentUser, slug\)/);
+  assert.ok((shell.match(/shellModuleHref\(currentUser, slug\)/g) ?? []).length >= 4);
   assert.match(shell, /touch-manipulation lg:hidden/);
-  assert.match(shell, /hidden gap-1 rounded-lg px-3 py-1 2xl:inline-flex/);
+  assert.doesNotMatch(shell, /AI suggestions require review/);
   assert.match(shell, /hidden rounded-lg border bg-card\/70 px-3 py-1\.5 text-right 2xl:block/);
   assert.match(shell, /flex min-h-12 touch-manipulation flex-col items-center/);
   assert.match(shell, /env\(safe-area-inset-bottom\)/);
@@ -25,6 +31,32 @@ test("dashboard shell adapts navigation and toolbar density by device width", ()
   assert.match(shell, /More for your role/);
   assert.match(shell, /teacher-quick-log/);
   assert.match(refresh, /text-\[0\.68rem\] 2xl:inline-flex/);
+});
+
+test("shared workflow controls expose headings, labels, and live feedback", () => {
+  const workflow = source("src/components/automation-workflow-builder.tsx");
+
+  assert.match(workflow, /<CardTitle><h1>Automation Workflow Builder<\/h1><\/CardTitle>/);
+  assert.match(workflow, /role="status" aria-live="polite"/);
+  assert.match(workflow, /role="alert"/);
+  for (const id of [
+    "automation-saved-workflow",
+    "automation-status",
+    "automation-name",
+    "automation-trigger",
+    "automation-delay",
+    "automation-audience",
+    "automation-condition",
+    "automation-requires-review",
+    "automation-action-type",
+    "automation-channel",
+    "automation-template",
+    "automation-subject",
+    "automation-body",
+  ]) {
+    assert.match(workflow, new RegExp(`htmlFor="${id}"`));
+    assert.match(workflow, new RegExp(`id="${id}"`));
+  }
 });
 
 test("role bottom navigation only renders overflow navigation when destinations remain", () => {

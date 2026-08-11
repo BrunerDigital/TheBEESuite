@@ -70,7 +70,7 @@ const inviteStatusLabel: Record<InviteStatus, string> = {
   not_invited: "Not invited",
   linked: "Linked",
   invited: "Invited",
-  accepted: "Provider accepted",
+  accepted: "Accepted for delivery",
   delivered: "Delivered",
   expired: "Expired",
   failed: "Failed",
@@ -111,13 +111,13 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
         return;
       }
       if (messageType === "guide") {
-        setStatusMessage("The provider accepted the parent feature guide, FAQ, app-install, and payment-setup email.");
+        setStatusMessage("The parent guide email was accepted for delivery.");
         return;
       }
       setStatusMessage(
         json?.auth?.credentialCreated
-          ? "The provider accepted the welcome email. It includes the login email and first-login password, ProCare transition and tuition guidance when applicable, family check, kiosk PIN, browser-install steps, and secure payment setup."
-          : "The provider accepted the welcome reminder. The parent's current password was preserved; the email includes ProCare transition and tuition guidance when applicable, a forgot-password option, browser-install steps, and secure payment setup.",
+          ? "The welcome email was accepted for delivery. It includes sign-in details, family verification, the Family PIN, Add to Home Screen steps, and payment guidance when available."
+          : "The welcome reminder was accepted for delivery. The parent's current password was not changed; the email includes Forgot password, Add to Home Screen steps, and payment guidance when available.",
       );
       setInviteStatus("accepted");
     });

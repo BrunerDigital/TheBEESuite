@@ -78,11 +78,11 @@ async function removeSubscription(subscription: PushSubscription) {
 export function WebPushControl() {
   const [state, setState] = useState<PushState>("loading");
   const [configuration, setConfiguration] = useState<PushConfiguration | null>(null);
-  const [detail, setDetail] = useState("Checking this device...");
+  const [detail, setDetail] = useState("Checking this device…");
 
   const inspect = useCallback(async () => {
     setState("loading");
-    setDetail("Checking this device...");
+    setDetail("Checking this device…");
 
     try {
       const response = await fetch("/api/notifications/push-subscription", { cache: "no-store" });
@@ -92,17 +92,17 @@ export function WebPushControl() {
 
       if (isIOS() && !isStandalone()) {
         setState("needs_install");
-        setDetail("Add The BEE Suite to your Home Screen, open it there, then enable alerts.");
+        setDetail("Add The BEE Suite to your Home Screen, open it from the new icon, then return here to enable alerts.");
         return;
       }
       if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
         setState("unsupported");
-        setDetail("This browser does not support app notifications.");
+        setDetail("This browser cannot show device alerts. You can still see updates inside the Parent Portal.");
         return;
       }
       if (!json.configured || !json.publicKey) {
         setState("unconfigured");
-        setDetail("Push delivery is awaiting secure server configuration.");
+        setDetail("Device alerts aren’t available yet.");
         return;
       }
 
@@ -122,7 +122,7 @@ export function WebPushControl() {
       }
       if (Notification.permission === "denied") {
         setState("blocked");
-        setDetail("Notifications are blocked in this device's settings.");
+        setDetail("Open this device’s notification settings and allow alerts for The BEE Suite, then return here.");
         return;
       }
 
@@ -142,7 +142,7 @@ export function WebPushControl() {
   async function enable() {
     if (!configuration?.publicKey) return void inspect();
     setState("working");
-    setDetail("Opening notification permission...");
+    setDetail("Opening notification permission…");
 
     try {
       const permission = Notification.permission === "granted"
@@ -151,7 +151,7 @@ export function WebPushControl() {
       if (permission !== "granted") {
         setState(permission === "denied" ? "blocked" : "disabled");
         setDetail(permission === "denied"
-          ? "Notifications are blocked in this device's settings."
+          ? "Open this device’s notification settings and allow alerts for The BEE Suite, then return here."
           : "Notification permission was not enabled.");
         return;
       }
@@ -173,7 +173,7 @@ export function WebPushControl() {
 
   async function disable() {
     setState("working");
-    setDetail("Turning off alerts on this device...");
+    setDetail("Turning off alerts on this device…");
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
@@ -190,39 +190,44 @@ export function WebPushControl() {
   const working = state === "loading" || state === "working";
   const actionable = ["enabled", "disabled", "error"].includes(state);
   const label = state === "enabled"
-    ? "Turn off device alerts"
+    ? "Turn Off Device Alerts"
     : state === "error"
-      ? "Try notification setup again"
+      ? "Check Alerts Again"
       : state === "disabled"
-        ? "Enable device alerts"
+        ? "Enable Device Alerts"
         : state === "needs_install"
-          ? "Add to Home Screen for alerts"
+          ? "Add to Home Screen First"
           : state === "blocked"
-            ? "Blocked in device settings"
+            ? "Allow Alerts in Device Settings"
             : state === "unconfigured"
-              ? "Push setup pending"
+              ? "Alerts Unavailable"
               : state === "unsupported"
-                ? "Alerts unavailable"
-                : "Checking alerts";
+                ? "Alerts Unavailable"
+                : "Checking Alerts…";
 
   return (
-    <div className="mt-3 rounded-lg border bg-background/60 p-3" aria-live="polite">
+    <div className="mt-3 rounded-lg border bg-background/60 p-3" aria-live="polite" aria-busy={working}>
       <div className="flex items-start gap-2.5">
         <BellRing className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <div className="text-xs font-semibold">Device alerts</div>
           <p className="mt-1 text-xs leading-4 text-muted-foreground">{detail}</p>
-          <Button
-            className="mt-2 h-8 w-full"
-            size="sm"
-            variant={state === "enabled" ? "outline" : "default"}
-            disabled={working || !actionable}
-            onClick={state === "enabled" ? disable : state === "error" ? inspect : enable}
-            type="button"
-          >
-            {working ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : null}
-            {label}
-          </Button>
+          {actionable ? (
+            <Button
+              className="mt-2 min-h-11 w-full"
+              size="sm"
+              variant={state === "enabled" ? "outline" : "default"}
+              onClick={state === "enabled" ? disable : state === "error" ? inspect : enable}
+              type="button"
+            >
+              {label}
+            </Button>
+          ) : (
+            <div className="mt-2 flex min-h-11 items-center justify-center gap-2 rounded-lg border bg-muted/40 px-3 text-center text-xs font-medium text-muted-foreground" role="status">
+              {working ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+              {label}
+            </div>
+          )}
         </div>
       </div>
     </div>

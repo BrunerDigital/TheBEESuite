@@ -32,7 +32,7 @@ test("login and password recovery preserve controlled input when services are un
   assert.match(reset, /Your entries are still here/i);
   assert.match(reset, /linkStatus === "ready"/);
   assert.match(reset, /Reset link unavailable/);
-  assert.match(reset, /Request one fresh reset link/);
+  assert.match(reset, /Request a New Reset Link/);
   assert.match(reset, /addEventListener\("hashchange", resolveCurrentRecoveryState\)/);
   assert.match(reset, /removeEventListener\("hashchange", resolveCurrentRecoveryState\)/);
   assert.match(reset, /passwordRecoveryUrlWithoutSecrets\(window\.location\.href\)/);
@@ -45,6 +45,27 @@ test("login and password recovery preserve controlled input when services are un
   assert.match(forgotRoute, /passwordResetIpVolumeKey\(ip\)/);
   assert.doesNotMatch(forgotRoute, /forgot-password:\$\{[^}]*email/);
   assert.doesNotMatch(forgotRoute, /metadata:[^\n]*(email|recipient)/i);
+});
+
+test("parent sign-in and setup use invitation-specific credentials and current install guidance", () => {
+  const login = readFileSync("src/components/login-form.tsx", "utf8");
+  const parentSetup = readFileSync("src/components/parent-portal-setup-form.tsx", "utf8");
+  const forgot = readFileSync("src/components/forgot-password-form.tsx", "utf8");
+  const reset = readFileSync("src/components/reset-password-form.tsx", "utf8");
+  const webPush = readFileSync("src/components/web-push-control.tsx", "utf8");
+  const parentTrustSurfaces = [login, parentSetup, forgot, reset, webPush].join("\n");
+
+  assert.match(login, /temporary password from your school invitation/i);
+  assert.match(parentSetup, /Review Your Family/i);
+  assert.doesNotMatch(parentSetup, /Use Your School Invitation/i);
+  assert.match(login, /Forgot password/i);
+  assert.doesNotMatch([login, parentSetup].join("\n"), /BusyBees|default (?:first[- ]login )?password/i);
+  assert.match(parentSetup, /Add the Parent Portal to your Home Screen/i);
+  assert.doesNotMatch(parentSetup, /App Store app is expected|within about a week|coming soon/i);
+  assert.match(webPush, /Device alerts aren’t available yet/i);
+  assert.match(webPush, /Alerts Unavailable/);
+  assert.doesNotMatch(webPush, /Push setup pending|secure server configuration/i);
+  assert.doesNotMatch(parentTrustSurfaces, /PARENT_GUARDIAN|live pilot|pilot safeguards|role-gated|human-reviewed|AI-generated/i);
 });
 
 test("payment return states cover expiry, cancellation, failure, retry, and confirmation", () => {

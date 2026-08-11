@@ -287,7 +287,7 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                     <TableRow key={review.id}>
                       <TableCell>
                         <div className="font-medium">{review.source}</div>
-                        <div className="text-xs text-muted-foreground">{review.center?.name ?? "Tenant-wide"} · {formatDate(review.createdAt, timeZone)}</div>
+                        <div className="text-xs text-muted-foreground">{review.center?.name ?? "All locations"} · {formatDate(review.createdAt, timeZone)}</div>
                       </TableCell>
                       <TableCell>{review.rating}/5</TableCell>
                       <TableCell className="max-w-sm whitespace-normal text-muted-foreground">{review.body ?? ""}</TableCell>
@@ -421,7 +421,7 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                     <Select value={surveyCenterId} onValueChange={(value) => value && setSurveyCenterId(value)}>
                       <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Tenant-wide</SelectItem>
+                        <SelectItem value="all">All locations</SelectItem>
                         {data.centers.map((center) => (
                           <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>
                         ))}
@@ -546,7 +546,7 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                           <div className="font-medium">{survey.name}</div>
                           <div className="text-xs text-muted-foreground">POST /api/reputation/surveys/{survey.id}/responses</div>
                         </TableCell>
-                        <TableCell>{survey.center?.name ?? "Tenant-wide"}</TableCell>
+                        <TableCell>{survey.center?.name ?? "All locations"}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Star className="size-4 text-primary" />

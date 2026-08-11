@@ -412,7 +412,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
         </TabsContent>
 
         <TabsContent value="procare" className="grid gap-5">
-          <Alert><ShieldCheck className="size-4" /><AlertTitle>Guarded import path preserved</AlertTitle><AlertDescription>Submit an exact location-scoped source package for dry-run review first. Import commit remains fingerprint-bound, human-reviewed, chunked, backed up, and separately reconciled.</AlertDescription></Alert>
+          <Alert><ShieldCheck className="size-4" /><AlertTitle>Review before importing</AlertTitle><AlertDescription>Upload the source file for one location and review the preview first. Confirm it before importing; the system keeps a backup, imports in smaller groups, and provides reconciliation results afterward.</AlertDescription></Alert>
           <ProcareImportPanel centers={centers} allowBulkImport={allowBulkImport} />
         </TabsContent>
       </Tabs>

@@ -353,7 +353,7 @@ function ExecutiveLensDashboard({
           id={`dashboard-${lens}-all-location-records`}
           className="glass-panel"
           title="All-location records"
-          description="Open tenant-wide operational records for every school available to executive users."
+          description="Open operational records for every school available to this executive account."
           contentClassName="flex flex-wrap gap-2"
         >
           <Button variant="outline" nativeButton={false} render={<Link href="/billing-invoices" />}>Accounts and ledgers</Button>
@@ -1135,7 +1135,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     && (isTeacherDashboard || visibleLenses.includes("director"));
   const visibleConfiguredWidgets = hasWidgetConfiguration ? configuredWidgets.filter((widget) => widget.visible) : [];
   const widgetSummaries: Partial<Record<DashboardWidgetId, { value: string; detail: string; href: string }>> = {
-    aiBrief: { value: aiHighlights.length ? aiHighlights.join(" · ") : "Ready", detail: "Human review required", href: aiBriefHref },
+    aiBrief: { value: aiHighlights.length ? aiHighlights.join(" · ") : "Ready", detail: "Review before acting", href: aiBriefHref },
     executiveRollup: { value: `${dashboardCenters.length}`, detail: "Visible centers", href: "/multi-location-dashboard" },
     enrollmentPipeline: { value: kpiValue("New leads"), detail: kpiTrend("New leads", "Live enrollment pipeline"), href: "/crm-leads" },
     toursAndTasks: { value: kpiValue("Tours today"), detail: kpiTrend("Tours today", "Open tour and CRM tasks"), href: "/tours" },
@@ -1518,7 +1518,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     AI daily center summary
                   </span>
                 )}
-                description="Human review required"
+                description="Review before acting"
               >
               <p className="text-sm leading-6 text-muted-foreground">
                 {aiSummary}

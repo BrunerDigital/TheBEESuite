@@ -40,7 +40,7 @@ const flows = [
       ["/tours", "Open Tours", "Use tours for scheduled visits, tour preparation, reminders, and post-tour follow-up."],
       ["/waitlist", "Open Waitlist", "Use the waitlist to manage start-date demand and classroom capacity planning."],
       ["/campaigns", "Review Campaigns", "Campaigns support enrollment follow-up and parent newsletters after the audience is verified."],
-      ["/automations", "Review Automations", "Automations should stay human-reviewed for sensitive enrollment and parent workflows."],
+      ["/automations", "Review Automations", "School staff must approve sensitive enrollment and family communication steps."],
     ],
   },
   {

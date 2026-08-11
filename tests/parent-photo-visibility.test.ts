@@ -27,7 +27,7 @@ test("the parent portal scopes shared photos to linked children and signs privat
 test("the parent workspace renders signed classroom photos with a safe unavailable state", () => {
   const parentWorkspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
 
-  assert.match(parentWorkspace, /Teacher-shared classroom photos for this family/);
+  assert.match(parentWorkspace, /A classroom moment shared by your school\./);
   assert.match(parentWorkspace, /const imageSrc = renderableImageSrc\(item\.url\)/);
   assert.match(parentWorkspace, /<Image[\s\S]*?src=\{imageSrc\}[\s\S]*?unoptimized/);
   assert.match(parentWorkspace, /Image unavailable/);

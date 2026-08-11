@@ -230,7 +230,7 @@ function getLeadOwner(lead?: CrmLead | null) {
 }
 
 function makeMrBeeDraft(lead: CrmLead | undefined, brandName: string) {
-  if (!lead) return "Choose a lead and Mr. Bee will draft a warm, human-reviewed follow-up.";
+  if (!lead) return "Choose a lead, then ask Mr. Bee to draft a follow-up for your review.";
 
   return `Hi ${lead.familyName}, this is ${brandName} following up on your ${lead.programInterest ?? "childcare"} inquiry for ${lead.center.name}. We would be happy to answer questions, confirm availability, or help schedule your next step.`;
 }

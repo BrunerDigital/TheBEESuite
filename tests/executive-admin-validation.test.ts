@@ -59,7 +59,7 @@ test("executive user validation protects scope and credential choices", () => {
     email: "jane@example.com",
     role: "CENTER_DIRECTOR",
     accessScopeType: "TENANT",
-  }).includes("Tenant-wide access is limited to executive, regional, billing, or auditor roles."));
+  }).includes("Access to every location is limited to executive, regional, billing, or auditor roles."));
 
   assert.ok(validateExecutiveUserForm({
     name: "Alex Admin",

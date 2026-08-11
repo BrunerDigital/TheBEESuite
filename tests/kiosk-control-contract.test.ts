@@ -20,9 +20,16 @@ test("family PIN and QR controls have explicit working and recovery states", () 
 });
 
 test("privacy and family actions expose no idle no-op controls", () => {
+  assert.match(kioskSource, /const idleResetSeconds = 45/);
+  assert.match(kioskSource, /if \(remaining <= 0\) reset\(\)/);
   assert.match(kioskSource, /hasPrivateState \? "flex" : "hidden xl:flex"/);
   assert.match(kioskSource, /\{hasPrivateState \? \([\s\S]*Start Over[\s\S]*\) : null\}/);
   assert.match(kioskSource, /const hasPrivateState = Boolean\(/);
+  assert.match(kioskSource, /window\.addEventListener\("pagehide", clearPrivateState\)/);
+  assert.match(kioskSource, /window\.addEventListener\("pageshow", clearRestoredPrivateState\)/);
+  assert.match(kioskSource, /clearRestoredPrivateState\(event: PageTransitionEvent\)[\s\S]*if \(event\.persisted\) reset\(\)/);
+  assert.match(kioskSource, /window\.removeEventListener\("pagehide", clearPrivateState\)/);
+  assert.match(kioskSource, /window\.removeEventListener\("pageshow", clearRestoredPrivateState\)/);
   assert.match(kioskSource, /name="selectedChildren"/);
   assert.match(kioskSource, /const selected = event\.currentTarget\.checked/);
   assert.match(kioskSource, /disabled=\{isPending \|\| !canCheckInSelected \|\| !signatureName\.trim\(\)\}/);

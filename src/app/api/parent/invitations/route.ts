@@ -536,9 +536,13 @@ async function POSTHandler(request: NextRequest) {
       emailCopy,
       manualCopy,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Parent portal setup could not be prepared." },
+      {
+        ok: false,
+        error:
+          "We couldn't confirm whether the invitation finished. Refresh this family before trying again. If the status is still unclear, contact support.",
+      },
       { status: 502 },
     );
   }

@@ -143,9 +143,12 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       });
       nextStorageKey = upload.storageKey;
       signatureEvidence = { signerName: signatureGuard.signerName, signedAt, evidenceHash };
-    } catch (error) {
+    } catch {
       return NextResponse.json(
-        { ok: false, error: error instanceof Error ? error.message : "Signature certificate could not be stored securely." },
+        {
+          ok: false,
+          error: "We couldn't save the signed document. It has not been submitted. Try again.",
+        },
         { status: 502 },
       );
     }
@@ -164,9 +167,12 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
         documentId: document.id,
       });
       nextStorageKey = upload.storageKey;
-    } catch (error) {
+    } catch {
       return NextResponse.json(
-        { ok: false, error: error instanceof Error ? error.message : "Document could not be uploaded to secure storage." },
+        {
+          ok: false,
+          error: "We couldn't upload the document. It has not been submitted. Try again.",
+        },
         { status: 502 },
       );
     }

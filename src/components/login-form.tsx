@@ -86,7 +86,7 @@ const loginCopy: Record<LoginPortal, {
   executives: {
     heroTitle: "Open your executive workspace.",
     heroBody: "Sign in to corporate office reporting, multi-location visibility, FTE review, account setup, billing oversight, integrations, and executive controls.",
-    heroFooter: "Executive tools stay separated from school-level landing flows while preserving tenant-wide access.",
+    heroFooter: "Executive sign-in is separate from school sign-in and only shows locations assigned to your account.",
     heroItems: ["Multi-location", "FTE", "Controls"],
     cardTitle: "Log in as an executive",
     cardDescription: "Use your corporate office or platform account.",

@@ -155,15 +155,15 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Card className="glass-panel min-w-0 overflow-hidden">
         <CardHeader>
-          <CardTitle>Automation Workflow Builder</CardTitle>
+          <CardTitle><h1>Automation Workflow Builder</h1></CardTitle>
           <CardDescription>Configure trigger, rules, delay, review gate, and action payloads for school operations workflows.</CardDescription>
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
-          {message ? <div className="rounded-lg border bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{message}</div> : null}
-          {error ? <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
+          {message ? <div role="status" aria-live="polite" className="rounded-lg border bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{message}</div> : null}
+          {error ? <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
           <div className="grid min-w-0 gap-3 md:grid-cols-2">
             <div className="space-y-1">
-              <Label>Saved Workflow</Label>
+              <Label htmlFor="automation-saved-workflow">Saved Workflow</Label>
               <Select value={selectedId || "new"} onValueChange={(value) => {
                 if (value === "new") {
                   setSelectedId("");
@@ -172,7 +172,7 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
                 const automation = data.automations.find((item) => item.id === value);
                 if (automation) loadAutomation(automation);
               }}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="automation-saved-workflow" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="new">New workflow</SelectItem>
                   {data.automations.map((automation) => (
@@ -182,9 +182,9 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Status</Label>
+              <Label htmlFor="automation-status">Status</Label>
               <Select value={status} onValueChange={(value) => value && setStatus(value)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="automation-status" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="paused">Paused</SelectItem>
@@ -194,13 +194,13 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
               </Select>
             </div>
             <div className="space-y-1 md:col-span-2">
-              <Label>Workflow Name</Label>
-              <Input value={name} onChange={(event) => setName(event.target.value)} />
+              <Label htmlFor="automation-name">Workflow Name</Label>
+              <Input id="automation-name" value={name} onChange={(event) => setName(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Trigger</Label>
+              <Label htmlFor="automation-trigger">Trigger</Label>
               <Select value={trigger} onValueChange={(value) => value && setTrigger(value)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="automation-trigger" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="new_inquiry">New inquiry</SelectItem>
                   <SelectItem value="tour_scheduled">Tour scheduled</SelectItem>
@@ -214,28 +214,28 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Delay</Label>
-              <Input value={delay} onChange={(event) => setDelay(event.target.value)} placeholder="Immediate, 2 hours, 1 day" />
+              <Label htmlFor="automation-delay">Delay</Label>
+              <Input id="automation-delay" value={delay} onChange={(event) => setDelay(event.target.value)} placeholder="Immediate, 2 hours, 1 day" />
             </div>
             <div className="space-y-1 md:col-span-2">
-              <Label>Audience</Label>
-              <Input value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Center, classroom, lead stage, family status, tag" />
+              <Label htmlFor="automation-audience">Audience</Label>
+              <Input id="automation-audience" value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Center, classroom, lead stage, family status, tag" />
             </div>
             <div className="space-y-1 md:col-span-2">
-              <Label>Condition Rule</Label>
-              <Textarea value={condition} onChange={(event) => setCondition(event.target.value)} placeholder="Example: Lead has completed tour and no application after 24 hours" />
+              <Label htmlFor="automation-condition">Condition Rule</Label>
+              <Textarea id="automation-condition" value={condition} onChange={(event) => setCondition(event.target.value)} placeholder="Example: Lead has completed tour and no application after 24 hours" />
             </div>
             <div className="flex items-center justify-between rounded-xl border bg-background/40 p-3 md:col-span-2">
               <div>
-                <Label>Require Staff Review</Label>
-                <div className="text-xs text-muted-foreground">Use this for billing, compliance, enrollment decisions, and AI-assisted messaging.</div>
+                <Label htmlFor="automation-requires-review">Require Staff Review</Label>
+                <div id="automation-requires-review-help" className="text-xs text-muted-foreground">Require approval before billing, enrollment, compliance, or drafted-message actions continue.</div>
               </div>
-              <Switch checked={requiresReview} onCheckedChange={setRequiresReview} />
+              <Switch id="automation-requires-review" aria-describedby="automation-requires-review-help" checked={requiresReview} onCheckedChange={setRequiresReview} />
             </div>
             <div className="space-y-1">
-              <Label>Action Type</Label>
+              <Label htmlFor="automation-action-type">Action Type</Label>
               <Select value={actionType} onValueChange={(value) => value && setActionType(value)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="automation-action-type" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="send_campaign">Send campaign</SelectItem>
                   <SelectItem value="create_task">Create task</SelectItem>
@@ -247,9 +247,9 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Channel</Label>
+              <Label htmlFor="automation-channel">Channel</Label>
               <Select value={channel} onValueChange={(value) => value && setChannel(value)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="automation-channel" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="email">Email</SelectItem>
                   <SelectItem value="sms">SMS</SelectItem>
@@ -260,12 +260,12 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
               </Select>
             </div>
             <div className="space-y-1 md:col-span-2">
-              <Label>Template</Label>
+              <Label htmlFor="automation-template">Template</Label>
               <Select value={templateKey || "none"} onValueChange={(value) => {
                 if (!value) return;
                 applyTemplate(value === "none" ? "" : value);
               }}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="automation-template" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No campaign template</SelectItem>
                   {campaignTemplates.map((template) => (
@@ -275,15 +275,15 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
               </Select>
             </div>
             <div className="space-y-1 md:col-span-2">
-              <Label>Action Subject</Label>
-              <Input value={subject} onChange={(event) => setSubject(event.target.value)} />
+              <Label htmlFor="automation-subject">Action Subject</Label>
+              <Input id="automation-subject" value={subject} onChange={(event) => setSubject(event.target.value)} />
             </div>
             <div className="space-y-1 md:col-span-2">
-              <Label>Action Body</Label>
-              <Textarea className="min-h-40" value={body} onChange={(event) => setBody(event.target.value)} />
+              <Label htmlFor="automation-body">Action Body</Label>
+              <Textarea id="automation-body" className="min-h-40" value={body} onChange={(event) => setBody(event.target.value)} />
             </div>
           </div>
-          <Button disabled={readOnly || isPending || !name} onClick={save}>
+          <Button type="button" disabled={readOnly || isPending || !name} onClick={save}>
             <Save data-icon="inline-start" />
             {readOnly ? "Preview only" : "Save Workflow"}
           </Button>
@@ -343,7 +343,7 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
                 ))}
                 {!data.automations.length ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-muted-foreground">No tenant workflows have been configured yet.</TableCell>
+                    <TableCell colSpan={3} className="text-muted-foreground">No workflows have been set up yet.</TableCell>
                   </TableRow>
                 ) : null}
               </TableBody>

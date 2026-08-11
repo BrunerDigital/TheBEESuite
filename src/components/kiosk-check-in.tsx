@@ -240,6 +240,23 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
     return () => window.clearInterval(timer);
   }, [hasPrivateState, reset]);
 
+  useEffect(() => {
+    function clearPrivateState() {
+      reset();
+    }
+
+    function clearRestoredPrivateState(event: PageTransitionEvent) {
+      if (event.persisted) reset();
+    }
+
+    window.addEventListener("pagehide", clearPrivateState);
+    window.addEventListener("pageshow", clearRestoredPrivateState);
+    return () => {
+      window.removeEventListener("pagehide", clearPrivateState);
+      window.removeEventListener("pageshow", clearRestoredPrivateState);
+    };
+  }, [reset]);
+
   function appendDigit(digit: string) {
     markActivity();
     setError("");

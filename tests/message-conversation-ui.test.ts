@@ -17,7 +17,8 @@ test("director messaging uses a searchable, accessible conversation inbox", () =
   assert.match(inbox, /Messages with \$\{selectedThread\.familyName\}/);
   assert.match(messagesPage, /<MessageConversationInbox/);
   assert.match(inbox, /styles\.staffShell/);
-  assert.match(inbox, /Family thread · school scoped/);
+  assert.match(inbox, /Family conversation/);
+  assert.match(inbox, /Staff conversation/);
   assert.match(conversationStyles, /\.bubbleSchool/);
   assert.match(conversationStyles, /backdrop-filter: blur\(22px\)/);
 });

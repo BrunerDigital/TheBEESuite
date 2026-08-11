@@ -160,7 +160,7 @@ import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
 import { isReportKind } from "@/lib/reporting-analytics-shared";
 import { homePathForRole, loginHrefForNextPath } from "@/lib/login-routing";
-import { canAccessModule } from "@/lib/rbac";
+import { canAccessModule, canAccessResolvedModuleRoute } from "@/lib/rbac";
 import { assetKind, canManageAssetHub, CORPORATE_ASSET_TYPE, readAssetMetadata } from "@/lib/asset-hub";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
@@ -6194,7 +6194,7 @@ export async function renderAuthenticatedModulePage(
     redirect(canAccessModule(user, "classroom-dashboard") ? "/classroom-dashboard" : "/dashboard");
   }
 
-  if (!canAccessModule(user, slug) || !canAccessModule(user, effectiveSlug)) {
+  if (!canAccessResolvedModuleRoute(user, slug, effectiveSlug)) {
     redirect(homePathForRole(user.role));
   }
 

@@ -55,7 +55,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { modules, navGroups } from "@/lib/demo-data";
 import { notificationCenterHrefForRole, storedNotificationHrefForRole } from "@/lib/notification-links";
 import { NOTIFICATIONS_CHANGED_EVENT } from "@/lib/notification-client-events";
-import { canAccessModule } from "@/lib/rbac";
+import { accessibleModuleRouteSlug } from "@/lib/rbac";
 import { canUseKidCityCorporateBilling, type WorkspaceBranding } from "@/lib/brand-assets";
 import { cn } from "@/lib/utils";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
@@ -165,7 +165,12 @@ function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) 
     slug === "corporate-billing"
     && !canUseKidCityCorporateBilling(currentUser?.role, currentUser?.branding?.kind)
   ) return false;
-  return canAccessModule(currentUser, slug);
+  return Boolean(accessibleModuleRouteSlug(currentUser, slug));
+}
+
+function shellModuleHref(currentUser: ShellUser | undefined, slug: string) {
+  const accessibleSlug = accessibleModuleRouteSlug(currentUser, slug) ?? slug;
+  return accessibleSlug === "dashboard" ? "/dashboard" : `/${accessibleSlug}`;
 }
 
 function ScopeIcon({ kind, className }: { kind: WorkspaceScopeContext["kind"]; className?: string }) {
@@ -302,7 +307,7 @@ function SidebarRail({ currentUser, onLogout, previewMode = false, previewHrefBa
               </Tooltip>
             );
           }) : visibleItems.map(({ label, slug, Icon, group }) => {
-            const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
+            const href = shellModuleHref(currentUser, slug);
             const active = pathname === href || (slug === "dashboard" && pathname === "/center-dashboard");
             return (
               <Tooltip key={slug}>
@@ -643,7 +648,7 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
               </div>
               <div className="flex flex-col gap-1">
                 {group.items.map(([label, slug, Icon]) => {
-                  const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
+                  const href = shellModuleHref(currentUser, slug);
                   const active = pathname === href || (slug === "dashboard" && pathname === "/center-dashboard");
                   const description = descriptionBySlug.get(slug) ?? `${label} workspace, tools, and related activity.`;
                   return (
@@ -653,6 +658,7 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
                           <Link
                             href={href}
                             onClick={close}
+                            aria-current={active ? "page" : undefined}
                             aria-description={description}
                             className={cn(
                               "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
@@ -772,6 +778,18 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
             >
               <Bell data-icon="inline-start" aria-hidden="true" />
               Notifications
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+        {isTeacherUser(currentUser) ? (
+          <>
+            <DropdownMenuItem
+              className="p-0"
+              render={<Link href="/teacher-portal#teacher-profile-setup" className="flex w-full items-center gap-2 px-3 py-2" />}
+            >
+              <ShieldCheck data-icon="inline-start" aria-hidden="true" />
+              Profile settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
@@ -915,7 +933,7 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
               <div className="grid gap-2 pb-px sm:grid-cols-2">
                 {moreItems.map(({ label, slug, Icon, group }) => {
-                  const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
+                  const href = shellModuleHref(currentUser, slug);
                   return (
                     <Link
                       key={slug}
@@ -1158,6 +1176,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <Input
                   ref={searchInputRef}
+                  aria-label="Search workspace"
                   aria-autocomplete="list"
                   aria-controls="global-search-results"
                   aria-expanded={searchOpen && searchQuery.trim().length >= 2}
@@ -1232,7 +1251,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                     <DialogDescription>Find families, child records, billing items, tasks, and messages for your role.</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-3">
-                    <Input autoComplete="off" name="mobile-workspace-search" placeholder={searchPlaceholder} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitGlobalSearch(); }} />
+                    <Input aria-label="Search workspace" autoComplete="off" name="mobile-workspace-search" placeholder={searchPlaceholder} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitGlobalSearch(); }} />
                     {trimmedSearchQuery.length < 2 ? (
                       <p className="text-sm text-muted-foreground">Type at least two characters to search scoped workspace records.</p>
                     ) : searchPending ? (
@@ -1275,7 +1294,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                       </DialogHeader>
                       <div className="grid gap-2">
                         {visibleCommandItems.map(({ label, slug, Icon, group }) => {
-                          const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
+                          const href = shellModuleHref(currentUser, slug);
                           return (
                             <Link key={slug} href={href} className="flex items-center gap-3 rounded-lg border bg-background/60 p-3 transition hover:border-primary/50 hover:bg-primary/10">
                               <Icon className="text-primary" />

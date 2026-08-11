@@ -97,6 +97,18 @@ const readOnlyAuditorModules = new Set<ModuleSlug>([
   "audit-logs",
 ]);
 
+const consolidatedModuleViews: Partial<Record<ModuleSlug, ReadonlySet<ModuleSlug>>> = {
+  "crm-leads": new Set(["enrollment-pipeline", "tours", "waitlist"]),
+  campaigns: new Set(["automations"]),
+  "classroom-dashboard": new Set(["attendance", "daily-reports", "incident-reports"]),
+  "family-detail": new Set(["child-profile", "messages", "parent-media-review"]),
+  "billing-invoices": new Set(["payments"]),
+  forms: new Set(["documents", "compliance"]),
+  analytics: new Set(["reputation"]),
+  staff: new Set(["team-permissions"]),
+  "billing-settings": new Set(["integrations", "school-setup", "notifications", "white-label"]),
+};
+
 export function isExecutiveRole(role?: string | null) {
   return Boolean(role && executiveRoles.has(role));
 }
@@ -134,6 +146,23 @@ export function canAccessModule(subject: AccessSubject, slug: string) {
   if (classroomModules.has(slug as ModuleSlug) && classroomRoles.has(role)) return true;
   if (billingModules.has(slug as ModuleSlug) && billingRoles.has(role)) return true;
   return false;
+}
+
+export function canAccessResolvedModuleRoute(subject: AccessSubject, requestedSlug: string, resolvedSlug: string) {
+  if (requestedSlug === resolvedSlug) return canAccessModule(subject, requestedSlug);
+
+  const allowedViews = consolidatedModuleViews[requestedSlug as ModuleSlug];
+  return Boolean(
+    allowedViews?.has(resolvedSlug as ModuleSlug)
+    && canAccessModule(subject, resolvedSlug),
+  );
+}
+
+export function accessibleModuleRouteSlug(subject: AccessSubject, requestedSlug: string) {
+  if (canAccessModule(subject, requestedSlug)) return requestedSlug;
+
+  const allowedViews = consolidatedModuleViews[requestedSlug as ModuleSlug];
+  return [...(allowedViews ?? [])].find((viewSlug) => canAccessModule(subject, viewSlug)) ?? null;
 }
 
 export function dashboardLensesForRole(subject: AccessSubject) {

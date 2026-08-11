@@ -14,6 +14,10 @@ import {
   paymentMethodRequestRecipientOptions,
   validatePaymentMethodRequestToken,
 } from "@/lib/payment-method-request-forms";
+import {
+  PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE,
+  paymentServiceError,
+} from "@/lib/parent-payment-errors";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
@@ -117,7 +121,17 @@ async function POSTHandler(request: NextRequest) {
 
   const billingApproval = stripeSchoolBillingApproval({ customFields: center.customFields, centerName: center.name });
   if (!billingApproval.approved) {
-    return NextResponse.json({ ok: false, error: billingApproval.blockingReason, billingApproval }, { status: 403 });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: paymentServiceError({
+          parentFacing: true,
+          providerError: billingApproval.blockingReason || "Online billing is not approved for this school.",
+          fallback: PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE,
+        }),
+      },
+      { status: 403 },
+    );
   }
 
   const allowedEmails = new Set(paymentMethodRequestRecipientOptions({
@@ -159,7 +173,15 @@ async function POSTHandler(request: NextRequest) {
     });
     if (!customer.ok || !customer.id) {
       return NextResponse.json(
-        { ok: false, configured: customer.configured, error: customer.error || "Payment profile could not be created." },
+        {
+          ok: false,
+          configured: customer.configured,
+          error: paymentServiceError({
+            parentFacing: true,
+            providerError: customer.error || "Payment profile could not be created.",
+            fallback: PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE,
+          }),
+        },
         { status: customer.configured ? 502 : 503 },
       );
     }
@@ -213,7 +235,15 @@ async function POSTHandler(request: NextRequest) {
   });
   if (!setup.ok || !setup.url) {
     return NextResponse.json(
-      { ok: false, configured: setup.configured, error: setup.error || "Payment method setup could not be created." },
+      {
+        ok: false,
+        configured: setup.configured,
+        error: paymentServiceError({
+          parentFacing: true,
+          providerError: setup.error || "Payment method setup could not be created.",
+          fallback: PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE,
+        }),
+      },
       { status: setup.configured ? 502 : 503 },
     );
   }

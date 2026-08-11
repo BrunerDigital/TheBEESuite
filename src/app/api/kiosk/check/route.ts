@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { centerServiceDayWindow, isLatePickup, latestLogMap, normalizeCheckAction, readLatePickupCutoff, validateNextCheckAction, validateSelectedChildren } from "@/lib/attendance-state";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { writeSystemAuditLog } from "@/lib/audit";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 import { sendCheckoutDailyReportEmail } from "@/lib/daily-report-email";
@@ -26,7 +27,7 @@ async function findGuardianByPin(centerId: string, pin: string, childIds: string
           name: true,
           custodyNotes: true,
           children: {
-            where: { id: { in: childIds } },
+            where: { id: { in: childIds }, ...currentlyEnrolledChildWhere() },
             select: {
               id: true,
               fullName: true,
@@ -57,7 +58,7 @@ async function findGuardianByQrToken(centerId: string, qrToken: string, childIds
           name: true,
           custodyNotes: true,
           children: {
-            where: { id: { in: childIds } },
+            where: { id: { in: childIds }, ...currentlyEnrolledChildWhere() },
             select: {
               id: true,
               fullName: true,
@@ -123,7 +124,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const allowedChildren = guardian.family.children.filter((child) => child.classroom?.centerId === centerId || !child.classroom);
+  const allowedChildren = guardian.family.children.filter((child) => child.classroom?.centerId === centerId);
   if (!allowedChildren.length) {
     return NextResponse.json({ ok: false, error: "No selected children are linked to this guardian at this school." }, { status: 403 });
   }

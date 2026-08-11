@@ -77,6 +77,6 @@
   <g data-safe-box="true" data-safe-x="96" data-safe-y="838" data-safe-width="1408" data-safe-height="94">
     <rect x="72" y="822" width="1456" height="130" rx="24" fill="rgba(245,181,27,.11)" stroke="rgba(245,181,27,.42)"/>
     <text x="104" y="866" fill="#fde68a" font-size="20" font-weight="900" letter-spacing=".08em">STOP / VERIFY</text>
-    <text  x="104" y="908" fill="#f8fafc" font-size="24" font-weight="500">Custody, pickup, medical, incident, billing, and compliance decisions remain human-reviewed.</text>
+    <text  x="104" y="908" fill="#f8fafc" font-size="24" font-weight="500">School staff must review custody, pickup, medical, incident, billing, and compliance decisions.</text>
   </g>
   </svg>

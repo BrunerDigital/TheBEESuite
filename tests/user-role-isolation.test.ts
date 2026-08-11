@@ -12,7 +12,11 @@ import {
 import { validateSelectedChildren } from "../src/lib/attendance-state";
 import { centerScopedAccessGuard } from "../src/lib/operations-guardrails";
 import { canAccessFamilyRecord, canMessageClassroomFamily } from "../src/lib/portal-guardrails";
-import { canAccessModule } from "../src/lib/rbac";
+import {
+  accessibleModuleRouteSlug,
+  canAccessModule,
+  canAccessResolvedModuleRoute,
+} from "../src/lib/rbac";
 
 function scopedUser(role: UserRole, centerIds: string[], accessScope: CurrentUser["accessScope"] = "scoped") {
   return { role, centerIds, accessScope } as CurrentUser;
@@ -107,4 +111,34 @@ test("authorized pickup remains excluded from family data modules pending routin
   assert.equal(canAccessModule(pickup, "documents"), false);
   assert.equal(canAccessModule(pickup, "billing-invoices"), false);
   assert.equal(canAccessModule(pickup, "notifications"), false);
+});
+
+test("consolidated workspaces preserve each role's authorized legacy destinations", () => {
+  const teacher = scopedUser(UserRole.TEACHER, ["school_a"], "center");
+  const billing = scopedUser(UserRole.BILLING_ADMIN, ["school_a"], "center");
+  const auditor = scopedUser(UserRole.READ_ONLY_AUDITOR, ["school_a"], "scoped");
+  const parent = scopedUser(UserRole.PARENT_GUARDIAN, ["school_a"], "center");
+
+  assert.equal(canAccessModule(teacher, "family-detail"), false);
+  assert.equal(canAccessResolvedModuleRoute(teacher, "family-detail", "messages"), true);
+  assert.equal(canAccessResolvedModuleRoute(teacher, "forms", "documents"), true);
+  assert.equal(canAccessResolvedModuleRoute(teacher, "forms", "compliance"), false);
+  assert.equal(canAccessResolvedModuleRoute(teacher, "billing-settings", "notifications"), true);
+  assert.equal(accessibleModuleRouteSlug(teacher, "family-detail"), "messages");
+  assert.equal(accessibleModuleRouteSlug(teacher, "forms"), "documents");
+  assert.equal(accessibleModuleRouteSlug(teacher, "billing-settings"), "notifications");
+
+  assert.equal(canAccessResolvedModuleRoute(billing, "family-detail", "messages"), true);
+  assert.equal(accessibleModuleRouteSlug(billing, "family-detail"), "messages");
+  assert.equal(canAccessResolvedModuleRoute(auditor, "forms", "documents"), true);
+  assert.equal(canAccessResolvedModuleRoute(auditor, "forms", "compliance"), true);
+  assert.equal(canAccessResolvedModuleRoute(auditor, "billing-settings", "notifications"), true);
+  assert.equal(accessibleModuleRouteSlug(auditor, "forms"), "documents");
+  assert.equal(accessibleModuleRouteSlug(auditor, "billing-settings"), "notifications");
+
+  assert.equal(canAccessResolvedModuleRoute(parent, "family-detail", "messages"), false);
+  assert.equal(accessibleModuleRouteSlug(parent, "family-detail"), null);
+  assert.equal(canAccessResolvedModuleRoute(teacher, "family-detail", "child-profile"), false);
+  assert.equal(canAccessResolvedModuleRoute(teacher, "analytics", "messages"), false);
+  assert.equal(canAccessResolvedModuleRoute(teacher, "family-detail", "family-detail"), false);
 });

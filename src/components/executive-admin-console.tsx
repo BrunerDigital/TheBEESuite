@@ -1139,7 +1139,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                       </TableCell>
                       <TableCell>{user.role.replaceAll("_", " ")}</TableCell>
                       <TableCell>{grant?.scopeType.replaceAll("_", " ") ?? "Role fallback"}</TableCell>
-                      <TableCell>{grant?.center?.crmLocationId ?? grant?.center?.name ?? user.staffProfile?.center?.crmLocationId ?? user.staffProfile?.center?.name ?? grant?.ownerGroup?.name ?? "Tenant"}</TableCell>
+                      <TableCell>{grant?.center?.crmLocationId ?? grant?.center?.name ?? user.staffProfile?.center?.crmLocationId ?? user.staffProfile?.center?.name ?? grant?.ownerGroup?.name ?? "All locations"}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           <Badge variant={user.isActive ? "default" : "outline"}>{user.isActive ? "Active" : "Inactive"}</Badge>

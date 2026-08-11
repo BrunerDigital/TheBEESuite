@@ -380,6 +380,23 @@ function notificationBodyUrl(body: string) {
   return body.match(/https?:\/\/[^\s)]+/i)?.[0] ?? null;
 }
 
+function PaymentFormDestination({ body }: { body: string }) {
+  const href = notificationBodyUrl(body);
+
+  if (!href) {
+    return <span className="mt-2 inline-flex text-xs text-muted-foreground">Payment form link unavailable</span>;
+  }
+
+  return (
+    <a
+      className="mt-2 inline-flex rounded-sm text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      href={href}
+    >
+      Open payment form
+    </a>
+  );
+}
+
 export function NotificationCenterPage({ data }: { data: NotificationCenterData }) {
   const items = [...data.derived, ...data.notifications].slice(0, 50);
   const isStoredNotification = (
@@ -440,14 +457,7 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
                   <TableCell>
                     <div className="font-medium">{item.title}</div>
                     <div className="mt-1 max-w-2xl whitespace-normal text-xs text-muted-foreground">{item.body}</div>
-                    {item.type === "payment_method_form" && notificationBodyUrl(item.body) ? (
-                      <a
-                        className="mt-2 inline-flex text-xs font-medium text-primary underline-offset-4 hover:underline"
-                        href={notificationBodyUrl(item.body) ?? undefined}
-                      >
-                        Open payment form
-                      </a>
-                    ) : null}
+                    {item.type === "payment_method_form" ? <PaymentFormDestination body={item.body} /> : null}
                   </TableCell>
                   <TableCell>{item.type}</TableCell>
                   <TableCell>
@@ -935,7 +945,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
               {integration.status === "Connected" || integration.status === "Configured" ? (
                 <div className="mt-4 flex items-center gap-2 text-sm text-primary">
                   <CheckCircle2 data-icon="inline-start" />
-                  Ready for pilot workflows
+                  Ready to use
                 </div>
               ) : null}
             </CardContent>
@@ -980,7 +990,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
                         <div className="mt-1 max-w-md whitespace-normal text-xs text-destructive">{delivery.lastError}</div>
                       ) : null}
                     </TableCell>
-                    <TableCell>{delivery.center?.crmLocationId ?? delivery.center?.name ?? "Tenant-wide"}</TableCell>
+                    <TableCell>{delivery.center?.crmLocationId ?? delivery.center?.name ?? "All locations"}</TableCell>
                     <TableCell>
                       <Badge variant={delivery.status === "failed" ? "destructive" : delivery.status === "delivered" ? "default" : "outline"}>
                         {delivery.status}
@@ -1418,7 +1428,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
                     <div className="text-xs text-muted-foreground">{delivery.purpose.replaceAll("_", " ")}</div>
                     {delivery.lastError ? <div className="mt-1 max-w-md text-xs text-destructive">{delivery.lastError}</div> : null}
                   </TableCell>
-                  <TableCell>{delivery.center?.crmLocationId ?? delivery.center?.name ?? "Tenant-wide"}</TableCell>
+                  <TableCell>{delivery.center?.crmLocationId ?? delivery.center?.name ?? "All locations"}</TableCell>
                   <TableCell>
                     <Badge variant={delivery.status === "failed" ? "destructive" : delivery.status === "delivered" ? "default" : "outline"}>
                       {delivery.status}
@@ -1498,7 +1508,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
                       <div className="text-xs text-muted-foreground">{log.resource} {log.resourceId ?? ""}</div>
                     </TableCell>
                     <TableCell>{log.user?.email ?? "System"}</TableCell>
-                    <TableCell>{log.center?.crmLocationId ?? log.center?.name ?? "Tenant-wide"}</TableCell>
+                    <TableCell>{log.center?.crmLocationId ?? log.center?.name ?? "All locations"}</TableCell>
                     <TableCell>{formatDateTime(log.createdAt, log)}</TableCell>
                   </TableRow>
                 ))}
@@ -1620,14 +1630,7 @@ export function HelpPage({ data }: { data: HelpPageData }) {
                     <TableCell>
                       <div className="font-medium">{notification.title}</div>
                       <div className="text-xs text-muted-foreground">{notification.body}</div>
-                      {notification.type === "payment_method_form" && notificationBodyUrl(notification.body) ? (
-                        <a
-                          className="mt-2 inline-flex text-xs font-medium text-primary underline-offset-4 hover:underline"
-                          href={notificationBodyUrl(notification.body) ?? undefined}
-                        >
-                          Open payment form
-                        </a>
-                      ) : null}
+                      {notification.type === "payment_method_form" ? <PaymentFormDestination body={notification.body} /> : null}
                     </TableCell>
                     <TableCell>{notification.type.replaceAll("_", " ")}</TableCell>
                     <TableCell>
@@ -1669,7 +1672,7 @@ export function HelpPage({ data }: { data: HelpPageData }) {
                       <div className="text-xs text-muted-foreground">{event.resource} {event.resourceId ?? ""}</div>
                     </TableCell>
                     <TableCell>{event.user?.email ?? "System"}</TableCell>
-                    <TableCell>{event.center?.crmLocationId ?? event.center?.name ?? "Tenant-wide"}</TableCell>
+                    <TableCell>{event.center?.crmLocationId ?? event.center?.name ?? "All locations"}</TableCell>
                     <TableCell>{formatDateTime(event.createdAt, event)}</TableCell>
                   </TableRow>
                 ))}
@@ -2406,19 +2409,25 @@ function MessageAttachmentLinks({ attachments }: { attachments?: MessageAttachme
 
   return (
     <div className="mt-3 flex flex-wrap gap-2">
-      {attachments.map((attachment) => (
+      {attachments.map((attachment) => attachment.downloadUrl ? (
         <a
           key={attachment.id}
-          className="inline-flex max-w-full items-center gap-2 rounded-md border bg-background/60 px-2.5 py-1.5 text-xs font-medium text-foreground transition hover:bg-accent"
-          href={attachment.downloadUrl ?? undefined}
+          className="inline-flex max-w-full items-center gap-2 rounded-md border bg-background/60 px-2.5 py-1.5 text-xs font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          href={attachment.downloadUrl}
           target="_blank"
           rel="noreferrer"
-          aria-disabled={!attachment.downloadUrl}
         >
-          {attachment.kind === "image" ? <ImageIcon className="size-3.5 shrink-0 text-primary" /> : <FileText className="size-3.5 shrink-0 text-primary" />}
+          {attachment.kind === "image" ? <ImageIcon className="size-3.5 shrink-0 text-primary" aria-hidden="true" /> : <FileText className="size-3.5 shrink-0 text-primary" aria-hidden="true" />}
           <span className="truncate">{attachment.filename}</span>
           <span className="shrink-0 text-muted-foreground">{formatAttachmentSize(attachment.size)}</span>
         </a>
+      ) : (
+        <span key={attachment.id} className="inline-flex max-w-full items-center gap-2 text-xs text-muted-foreground">
+          {attachment.kind === "image" ? <ImageIcon className="size-3.5 shrink-0" aria-hidden="true" /> : <FileText className="size-3.5 shrink-0" aria-hidden="true" />}
+          <span className="truncate">{attachment.filename}</span>
+          <span className="shrink-0">{formatAttachmentSize(attachment.size)}</span>
+          <span className="shrink-0">Attachment unavailable</span>
+        </span>
       ))}
     </div>
   );
@@ -3289,7 +3298,7 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Incident Reports</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Human-reviewed incident documentation. AI can assist wording only and must not make final safety, medical, legal, or custody decisions.
+          AI can help draft wording, but a staff member must verify every fact and complete the report. AI must not make safety, medical, legal, or custody decisions.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -5533,7 +5542,7 @@ export function AnalyticsPage({ data }: { data: AnalyticsPageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Reporting and Analytics</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Live enrollment, tour, billing, message, incident, and pipeline health indicators for the pilot.
+          Current enrollment, tours, billing, messages, incidents, and pipeline health across your available schools.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">

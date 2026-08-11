@@ -106,7 +106,7 @@ export function validateExecutiveUserForm(input: {
   if (scopeType === "CENTER" && !centerId) errors.push("Center-scoped users require a location.");
   if (scopeType === "OWNER_GROUP" && !ownerGroupId) errors.push("Owner-group-scoped users require an owner group.");
   if (scopeType === "TENANT" && !tenantAccessRoles.has(role)) {
-    errors.push("Tenant-wide access is limited to executive, regional, billing, or auditor roles.");
+    errors.push("Access to every location is limited to executive, regional, billing, or auditor roles.");
   }
   if (password && password.length < 8) errors.push("Passwords must be at least 8 characters.");
   if (password && sendPasswordReset) errors.push("Choose either a password or a reset email, not both.");

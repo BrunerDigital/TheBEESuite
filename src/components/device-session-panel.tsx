@@ -115,7 +115,7 @@ export function DeviceSessionPanel({
     <Card className="glass-panel">
       <CardHeader>
         <CardTitle>App and Device Sessions</CardTitle>
-        <CardDescription>Installed app, tablet kiosk, classroom, family, and browser sessions using this tenant account data.</CardDescription>
+        <CardDescription>Installed app, tablet kiosk, classroom, family, and browser sessions connected to this account.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="grid gap-3 md:grid-cols-4">

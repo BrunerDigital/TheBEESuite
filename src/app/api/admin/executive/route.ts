@@ -616,7 +616,7 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
   if (scopeType === "CENTER" && !center) throw new Error("Center-scoped users require a location.");
   if (scopeType === "OWNER_GROUP" && !ownerGroup && !center?.ownerGroupId) throw new Error("Owner-group-scoped users require an owner group.");
   if (scopeType === "TENANT" && !tenantAccessRoles.has(roleValue)) {
-    throw new Error("Tenant-wide access is limited to executive, regional, or auditor roles.");
+    throw new Error("Access to every location is limited to executive, regional, or auditor roles.");
   }
   const accessGrantTarget: AccessGrantTarget & { role: UserRole } = {
     role: roleValue,

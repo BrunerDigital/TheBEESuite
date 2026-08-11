@@ -231,7 +231,7 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
           <div>
             <CardTitle>Integration Setup</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
-              Setup records track owners, public identifiers, review status, tenant-specific encrypted credentials, and server environment readiness.
+              Setup records show who owns each connection, its public identifiers, review status, saved connection details, and server readiness.
             </CardDescription>
           </div>
           <Badge variant={activeCanManage ? "default" : "outline"}>
@@ -446,9 +446,9 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
           {active.credentialFields.length && !active.oauth.supported ? (
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="flex flex-col gap-1">
-                <div className="font-medium">Tenant Credentials</div>
+                <div className="font-medium">Secure Connection Details</div>
                 <p className="text-sm text-muted-foreground">
-                  Saved credentials are encrypted server-side and hidden after save. Leave a field blank to keep the existing value.
+                  Saved connection details are encrypted on the server and hidden after save. Leave a field blank to keep the existing value.
                 </p>
               </div>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -468,7 +468,7 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
                         type="password"
                         value={credentialDraft[field.key] ?? ""}
                         onChange={(event) => updateCredentialDraft(field.key, event.target.value)}
-                        placeholder={field.placeholder ?? (presence?.configured ? "Leave blank to keep saved value" : "Enter tenant credential")}
+                        placeholder={field.placeholder ?? (presence?.configured ? "Leave blank to keep saved value" : "Enter secure value")}
                         disabled={!activeCanManage || isPending}
                         autoComplete="off"
                       />

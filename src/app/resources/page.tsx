@@ -273,7 +273,7 @@ const guides: ResourceGuide[] = [
       "Confirm School / center. Enter the family, guardian, and child; leave Prior balance owed at cutover blank or 0 unless a verified pre-BEE Suite debt exists.",
       "Save, reopen the family, and confirm the sticky school/family context, guardian relationship, personal email, phone, linked children, active or pending enrollment, classroom, and safety notes.",
       "Scroll to Parent Portal Access, select the exact guardian, and choose Send Parent App Invite. A safely entered current family does not require a ProCare import batch.",
-      "Read the invitation result: Accepted means the email provider accepted it; Delivered confirms delivery; Failed or Expired needs follow-up.",
+      "Read the invitation result: Accepted means the email service received it for delivery; Delivered confirms it reached the recipient; Failed or Expired needs follow-up.",
       "If Copy Invitation for Manual Email appears, send that copy only from the approved school email account to the guardian email shown.",
       "Use Resend Parent App Invite for an existing linked parent. The current password is preserved; the parent can choose Forgot password.",
       "After the account is linked, Send Parent Feature Guide & FAQ may be used.",

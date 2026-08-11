@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   computeIntegrationDeliveryState,
   nextIntegrationRetryAt,
+  staleTimeSensitiveDeliveryReason,
 } from "@/lib/integration-deliveries";
 
 test("integration delivery state records skipped, delivered, pending, and failed outcomes", () => {
@@ -63,4 +64,35 @@ test("integration retries atomically claim a due delivery before sending", () =>
   assert.match(source, /status: "pending"[\s\S]*attempts[\s\S]*nextAttemptAt/);
   assert.ok(retrySource.indexOf("claimIntegrationDeliveryForRetry") < retrySource.indexOf("sendDelivery("));
   assert.match(retrySource, /status: "claimed_elsewhere"/);
+});
+
+test("stale or out-of-window FTE retries are skipped instead of emailing an old reminder", () => {
+  assert.equal(
+    staleTimeSensitiveDeliveryReason(
+      "fte_reminder_email",
+      { weekStart: "2026-06-22" },
+      new Date("2026-08-10T14:30:00.000Z"),
+    ),
+    "The FTE reporting week is no longer current.",
+  );
+  assert.equal(
+    staleTimeSensitiveDeliveryReason(
+      "fte_reminder_sms",
+      { weekStart: "2026-08-10" },
+      new Date("2026-08-10T14:30:00.000Z"),
+    ),
+    "FTE external reminders are outside the approved Friday evening window.",
+  );
+  assert.equal(
+    staleTimeSensitiveDeliveryReason("parent_invitation_email", {}, new Date("2026-08-10T14:30:00.000Z")),
+    null,
+  );
+});
+
+test("FTE SMS delivery records retain the reporting week needed for safe retries", () => {
+  const deliverySource = readFileSync(new URL("../src/lib/integration-deliveries.ts", import.meta.url), "utf8");
+  const fteSource = readFileSync(new URL("../src/app/api/cron/fte-reminders/route.ts", import.meta.url), "utf8");
+  assert.match(deliverySource, /metadata\?: Record<string, unknown>/);
+  assert.match(deliverySource, /dedupeKey: dedupeKey \?\? null,[\s\S]*\.\.\.metadata/);
+  assert.match(fteSource, /purpose: "fte_reminder_sms",[\s\S]*metadata: \{[\s\S]*weekStart: weekLabel/);
 });

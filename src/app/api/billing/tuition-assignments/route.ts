@@ -4,11 +4,10 @@ import { writeAuditLog } from "@/lib/audit";
 import { canManageBilling, canAccessCenter, getCurrentUser } from "@/lib/auth";
 import {
   defaultRecurringBillingPeriod,
-  firstUncoveredTuitionBillingPeriod,
   FOUR_WEEK_TUITION_AUTOBILL_CADENCE,
   isVoucherFundedTuitionAmount,
-  laterWeeklyBillingPeriod,
   normalizeBillingCadence,
+  normalizeRecurringBillingDay,
   WEEKLY_TUITION_AUTOBILL_CADENCE,
   WEEKLY_TUITION_AUTOBILL_DAY,
 } from "@/lib/billing-workflows";
@@ -100,23 +99,42 @@ async function POSTHandler(request: NextRequest) {
   if (plan.centerId !== access.centerId) {
     return NextResponse.json({ ok: false, error: "Tuition plan belongs to a different school." }, { status: 403 });
   }
-  const requestedCadence = normalizeBillingCadence(body.billingCadence);
+  const planCadence = normalizeBillingCadence(plan.cadence);
+  const requestedCadence = clean(body.billingCadence)
+    ? normalizeBillingCadence(body.billingCadence)
+    : planCadence;
   const cadence = requestedCadence === FOUR_WEEK_TUITION_AUTOBILL_CADENCE
     ? FOUR_WEEK_TUITION_AUTOBILL_CADENCE
-    : WEEKLY_TUITION_AUTOBILL_CADENCE;
-  const billingDay = WEEKLY_TUITION_AUTOBILL_DAY;
-  const previousCadence = normalizeBillingCadence(existingFields.tuitionBillingCadence ?? existingFields.tuitionPlanCadence);
-  const existingInvoices = previousCadence === cadence ? [] : await prisma.invoice.findMany({
+    : requestedCadence === "monthly"
+      ? "monthly"
+      : WEEKLY_TUITION_AUTOBILL_CADENCE;
+  if ((planCadence === "monthly" && cadence !== "monthly") || (planCadence !== "monthly" && cadence === "monthly")) {
+    return NextResponse.json({ ok: false, error: "The tuition plan and assignment must use the same monthly or weekly rate cadence." }, { status: 400 });
+  }
+  const billingDay = cadence === "monthly"
+    ? normalizeRecurringBillingDay(body.billingDay, cadence)
+    : WEEKLY_TUITION_AUTOBILL_DAY;
+  const previousCadenceValue = clean(existingFields.tuitionBillingCadence ?? existingFields.tuitionPlanCadence);
+  const previousCadence = previousCadenceValue ? normalizeBillingCadence(previousCadenceValue) : null;
+  const cadenceChanging = Boolean(previousCadence && previousCadence !== cadence);
+  const existingInvoices = cadenceChanging ? await prisma.invoice.findMany({
     where: { billingAccount: { familyId }, status: { not: "VOID" } },
     orderBy: { createdAt: "desc" },
     take: 200,
     select: { customFields: true },
+  }) : [];
+  const hasExistingTuitionCoverage = existingInvoices.some((invoice) => {
+    const fields = jsonObject(invoice.customFields);
+    return clean(fields.chargeSource) === "tuitionPlan" && clean(fields.childId) === childId;
   });
+  if (hasExistingTuitionCoverage) {
+    return NextResponse.json({
+      ok: false,
+      error: "Existing non-void tuition invoice coverage must be reviewed before changing this child's billing cycle.",
+    }, { status: 409 });
+  }
   const requestedStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
-  const firstUncoveredPeriod = firstUncoveredTuitionBillingPeriod({ invoices: existingInvoices, childId, fallbackDate: new Date() });
-  const billingStartPeriod = previousCadence === cadence
-    ? requestedStartPeriod
-    : laterWeeklyBillingPeriod(requestedStartPeriod, firstUncoveredPeriod);
+  const billingStartPeriod = requestedStartPeriod;
   const updatedAt = new Date().toISOString();
   const voucherFunded = isVoucherFundedTuitionAmount(plan.amountCents);
   const tuitionCredits = normalizeTuitionCredits(body.tuitionCredits);
@@ -125,7 +143,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Credits cannot be added to a $0 voucher-funded tuition assignment." }, { status: 400 });
   }
   if (!voucherFunded && tuitionCreditsTotalCents >= plan.amountCents) {
-    return NextResponse.json({ ok: false, error: "Weekly credits must be less than the gross weekly tuition rate." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Credits must be less than the gross recurring tuition rate." }, { status: 400 });
   }
 
   const updated = await prisma.$transaction(async (tx) => {

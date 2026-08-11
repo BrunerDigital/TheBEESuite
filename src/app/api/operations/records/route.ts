@@ -41,7 +41,7 @@ import {
   isCurrentlyEnrolledChildRecord,
   isCurrentlyEnrolledStatus,
 } from "@/lib/enrollment-status";
-import { canSaveTuitionPlanAmount } from "@/lib/billing-workflows";
+import { canSaveTuitionPlanAmount, normalizeBillingCadence } from "@/lib/billing-workflows";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -1900,11 +1900,12 @@ async function POSTHandler(request: NextRequest) {
       }
     }
     centerId = requestedCenterId;
+    const requestedTuitionCadence = clean(body.cadence);
     const data = {
       centerId: requestedCenterId,
       name: clean(body.name),
       ageGroup: clean(body.ageGroup) || "Preschool",
-      cadence: "weekly",
+      cadence: requestedTuitionCadence ? normalizeBillingCadence(requestedTuitionCadence) : "weekly",
       amountCents: intValue(body.amountCents || Number(body.amountDollars) * 100),
     };
     const zeroDollarVoucher = body.zeroDollarVoucher === true;

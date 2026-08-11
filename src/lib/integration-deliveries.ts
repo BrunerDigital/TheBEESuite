@@ -5,6 +5,7 @@ import {
   type InquiryIntegrationResult,
 } from "@/lib/inquiry-integrations";
 import { sendEmail, sendSms, type IntegrationSendResult } from "@/lib/integrations";
+import { fteExternalEscalationWindow, getFteDueState } from "@/lib/fte-report-guardrails";
 import { prisma } from "@/lib/prisma";
 
 export type IntegrationDeliveryProvider = "google_sheets" | "sendgrid" | "twilio";
@@ -61,6 +62,7 @@ type RecordCommunicationSmsDeliveryInput = {
   result: IntegrationSendResult;
   purpose?: Extract<IntegrationDeliveryPurpose, "communication_sms" | "fte_reminder_sms" | "notification_sms">;
   maxAttempts?: number;
+  metadata?: Record<string, unknown>;
 };
 
 type RecordEmailDeliveryInput = {
@@ -209,6 +211,7 @@ export async function recordCommunicationSmsDeliveryAttempt({
   result,
   purpose = "communication_sms",
   maxAttempts = 5,
+  metadata = {},
 }: RecordCommunicationSmsDeliveryInput) {
   const deliveryResult: IntegrationAttemptResult = result.configured
     ? result
@@ -240,6 +243,7 @@ export async function recordCommunicationSmsDeliveryAttempt({
         statusCallbackUrl: statusCallbackUrl ?? null,
         tenantId,
         dedupeKey: dedupeKey ?? null,
+        ...metadata,
       } as Prisma.InputJsonObject,
       lastResult: deliveryResult as Prisma.InputJsonObject,
       lastError: deliveryResult.error ?? null,
@@ -329,6 +333,18 @@ function stringArray(value: unknown) {
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+export function staleTimeSensitiveDeliveryReason(
+  purpose: string,
+  payload: Record<string, unknown>,
+  now = new Date(),
+) {
+  if (purpose !== "fte_reminder_email" && purpose !== "fte_reminder_sms") return null;
+  const currentWeek = getFteDueState(now).weekStart.toISOString().slice(0, 10);
+  if (stringValue(payload.weekStart) !== currentWeek) return "The FTE reporting week is no longer current.";
+  if (!fteExternalEscalationWindow(now)) return "FTE external reminders are outside the approved Friday evening window.";
+  return null;
 }
 
 const SENDGRID_EMAIL_PURPOSES = new Set([
@@ -452,6 +468,30 @@ export async function retryPendingIntegrationDeliveries({
       ...asRecord(delivery.payload),
       tenantId: delivery.tenantId,
     };
+    const staleReason = staleTimeSensitiveDeliveryReason(delivery.purpose, payload, now);
+    if (staleReason) {
+      const skipped = await prisma.integrationDelivery.updateMany({
+        where: { id: delivery.id, status: "pending", attempts: nextAttempts },
+        data: {
+          status: "skipped",
+          lastError: staleReason,
+          nextAttemptAt: null,
+          deliveredAt: null,
+        },
+      });
+      if (skipped.count !== 1) {
+        throw new Error(`Integration delivery ${delivery.id} changed after its retry claim.`);
+      }
+      results.push({
+        id: delivery.id,
+        provider: delivery.provider,
+        purpose: delivery.purpose,
+        status: "skipped",
+        attempts: nextAttempts,
+        error: staleReason,
+      });
+      continue;
+    }
     let result: Awaited<ReturnType<typeof sendDelivery>>;
     try {
       result = await sendDelivery(delivery.provider, delivery.purpose, payload);

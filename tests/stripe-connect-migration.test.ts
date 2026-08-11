@@ -69,6 +69,8 @@ test("payment setup completion cannot let an older source session replace a newe
   const webhook = readFileSync("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   assert.match(webhook, /latestSetupSessionId && latestSetupSessionId !== session\.id/);
   assert.match(webhook, /staleSetupSessionIgnored: true/);
+  assert.match(webhook, /currentSetupSessionId && currentSetupSessionId !== session\.id/);
+  assert.match(webhook, /staleSetupExpirationIgnored: true/);
 });
 
 test("corporate Stripe verification is pinned to the eight approved school accounts", () => {

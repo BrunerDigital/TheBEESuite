@@ -13,12 +13,15 @@ import { terminalStoreEnabled, terminalStoreReturnState } from "../src/lib/featu
 
 const originalStripeSecret = process.env.STRIPE_SECRET_KEY;
 const originalTerminalStoreEnabled = process.env.NEXT_PUBLIC_TERMINAL_STORE_ENABLED;
+const originalTerminalStoreReleaseApproved = process.env.NEXT_PUBLIC_TERMINAL_STORE_RELEASE_APPROVED;
 
 afterEach(() => {
   if (originalStripeSecret === undefined) delete process.env.STRIPE_SECRET_KEY;
   else process.env.STRIPE_SECRET_KEY = originalStripeSecret;
   if (originalTerminalStoreEnabled === undefined) delete process.env.NEXT_PUBLIC_TERMINAL_STORE_ENABLED;
   else process.env.NEXT_PUBLIC_TERMINAL_STORE_ENABLED = originalTerminalStoreEnabled;
+  if (originalTerminalStoreReleaseApproved === undefined) delete process.env.NEXT_PUBLIC_TERMINAL_STORE_RELEASE_APPROVED;
+  else process.env.NEXT_PUBLIC_TERMINAL_STORE_RELEASE_APPROVED = originalTerminalStoreReleaseApproved;
 });
 
 test("terminal store prices are exactly 20 percent above Stripe list prices", () => {
@@ -47,6 +50,7 @@ test("terminal store totals preserve base price and Bee Suite markup", () => {
 
 test("terminal store stays hidden and inaccessible until explicitly re-enabled", () => {
   delete process.env.NEXT_PUBLIC_TERMINAL_STORE_ENABLED;
+  delete process.env.NEXT_PUBLIC_TERMINAL_STORE_RELEASE_APPROVED;
 
   assert.equal(terminalStoreEnabled(), false);
   assert.equal(canAccessModule({ role: "PLATFORM_OWNER", accessScope: "platform" }, "terminal-store"), false);
@@ -62,6 +66,11 @@ test("terminal store stays hidden and inaccessible until explicitly re-enabled",
 
 test("terminal store can be explicitly re-enabled for its approved roles", () => {
   process.env.NEXT_PUBLIC_TERMINAL_STORE_ENABLED = "true";
+  delete process.env.NEXT_PUBLIC_TERMINAL_STORE_RELEASE_APPROVED;
+
+  assert.equal(terminalStoreEnabled(), false);
+
+  process.env.NEXT_PUBLIC_TERMINAL_STORE_RELEASE_APPROVED = "true";
 
   assert.equal(terminalStoreEnabled(), true);
   assert.equal(canAccessModule({ role: "PLATFORM_OWNER", accessScope: "platform" }, "terminal-store"), true);

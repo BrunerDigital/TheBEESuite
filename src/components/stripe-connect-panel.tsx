@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowUpRight, BadgeDollarSign, CheckCircle2, CreditCard, Landmark, LockKeyhole, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, BadgeDollarSign, CheckCircle2, Landmark, LockKeyhole, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -201,38 +201,12 @@ export function StripeConnectPanel({
     }
   }
 
-  async function startSoftwarePaymentSetup(centerId: string, method: "ach" | "card" | "default" | "stripe_balance") {
-    const approved = method !== "stripe_balance" || window.confirm(
-      "By clicking OK, you authorize The BEE Suite to debit this school's Stripe account balance for the $99 monthly recurring software fee arising from its use of The BEE Suite. You can opt out by cancelling the subscription.",
-    );
-    if (!approved) return;
-    setBusyCenterId(centerId);
-    setMessage(null);
-    try {
-      const response = await fetch("/api/billing/software-payment-method", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ centerId, method, approved }),
-      });
-      const json = await response.json();
-      if (!response.ok || !json.ok) throw new Error(json.error || "Software payment setup could not be opened.");
-      if (json.url) window.location.assign(json.url as string);
-      else {
-        setMessage(json.message || "$99 monthly billing from this school's Stripe balance is authorized.");
-        window.location.reload();
-      }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Software payment setup could not be opened.");
-      setBusyCenterId(null);
-    }
-  }
-
   async function openPayoutBankSelection(center: StripeConnectCenter) {
     if (payoutWindowRef.current && !payoutWindowRef.current.closed) {
       payoutWindowRef.current.close();
     }
 
-    const windowName = `stripe-payout-${center.id}-${Date.now()}`;
+    const windowName = `stripe-payout-${center.id}`;
     const stripeWindow = window.open("about:blank", windowName);
     if (!stripeWindow) {
       setMessage("Allow pop-ups for The BEE Suite, then choose the payout bank again.");
@@ -348,15 +322,6 @@ export function StripeConnectPanel({
       const timer = window.setTimeout(() => setMessage(messages[stripeConnectStatus]), 0);
       return () => window.clearTimeout(timer);
     }
-    const softwarePayment = searchParams.get("softwarePayment");
-    if (softwarePayment === "success") {
-      const timer = window.setTimeout(() => setMessage("Software payment method authorized. The payment processor is confirming it as the school's default method."), 0);
-      return () => window.clearTimeout(timer);
-    }
-    if (softwarePayment === "cancelled") {
-      const timer = window.setTimeout(() => setMessage("Software payment method setup was cancelled. The payout account was not changed."), 0);
-      return () => window.clearTimeout(timer);
-    }
     return undefined;
   }, [searchParams, stripeConfigured, syncStatus]);
 
@@ -460,10 +425,10 @@ export function StripeConnectPanel({
           </span>
         </div>
         {migrationCount ? (
-          <div className="flex gap-3 rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-800">
-            <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-700" />
+          <div className="flex gap-3 rounded-xl border border-blue-300/40 bg-blue-50 p-4 text-sm leading-6 text-slate-800">
+            <ShieldCheck className="mt-0.5 size-5 shrink-0 text-blue-700" />
             <span>
-              {migrationCount} school{migrationCount === 1 ? " has" : "s have"} a prepared Stripe reauthorization. Parent payments remain on each existing account, and its current payout bank is protected. Use the branded reauthorization action for the new account; do not change the existing payout destination during migration.
+              {migrationCount} school{migrationCount === 1 ? " has" : "s have"} a Stripe replacement in progress. Parent payments remain active on each school&apos;s current verified account while the replacement is reviewed. Replacement requirements affect only the future cutover and payout setup; they do not mean parent checkout is unavailable today.
             </span>
           </div>
         ) : null}
@@ -569,7 +534,6 @@ export function StripeConnectPanel({
               <TableHead>Payout destination</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Requirements</TableHead>
-              <TableHead>BEE Suite fee method (not payouts)</TableHead>
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
@@ -579,22 +543,9 @@ export function StripeConnectPanel({
               const status = statusLabel(center);
               const hasAccount = maskedAccount(center) !== "Not connected";
               const centerFields = fields(center.customFields);
-              const softwareMethodType = text(centerFields.stripeSoftwarePaymentMethodType);
-              const softwareLast4 = text(centerFields.stripeSoftwarePaymentMethodLast4);
               const hasConfirmedPayoutBank = Boolean(text(centerFields.stripePayoutBankLast4));
               const migration = readStripeConnectMigration(center.customFields);
               const migrationInProgress = Boolean(migration.targetAccountId && !migration.cutoverAt);
-              const softwareMethodLabel = softwareMethodType === "stripe_balance"
-                ? "$99 monthly from the school's Stripe balance"
-                : softwareMethodType === "us_bank_account"
-                ? `${text(centerFields.stripeSoftwarePaymentMethodBankName) || "Bank account"}${softwareLast4 ? ` •••• ${softwareLast4}` : ""}`
-                : softwareMethodType === "card"
-                  ? `${text(centerFields.stripeSoftwarePaymentMethodBrand) || "Card"}${softwareLast4 ? ` •••• ${softwareLast4}` : ""}`
-                  : hasConfirmedPayoutBank
-                    ? "Separate authorization required for BEE Suite fees"
-                    : hasAccount
-                      ? "Complete payout bank first"
-                      : "Add after payout setup";
               return (
                 <TableRow key={center.id}>
                   <TableCell className="font-medium">{center.name}</TableCell>
@@ -614,37 +565,13 @@ export function StripeConnectPanel({
                     {migrationInProgress
                       ? migration.status === "ready_for_cutover"
                         ? "New account authorized and ready for controlled cutover"
-                        : migration.status === "balance_authorization_required"
-                          ? "New business and payout setup complete; $99 balance authorization required"
-                          : "Parent payments remain active on the current account while the new account is reauthorized"
+                        : "Parent payments remain active on the current account while the replacement is verified"
                       : readiness.requirementFields.length
                       ? readiness.requirementFields.slice(0, 4).join(", ")
                       : readiness.canAcceptParentPayments
                         ? "Parent payments enabled"
                         : readiness.blockingReason || "Awaiting payout status"}
                     {readiness.requirementFields.length > 4 ? ` +${readiness.requirementFields.length - 4} more` : ""}
-                  </TableCell>
-                  <TableCell className="max-w-xs whitespace-normal">
-                    <div className="text-xs font-medium">{softwareMethodLabel}</div>
-                    {hasAccount && softwareMethodType !== "stripe_balance" ? (
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        Authorize $99 monthly from this school&apos;s Stripe balance. This does not change its payout bank.
-                      </p>
-                    ) : null}
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <Button type="button" size="sm" variant="outline" disabled={migrationInProgress || busyCenterId === center.id || !stripeConfigured || !readiness.canAcceptParentPayments || softwareMethodType === "stripe_balance"} onClick={() => startSoftwarePaymentSetup(center.id, "stripe_balance")}>
-                        <Landmark data-icon="inline-start" />
-                        {softwareMethodType === "stripe_balance" ? "Balance authorized" : "Authorize $99 balance fee"}
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" disabled={migrationInProgress || busyCenterId === center.id || !stripeConfigured || !hasConfirmedPayoutBank} onClick={() => startSoftwarePaymentSetup(center.id, "ach")}>
-                        <BadgeDollarSign data-icon="inline-start" />
-                        {softwareMethodType ? "Change fee bank" : hasConfirmedPayoutBank ? "Authorize fee bank" : "Available after payout bank"}
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" disabled={migrationInProgress || busyCenterId === center.id || !stripeConfigured} onClick={() => startSoftwarePaymentSetup(center.id, "card")}>
-                        <CreditCard data-icon="inline-start" />
-                        {softwareMethodType ? "Change" : "Add card"}
-                      </Button>
-                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap justify-end gap-2">
@@ -698,7 +625,7 @@ export function StripeConnectPanel({
             })}
             {!localCenters.length ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-muted-foreground">No centers are visible for this workspace.</TableCell>
+                <TableCell colSpan={7} className="text-muted-foreground">No centers are visible for this workspace.</TableCell>
               </TableRow>
             ) : null}
           </TableBody>
@@ -706,12 +633,8 @@ export function StripeConnectPanel({
 
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
-          Parent payments are blocked until the designated school account has submitted its required details, has no outstanding requirements, and Stripe reports both charges and payouts enabled. Stripe Dashboard links are account-specific and should only be opened from this authenticated Bee Suite screen.
-        </div>
-        <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
-          <CreditCard className="mt-0.5 size-5 shrink-0 text-primary" />
           <span>
-            The payout bank is the preferred software-fee method after payout onboarding. Stripe requires the school to authorize a separate ACH mandate before that bank can be charged. This does not alter the payout destination. Directors can replace the default with another bank account or card at any time from this table.
+            A school can accept parent payments whenever its active account shows Ready. If a replacement account still needs information, the current verified account remains active until a controlled cutover. Stripe Dashboard links are account-specific and should only be opened from this authenticated BEE Suite screen.
           </span>
         </div>
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">

@@ -5,6 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
 import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
+import { hasConflictingGuardianFamilyLinks } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
 import { familyNameFromGuardian } from "@/lib/registration-packet";
 import { enrollmentClassroomValidationError } from "@/lib/enrollment-status";
@@ -84,7 +85,13 @@ async function POSTHandler(request: NextRequest) {
 
   const center = await prisma.center.findUnique({
     where: { id: centerId },
-    select: { id: true, organizationId: true, name: true, crmLocationId: true },
+    select: {
+      id: true,
+      organizationId: true,
+      name: true,
+      crmLocationId: true,
+      organization: { select: { tenantId: true } },
+    },
   });
   if (!center) {
     return NextResponse.json({ ok: false, error: "Center not found." }, { status: 404 });
@@ -107,18 +114,55 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: classroomError, errors: { classroomId: classroomError } }, { status: 400 });
   }
 
-  const existingFamilyMatch = guardianEmail
-    ? await prisma.family.findFirst({
+  const existingParentUser = guardianEmail
+    ? await prisma.user.findUnique({
+        where: { email: guardianEmail },
+        select: {
+          id: true,
+          tenantId: true,
+          role: true,
+          guardians: { select: { familyId: true } },
+        },
+      })
+    : null;
+  if (existingParentUser && existingParentUser.tenantId !== center.organization.tenantId) {
+    return NextResponse.json({ ok: false, error: "This email belongs to another organization." }, { status: 409 });
+  }
+  if (existingParentUser && existingParentUser.role !== UserRole.PARENT_GUARDIAN) {
+    return NextResponse.json({ ok: false, error: "This email belongs to a non-parent account." }, { status: 409 });
+  }
+
+  const existingFamilyCandidates = guardianEmail
+    ? await prisma.family.findMany({
         where: {
           centerId: center.id,
           OR: [
-            { billingEmail: guardianEmail },
-            { guardians: { some: { email: guardianEmail } } },
+            { billingEmail: { equals: guardianEmail, mode: "insensitive" } },
+            { guardians: { some: { email: { equals: guardianEmail, mode: "insensitive" }, isBillingContact: true } } },
+            ...(existingParentUser ? [{ guardians: { some: { userId: existingParentUser.id } } }] : []),
           ],
         },
         select: { id: true, name: true },
+        orderBy: { id: "asc" },
+        take: 2,
       })
-    : null;
+    : [];
+  if (existingFamilyCandidates.length > 1) {
+    return NextResponse.json(
+      { ok: false, error: "This email matches more than one family. Review the existing family records before continuing." },
+      { status: 409 },
+    );
+  }
+  const existingFamilyMatch = existingFamilyCandidates[0] ?? null;
+  if (
+    existingParentUser
+    && hasConflictingGuardianFamilyLinks(existingFamilyMatch?.id ?? "", existingParentUser.guardians)
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "This parent login is already linked to a different family. Review the family link before continuing." },
+      { status: 409 },
+    );
+  }
   if (existingFamilyMatch && startingBalanceCents > 0) {
     return NextResponse.json(
       {
@@ -155,13 +199,6 @@ async function POSTHandler(request: NextRequest) {
           },
         });
 
-    const existingParentUser = guardianEmail
-      ? await tx.user.findUnique({
-          where: { email: guardianEmail },
-          select: { id: true, role: true },
-        })
-      : null;
-
     const existingGuardian = await tx.guardian.findFirst({
       where: {
         familyId: family.id,
@@ -180,7 +217,7 @@ async function POSTHandler(request: NextRequest) {
       relation: guardianRelation,
       preferredCommunication,
       isBillingContact: true,
-      userId: existingParentUser?.role === UserRole.PARENT_GUARDIAN ? existingParentUser.id : null,
+      userId: existingParentUser?.id ?? null,
     };
 
     const guardian = existingGuardian

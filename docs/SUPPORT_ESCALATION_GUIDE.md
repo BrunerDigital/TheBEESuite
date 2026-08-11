@@ -1,8 +1,8 @@
 # Support Escalation Guide
 
-Last updated: July 29, 2026
+Last updated: August 11, 2026
 
-Use this for live-school support during the Kid City USA pilot and future customer rollouts.
+Use this for live-school support and future customer rollouts.
 
 ## Severity Levels
 

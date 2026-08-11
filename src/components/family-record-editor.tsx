@@ -1240,8 +1240,8 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                     ? selectedPaymentMethod?.hasSavedPaymentMethod
                       ? `${selectedPaymentMethod.paymentMethodLabel ?? "Payment method saved securely"}${selectedPaymentMethod.lastUpdatedAt ? ` on ${formatDate(selectedPaymentMethod.lastUpdatedAt)}` : ""}.`
                       : selectedPaymentMethod?.autopayStatus === "pending"
-                        ? "Bank verification is pending. Use Instant Bank Login to verify through the parent's bank now."
-                        : "No bank account or card is saved for autopay."
+                        ? "Bank verification is pending. Select Connect bank account to continue with the parent's bank."
+                        : "No payment method is saved."
                     : "No billing account is linked to this family yet."}
                 </p>
               </div>
@@ -1276,32 +1276,32 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             <div className="mt-4 flex flex-wrap gap-2">
               <Button disabled={isPending || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("setup", "link_bank")}>
                 <Building2 data-icon="inline-start" />
-                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Verify Bank Instantly" : "Instant Bank Login"}
+                Connect bank account
               </Button>
               <Button disabled={isPending || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("setup", "card")} variant="outline">
                 <CreditCard data-icon="inline-start" />
-                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Replace With Card" : "Add Card"}
+                Save card
               </Button>
               <Button
                 disabled={isPending || !selectedPaymentMethod?.hasStripeCustomer}
                 onClick={() => manageFamilyPaymentMethod("portal")}
                 variant="outline"
               >
-                Manage Saved Method
+                Manage saved method
               </Button>
               <Button
                 disabled={isPending || selectedAutopayStatus === "enabled" || !selectedPaymentMethod?.hasSavedPaymentMethod}
                 onClick={() => manageFamilyPaymentMethod("enable_autopay")}
                 variant="outline"
               >
-                Enable Autopay
+                Enable autopay
               </Button>
               <Button
                 disabled={isPending || selectedAutopayStatus === "disabled" || !selectedBillingAccount}
                 onClick={() => manageFamilyPaymentMethod("disable_autopay")}
                 variant="outline"
               >
-                Disable Autopay
+                Disable autopay
               </Button>
             </div>
           </div>

@@ -2,17 +2,17 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildKioskTuitionBalanceSummary, buildKioskTuitionBalanceWarning } from "../src/lib/kiosk-billing-reminders";
 
-test("kiosk tuition warning is friendly and non-blocking", () => {
+test("kiosk tuition warning is direct and non-blocking", () => {
   const warning = buildKioskTuitionBalanceWarning({
     balanceCents: 37500,
     nextOpenInvoice: { number: "INV-100", totalCents: 25000, dueDate: "2026-06-22T12:00:00.000Z" },
   });
 
   assert.equal(warning?.type, "tuition_balance_due");
-  assert.match(warning?.message ?? "", /Friendly reminder/);
+  assert.doesNotMatch(warning?.message ?? "", /Friendly reminder/i);
   assert.match(warning?.message ?? "", /\$375.00/);
-  assert.match(warning?.message ?? "", /still check in/);
-  assert.match(warning?.message ?? "", /The BEE Suite parent portal/);
+  assert.match(warning?.message ?? "", /complete check-in now/);
+  assert.match(warning?.message ?? "", /The BEE Suite Parent Portal/);
 });
 
 test("kiosk tuition warning falls back to the next open invoice", () => {
@@ -39,6 +39,6 @@ test("kiosk tuition balance summary includes parent portal pay link", () => {
   assert.equal(summary?.amountDueCents, 37500);
   assert.equal(summary?.nextInvoiceNumber, "INV-100");
   assert.equal(summary?.paymentUrl, "/parent-portal#billing");
-  assert.equal(summary?.paymentLabel, "Pay in The BEE Suite parent portal");
-  assert.match(summary?.message ?? "", /The BEE Suite parent portal/);
+  assert.equal(summary?.paymentLabel, "Review or pay in the Parent Portal");
+  assert.match(summary?.message ?? "", /The BEE Suite Parent Portal/);
 });

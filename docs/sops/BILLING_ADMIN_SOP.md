@@ -1,6 +1,6 @@
 # Billing Admin SOP - The BEE Suite
 
-Last updated: August 6, 2026
+Last updated: August 11, 2026
 
 Audience: billing admins, school directors handling billing, accounting users, and launch support.
 
@@ -161,7 +161,7 @@ Use this when a family needs to save ACH/bank or card details for future payment
 4. Select the intended recipient email.
 5. Send the secure payment request.
 6. Tell the parent to start from the branded The BEE Suite link.
-7. Explain that `Save Debit/Credit Card` is presented first and `Verify Bank Instantly` remains available for ACH verification.
+7. Explain that `Save card` is presented first and `Connect bank account` remains available for bank verification.
 8. Tell the parent the exact total is shown before submission and no processing fee is added to their payment.
 9. Remind the parent that The BEE Suite does not store bank login credentials, full bank account numbers, or full card numbers.
 10. Explain that saving the method does not enable autopay. The family or authorized director must enable autopay separately.
@@ -170,19 +170,19 @@ Use this when a family needs to save ACH/bank or card details for future payment
 
 - The BEE Suite billing account belongs to the family at one school. Guardians and payers are contacts; the family has one selected Stripe customer and one selected saved default method for stored-method charges and autopay.
 - A secure setup link may be sent to the verified billing email or a listed guardian email. The payer completes Stripe's secure bank/card setup; staff must never collect full card or bank credentials.
-- `Save Card`, `Verify Bank Instantly`, or `Replace Saved Method` saves or replaces the selected family method. It does not enable autopay.
-- `Enable Autopay` requires an already saved method and explicit confirmation. `Disable Autopay` stops automatic collection but keeps the method available for deliberate one-time payments.
-- `Manage Saved Method` opens the connected-account Stripe portal. After a change, return to The BEE Suite and verify the masked method label and autopay status before billing.
+- `Save card`, `Connect bank account`, or `Replace saved method` saves or replaces the selected family method. It does not enable autopay.
+- `Enable autopay` requires an already saved method and explicit confirmation. `Disable autopay` stops automatic collection but keeps the method available for deliberate one-time payments.
+- `Manage payment method` opens the connected-account Stripe portal. After a change, return to The BEE Suite and verify the masked method label and autopay status before billing.
 - A payment method saved for one location's Stripe connected account cannot be reused at another location. Create a correctly scoped customer and method for the new school.
 - If two adults want to split an invoice, do not attempt to put two methods on autopay. Keep autopay disabled or use the one agreed default; process approved one-time payments against the remaining invoice balance and verify each result before the next payment.
 
-## ACH And Instant Bank Guidance
+## Bank Payment Guidance
 
-Bank payment remains an available lower-cost option when the school enables it. Do not describe it as the only or automatically selected method; the current parent flow presents card first.
+Bank payment may have a lower processing cost for the school when it is enabled. Parents are not charged a processing fee for either method. Do not describe bank payment as the only or automatically selected method; the current parent flow presents card first.
 
-- `Verify Bank Instantly` saves a verified bank payment profile for future payments or autopay.
-- `Instant Bank` lets a parent pay an invoice by logging into their bank through the secure processor handoff.
-- `One-Time Bank` or ACH may take a few business days to settle.
+- `Connect bank account` saves a verified bank payment profile for future payments or autopay.
+- `Pay with Link` opens Stripe Link for a payment method available in the payer's Link account; it is not the bank-account setup action.
+- `Bank account` payments may take a few business days to settle.
 - Pending bank payments should not be repeated unless the school confirms the first attempt failed or expired.
 - Bank payments may settle differently from cards. Tell parents the exact total and payment status are shown before and after submission.
 
@@ -197,7 +197,7 @@ Bank payment remains an available lower-cost option when the school enables it. 
 
 1. Choose the family billing account.
 2. Choose payment target: open invoice, total balance, or custom amount.
-3. Choose payment method: autopay, saved method, card checkout, instant bank checkout, or ACH checkout.
+3. Choose a payment method: autopay, a saved method, `Debit or credit card`, `Pay with Link`, or `Bank account`.
 4. Review the payment route summary.
 5. Confirm the school payout account is ready.
 6. Submit the payment or open the secure checkout handoff.

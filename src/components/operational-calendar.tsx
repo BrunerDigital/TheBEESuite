@@ -112,6 +112,39 @@ function syncTone(status: string | null | undefined) {
   return "outline";
 }
 
+const CALENDAR_LABEL_ACRONYMS: Record<string, string> = {
+  ach: "ACH",
+  api: "API",
+  ein: "EIN",
+  id: "ID",
+  qr: "QR",
+  sms: "SMS",
+  url: "URL",
+};
+
+function calendarDisplayLabel(value: string | null | undefined, fallback: string) {
+  if (!value) return fallback;
+  const normalized = value.trim();
+  if (!normalized) return fallback;
+  if (!normalized.includes("_") && !normalized.includes("-")) {
+    const acronym = CALENDAR_LABEL_ACRONYMS[normalized.toLocaleLowerCase("en-US")];
+    if (acronym) return acronym;
+    return normalized === normalized.toLocaleLowerCase("en-US")
+      ? normalized.charAt(0).toLocaleUpperCase("en-US") + normalized.slice(1)
+      : normalized;
+  }
+  const words = normalized
+    .replaceAll("_", " ")
+    .replaceAll("-", " ")
+    .toLocaleLowerCase("en-US")
+    .split(/\s+/);
+  return words.map((word, index) => {
+    const acronym = CALENDAR_LABEL_ACRONYMS[word];
+    if (acronym) return acronym;
+    return index === 0 ? word.charAt(0).toLocaleUpperCase("en-US") + word.slice(1) : word;
+  }).join(" ");
+}
+
 function recurrenceLabel(rule: string | null | undefined) {
   if (!rule) return "One time";
   const frequency = rule.match(/FREQ=([^;]+)/)?.[1]?.toLowerCase() ?? "repeating";
@@ -243,9 +276,9 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
           <CalendarDays data-icon="inline-start" />
           Operational calendar
         </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">Calendar and Scheduling</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Calendar and scheduling</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Tours, staffing, billing, compliance, birthdays, school closures, holidays, recurring events, and Google Calendar sync in one role-scoped view.
+          Review tours, staffing, billing, compliance, birthdays, closures, holidays, and recurring events for the schools you can access.
         </p>
       </section>
 
@@ -418,7 +451,7 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
 
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Google Calendar Sync</CardTitle>
+              <CardTitle>Google Calendar sync</CardTitle>
               <CardDescription>Push local calendar items and import external Google events for the selected center.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
@@ -426,12 +459,12 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
                 <div className="flex items-start gap-3">
                   <Cloud className="mt-0.5 size-5 shrink-0 text-primary" />
                   <div>
-                    <div className="font-medium">{googleCalendar.status}</div>
+                    <div className="font-medium">{calendarDisplayLabel(googleCalendar.status, "Status unavailable")}</div>
                     <div className="mt-1 text-sm text-muted-foreground">Last sync: {formatLastSync(googleCalendar.lastSyncAt, timeZone)}</div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {googleCalendar.configured ? <Badge>Configured</Badge> : <Badge variant="outline">Needs credentials</Badge>}
                       {googleCalendar.missingRequirements.map((requirement) => (
-                        <Badge key={requirement} variant="secondary">{requirement}</Badge>
+                        <Badge key={requirement} variant="secondary">{calendarDisplayLabel(requirement, "Setup required")}</Badge>
                       ))}
                     </div>
                   </div>
@@ -450,7 +483,7 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Schedule</CardTitle>
-          <CardDescription>Sorted operational events for the current school scope.</CardDescription>
+          <CardDescription>Events for the schools shown above, sorted by date and time.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -473,16 +506,16 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
                       <div className="font-medium">{formatDateTime(event.startsAt, timeZone, event.allDay)}</div>
                       {event.endsAt ? <div className="text-xs text-muted-foreground">Ends {formatDateTime(event.endsAt, timeZone, event.allDay)}</div> : null}
                     </TableCell>
-                    <TableCell><Badge variant={eventTone(event.type)}>{event.type.replaceAll("_", " ")}</Badge></TableCell>
+                    <TableCell><Badge variant={eventTone(event.type)}>{calendarDisplayLabel(event.type, "Event")}</Badge></TableCell>
                     <TableCell>
                       <div className="font-medium">{event.title}</div>
                       <div className="text-xs text-muted-foreground">{event.classroomName ? `${event.classroomName} · ` : ""}{event.detail}</div>
                       {event.recurrenceRule ? <div className="mt-1 text-xs text-muted-foreground"><CalendarCheck2 data-icon="inline-start" /> {recurrenceLabel(event.recurrenceRule)}</div> : null}
                     </TableCell>
                     <TableCell>{event.centerName}</TableCell>
-                    <TableCell><Badge variant="outline">{event.visibility ?? "staff"}</Badge></TableCell>
-                    <TableCell><Badge variant="outline">{event.status}</Badge></TableCell>
-                    <TableCell><Badge variant={syncTone(event.syncStatus)}>{event.syncStatus ?? event.source ?? "system"}</Badge></TableCell>
+                    <TableCell><Badge variant="outline">{calendarDisplayLabel(event.visibility, "Staff")}</Badge></TableCell>
+                    <TableCell><Badge variant="outline">{calendarDisplayLabel(event.status, "Status unavailable")}</Badge></TableCell>
+                    <TableCell><Badge variant={syncTone(event.syncStatus)}>{calendarDisplayLabel(event.syncStatus ?? event.source, "The BEE Suite")}</Badge></TableCell>
                   </TableRow>
                 ))}
                 {!filteredEvents.length ? (

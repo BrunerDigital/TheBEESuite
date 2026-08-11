@@ -177,7 +177,35 @@ function statusBadgeVariant(status: string) {
 }
 
 function statusLabel(status: string) {
-  return status.replaceAll("_", " ");
+  return centerStatuses.find(([value]) => value === status)?.[1]
+    ?? status.replaceAll("_", " ").replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
+function userRoleLabel(role: string) {
+  return roles.find(([value]) => value === role)?.[1]
+    ?? role.replaceAll("_", " ").toLocaleLowerCase().replace(/^\w/, (letter) => letter.toLocaleUpperCase());
+}
+
+function accessScopeLabel(scopeType: string | null | undefined) {
+  if (scopeType === "TENANT") return "All locations";
+  if (scopeType === "OWNER_GROUP") return "Owner group";
+  if (scopeType === "CENTER") return "Single location";
+  return "Access based on role";
+}
+
+function retryActionLabel(action: string) {
+  const labels: Record<string, string> = {
+    saveCenter: "Try saving school again",
+    setCenterStatus: "Try school status change again",
+    saveOwnerGroup: "Try saving owner group again",
+    setOwnerGroupStatus: "Try owner group status change again",
+    saveUser: "Try saving user again",
+    resetUserPassword: "Try password reset again",
+    setUserStatus: "Try user status change again",
+    revokeUserSessions: "Try signing out devices again",
+    bulkImport: "Try import again",
+  };
+  return labels[action] ?? "Try this action again";
 }
 
 export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }: Props) {
@@ -315,20 +343,20 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
 
   function executiveSuccessDetail(action: string, fallback: string, json: ExecutiveActionResponse | null) {
     if (action === "saveCenter" && json?.center) {
-      return `${json.center.crmLocationId ?? json.center.name ?? "Location"} saved. Status: ${json.center.status ?? "updated"}.`;
+      return `${json.center.crmLocationId ?? json.center.name ?? "Location"} saved. Status: ${statusLabel(json.center.status ?? "updated")}.`;
     }
     if (action === "setCenterStatus" && json?.center) {
-      return `${json.center.crmLocationId ?? json.center.name ?? "Location"} is now ${json.center.status ?? "updated"}.`;
+      return `${json.center.crmLocationId ?? json.center.name ?? "Location"} is now ${statusLabel(json.center.status ?? "updated")}.`;
     }
     if (action === "saveOwnerGroup" && json?.ownerGroup) {
-      return `${json.ownerGroup.name ?? "Owner group"} saved. Status: ${json.ownerGroup.status ?? "updated"}.`;
+      return `${json.ownerGroup.name ?? "Owner group"} saved. Status: ${statusLabel(json.ownerGroup.status ?? "updated")}.`;
     }
     if (action === "setOwnerGroupStatus" && json?.ownerGroup) {
-      return `${json.ownerGroup.name ?? "Owner group"} is now ${json.ownerGroup.status ?? "updated"}.`;
+      return `${json.ownerGroup.name ?? "Owner group"} is now ${statusLabel(json.ownerGroup.status ?? "updated")}.`;
     }
     if (action === "saveUser" && json?.user) {
       const resetDetail = json.auth?.passwordResetSent ? " Setup/reset email requested." : "";
-      return `${json.user.email ?? json.user.name ?? "User"} saved and scoped.${resetDetail}`;
+      return `${json.user.email ?? json.user.name ?? "User"} saved with the selected access.${resetDetail}`;
     }
     if (action === "resetUserPassword" && json?.user) {
       return json.auth?.passwordResetSent
@@ -339,10 +367,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
       return `${json.user.email ?? "User"} ${json.user.isActive ? "reactivated" : "deactivated"}.`;
     }
     if (action === "revokeUserSessions" && json?.user) {
-      return `Active sessions revoked for ${json.user.email ?? "the user"}. New session version: ${json.user.sessionVersion ?? "updated"}.`;
+      return `${json.user.email ?? "The user"} was signed out on all devices.`;
     }
     if (action === "bulkImport" && json?.summary) {
-      return `Bulk import finished: ${json.summary.imported} imported, ${json.summary.failed} failed.`;
+      return `Import complete: ${json.summary.imported} imported, ${json.summary.failed} failed.`;
     }
     return fallback;
   }
@@ -425,7 +453,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
         ? {
             title: archiveOnSave ? "Archive school?" : "Save school changes?",
             description: archiveOnSave
-              ? `${existing?.crmLocationId ?? existing?.name ?? "This school"} will leave active operational dropdowns. CRM, billing, FTE, and audit history remain available.`
+              ? `${existing?.crmLocationId ?? existing?.name ?? "This school"} will be removed from active school lists. Enrollment, billing, staffing, and audit history remain available.`
               : `Save profile, routing, capacity, owner group, and status updates for ${existing?.crmLocationId ?? existing?.name ?? "this school"}?`,
             confirmLabel: archiveOnSave ? "Archive school" : "Save changes",
             tone: archiveOnSave ? "destructive" : "default",
@@ -455,7 +483,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
       confirmation: {
         title: status === "closed" ? "Archive school?" : "Update school status?",
         description: status === "closed"
-          ? `${center?.crmLocationId ?? center?.name ?? "This location"} will leave active school dropdowns, while CRM, billing, FTE, and audit history stay intact.`
+          ? `${center?.crmLocationId ?? center?.name ?? "This location"} will be removed from active school lists. Enrollment, billing, staffing, and audit history remain available.`
           : `${center?.crmLocationId ?? center?.name ?? "This location"} will be set to ${statusLabel(status)}.`,
         confirmLabel: status === "closed" ? "Archive school" : "Update status",
         tone: status === "closed" ? "destructive" : "default",
@@ -514,12 +542,12 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
         password: userFormIsTeacher ? "" : userForm.password,
         sendPasswordReset: userFormIsTeacher ? false : userForm.sendPasswordReset === "yes",
       },
-      success: "User saved and access scoped.",
+      success: "User saved with the selected access.",
       working: existing ? "Updating user access..." : "Creating user...",
       confirmation: existing
         ? {
             title: "Update user access?",
-            description: `Save role and scope changes for ${existing.email}? Active access grants will be replaced with the selected scope.`,
+            description: `Save role and location access changes for ${existing.email}? Existing access assignments will be replaced with the selected access.`,
             confirmLabel: "Update user",
           }
         : undefined,
@@ -548,7 +576,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
       confirmation: {
         title: resetForm.password ? "Set password?" : "Send password reset?",
         description: resetForm.password
-          ? `${resetForm.email} will be required to replace the password before workspace access.`
+          ? `The new password will be applied to ${resetForm.email}. The next sign-in follows that account's password policy.`
           : `${resetForm.email} will receive a password setup/reset email.`,
         confirmLabel: resetForm.password ? "Set password" : "Send reset",
       },
@@ -568,7 +596,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
       confirmation: {
         title: status === "active" ? "Reactivate user?" : "Deactivate user?",
         description: status === "active"
-          ? `${email} will be able to access their assigned workspace again.`
+          ? `${email} will be able to sign in with their assigned access again.`
           : `${email} will lose access until an executive reactivates the account.`,
         confirmLabel: status === "active" ? "Reactivate user" : "Deactivate user",
         tone: status === "inactive" ? "destructive" : "default",
@@ -643,8 +671,8 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{pendingConfirmation?.confirmation?.title ?? "Confirm executive action"}</DialogTitle>
-            <DialogDescription>{pendingConfirmation?.confirmation?.description ?? "Confirm this executive console change."}</DialogDescription>
+            <DialogTitle>{pendingConfirmation?.confirmation?.title ?? "Confirm change"}</DialogTitle>
+            <DialogDescription>{pendingConfirmation?.confirmation?.description ?? "Review this change before continuing."}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setPendingConfirmation(null)} disabled={isPending}>
@@ -666,39 +694,39 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
       <CardHeader>
         <Badge className="w-fit">
           <ShieldCheck data-icon="inline-start" />
-          Executive self-service
+          Administration
         </Badge>
-        <CardTitle>Corporate Admin Controls</CardTitle>
+        <CardTitle>Corporate administration</CardTitle>
         <CardDescription>
-          Add or archive locations, create owner groups, assign users, and reset passwords without developer changes. Location removal archives records so CRM, billing, FTE, and audit history stay intact.
+          Manage locations, owner groups, and authorized user access. Archived locations retain billing, staffing, enrollment, and audit history.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {message ? (
           <Alert>
             <CheckCircle2 className="size-4" />
-            <AlertTitle>Completed</AlertTitle>
+            <AlertTitle>Change completed</AlertTitle>
             <AlertDescription>{message}</AlertDescription>
           </Alert>
         ) : null}
         {isPending && activeAction ? (
           <Alert className="border-primary/30 bg-primary/10">
             <Save className="size-4" />
-            <AlertTitle>Working</AlertTitle>
+            <AlertTitle>Action in progress</AlertTitle>
             <AlertDescription>{activeAction}</AlertDescription>
           </Alert>
         ) : null}
         {error ? (
           <Alert variant="destructive">
             <AlertCircle className="size-4" />
-            <AlertTitle>Needs attention</AlertTitle>
+            <AlertTitle>Action could not be completed</AlertTitle>
             <AlertDescription>
               <div className="space-y-3">
                 <p>{error}</p>
                 {lastFailedAction ? (
                   <Button type="button" size="sm" variant="outline" onClick={() => runAction(lastFailedAction)} disabled={isPending}>
                     <RefreshCw data-icon="inline-start" />
-                    Retry last action
+                    {retryActionLabel(lastFailedAction.action)}
                   </Button>
                 ) : null}
               </div>
@@ -724,10 +752,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Building2 className="size-5 text-primary" />
-                School Lifecycle
+                Schools
               </CardTitle>
               <CardDescription>
-                {activeSchools.length} active school{activeSchools.length === 1 ? "" : "s"} are available to dashboards and CRM routing for {brandName}. Archived schools stay visible here for recovery.
+                {activeSchools.length} active school{activeSchools.length === 1 ? "" : "s"} can be used across {brandName}. Archived schools remain listed for recordkeeping and reactivation.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -767,7 +795,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => loadCenter(center.id)}>Edit</Button>
+                          <Button variant="outline" size="sm" onClick={() => loadCenter(center.id)}>Edit school</Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -784,7 +812,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                   {!sortedCenters.length ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-muted-foreground">
-                        No schools are available in this scope yet.
+                        No schools are available for this account.
                       </TableCell>
                     </TableRow>
                   ) : null}
@@ -800,7 +828,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                 Bulk User and Location Import
               </CardTitle>
               <CardDescription>
-                Paste or upload CSV rows for locations and users. Location rows are imported first, then center-scoped users are matched by Location ID.
+                Paste or upload CSV rows for locations and users. Location rows are imported first, then single-location users are matched by Location ID.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -812,7 +840,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                     value={bulkCsv}
                     onChange={(event) => setBulkCsvText(event.target.value)}
                     rows={8}
-                    placeholder={"type,name,email,role,locationId,capacity,title,sendPasswordReset\nlocation,,school@example.com,,FL | Sarasota,120,,\nuser,Jane Director,jane@example.com,CENTER_DIRECTOR,FL | Sarasota,,Center Director,yes\nteacher,Sarah Johnson,,TEACHER,FL | Sarasota,,Lead Teacher,"}
+                    placeholder={"type,name,email,role,locationId,capacity,title,sendPasswordReset\nlocation,,school@example.com,,FL | Sarasota,120,,\nuser,Director Name,director@example.com,CENTER_DIRECTOR,FL | Sarasota,,Center Director,yes\nteacher,Teacher Name,,TEACHER,FL | Sarasota,,Lead Teacher,"}
                   />
                 </div>
                 <div className="space-y-3">
@@ -863,12 +891,12 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                         return (
                           <TableRow key={`${row.rowNumber}-${row.type}`}>
                             <TableCell>{row.rowNumber}</TableCell>
-                            <TableCell><Badge variant="outline">{row.type}</Badge></TableCell>
+                            <TableCell><Badge variant="outline">{statusLabel(row.type)}</Badge></TableCell>
                             <TableCell>{row.name || "Missing"}</TableCell>
                             <TableCell>{row.crmLocationId || row.locationId || "None"}</TableCell>
                             <TableCell>
                               <div>{row.email || "No email"}</div>
-                              <div className="text-xs text-muted-foreground">{row.role || "No role"}</div>
+                              <div className="text-xs text-muted-foreground">{row.role ? userRoleLabel(row.role) : "No role"}</div>
                             </TableCell>
                             <TableCell>
                               {row.errors.length ? (
@@ -999,9 +1027,9 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <UserPlus className="size-5 text-primary" />
-                User and Password Access
+                User access and sign-in
               </CardTitle>
-              <CardDescription>Create school users, assign scope, and set or send credentials. Users must choose a new private password before workspace access.</CardDescription>
+              <CardDescription>Create school users, choose their location access, and provide sign-in details. Password requirements follow the selected account type.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {generatedLogin ? (
@@ -1022,7 +1050,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                       </div>
                       <Button type="button" size="sm" variant="outline" onClick={copyGeneratedLogin}>
                         <Copy data-icon="inline-start" />
-                        Copy
+                        Copy login details
                       </Button>
                     </div>
                   </AlertDescription>
@@ -1051,7 +1079,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                   <Input value={userForm.title} onChange={(event) => setUserField("title", event.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Access scope</Label>
+                  <Label>Location access</Label>
                   <Select value={userForm.accessScopeType} onValueChange={(value) => setUserField("accessScopeType", value ?? userForm.accessScopeType)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -1112,9 +1140,9 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <ShieldCheck className="size-5 text-primary" />
-              Existing User Accounts
+              Existing user accounts
             </CardTitle>
-            <CardDescription>Find live users quickly, then load them into the edit or password-reset forms.</CardDescription>
+            <CardDescription>Review and update active and inactive user accounts.</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -1122,8 +1150,8 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                 <TableRow>
                   <TableHead>User</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Scope</TableHead>
-                  <TableHead>Center</TableHead>
+                  <TableHead>Location access</TableHead>
+                  <TableHead>School</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -1137,8 +1165,8 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                         <div className="font-medium">{user.name}</div>
                         <div className="text-xs text-muted-foreground">{user.email}</div>
                       </TableCell>
-                      <TableCell>{user.role.replaceAll("_", " ")}</TableCell>
-                      <TableCell>{grant?.scopeType.replaceAll("_", " ") ?? "Role fallback"}</TableCell>
+                      <TableCell>{userRoleLabel(user.role)}</TableCell>
+                      <TableCell>{accessScopeLabel(grant?.scopeType)}</TableCell>
                       <TableCell>{grant?.center?.crmLocationId ?? grant?.center?.name ?? user.staffProfile?.center?.crmLocationId ?? user.staffProfile?.center?.name ?? grant?.ownerGroup?.name ?? "All locations"}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
@@ -1148,11 +1176,11 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => loadUserForEdit(user)}>Edit</Button>
+                          <Button variant="outline" size="sm" onClick={() => loadUserForEdit(user)}>Edit user</Button>
                           <Button variant="outline" size="sm" onClick={() => {
                             clearInlineFeedback();
                             setResetForm((current) => ({ ...current, email: user.email }));
-                          }}>Reset</Button>
+                          }}>Reset password</Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -1167,7 +1195,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                             onClick={() => revokeSessionsForEmail(user.email)}
                             disabled={isPending}
                           >
-                            Sessions
+                            Sign out devices
                           </Button>
                         </div>
                       </TableCell>
@@ -1177,7 +1205,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                 {!sortedUsers.length ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-muted-foreground">
-                      No users are available in this scope yet.
+                      No users are available for this account.
                     </TableCell>
                   </TableRow>
                 ) : null}
@@ -1285,18 +1313,18 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                           <TableCell><Badge variant={statusBadgeVariant(group.status)}>{statusLabel(group.status)}</Badge></TableCell>
                           <TableCell>
                             <div>{group._count?.centers ?? 0} schools</div>
-                            <div className="text-xs text-muted-foreground">{group._count?.accessGrants ?? 0} scoped users</div>
+                            <div className="text-xs text-muted-foreground">{group._count?.accessGrants ?? 0} assigned users</div>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <Button variant="outline" size="sm" onClick={() => loadOwnerGroup(group.id)}>Edit</Button>
+                              <Button variant="outline" size="sm" onClick={() => loadOwnerGroup(group.id)}>Edit owner group</Button>
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => setOwnerGroupStatusById(group.id, group.status === "closed" ? "active" : "closed")}
                                 disabled={isPending}
                               >
-                                {group.status === "closed" ? "Reactivate" : "Archive"}
+                                {group.status === "closed" ? "Reactivate owner group" : "Archive owner group"}
                               </Button>
                             </div>
                           </TableCell>
@@ -1313,9 +1341,9 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <KeyRound className="size-5 text-primary" />
-                Password and Session Controls
+                Password and session controls
               </CardTitle>
-              <CardDescription>Send a reset email, set a password, deactivate users, or force a fresh login. Password resets also require the user to replace credentials.</CardDescription>
+              <CardDescription>Send a reset email, set a password, deactivate a user, or require a fresh sign-in. The next sign-in follows that account&apos;s password policy.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">

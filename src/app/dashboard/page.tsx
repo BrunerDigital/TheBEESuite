@@ -842,7 +842,7 @@ export default async function DashboardPage() {
     totalOpenSeats ? { widgetId: "classroomCapacity" as const, text: `${totalOpenSeats.toLocaleString()} open seats across visible centers` } : null,
     pendingIncidents ? { widgetId: "complianceQueue" as const, text: `${pendingIncidents.toLocaleString()} incident reports need review` } : null,
     highIntentLeadCount ? { widgetId: "enrollmentPipeline" as const, text: `${highIntentLeadCount.toLocaleString()} high-fit leads should be prioritized` } : null,
-    openTasks ? { widgetId: "toursAndTasks" as const, text: `${openTasks.toLocaleString()} CRM follow-up tasks are open` } : null,
+    openTasks ? { widgetId: "toursAndTasks" as const, text: `${openTasks.toLocaleString()} enrollment follow-up tasks are open` } : null,
     toursToday ? { widgetId: "toursAndTasks" as const, text: `${toursToday.toLocaleString()} tours are scheduled today` } : null,
   ];
   const dashboardNotifications = dashboardNotificationRows.filter((item): item is DashboardNotificationRow => Boolean(item));
@@ -858,8 +858,8 @@ export default async function DashboardPage() {
         `${totalOpenSeats.toLocaleString()} open seats`,
       ];
   const aiSummary = user.role === UserRole.TEACHER
-    ? `Classroom snapshot: ${activeChildren.toLocaleString()} children are visible to your role, ${pendingIncidents.toLocaleString()} classroom incident items need attention, and ${unreadMessages.toLocaleString()} family messages are unread.`
-    : `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread.`;
+    ? `Classroom snapshot: ${activeChildren.toLocaleString()} children are visible to you, ${pendingIncidents.toLocaleString()} incident items need attention, and ${unreadMessages.toLocaleString()} family messages are unread.`
+    : `Enrollment snapshot: ${newLeadCount.toLocaleString()} open inquiries, ${highIntentLeadCount.toLocaleString()} families showing strong interest, ${openTasks.toLocaleString()} open follow-up tasks, and ${unreadMessages.toLocaleString()} unread family messages.`;
   const centerEmbedCards = centers.map((center) => {
     const displayName = [displayText(center.crmLocationId ?? center.name), [center.city, center.state].filter(Boolean).join(", ")]
       .filter(Boolean)
@@ -868,8 +868,8 @@ export default async function DashboardPage() {
       title: `${displayName} inquiry form embed`,
       description:
         isKidCityWorkspace
-          ? "This school-specific Kid City USA form sends new inquiries directly into this school's CRM profile, notification routing, and reporting backup."
-          : "This center-specific form sends new inquiries directly into this school's CRM profile, notification routing, and reporting backup.",
+          ? "This school-specific Kid City USA form assigns new inquiries to this school and its approved follow-up contacts."
+          : "This school-specific form assigns new inquiries to this school and its approved follow-up contacts.",
       embedCode: isKidCityWorkspace
         ? getKidCityLocationInquiryEmbedCode({
             centerId: center.id,
@@ -890,7 +890,7 @@ export default async function DashboardPage() {
           {
             title: "Kid City USA inquiry form embed",
             description:
-              "Executive users can copy this multi-location form for the Kid City USA website. It routes each selected school to the matching CRM profile, notification email, and Google Sheets backup.",
+              "Executive users can copy this multi-location form for the Kid City USA website. Each inquiry is assigned to the school selected by the family.",
             embedCode: getKidCityInquiryEmbedCode(),
           },
         ]
@@ -941,8 +941,8 @@ export default async function DashboardPage() {
       { label: "Active children", value: activeChildren.toLocaleString(), trend: `${centers.length} visible centers`, tone: "emerald" },
       { label: "Enrollment capacity", value: capacity.toLocaleString(), trend: `${totalOpenSeats.toLocaleString()} open seats`, tone: "sky" },
       { label: "Occupancy", value: `${occupancy}%`, trend: "Live from center capacity", tone: "amber" },
-      { label: "New leads", value: newLeadCount.toLocaleString(), trend: `${highIntentLeadCount.toLocaleString()} high-fit`, tone: "violet" },
-      { label: "Tours today", value: toursToday.toLocaleString(), trend: `${openTasks.toLocaleString()} open CRM tasks`, tone: "sky" },
+      { label: "Open inquiries", value: newLeadCount.toLocaleString(), trend: `${highIntentLeadCount.toLocaleString()} high-fit`, tone: "violet" },
+      { label: "Tours today", value: toursToday.toLocaleString(), trend: `${openTasks.toLocaleString()} open follow-up tasks`, tone: "sky" },
       { label: "Outstanding balances", value: `$${revenueDollars.toLocaleString()}`, trend: "Current family balances", tone: "rose" },
       { label: "Teachers", value: staffCount.toLocaleString(), trend: "Assigned to visible centers", tone: "emerald" },
       { label: "Incidents to review", value: pendingIncidents.toLocaleString(), trend: `${expiringDocuments.toLocaleString()} expiring docs`, tone: "amber" },
@@ -960,7 +960,7 @@ export default async function DashboardPage() {
       score: lead.score,
       desiredStart: lead.desiredStartDate
         ? lead.desiredStartDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-        : "TBD",
+        : "Not set",
       tags: lead.tags.length
         ? lead.tags.map((tag) => tag.name)
         : [lead.programInterest, lead.ageGroupInterest].filter((tag): tag is string => Boolean(tag)),

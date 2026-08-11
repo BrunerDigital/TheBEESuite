@@ -1,8 +1,8 @@
 # The BEE Suite Role SOP Library
 
-Last updated: August 6, 2026
+Last updated: August 11, 2026
 
-Use these SOPs when training a school team or sending role-specific instructions before a launch, pilot, parent portal rollout, billing rollout, or kiosk rollout.
+Use these SOPs when training a school team or sending role-specific instructions before a launch, parent portal rollout, billing rollout, or kiosk rollout.
 
 For the owner/director transition announcement, use `SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md` with the curated packet in `output/pdf/SCHOOL_TRANSITION_EMAIL_PACKET_CURRENT/`.
 
@@ -54,7 +54,7 @@ When the UI, permissions, labels, routes, or workflow guardrails change, update 
 - `docs/sops/TEACHER_SOP.md` - classroom attendance, daily reports, media, incidents, messages, staff kiosk, and offline queue behavior.
 - `docs/sops/PARENT_PORTAL_INSTALL_GUIDE.md` - parent device install instructions for iPhone, iPad, Android, Fire tablet, and desktop.
 - `docs/sops/PARENT_PORTAL_SOP.md` - parent login, family dashboard, invoices, documents, messages, incident acknowledgements, and troubleshooting.
-- `docs/sops/PARENT_ACH_PAYMENT_GUIDE.md` - parent card-first payment choices, saved card/bank setup, one-time bank payment, autopay status, and exact-total review.
+- `docs/sops/PARENT_ACH_PAYMENT_GUIDE.md` - parent card-first payment choices, saved card and bank setup, individual bank payments, autopay status, and exact-total review.
 - `docs/sops/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` - lobby kiosk PIN/QR check-in/out, guardian signature, staff clock-in/out, and warning handling.
 
 ## Visual Assets
@@ -91,7 +91,7 @@ Before the guides are sent broadly, the school should confirm:
 - Teachers can log in and see the correct classroom rosters.
 - Parent guardian emails are accurate on family profiles.
 - Parent portal login is available from `https://thebeesuite.io/parents`; role-specific staff entry points are `/directors`, `/teachers`, and `/executives`.
-- Parent invitations use the verified guardian email, secure parent URL, and school-issued first-login password. Parents may change the password later; staff must never ask for it to be sent back.
+- Parent invitations use the verified guardian email, secure parent URL, and password from the school invitation. Parents may change the password later; staff must never ask for it to be sent back.
 - Kiosk PIN or QR credentials are ready before lobby check-in is used.
 - Stripe payout and checkout readiness are complete before parents are asked to pay online.
 - Billing and document workflows have been tested with one low-risk family record.

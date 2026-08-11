@@ -537,7 +537,7 @@ test("parent portal invite copy explains the app login, kiosk PIN, ACH, and fami
 
   assert.equal(buildParentPortalUrl("https://thebeesuite.io/"), "https://thebeesuite.io/parent-portal");
   assert.match(text, /Email: taylor@example\.com/);
-  assert.match(text, /First-login password: BusyBees/);
+  assert.match(text, /Password from your school invitation: BusyBees/);
   assert.match(text, /can keep this password or choose a private password anytime/);
   assert.match(text, /last 4 digits of your phone number/);
   assert.match(text, /Complete these steps in order/);

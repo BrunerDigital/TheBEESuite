@@ -1,6 +1,6 @@
 # The BEE Suite School System Operating Manual
 
-Last updated: August 6, 2026
+Last updated: August 11, 2026
 
 Audience: owners, executives, school directors, billing admins, training leads, and launch support.
 
@@ -123,7 +123,7 @@ flowchart TD
 | Director or assistant director | Correct school access, families, classrooms, teacher accounts, billing readiness | Run school dashboard, CRM, family records, parent access, classroom oversight, documents, messages, and escalations | `DIRECTOR_SOP.md` |
 | Billing admin | Billing access, ledgers, school-scoped tuition plans, payment readiness, approved policy | Create invoices, manage payment methods, send secure setup links, run school-scoped Terminal payments, reconcile payments, handle failed payments | `BILLING_ADMIN_SOP.md` |
 | Teacher | Teacher login, classroom assignment, roster, shift code if used | Attendance, daily reports, photos, incidents, messages, offline sync | `TEACHER_SOP.md` |
-| Parent or guardian | Guardian email linked to family, school-issued first-login password, secure parent portal link | Install portal, view updates, message school, review documents, choose card/bank payment, acknowledge incidents | `PARENT_PORTAL_INSTALL_GUIDE.md`, `PARENT_ACH_PAYMENT_GUIDE.md`, `PARENT_PORTAL_SOP.md` |
+| Parent or guardian | Guardian email linked to family, password from the school invitation, secure parent portal link | Install portal, view updates, message school, review documents, choose card/bank payment, acknowledge incidents | `PARENT_PORTAL_INSTALL_GUIDE.md`, `PARENT_ACH_PAYMENT_GUIDE.md`, `PARENT_PORTAL_SOP.md` |
 | Authorized pickup | Active PIN or QR credential, pickup authorization, correct school kiosk | Check child in/out, sign the kiosk, contact director for warnings | `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` |
 
 ## Launch Week Command Rhythm
@@ -144,7 +144,7 @@ Do not ask parents to pay online until:
 
 - The school's Stripe connected payout account is ready.
 - Webhook reconciliation is configured and tested.
-- Debit/credit card, Instant Bank, and One-Time Bank options match approved school policy and show the exact total before submission.
+- Debit or credit card and bank account options match approved school policy and show the exact total before submission.
 - The school-absorbed Stripe processing-cost policy is confirmed and no parent processing surcharge is configured.
 - Refunds, disputes, failed payments, duplicate payment handling, and support ownership are documented.
 - A billing smoke test passes for the school.

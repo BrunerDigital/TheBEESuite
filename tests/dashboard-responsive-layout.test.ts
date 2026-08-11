@@ -14,8 +14,8 @@ test("dashboard shell adapts navigation and toolbar density by device width", ()
   assert.match(shell, /2xl:block/);
   assert.match(shell, /lg:pl-20 2xl:pl-72/);
   assert.match(shell, /hidden min-w-0 flex-1 items-center lg:flex/);
-  assert.match(shell, /aria-label="Search workspace"[\s\S]*name="workspace-search"/);
-  assert.match(shell, /aria-label="Search workspace"[\s\S]*name="mobile-workspace-search"/);
+  assert.match(shell, /aria-label="Search The BEE Suite"[\s\S]*name="workspace-search"/);
+  assert.match(shell, /aria-label="Search The BEE Suite"[\s\S]*name="mobile-workspace-search"/);
   assert.match(shell, /aria-current=\{active \? "page" : undefined\}[\s\S]*aria-description=\{description\}/);
   assert.match(shell, /isTeacherUser\(currentUser\)[\s\S]*href="\/teacher-portal#teacher-profile-setup"[\s\S]*Profile settings/);
   assert.match(shell, /accessibleModuleRouteSlug\(currentUser, slug\)/);
@@ -28,7 +28,7 @@ test("dashboard shell adapts navigation and toolbar density by device width", ()
   assert.match(shell, /function ScopeContextLink/);
   assert.match(shell, /"mx-auto grid max-w-md items-end gap-1"/);
   assert.match(shell, /bottomNavItemCount === 4 \? "grid-cols-4"/);
-  assert.match(shell, /More for your role/);
+  assert.match(shell, /<SheetTitle[^>]*>More<\/SheetTitle>/);
   assert.match(shell, /teacher-quick-log/);
   assert.match(refresh, /text-\[0\.68rem\] 2xl:inline-flex/);
 });
@@ -36,7 +36,7 @@ test("dashboard shell adapts navigation and toolbar density by device width", ()
 test("shared workflow controls expose headings, labels, and live feedback", () => {
   const workflow = source("src/components/automation-workflow-builder.tsx");
 
-  assert.match(workflow, /<CardTitle><h1>Automation Workflow Builder<\/h1><\/CardTitle>/);
+  assert.match(workflow, /<CardTitle><h1>Automation workflow builder<\/h1><\/CardTitle>/);
   assert.match(workflow, /role="status" aria-live="polite"/);
   assert.match(workflow, /role="alert"/);
   for (const id of [

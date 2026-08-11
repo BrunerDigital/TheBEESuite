@@ -455,7 +455,7 @@ export function OnlineRegistrationForm({
           <CheckCircle2 className="size-4" />
           <AlertTitle>Registration submitted</AlertTitle>
           <AlertDescription>
-            The selected school received the registration packet and a CRM follow-up task was created.
+            The selected school received the registration packet. School staff will review it and contact you with next steps.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -471,7 +471,7 @@ export function OnlineRegistrationForm({
           <AlertCircle className="size-4" />
           <AlertTitle>Schools are not available</AlertTitle>
           <AlertDescription>
-            Registration can render, but it needs a database connection and active school records before families can submit packets.
+            Registration is temporarily unavailable. No information has been submitted. Try again later or contact the school.
           </AlertDescription>
         </Alert>
       ) : null}

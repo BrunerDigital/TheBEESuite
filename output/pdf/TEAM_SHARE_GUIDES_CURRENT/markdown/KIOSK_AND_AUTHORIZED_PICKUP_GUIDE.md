@@ -1,6 +1,6 @@
 # Kiosk And Authorized Pickup Guide - The BEE Suite
 
-Last updated: July 29, 2026
+Last updated: August 11, 2026
 
 Audience: directors, front desk staff, parents, guardians, authorized pickups, and staff using the lobby kiosk.
 
@@ -15,6 +15,14 @@ The lobby kiosk lets verified adults check children in or out and lets staff clo
 ## Visual Overview
 
 ![Kiosk and authorized pickup flow](../assets/kiosk-pickup-flow-c446f8c3c3.png)
+
+## Current Kiosk Credential Flow
+
+- The family kiosk is center-specific. Confirm the school name on the lobby device before every test or launch.
+- A guardian may use the 4 digit family PIN or issued QR credential. When no PIN exists, the parent invitation/setup flow may initialize it from the last four digits of the guardian phone.
+- The parent setup screen allows the guardian to confirm or change the PIN. Directors can manage the PIN and QR credential from the family workspace.
+- A credential never overrides custody, pickup, identity, or front-desk verification warnings.
+- Wait for the completed confirmation before repeating a check-in, check-out, clock-in, or clock-out action. If the device or network fails, use the school's documented fallback and reconcile the event once.
 
 ## Director Setup
 

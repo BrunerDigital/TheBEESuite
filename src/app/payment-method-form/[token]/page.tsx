@@ -146,12 +146,12 @@ export default async function PaymentMethodFormPage({
           <BrandLogo branding={branding} size="lg" priority />
           <div>
             <Badge className="mb-3 border-amber-300/30 bg-amber-300/10 text-amber-100" variant="outline">
-              The BEE Suite secure tuition flow
+              Secure tuition payment
             </Badge>
             <div className="flex items-start gap-2">
-              <h1 className="text-3xl font-semibold tracking-normal sm:text-4xl">Set up your family payment profile in The BEE Suite</h1>
+              <h1 className="text-3xl font-semibold tracking-normal sm:text-4xl">Set up your family&apos;s payment method</h1>
               <InfoTip label="About this payment setup" side="bottom" align="end" className="mt-1 text-zinc-400 hover:text-white">
-                Save a bank account or debit/credit card for tuition payments connected to {family.name}. A secure processor opens only when payment details must be collected.
+                Connect a bank account or save a debit or credit card for {family.name}. Payment details are entered only in the secure payment form.
               </InfoTip>
             </div>
           </div>
@@ -163,7 +163,7 @@ export default async function PaymentMethodFormPage({
               </div>
               {childNames ? (
                 <div>
-                  <div className="text-xs uppercase tracking-normal text-zinc-500">Linked child records</div>
+                  <div className="text-xs uppercase tracking-normal text-zinc-500">Children</div>
                   <div className="mt-1 text-sm font-medium">{childNames}</div>
                 </div>
               ) : null}

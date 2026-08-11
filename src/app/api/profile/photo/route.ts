@@ -56,9 +56,9 @@ async function POSTHandler(request: NextRequest) {
       tenantId: user.tenantId,
       userId: user.id,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Profile photo could not be uploaded." },
+      { ok: false, error: "We couldn't upload your profile photo. Try again." },
       { status: 502 },
     );
   }

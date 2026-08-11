@@ -37,7 +37,7 @@ test("parent sign-in, recovery, and setup forms expose real labels and recovery 
   assert.match(resetPassword, /name="currentPassword"/);
   assert.match(resetPassword, /name="newPassword"/);
   assert.match(resetPassword, /name="confirmPassword"/);
-  assert.match(resetPassword, /Request a New Reset Link/);
+  assert.match(resetPassword, /Request a new reset link/);
   assert.doesNotMatch(resetPassword, /nativeButton=\{false\}[\s\S]{0,80}freshResetHref/);
   assert.match(parentSetup, /name="fullName"/);
   assert.match(parentSetup, /name="phone"/);
@@ -55,7 +55,7 @@ test("linked family help stays family-specific and points to current Parent Port
   assert.match(support, /Family → Profile &amp; Security/);
   assert.match(support, /flex w-full flex-wrap items-center gap-2/);
   assert.match(resources, /Add the Parent Portal to Your Device/);
-  assert.match(resources, /temporary password from your school invitation/);
+  assert.match(resources, /password from your school invitation/);
   assert.doesNotMatch(resources, /school-issued first-login password/);
   assert.doesNotMatch(communicationsKit, /THE BEE SUITE • HUMAN-REVIEWED WORKFLOW|Profile Settings/);
   assert.match(communicationsKit, /THE BEE SUITE • STEP-BY-STEP GUIDE/);

@@ -462,9 +462,9 @@ async function POSTHandler(request: NextRequest) {
         centerId: recipient.staffProfile?.centerId ?? user.primaryCenterId,
         threadKey,
       });
-    } catch (error) {
+    } catch {
       return NextResponse.json(
-        { ok: false, error: error instanceof Error ? error.message : "Attachment could not be uploaded." },
+        { ok: false, error: "We couldn't upload the attachment. The message was not sent. Try again." },
         { status: 502 },
       );
     }
@@ -623,9 +623,9 @@ async function POSTHandler(request: NextRequest) {
         centerId: user.primaryCenterId,
         threadKey: "broadcast",
       });
-    } catch (error) {
+    } catch {
       return NextResponse.json(
-        { ok: false, error: error instanceof Error ? error.message : "Attachment could not be uploaded." },
+        { ok: false, error: "We couldn't upload the attachment. The message was not sent. Try again." },
         { status: 502 },
       );
     }
@@ -953,9 +953,9 @@ async function POSTHandler(request: NextRequest) {
       familyId,
       threadKey: familyId ? `family:${familyId}` : `internal:${user.primaryCenterId ?? user.tenantId}`,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Attachment could not be uploaded." },
+      { ok: false, error: "We couldn't upload the attachment. The message was not sent. Try again." },
       { status: 502 },
     );
   }

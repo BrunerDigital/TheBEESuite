@@ -1,6 +1,6 @@
 # The BEE Suite School System Operating Manual
 
-Last updated: July 29, 2026
+Last updated: August 11, 2026
 
 Audience: owners, executives, school directors, billing admins, training leads, and launch support.
 
@@ -18,9 +18,41 @@ The BEE Suite supports school operations, but it does not replace professional j
 
 ![Independent school launch gates](../assets/school-launch-gates-ec156afee4.png)
 
-![Director daily operating flow](../assets/director-daily-flow-86d6ce7528.png)
+![Director daily operating flow](../assets/director-daily-flow-830e761842.png)
 
-![Role and device screenshot standard](../assets/role-device-standards-guide-84bfebea52.png)
+![Role and device screenshot standard](../assets/role-device-standards-guide-c202e29952.png)
+
+## Current Application Navigation
+
+The live application uses a permission-scoped sidebar plus tabbed consolidated workspaces. A user sees only the groups and tabs allowed for that role and school scope.
+
+| Sidebar workspace | Current tabs or primary views |
+| --- | --- |
+| School Operations | Enrollment status, Classrooms, Attendance, Daily reports, Incidents |
+| Families & Communication | Families, Children, Messages, Media review |
+| Staff & Access | Teachers, Team permissions |
+| Billing & Payments | Billing & invoices, Payments |
+| Records & Compliance | Forms, Documents, Compliance |
+| Enrollment CRM | Leads, Pipeline, Tours, Waitlist |
+| Campaigns & Automations | Campaigns, Automations |
+| Insights & Reputation | Enrollment status, Analytics, Reputation |
+| Settings & Setup | Settings, Integrations, School setup, Notifications, White-label |
+
+Role entry points are `https://thebeesuite.io/directors`, `https://thebeesuite.io/teachers`, `https://thebeesuite.io/parents`, and `https://thebeesuite.io/executives`. General sign-in remains available at `https://thebeesuite.io/login`.
+
+## August 2026 Workflow Rules
+
+- Directors can add a family, guardian, child, billing account, and kiosk PIN in one save from `Add Family, Parent + Child`.
+- Parent invitations are sent one guardian at a time from `Parent Portal Access`. Current internal family linkage and identity checks authorize access; a ProCare import batch is not required for a safely entered new enrollment.
+- Ambiguous or conflicting guardian identities fail closed. Never create a duplicate family or child to work around missing parent visibility.
+- Parent invitation states distinguish provider acceptance from confirmed delivery and support a manual school-email fallback when automated sending fails.
+- Active lists, counts, and receivables exclude withdrawn/historical families while retaining their records for past-record review.
+- The selected child's tuition assignment is the canonical future rate; the family view displays active per-child rates and the weekly total.
+- Weekly and four-week tuition cadences are supported where configured. Existing billed coverage must be reviewed before changing cadence.
+- Eligible unpaid invoices may be voided through the approved action. Payment and ledger history must never be deleted.
+- The school absorbs Stripe processing costs; no processing fee is added to a parent payment.
+- AI data changes require an authorized, school-scoped preview and explicit confirmation.
+- Full dashboards do not automatically refresh in the background; lightweight notification refreshes remain. Users must wait for action results and reopen the specific record when confirmation is needed.
 
 ## System Map
 
@@ -95,7 +127,7 @@ flowchart TD
 | Director or assistant director | Correct school access, families, classrooms, teacher accounts, billing readiness | Run school dashboard, CRM, family records, parent access, classroom oversight, documents, messages, and escalations | `DIRECTOR_SOP.md` |
 | Billing admin | Billing access, ledgers, school-scoped tuition plans, payment readiness, approved policy | Create invoices, manage payment methods, send secure setup links, run school-scoped Terminal payments, reconcile payments, handle failed payments | `BILLING_ADMIN_SOP.md` |
 | Teacher | Teacher login, classroom assignment, roster, shift code if used | Attendance, daily reports, photos, incidents, messages, offline sync | `TEACHER_SOP.md` |
-| Parent or guardian | Guardian email linked to family, school-issued first-login password, secure parent portal link | Install portal, view updates, message school, review documents, choose card/bank payment, acknowledge incidents | `PARENT_PORTAL_INSTALL_GUIDE.md`, `PARENT_ACH_PAYMENT_GUIDE.md`, `PARENT_PORTAL_SOP.md` |
+| Parent or guardian | Guardian email linked to family, password from the school invitation, secure parent portal link | Install portal, view updates, message school, review documents, choose card/bank payment, acknowledge incidents | `PARENT_PORTAL_INSTALL_GUIDE.md`, `PARENT_ACH_PAYMENT_GUIDE.md`, `PARENT_PORTAL_SOP.md` |
 | Authorized pickup | Active PIN or QR credential, pickup authorization, correct school kiosk | Check child in/out, sign the kiosk, contact director for warnings | `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` |
 
 ## Launch Week Command Rhythm
@@ -116,8 +148,8 @@ Do not ask parents to pay online until:
 
 - The school's Stripe connected payout account is ready.
 - Webhook reconciliation is configured and tested.
-- Debit/credit card, Instant Bank, and One-Time Bank options match approved school policy and show any approved recovery before submission.
-- Parent processing recovery language is approved before card recovery is enabled.
+- Debit or credit card and bank account options match approved school policy and show the exact total before submission.
+- The school-absorbed Stripe processing-cost policy is confirmed and no parent processing surcharge is configured.
 - Refunds, disputes, failed payments, duplicate payment handling, and support ownership are documented.
 - A billing smoke test passes for the school.
 

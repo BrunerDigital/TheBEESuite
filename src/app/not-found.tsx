@@ -7,14 +7,14 @@ export default function NotFoundPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">The BEE Suite</p>
         <h1 className="text-3xl font-semibold">Page not found.</h1>
         <p className="text-sm leading-6 text-slate-300">
-          The link may be outdated or no longer available. Your parent and family workspace is available at the routes below.
+          The link may be outdated, or the page may have moved. Choose a destination below.
         </p>
         <div className="flex flex-col gap-3">
           <Link
             href="/parents"
             className="inline-flex items-center justify-center rounded-md bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
           >
-            Go to parent portal
+            Open Parent Portal
           </Link>
           <Link
             href="/"

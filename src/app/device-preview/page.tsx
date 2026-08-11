@@ -39,7 +39,7 @@ function DirectorPreview() {
   return (
     <div className="flex min-w-0 flex-col gap-5">
       <section className="honeyglass-hero overflow-hidden rounded-3xl border bg-card/85 p-5 shadow-2xl shadow-black/10 sm:p-7">
-        <Badge className="mb-4">Director command center</Badge>
+        <Badge className="mb-4">Director overview</Badge>
         <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-end">
           <div className="min-w-0">
             <h1 className="text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">Good morning, Avery</h1>
@@ -86,7 +86,7 @@ function DirectorPreview() {
           </CardContent>
         </Card>
         <Card className="glass-panel min-w-0 overflow-hidden">
-          <CardHeader><CardTitle>Quick actions</CardTitle><CardDescription>Frequent director workflows</CardDescription></CardHeader>
+          <CardHeader><CardTitle>Quick actions</CardTitle><CardDescription>Common director tasks</CardDescription></CardHeader>
           <CardContent className="grid grid-cols-2 gap-3">
             {['Attendance', 'Message families', 'Report incident', 'Run report'].map((label) => <div key={label} className="rounded-xl border bg-background/50 p-4 text-sm font-medium">{label}</div>)}
           </CardContent>

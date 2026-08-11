@@ -1,6 +1,6 @@
 # Executive Admin SOP - The BEE Suite
 
-Last updated: August 6, 2026
+Last updated: August 11, 2026
 
 Audience: school owners, corporate users, franchise/brand admins, regional managers, and platform operators.
 
@@ -113,7 +113,7 @@ Do not approve live parent payments for a school until every item below is compl
 3. Stripe status says the school can accept parent payments.
 4. Tuition plans, fees, discounts, subsidy rules, ledger balances, and open invoices are validated.
 5. Parent card and bank payment choices are approved; the current flow presents card before available bank options.
-6. Saved card, saved bank, one-time bank, and autopay disclosures match approved school policy.
+6. `Debit or credit card`, `Pay with Link`, `Bank account`, and autopay disclosures match approved school policy.
 7. The school-absorbed Stripe processing-cost policy is confirmed and no parent processing surcharge is configured.
 8. Refund, dispute, failed payment, duplicate payment, and support procedures are assigned.
 9. A low-risk billing smoke test has passed.

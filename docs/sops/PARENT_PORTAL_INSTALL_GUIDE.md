@@ -1,13 +1,13 @@
 # Parent Step-By-Step Guide: Install The BEE Suite Parent Portal
 
-Last updated: August 6, 2026
+Last updated: August 11, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite.
 
 ## What You Need
 
 - The guardian email address your school has on file.
-- The first-login password included in the approved parent invitation from your school.
+- The password included in the approved parent invitation from your school.
 - A phone, tablet, or computer with internet access.
 
 ## Visual Preview
@@ -96,7 +96,7 @@ Chrome and Edge may show an install icon in the address bar.
 
 1. Open the installed parent portal icon or go to `https://thebeesuite.io/parents`.
 2. Enter the personal email address on your guardian profile.
-3. On first access, enter the first-login password included in the approved school invitation.
+3. On first access, enter the password included in the approved school invitation.
 4. You may keep that password or choose a private password later from Parent Portal settings.
 5. If you forgot your current password, use the password recovery option.
 6. After login, open the parent portal.
@@ -120,12 +120,10 @@ If you log in but do not see your family, contact the school and ask them to con
 
 ## Troubleshooting
 
-Contact the school if:
+Contact the school with your name, child, school, and sign-in email if:
 
 - Your email is not recognized.
 - Your password does not work.
 - You log in but do not see your child.
 - A balance, invoice, photo, report, document, or incident looks wrong.
 - A payment button is missing or returns an error.
-
-Include your name, child name, school name, email address used to log in, and a screenshot if safe to share.

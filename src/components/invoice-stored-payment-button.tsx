@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Building2, CheckCircle2, CreditCard } from "lucide-react";
+import { AlertCircle, CheckCircle2, CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -49,7 +49,7 @@ function disabledReason(invoice: InvoiceStoredPaymentActionData) {
   const method = invoice.billingAccount.paymentMethodManagement;
   if (invoice.status !== "OPEN") return "Invoice is not open.";
   if (invoice.totalCents <= 0) return "Invoice total must be greater than zero.";
-  if (!method.hasStripeCustomer || !method.hasSavedPaymentMethod) return "No selected method.";
+  if (!method.hasStripeCustomer || !method.hasSavedPaymentMethod) return "No saved payment method.";
   return null;
 }
 
@@ -63,7 +63,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
 
   function processStoredMethod() {
     const confirmed = window.confirm(
-      `Charge ${invoice.billingAccount.family.name}'s selected payment method ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
+      `Process ${invoice.number} for ${invoice.billingAccount.family.name}? Account credit is applied first; any remaining balance, up to ${money(invoice.totalCents)}, is charged to the selected saved payment method.`,
     );
     if (!confirmed) return;
 
@@ -85,14 +85,22 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
       const json = await response.json().catch(() => null) as AutopaySummary | null;
       const result = json?.results?.find((item) => item.invoiceId === invoice.id);
       if (!response.ok || !json?.ok || !result) {
-        setError(json?.error || "Selected payment method could not be submitted.");
+        setError(json?.error || "The invoice could not be processed with the saved payment method. Review the family payment settings and try again.");
         return;
       }
       if (result.status !== "processing" && result.status !== "paid") {
-        setError(result.reason || "Selected payment method was not eligible.");
+        setError(result.reason || "This invoice cannot be processed with the saved payment method.");
         return;
       }
-      setMessage(result.status === "paid" ? "Payment recorded" : result.stripePaymentIntentId ? "Payment submitted" : "Processing started");
+      setMessage(
+        result.status === "paid"
+          ? result.stripePaymentIntentId
+            ? "Payment recorded"
+            : "Invoice paid with account credit"
+          : result.stripePaymentIntentId
+            ? "Payment submitted"
+            : "Payment processing",
+      );
       router.refresh();
     });
   }
@@ -101,7 +109,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
     if (invoice.status !== "OPEN") return setError("Invoice is not open.");
     if (invoice.totalCents <= 0) return setError("Invoice total must be greater than zero.");
     const confirmed = window.confirm(
-      `Open The BEE Suite instant bank checkout for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}? The secure processor will collect and verify the bank information.`,
+      `Open a secure Link payment form for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
     );
     if (!confirmed) return;
 
@@ -119,7 +127,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
       });
       const json = await response.json().catch(() => null) as CheckoutSummary | null;
       if (!response.ok || !json?.url) {
-        setError(json?.error || "Instant bank checkout could not be opened.");
+        setError(json?.error || "The secure Link payment form could not be opened.");
         return;
       }
       window.location.href = json.url;
@@ -130,7 +138,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
     if (invoice.status !== "OPEN") return setError("Invoice is not open.");
     if (invoice.totalCents <= 0) return setError("Invoice total must be greater than zero.");
     const confirmed = window.confirm(
-      `Open The BEE Suite debit/credit card checkout for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}? The secure processor will collect the card information.`,
+      `Open a secure card payment form for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
     );
     if (!confirmed) return;
 
@@ -148,7 +156,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
       });
       const json = await response.json().catch(() => null) as CheckoutSummary | null;
       if (!response.ok || !json?.url) {
-        setError(json?.error || "Debit/credit card checkout could not be opened.");
+        setError(json?.error || "The secure card payment form could not be opened.");
         return;
       }
       window.location.href = json.url;
@@ -165,7 +173,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
           variant={reason ? "outline" : "default"}
         >
           <CreditCard data-icon="inline-start" />
-          {isPending ? "Submitting" : "Charge Selected"}
+          {isPending ? "Submitting…" : "Process with saved method"}
         </Button>
         <Button
           size="sm"
@@ -173,8 +181,8 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
           onClick={openInstantBankCheckout}
           variant="outline"
         >
-          <Building2 data-icon="inline-start" />
-          Instant Bank
+          <CreditCard data-icon="inline-start" />
+          Pay with Link
         </Button>
         <Button
           size="sm"
@@ -183,7 +191,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
           variant="outline"
         >
           <CreditCard data-icon="inline-start" />
-          Debit/Credit
+          Debit or credit card
         </Button>
       </div>
       <div className="max-w-48 text-xs text-muted-foreground">

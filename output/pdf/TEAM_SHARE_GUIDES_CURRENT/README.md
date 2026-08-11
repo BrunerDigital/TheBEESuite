@@ -1,6 +1,6 @@
 # The BEE Suite Team Share Guides
 
-Prepared July 29, 2026. This stable `CURRENT` folder replaces prior date-stamped packets and contains the canonical Markdown and PDF editions of the core product, role, onboarding, payment, kiosk, migration, and support guides.
+Prepared August 11, 2026. This stable `CURRENT` folder replaces prior date-stamped packets and contains the canonical Markdown and PDF editions of the core product, role, onboarding, payment, kiosk, migration, and support guides.
 
 ## Recommended send order
 

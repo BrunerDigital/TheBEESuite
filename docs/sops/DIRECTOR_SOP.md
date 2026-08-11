@@ -1,6 +1,6 @@
 # Director SOP - The BEE Suite
 
-Last updated: August 6, 2026
+Last updated: August 11, 2026
 
 Audience: center directors, assistant directors, and school operators responsible for daily use of The BEE Suite.
 
@@ -28,7 +28,7 @@ Use the role-specific director entry point: `https://thebeesuite.io/directors`. 
 
 The current sidebar and workspace tabs are:
 
-- `Dashboard` for the role-aware daily command center, notifications, and the prominent `Enrollment Status Summary` shortcut.
+- `Dashboard` for the daily school overview, notifications, and the prominent `Enrollment Status Summary` shortcut.
 - `School Operations` with `Enrollment status`, `Classrooms`, `Attendance`, `Daily reports`, and `Incidents`.
 - `Families & Communication` with `Families`, `Children`, `Messages`, and `Media review`.
 - `Staff & Access` with `Teachers` and `Team permissions` when the role allows it.
@@ -50,7 +50,7 @@ Open `View enrollment status` from the director dashboard or School Operations, 
 4. Select `Save Family, Parent + Child`, then reopen the saved family.
 5. Confirm the sticky context header, guardian relationship, email, phone, linked children, active or pending enrollment, classroom, custody/pickup notes, and permissions.
 6. Scroll to `Parent Portal Access`, find the exact guardian, and select `Send Parent App Invite`.
-7. Read the result and status. `Accepted` means the email provider accepted the message; `Delivered` is confirmed delivery. `Failed` or `Expired` requires follow-up.
+7. Read the result and status. `Accepted` means the email service received the request; `Delivered` confirms delivery. `Failed` or `Expired` requires follow-up.
 8. If `Copy Invitation for Manual Email` appears, send that copy only from the approved school email account to the guardian email shown on the card.
 9. After the account is linked, `Send Parent Feature Guide & FAQ` may be used.
 
@@ -129,7 +129,7 @@ https://thebeesuite.io/login
 Parent login rules:
 
 - Username/email: the parent's personal email address on the guardian profile.
-- First access: the approved parent invitation includes the secure parent URL, guardian email, and a school-issued first-login password.
+- First access: the approved parent invitation includes the secure parent URL, guardian email, and password from the school invitation.
 - The parent may keep that password or choose a private password later from Parent Portal settings.
 - If the parent cannot log in, confirm the guardian email and family link, then use the approved resend/reset workflow. Never ask the parent to send a password back to the school.
 
@@ -139,7 +139,7 @@ Director steps:
 2. Confirm the guardian email is present and spelled correctly.
 3. Confirm the guardian is connected to the correct family.
 4. Confirm the parent portal access action has been completed or send the parent portal invite.
-5. Tell the parent to use the guardian email and first-login password from the invitation at `https://thebeesuite.io/parents`. The parent may change the password later from settings.
+5. Tell the parent to use the guardian email and password from the invitation at `https://thebeesuite.io/parents`. The parent may change the password later from settings.
 6. If the parent sees no family after login, verify the guardian-to-family link.
 
 Never give one guardian another guardian's login.
@@ -153,9 +153,9 @@ Billing users should review the ledger before sending payment instructions.
 3. Confirm the current balance, active per-child weekly tuition, family weekly total, open invoices, credits, and recent payments.
 4. If the family owes money, open the invoice or payment action connected to that balance.
 5. Confirm the payment method offered to parents matches the school policy:
-   - Debit/credit card is presented first in the current parent flow.
-   - Instant Bank and One-Time Bank remain available when enabled.
-   - Any fee or recovery disclosure must be shown before payment.
+   - `Debit or credit card` is presented first in the current parent flow.
+   - Bank account options remain available when enabled.
+   - The school absorbs Stripe processing costs, so no processing fee is added to the parent payment.
 6. For failed or pending payments, review the payment status before retrying.
 7. Do not mark an invoice paid manually unless the payment has been verified outside the app.
 8. Do not use `Charge This Child Now` unless an immediate invoice is intended and approved.

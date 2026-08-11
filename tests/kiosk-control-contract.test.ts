@@ -11,7 +11,7 @@ test("family PIN and QR controls have explicit working and recovery states", () 
   assert.match(kioskSource, /disabled=\{!pin\.length\}[\s\S]*>Clear<\/Button>/);
   assert.match(kioskSource, /disabled=\{!pin\.length\}[\s\S]*>Delete<\/Button>/);
   assert.match(kioskSource, /disabled=\{isPending \|\| pin\.length !== 4\}/);
-  assert.match(kioskSource, /pendingAction === "family_lookup" \? "Checking…" : "Continue"/);
+  assert.match(kioskSource, /pendingAction === "family_lookup" \? "Verifying…" : "Verify Family PIN"/);
   assert.match(kioskSource, /Use PIN Instead/);
   assert.match(kioskSource, /cameraState === "unavailable"[\s\S]*Try Camera Again/);
   assert.match(kioskSource, /function retryCamera\(\)[\s\S]*setCameraAttempt\(\(current\) => current \+ 1\)/);

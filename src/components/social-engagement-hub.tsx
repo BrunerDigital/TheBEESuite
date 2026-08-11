@@ -45,13 +45,13 @@ type ReviewResponse = {
 };
 
 const capabilities = [
-  { provider: "Facebook & Instagram", publish: "Direct API", analytics: "Organic + paid", engagement: "Direct unified inbox", note: "Meta app review required" },
-  { provider: "Google Business Profile", publish: "Direct API", analytics: "Profile performance", engagement: "Reviews + public replies", note: "Verified location required" },
-  { provider: "LinkedIn", publish: "Direct API", analytics: "Organic + paid", engagement: "Comments via native tools", note: "Community Management approval" },
-  { provider: "TikTok", publish: "Direct API", analytics: "Organic + paid", engagement: "Native inbox handoff", note: "Public posting audit required" },
-  { provider: "Pinterest", publish: "Direct API", analytics: "Organic", engagement: "Native inbox handoff", note: "Business app access required" },
-  { provider: "X", publish: "Direct API", analytics: "Organic", engagement: "Native inbox handoff", note: "Access-tier dependent" },
-  { provider: "Google & Microsoft Ads", publish: "Ad platforms", analytics: "Paid campaigns", engagement: "Not applicable", note: "Official ad APIs" },
+  { provider: "Facebook & Instagram", publish: "Connected publishing", analytics: "Posts and ads", engagement: "Messages in The BEE Suite", note: "Meta approval required" },
+  { provider: "Google Business Profile", publish: "Connected publishing", analytics: "Profile activity", engagement: "Reviews and public replies", note: "Verified location required" },
+  { provider: "LinkedIn", publish: "Connected publishing", analytics: "Posts and ads", engagement: "Open LinkedIn for comments", note: "LinkedIn approval required" },
+  { provider: "TikTok", publish: "Connected publishing", analytics: "Posts and ads", engagement: "Open TikTok for messages", note: "TikTok approval required" },
+  { provider: "Pinterest", publish: "Connected publishing", analytics: "Posts", engagement: "Open Pinterest for messages", note: "Business access required" },
+  { provider: "X", publish: "Connected publishing", analytics: "Posts", engagement: "Open X for messages", note: "Eligible account required" },
+  { provider: "Google & Microsoft Ads", publish: "Use each ad account", analytics: "Campaign results", engagement: "Not applicable", note: "Ad account connection required" },
 ] as const;
 
 function formatDate(value: string | null | undefined) {
@@ -68,8 +68,8 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
   const [inboxItems, setInboxItems] = useState<SocialInboxItem[]>([]);
   const [reviews, setReviews] = useState<ExternalReview[]>([]);
   const [reviewSummary, setReviewSummary] = useState({ averageRating: null as number | null, totalReviewCount: 0 });
-  const [inboxStatus, setInboxStatus] = useState("Select Refresh Inbox to load current provider data.");
-  const [reviewStatus, setReviewStatus] = useState("Select Refresh Reviews to load current Google data.");
+  const [inboxStatus, setInboxStatus] = useState("Select Refresh inbox to load recent social messages.");
+  const [reviewStatus, setReviewStatus] = useState("Select Refresh reviews to load recent Google reviews.");
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replyTarget, setReplyTarget] = useState<ExternalReview | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -79,8 +79,8 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
     setInboxItems([]);
     setReviews([]);
     setReviewSummary({ averageRating: null, totalReviewCount: 0 });
-    setInboxStatus("Select Refresh Inbox to load current provider data.");
-    setReviewStatus("Select Refresh Reviews to load current Google data.");
+    setInboxStatus("Select Refresh inbox to load recent social messages.");
+    setReviewStatus("Select Refresh reviews to load recent Google reviews.");
   }
 
   function refreshInbox() {
@@ -91,12 +91,14 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
       const json = await response.json().catch(() => null) as InboxResponse | null;
       if (!response.ok || !json?.ok) {
         setInboxItems([]);
-        setInboxStatus(json?.error || "The social inbox could not be loaded. Check the school’s Meta connection and messaging permissions.");
+        setInboxStatus(json?.configured === false
+          ? "Connect this school’s Facebook and Instagram accounts before loading messages."
+          : "The social inbox could not be loaded. Check the school’s Meta connection and try again.");
         return;
       }
       setInboxItems(json.items ?? []);
       const warning = json.warnings?.length ? ` ${json.warnings.join(" ")}` : "";
-      setInboxStatus(`${json.items?.length ?? 0} recent message${json.items?.length === 1 ? "" : "s"} loaded directly from Meta.${warning}`);
+      setInboxStatus(`${json.items?.length ?? 0} recent message${json.items?.length === 1 ? "" : "s"} loaded from Meta.${warning}`);
     });
   }
 
@@ -108,7 +110,9 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
       const json = await response.json().catch(() => null) as ReviewResponse | null;
       if (!response.ok || !json?.ok) {
         setReviews([]);
-        setReviewStatus(json?.error || "Google reviews could not be loaded. Check the school’s Business Profile connection.");
+        setReviewStatus(json?.configured === false
+          ? "Connect this school’s Google Business Profile before loading reviews."
+          : "Google reviews could not be loaded. Check the school’s Business Profile connection and try again.");
         return;
       }
       setReviews(json.reviews ?? []);
@@ -129,14 +133,14 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
       });
       const json = await response.json().catch(() => null) as { ok?: boolean; error?: string; reply?: { comment: string; updateTime: string; state?: string } } | null;
       if (!response.ok || !json?.ok || !json.reply) {
-        setReviewStatus(json?.error || "The Google review response could not be published.");
+        setReviewStatus("The Google review response could not be published. Your draft is still available. Try again.");
         setReplyTarget(null);
         return;
       }
       setReviews((current) => current.map((review) => review.name === replyTarget.name
         ? { ...review, reply: json.reply?.comment || comment, replyUpdatedAt: json.reply?.updateTime || new Date().toISOString(), replyState: json.reply?.state || review.replyState }
         : review));
-      setReviewStatus("The public Google review response was published and audit logged.");
+      setReviewStatus("The public Google review response was published.");
       setReplyTarget(null);
     });
   }
@@ -145,8 +149,8 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
     return (
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Social Inbox & Reviews</CardTitle>
-          <CardDescription>An active, authorized school is required before social provider data can be loaded.</CardDescription>
+          <CardTitle>Social inbox and reviews</CardTitle>
+          <CardDescription>No schools are available for social messages and reviews.</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -158,14 +162,14 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
         <CardHeader>
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
-              <CardTitle>Social Inbox & Reputation</CardTitle>
+              <CardTitle>Social inbox and reviews</CardTitle>
               <CardDescription className="mt-2 max-w-3xl">
-                Work from one school-scoped command center while official platform APIs continue to handle publishing, reviews, and paid campaign reporting.
+                Review social messages, Google reviews, and campaign reporting for the selected school.
               </CardDescription>
             </div>
             <Link href="/integrations" className={buttonVariants({ variant: "outline" })}>
               <Link2 data-icon="inline-start" aria-hidden="true" />
-              Manage Connections
+              Manage connections
             </Link>
           </div>
         </CardHeader>
@@ -179,14 +183,14 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
               onChange={(event) => selectCenter(event.target.value)}
             >
               {centers.map((center) => (
-                <option key={center.id} value={center.id}>{center.crmLocationId ? `${center.crmLocationId} · ` : ""}{center.name}</option>
+                <option key={center.id} value={center.id}>{center.crmLocationId ? `${center.name} · Location ${center.crmLocationId}` : center.name}</option>
               ))}
             </select>
           </div>
           <div className="rounded-xl border bg-primary/5 p-4 text-sm leading-6 text-muted-foreground">
             <div className="flex items-start gap-3">
               <ShieldCheck className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
-              <p>Provider tokens stay encrypted and school scoped. Message and review content is loaded on demand and is not copied into family messages, billing records, or the BEE Suite database.</p>
+              <p>Social messages and reviews are loaded only when requested for the selected school. They remain separate from family messages and billing records.</p>
             </div>
           </div>
         </CardContent>
@@ -194,21 +198,21 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
 
       <Tabs defaultValue="inbox" className="gap-4">
         <TabsList>
-          <TabsTrigger value="inbox">Unified Inbox</TabsTrigger>
-          <TabsTrigger value="reviews">Google Reviews</TabsTrigger>
-          <TabsTrigger value="coverage">Platform Coverage</TabsTrigger>
+          <TabsTrigger value="inbox">Social inbox</TabsTrigger>
+          <TabsTrigger value="reviews">Google reviews</TabsTrigger>
+          <TabsTrigger value="coverage">Connected channels</TabsTrigger>
         </TabsList>
         <TabsContent value="inbox" className="grid gap-4">
           <Card className="glass-panel">
             <CardHeader>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <CardTitle>Facebook & Instagram Inbox</CardTitle>
-                  <CardDescription className="mt-2">Recent Messenger and Instagram professional-account conversations loaded directly through Meta’s official API.</CardDescription>
+                  <CardTitle>Facebook and Instagram inbox</CardTitle>
+                  <CardDescription className="mt-2">Recent Messenger and Instagram conversations from the school’s connected Meta account.</CardDescription>
                 </div>
                 <Button type="button" onClick={refreshInbox} disabled={isPending || !centerId}>
                   <RefreshCw data-icon="inline-start" aria-hidden="true" />
-                  Refresh Inbox
+                  Refresh inbox
                 </Button>
               </div>
             </CardHeader>
@@ -224,29 +228,29 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
                         <span className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</span>
                       </div>
                       <h3 className="mt-3 font-medium text-pretty">{item.author}</h3>
-                      <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">{item.text || "This provider item has no text content."}</p>
+                      <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">{item.text || "This message has no written content."}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {item.inboxPermalink ? <a href={item.inboxPermalink} target="_blank" rel="noreferrer" className={buttonVariants({ size: "sm" })}><Inbox data-icon="inline-start" aria-hidden="true" />Respond in Meta</a> : null}
-                        {item.permalink ? <a href={item.permalink} target="_blank" rel="noreferrer" className={buttonVariants({ size: "sm", variant: "outline" })}><ExternalLink data-icon="inline-start" aria-hidden="true" />Open Network Post</a> : null}
+                        {item.permalink ? <a href={item.permalink} target="_blank" rel="noreferrer" className={buttonVariants({ size: "sm", variant: "outline" })}><ExternalLink data-icon="inline-start" aria-hidden="true" />Open post</a> : null}
                       </div>
                     </article>
                   ))}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No provider messages are loaded for this school.</div>
+                <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No social messages are loaded for this school.</div>
               )}
             </CardContent>
           </Card>
 
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Direct Connection Readiness</CardTitle>
-              <CardDescription>Use the school’s existing Meta OAuth connection—no social-management intermediary or separate inbox token is required.</CardDescription>
+              <CardTitle>Facebook and Instagram connection</CardTitle>
+              <CardDescription>Use the school’s existing Meta connection for messages, publishing, and reporting.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
-                Connect Facebook & Instagram in Settings & Setup → Integrations, select the correct Page and linked professional account, then complete Meta’s messaging-permission review. The BEE Suite uses that same encrypted school connection for publishing, profile analytics, and this inbox.
-                <div className="mt-3"><Link href="/integrations" className={buttonVariants({ size: "sm", variant: "outline" })}><Link2 data-icon="inline-start" aria-hidden="true" />Open Meta Connection</Link></div>
+                In Settings & Setup, open Integrations and connect the school’s Facebook Page and Instagram professional account. Complete Meta’s messaging review to load inbox conversations here.
+                <div className="mt-3"><Link href="/integrations" className={buttonVariants({ size: "sm", variant: "outline" })}><Link2 data-icon="inline-start" aria-hidden="true" />Open Meta connection</Link></div>
               </div>
             </CardContent>
           </Card>
@@ -257,10 +261,10 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
             <CardHeader>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <CardTitle>Google Business Reviews</CardTitle>
+                  <CardTitle>Google Business reviews</CardTitle>
                   <CardDescription className="mt-2">Read current location reviews and publish a confirmed public response from the selected school.</CardDescription>
                 </div>
-                <Button type="button" onClick={refreshReviews} disabled={isPending || !centerId}><RefreshCw data-icon="inline-start" aria-hidden="true" />Refresh Reviews</Button>
+                <Button type="button" onClick={refreshReviews} disabled={isPending || !centerId}><RefreshCw data-icon="inline-start" aria-hidden="true" />Refresh reviews</Button>
               </div>
             </CardHeader>
             <CardContent className="grid gap-4">
@@ -279,9 +283,9 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
                     <p className="mt-3 break-words text-sm leading-6 text-muted-foreground">{review.comment || "This reviewer left a rating without a written comment."}</p>
                     {review.reply ? <div className="mt-4 rounded-lg border bg-primary/5 p-3 text-sm"><div className="font-medium">Current public response</div><p className="mt-1 break-words text-muted-foreground">{review.reply}</p></div> : null}
                     <div className="mt-4 grid gap-2">
-                      <Label htmlFor={`review-reply-${review.id}`}>{review.reply ? "Update Public Response" : "Public Response"}</Label>
+                      <Label htmlFor={`review-reply-${review.id}`}>{review.reply ? "Update public response" : "Public response"}</Label>
                       <Textarea id={`review-reply-${review.id}`} name={`review_reply_${review.id}`} autoComplete="off" maxLength={4096} placeholder="Write a helpful, privacy-safe response…" value={replyDrafts[review.name] ?? review.reply} onChange={(event) => setReplyDrafts((current) => ({ ...current, [review.name]: event.target.value }))} />
-                      <div><Button type="button" size="sm" onClick={() => setReplyTarget(review)} disabled={isPending || !(replyDrafts[review.name] ?? review.reply).trim()}><MessageSquareReply data-icon="inline-start" aria-hidden="true" />Review & Publish</Button></div>
+                      <div><Button type="button" size="sm" onClick={() => setReplyTarget(review)} disabled={isPending || !(replyDrafts[review.name] ?? review.reply).trim()}><MessageSquareReply data-icon="inline-start" aria-hidden="true" />Review and publish</Button></div>
                     </div>
                   </article>
                 ))}
@@ -293,11 +297,11 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
 
         <TabsContent value="coverage">
           <Card className="glass-panel">
-            <CardHeader><CardTitle>Platform Capability Map</CardTitle><CardDescription>The BEE Suite uses direct official APIs for publishing and reporting, with explicit native handoffs where a platform does not offer the required inbox capability.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Connected channels</CardTitle><CardDescription>See where publishing, reporting, messages, and reviews are available after each channel is connected.</CardDescription></CardHeader>
             <CardContent>
               <div className="overflow-x-auto rounded-xl border">
                 <Table>
-                  <TableHeader><TableRow><TableHead>Platform</TableHead><TableHead>Publishing</TableHead><TableHead>Analytics</TableHead><TableHead>Inbox & Reviews</TableHead><TableHead>Connection Gate</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead>Channel</TableHead><TableHead>Publishing</TableHead><TableHead>Reporting</TableHead><TableHead>Messages and reviews</TableHead><TableHead>Setup required</TableHead></TableRow></TableHeader>
                   <TableBody>{capabilities.map((row) => <TableRow key={row.provider}><TableCell className="font-medium">{row.provider}</TableCell><TableCell>{row.publish}</TableCell><TableCell>{row.analytics}</TableCell><TableCell>{row.engagement}</TableCell><TableCell>{row.note}</TableCell></TableRow>)}</TableBody>
                 </Table>
               </div>
@@ -308,9 +312,9 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
 
       <Dialog open={Boolean(replyTarget)} onOpenChange={(open) => { if (!open) setReplyTarget(null); }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Publish Public Google Response?</DialogTitle><DialogDescription>This response will appear publicly on the selected school’s Google Business Profile. Confirm that it contains no private child, family, or staff information.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Publish this Google response?</DialogTitle><DialogDescription>This response will appear publicly on the selected school’s Google Business Profile. Confirm that it contains no private child, family, or staff information.</DialogDescription></DialogHeader>
           <div className="max-h-64 overflow-y-auto rounded-lg border bg-background/50 p-3 text-sm leading-6 whitespace-pre-wrap break-words">{replyTarget ? replyDrafts[replyTarget.name] ?? replyTarget.reply : ""}</div>
-          <DialogFooter><Button type="button" variant="outline" onClick={() => setReplyTarget(null)}>Cancel</Button><Button type="button" onClick={publishReply} disabled={isPending}><Send data-icon="inline-start" aria-hidden="true" />Publish Response</Button></DialogFooter>
+          <DialogFooter><Button type="button" variant="outline" onClick={() => setReplyTarget(null)}>Cancel</Button><Button type="button" onClick={publishReply} disabled={isPending}><Send data-icon="inline-start" aria-hidden="true" />Publish response</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

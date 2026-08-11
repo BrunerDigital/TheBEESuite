@@ -19,7 +19,7 @@ from reportlab.platypus import CondPageBreak, Paragraph, SimpleDocTemplate, Spac
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output" / "pdf" / "TEAM_SHARE_GUIDES_CURRENT"
-PUBLICATION_DATE = "July 29, 2026"
+PUBLICATION_DATE = "August 11, 2026"
 
 FILES = [
     Path("docs/BEE_SUITE_COMPLETE_GUIDE.md"),

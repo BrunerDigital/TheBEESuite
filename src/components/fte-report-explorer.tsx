@@ -717,9 +717,9 @@ export function FteReportExplorer({ centers, reports }: Props) {
                           <div className="space-y-4 rounded-xl border bg-background/80 p-4">
                             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                               <div>
-                                <div className="text-sm font-semibold">Inline executive correction</div>
+                                <div className="text-sm font-semibold">Executive correction</div>
                                 <div className="text-xs text-muted-foreground">
-                                  Changes are audited, backed up to the FTE sheet integration, and routed through the same scoped API as director submissions.
+                                  Changes are recorded in the activity history and included in the same reporting process as director submissions.
                                 </div>
                               </div>
                               <Badge variant="outline">{centerLabel(center)}</Badge>

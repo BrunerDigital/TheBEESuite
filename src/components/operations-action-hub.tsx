@@ -127,7 +127,7 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>
-          Use an existing record ID to update a record, or leave it blank to create a new one through the live operations API.
+          Enter an existing record reference to update it, or leave the reference blank to create a new record.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -159,9 +159,9 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
           </div>
           {centers.length > 0 && centerScopedEntities.has(entity) ? (
             <div className="space-y-1">
-              <Label>Center</Label>
+              <Label>School</Label>
               <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
-                <SelectTrigger><SelectValue placeholder="Choose center" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Choose school" /></SelectTrigger>
                 <SelectContent>
                   {centers.map((center) => (
                     <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>
@@ -171,19 +171,19 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
             </div>
           ) : null}
           <div className="space-y-1">
-            <Label>Existing ID</Label>
-            <Input value={id} onChange={(event) => setId(event.target.value)} placeholder="Optional edit ID" />
+            <Label>Existing record reference</Label>
+            <Input value={id} onChange={(event) => setId(event.target.value)} placeholder="Optional" />
           </div>
           <div className="space-y-1">
-            <Label>Name / Title</Label>
+            <Label>Name or title</Label>
             <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Record name" />
           </div>
           <div className="space-y-1">
-            <Label>Related ID</Label>
-            <Input value={relatedId} onChange={(event) => setRelatedId(event.target.value)} placeholder="Family, form, or staff ID" />
+            <Label>Related record reference</Label>
+            <Input value={relatedId} onChange={(event) => setRelatedId(event.target.value)} placeholder="Optional" />
           </div>
           <div className="space-y-1">
-            <Label>Type / Trigger</Label>
+            <Label>Type or trigger</Label>
             <Input value={type} onChange={(event) => setType(event.target.value)} placeholder="email, policy, CPR, etc." />
           </div>
           <div className="space-y-1">
@@ -191,21 +191,21 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
             <Input value={status} onChange={(event) => setStatus(event.target.value)} placeholder="active, draft, requested" />
           </div>
           <div className="space-y-1">
-            <Label>Amount / Rating</Label>
+            <Label>Amount or rating</Label>
             <Input value={amountDollars} onChange={(event) => setAmountDollars(event.target.value)} placeholder="199 or 5" inputMode="decimal" />
           </div>
           <div className="space-y-1">
-            <Label>Expiration / Send Date</Label>
+            <Label>Expiration or send date</Label>
             <Input value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} type="date" />
           </div>
         </div>
         <div className="space-y-1">
-          <Label>Body / Notes / Fields / Action</Label>
+          <Label>Notes or details</Label>
           <Textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Record body, notes, form fields, automation action, or response draft" />
         </div>
         <Button disabled={isPending || !entity} onClick={submit}>
           <Save data-icon="inline-start" />
-          Save Record
+          Save record
         </Button>
       </CardContent>
     </Card>

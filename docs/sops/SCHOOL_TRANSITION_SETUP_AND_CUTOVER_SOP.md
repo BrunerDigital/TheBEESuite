@@ -1,6 +1,6 @@
 # School Transition Setup And Cutover SOP - The BEE Suite
 
-**Updated:** August 6, 2026  
+**Updated:** August 11, 2026
 **Audience:** owners, directors, billing owners, and BEE Suite implementation support  
 **Purpose:** move one school from ProCare to The BEE Suite without duplicating tuition, skipping safety validation, or treating technical setup as launch approval.
 

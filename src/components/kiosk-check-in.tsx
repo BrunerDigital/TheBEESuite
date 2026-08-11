@@ -283,7 +283,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
       ? { method: "qr", qrToken: normalizedQrToken }
       : { method: "pin", pin };
     if ((credential.method === "pin" && credential.pin.length !== 4) || (credential.method === "qr" && !credential.qrToken)) {
-      setError("Enter a PIN or scan a QR code before finding a family.");
+      setError("Enter a 4-digit Family PIN or scan a Family QR Code.");
       return;
     }
 
@@ -326,7 +326,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
       if (!navigator.mediaDevices?.getUserMedia || !qrVideoRef.current) {
         if (!active) return;
         setCameraState("unavailable");
-        setCameraMessage("No camera is available on this device. Use your 4-Digit Family PIN, or connect a camera and try again.");
+        setCameraMessage("No camera is available on this device. Use your 4-digit Family PIN, or connect a camera and try again.");
         return;
       }
 
@@ -366,8 +366,8 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
         const denied = name === "NotAllowedError" || name === "SecurityError";
         setCameraState("unavailable");
         setCameraMessage(denied
-          ? "Camera access is blocked. Allow camera access in this browser, then try again—or use your 4-Digit Family PIN."
-          : "The camera could not start. Try again, or use your 4-Digit Family PIN.");
+          ? "Camera access is blocked. Allow camera access in this browser, then try again. You can also use your 4-digit Family PIN."
+          : "The camera could not start. Try again, or use your 4-digit Family PIN.");
       }
     }
 
@@ -401,7 +401,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
       return;
     }
     if (!verifiedCredential) {
-      setError("Find the family before completing check-in or check-out.");
+      setError("Verify the family before completing check-in or check-out.");
       return;
     }
 
@@ -446,7 +446,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
       return;
     }
     if (!staffCredentialReady) {
-      setError("Enter your 4 digit staff code.");
+      setError("Enter your 4-digit staff code.");
       return;
     }
 
@@ -487,7 +487,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
       return;
     }
     if (!staffCredentialReady) {
-      setError("Enter your 4 digit staff code.");
+      setError("Enter your 4-digit staff code.");
       return;
     }
 
@@ -565,14 +565,14 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
         {status ? (
           <Alert>
             <CheckCircle2 className="size-4" aria-hidden="true" />
-            <AlertTitle>Complete</AlertTitle>
+            <AlertTitle>Action confirmed</AlertTitle>
             <AlertDescription>{status}</AlertDescription>
           </Alert>
         ) : null}
         {error ? (
           <Alert variant="destructive">
             <AlertCircle className="size-4" aria-hidden="true" />
-            <AlertTitle>Needs attention</AlertTitle>
+            <AlertTitle>We couldn&apos;t continue</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
@@ -583,15 +583,15 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
               <CardTitle>
                 {activeKioskMode === "family"
                   ? credentialMode === "pin"
-                    ? familyOnly ? "Enter Your 4-Digit Family PIN" : "Enter a 4-Digit Family PIN"
-                    : familyOnly ? "Scan Your QR Code" : "Scan a Family QR Code"
-                  : "Staff Clock-In & Clock-Out"}
+                    ? familyOnly ? "Enter your 4-digit Family PIN" : "Enter a 4-digit Family PIN"
+                    : familyOnly ? "Scan your Family QR code" : "Scan a Family QR code"
+                  : "Staff time clock"}
               </CardTitle>
               <CardDescription>
                 {activeKioskMode === "family"
                   ? credentialMode === "pin"
-                    ? familyOnly ? "Enter the Family PIN from your parent portal." : "Use the PIN provided by your school director."
-                    : familyOnly ? "Hold the QR code from your parent portal inside the frame." : "Use the guardian QR card issued by your school director."
+                    ? familyOnly ? "Enter the Family PIN shown in your Parent Portal." : "Enter the Family PIN provided by the school."
+                    : familyOnly ? "Hold the Family QR code from your Parent Portal inside the frame." : "Hold the Family QR code provided by the school inside the frame."
                   : "Use your staff kiosk code to clock in or clock out. Add work email only if the kiosk asks for it."}
               </CardDescription>
             </CardHeader>
@@ -600,11 +600,11 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                 <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/60 p-1">
                   <Button type="button" variant={activeKioskMode === "family" ? "default" : "ghost"} onClick={() => selectKioskMode("family")}>
                     <ShieldCheck data-icon="inline-start" aria-hidden="true" />
-                    Family
+                    Family check-in
                   </Button>
                   <Button type="button" variant={activeKioskMode === "staff" ? "default" : "ghost"} onClick={() => selectKioskMode("staff")}>
                     <UserRound data-icon="inline-start" aria-hidden="true" />
-                    Staff
+                    Staff time clock
                   </Button>
                 </div>
               ) : null}
@@ -614,18 +614,18 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                   <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/60 p-1">
                     <Button type="button" variant={credentialMode === "pin" ? "default" : "ghost"} onClick={() => selectCredentialMode("pin")}>
                       <KeyRound data-icon="inline-start" aria-hidden="true" />
-                      PIN
+                      Enter PIN
                     </Button>
                     <Button type="button" variant={credentialMode === "qr" ? "default" : "ghost"} onClick={() => selectCredentialMode("qr")}>
                       <QrCode data-icon="inline-start" aria-hidden="true" />
-                      QR
+                      Scan QR code
                     </Button>
                   </div>
 
                   {cameraState === "unavailable" && cameraMessage ? (
                     <Alert>
                       <KeyRound className="size-4" aria-hidden="true" />
-                      <AlertTitle>Camera needs attention</AlertTitle>
+                      <AlertTitle>Camera unavailable</AlertTitle>
                       <AlertDescription>{cameraMessage}</AlertDescription>
                     </Alert>
                   ) : null}
@@ -661,7 +661,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                         }}>Delete</Button>
                       </div>
                       <Button className="h-14 w-full text-lg sm:h-16 lg:h-12 2xl:h-16" disabled={isPending || pin.length !== 4} onClick={() => lookupCredential()}>
-                        {pendingAction === "family_lookup" ? "Checking…" : "Continue"}
+                        {pendingAction === "family_lookup" ? "Verifying…" : "Verify Family PIN"}
                       </Button>
                     </>
                   ) : (
@@ -710,7 +710,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                       name="staffEmail"
                       autoComplete="email"
                       spellCheck={false}
-                      placeholder="Only needed if the kiosk asks…"
+                      placeholder="name@example.com"
                     />
                   </div>
                   <div
@@ -837,15 +837,15 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Staff clock events are stored on the teacher profile and written to the audit log for director review.
+                      Directors can review completed clock-in and clock-out records.
                     </p>
                   </>
                 ) : (
                   <div className="grid flex-1 place-items-center rounded-2xl border bg-background/40 p-8 text-center">
                     <div>
-                      <h2 className="text-lg font-medium">Start Here</h2>
+                      <h2 className="text-lg font-medium">Enter staff code</h2>
                       <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                        Enter the 4-Digit staff code to view the current clock status, then clock in or clock out.
+                        Enter your 4-digit staff code to view your current status, then clock in or clock out.
                       </p>
                     </div>
                   </div>
@@ -884,7 +884,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                           </Button>
                         </div>
                         <p className="mt-2 text-xs text-muted-foreground">
-                          Open the Parent Portal to review details or pay securely on your own device.
+                          Open the Parent Portal to review billing details and available payment options.
                         </p>
                       </div>
                     ) : null}
@@ -945,7 +945,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                     <>
                       <div className="mt-auto grid gap-3 sm:grid-cols-2">
                         <div className="grid gap-2 sm:col-span-2">
-                          <Label htmlFor="signature-name" className="text-base">Type Your Full Name</Label>
+                          <Label htmlFor="signature-name" className="text-base">Type your full name</Label>
                           <Input
                             id="signature-name"
                             name="guardianSignature"
@@ -985,9 +985,9 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
               ) : (
                 <div className="grid flex-1 place-items-center rounded-2xl border bg-background/40 p-8 text-center">
                   <div>
-                      <h2 className="text-lg font-medium">Start Here</h2>
+                      <h2 className="text-lg font-medium">Enter Family PIN or scan QR code</h2>
                       <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                        Enter your 4-Digit Family PIN or scan your School Check-In QR code. Your children will appear here next.
+                        Enter your 4-digit Family PIN or scan your Family QR code. Your children will appear here next.
                     </p>
                   </div>
                 </div>

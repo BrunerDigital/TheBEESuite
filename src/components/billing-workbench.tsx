@@ -257,12 +257,6 @@ function centerLabel(center: BillingWorkbenchCenter) {
   return [center.crmLocationId, center.name].filter(Boolean).join(" · ");
 }
 
-function stripeAccountLabel(accountId: string | null | undefined) {
-  if (!accountId) return "No payout account";
-  if (accountId.length <= 12) return accountId;
-  return `${accountId.slice(0, 8)}...${accountId.slice(-4)}`;
-}
-
 function normalizeEmail(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
@@ -541,7 +535,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const selectedChildSummary = selectedChildren.length
     ? `${selectedChildren.length} child${selectedChildren.length === 1 ? "" : "ren"}`
     : "No children";
-  const selectedBillingAccountLabel = selectedBillingAccount?.id ? `${selectedBillingAccount.id.slice(0, 8)}...` : "No account";
 
   function billingContextDescription(childName?: string) {
     return [
@@ -565,19 +558,19 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function paymentMethodLabel(method: DirectorPaymentMethod) {
-    if (method === "autopay") return "Run autopay";
-    if (method === "saved_method") return "Charge saved method";
-    if (method === "card_checkout") return "Open phone card checkout";
-    if (method === "instant_bank_checkout") return "Instant bank checkout";
-    return "ACH bank checkout";
+    if (method === "autopay") return "Process invoice with autopay";
+    if (method === "saved_method") return "Process with saved payment method";
+    if (method === "card_checkout") return "Open debit or credit card payment";
+    if (method === "instant_bank_checkout") return "Open Link payment";
+    return "Open bank account payment";
   }
 
   function paymentRouteSummary(method: DirectorPaymentMethod) {
-    if (method === "autopay") return "The BEE Suite submits an off-session processor charge using the family autopay method on the selected invoice.";
-    if (method === "saved_method") return "The BEE Suite submits an off-session processor charge using the saved family payment method.";
-    if (method === "card_checkout") return "The BEE Suite opens a secure card-entry handoff for phone payments.";
-    if (method === "instant_bank_checkout") return "The BEE Suite opens a secure instant bank verification handoff.";
-    return "The BEE Suite opens a secure ACH bank-account collection handoff.";
+    if (method === "autopay") return "Applies available account credit first, then charges any remaining invoice balance to the family's authorized autopay payment method.";
+    if (method === "saved_method") return "Applies available account credit first, then charges any remaining invoice balance to the family's saved payment method.";
+    if (method === "card_checkout") return "Opens a secure card payment form.";
+    if (method === "instant_bank_checkout") return "Opens a secure Link payment form.";
+    return "Opens a secure bank account payment form.";
   }
 
   function openPaymentReview(method: DirectorPaymentMethod) {
@@ -601,7 +594,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   function manageFamilyPaymentMethod(action: "setup" | "portal" | "enable_autopay" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
     if (!selectedFamily) return setErrorMessage("Choose a family before managing payment information.");
     if (action === "enable_autopay" && !window.confirm(
-      "Enable autopay for this family? The BEE Suite will use the one selected saved method for open invoices on or after their due date. Weekly tuition invoices are created separately, and the amount charged is the unpaid invoice balance.",
+      "Enable autopay for this family? Open invoices are processed on or after their due date. Account credit is applied first, and the selected saved method pays any remaining balance. Weekly tuition invoices are created separately.",
     )) return;
     if (action === "disable_autopay" && !confirmBillingAction("disable autopay")) return;
     startTransition(async () => {
@@ -683,10 +676,16 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         } | null;
         const first = json?.results?.[0];
         if (!response.ok || !json?.ok || first?.status === "failed" || first?.status === "skipped") {
-          setErrorMessage(json?.error || first?.reason || "Saved payment method could not be charged.");
+          setErrorMessage(json?.error || first?.reason || "The invoice could not be processed with the saved payment method.");
           return;
         }
-        setStatusMessage(`${method === "autopay" ? "Autopay" : "Saved payment method charge"} ${first?.status === "paid" ? "recorded" : "submitted"} for ${selectedPaymentInvoice?.number ?? "the selected invoice"}.`);
+        setStatusMessage(
+          first?.status === "paid" && !first.stripePaymentIntentId
+            ? selectedPaymentInvoice?.number
+              ? `Invoice ${selectedPaymentInvoice.number} was paid with account credit.`
+              : "The selected invoice was paid with account credit."
+            : `${method === "autopay" ? "Autopay payment" : "Saved payment method payment"} ${first?.status === "paid" ? "recorded" : "is processing"} for ${selectedPaymentInvoice?.number ?? "the selected invoice"}.`,
+        );
         router.refresh();
         return;
       }
@@ -705,7 +704,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         });
         const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
         if (!response.ok || !json?.url) {
-          setErrorMessage(json?.error || "Payment checkout could not be opened.");
+          setErrorMessage(json?.error || "The secure payment form could not be opened.");
           return;
         }
         window.location.href = json.url;
@@ -779,9 +778,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         return;
       }
       const failed = json?.results?.filter((result) => !result.ok) ?? [];
-      const label = intent === "instant_bank_verification" ? "instant bank verification email" : "tuition payment link email";
+      const label = intent === "instant_bank_verification" ? "bank verification email" : "tuition payment link email";
       setStatusMessage(
-        `${json?.emailsSent ?? 0} ${label}${json?.emailsSent === 1 ? "" : "s"} sent and ${json?.notificationsCreated ?? 0} profile notification${json?.notificationsCreated === 1 ? "" : "s"} created.${failed.length ? ` ${failed.length} email${failed.length === 1 ? "" : "s"} need attention.` : ""}`,
+        `${json?.emailsSent ?? 0} ${label}${json?.emailsSent === 1 ? "" : "s"} sent and ${json?.notificationsCreated ?? 0} Parent Portal notification${json?.notificationsCreated === 1 ? "" : "s"} created.${failed.length ? ` ${failed.length} email${failed.length === 1 ? "" : "s"} need attention.` : ""}`,
       );
     });
   }
@@ -1381,26 +1380,23 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         <DialogHeader>
           <DialogTitle>{paymentReviewMethod ? paymentMethodLabel(paymentReviewMethod) : "Review payment"}</DialogTitle>
           <DialogDescription>
-            Confirm the family, target, Bee Suite payment route, and exact parent-responsible amount before submitting the payment.
+            Review the family, payment method, amount, and invoice or balance before submitting.
           </DialogDescription>
         </DialogHeader>
         {paymentReviewMethod ? (
           <div className="grid gap-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <SummaryMetric label="Family" value={selectedFamily?.name ?? "Not selected"} detail={selectedFamily?.billingEmail ?? "No billing email"} />
-              <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} detail={stripeAccountLabel(selectedCheckoutReadiness?.accountId)} />
-              <SummaryMetric label="Payment target" value={directorPaymentTargetLabel} detail={selectedPaymentInvoice ? `Due ${formatShortDate(selectedPaymentInvoice.dueDate)}` : "Family balance payment"} />
-              <SummaryMetric label="Amount to submit" value={money(directorPaymentAmountCents)} detail={effectivePaymentTarget === "custom" ? paymentDescription : selectedPaymentInvoice?.number ?? "Balance"} />
+              <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} detail={selectedCheckoutReadiness?.canAcceptParentPayments ? "Online payments ready" : "Online payments unavailable"} />
+              <SummaryMetric label="Apply payment to" value={directorPaymentTargetLabel} detail={selectedPaymentInvoice ? `Due ${formatShortDate(selectedPaymentInvoice.dueDate)}` : "Family balance payment"} />
+              <SummaryMetric label="Amount" value={money(directorPaymentAmountCents)} detail={effectivePaymentTarget === "custom" ? paymentDescription : selectedPaymentInvoice?.number ?? "Balance"} />
             </div>
             <div className="rounded-lg border bg-background/45 p-3">
-              <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">The BEE Suite route</div>
+              <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Payment method</div>
               <div className="mt-2 text-sm font-medium">{paymentRouteSummary(paymentReviewMethod)}</div>
-              <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                Hosted handoffs and saved-method charges are created server-side with invoice, family, center, payment, payout-account, and collection-mode metadata for webhook reconciliation.
-              </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <ContextBadge label="Readiness" value={selectedCheckoutReadiness?.label ?? "Unknown"} variant={selectedCheckoutReadiness?.canAcceptParentPayments ? "default" : "destructive"} />
+              <ContextBadge label="Online payments" value={selectedCheckoutReadiness?.label ?? "Unknown"} variant={selectedCheckoutReadiness?.canAcceptParentPayments ? "default" : "destructive"} />
               <ContextBadge label="Saved method" value={selectedPaymentMethod?.paymentMethodLabel ?? "None"} />
               <ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />
             </div>
@@ -1427,8 +1423,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Billing Workbench</CardTitle>
-            <CardDescription>Post tuition, fees, and account adjustments to family ledgers.</CardDescription>
+            <CardTitle>Family billing</CardTitle>
+            <CardDescription>Create charges, record payments, and manage account adjustments.</CardDescription>
           </div>
           <Badge variant="outline">
             <BadgeDollarSign data-icon="inline-start" />
@@ -1440,23 +1436,23 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         {statusMessage ? (
           <Alert>
             <CheckCircle2 className="size-4" />
-            <AlertTitle>Billing saved</AlertTitle>
+            <AlertTitle>Update complete</AlertTitle>
             <AlertDescription>{statusMessage}</AlertDescription>
           </Alert>
         ) : null}
         {errorMessage ? (
           <Alert variant="destructive">
             <AlertCircle className="size-4" />
-            <AlertTitle>Needs attention</AlertTitle>
+            <AlertTitle>Action needed</AlertTitle>
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         ) : null}
 
         <EntityHeader
           sticky
-          eyebrow="Currently editing billing data"
+          eyebrow="Family billing"
           title={selectedFamily?.name ?? "Choose a family"}
-          subtitle={`Billing account context: ${billingContextDescription()}`}
+          subtitle={billingContextDescription()}
           initials={initialsFromName(selectedFamily?.name)}
           status={<ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />}
           actions={
@@ -1470,9 +1466,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         >
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} />
-            <SummaryMetric label="Billing account" value={selectedBillingAccountLabel} detail={`Updated ${formatShortDate(selectedFamily?.updatedAt)}`} />
+            <SummaryMetric label="Last updated" value={formatShortDate(selectedFamily?.updatedAt)} detail="Family billing information" />
             <SummaryMetric label="Balance" value={money(familyBalanceCents)} detail={selectedPaymentMethod?.hasSavedPaymentMethod ? "Saved method on file" : "No saved method"} />
-            <SummaryMetric label="Family contacts" value={`${selectedPaymentRequestEmailOptions.length} billing emails`} detail={selectedFamily?.billingEmail ?? "No billing email"} />
+            <SummaryMetric label="Payment contacts" value={`${selectedPaymentRequestEmailOptions.length} contact${selectedPaymentRequestEmailOptions.length === 1 ? "" : "s"}`} detail={selectedFamily?.billingEmail ?? "No billing email"} />
             <SummaryMetric label="Children" value={selectedChildSummary} detail={selectedChildren.map((child) => child.fullName).slice(0, 2).join(", ") || "No child records"} />
             <SummaryMetric
               label="Weekly tuition"
@@ -1518,16 +1514,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         {selectedCheckoutReadiness?.canAcceptParentPayments ? (
           <Alert className="border-emerald-500/30 bg-emerald-500/10">
             <CheckCircle2 className="size-4 text-emerald-600" />
-            <AlertTitle>Parent payments connected</AlertTitle>
+            <AlertTitle>Online payments ready</AlertTitle>
             <AlertDescription>
-              Invoices for {selectedCenter ? centerLabel(selectedCenter) : "this school"} route through{" "}
-              {stripeAccountLabel(selectedCheckoutReadiness.accountId)}.
+              Parents can pay invoices online for {selectedCenter ? centerLabel(selectedCenter) : "this school"}.
             </AlertDescription>
           </Alert>
         ) : selectedCheckoutReadiness ? (
           <Alert variant="destructive">
             <AlertCircle className="size-4" />
-            <AlertTitle>Parent payments blocked</AlertTitle>
+            <AlertTitle>Online payments unavailable</AlertTitle>
             <AlertDescription>
               {selectedCheckoutReadiness.blockingReason || "Finish payout setup before parents can pay invoices for this school."}
             </AlertDescription>
@@ -1538,7 +1533,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 text-sm font-medium">
-                Family payment profile
+                Family payment methods
                 <InfoTip label="About family payment profiles">
                   Saving a method and enabling autopay are separate actions. One selected family method is used for saved-method charges or autopay.
                 </InfoTip>
@@ -1563,20 +1558,20 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <div className="flex flex-wrap gap-2">
               <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily} onClick={() => manageFamilyPaymentMethod("setup", "link_bank")}>
                 <Building2 data-icon="inline-start" />
-                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Verify Bank Instantly" : "Instant Bank Login"}
+                Connect bank account
               </Button>
               <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily} onClick={() => manageFamilyPaymentMethod("setup", "card")} variant="outline">
                 <CreditCard data-icon="inline-start" />
-                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Replace Card" : "Add Card"}
+                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Replace saved card" : "Save card"}
               </Button>
               <Button className="w-full sm:w-auto" disabled={isPending || !selectedPaymentMethod?.hasStripeCustomer} onClick={() => manageFamilyPaymentMethod("portal")} variant="outline">
-                Manage Saved
+                Manage payment method
               </Button>
               <Button className="w-full sm:w-auto" disabled={isPending || selectedAutopayStatus === "enabled" || !selectedPaymentMethod?.hasSavedPaymentMethod} onClick={() => manageFamilyPaymentMethod("enable_autopay")} variant="outline">
-                Enable Autopay
+                Enable autopay
               </Button>
               <Button className="w-full sm:w-auto" disabled={isPending || selectedAutopayStatus === "disabled" || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("disable_autopay")} variant="outline">
-                Disable Autopay
+                Disable autopay
               </Button>
             </div>
           </div>
@@ -1584,9 +1579,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  Director payment terminal
+                  Collect a family payment
                   <InfoTip label="About director payment actions">
-                    Choose total balance, an open invoice, or a custom amount, then charge a saved method, use the in-person Stripe reader, or open secure phone checkout.
+                    Choose the family balance, an open invoice, or a custom amount. Then use a saved method, the in-person card reader, or a secure payment form.
                   </InfoTip>
                 </div>
               </div>
@@ -1594,9 +1589,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
             <div className="grid gap-3 md:grid-cols-6">
               <div className="space-y-1 md:col-span-2">
-                <Label>Payment target</Label>
+                <Label>Apply payment to</Label>
                 <Select value={effectivePaymentTarget} onValueChange={(value) => value && setPaymentTarget(value)}>
-                  <SelectTrigger><SelectValue placeholder="Choose target" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Choose balance or invoice" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="balance">Total balance · {money(familyBalanceCents)}</SelectItem>
                     {openInvoices.map((invoice) => (
@@ -1633,7 +1628,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 onClick={() => openPaymentReview("saved_method")}
               >
                 <CreditCard data-icon="inline-start" />
-                Charge Selected Method
+                Process with saved method
               </Button>
               {effectivePaymentTarget.startsWith("invoice:") ? (
                 <Button
@@ -1642,7 +1637,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   variant="outline"
                 >
                   <Play data-icon="inline-start" />
-                  Run Autopay
+                  Process invoice with autopay
                 </Button>
               ) : null}
               {selectedCenter && selectedFamily && selectedBillingAccount ? (
@@ -1661,15 +1656,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 onClick={() => openPaymentReview("card_checkout")}
               >
                 <CreditCard data-icon="inline-start" />
-                Phone Card Checkout
+                Debit or credit card
               </Button>
               <Button
                 disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
                 onClick={() => openPaymentReview("instant_bank_checkout")}
                 variant="outline"
               >
-                <Building2 data-icon="inline-start" />
-                Instant Bank
+                <CreditCard data-icon="inline-start" />
+                Pay with Link
               </Button>
               <Button
                 disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
@@ -1677,13 +1672,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 variant="outline"
               >
                 <Building2 data-icon="inline-start" />
-                ACH Bank Checkout
+                Bank account
               </Button>
             </div>
             <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-              Payment help
+              Payment options
               <InfoTip label="Payment action help" side="right">
-                Use In-Person Card Reader when the parent is at the school. Use Phone Card Checkout when a parent gives card details by phone. In both flows, card numbers are handled by Stripe and never stored by The BEE Suite.
+                Use In-Person Card Reader when the parent is at the school. Secure payment forms keep full card and bank details out of The BEE Suite.
               </InfoTip>
             </div>
           </div>
@@ -1692,25 +1687,25 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <div>
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Mail className="size-4 text-muted-foreground" />
-                  Branded parent payment and bank verification links
+                  Send a secure payment link
                   <InfoTip label="About secure payment links" side="right">
-                    Email a secure form branded for The BEE Suite. Parents start in the school-branded portal; Stripe appears only during the secure processor handoff when required.
+                    Send a secure payment form to email addresses saved on the family record. The form collects card or bank details securely.
                   </InfoTip>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button disabled={isPending || !selectedFamily || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("instant_bank_verification")}>
                   <Building2 data-icon="inline-start" />
-                  Send Instant Bank Verification
+                  Send bank verification link
                 </Button>
                 <Button disabled={isPending || !selectedFamily || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("payment_steps")} variant="outline">
                   <Send data-icon="inline-start" />
-                  Send Payment Link
+                  Send payment link
                 </Button>
                 {manualPaymentEmailCopies.length ? (
                   <Button type="button" disabled={isPending} onClick={copyPaymentEmails} variant="outline">
                     <Copy data-icon="inline-start" />
-                    Copy Email{manualPaymentEmailCopies.length === 1 ? "" : "s"}
+                    Copy email{manualPaymentEmailCopies.length === 1 ? "" : "s"}
                   </Button>
                 ) : null}
               </div>
@@ -1730,7 +1725,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     <span className="min-w-0">
                       <span className="block truncate font-medium">{option.label}</span>
                       <span className="block break-all text-xs text-muted-foreground">
-                        {option.email}{option.hasPortalUser ? " · profile notification" : ""}
+                        {option.email}{option.hasPortalUser ? " · Parent Portal notification" : ""}
                       </span>
                     </span>
                   </label>

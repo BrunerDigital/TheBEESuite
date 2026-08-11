@@ -117,8 +117,33 @@ function formatMoney(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
 }
 
-function suggestionLabel(type: string) {
-  return type.replaceAll("_", " ");
+const AI_LABEL_ACRONYMS: Record<string, string> = {
+  api: "API",
+  id: "ID",
+  sms: "SMS",
+  url: "URL",
+};
+
+function aiDisplayLabel(value: string, fallback = "Status unavailable") {
+  const labels: Record<string, string> = {
+    approved: "Approved",
+    archived: "Archived",
+    center: "One school",
+    center_group: "Selected schools",
+    message_broadcast_draft: "School message draft",
+    message_family_reply_draft: "Family reply draft",
+    mr_bee_lead_follow_up: "Enrollment follow-up",
+    pending_review: "Needs review",
+    rejected: "Rejected",
+  };
+  if (labels[value]) return labels[value];
+  const words = value.trim().replaceAll("_", " ").replaceAll("-", " ").toLocaleLowerCase("en-US").split(/\s+/).filter(Boolean);
+  if (!words.length) return fallback;
+  return words.map((word, index) => {
+    const acronym = AI_LABEL_ACRONYMS[word];
+    if (acronym) return acronym;
+    return index === 0 ? word.charAt(0).toLocaleUpperCase("en-US") + word.slice(1) : word;
+  }).join(" ");
 }
 
 function statusVariant(status: string): "default" | "outline" | "destructive" | "secondary" {
@@ -135,7 +160,7 @@ function record(value: unknown): Record<string, unknown> {
 async function jsonRequest<T>(url: string, init: RequestInit) {
   const response = await fetch(url, init);
   const json = await response.json().catch(() => null) as (T & { error?: string }) | null;
-  if (!response.ok) throw new Error(json?.error || "AI command could not be completed.");
+  if (!response.ok) throw new Error(json?.error || "The request could not be completed.");
   return json as T;
 }
 
@@ -198,9 +223,9 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
           body: JSON.stringify({ action: "generate_summary", centerId }),
         });
         setSummaries((current) => [json.summary, ...current].slice(0, 20));
-        setStatusMessage("Operations summary generated and added to the review log.");
+        setStatusMessage("School summary generated and added to the review history.");
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Operations summary could not be generated.");
+        setErrorMessage(error instanceof Error ? error.message : "The school summary could not be generated.");
       }
     });
   }
@@ -224,12 +249,12 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
         setCommandResponse(json.message);
         if (json.requiresConfirmation && json.proposalId && json.plan) {
           setPendingChangePlan({ proposalId: json.proposalId, entries: json.plan });
-          setStatusMessage("Review the exact scope below. No data has changed yet.");
+          setStatusMessage("Review the proposed changes below. No data has changed yet.");
         } else {
           setStatusMessage("Mr. Bee completed the request without changing data.");
         }
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Mr. Bee could not complete the command.");
+        setErrorMessage(error instanceof Error ? error.message : "Mr. Bee could not complete the request.");
       }
     });
   }
@@ -248,14 +273,14 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
         setPendingChangePlan(null);
         setStatusMessage(decision === "confirm" ? `${json.changes?.length ?? 0} confirmed change${json.changes?.length === 1 ? "" : "s"} completed and audited.` : "Change plan cancelled. No data was changed.");
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "The AI change plan could not be resolved.");
+        setErrorMessage(error instanceof Error ? error.message : "The proposed changes could not be completed.");
       }
     });
   }
 
   function draftLeadFollowUp() {
     if (!effectiveLeadId) {
-      setErrorMessage("Choose a lead before drafting a follow-up.");
+      setErrorMessage("Choose an enrollment inquiry before drafting a follow-up.");
       return;
     }
     startTransition(async () => {
@@ -275,9 +300,9 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
           guardrailNote: json.guardrailNote,
           createdAt: new Date().toISOString(),
         }, ...current].slice(0, 30));
-        setStatusMessage("Lead follow-up draft added to the suggestion queue.");
+        setStatusMessage("Enrollment follow-up draft added to the review queue.");
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Lead follow-up could not be drafted.");
+        setErrorMessage(error instanceof Error ? error.message : "The enrollment follow-up could not be drafted.");
       }
     });
   }
@@ -338,7 +363,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
           body: JSON.stringify({ action: "update_suggestion_status", suggestionId, status, ...review }),
         });
         setSuggestions((current) => current.map((suggestion) => suggestion.id === suggestionId ? json.suggestion : suggestion));
-        setStatusMessage(`Suggestion marked ${status.replaceAll("_", " ")}.`);
+        setStatusMessage(`Suggestion marked ${aiDisplayLabel(status).toLocaleLowerCase("en-US")}.`);
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Suggestion status could not be updated.");
       }
@@ -352,7 +377,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
     const targetCenterId = typeof context.centerId === "string" ? context.centerId : "";
     if (suggestion.type.includes("lead")) {
       updateSuggestionStatus(suggestion.id, "approved", { selectedSubject: entry.subject, selectedBody: entry.body, destination: "crm_lead" });
-      setStatusMessage("Draft approved. Open the linked lead to review and send it from CRM.");
+      setStatusMessage("Draft approved. Open the enrollment inquiry to review and send it.");
       return;
     }
     setMessageMode(targetMode);
@@ -381,17 +406,17 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
         <div className="relative">
           <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">Ask Mr. Bee to run the school with you</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Get a live operating brief, identify exceptions, prepare family communication, and move directly into the dashboard workflow that needs you.</p>
+              <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">Ask Mr. Bee about school activity</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Review current school information, prepare family communication, and open the related task.</p>
             </div>
             <div className="w-full lg:w-72">
-              <Label className="sr-only">School scope</Label>
+              <Label htmlFor="mr-bee-school" className="sr-only">School</Label>
               <Select value={centerId} onValueChange={(value) => { if (value) { setCenterId(value); setPendingChangePlan(null); } }}>
-                <SelectTrigger className="h-11 w-full border-zinc-700 bg-zinc-900 text-white">
+                <SelectTrigger id="mr-bee-school" className="h-11 w-full border-zinc-700 bg-zinc-900 text-white">
                   <SelectValue placeholder="Choose school" />
                 </SelectTrigger>
                 <SelectContent>
-                  {data.centers.length > 1 ? <SelectItem value="all">All visible schools</SelectItem> : null}
+                  {data.centers.length > 1 ? <SelectItem value="all">All available schools</SelectItem> : null}
                   {data.centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -402,14 +427,14 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-amber-400 text-black"><Sparkles className="size-5" /></div>
-                <Input aria-label="Director command" value={commandText} onChange={(event) => setCommandText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") runDirectorCommand(); }} className="h-11 border-0 bg-transparent px-0 text-base text-white shadow-none placeholder:text-zinc-500 focus-visible:ring-0" placeholder="Ask for a summary, plan, follow-up, or message…" />
+                <Input aria-label="Request for Mr. Bee" value={commandText} onChange={(event) => setCommandText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") runDirectorCommand(); }} className="h-11 border-0 bg-transparent px-0 text-base text-white shadow-none placeholder:text-zinc-500 focus-visible:ring-0" placeholder="Ask for a summary, follow-up, or message…" />
               </div>
               <Button onClick={runDirectorCommand} disabled={isPending} className="h-11 bg-amber-400 px-6 text-black hover:bg-amber-300">
-                <Send data-icon="inline-start" /> Review command
+                <Send data-icon="inline-start" /> Ask Mr. Bee
               </Button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-800 pt-3">
-              {["What needs my attention today?", "Update the Smith family's open invoice to $…", "Move Jordan Lee to enrolled in…", "Correct this school's main phone to…"].map((command) => (
+              {["What needs my attention today?", "Summarize enrollment follow-ups.", "Show attendance items that need review.", "Draft a family update for me to review."].map((command) => (
                 <button key={command} type="button" onClick={() => setCommandText(command)} className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-amber-400/60 hover:text-amber-300">{command}</button>
               ))}
             </div>
@@ -430,7 +455,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                   <div className="mt-3 space-y-3">
                     {pendingChangePlan.entries.map((entry, index) => (
                       <div key={`${entry.action}-${index}`} className="rounded-xl border border-zinc-700 bg-zinc-950/70 p-3">
-                        <div className="text-sm font-medium text-white">{entry.action.replaceAll("_", " ")}</div>
+                        <div className="text-sm font-medium text-white">{aiDisplayLabel(entry.action, "Proposed change")}</div>
                         <div className="mt-1 text-xs text-zinc-400">{entry.targets.length} record{entry.targets.length === 1 ? "" : "s"}: {entry.targets.slice(0, 8).map((target) => target.label).join(", ")}{entry.targets.length > 8 ? `, and ${entry.targets.length - 8} more` : ""}</div>
                         <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-black/40 p-2 text-xs text-zinc-300">{JSON.stringify(entry.patch, null, 2)}</pre>
                       </div>
@@ -444,15 +469,15 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
               </div>
             </div>
           ) : null}
-          <p className="mt-3 text-xs leading-5 text-zinc-500">AI actions use the selected school and the same director-level boundaries as the dashboard, including profile, enrollment, and open-invoice changes. Access, invitations, PINs, payment submission/refunds, payouts, autopay, messages, deletes, and provider settings remain blocked.</p>
+          <p className="mt-3 text-xs leading-5 text-zinc-500">Mr. Bee can review information and propose changes for the selected school. You must confirm proposed changes before they are applied. Payments, account access, messages, and deletions are not completed here.</p>
         </div>
       </section>
 
       <section>
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h2 className="flex items-center gap-2 text-xl font-semibold"><Activity className="size-5 text-amber-500" /> School pulse</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Live signals from across the director dashboard.</p>
+            <h2 className="flex items-center gap-2 text-xl font-semibold"><Activity className="size-5 text-amber-500" /> School activity</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Current attendance, staffing, enrollment, billing, messages, and compliance.</p>
           </div>
           <div className="text-xs text-muted-foreground">{stats.pendingReview} draft{stats.pendingReview === 1 ? "" : "s"} awaiting review</div>
         </div>
@@ -460,7 +485,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
           {[
             { label: "Attendance", value: data.pulse.activeChildren ? `${Math.round((data.pulse.checkedInChildren / data.pulse.activeChildren) * 100)}%` : "0%", detail: `${data.pulse.checkedInChildren} of ${data.pulse.activeChildren} checked in`, icon: Users, href: "/attendance", tone: "text-lime-400", barClass: "bg-lime-400", bar: data.pulse.activeChildren ? (data.pulse.checkedInChildren / data.pulse.activeChildren) * 100 : 0 },
             { label: "Staffing", value: `${data.pulse.staffClockedIn}/${data.pulse.staffTotal}`, detail: "Team members clocked in", icon: Users, href: "/staff", tone: "text-amber-400", barClass: "bg-amber-400", bar: data.pulse.staffTotal ? (data.pulse.staffClockedIn / data.pulse.staffTotal) * 100 : 0 },
-            { label: "Enrollment", value: `${data.pulse.activeChildren}/${data.pulse.licensedCapacity || data.pulse.activeChildren}`, detail: `${data.pulse.highIntentLeads} high-intent leads`, icon: CalendarDays, href: "/enrollment-pipeline", tone: "text-sky-400", barClass: "bg-sky-400", bar: data.pulse.licensedCapacity ? (data.pulse.activeChildren / data.pulse.licensedCapacity) * 100 : 100 },
+            { label: "Enrollment", value: `${data.pulse.activeChildren}/${data.pulse.licensedCapacity || data.pulse.activeChildren}`, detail: `${data.pulse.highIntentLeads} inquiries ready for follow-up`, icon: CalendarDays, href: "/enrollment-pipeline", tone: "text-sky-400", barClass: "bg-sky-400", bar: data.pulse.licensedCapacity ? (data.pulse.activeChildren / data.pulse.licensedCapacity) * 100 : 100 },
             { label: "Billing", value: formatMoney(data.pulse.overdueInvoiceCents), detail: `${data.pulse.overdueInvoices} accounts past due`, icon: CircleDollarSign, href: "/billing-invoices", tone: "text-emerald-400", barClass: "bg-emerald-400", bar: data.pulse.openInvoices ? ((data.pulse.openInvoices - data.pulse.overdueInvoices) / data.pulse.openInvoices) * 100 : 100 },
             { label: "Family messages", value: data.pulse.unreadMessages.toLocaleString(), detail: data.pulse.unreadMessages ? "Unread · requires response" : "Inbox is clear", icon: MessageSquare, href: "/messages", tone: "text-violet-400", barClass: "bg-violet-400", bar: Math.max(10, 100 - data.pulse.unreadMessages * 10) },
             { label: "Compliance", value: data.pulse.openComplianceTasks.toLocaleString(), detail: data.pulse.openComplianceTasks ? "Items need attention" : "All items on track", icon: ShieldCheck, href: "/compliance", tone: "text-orange-400", barClass: "bg-orange-400", bar: data.pulse.openComplianceTasks ? Math.max(15, 100 - data.pulse.openComplianceTasks * 8) : 100 },
@@ -479,15 +504,15 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,.75fr)]">
         <Card className="overflow-hidden border-amber-400/30">
           <CardHeader className="border-b bg-amber-400/[0.04]">
-            <CardTitle className="flex items-center gap-2"><ClipboardCheck className="size-5 text-amber-500" /> Priority plan</CardTitle>
-            <CardDescription>AI-organized work based on live dashboard exceptions. You stay in control of every action.</CardDescription>
+            <CardTitle className="flex items-center gap-2"><ClipboardCheck className="size-5 text-amber-500" /> Items to review</CardTitle>
+            <CardDescription>Tasks that may need attention based on current school records.</CardDescription>
           </CardHeader>
           <CardContent className="divide-y p-0">
             {[
               { level: data.pulse.pendingIncidents ? "High" : "Ready", title: data.pulse.pendingIncidents ? `${data.pulse.pendingIncidents} incident report${data.pulse.pendingIncidents === 1 ? "" : "s"} need review` : "Incident review queue is clear", detail: "Review details, documentation, and parent acknowledgement.", href: "/incident-reports", icon: AlertTriangle },
               { level: data.pulse.overdueInvoices ? "High" : "Ready", title: data.pulse.overdueInvoices ? `${data.pulse.overdueInvoices} overdue invoice${data.pulse.overdueInvoices === 1 ? "" : "s"}` : "No overdue billing exceptions", detail: "Open family ledgers and decide the next follow-up.", href: "/billing-invoices", icon: CircleDollarSign },
               { level: data.pulse.unreadMessages ? "Medium" : "Ready", title: data.pulse.unreadMessages ? `${data.pulse.unreadMessages} unread family message${data.pulse.unreadMessages === 1 ? "" : "s"}` : "Family inbox is caught up", detail: "Respond while questions and requests are current.", href: "/messages", icon: MessageSquare },
-              { level: "Growth", title: `${data.pulse.highIntentLeads} high-intent lead${data.pulse.highIntentLeads === 1 ? "" : "s"}`, detail: `${data.pulse.upcomingTours} upcoming tours across the current scope.`, href: "/enrollment-pipeline", icon: CalendarDays },
+              { level: "Enrollment", title: `${data.pulse.highIntentLeads} enrollment inquir${data.pulse.highIntentLeads === 1 ? "y" : "ies"} ready for follow-up`, detail: `${data.pulse.upcomingTours} upcoming tour${data.pulse.upcomingTours === 1 ? "" : "s"} at the selected schools.`, href: "/enrollment-pipeline", icon: CalendarDays },
             ].map((item) => (
               <div key={item.title} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                 <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -506,7 +531,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
               {suggestions.filter((suggestion) => suggestion.status === "pending_review").slice(0, 4).map((suggestion) => (
                 <div key={suggestion.id} className="flex items-center gap-3 px-4 py-3">
                   <MessageSquare className="size-4 shrink-0 text-amber-500" />
-                  <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium capitalize">{suggestionLabel(suggestion.type)}</div><div className="text-xs text-muted-foreground">{suggestion.status.replaceAll("_", " ")}</div></div>
+                  <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{aiDisplayLabel(suggestion.type, "Draft")}</div><div className="text-xs text-muted-foreground">{aiDisplayLabel(suggestion.status)}</div></div>
                   <Button variant="ghost" size="icon-sm" onClick={() => document.getElementById("suggestion-review-queue")?.scrollIntoView({ behavior: "smooth", block: "start" })} title="Review draft"><ArrowRight /></Button>
                 </div>
               ))}
@@ -514,10 +539,10 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
             </CardContent>
           </Card>
           <Card className="border-amber-400/30">
-            <CardHeader className="border-b py-4"><CardTitle className="flex items-center gap-2"><Sparkles className="size-5 text-amber-500" /> Recent intelligence</CardTitle><CardDescription>Latest operating insights from your school.</CardDescription></CardHeader>
+            <CardHeader className="border-b py-4"><CardTitle className="flex items-center gap-2"><Sparkles className="size-5 text-amber-500" /> Recent summaries</CardTitle><CardDescription>Latest school summaries prepared for review.</CardDescription></CardHeader>
             <CardContent className="divide-y p-0">
               {summaries.slice(0, 3).map((summary) => <div key={summary.id} className="px-4 py-3"><div className="text-sm font-medium">{summary.title}</div><div className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{summary.body}</div></div>)}
-              {!summaries.length ? <div className="p-4 text-sm text-muted-foreground">Generate a live brief to start the intelligence log.</div> : null}
+              {!summaries.length ? <div className="p-4 text-sm text-muted-foreground">Generate a school summary to begin the review history.</div> : null}
             </CardContent>
           </Card>
         </div>
@@ -526,14 +551,14 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
       {statusMessage ? (
         <Alert>
           <CheckCircle2 />
-          <AlertTitle>AI command completed</AlertTitle>
+          <AlertTitle>Request completed</AlertTitle>
           <AlertDescription>{statusMessage}</AlertDescription>
         </Alert>
       ) : null}
       {errorMessage ? (
         <Alert variant="destructive">
           <XCircle />
-          <AlertTitle>AI command failed</AlertTitle>
+          <AlertTitle>Request could not be completed</AlertTitle>
           <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
       ) : null}
@@ -541,8 +566,8 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
       <Card className="glass-panel" id="ai-action-studio">
         <CardHeader>
           <div>
-            <CardTitle>Action studio</CardTitle>
-            <CardDescription>Turn the priorities above into a reviewed summary, enrollment follow-up, or family communication draft.</CardDescription>
+            <CardTitle>Drafting tools</CardTitle>
+            <CardDescription>Prepare a school summary, enrollment follow-up, or family message for review.</CardDescription>
           </div>
         </CardHeader>
       </Card>
@@ -550,13 +575,13 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="glass-panel" id="suggestion-review-queue">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Sparkles /> Operations Summary</CardTitle>
-            <CardDescription>Generate a current summary from live lead, attendance, staff, family message, billing, and incident data.</CardDescription>
+            <CardTitle className="flex items-center gap-2"><Sparkles /> School summary</CardTitle>
+            <CardDescription>Prepare a current summary of enrollment inquiries, attendance, staffing, family messages, billing, and incidents.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Button onClick={generateSummary} disabled={isPending || !data.centers.length}>
               <RefreshCw data-icon="inline-start" />
-              Generate Summary
+              Generate summary
             </Button>
             <p className="text-xs text-muted-foreground">{AI_COMMAND_GUARDRAIL_NOTE}</p>
           </CardContent>
@@ -564,20 +589,20 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
 
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Bot /> Lead Follow-Up</CardTitle>
-            <CardDescription>Create a reviewable Mr. Bee draft for an active enrollment lead.</CardDescription>
+            <CardTitle className="flex items-center gap-2"><Bot /> Enrollment follow-up</CardTitle>
+            <CardDescription>Prepare a follow-up draft for an active enrollment inquiry.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-2">
-              <Label>Lead</Label>
+              <Label>Enrollment inquiry</Label>
               <Select value={effectiveLeadId} onValueChange={(value) => value && setLeadId(value)} disabled={!filteredLeads.length}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose lead" />
+                  <SelectValue placeholder="Choose inquiry" />
                 </SelectTrigger>
                 <SelectContent>
                   {filteredLeads.map((lead) => (
                     <SelectItem key={lead.id} value={lead.id}>
-                      {lead.familyName} - {lead.stage.replaceAll("_", " ")} - {lead.score}
+                      {lead.familyName} - {aiDisplayLabel(lead.stage)} - {lead.score}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -598,14 +623,14 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
             </div>
             <Button onClick={draftLeadFollowUp} disabled={isPending || !effectiveLeadId}>
               <MailPlus data-icon="inline-start" />
-              Draft Follow-Up
+              Draft follow-up
             </Button>
           </CardContent>
         </Card>
 
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Megaphone /> Family Message Draft</CardTitle>
+            <CardTitle className="flex items-center gap-2"><Megaphone /> Family message draft</CardTitle>
             <CardDescription>Create family or broadcast message options for staff review.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -615,7 +640,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                 <TabsTrigger value="family">Family</TabsTrigger>
               </TabsList>
               <TabsContent value="broadcast" className="space-y-3">
-                <div className="text-xs text-muted-foreground">{selectedCenterIds.length.toLocaleString()} school scope for the recipient estimate.</div>
+                <div className="text-xs text-muted-foreground">{selectedCenterIds.length.toLocaleString()} selected school{selectedCenterIds.length === 1 ? "" : "s"} included in the recipient estimate.</div>
               </TabsContent>
               <TabsContent value="family" className="space-y-3">
                 <div className="grid gap-2">
@@ -658,7 +683,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
             </div>
             <Button onClick={draftMessage} disabled={isPending || (messageMode === "family" ? !effectiveFamilyId : !selectedCenterIds.length)}>
               <Send data-icon="inline-start" />
-              Draft Message Options
+              Draft message options
             </Button>
           </CardContent>
         </Card>
@@ -668,8 +693,8 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
         <Card className="glass-panel">
           <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <CardTitle>Suggestion Review Queue</CardTitle>
-              <CardDescription>Review the target, choose a draft, and move it into the workflow where staff will finish the action.</CardDescription>
+              <CardTitle>Suggestion review queue</CardTitle>
+              <CardDescription>Review the recipient and draft, then open the related screen to finish the action.</CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
               {[["pending_review", "Needs review"], ["approved", "Approved"], ["all", "All"]].map(([value, label]) => <Button key={value} size="sm" variant={queueFilter === value ? "default" : "outline"} onClick={() => setQueueFilter(value)}>{label}</Button>)}
@@ -700,8 +725,8 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                     return (
                       <TableRow key={suggestion.id}>
                         <TableCell className="min-w-40 align-top">
-                          <div className="font-medium capitalize">{suggestionLabel(suggestion.type)}</div>
-                          <div className="mt-1 text-xs font-medium text-primary">{lead ? `${lead.familyName} · ${lead.centerName}` : family ? `${family.name} · ${family.centerName}` : context.targetMode === "broadcast" ? "School broadcast" : "Operations draft"}</div>
+                          <div className="font-medium">{aiDisplayLabel(suggestion.type, "Draft")}</div>
+                          <div className="mt-1 text-xs font-medium text-primary">{lead ? `${lead.familyName} · ${lead.centerName}` : family ? `${family.name} · ${family.centerName}` : context.targetMode === "broadcast" ? "School broadcast" : "School draft"}</div>
                           <div className="mt-1 text-xs text-muted-foreground">{suggestion.guardrailNote}</div>
                         </TableCell>
                         <TableCell className="min-w-80 align-top">
@@ -712,7 +737,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                           {suggestion.status === "pending_review" ? <div className="mt-3 flex flex-wrap gap-2">{choices.map((choice) => <Button key={choice.label} size="sm" onClick={() => applySuggestion(suggestion, choice)}><CheckCircle2 data-icon="inline-start" />Use {choice.label}</Button>)}</div> : null}
                         </TableCell>
                         <TableCell className="align-top">
-                          <Badge variant={statusVariant(suggestion.status)}>{suggestion.status.replaceAll("_", " ")}</Badge>
+                          <Badge variant={statusVariant(suggestion.status)}>{aiDisplayLabel(suggestion.status)}</Badge>
                         </TableCell>
                         <TableCell className="min-w-36 align-top text-xs text-muted-foreground">{formatDate(suggestion.createdAt, timeZone)}</TableCell>
                         <TableCell className="min-w-52 align-top">
@@ -720,7 +745,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                             <Button variant="outline" size="icon-sm" onClick={() => copySuggestion(suggestion)} title="Copy suggestion">
                               <Copy />
                             </Button>
-                            {lead ? <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/crm-leads?q=${encodeURIComponent(lead.familyName)}`} />}><ArrowRight data-icon="inline-end" />Open lead</Button> : null}
+                            {lead ? <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/crm-leads?q=${encodeURIComponent(lead.familyName)}`} />}><ArrowRight data-icon="inline-end" />Open inquiry</Button> : null}
                             {family ? <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/messages?familyId=${encodeURIComponent(family.id)}`} />}><ArrowRight data-icon="inline-end" />Messages</Button> : null}
                             <Button variant="outline" size="icon-sm" onClick={() => updateSuggestionStatus(suggestion.id, "rejected")} disabled={isPending} title="Reject">
                               <XCircle />
@@ -746,7 +771,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
 
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Recent Summaries</CardTitle>
+            <CardTitle>Recent summaries</CardTitle>
             <CardDescription>Generated school snapshots for director review.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -757,7 +782,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                     <div className="font-medium">{summary.title}</div>
                     <div className="mt-1 text-xs text-muted-foreground">{formatDate(summary.createdAt, timeZone)}</div>
                   </div>
-                  <Badge variant={summary.requiresReview ? "outline" : "default"}>{summary.scope}</Badge>
+                  <Badge variant={summary.requiresReview ? "outline" : "default"}>{aiDisplayLabel(summary.scope, "Selected schools")}</Badge>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">{summary.body}</p>
               </div>

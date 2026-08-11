@@ -93,8 +93,9 @@ test("payment dunning copy and dedupe keys are scoped per payment attempt and re
     userId: "user_1",
   });
 
-  assert.equal(copy.guardianSubject, "Payment retry needed for invoice INV-100 (attempt 2)");
+  assert.equal(copy.guardianSubject, "Payment could not be completed for invoice INV-100 — reminder 2");
   assert.match(copy.staffBody, /Anderson Family at FL \| Sarasota has a failed \$125\.50 payment/);
-  assert.match(copy.guardianBody, /Please retry the payment from your parent account/);
+  assert.match(copy.guardianBody, /Please try again from your Parent Portal/);
+  assert.doesNotMatch(copy.guardianBody, /attempt|automated reminder/i);
   assert.notEqual(first, differentAttempt);
 });

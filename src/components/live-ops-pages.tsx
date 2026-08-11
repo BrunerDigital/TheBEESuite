@@ -230,11 +230,19 @@ function jsonSummary(value: unknown) {
 
 function formatRecordLabel(value: string | null | undefined) {
   if (!value) return "Not set";
-  return value
+  const acronyms = new Set(["FTE", "SMS", "API", "ACH", "ID", "URL", "QR"]);
+  const words = value
     .replaceAll("_", " ")
     .replace(/\s+/g, " ")
     .trim()
-    .replace(/^\w/, (letter) => letter.toUpperCase());
+    .split(" ")
+    .map((word) => {
+      const upper = word.toLocaleUpperCase();
+      return acronyms.has(upper) ? upper : word.toLocaleLowerCase();
+    })
+    .join(" ");
+
+  return words.replace(/^\w/, (letter) => letter.toLocaleUpperCase());
 }
 
 function localImageSrc(value: string | null | undefined) {
@@ -408,11 +416,11 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
         <Badge className="mb-4">
           <Bell data-icon="inline-start" />
-          Live action queue
+          Notifications
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Notification Center</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Role-scoped alerts from CRM tasks, high-intent leads, incident review queues, and system notifications.
+          Review enrollment follow-ups, prospective-family activity, incident reviews, and school notifications.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -434,8 +442,8 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>Current Queue</CardTitle>
-              <CardDescription>Newest alerts and derived CRM actions</CardDescription>
+              <CardTitle>Current notifications</CardTitle>
+              <CardDescription>Newest notifications and follow-up items</CardDescription>
             </div>
             <NotificationReadAction label="Mark my notifications read" />
           </div>
@@ -459,16 +467,16 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
                     <div className="mt-1 max-w-2xl whitespace-normal text-xs text-muted-foreground">{item.body}</div>
                     {item.type === "payment_method_form" ? <PaymentFormDestination body={item.body} /> : null}
                   </TableCell>
-                  <TableCell>{item.type}</TableCell>
+                  <TableCell>{formatRecordLabel(item.type)}</TableCell>
                   <TableCell>
-                    <Badge variant={item.priority === "high" ? "destructive" : "outline"}>{item.priority}</Badge>
+                    <Badge variant={item.priority === "high" ? "destructive" : "outline"}>{formatRecordLabel(item.priority)}</Badge>
                   </TableCell>
                   <TableCell>{"readAt" in item && item.readAt ? "Read" : "Open"}</TableCell>
                   <TableCell>
                     {isStoredNotification(item) ? (
                       <NotificationReadAction notificationId={item.id} readAt={item.readAt} compact />
                     ) : (
-                      <span className="text-xs text-muted-foreground">Derived</span>
+                      <span className="text-xs text-muted-foreground">Automatic alert</span>
                     )}
                   </TableCell>
                 </TableRow>
@@ -476,7 +484,7 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
               {!items.length ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-muted-foreground">
-                    No notifications are queued for this scope.
+                    No notifications are available for this account.
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -511,17 +519,17 @@ export function AuditLogsPage({ data }: { data: AuditLogsData }) {
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
         <Badge className="mb-4">
           <ShieldCheck data-icon="inline-start" />
-          Sensitive workflow evidence
+          Activity history
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Audit Logs</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Live audit trail for lead creation, pipeline updates, notes, tasks, reviewed emails, and restricted-data events.
+          Review enrollment changes, notes, tasks, messages, and protected-record activity.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Events" value={data.stats.total} detail="Visible to this role" />
-        <StatCard label="Lead actions" value={data.stats.leadActions} detail="CRM workflow changes" />
-        <StatCard label="Sensitive markers" value={data.stats.sensitive} detail="Restricted/security events" />
+        <StatCard label="Events" value={data.stats.total} detail="Based on your assigned access" />
+        <StatCard label="Enrollment actions" value={data.stats.leadActions} detail="Prospective-family changes" />
+        <StatCard label="Protected activity" value={data.stats.sensitive} detail="Protected records and access events" />
       </div>
       <AuditLogViewer logs={data.logs} />
     </div>
@@ -567,13 +575,13 @@ export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Team, Users, and Permissions</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Live user directory with role, active status, and center assignments. Passwords are managed through Supabase Auth, not stored here.
+          Review team roles, account status, location access, and active device sessions.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Users visible" value={data.users.length} detail="Scoped by role and center" />
+        <StatCard label="Users available" value={data.users.length} detail="Based on your assigned access" />
         {data.roleCounts.slice(0, 3).map((role) => (
-          <StatCard key={role.role} label={role.role.replaceAll("_", " ")} value={role.count} />
+          <StatCard key={role.role} label={formatRecordLabel(role.role)} value={role.count} />
         ))}
       </div>
       <DeviceSessionPanel
@@ -584,7 +592,7 @@ export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>User Directory</CardTitle>
-          <CardDescription>{data.brandName} accounts and role-scoped access</CardDescription>
+          <CardDescription>{data.brandName} accounts and assigned location access</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -593,7 +601,7 @@ export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
                 <TableHead>User</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Center</TableHead>
-                <TableHead>Access scope</TableHead>
+                <TableHead>Location access</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -604,20 +612,20 @@ export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
                     <div className="font-medium">{user.name}</div>
                     <div className="text-xs text-muted-foreground">{user.email}</div>
                   </TableCell>
-                  <TableCell>{user.role.replaceAll("_", " ")}</TableCell>
+                  <TableCell>{formatRecordLabel(user.role)}</TableCell>
                   <TableCell>{user.staffProfile?.center?.crmLocationId ?? user.staffProfile?.center?.name ?? "Organization-wide"}</TableCell>
                   <TableCell>
                     {user.accessGrants.length ? (
                       <div className="flex flex-wrap gap-1.5">
                         {user.accessGrants.slice(0, 3).map((grant) => (
                           <Badge key={grant.id} variant="outline">
-                            {grant.scopeType.replaceAll("_", " ")}: {grant.center?.crmLocationId ?? grant.center?.name ?? grant.ownerGroup?.name ?? grant.organization?.name ?? grant.brand?.name ?? "Tenant"}
+                            {formatRecordLabel(grant.scopeType)}: {grant.center?.crmLocationId ?? grant.center?.name ?? grant.ownerGroup?.name ?? grant.organization?.name ?? grant.brand?.name ?? "All locations"}
                           </Badge>
                         ))}
                         {user.accessGrants.length > 3 ? <Badge variant="outline">+{user.accessGrants.length - 3}</Badge> : null}
                       </div>
                     ) : (
-                      <span className="text-xs text-muted-foreground">Role fallback</span>
+                      <span className="text-xs text-muted-foreground">Access based on role</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -711,11 +719,11 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
         <Badge className="mb-4">
           <Building2 data-icon="inline-start" />
-          Enterprise control
+          Corporate administration
         </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">Executive / Franchise Admin</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Corporate administration</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Corporate controls for location lifecycle, owner groups, scoped users, password resets, and multi-location visibility for {data.brandName}.
+          Manage locations, owner groups, user access, and multi-location visibility for {data.brandName}.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -728,8 +736,8 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Ownership Containers</CardTitle>
-            <CardDescription>Franchisees, multi-location owners, and single-center operators under a brand</CardDescription>
+            <CardTitle>Owner groups</CardTitle>
+            <CardDescription>Franchisees, multi-location owners, and single-school operators</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -748,7 +756,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
                       <div className="font-medium">{group.name}</div>
                       <div className="text-xs text-muted-foreground">{group.contactName ?? group.billingEmail ?? group.slug}</div>
                     </TableCell>
-                    <TableCell>{group.ownerType.replaceAll("_", " ")}</TableCell>
+                    <TableCell>{formatRecordLabel(group.ownerType)}</TableCell>
                     <TableCell>{group._count.centers}</TableCell>
                     <TableCell>{group._count.accessGrants}</TableCell>
                   </TableRow>
@@ -764,8 +772,8 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
         </Card>
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Scoped Access Grants</CardTitle>
-            <CardDescription>Explicit visibility rules layered over roles</CardDescription>
+            <CardTitle>Assigned access</CardTitle>
+            <CardDescription>Location and organization access assigned to each user</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -784,14 +792,14 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
                       <div className="font-medium">{grant.user.name}</div>
                       <div className="text-xs text-muted-foreground">{grant.user.email}</div>
                     </TableCell>
-                    <TableCell>{grant.role.replaceAll("_", " ")}</TableCell>
-                    <TableCell>{grant.scopeType.replaceAll("_", " ")}</TableCell>
-                    <TableCell>{grant.center?.crmLocationId ?? grant.center?.name ?? grant.ownerGroup?.name ?? grant.organization?.name ?? grant.brand?.name ?? "Tenant"}</TableCell>
+                    <TableCell>{formatRecordLabel(grant.role)}</TableCell>
+                    <TableCell>{formatRecordLabel(grant.scopeType)}</TableCell>
+                    <TableCell>{grant.center?.crmLocationId ?? grant.center?.name ?? grant.ownerGroup?.name ?? grant.organization?.name ?? grant.brand?.name ?? "All locations"}</TableCell>
                   </TableRow>
                 ))}
                 {!data.accessGrants.length ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-muted-foreground">No explicit grants yet. Legacy role fallbacks still apply.</TableCell>
+                    <TableCell colSpan={4} className="text-muted-foreground">No additional access assignments. Each user&apos;s role determines their current access.</TableCell>
                   </TableRow>
                 ) : null}
               </TableBody>
@@ -801,8 +809,8 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Center Profiles</CardTitle>
-          <CardDescription>Location routing, capacity, and recipient readiness</CardDescription>
+          <CardTitle>School profiles</CardTitle>
+          <CardDescription>Contact information, capacity, ownership, and status</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -831,7 +839,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
                     <Badge variant={center.email ? "default" : "outline"}>{center.email ? "Ready" : "Missing"}</Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={center.status === "active" ? "default" : "outline"}>{center.status}</Badge>
+                    <Badge variant={center.status === "active" ? "default" : "outline"}>{formatRecordLabel(center.status)}</Badge>
                   </TableCell>
                   <TableCell>{center._count.leads.toLocaleString()}</TableCell>
                   <TableCell>{center._count.staff}</TableCell>
@@ -894,11 +902,11 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
         <Badge className="mb-4">
           <Link2 data-icon="inline-start" />
-          Credential readiness
+          Connected services
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Integrations</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Live environment status without exposing secrets. Credentialed integrations run from server routes with human review and audit logging where sensitive workflows are involved.
+          Review connected service status and items that need attention. Sensitive credentials are never shown.
         </p>
       </section>
       {data.deliveryStats ? (
@@ -914,8 +922,8 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
       {data.deliveryStats ? (
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>SendGrid Follow-up Queue</CardTitle>
-            <CardDescription>Accepted email older than 24 hours and final provider failure signals require human review. Deferred is shown separately because SendGrid is still retrying.</CardDescription>
+            <CardTitle>Email delivery follow-up</CardTitle>
+            <CardDescription>Email deliveries that have not completed after 24 hours need review. Deferred messages remain in progress while the email provider retries.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-5">
             <StatCard label="Needs follow-up" value={data.deliveryStats.needsFollowUp.toLocaleString()} />
@@ -936,7 +944,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
                   <CardDescription>{integration.purpose}</CardDescription>
                 </div>
                 <Badge variant={integration.status === "Connected" || integration.status === "Configured" ? "default" : "outline"}>
-                  {integration.status}
+                  {formatRecordLabel(integration.status)}
                 </Badge>
               </div>
             </CardHeader>
@@ -962,9 +970,9 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
       {data.recentDeliveries ? (
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Integration Delivery Health</CardTitle>
+            <CardTitle>Message delivery status</CardTitle>
             <CardDescription>
-              Recent outbound integration attempts. Pending rows are retried by the daily cron job; accepted email waits for a signed final provider event.
+              Recent email, text message, and connected-service deliveries. Pending items will retry automatically.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -984,16 +992,18 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
                   <TableRow key={delivery.id}>
                     <TableCell>{formatDateTime(delivery.createdAt, delivery)}</TableCell>
                     <TableCell>
-                      <div className="font-medium">{delivery.provider.replaceAll("_", " ")}</div>
-                      <div className="text-xs text-muted-foreground">{delivery.purpose.replaceAll("_", " ")}</div>
+                      <div className="font-medium">{formatRecordLabel(delivery.provider)}</div>
+                      <div className="text-xs text-muted-foreground">{formatRecordLabel(delivery.purpose)}</div>
                       {delivery.lastError ? (
-                        <div className="mt-1 max-w-md whitespace-normal text-xs text-destructive">{delivery.lastError}</div>
+                        <div className="mt-1 max-w-md whitespace-normal text-xs text-destructive">
+                          Delivery did not complete. Review the destination and try again.
+                        </div>
                       ) : null}
                     </TableCell>
                     <TableCell>{delivery.center?.crmLocationId ?? delivery.center?.name ?? "All locations"}</TableCell>
                     <TableCell>
                       <Badge variant={delivery.status === "failed" ? "destructive" : delivery.status === "delivered" ? "default" : "outline"}>
-                        {delivery.status}
+                        {formatRecordLabel(delivery.status)}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -1007,7 +1017,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
                 {!data.recentDeliveries.length ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-muted-foreground">
-                      No integration deliveries have been recorded for this scope yet.
+                      No connected-service deliveries have been recorded for this account.
                     </TableCell>
                   </TableRow>
                 ) : null}
@@ -1185,7 +1195,7 @@ const projectAccountGroups: Array<{ title: string; description: string; accounts
       {
         label: "OpenAI Platform",
         href: "https://platform.openai.com/",
-        detail: "Mr. Bee and AI command center API usage, keys, and model settings.",
+        detail: "Manage Mr. Bee service usage, API keys, and model settings.",
         status: "AI",
         Icon: Bot,
       },
@@ -1230,7 +1240,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Developer Dashboard</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Production-facing technical operations for integrations, imports, webhooks, audit events, and record maintenance.
+          Review connected services, imports, administrative activity, and record maintenance.
         </p>
       </section>
 
@@ -1242,7 +1252,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
       </section>
 
       <Card className="glass-panel border-amber-500/35">
-        <CardHeader><CardTitle>Privacy-Safe Reliability Alerts</CardTitle><CardDescription>Counts contain no parent, child, family, message, or credential data. Structured server anomalies are emitted as database_unreachable, auth_rate_limited, push_delivery_rejected, provider_delivery_failure, or application_error.</CardDescription></CardHeader>
+        <CardHeader><CardTitle>Reliability Alerts</CardTitle><CardDescription>These counts do not include parent, child, family, message, or credential information.</CardDescription></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           <StatCard label="Client exceptions (24h)" value={data.stats.unresolvedClientErrors24h} detail="Unresolved, deduplicated reports" />
           <StatCard label="Push failures (24h)" value={data.stats.failedPushDeliveries24h} detail="Failed delivery attempts" />
@@ -1253,7 +1263,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
       <DeveloperSubscriptionConsole schools={data.softwareSubscriptions} />
 
       <Card className="glass-panel border-primary/25">
-        <CardHeader><CardTitle className="flex items-center gap-2"><Users className="size-5 text-primary" />Users, roles, and access</CardTitle><CardDescription>The developer lens controls user creation, roles, school scope, credential resets, session revocation, and account activation.</CardDescription></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Users className="size-5 text-primary" />Users, roles, and access</CardTitle><CardDescription>Create users, assign roles and locations, manage sign-in access, and sign users out of active devices.</CardDescription></CardHeader>
         <CardContent className="flex flex-wrap items-center gap-3"><Badge variant="outline">{data.stats.activeUsers} active</Badge><Badge variant="outline">{data.stats.inactiveUsers} inactive</Badge><Link className={buttonVariants()} href="/agency-admin#existing-user-accounts">Open user access control <ArrowRight /></Link></CardContent>
       </Card>
 
@@ -1262,7 +1272,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
           <div>
             <h2 className="text-2xl font-semibold tracking-tight">Project accounts and platforms</h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Quick links for every outside account and internal admin surface involved in The BEE Suite build, deployment, data, communications, AI, and design workflow.
+              Open approved service dashboards and administration tools used by The BEE Suite.
             </p>
           </div>
           <Badge variant="outline" className="w-fit">
@@ -1312,10 +1322,10 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Audit events" value={data.stats.auditEvents.toLocaleString()} />
-        <StatCard label="CRUD mutations" value={data.stats.operationMutations.toLocaleString()} detail="Operations API" />
+        <StatCard label="Record changes" value={data.stats.operationMutations.toLocaleString()} detail="Administrative actions" />
         <StatCard label="Deliveries" value={data.stats.integrationDeliveries.toLocaleString()} />
         <StatCard label="Failed delivery" value={data.stats.failedDeliveries.toLocaleString()} />
-        <StatCard label="Webhook errors" value={data.stats.webhookErrors.toLocaleString()} />
+        <StatCard label="Integration errors" value={data.stats.webhookErrors.toLocaleString()} />
         <StatCard label="ProCare imports" value={data.stats.procareImports.toLocaleString()} />
       </div>
 
@@ -1331,8 +1341,8 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Integration Runtime</CardTitle>
-            <CardDescription>Connected provider records and most recent sync state</CardDescription>
+            <CardTitle>Connected services</CardTitle>
+            <CardDescription>Current service status and most recent update</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -1346,16 +1356,16 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
               <TableBody>
                 {data.integrations.map((integration) => (
                   <TableRow key={integration.id}>
-                    <TableCell className="font-medium">{integration.provider.replaceAll("_", " ")}</TableCell>
+                    <TableCell className="font-medium">{formatRecordLabel(integration.provider)}</TableCell>
                     <TableCell>
-                      <Badge variant={integration.status === "failed" ? "destructive" : "outline"}>{integration.status}</Badge>
+                      <Badge variant={integration.status === "failed" ? "destructive" : "outline"}>{formatRecordLabel(integration.status)}</Badge>
                     </TableCell>
                     <TableCell>{formatDateTime(integration.lastSyncAt, integration)}</TableCell>
                   </TableRow>
                 ))}
                 {!data.integrations.length ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-muted-foreground">No integration records have been configured for this tenant.</TableCell>
+                    <TableCell colSpan={3} className="text-muted-foreground">No connected services have been configured for this account.</TableCell>
                   </TableRow>
                 ) : null}
               </TableBody>
@@ -1365,8 +1375,8 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
 
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Recent Webhooks</CardTitle>
-            <CardDescription>Payment processor webhook processing and error evidence</CardDescription>
+            <CardTitle>Recent payment events</CardTitle>
+            <CardDescription>Recent payment updates and any processing errors</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -1382,11 +1392,11 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
                 {data.webhooks.map((webhook) => (
                   <TableRow key={webhook.id}>
                     <TableCell>
-                      <div className="font-medium">{webhook.type}</div>
+                      <div className="font-medium">{formatRecordLabel(webhook.type)}</div>
                       {webhook.error ? <div className="mt-1 max-w-md text-xs text-destructive">{webhook.error}</div> : null}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={webhook.error || webhook.status === "failed" ? "destructive" : "outline"}>{webhook.status}</Badge>
+                      <Badge variant={webhook.error || webhook.status === "failed" ? "destructive" : "outline"}>{formatRecordLabel(webhook.status)}</Badge>
                     </TableCell>
                     <TableCell>{webhook.objectId ?? "Not set"}</TableCell>
                     <TableCell>{webhook.processedAt ? formatDateTime(webhook.processedAt, webhook) : formatDateTime(webhook.createdAt, webhook)}</TableCell>
@@ -1394,7 +1404,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
                 ))}
                 {!data.webhooks.length ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-muted-foreground">No payment processor webhooks have been recorded yet.</TableCell>
+                    <TableCell colSpan={4} className="text-muted-foreground">No payment events have been recorded yet.</TableCell>
                   </TableRow>
                 ) : null}
               </TableBody>
@@ -1405,8 +1415,8 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
 
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Delivery Queue</CardTitle>
-          <CardDescription>Outbound email, SMS, Sheets, and webhook delivery attempts</CardDescription>
+          <CardTitle>Message delivery attempts</CardTitle>
+          <CardDescription>Recent email, text message, spreadsheet, and connected-service deliveries</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -1424,14 +1434,18 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
                 <TableRow key={delivery.id}>
                   <TableCell>{formatDateTime(delivery.createdAt, delivery)}</TableCell>
                   <TableCell>
-                    <div className="font-medium">{delivery.provider.replaceAll("_", " ")}</div>
-                    <div className="text-xs text-muted-foreground">{delivery.purpose.replaceAll("_", " ")}</div>
-                    {delivery.lastError ? <div className="mt-1 max-w-md text-xs text-destructive">{delivery.lastError}</div> : null}
+                    <div className="font-medium">{formatRecordLabel(delivery.provider)}</div>
+                    <div className="text-xs text-muted-foreground">{formatRecordLabel(delivery.purpose)}</div>
+                    {delivery.lastError ? (
+                      <div className="mt-1 max-w-md text-xs text-destructive">
+                        Delivery did not complete. Review the destination and try again.
+                      </div>
+                    ) : null}
                   </TableCell>
                   <TableCell>{delivery.center?.crmLocationId ?? delivery.center?.name ?? "All locations"}</TableCell>
                   <TableCell>
                     <Badge variant={delivery.status === "failed" ? "destructive" : delivery.status === "delivered" ? "default" : "outline"}>
-                      {delivery.status}
+                      {formatRecordLabel(delivery.status)}
                     </Badge>
                   </TableCell>
                   <TableCell>{delivery.attempts}/{delivery.maxAttempts}</TableCell>
@@ -1471,13 +1485,13 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
                       <div className="text-xs text-muted-foreground">{formatDateTime(batch.createdAt, batch)} · {batch.uploadedBy?.email ?? "System"}</div>
                     </TableCell>
                     <TableCell>{batch.center.crmLocationId ?? batch.center.name}</TableCell>
-                    <TableCell><Badge variant={batch.status === "failed" ? "destructive" : "outline"}>{batch.status}</Badge></TableCell>
+                    <TableCell><Badge variant={batch.status === "failed" ? "destructive" : "outline"}>{formatRecordLabel(batch.status)}</Badge></TableCell>
                     <TableCell>{batch._count.rows.toLocaleString()}</TableCell>
                   </TableRow>
                 ))}
                 {!data.imports.length ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-muted-foreground">No ProCare import batches are visible for this scope.</TableCell>
+                    <TableCell colSpan={4} className="text-muted-foreground">No ProCare imports are available for this account.</TableCell>
                   </TableRow>
                 ) : null}
               </TableBody>
@@ -1487,8 +1501,8 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
 
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Recent Operations Audit</CardTitle>
-            <CardDescription>CRUD actions and sensitive workflow entries</CardDescription>
+            <CardTitle>Recent administrative activity</CardTitle>
+            <CardDescription>Account, access, and other sensitive changes</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -1504,7 +1518,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
                 {data.auditLogs.map((log) => (
                   <TableRow key={log.id}>
                     <TableCell>
-                      <div className="font-medium">{log.action.replaceAll("_", " ")}</div>
+                      <div className="font-medium">{formatRecordLabel(log.action)}</div>
                       <div className="text-xs text-muted-foreground">{log.resource} {log.resourceId ?? ""}</div>
                     </TableCell>
                     <TableCell>{log.user?.email ?? "System"}</TableCell>
@@ -1560,7 +1574,7 @@ export function HelpPage({ data }: { data: HelpPageData }) {
     { href: "/school-setup", label: "School setup", detail: "Director launch readiness and required configuration" },
     { href: "/family-detail", label: "Families", detail: "Family, guardian, custody, document, and change-request records" },
     { href: "/attendance", label: "Attendance", detail: "Kiosk, QR/PIN, check-in/out, and classroom status" },
-    { href: "/billing-invoices", label: "Billing", detail: "Tuition plans, invoices, payments, dunning, and ledger reports" },
+    { href: "/billing-invoices", label: "Billing", detail: "Tuition plans, invoices, payments, payment follow-up, and account history" },
     { href: "/compliance", label: "Compliance", detail: "Incidents, medication logs, drills, licensing, and reminders" },
     { href: "/analytics", label: "Reports", detail: "Enrollment, attendance, billing, response-time, and export reports" },
   ];
@@ -1570,11 +1584,11 @@ export function HelpPage({ data }: { data: HelpPageData }) {
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
         <Badge className="mb-4">
           <BookOpen data-icon="inline-start" />
-          Support workspace
+          Help
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Help and Documentation</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Role-scoped support hub for launch tasks, current alerts, support-access history, and operational areas that need school configuration.
+          Find school setup tasks, current alerts, support history, and areas that still need configuration.
         </p>
       </section>
 
@@ -1632,9 +1646,9 @@ export function HelpPage({ data }: { data: HelpPageData }) {
                       <div className="text-xs text-muted-foreground">{notification.body}</div>
                       {notification.type === "payment_method_form" ? <PaymentFormDestination body={notification.body} /> : null}
                     </TableCell>
-                    <TableCell>{notification.type.replaceAll("_", " ")}</TableCell>
+                    <TableCell>{formatRecordLabel(notification.type)}</TableCell>
                     <TableCell>
-                      <Badge variant={notification.priority === "high" ? "destructive" : "outline"}>{notification.priority}</Badge>
+                      <Badge variant={notification.priority === "high" ? "destructive" : "outline"}>{formatRecordLabel(notification.priority)}</Badge>
                     </TableCell>
                     <TableCell>{formatDateTime(notification.createdAt, notification)}</TableCell>
                   </TableRow>
@@ -1668,7 +1682,7 @@ export function HelpPage({ data }: { data: HelpPageData }) {
                 {data.supportEvents.map((event) => (
                   <TableRow key={event.id}>
                     <TableCell>
-                      <div className="font-medium">{event.action.replaceAll("_", " ")}</div>
+                      <div className="font-medium">{formatRecordLabel(event.action)}</div>
                       <div className="text-xs text-muted-foreground">{event.resource} {event.resourceId ?? ""}</div>
                     </TableCell>
                     <TableCell>{event.user?.email ?? "System"}</TableCell>
@@ -1678,7 +1692,7 @@ export function HelpPage({ data }: { data: HelpPageData }) {
                 ))}
                 {!data.supportEvents.length ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-muted-foreground">No support-access events are recorded for this scope.</TableCell>
+                    <TableCell colSpan={4} className="text-muted-foreground">No support-access activity has been recorded for this account.</TableCell>
                   </TableRow>
                 ) : null}
               </TableBody>
@@ -1819,13 +1833,13 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
                       <ArrowRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
                     </Link>
                   </TableCell>
-                  <TableCell>{lead.stage.replaceAll("_", " ")}</TableCell>
+                  <TableCell>{formatRecordLabel(lead.stage)}</TableCell>
                   <TableCell><Badge>{lead.score}</Badge></TableCell>
                   <TableCell>{formatDate(lead.createdAt)}</TableCell>
                   <TableCell>
                     <Link href={crmLeadSearchHref(lead.familyName)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                       <ArrowRight data-icon="inline-start" />
-                      CRM
+                      Open inquiry
                     </Link>
                   </TableCell>
                 </TableRow>
@@ -1917,7 +1931,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Enrollment Pipeline</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Stage counts, high-intent families, and newest CRM records scoped to the current user.
+          Review prospective families by enrollment stage, priority, and recent activity.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-3">
@@ -1992,7 +2006,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
               {!data.applicationSubmissions.length ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-muted-foreground">
-                    No online registration applications are waiting in this scope.
+                    No online registration applications are waiting for the schools you can access.
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -2030,7 +2044,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
                     </Link>
                     <div className="text-xs text-muted-foreground">{enrollment.familyName}{enrollment.centerName ? ` · ${enrollment.centerName}` : ""}</div>
                   </TableCell>
-                  <TableCell>{enrollment.stage.replaceAll("_", " ")}</TableCell>
+                  <TableCell>{formatRecordLabel(enrollment.stage)}</TableCell>
                   <TableCell>
                     <Badge>{enrollment.summary.percentComplete}%</Badge>
                     <div className="mt-1 text-xs text-muted-foreground">
@@ -2053,7 +2067,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
               {!data.enrollmentChecklists.length ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-muted-foreground">
-                    No approved enrollment checklists have been created in this scope yet.
+                    No approved enrollment checklists have been created for the schools you can access.
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -2064,7 +2078,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Newest Pipeline Activity</CardTitle>
-          <CardDescription>Use CRM Leads to move stages, add notes, schedule tours, and contact families.</CardDescription>
+          <CardDescription>Use Prospective Families to update stages, add notes, schedule tours, and contact families.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -2092,13 +2106,13 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
                     <div className="text-xs text-muted-foreground">{lead.email ?? lead.phone ?? "No contact info"}</div>
                   </TableCell>
                   <TableCell>{lead.center.crmLocationId ?? lead.center.name}</TableCell>
-                  <TableCell>{lead.stage.replaceAll("_", " ")}</TableCell>
+                  <TableCell>{formatRecordLabel(lead.stage)}</TableCell>
                   <TableCell><Badge>{lead.score}</Badge></TableCell>
                   <TableCell>{formatDate(lead.createdAt)}</TableCell>
                   <TableCell>
                     <Link href={crmLeadSearchHref(lead.familyName)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                       <ArrowRight data-icon="inline-start" />
-                      CRM
+                      Open inquiry
                     </Link>
                   </TableCell>
                 </TableRow>
@@ -2137,7 +2151,7 @@ export function ToursPage({ data }: { data: ToursPageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Tours</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Scheduled family tours from the enrollment CRM. New tours can be scheduled from a selected lead.
+          Review scheduled family tours. Schedule a new tour from the prospective family&apos;s inquiry.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-3">
@@ -2181,13 +2195,13 @@ export function ToursPage({ data }: { data: ToursPageData }) {
                     <div className="text-xs text-muted-foreground">{tour.lead?.email ?? tour.lead?.phone ?? ""}</div>
                   </TableCell>
                   <TableCell>{tour.center.crmLocationId ?? tour.center.name}</TableCell>
-                  <TableCell><Badge variant={tour.status === "completed" ? "secondary" : "default"}>{tour.status}</Badge></TableCell>
+                  <TableCell><Badge variant={tour.status === "completed" ? "secondary" : "default"}>{formatRecordLabel(tour.status)}</Badge></TableCell>
                   <TableCell className="max-w-sm whitespace-normal text-muted-foreground">{tour.notes ?? ""}</TableCell>
                   <TableCell>
                     {tour.lead?.familyName ? (
                       <Link href={crmLeadSearchHref(tour.lead.familyName)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                         <ArrowRight data-icon="inline-start" />
-                        CRM
+                        Open inquiry
                       </Link>
                     ) : null}
                   </TableCell>
@@ -2196,7 +2210,7 @@ export function ToursPage({ data }: { data: ToursPageData }) {
               {!data.tours.length ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-muted-foreground">
-                    No tours are scheduled for this scope yet.
+                    No tours are scheduled for the schools you can access.
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -2240,7 +2254,7 @@ export function WaitlistPage({ data }: { data: WaitlistPageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Waitlist</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Families in the waitlisted CRM stage plus imported waitlist entries where available.
+          Review prospective families in the waitlisted stage and imported waitlist entries.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-2">
@@ -2249,7 +2263,7 @@ export function WaitlistPage({ data }: { data: WaitlistPageData }) {
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>CRM Waitlist</CardTitle>
+          <CardTitle>Waitlist</CardTitle>
           <CardDescription>Leads currently in the Waitlisted stage</CardDescription>
         </CardHeader>
         <CardContent>
@@ -2283,7 +2297,7 @@ export function WaitlistPage({ data }: { data: WaitlistPageData }) {
                   <TableCell>
                     <Link href={crmLeadSearchHref(lead.familyName)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                       <ArrowRight data-icon="inline-start" />
-                      CRM
+                      Open inquiry
                     </Link>
                   </TableCell>
                 </TableRow>
@@ -2291,7 +2305,7 @@ export function WaitlistPage({ data }: { data: WaitlistPageData }) {
               {!data.leadWaitlist.length ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-muted-foreground">
-                    No CRM leads are currently waitlisted in this scope.
+                    No prospective families are currently in the waitlisted stage.
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -2302,7 +2316,7 @@ export function WaitlistPage({ data }: { data: WaitlistPageData }) {
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Imported Waitlist Entries</CardTitle>
-          <CardDescription>Standalone waitlist records from the data model</CardDescription>
+          <CardDescription>Waitlist records imported from existing school data</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -2331,7 +2345,7 @@ export function WaitlistPage({ data }: { data: WaitlistPageData }) {
                   <TableCell>{entry.childName}</TableCell>
                   <TableCell>{entry.ageGroup}</TableCell>
                   <TableCell>{formatDate(entry.desiredStartDate)}</TableCell>
-                  <TableCell><Badge variant="outline">{entry.status}</Badge></TableCell>
+                  <TableCell><Badge variant="outline">{formatRecordLabel(entry.status)}</Badge></TableCell>
                   <TableCell>
                     <Link href={familySearchHref(entry.familyName)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                       <ArrowRight data-icon="inline-start" />
@@ -2448,7 +2462,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
           <InfoTip label="About messages" side="right">
             {isParentMessagingView
               ? "Messages shown here are connected to your family portal account and school communication history."
-              : "Communication records are limited to the current user's school access. Draft assistance can be used by staff, but sensitive outreach still needs human review."}
+              : "Messages are limited to the schools you can access. Review assisted drafts carefully before sending sensitive family communication."}
           </InfoTip>
         </div>
       </section>
@@ -2578,7 +2592,7 @@ export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Announcements</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Warm, professional broadcast drafts and scheduled notices by school, with emergency alert routing controlled through notification settings.
+          Create and schedule announcements for families or staff. Emergency delivery follows the school&apos;s notification settings.
         </p>
       </section>
       {data.demoMode ? <DemoDataNotice section="announcement" /> : null}
@@ -2614,7 +2628,7 @@ export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
                   </TableCell>
                   <TableCell>{announcement.center?.crmLocationId ?? announcement.center?.name ?? "All centers"}</TableCell>
                   <TableCell>{jsonSummary(announcement.audience)}</TableCell>
-                  <TableCell><Badge variant={announcement.status === "sent" ? "default" : "outline"}>{announcement.status}</Badge></TableCell>
+                  <TableCell><Badge variant={announcement.status === "sent" ? "default" : "outline"}>{formatRecordLabel(announcement.status)}</Badge></TableCell>
                   <TableCell>{formatDateTime(announcement.sendAt, announcement)}</TableCell>
                   <TableCell>
                     <CommunicationSendButton endpoint={`/api/communications/announcements/${announcement.id}/send`} />
@@ -2624,7 +2638,7 @@ export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
               {!data.announcements.length ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-muted-foreground">
-                    No announcements have been created for this scope yet.
+                    No announcements have been created for the schools you can access.
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -2971,7 +2985,7 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
                     <div className="text-xs text-muted-foreground">{record.child?.ageGroup ?? ""}</div>
                   </TableCell>
                   <TableCell>{record.classroom?.name ?? "No classroom"}</TableCell>
-                  <TableCell><Badge variant={record.status === "present" ? "default" : "outline"}>{record.status}</Badge></TableCell>
+                  <TableCell><Badge variant={record.status === "present" ? "default" : "outline"}>{formatRecordLabel(record.status)}</Badge></TableCell>
                   <TableCell>{record.absenceReason ?? ""}</TableCell>
                 </TableRow>
               ))}
@@ -3074,7 +3088,7 @@ export function DailyReportsPage({ data }: { data: DailyReportsPageData }) {
                       <td>{report.suppliesNeeded ?? report.teacherNote ?? report.mood ?? ""}</td>
                     </tr>
                   ))}
-                  {!data.reports.length ? <tr><td colSpan={7}>No daily reports are visible for this scope.</td></tr> : null}
+                  {!data.reports.length ? <tr><td colSpan={7}>No daily reports are available for the schools you can access.</td></tr> : null}
                 </tbody>
               </table>
             </ReportPrintAction>
@@ -3165,7 +3179,7 @@ export function ParentMediaReviewPage({ data }: { data: ParentMediaReviewPageDat
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Parent Media Review</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Review teacher-uploaded child photos that were held because photo/video permission was missing. Approval is a human confirmation and is written to the audit trail.
+          Review teacher-uploaded child photos that need approval before they can be shared with families.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -3199,7 +3213,7 @@ export function ParentMediaReviewPage({ data }: { data: ParentMediaReviewPageDat
                   </div>
                   <div className="space-y-4 p-5">
                     <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline">{item.status.replaceAll("_", " ")}</Badge>
+                      <Badge variant="outline">{formatRecordLabel(item.status)}</Badge>
                       <Badge variant={item.child.photoVideoPermission ? "default" : "secondary"}>
                         {item.child.photoVideoPermission ? "Permission verified" : "Permission missing"}
                       </Badge>
@@ -3298,7 +3312,7 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Incident Reports</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          AI can help draft wording, but a staff member must verify every fact and complete the report. AI must not make safety, medical, legal, or custody decisions.
+          Review incident details, parent notification, and acknowledgment status. Staff must verify every fact before completing a report.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -3353,7 +3367,7 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
                       <td>{incident.child.fullName}</td>
                       <td>{incident.classroom?.name ?? "No classroom"}</td>
                       <td>{incident.classroom?.center.crmLocationId ?? incident.classroom?.center.name ?? "No school"}</td>
-                      <td>{incident.type}</td>
+                      <td>{formatRecordLabel(incident.type)}</td>
                       <td>{incident.adminReviewStatus}</td>
                       <td>
                         {incident.parentNotified ? "Parent notified" : "Parent not notified"}; {incident.parentAcknowledgedAt ? <>Acknowledged {formatDateTime(incident.parentAcknowledgedAt, incident)}</> : "Awaiting acknowledgment"}
@@ -3364,7 +3378,7 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
                       </td>
                     </tr>
                   ))}
-                  {!data.incidents.length ? <tr><td colSpan={8}>No incident reports are visible for this scope.</td></tr> : null}
+                  {!data.incidents.length ? <tr><td colSpan={8}>No incident reports are available for the schools you can access.</td></tr> : null}
                 </tbody>
               </table>
             </ReportPrintAction>
@@ -3390,7 +3404,7 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
                   <TableCell>{formatDateTime(incident.occurredAt, incident)}</TableCell>
                   <TableCell className="font-medium">{incident.child.fullName}</TableCell>
                   <TableCell>{incident.classroom?.name ?? "No classroom"}</TableCell>
-                  <TableCell>{incident.type}</TableCell>
+                  <TableCell>{formatRecordLabel(incident.type)}</TableCell>
                   <TableCell><Badge variant={incident.adminReviewStatus === "pending" ? "destructive" : "outline"}>{incident.adminReviewStatus}</Badge></TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1 text-xs">
@@ -3545,7 +3559,7 @@ export function StaffPage({ data }: { data: StaffPageData }) {
                     </TableCell>
                     <TableCell>{staff.center.crmLocationId ?? staff.center.name}</TableCell>
                     <TableCell>{staff.classroom?.name ?? "Unassigned"}</TableCell>
-                    <TableCell>{staff.user.role.replaceAll("_", " ")}</TableCell>
+                    <TableCell>{formatRecordLabel(staff.user.role)}</TableCell>
                     <TableCell><Badge variant={staff.backgroundCheckStatus?.includes("clear") ? "default" : "outline"}>{staff.backgroundCheckStatus ?? "Not set"}</Badge></TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
@@ -3589,7 +3603,7 @@ export function StaffPage({ data }: { data: StaffPageData }) {
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Upcoming Staff Schedule</CardTitle>
-          <CardDescription>Published teacher coverage for the visible school scope</CardDescription>
+          <CardDescription>Published teacher coverage for the schools you can access</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -3609,12 +3623,12 @@ export function StaffPage({ data }: { data: StaffPageData }) {
                   <TableCell>{schedule.center.crmLocationId ?? schedule.center.name}</TableCell>
                   <TableCell>{formatDateTime(schedule.startsAt, schedule)}</TableCell>
                   <TableCell>{formatDateTime(schedule.endsAt, schedule)}</TableCell>
-                  <TableCell><Badge variant="outline">{schedule.status}</Badge></TableCell>
+                  <TableCell><Badge variant="outline">{formatRecordLabel(schedule.status)}</Badge></TableCell>
                 </TableRow>
               ))}
               {!data.schedules.length ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground">No upcoming staff schedules are visible for this scope.</TableCell>
+                  <TableCell colSpan={5} className="text-muted-foreground">No upcoming staff schedules are available for the schools you can access.</TableCell>
                 </TableRow>
               ) : null}
             </TableBody>
@@ -3711,10 +3725,10 @@ export function FormsPage({ data }: { data: FormsPageData }) {
               {data.forms.map((form) => (
                 <TableRow key={form.id}>
                   <TableCell className="font-medium">{form.name}</TableCell>
-                  <TableCell>{form.type}</TableCell>
+                  <TableCell>{formatRecordLabel(form.type)}</TableCell>
                   <TableCell>{jsonSummary(form.schema)}</TableCell>
                   <TableCell>{form._count.submissions}</TableCell>
-                  <TableCell><Badge>{form.status}</Badge></TableCell>
+                  <TableCell><Badge>{formatRecordLabel(form.status)}</Badge></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -3746,9 +3760,9 @@ export function FormsPage({ data }: { data: FormsPageData }) {
                   <TableCell>{formatDateTime(submission.submittedAt, submission)}</TableCell>
                   <TableCell>
                     <div className="font-medium">{submission.form.name}</div>
-                    <div className="text-xs text-muted-foreground">{submission.form.type}</div>
+                    <div className="text-xs text-muted-foreground">{formatRecordLabel(submission.form.type)}</div>
                   </TableCell>
-                  <TableCell><Badge variant="outline">{submission.status}</Badge></TableCell>
+                  <TableCell><Badge variant="outline">{formatRecordLabel(submission.status)}</Badge></TableCell>
                   <TableCell>
                     {submission.form.type === "online_registration" ? (
                       <Badge variant={submission.registrationPayment.status === "paid" ? "default" : submission.registrationPayment.required ? "outline" : "secondary"}>
@@ -3778,7 +3792,7 @@ export function FormsPage({ data }: { data: FormsPageData }) {
               ))}
               {!data.submissions.length ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-muted-foreground">No submitted forms are visible for this scope.</TableCell>
+                  <TableCell colSpan={7} className="text-muted-foreground">No submitted forms are available for the schools you can access.</TableCell>
                 </TableRow>
               ) : null}
             </TableBody>
@@ -3862,7 +3876,7 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Teacher Documents</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Read-only child information, allergy plans, medical care notes, emergency details, and permission records for children in your assigned classroom or school scope.
+          Review child information, allergy plans, medical care notes, emergency details, and permission records for your assigned classroom or schools.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -3960,7 +3974,7 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
         {!data.children.length ? (
           <Card className="glass-panel xl:col-span-2">
             <CardContent className="p-6 text-sm text-muted-foreground">
-              No children are assigned to your classroom or school scope yet.
+              No children are assigned to your classroom or schools.
             </CardContent>
           </Card>
         ) : null}
@@ -3987,8 +4001,8 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
                 <TableRow key={document.id}>
                   <TableCell className="font-medium">{document.name}</TableCell>
                   <TableCell>{document.child.fullName}</TableCell>
-                  <TableCell>{document.type}</TableCell>
-                  <TableCell><Badge variant={document.status === "pending" ? "outline" : "default"}>{document.status}</Badge></TableCell>
+                  <TableCell>{formatRecordLabel(document.type)}</TableCell>
+                  <TableCell><Badge variant={document.status === "pending" ? "outline" : "default"}>{formatRecordLabel(document.status)}</Badge></TableCell>
                   <TableCell>{formatDate(document.expiresAt)}</TableCell>
                   <TableCell>
                     {document.downloadUrl ? (
@@ -4085,8 +4099,8 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
                 <TableRow key={document.id}>
                   <TableCell className="font-medium">{document.name}</TableCell>
                   <TableCell>{document.child?.fullName ?? document.family?.name ?? "Unassigned"}</TableCell>
-                  <TableCell>{document.type}</TableCell>
-                  <TableCell><Badge variant={document.status === "pending" ? "outline" : "default"}>{document.status}</Badge></TableCell>
+                  <TableCell>{formatRecordLabel(document.type)}</TableCell>
+                  <TableCell><Badge variant={document.status === "pending" ? "outline" : "default"}>{formatRecordLabel(document.status)}</Badge></TableCell>
                   <TableCell>{formatDate(document.expiresAt)}</TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">
@@ -4181,7 +4195,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Compliance-Readiness Dashboard</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Compliance-ready workflows and documentation support for licensing checklists, certifications, incident review, immunizations, allergies, and audit readiness. This is not legal or licensing advice.
+          Track licensing checklists, staff certifications, incident reviews, immunizations, allergies, and supporting records. Confirm current requirements with the appropriate licensing authority.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-6">
@@ -4218,7 +4232,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Recent Medication Logs</CardTitle>
-          <CardDescription>Medication administration records in the current compliance scope</CardDescription>
+          <CardDescription>Medication administration records for the schools you can access</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -4241,14 +4255,14 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
                     <div>{log.medicationName} · {log.dosage}{log.route ? ` · ${log.route}` : ""}</div>
                     {log.notes ? <div className="text-xs text-muted-foreground">{log.notes}</div> : null}
                   </TableCell>
-                  <TableCell><Badge variant={log.status === "administered" ? "default" : "outline"}>{log.status}</Badge></TableCell>
+                  <TableCell><Badge variant={log.status === "administered" ? "default" : "outline"}>{formatRecordLabel(log.status)}</Badge></TableCell>
                   <TableCell>{log.administeredBy?.name ?? "Unknown"}</TableCell>
                   <TableCell>{log.parentNotified ? "Notified" : "Not recorded"}</TableCell>
                 </TableRow>
               ))}
               {!data.medicationLogs.length ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">No medication logs have been recorded for this scope yet.</TableCell>
+                  <TableCell colSpan={6} className="text-muted-foreground">No medication logs have been recorded for the schools you can access.</TableCell>
                 </TableRow>
               ) : null}
             </TableBody>
@@ -4447,7 +4461,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-sm text-muted-foreground">Total FTE</div>
                 <div className="mt-2 text-2xl font-semibold">{data.fte.totalFte.toLocaleString()}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{data.fte.status.replaceAll("_", " ")}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{formatRecordLabel(data.fte.status)}</div>
               </div>
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-sm text-muted-foreground">Locations reported</div>
@@ -4459,7 +4473,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
                 <TableHeader>
                   <TableRow>
                     <TableHead>School</TableHead>
-                    <TableHead>CRM Location ID</TableHead>
+                    <TableHead>Location ID</TableHead>
                     <TableHead>FTE</TableHead>
                     <TableHead>Report Date</TableHead>
                   </TableRow>
@@ -4489,7 +4503,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>School Network</CardTitle>
-          <CardDescription>Location profile readiness and CRM volume</CardDescription>
+          <CardDescription>School contact details, readiness, and enrollment inquiry volume</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -4634,7 +4648,7 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="FTE rows" value={data.stats.submittedFteReports.toLocaleString()} detail="Visible reports" />
         <StatCard label="Latest FTE total" value={data.stats.latestFteTotal.toLocaleString()} detail="Most recent report per visible school" />
-        <StatCard label="Visible schools" value={data.stats.centers.toLocaleString()} detail={isExecutive ? "Executive scope" : "Director scope"} />
+        <StatCard label="Schools available" value={data.stats.centers.toLocaleString()} detail={isExecutive ? "Assigned corporate access" : "Assigned director access"} />
       </div>
 
       {isExecutive ? (
@@ -4691,7 +4705,7 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
                         <TableCell className="font-medium">{center.name}</TableCell>
                         <TableCell>{center.currentWeekFte?.toLocaleString() ?? "Due"}</TableCell>
                         <TableCell>{center.latestFte?.toLocaleString() ?? "None"}</TableCell>
-                        <TableCell><Badge variant={center.status === "Due" ? "outline" : "secondary"}>{center.status}</Badge></TableCell>
+                        <TableCell><Badge variant={center.status === "Due" ? "outline" : "secondary"}>{formatRecordLabel(center.status)}</Badge></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -4767,7 +4781,7 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
-            <StatCard label="Sheet FTE total" value={data.fte.totalFte.toLocaleString()} detail={data.fte.status.replaceAll("_", " ")} />
+            <StatCard label="Sheet FTE total" value={data.fte.totalFte.toLocaleString()} detail={formatRecordLabel(data.fte.status)} />
             <StatCard label="Sheet locations" value={data.fte.locationCount.toLocaleString()} detail={data.fte.error || "Backup source read"} />
           </CardContent>
         </Card>
@@ -4916,7 +4930,7 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
                 {!data.guardianChangeRequests.length ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-muted-foreground">
-                      No guardian change requests are pending or recently reviewed for this scope.
+                      No guardian change requests are pending or recently reviewed for the schools you can access.
                     </TableCell>
                   </TableRow>
                 ) : null}
@@ -5132,8 +5146,8 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Recurring Tuition Scheduler</CardTitle>
-          <CardDescription>Live assignment coverage for the daily tuition invoice run.</CardDescription>
+          <CardTitle>Recurring tuition</CardTitle>
+          <CardDescription>Review active tuition assignments and the invoices due to be created.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-4">
@@ -5143,7 +5157,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
             <MetricTile label="Weekly plans" value={data.recurringScheduler.weeklyAssignments} detail={data.recurringScheduler.currentWeeklyPeriod} />
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            Scheduler: {data.recurringScheduler.cronSchedule}. Runs idempotent invoice generation through the tuition billing cron route.
+            Invoice schedule: {data.recurringScheduler.cronSchedule}. Eligible invoices are created automatically.
           </p>
         </CardContent>
       </Card>
@@ -5281,7 +5295,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Invoices</CardTitle>
-          <CardDescription>Payment status and balances from the CRM database</CardDescription>
+          <CardDescription>Review invoice status, due dates, and family balances.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -5322,7 +5336,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                       </Badge>
                     ) : null}
                   </TableCell>
-                  <TableCell><Badge variant={invoice.status === "OPEN" ? "outline" : "default"}>{invoice.status}</Badge></TableCell>
+                  <TableCell><Badge variant={invoice.status === "OPEN" ? "outline" : "default"}>{formatRecordLabel(invoice.status)}</Badge></TableCell>
                   <TableCell>{formatDate(invoice.dueDate)}</TableCell>
                   <TableCell>{money(invoice.totalCents)}</TableCell>
                   <TableCell>{invoice._count.items}</TableCell>
@@ -5406,7 +5420,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Payments</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Secure checkout and webhook reconciliation are live in the server layer. Parent payments are routed through The BEE Suite platform account to each school&apos;s connected payout account.
+          Review parent payment status, follow-up needs, and each school&apos;s payout readiness.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-6">
@@ -5414,7 +5428,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
         <StatCard label="Paid" value={data.stats.paid} />
         <StatCard label="Failed" value={data.stats.failed} />
         <StatCard label="Draft/checkout" value={data.stats.draft} />
-        <StatCard label="Processor" value={data.stats.stripeConfigured && data.stats.webhookConfigured ? "Ready" : "Needs keys"} />
+        <StatCard label="Payment processing" value={data.stats.stripeConfigured && data.stats.webhookConfigured ? "Ready" : "Setup needed"} />
         <StatCard label="Payout schools" value={`${data.stats.payoutReadyCenters}/${data.stats.payoutStartedCenters}`} detail="ready / started" />
       </div>
       <div className="grid gap-4 md:grid-cols-5">
@@ -5426,15 +5440,15 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
         <StatCard label="Due autopay" value={data.stats.autopayDueInvoices} detail={money(data.stats.autopayDueCents)} />
       </div>
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Dunning ready" value={data.stats.dunningReady} detail="send on next cron run" />
+        <StatCard label="Reminders ready" value={data.stats.dunningReady} detail="scheduled for the next reminder run" />
         <StatCard label="Retry waiting" value={data.stats.dunningWaiting} detail="follow-up scheduled" />
         <StatCard label="Maxed retries" value={data.stats.dunningMaxed} detail="manual billing review" />
       </div>
       <PaymentAutopayActions />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Payment Attempts</CardTitle>
-          <CardDescription>Provider status, family, reconciliation marker, and retry follow-up state</CardDescription>
+          <CardTitle>Payment attempts</CardTitle>
+          <CardDescription>Review payment status, family, and any follow-up needed.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -5465,20 +5479,20 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                     </Link>
                     <div className="text-xs text-muted-foreground">{payment.billingAccount.family.billingEmail ?? "No billing email"}</div>
                   </TableCell>
-                  <TableCell>{payment.provider}</TableCell>
-                  <TableCell><Badge variant={payment.status === "PAID" ? "default" : "outline"}>{payment.status}</Badge></TableCell>
+                  <TableCell>{formatRecordLabel(payment.provider)}</TableCell>
+                  <TableCell><Badge variant={payment.status === "PAID" ? "default" : "outline"}>{formatRecordLabel(payment.status)}</Badge></TableCell>
                   <TableCell>{money(payment.amountCents)}</TableCell>
                   <TableCell>{formatDateTime(payment.paidAt, payment)}</TableCell>
                   <TableCell>
                     <Badge variant={payment.dunningStatus === "ready" || payment.dunningStatus === "maxed" ? "destructive" : "outline"}>
-                      {payment.dunningStatus}
+                      {formatRecordLabel(payment.dunningStatus)}
                     </Badge>
                     <div className="mt-1 text-xs text-muted-foreground">
                       {payment.dunningAttemptCount} attempt{payment.dunningAttemptCount === 1 ? "" : "s"}
                     </div>
                   </TableCell>
                   <TableCell className="max-w-sm whitespace-normal text-xs text-muted-foreground">
-                    <div>{payment.failureMessage ?? "No failure detail from provider"}</div>
+                    <div>{payment.failureMessage ?? "No failure details available"}</div>
                     <div className="mt-1">
                       {payment.dunningStatus === "waiting"
                         ? <>Next reminder: {formatDateTime(payment.dunningNextAttemptAt, payment)}</>
@@ -5557,7 +5571,7 @@ export function AnalyticsPage({ data }: { data: AnalyticsPageData }) {
       </div>
       {data.fte ? (
         <div className="grid gap-4 md:grid-cols-3">
-          <StatCard label="FTE total" value={data.fte.totalFte.toLocaleString()} detail={data.fte.status.replaceAll("_", " ")} />
+          <StatCard label="FTE total" value={data.fte.totalFte.toLocaleString()} detail={formatRecordLabel(data.fte.status)} />
           <StatCard label="FTE locations" value={data.fte.locationCount.toLocaleString()} detail={`${data.fte.sourceMode === "template_week_tab" ? "Template" : "Rolling"} tab: ${data.fte.sheetName}`} />
           <StatCard
             label="FTE sync"
@@ -5603,8 +5617,8 @@ export function AiCommandPage({ data }: { data: AiCommandPageData }) {
   return (
     <div className="flex flex-col gap-6">
       <section>
-        <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">AI Command Center</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Your live operating layer across attendance, staffing, enrollment, families, billing, communication, and compliance.</p>
+        <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">AI assistant</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Review suggested priorities and drafts based on attendance, staffing, enrollment, family communication, billing, and required records.</p>
       </section>
       <AiCommandCenter data={data} />
     </div>
@@ -5690,7 +5704,7 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
       </section>
       <div className="grid gap-4 lg:grid-cols-3">
         <StatCard label="Legacy brand settings" value={data.settings.length} detail="Backward-compatible white-label records" />
-        <StatCard label="Customization layers" value={data.customizations.length} detail="Brand, owner group, and center-scoped overrides" />
+        <StatCard label="Branding settings" value={data.customizations.length} detail="Brand, owner group, and school overrides" />
         <StatCard label="Brand assets" value={data.assets.length} detail="Logos, favicon, mascot, and portal media references" />
       </div>
       <TenantControlsPanel
@@ -5704,16 +5718,16 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
       />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Customization Layers</CardTitle>
-          <CardDescription>Brand defaults can be overridden by owner groups or individual schools without mixing tenants.</CardDescription>
+          <CardTitle>Branding Settings</CardTitle>
+          <CardDescription>Set brand defaults and school- or owner-group-specific overrides.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Scope</TableHead>
+                <TableHead>Applies to</TableHead>
                 <TableHead>Branding</TableHead>
-                <TableHead>Container</TableHead>
+                <TableHead>School or owner group</TableHead>
                 <TableHead>Portal</TableHead>
                 <TableHead>Domain</TableHead>
               </TableRow>
@@ -5721,7 +5735,7 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
             <TableBody>
               {data.customizations.map((setting) => (
                 <TableRow key={setting.id}>
-                  <TableCell><Badge variant="outline">{setting.scopeType}</Badge></TableCell>
+                  <TableCell><Badge variant="outline">{formatRecordLabel(setting.scopeType)}</Badge></TableCell>
                   <TableCell>
                     <div className="font-medium">{setting.brandName}</div>
                     <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
@@ -5731,7 +5745,7 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
                       {setting.accentColor}
                     </div>
                   </TableCell>
-                  <TableCell>{setting.center?.crmLocationId ?? setting.center?.name ?? setting.ownerGroup?.name ?? setting.brand?.name ?? "Tenant"}</TableCell>
+                  <TableCell>{setting.center?.crmLocationId ?? setting.center?.name ?? setting.ownerGroup?.name ?? setting.brand?.name ?? "Brand default"}</TableCell>
                   <TableCell>{setting.parentPortalName ?? setting.loginScreenTitle ?? "Default portal"}</TableCell>
                   <TableCell>{setting.customDomainPlaceholder || "Not set"}</TableCell>
                 </TableRow>
@@ -5787,7 +5801,7 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{asset.center?.crmLocationId ?? asset.center?.name ?? asset.ownerGroup?.name ?? asset.brand?.name ?? "Tenant"}</TableCell>
+                    <TableCell>{asset.center?.crmLocationId ?? asset.center?.name ?? asset.ownerGroup?.name ?? asset.brand?.name ?? "Brand default"}</TableCell>
                     <TableCell>{asset.storageKey ?? asset.url ?? "Upload pending"}</TableCell>
                   </TableRow>
                 );
@@ -5998,15 +6012,15 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Parent Tuition Flow</CardTitle>
+            <CardTitle>Parent payments</CardTitle>
             <CardDescription>
-              Parent portal invoice buttons create secure checkout sessions. Successful webhooks mark payments paid, close invoices, and write ledger credits.
+              Parents can review open invoices and choose an available payment option in the Parent Portal.
             </CardDescription>
           </CardHeader>
         </Card>
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>School Payout Flow</CardTitle>
+            <CardTitle>School payouts</CardTitle>
             <CardDescription>
               Each school completes payout onboarding before live parent payments are accepted for that school.
             </CardDescription>
@@ -6016,8 +6030,8 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Tuition Plans</CardTitle>
-            <CardDescription>Age group and cadence settings</CardDescription>
+            <CardTitle>Tuition plans</CardTitle>
+            <CardDescription>Age group, billing frequency, and amount</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -6036,7 +6050,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
                     <TableCell className="font-medium">{plan.name}</TableCell>
                     <TableCell>{plan.center ? [plan.center.crmLocationId, plan.center.name].filter(Boolean).join(" · ") : "Unassigned legacy rate"}</TableCell>
                     <TableCell>{plan.ageGroup}</TableCell>
-                    <TableCell>{plan.cadence}</TableCell>
+                    <TableCell>{formatRecordLabel(plan.cadence)}</TableCell>
                     <TableCell>{money(plan.amountCents)}</TableCell>
                   </TableRow>
                 ))}
@@ -6062,7 +6076,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
                 {data.products.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell className="font-medium">{product.name}</TableCell>
-                    <TableCell>{product.type}</TableCell>
+                    <TableCell>{formatRecordLabel(product.type)}</TableCell>
                     <TableCell>{money(product.amountCents)}</TableCell>
                   </TableRow>
                 ))}

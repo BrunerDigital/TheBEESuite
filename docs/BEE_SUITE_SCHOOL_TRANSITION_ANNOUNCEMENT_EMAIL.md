@@ -1,6 +1,6 @@
 # The BEE Suite School Transition Announcement Email
 
-**Updated:** August 2, 2026  
+**Updated:** August 11, 2026
 **Audience:** school owners and directors  
 **Use:** standalone owner/director announcement sent manually before the new week. This is not an automated or dashboard-linked email.
 

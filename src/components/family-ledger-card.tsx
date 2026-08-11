@@ -42,6 +42,11 @@ function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
+function ledgerTypeLabel(value: string) {
+  const normalized = value.replaceAll("_", " ").toLowerCase();
+  return normalized ? `${normalized[0].toUpperCase()}${normalized.slice(1)}` : "";
+}
+
 export function FamilyLedgerCard({
   entries,
   families,
@@ -137,7 +142,7 @@ export function FamilyLedgerCard({
                     year: "numeric",
                   })}
                 </TableCell>
-                <TableCell><Badge variant="outline">{entry.type}</Badge></TableCell>
+                <TableCell><Badge variant="outline">{ledgerTypeLabel(entry.type)}</Badge></TableCell>
                 <TableCell>{entry.description}</TableCell>
                 <TableCell>{money(entry.amountCents)}</TableCell>
                 <TableCell>{entry.balanceAfterCents === null ? "Not set" : money(entry.balanceAfterCents)}</TableCell>

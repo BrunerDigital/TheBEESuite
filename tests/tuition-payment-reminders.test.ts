@@ -80,15 +80,17 @@ test("eligibility requires a current classroom child and a payable reviewed bala
   }), false);
 });
 
-test("friendly reminder copy uses only the canonical secure parent portal", () => {
+test("tuition reminder copy uses only the canonical secure parent portal", () => {
   const reminder = tuitionPaymentReminderCopy({
     familyName: "Anderson Family",
     centerName: "FL | Sarasota",
     balanceCents: 37_500,
   });
 
-  assert.equal(reminder.title, "Friendly reminder: your tuition balance is available");
+  assert.equal(reminder.title, "Tuition balance reminder");
   assert.match(reminder.body, /current tuition balance of \$375\.00/);
+  assert.match(reminder.body, /open Payments/);
+  assert.doesNotMatch(reminder.body, /friendly reminder/i);
   assert.match(reminder.body, /iPhone or iPad/);
   assert.match(reminder.body, /Android/);
   assert.match(reminder.body, /Computer/);

@@ -67,7 +67,20 @@ function schoolLabel(school: BillingReceiptSchool | null) {
 }
 
 function schoolEinLabel(school: BillingReceiptSchool | null) {
-  return school?.ein ?? "EIN not saved";
+  return school?.ein ?? "Not provided";
+}
+
+function displayLabel(value: string) {
+  const normalized = value.replaceAll("_", " ").toLowerCase();
+  return normalized ? `${normalized[0].toUpperCase()}${normalized.slice(1)}` : "";
+}
+
+function paymentTypeLabel(provider: string) {
+  if (provider === "stripe") return "Online payment";
+  if (provider === "stripe_terminal") return "In-person card payment";
+  if (provider === "manual_cash") return "Cash payment";
+  if (provider === "manual_check") return "Check payment";
+  return "Other payment";
 }
 
 export function LedgerPrintButton({ entries, schools }: { entries: BillingLedgerPrintEntry[]; schools: BillingReceiptSchool[] }) {
@@ -91,7 +104,7 @@ export function LedgerPrintButton({ entries, schools }: { entries: BillingLedger
           <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>{reportTitle}</h1>
           <div>Generated: {formatPrintDateTime(generatedAt, timeZone)}</div>
           <div>School: {singleSchool ? schoolLabel(singleSchool) : "Multiple schools"}</div>
-          <div>School EIN: {singleSchool ? schoolEinLabel(singleSchool) : "Shown by ledger row"}</div>
+          <div>School EIN: {singleSchool ? schoolEinLabel(singleSchool) : "See each row"}</div>
           <div>Total charges: {money(totalCharges)}</div>
           <div>Total credits/payments: {money(totalCredits)}</div>
         </header>
@@ -120,7 +133,7 @@ export function LedgerPrintButton({ entries, schools }: { entries: BillingLedger
                     <div>{entry.billingAccount.family.name}</div>
                     <div>{entry.billingAccount.family.billingEmail ?? "No billing email"}</div>
                   </td>
-                  <td>{entry.type}</td>
+                  <td>{displayLabel(entry.type)}</td>
                   <td>{entry.description}</td>
                   <td>{money(entry.amountCents)}</td>
                   <td>{entry.balanceAfterCents === null ? "Not set" : money(entry.balanceAfterCents)}</td>
@@ -173,10 +186,10 @@ export function PaymentReceiptPrintButton({ payment, schools }: { payment: Billi
             </tr>
             <tr>
               <th>Status</th>
-              <td>{payment.status}</td>
+              <td>{displayLabel(payment.status)}</td>
             </tr>
             <tr>
-              <th>Reference</th>
+              <th>Applied to</th>
               <td>{payment.paymentReferenceLabel}</td>
             </tr>
             <tr>
@@ -184,11 +197,11 @@ export function PaymentReceiptPrintButton({ payment, schools }: { payment: Billi
               <td>{payment.invoiceNumber ?? "Not linked"}</td>
             </tr>
             <tr>
-              <th>Provider</th>
-              <td>{payment.provider}</td>
+              <th>Payment type</th>
+              <td>{paymentTypeLabel(payment.provider)}</td>
             </tr>
             <tr>
-              <th>Payment ID</th>
+              <th>Payment reference</th>
               <td>{payment.externalIdPlaceholder ?? payment.id}</td>
             </tr>
           </tbody>

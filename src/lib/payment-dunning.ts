@@ -148,7 +148,7 @@ export function paymentDunningDedupeKey(input: {
 
 export function paymentDunningMessageSubject(invoiceNumber: string | null, attemptNumber: number) {
   const invoiceLabel = invoiceNumber ? `invoice ${invoiceNumber}` : "your tuition invoice";
-  return `Payment retry needed for ${invoiceLabel} (attempt ${attemptNumber})`;
+  return `Payment could not be completed for ${invoiceLabel} — reminder ${attemptNumber}`;
 }
 
 export function paymentDunningCopy(input: {
@@ -167,12 +167,13 @@ export function paymentDunningCopy(input: {
     ? ` If this is not resolved, the next reminder is scheduled for ${input.nextAttemptAt.toISOString().slice(0, 10)}.`
     : " This is the final automated reminder in the retry sequence.";
   const failure = input.failureMessage ? ` Payment processor reported: ${input.failureMessage}` : "";
+  const guardianNextStep = " If another payment is already processing or you recently paid, no action is needed.";
 
   return {
     staffTitle: `Failed payment follow-up: ${input.familyName}`,
     staffBody: `${input.familyName}${center} has a failed ${amount} payment for ${invoiceLabel}. Retry attempt ${input.attemptNumber} is due now.${failure}${nextStep}`,
-    guardianTitle: `Payment retry needed`,
-    guardianBody: `A ${amount} payment for ${invoiceLabel} did not complete. Please retry the payment from your parent account or contact the school office for help.${nextStep}`,
+    guardianTitle: "Payment could not be completed",
+    guardianBody: `A ${amount} payment for ${invoiceLabel} did not complete. Please try again from your Parent Portal or contact the school office for help.${guardianNextStep}`,
     guardianSubject: paymentDunningMessageSubject(input.invoiceNumber ?? null, input.attemptNumber),
   };
 }

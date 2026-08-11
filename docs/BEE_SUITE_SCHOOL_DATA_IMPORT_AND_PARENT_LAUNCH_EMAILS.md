@@ -1,6 +1,6 @@
 # The BEE Suite School Data Import and Parent Launch Email Kit
 
-**Updated:** July 29, 2026
+**Updated:** August 11, 2026
 **Purpose:** Ready-to-send emails that guide a school from ProCare export through BEE Suite import, school setup, payment readiness, and parent portal launch.
 
 ## How to use this kit
@@ -370,13 +370,13 @@ Do not accept live payments if a test applies to the wrong invoice, applies twic
 
 The current payment flow presents card first and keeps secure bank choices available:
 
-- **Save Debit/Credit Card:** save a card for future payments or autopay
-- **Debit/Credit Card:** pay an open invoice by card
-- **Verify Bank Instantly:** save a bank for future use
-- **Instant Bank:** pay through a supported bank login
-- **One-Time Bank:** enter routing and account details for one payment
+- **Save card:** save a card for future payments or autopay
+- **Debit or credit card:** pay an open invoice by card
+- **Connect bank account:** save a bank account for future use
+- **Pay with Link:** pay using a payment method available in Stripe Link
+- **Bank account:** enter bank details for one payment when offered
 
-Parents must review the exact total, processing recovery when shown, and disclosure before submitting a payment. A pending bank setup or payment may take time to settle; parents should not repeat the transaction while it is pending.
+Parents must review the exact total before submitting a payment. The school absorbs Stripe processing costs, so no processing fee is added to the parent payment. A pending bank setup or payment may take time to settle; parents should not repeat the transaction while it is pending.
 
 Never ask a parent to send bank details, bank passwords, screenshots of banking credentials, or full card numbers.
 
@@ -446,11 +446,11 @@ Your school is inviting you to The BEE Suite parent portal. The portal gives you
 
 1. Open **https://thebeesuite.io/parents**.
 2. Confirm the address starts with `https://thebeesuite.io`. In Safari, stop and contact the school if the address bar says **Not Secure**.
-3. Sign in with your guardian email address and the school-issued first-login password included in your approved invitation.
+3. Sign in with your guardian email address and the password included in your invitation.
 4. Confirm that you see the correct family and child or children.
 5. If any family or child information is wrong, stop and contact your school.
 
-You may keep the school-issued password or change it later in **Settings**. The invitation and password belong only to you and should not be forwarded.
+You may keep the invitation password or change it later under **Family → Profile & Security**. The invitation and password belong only to you and should not be forwarded.
 
 ## Review your portal
 
@@ -472,15 +472,15 @@ The portal presents card first and keeps bank payment choices available.
 
 To save a card:
 
-1. Open **Payment Settings**.
-2. Select **Save Debit/Credit Card**.
+1. Open **Payments**.
+2. Select **Save card**.
 3. Complete the secure Stripe steps.
 4. Return to The BEE Suite and confirm the card shows as saved.
 
 To save a bank:
 
-1. Open **Payment Settings**.
-2. Select **Verify Bank Instantly**.
+1. Open **Payments**.
+2. Select **Connect bank account**.
 3. Complete the secure Stripe bank-verification steps.
 4. Return to The BEE Suite and confirm the bank shows as saved.
 
@@ -488,11 +488,11 @@ If your bank status says **Pending**, do not repeat the setup unless the school 
 
 ## Pay an invoice
 
-1. Open **Billing** and select the open invoice.
+1. Open **Payments** and select the open invoice.
 2. Confirm the family, invoice number, due date, and amount.
-3. Choose **Debit/Credit Card**, **Instant Bank**, or **One-Time Bank**.
+3. Choose **Debit or credit card**, **Pay with Link**, or **Bank account**.
 4. Follow the secure Stripe instructions.
-5. Review the exact total, processing recovery when shown, and disclosure.
+5. Review the exact total. No processing fee is added to the parent payment.
 6. Submit the payment and wait for the confirmation page.
 
 Bank payments can take a few business days to settle. Do not pay the same invoice again while the first payment is processing.

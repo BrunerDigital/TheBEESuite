@@ -127,9 +127,9 @@ async function POSTHandler(request: NextRequest) {
       });
       photoUrl = upload.recordUrl;
       storageKey = upload.storageKey;
-    } catch (error) {
+    } catch {
       return NextResponse.json(
-        { ok: false, error: error instanceof Error ? error.message : "Photo could not be uploaded to secure storage." },
+        { ok: false, error: "We couldn't upload this photo. It was not shared. Try again." },
         { status: 502 },
       );
     }

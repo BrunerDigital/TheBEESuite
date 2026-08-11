@@ -181,7 +181,7 @@ async function POSTHandler(request: NextRequest) {
   }
   if (temporaryPassword) {
     return NextResponse.json(
-      { ok: false, error: "Custom temporary passwords are not accepted. Parent access uses the school-issued first-login password." },
+      { ok: false, error: "Custom invitation passwords are not accepted. Parent access uses the password issued in the school invitation." },
       { status: 400 },
     );
   }

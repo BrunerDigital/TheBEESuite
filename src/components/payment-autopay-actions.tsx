@@ -46,6 +46,14 @@ function statusVariant(status: AutopayResult["status"]): "default" | "outline" |
   return "outline";
 }
 
+function statusLabel(status: AutopayResult["status"]) {
+  if (status === "would_charge") return "Eligible";
+  if (status === "paid") return "Paid";
+  if (status === "processing") return "Processing";
+  if (status === "failed") return "Failed";
+  return "Skipped";
+}
+
 export function PaymentAutopayActions() {
   const [isPending, startTransition] = useTransition();
   const [summary, setSummary] = useState<AutopaySummary | null>(null);
@@ -53,7 +61,7 @@ export function PaymentAutopayActions() {
 
   function runAutopay(dryRun: boolean) {
     if (!dryRun) {
-      const confirmed = window.confirm("Run live autopay for eligible due invoices with saved payment methods?");
+      const confirmed = window.confirm("Process up to 50 eligible due invoices now? Account credit is applied first; any remaining balance is charged to each family's authorized autopay payment method.");
       if (!confirmed) return;
     }
 
@@ -80,19 +88,19 @@ export function PaymentAutopayActions() {
       <CardHeader>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <CardTitle>Autopay Collection</CardTitle>
+            <CardTitle>Autopay invoices</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
-              Preview or submit due open invoices for families with enabled autopay and a saved payment method.
+              Review eligible due invoices before processing them. Account credit is applied first; any remaining balance is charged to each family&apos;s authorized autopay payment method.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button disabled={isPending} onClick={() => runAutopay(true)} variant="outline">
               <Search data-icon="inline-start" />
-              Preview Due
+              Review due invoices
             </Button>
             <Button disabled={isPending} onClick={() => runAutopay(false)}>
               <Play data-icon="inline-start" />
-              Run Autopay
+              Process eligible invoices
             </Button>
           </div>
         </div>
@@ -101,16 +109,16 @@ export function PaymentAutopayActions() {
         {error ? (
           <Alert variant="destructive">
             <AlertCircle className="size-4" />
-            <AlertTitle>Needs attention</AlertTitle>
+            <AlertTitle>Autopay not completed</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
         {summary ? (
           <Alert>
             <CheckCircle2 className="size-4" />
-            <AlertTitle>{summary.dryRun ? "Autopay preview ready" : "Autopay submitted"}</AlertTitle>
+            <AlertTitle>{summary.dryRun ? "Review complete" : "Autopay results"}</AlertTitle>
             <AlertDescription>
-              Scanned {summary.scanned ?? 0} invoice(s). {summary.dryRun ? summary.wouldCharge ?? 0 : (summary.paid ?? 0) + (summary.processing ?? 0)} eligible for {money(summary.totalCents)}. {summary.paid ?? 0} paid. {summary.processing ?? 0} processing. {summary.skipped ?? 0} skipped. {summary.failed ?? 0} failed.
+              Reviewed {summary.scanned ?? 0} invoices. {summary.dryRun ? summary.wouldCharge ?? 0 : (summary.paid ?? 0) + (summary.processing ?? 0)} {summary.dryRun ? "eligible" : "processed"} for {money(summary.totalCents)}. {summary.paid ?? 0} paid; {summary.processing ?? 0} processing; {summary.skipped ?? 0} skipped; {summary.failed ?? 0} failed.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -133,9 +141,9 @@ export function PaymentAutopayActions() {
                   <TableCell>{result.invoiceNumber}</TableCell>
                   <TableCell>{result.centerName ?? "Not linked"}</TableCell>
                   <TableCell>{money(result.amountCents)}</TableCell>
-                  <TableCell><Badge variant={statusVariant(result.status)}>{result.status.replaceAll("_", " ")}</Badge></TableCell>
+                  <TableCell><Badge variant={statusVariant(result.status)}>{statusLabel(result.status)}</Badge></TableCell>
                   <TableCell className="max-w-sm text-xs text-muted-foreground">
-                    {result.reason ?? result.stripePaymentIntentId ?? result.paymentId ?? ""}
+                    {result.reason ?? "—"}
                   </TableCell>
                 </TableRow>
               ))}

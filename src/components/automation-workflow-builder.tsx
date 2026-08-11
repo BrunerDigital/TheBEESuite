@@ -50,13 +50,29 @@ function formatDate(value: Date | string, timeZone: string) {
   return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "Unknown");
 }
 
-function jsonSummary(value: unknown) {
+function displayTokenLabel(value: string) {
+  const words = value.trim().replaceAll("_", " ").split(/\s+/).filter(Boolean);
+  if (!words.length) return "Not set";
+  return words.map((word, index) => index === 0
+    ? `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`
+    : word.toLowerCase()).join(" ");
+}
+
+function actionSummary(value: unknown) {
   const record = asRecord(value);
   const entries = Object.entries(record)
     .filter(([, item]) => item !== null && item !== undefined && item !== "")
     .slice(0, 3)
-    .map(([key, item]) => `${key}: ${String(item)}`);
-  return entries.length ? entries.join(" · ") : "None";
+    .map(([key, item]) => {
+      const rawValue = stringValue(item, "Configured");
+      const displayValue = typeof item === "boolean"
+        ? item ? "Yes" : "No"
+        : /^[a-z0-9_]+$/i.test(rawValue)
+          ? displayTokenLabel(rawValue)
+          : rawValue;
+      return `${displayTokenLabel(key)}: ${displayValue}`;
+    });
+  return entries.length ? entries.join(" · ") : "No action set";
 }
 
 export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: AutomationWorkflowBuilderData; readOnly?: boolean }) {
@@ -155,15 +171,15 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Card className="glass-panel min-w-0 overflow-hidden">
         <CardHeader>
-          <CardTitle><h1>Automation Workflow Builder</h1></CardTitle>
-          <CardDescription>Configure trigger, rules, delay, review gate, and action payloads for school operations workflows.</CardDescription>
+          <CardTitle><h1>Automation workflow builder</h1></CardTitle>
+          <CardDescription>Choose when an automation runs, which rules it follows, when staff review it, and what it does.</CardDescription>
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
           {message ? <div role="status" aria-live="polite" className="rounded-lg border bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{message}</div> : null}
           {error ? <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
           <div className="grid min-w-0 gap-3 md:grid-cols-2">
             <div className="space-y-1">
-              <Label htmlFor="automation-saved-workflow">Saved Workflow</Label>
+              <Label htmlFor="automation-saved-workflow">Saved workflow</Label>
               <Select value={selectedId || "new"} onValueChange={(value) => {
                 if (value === "new") {
                   setSelectedId("");
@@ -327,7 +343,7 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
                 <TableRow>
                   <TableHead>Workflow</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Last Run</TableHead>
+                  <TableHead>Last run</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -335,10 +351,10 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
                   <TableRow key={automation.id}>
                     <TableCell>
                       <div className="font-medium">{automation.name}</div>
-                      <div className="text-xs text-muted-foreground">{jsonSummary(automation.action)}</div>
+                      <div className="text-xs text-muted-foreground">{actionSummary(automation.action)}</div>
                     </TableCell>
-                    <TableCell><Badge variant={automation.status === "active" ? "default" : "outline"}>{automation.status}</Badge></TableCell>
-                    <TableCell>{automation.runs[0] ? `${automation.runs[0].status} · ${formatDate(automation.runs[0].createdAt, timeZone)}` : "No runs"}</TableCell>
+                    <TableCell><Badge variant={automation.status === "active" ? "default" : "outline"}>{displayTokenLabel(automation.status)}</Badge></TableCell>
+                    <TableCell>{automation.runs[0] ? `${displayTokenLabel(automation.runs[0].status)} · ${formatDate(automation.runs[0].createdAt, timeZone)}` : "No runs"}</TableCell>
                   </TableRow>
                 ))}
                 {!data.automations.length ? (

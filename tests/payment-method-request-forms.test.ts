@@ -35,7 +35,7 @@ test("payment method request tokens validate family, center, tenant, and email",
   assert.equal(result.ok ? result.payload.email : "", "parent@example.com");
 });
 
-test("instant bank request copy focuses parents on bank login verification", () => {
+test("bank account request copy separates verification from autopay consent", () => {
   const formUrl = buildPaymentMethodRequestFocusedFormUrl("https://thebeesuite.io/", "token_123", "instant_bank_verification");
   const email = buildPaymentMethodRequestEmailText({
     recipientLabel: "Alex Parent",
@@ -54,18 +54,17 @@ test("instant bank request copy focuses parents on bank login verification", () 
   assert.equal(paymentMethodRequestBrandSender("Sarasota"), "Sarasota via The BEE Suite");
   assert.equal(
     buildPaymentMethodRequestEmailSubject({ centerLabel: "Sarasota", intent: "instant_bank_verification" }),
-    "Sarasota via The BEE Suite: secure ACH autopay verification requested",
+    "Sarasota via The BEE Suite: secure bank account verification requested",
   );
   assert.match(email, /Sarasota via The BEE Suite is asking/i);
-  assert.match(email, /complete ACH verification through The BEE Suite/i);
-  assert.match(email, /enabled for autopay/i);
-  assert.match(email, /logging into your bank through the secure portal/i);
-  assert.match(email, /branded The BEE Suite link/i);
+  assert.match(email, /verify a bank account/i);
+  assert.match(email, /does not turn on autopay/i);
+  assert.match(email, /Connect securely through your bank/i);
   assert.match(email, /instead of waiting for microdeposits/i);
-  assert.match(email, /Stripe may appear only as the regulated payment processor/i);
-  assert.match(notification, /complete ACH verification/i);
-  assert.match(notification, /enable autopay/i);
-  assert.match(notification, /secure bank-login portal/i);
+  assert.match(email, /Stripe provides the secure payment form/i);
+  assert.match(notification, /Verify a bank account/i);
+  assert.match(notification, /does not turn on autopay/i);
+  assert.doesNotMatch(notification, /enable autopay/i);
   assert.equal(extractFirstUrl(notification), formUrl);
 });
 
@@ -113,14 +112,14 @@ test("payment method request copy links to the branded form", () => {
   assert.equal(formUrl, "https://thebeesuite.io/payment-method-form/token_123");
   assert.equal(
     buildPaymentMethodRequestEmailSubject({ centerLabel: "Sarasota" }),
-    "Sarasota via The BEE Suite: secure tuition payment steps",
+    "Sarasota via The BEE Suite: tuition payment options",
   );
   assert.match(email, /pay an open invoice/i);
-  assert.match(email, /verify a bank account instantly/i);
-  assert.match(email, /debit\/credit card/i);
-  assert.match(email, /branded The BEE Suite link/i);
-  assert.match(email, /Stripe may appear only as the regulated payment processor/i);
-  assert.match(notification, /branded The BEE Suite payment form/i);
+  assert.match(email, /connect a bank account/i);
+  assert.match(email, /debit or credit card/i);
+  assert.match(email, /does not turn on autopay/i);
+  assert.match(email, /Stripe provides the secure payment form/i);
+  assert.match(notification, /Review tuition payment options/i);
   assert.equal(extractFirstUrl(notification), formUrl);
 });
 
@@ -181,9 +180,9 @@ test("payment method request checkout branding uses public Bee Suite assets and 
   assert.equal(localLogoUrl, null);
   assert.equal(branding.displayName, "Sarasota via The BEE Suite");
   assert.equal(branding.logoUrl, logoUrl);
-  assert.match(branding.submitMessage ?? "", /complete ACH verification through The BEE Suite/i);
-  assert.match(branding.submitMessage ?? "", /enable autopay/i);
-  assert.match(branding.submitMessage ?? "", /The BEE Suite does not store your bank login/i);
+  assert.match(branding.submitMessage ?? "", /Connect your bank account/i);
+  assert.match(branding.submitMessage ?? "", /does not turn on autopay/i);
+  assert.match(branding.submitMessage ?? "", /does not store your bank sign-in credentials/i);
   assert.match(branding.afterSubmitMessage ?? "", /return to The BEE Suite/i);
-  assert.match(branding.setupDescription ?? "", /payment profile setup for Johnson Family/i);
+  assert.match(branding.setupDescription ?? "", /Payment method setup for Johnson Family/i);
 });

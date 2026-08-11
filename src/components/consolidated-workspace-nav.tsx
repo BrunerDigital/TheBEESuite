@@ -22,11 +22,13 @@ import {
   WalletCards,
   Workflow,
 } from "lucide-react";
+import { beeWebWorkspaceAliases } from "@/lib/app-catalog";
 import { cn } from "@/lib/utils";
 
 const workspaceConfig = {
   enrollment: {
-    title: "Enrollment",
+    brandAlias: beeWebWorkspaceAliases.enrollment.brandLabel,
+    title: beeWebWorkspaceAliases.enrollment.functionalLabel,
     description: "Track prospective families from inquiry through tours, waitlists, and enrollment.",
     note: "From inquiry to enrollment",
     columns: "sm:grid-cols-2 xl:grid-cols-4",
@@ -38,7 +40,8 @@ const workspaceConfig = {
     ],
   },
   growth: {
-    title: "Campaigns & Automations",
+    brandAlias: beeWebWorkspaceAliases.growth.brandLabel,
+    title: beeWebWorkspaceAliases.growth.functionalLabel,
     description: "Plan outreach and review the automated steps connected to each campaign.",
     note: "Campaign planning",
     columns: "sm:grid-cols-2",
@@ -48,7 +51,8 @@ const workspaceConfig = {
     ],
   },
   operations: {
-    title: "School Operations",
+    brandAlias: beeWebWorkspaceAliases.operations.brandLabel,
+    title: beeWebWorkspaceAliases.operations.functionalLabel,
     description: "Review enrollment, classrooms, attendance, daily reports, and incident follow-up.",
     note: "Daily school tasks",
     columns: "sm:grid-cols-2 xl:grid-cols-5",
@@ -61,6 +65,7 @@ const workspaceConfig = {
     ],
   },
   families: {
+    brandAlias: null,
     title: "Families & Communication",
     description: "Review family records, child profiles, messages, and shared photos.",
     note: "Family records and messages",
@@ -73,7 +78,8 @@ const workspaceConfig = {
     ],
   },
   billing: {
-    title: "Billing & Payments",
+    brandAlias: beeWebWorkspaceAliases.billing.brandLabel,
+    title: beeWebWorkspaceAliases.billing.functionalLabel,
     description: "Manage invoices, balances, payments, deposits, and transaction follow-up.",
     note: "Invoices and payments",
     columns: "sm:grid-cols-2",
@@ -83,7 +89,8 @@ const workspaceConfig = {
     ],
   },
   records: {
-    title: "Records & Compliance",
+    brandAlias: beeWebWorkspaceAliases.records.brandLabel,
+    title: beeWebWorkspaceAliases.records.functionalLabel,
     description: "Create forms, manage documents, and track required records.",
     note: "Forms and required records",
     columns: "sm:grid-cols-3",
@@ -94,7 +101,8 @@ const workspaceConfig = {
     ],
   },
   insights: {
-    title: "Insights & Reputation",
+    brandAlias: beeWebWorkspaceAliases.insights.brandLabel,
+    title: beeWebWorkspaceAliases.insights.functionalLabel,
     description: "Review school performance, trends, and family feedback.",
     note: "Reports and family feedback",
     columns: "sm:grid-cols-3",
@@ -105,7 +113,8 @@ const workspaceConfig = {
     ],
   },
   staff: {
-    title: "Staff & Access",
+    brandAlias: beeWebWorkspaceAliases.staff.brandLabel,
+    title: beeWebWorkspaceAliases.staff.functionalLabel,
     description: "Manage staff records, classroom assignments, roles, and access.",
     note: "Team and permissions",
     columns: "sm:grid-cols-2",
@@ -115,6 +124,7 @@ const workspaceConfig = {
     ],
   },
   settings: {
+    brandAlias: null,
     title: "Settings & Setup",
     description: "Manage integrations, billing preferences, school setup, branding, and notifications.",
     note: "School preferences and setup",
@@ -138,7 +148,18 @@ export function ConsolidatedWorkspaceNav({ workspace, activeView, allowedViews }
     <section className="mb-6 overflow-hidden rounded-2xl border border-primary/25 bg-card/75 shadow-xl shadow-black/10">
       <div className="flex flex-col gap-3 border-b border-border/70 bg-gradient-to-r from-primary/[0.10] via-transparent to-transparent px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-lg font-semibold"><Sparkles className="size-5 text-primary" />{config.title}</div>
+          <div className="flex flex-wrap items-center gap-2 text-lg font-semibold">
+            <Sparkles className="size-5 text-primary" />
+            <span>{config.title}</span>
+            {config.brandAlias ? (
+              <span
+                aria-hidden="true"
+                className="whitespace-nowrap rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-foreground"
+              >
+                {config.brandAlias}
+              </span>
+            ) : null}
+          </div>
           <p className="mt-1 max-w-4xl text-sm text-muted-foreground">{config.description}</p>
         </div>
         <div className="shrink-0 text-xs text-muted-foreground">{config.note}</div>

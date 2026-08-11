@@ -28,8 +28,8 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
   },
   {
     id: "procare-import",
-    title: "Import ProCare families and children",
-    description: "Import unencrypted ProCare data, review duplicate matches, and confirm families, guardians, children, contacts, allergies, schedules, and classroom assignments.",
+    title: "Review imported families and children",
+    description: "Import approved source data, review duplicate matches, and confirm families, guardians, children, contacts, allergies, schedules, and classroom assignments.",
     href: "/family-detail",
   },
   {

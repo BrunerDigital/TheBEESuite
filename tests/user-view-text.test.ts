@@ -18,6 +18,11 @@ test("known presentation fixture markers are removed from user-facing text", () 
   assert.equal(removeDemoMarkersFromUserView("demoexec@demo.thebeesuite.io"), "executive@example.com");
 });
 
+test("presentation cleanup leaves stored source wording unchanged", () => {
+  assert.equal(removeDemoMarkersFromUserView("ProCare Preschool"), "ProCare Preschool");
+  assert.equal(removeDemoMarkersFromUserView("procare_family_account_id"), "procare_family_account_id");
+});
+
 test("fallback presentation data no longer labels itself as demo content", () => {
   const visibleFallbackContent = JSON.stringify({
     centers,

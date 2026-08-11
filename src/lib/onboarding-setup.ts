@@ -42,7 +42,7 @@ export const schoolOnboardingSetupSections = [
     owner: "Director or admin",
     href: "/family-detail",
     description: "Import families, guardians, children, authorized pickups, emergency contacts, allergies, schedules, and classroom assignments.",
-    placeholder: "Unencrypted Procare export files\nFamily/guardian/child field mapping\nClassroom assignment rules\nMissing parent emails to collect",
+    placeholder: "Approved source export files\nFamily/guardian/child field mapping\nClassroom assignment rules\nMissing parent emails to collect",
   },
   {
     field: "tuitionRateSetup",

@@ -59,13 +59,13 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
   assert.match(resources, /id: "director-parent-invites"/);
   assert.match(resources, /Add Family, Parent \+ Child/);
   assert.match(resources, /Accepted means the email service received it for delivery/);
-  assert.match(resources, /does not require a ProCare import batch/);
+  assert.match(resources, /does not require a prior import batch/);
   assert.match(resources, /School Operations > Enrollment status/);
   assert.match(resources, /presents card first/);
   assert.match(resources, /Thursday schedule/);
   assert.match(resources, /Friday at 12 PM Eastern/);
   assert.match(resources, /HELD OFF gate is not a PASS/);
-  assert.match(resources, /ProCare as the source of record/);
+  assert.match(resources, /previous system as the source of record/);
   assert.match(resources, /object-contain/);
   assert.match(resources, /Tap a screen to open the full view/);
   assert.doesNotMatch(resources, /Section link/);

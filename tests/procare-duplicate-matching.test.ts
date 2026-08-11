@@ -33,7 +33,7 @@ test("scores a high-confidence family match from ProCare import data", () => {
   );
 
   assert.equal(candidate?.confidence, "high");
-  assert.ok(candidate?.reasons.includes("same ProCare ID"));
+  assert.ok(candidate?.reasons.includes("same source ID"));
   assert.ok(candidate?.reasons.includes("matching child date of birth"));
 });
 

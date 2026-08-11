@@ -46,8 +46,8 @@ test("ProCare imports require the exact completed review before commit", () => {
   const route = readFileSync(new URL("../src/app/api/imports/procare/route.ts", import.meta.url), "utf8");
   const panel = readFileSync(new URL("../src/components/procare-import-panel.tsx", import.meta.url), "utf8");
 
-  assert.match(panel, /Submit this exact ProCare export for review before committing it/);
-  assert.match(panel, /Import ProCare Data/);
+  assert.match(panel, /Submit this exact source export for review before committing it/);
+  assert.match(panel, /Import Family Accounts/);
   assert.match(route, /status: "needs_resolution"/);
   assert.match(route, /procare\.import\.rows_disposed/);
   assert.match(panel, /Unresolved imported data/);
@@ -71,7 +71,7 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(route, /Choose either uploaded files or pasted CSV text/);
   assert.match(route, /MAX_PROCARE_SOURCE_FILES/);
   assert.match(route, /MAX_PROCARE_UPLOAD_BYTES/);
-  assert.match(route, /No supported ProCare report or consolidated CSV columns were recognized/);
+  assert.match(route, /No supported source report or consolidated CSV columns were recognized/);
   assert.match(route, /formData\.getAll\("file"\)/);
   assert.match(route, /if \(isZipBuffer\(buffer\)\)/);
   assert.doesNotMatch(panel, /accept="/);
@@ -88,16 +88,16 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(panel, /Preview ready - no records written yet/);
   assert.match(panel, /Detected source inventory/);
   assert.match(panel, /sourceInventoryConfirmed/);
-  assert.match(route, /Confirm the detected ProCare source inventory before importing/);
+  assert.match(route, /Confirm the detected source inventory before importing/);
   assert.match(panel, /XMLHttpRequest/);
-  assert.match(panel, /ProCare import progress/);
+  assert.match(panel, /Data import progress/);
   assert.match(panel, /Upload and import complete/);
   assert.match(panel, /lastImportSummary/);
   assert.match(panel, /Post-import setup readiness/);
   assert.match(panel, /Open school setup/);
   assert.match(panel, /billing-settings\?view=setup/);
   assert.match(panel, /Import does not activate the school by itself/);
-  assert.match(panel, /Parent invitations, kiosk\/PIN credentials, billing\/payment activation, and ProCare retirement stay held off/);
+  assert.match(panel, /Parent invitations, kiosk\/PIN credentials, billing\/payment activation, and legacy-system archival stay held off/);
   assert.match(panel, /useRouter/);
   assert.match(panel, /router\.refresh\(\)/);
   assert.match(panel, /hasCompletedPreview/);
@@ -123,7 +123,7 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.doesNotMatch(route, /requestedChunkStart/);
   assert.match(route, /existingBatch && Array\.isArray\(existingSummary\.stagedRowNumbers\)/);
   assert.match(route, /partial: true/);
-  assert.match(route, /resumable ProCare import batch/);
+  assert.match(route, /resumable data import batch/);
   assert.match(route, /This import page is out of date/);
   assert.match(panel, /request timed out before completing/);
   assert.match(route, /buildProcareMultiReportRows/);

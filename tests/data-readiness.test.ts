@@ -44,6 +44,7 @@ test("readiness statuses preserve imported, excluded, failed, and safety-blocked
 test("bulk confirmation is limited to low-risk rows with stable source IDs", () => {
   const safe = row();
   assert.equal(safe.category, "Historical and informational data");
+  assert.equal(safe.sourceFilename, "procare.csv");
   assert.equal(safe.bulkEligible, true);
   assert.equal(canBulkConfirmReadinessTask(safe), true);
 
@@ -84,11 +85,14 @@ test("batch reconciliation and exports expose source provenance", () => {
     verified: false,
   });
   assert.equal(batch.status, "CONFIRM");
+  assert.equal(batch.sourceFilename, "procare.zip");
   assert.match(batch.sourceIds.join(" "), /sha-256-evidence/);
   const summary = summarizeDataReadiness([batch], 10);
   assert.equal(summary.actionable, 1);
   assert.equal(summary.sourceRows, 10);
-  assert.match(dataReadinessCsv([batch]), /Source SHA-256: sha-256-evidence/);
+  const csv = dataReadinessCsv([batch]);
+  assert.match(csv, /Source SHA-256: sha-256-evidence/);
+  assert.match(csv, /procare\.zip/);
 });
 
 test("readiness API is tenant-scoped, evidence-only, and keeps sensitive gates separate", () => {

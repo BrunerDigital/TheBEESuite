@@ -328,7 +328,7 @@ export const modules: ModuleDefinition[] = [
     title: "Data import review",
     eyebrow: "Prepare school records",
     description:
-      "Review imported ProCare records, resolve differences, record decisions, and confirm each school before launch.",
+      "Review imported records, resolve differences, record decisions, and confirm each school before launch.",
     owner: "Center director, assistant director, regional manager, brand admin",
     metrics: ["7 shared statuses", "7 risk priorities", "Append-only decisions", "Separate launch gates"],
     features: ["Prioritized action queue", "Focused review drawers", "Safe low-risk bulk confirmation", "CSV audit export"],

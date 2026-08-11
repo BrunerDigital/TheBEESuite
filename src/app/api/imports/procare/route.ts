@@ -1122,7 +1122,7 @@ async function previewImportRows({
   duplicateMatches.sort((a, b) => a.rowNumber - b.rowNumber || a.entity.localeCompare(b.entity));
 
   return {
-    center: autoMap ? "Auto-mapped from ProCare export" : defaultCenter.crmLocationId ?? defaultCenter.name,
+    center: autoMap ? "Auto-mapped from source data" : defaultCenter.crmLocationId ?? defaultCenter.name,
     sourceType,
     filename,
     rows: Math.max(rows.length - 1, 0),
@@ -1292,7 +1292,7 @@ function buildConsolidatedRowsFromFiles(
         records: [] as Record<string, string>[],
       };
     }
-    throw new Error("No supported ProCare report or consolidated CSV columns were recognized. Upload the four standard ProCare reports, a ZIP containing them, or a consolidated CSV with headings such as Family Name, Child Name, Guardian Email, Balance, or Classroom.");
+    throw new Error("No supported source report or consolidated CSV columns were recognized. Upload the four standard source reports, a ZIP containing them, or a consolidated CSV with headings such as Family Name, Child Name, Guardian Email, Balance, or Classroom.");
   }
 
   const dataHeaders = [...new Set(sources.flatMap((source) => source.records.flatMap((record) => Object.keys(record))))];
@@ -1402,14 +1402,14 @@ function combineStandardAndSupplementalProcareRows(
 async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
   const uploadedFiles = files.filter((entry): entry is File => entry instanceof File && entry.size > 0);
   if (uploadedFiles.length && pastedCsv.trim()) {
-    throw new Error("Choose either uploaded files or pasted CSV text before submitting the ProCare import review.");
+    throw new Error("Choose either uploaded files or pasted CSV text before submitting the data import review.");
   }
   if (uploadedFiles.length > MAX_PROCARE_SOURCE_FILES) {
-    throw new Error(`The selected ProCare sources contain more than ${MAX_PROCARE_SOURCE_FILES} files. Split the handoff into reviewed batches.`);
+    throw new Error(`The selected sources contain more than ${MAX_PROCARE_SOURCE_FILES} files. Split the handoff into reviewed batches.`);
   }
   const uploadedBytes = uploadedFiles.reduce((total, file) => total + file.size, 0);
   if (uploadedBytes > MAX_PROCARE_UPLOAD_BYTES) {
-    throw new Error("The selected ProCare sources are larger than 100 MB. Split the handoff into reviewed batches.");
+    throw new Error("The selected sources are larger than 100 MB. Split the handoff into reviewed batches.");
   }
   if (!uploadedFiles.length) {
     return { text: pastedCsv, filename: "pasted-procare-import.csv", sourceType: "csv_text", datasetCoverage: null };
@@ -1567,7 +1567,7 @@ async function GETHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
   if (!canManageOperations(user)) {
-    return NextResponse.json({ ok: false, error: "ProCare import backups are not allowed for this role." }, { status: 403 });
+    return NextResponse.json({ ok: false, error: "Data import backups are not allowed for this role." }, { status: 403 });
   }
 
   const requestedBatchId = clean(request.nextUrl.searchParams.get("batchId") || request.nextUrl.searchParams.get("id"));
@@ -1601,7 +1601,7 @@ async function GETHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
   }
   if (!batch) {
-    return NextResponse.json({ ok: false, error: "ProCare import batch not found." }, { status: 404 });
+    return NextResponse.json({ ok: false, error: "Data import batch not found." }, { status: 404 });
   }
   if (importBatchCenterIds(batch).some((centerId) => !canAccessCenter(user, centerId))) {
     return NextResponse.json({ ok: false, error: "You do not have access to this import batch." }, { status: 403 });
@@ -1688,7 +1688,7 @@ async function GETHandler(request: NextRequest) {
         hasAuthorizedPickupRows = true;
         try {
           const relationships = JSON.parse(value(raw, ["procare relationship records"]) || "[]") as unknown;
-          if (!Array.isArray(relationships)) throw new Error("ProCare relationship records must be an array.");
+          if (!Array.isArray(relationships)) throw new Error("Source relationship records must be an array.");
           for (const relationship of relationships) {
             if (!relationship || typeof relationship !== "object" || Array.isArray(relationship)) continue;
             const record = relationship as ProcareRelationshipRecord;
@@ -1886,7 +1886,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
   if (!canManageOperations(user)) {
-    return NextResponse.json({ ok: false, error: "ProCare imports are not allowed for this role." }, { status: 403 });
+    return NextResponse.json({ ok: false, error: "Data imports are not allowed for this role." }, { status: 403 });
   }
 
   const formData = await request.formData();
@@ -1909,14 +1909,14 @@ async function POSTHandler(request: NextRequest) {
     ? Math.min(parsedChunkSize, 20)
     : Number.MAX_SAFE_INTEGER;
   if (!dryRun && !chunkSizeInput) {
-    return NextResponse.json({ ok: false, error: "This import page is out of date. Refresh the page, select the ProCare export again, and restart the import." }, { status: 409 });
+    return NextResponse.json({ ok: false, error: "This import page is out of date. Refresh the page, select the source export again, and restart the import." }, { status: 409 });
   }
   let fieldMapping: ProcareFieldMapping = {};
   try {
     const mappingJson = clean(formData.get("fieldMapping"));
     fieldMapping = mappingJson ? JSON.parse(mappingJson) as ProcareFieldMapping : {};
   } catch {
-    return NextResponse.json({ ok: false, error: "The ProCare field mapping is invalid. Review the column matches and try again." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "The source field mapping is invalid. Review the column matches and try again." }, { status: 400 });
   }
   const autoMap = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase()) && canAccessAllCenters(user);
   const centerId = autoMap ? "" : requestedCenterId || user.primaryCenterId;
@@ -1958,12 +1958,12 @@ async function POSTHandler(request: NextRequest) {
     importPayload = await readImportText(files, pastedCsv);
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "ProCare export could not be read." },
+      { ok: false, error: error instanceof Error ? error.message : "Source export could not be read." },
       { status: 400 },
     );
   }
   const text = importPayload.text;
-  if (!text) return NextResponse.json({ ok: false, error: "Upload ProCare CSV files, a ZIP export, or paste CSV text." }, { status: 400 });
+  if (!text) return NextResponse.json({ ok: false, error: "Upload source CSV files, a ZIP export, or paste CSV text." }, { status: 400 });
 
   const rows = importPayload.parsedRows ?? parseImportRows(text);
   const guardedRenderedImport = importPayload.sourceType === "procare_rendered_report_files" && Boolean(importPayload.datasetCoverage);
@@ -1985,7 +1985,7 @@ async function POSTHandler(request: NextRequest) {
 
   const duplicateTargets = headers.filter((header, index) => header && headers.indexOf(header) !== index);
   if (duplicateTargets.length) {
-    return NextResponse.json({ ok: false, error: `Each ProCare column must map to a different BEE Suite field. Duplicate mapping: ${[...new Set(duplicateTargets)].join(", ")}.` }, { status: 400 });
+    return NextResponse.json({ ok: false, error: `Each source column must map to a different BEE Suite field. Duplicate mapping: ${[...new Set(duplicateTargets)].join(", ")}.` }, { status: 400 });
   }
   const mappingSignature = JSON.stringify(Object.entries(fieldMapping).sort(([a], [b]) => a.localeCompare(b)));
   const sourceSha256 = procareSourceSha256(text);
@@ -2020,7 +2020,7 @@ async function POSTHandler(request: NextRequest) {
   if (importPayload.datasetCoverage && !sourceInventoryConfirmed) {
     return NextResponse.json({
       ok: false,
-      error: "Confirm the detected ProCare source inventory before importing.",
+      error: "Confirm the detected source inventory before importing.",
     }, { status: 409 });
   }
 
@@ -2030,14 +2030,14 @@ async function POSTHandler(request: NextRequest) {
   if (missingCorrelationConfirmations.length) {
     return NextResponse.json({
       ok: false,
-      error: `Confirm the reviewed ProCare correlations in order before importing: ${missingCorrelationConfirmations.join(", ")}.`,
+      error: `Confirm the reviewed source correlations in order before importing: ${missingCorrelationConfirmations.join(", ")}.`,
     }, { status: 409 });
   }
 
   const reviewFingerprint = buildReviewFingerprint(submittedWarningRowNumbers, submittedDuplicateReviewRowNumbers);
   if (submittedSourceSha256 !== sourceSha256 || submittedReviewFingerprint !== reviewFingerprint) {
     return NextResponse.json(
-      { ok: false, error: "Submit this unchanged ProCare export for review before importing it." },
+      { ok: false, error: "Submit this unchanged source export for review before importing it." },
       { status: 409 },
     );
   }
@@ -2045,7 +2045,7 @@ async function POSTHandler(request: NextRequest) {
   const requestedBatch = requestedBatchId
     ? await prisma.procareImportBatch.findFirst({ where: { id: requestedBatchId, centerId: center.id, uploadedById: user.id, status: "processing" }, include: { _count: { select: { rows: true } } } })
     : null;
-  if (requestedBatchId && !requestedBatch) return NextResponse.json({ ok: false, error: "The resumable ProCare import batch could not be found." }, { status: 409 });
+  if (requestedBatchId && !requestedBatch) return NextResponse.json({ ok: false, error: "The resumable data import batch could not be found." }, { status: 409 });
   const resumableCandidates = requestedBatch ? [] : await prisma.procareImportBatch.findMany({
     where: { centerId: center.id, uploadedById: user.id, status: "processing" },
     orderBy: { createdAt: "desc" },
@@ -3315,7 +3315,7 @@ async function POSTHandler(request: NextRequest) {
 async function PATCHHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageOperations(user)) return NextResponse.json({ ok: false, error: "ProCare import reconciliation is not allowed for this role." }, { status: 403 });
+  if (!canManageOperations(user)) return NextResponse.json({ ok: false, error: "Data import reconciliation is not allowed for this role." }, { status: 403 });
   const body = await request.json().catch(() => null) as { batchId?: string; rowNumbers?: number[]; action?: string } | null;
   const batch = body?.batchId ? await prisma.procareImportBatch.findUnique({
     where: { id: body.batchId },

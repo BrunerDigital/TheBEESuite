@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import { canAccessModule } from "../src/lib/rbac";
 import {
@@ -8,7 +9,7 @@ import {
   terminalStoreOrderTotals,
   terminalStorePriceCents,
 } from "../src/lib/terminal-store";
-import { terminalStoreEnabled } from "../src/lib/feature-availability";
+import { terminalStoreEnabled, terminalStoreReturnState } from "../src/lib/feature-availability";
 
 const originalStripeSecret = process.env.STRIPE_SECRET_KEY;
 const originalTerminalStoreEnabled = process.env.NEXT_PUBLIC_TERMINAL_STORE_ENABLED;
@@ -66,6 +67,18 @@ test("terminal store can be explicitly re-enabled for its approved roles", () =>
   assert.equal(canAccessModule({ role: "PLATFORM_OWNER", accessScope: "platform" }, "terminal-store"), true);
   assert.equal(canAccessModule({ role: "CENTER_DIRECTOR", accessScope: "center", centerIds: ["center_1"] }, "terminal-store"), true);
   assert.equal(canAccessModule({ role: "BILLING_ADMIN", accessScope: "center", centerIds: ["center_1"] }, "terminal-store"), false);
+});
+
+test("disabled terminal store preserves only existing checkout return states", () => {
+  assert.equal(terminalStoreReturnState("success"), "success");
+  assert.equal(terminalStoreReturnState(["cancelled"]), "cancelled");
+  assert.equal(terminalStoreReturnState("pending"), null);
+  assert.equal(terminalStoreReturnState(["", "success"]), null);
+  assert.equal(terminalStoreReturnState(undefined), null);
+
+  const pageSource = readFileSync(new URL("../src/app/[slug]/page.tsx", import.meta.url), "utf8");
+  assert.match(pageSource, /!terminalStoreAvailable && !terminalStoreReturn\) notFound\(\)/);
+  assert.match(pageSource, /<TerminalStoreReturnPage status=\{terminalStoreReturn\} \/>/);
 });
 
 test("terminal store checkout uses platform Stripe checkout without a connected account", async () => {

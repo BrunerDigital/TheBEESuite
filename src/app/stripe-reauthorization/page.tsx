@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
-import { BadgeCheck, Building2, CreditCard, Landmark, ShieldCheck } from "lucide-react";
+import { BadgeCheck, Building2, Landmark, ShieldCheck } from "lucide-react";
 import { CorporateStripeVerificationCard } from "@/components/corporate-stripe-verification-card";
 import { StripeReauthorizationCard } from "@/components/stripe-reauthorization-card";
 import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser, requiresPasswordResetGate } from "@/lib/auth";
@@ -85,7 +85,7 @@ export default async function StripeReauthorizationPage({
         [Building2, "Business details", "Confirm the legal business name and tax information."],
         [BadgeCheck, "Authorized representative", "Verify the person permitted to act for the school."],
         [Landmark, "Payout destination", "Provide or confirm the bank used for school payouts."],
-        [CreditCard, "Payment readiness", "Authorize the $99 monthly BEE Suite fee from Stripe balance."],
+        [ShieldCheck, "Terms of service", "Agree to the terms of service before opening Stripe's secure hosted flow."],
       ];
 
   return (

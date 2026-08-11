@@ -3,6 +3,8 @@ export type StripeConnectMigrationStatus =
   | "prepared"
   | "onboarding_opened"
   | "requirements_due"
+  // Legacy stored value from the original migration flow. Software billing is
+  // no longer a payment-readiness or cutover requirement.
   | "balance_authorization_required"
   | "ready_for_cutover"
   | "cutover_complete";
@@ -76,8 +78,7 @@ export function readStripeConnectMigration(customFields: unknown): StripeConnect
       Boolean(targetPayoutBankLast4);
     if (!targetReady) {
       status = storedStatus === "onboarding_opened" ? "onboarding_opened" : targetRequirementFields.length ? "requirements_due" : "prepared";
-    } else if (!balanceAuthorized) status = "balance_authorization_required";
-    else status = "ready_for_cutover";
+    } else status = "ready_for_cutover";
   }
 
   return {

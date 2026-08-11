@@ -36,6 +36,7 @@ export function CorporateStripeVerificationCard({
   autoStart,
 }: Props) {
   const [status, setStatus] = useState(initialStatus);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(
     initialStatus === "stripe_verification_required" ? null : statusMessage(initialStatus),
@@ -73,7 +74,7 @@ export function CorporateStripeVerificationCard({
       const response = await fetch("/api/billing/connect/migration", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ centerId }),
+        body: JSON.stringify({ centerId, authorizedRepresentative: true, termsAccepted: true }),
       });
       const json = await response.json();
       if (!response.ok || !json.ok) throw new Error(json.error || "Secure Stripe verification could not be opened.");
@@ -92,13 +93,13 @@ export function CorporateStripeVerificationCard({
   }
 
   useEffect(() => {
-    if (!autoStart || status !== "stripe_verification_required" || autoStarted.current) return;
+    if (!autoStart || !termsAccepted || status !== "stripe_verification_required" || autoStarted.current) return;
     autoStarted.current = true;
     const timeoutId = window.setTimeout(() => void startVerification(), 0);
     return () => window.clearTimeout(timeoutId);
     // The authenticated, server-allowlisted page controls this one-time hosted handoff.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart, status]);
+  }, [autoStart, status, termsAccepted]);
 
   const complete = status === "stripe_verification_complete";
   const pending = status === "stripe_verification_pending";
@@ -111,9 +112,15 @@ export function CorporateStripeVerificationCard({
         <div><strong>Selected school:</strong> {schoolName}. This page is pinned to the approved Stripe account for this location.</div>
       </div>
 
-      <div className="mt-6 rounded-2xl border p-4 text-sm leading-6">
-        Enter the bank information and accept Stripe&apos;s terms directly in Stripe&apos;s secure hosted flow.
-      </div>
+      <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm leading-6">
+        <input
+          type="checkbox"
+          checked={termsAccepted}
+          onChange={(event) => setTermsAccepted(event.target.checked)}
+          className="mt-1 size-4 rounded border-slate-300 accent-amber-500"
+        />
+        <span>I agree to the terms of service and confirm that I am authorized to act for this school. Stripe will collect the bank information and final Stripe attestation in its secure hosted flow.</span>
+      </label>
 
       {message ? <div role="status" className="mt-5 rounded-xl border bg-slate-50 p-4 text-sm leading-6">{message}</div> : null}
 
@@ -125,7 +132,7 @@ export function CorporateStripeVerificationCard({
         ) : blocked ? (
           <div className="flex items-center gap-2 font-semibold text-amber-700"><TriangleAlert className="size-5" /> Verification session unavailable</div>
         ) : (
-          <Button type="button" size="lg" disabled={busy} onClick={() => void startVerification()}>
+          <Button type="button" size="lg" disabled={!termsAccepted || busy} onClick={() => void startVerification()}>
             {busy ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : null}
             Open secure Stripe verification
             {!busy ? <ArrowUpRight data-icon="inline-end" /> : null}

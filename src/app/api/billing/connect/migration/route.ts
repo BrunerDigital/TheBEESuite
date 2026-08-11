@@ -35,6 +35,7 @@ async function authorizedCenter(request: NextRequest, method: "GET" | "POST") {
   const body = method === "POST" ? await request.json().catch(() => ({})) as {
     centerId?: unknown;
     authorizedRepresentative?: unknown;
+    termsAccepted?: unknown;
     returnToCorporatePortfolio?: unknown;
   } : {};
   if (!user) return { response: NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 }), user: null, center: null, body, corporateVerification: false };
@@ -109,11 +110,43 @@ async function GETHandler(request: NextRequest) {
     if (!banks.ok) {
       return NextResponse.json({ ok: false, error: banks.error || "The Stripe payout bank could not be checked." }, { status: banks.configured ? 502 : 503 });
     }
-    return NextResponse.json({
-      ok: true,
-      centerId: center.id,
-      status: stripeVerificationState(target.account, corporateStripePayoutBankIsConfirmed(banks.banks)),
+    const payoutBank = banks.defaultBank;
+    const verificationStatus = stripeVerificationState(target.account, corporateStripePayoutBankIsConfirmed(banks.banks));
+    const migrationStatus = verificationStatus === "stripe_verification_complete"
+      ? "ready_for_cutover"
+      : verificationStatus === "stripe_verification_required"
+        ? "requirements_due"
+        : "onboarding_opened";
+    const syncedAt = new Date().toISOString();
+    const patch: Prisma.JsonObject = {
+      stripeConnectMigrationStatus: migrationStatus,
+      stripeConnectMigrationTargetChargesEnabled: target.account.chargesEnabled,
+      stripeConnectMigrationTargetPayoutsEnabled: target.account.payoutsEnabled,
+      stripeConnectMigrationTargetDetailsSubmitted: target.account.detailsSubmitted,
+      stripeConnectMigrationTargetRequirementFields: target.account.requirementFields,
+      stripeConnectMigrationTargetFeesCollector: target.account.feesCollector,
+      stripeConnectMigrationTargetLossesCollector: target.account.lossesCollector,
+      stripeConnectMigrationTargetPayoutBankName: payoutBank?.bankName || null,
+      stripeConnectMigrationTargetPayoutBankLast4: payoutBank?.last4 || null,
+      stripeConnectMigrationTargetPayoutBankStatus: payoutBank?.status || null,
+      stripeConnectMigrationTargetPayoutBankCount: banks.banks.length,
+      stripeConnectMigrationLastSyncedAt: syncedAt,
+    };
+    const synced = await prisma.center.updateMany({
+      where: { id: center.id, customFields: { equals: fields as Prisma.InputJsonValue } },
+      data: { customFields: { ...fields, ...patch } },
     });
+    if (synced.count !== 1) {
+      return NextResponse.json({ ok: false, error: "The school's Stripe verification changed while status was refreshing. Refresh and try again." }, { status: 409 });
+    }
+    await writeAuditLog(user, {
+      centerId: center.id,
+      action: "billing.connect.migration.status_synced",
+      resource: "Center",
+      resourceId: center.id,
+      metadata: { sourceAccountId: migration.sourceAccountId, targetAccountId: migration.targetAccountId, status: migrationStatus, payoutBankConfirmed: Boolean(payoutBank?.last4) },
+    });
+    return NextResponse.json({ ok: true, centerId: center.id, status: verificationStatus });
   }
 
   const [target, banks] = await Promise.all([
@@ -136,9 +169,8 @@ async function GETHandler(request: NextRequest) {
     lossesCollector: target.account.lossesCollector,
     payoutBankLast4: payoutBank?.last4,
   });
-  const balanceAuthorized = Boolean(clean(fields.stripeConnectMigrationBalanceApprovalAt));
   const status = targetReady
-    ? balanceAuthorized ? "ready_for_cutover" : "balance_authorization_required"
+    ? "ready_for_cutover"
     : target.account.requirementFields.length ? "requirements_due" : "onboarding_opened";
   const syncedAt = new Date().toISOString();
   const patch: Prisma.JsonObject = {
@@ -180,8 +212,8 @@ async function POSTHandler(request: NextRequest) {
   if (auth.response) return auth.response;
   if (!auth.user || !auth.center) return NextResponse.json({ ok: false, error: "Authorization could not be verified." }, { status: 403 });
   const { user, center, corporateVerification } = auth;
-  if (!corporateVerification && auth.body.authorizedRepresentative !== true) {
-    return NextResponse.json({ ok: false, error: "Confirm that you are authorized to act for this school before continuing." }, { status: 400 });
+  if (auth.body.authorizedRepresentative !== true || auth.body.termsAccepted !== true) {
+    return NextResponse.json({ ok: false, error: "Agree to the terms of service and confirm that you are authorized to act for this school before continuing." }, { status: 400 });
   }
   const fields = jsonObject(center.customFields);
   const migration = readStripeConnectMigration(fields);
@@ -259,7 +291,8 @@ async function POSTHandler(request: NextRequest) {
     metadata: {
       sourceAccountId: migration.sourceAccountId,
       targetAccountId: migration.targetAccountId,
-      authorizedRepresentativeConfirmed: corporateVerification ? false : true,
+      authorizedRepresentativeConfirmed: true,
+      termsAccepted: true,
       corporateVerification,
       returnToCorporatePortfolio,
       linkStored: false,
@@ -332,7 +365,8 @@ async function POSTHandler(request: NextRequest) {
     metadata: {
       sourceAccountId: migration.sourceAccountId,
       targetAccountId: migration.targetAccountId,
-      authorizedRepresentativeConfirmed: corporateVerification ? false : true,
+      authorizedRepresentativeConfirmed: true,
+      termsAccepted: true,
       corporateVerification,
       returnToCorporatePortfolio,
       linkStored: false,

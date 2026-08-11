@@ -76,6 +76,9 @@ test("authored import and setup UI copy omits the legacy vendor name", () => {
   assert.doesNotMatch(dataReadinessCenter, /Legacy-system archival/);
   assert.match(instructionGraphics, /previous-system cutover, source-file archival, and wider rollout are separate decisions/);
   assert.match(instructionGraphics, /Archive source files separately/);
+  const importPanel = source("src/components/procare-import-panel.tsx");
+  assert.match(importPanel, /supports only the previous-system export format built from Enrollment, ParentInfo, Relationships, and ChildInfo reports/);
+  assert.match(importPanel, /Do not upload an export from another provider/);
 });
 
 test("stored values, lookup keys, and import provenance remain exact", () => {

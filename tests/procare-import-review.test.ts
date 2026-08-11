@@ -65,7 +65,7 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(route, /childIdentity/);
   assert.match(route, /accountIdentity/);
   assert.match(panel, /mapping-follow-up/);
-  assert.match(panel, /staff, schedule, attendance, sign-in\/out, health, and account-balance exports/);
+  assert.match(panel, /staff, schedule, attendance, sign-in\/out, health, and account-balance reports from that same supported format/);
   assert.match(route, /looksLikeStandardMultiReportShard/);
   assert.match(route, /sourceType: "csv_files"/);
   assert.match(route, /Choose either uploaded files or pasted CSV text/);
@@ -97,6 +97,9 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(panel, /Open school setup/);
   assert.match(panel, /billing-settings\?view=setup/);
   assert.match(panel, /Import does not activate the school by itself/);
+  assert.match(panel, /Supported previous-system export format only/);
+  assert.match(panel, /Do not upload an export from another provider/);
+  assert.match(panel, /Enrollment, ParentInfo, Relationships, and ChildInfo/);
   assert.match(panel, /Parent invitations, kiosk\/PIN credentials, billing\/payment activation, previous-system cutover, and source-file archival each stay held off/);
   assert.match(panel, /useRouter/);
   assert.match(panel, /router\.refresh\(\)/);

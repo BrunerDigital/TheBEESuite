@@ -586,10 +586,17 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       <CardHeader>
         <CardTitle>Import Family Accounts</CardTitle>
         <CardDescription>
-          The four standard source reports—Enrollment, ParentInfo, Relationships, and ChildInfo—populate families, guardians, children, classrooms, enrollment details, allergies, emergency contacts, and pickups. Add staff, schedule, attendance, sign-in/out, health, and account-balance exports to the same upload or ZIP; supported rows are linked by source IDs, while reports without a safe destination mapping are identified for migration follow-up.
+          This importer supports only the previous-system export format built from Enrollment, ParentInfo, Relationships, and ChildInfo reports. Those reports populate families, guardians, children, classrooms, enrollment details, allergies, emergency contacts, and pickups. Add staff, schedule, attendance, sign-in/out, health, and account-balance reports from that same supported format to the upload or ZIP; supported rows are linked by source IDs, while reports without a safe destination mapping are identified for migration follow-up.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <Alert>
+          <AlertCircle className="size-4" />
+          <AlertTitle>Supported previous-system export format only</AlertTitle>
+          <AlertDescription>
+            Use only the configured legacy reports named above. Do not upload an export from another provider; it requires a separately reviewed importer so its source identity and matching rules remain exact.
+          </AlertDescription>
+        </Alert>
         <div className="space-y-3 rounded-xl border bg-muted/20 p-4" aria-live="polite">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -841,7 +848,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             ) : null}
           </div>
           <div className="space-y-1">
-            <Label>Source export folder or files</Label>
+            <Label>Supported previous-system export folder or files</Label>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={() => folderRef.current?.click()}>
                 <Upload data-icon="inline-start" />
@@ -908,7 +915,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               </div>
             ) : null}
             <p className="text-xs leading-5 text-muted-foreground">
-              Choose one folder containing any number or combination of the recommended source exports, choose individual files, or choose a ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Each reviewed batch may contain up to 500 files and 100 MB.
+              Choose one folder containing any number or combination of the supported previous-system reports, choose individual files, or choose a ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Do not submit exports from another provider through this importer. Each reviewed batch may contain up to 500 files and 100 MB.
             </p>
             {hasMixedSources ? (
               <Alert variant="destructive">
@@ -1023,7 +1030,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                         );
                       })}
                       {!section.correlations.length ? (
-                        <div className="text-xs text-muted-foreground">The four standard source reports (Enrollment, ParentInfo, Relationships, and ChildInfo) supply this relationship automatically.</div>
+                        <div className="text-xs text-muted-foreground">The four supported previous-system reports (Enrollment, ParentInfo, Relationships, and ChildInfo) supply this relationship automatically.</div>
                       ) : null}
                     </div>
                     {section.required ? (

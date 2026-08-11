@@ -680,7 +680,7 @@ function ExecutiveLensDashboard({
                 </div>
                 <Badge
                   variant="secondary"
-                  render={<Link href={withQueryParam("/crm-leads", "q", school.name)} aria-label={`Open CRM leads for ${school.name}`} />}
+                  render={<Link href={withQueryParam("/crm-leads", "q", school.name)} aria-label={`Open enrollment inquiries for ${school.name}`} />}
                 >
                   {school.leads} leads
                 </Badge>
@@ -1066,13 +1066,13 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
       ? messages
       : [];
   const aiSummary = live?.aiSummary ??
-    "Your visible centers are operating inside configured workflow targets. Prioritize high-fit inquiries, review open tasks, and confirm sensitive actions before sending messages or changing records.";
+    "Review new inquiries, open tasks, and family messages before taking action.";
   const aiHighlights = live?.aiHighlights?.length
     ? live.aiHighlights
     : showDemoFallbackData
       ? ["4 high-fit leads", "8 expiring docs", "2 open seats"]
       : [];
-  const asOfLabel = live?.asOfLabel ?? "Current workspace";
+  const asOfLabel = live?.asOfLabel ?? "Current overview";
   const maxRevenue = Math.max(...dashboardAnalytics.map((point) => point.revenue), 1);
   const maxFunnelCount = Math.max(...dashboardAnalytics.flatMap((point) => [point.leads, point.tours, point.enrolled]), 1);
   const openSeatsByAgeGroup = Array.from(
@@ -1109,6 +1109,13 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const isParentDashboard = visibleLenses.length === 1 && visibleLenses.includes("parent");
   const isPickupDashboard = visibleLenses.length === 1 && visibleLenses.includes("pickup");
   const isDirectorDashboard = visibleLenses.includes("director");
+  const dashboardTitle = isTeacherDashboard
+    ? "Classroom overview"
+    : isBillingDashboard
+      ? "Billing overview"
+      : isParentDashboard || isPickupDashboard
+        ? "Family overview"
+        : "School operations overview";
   const commandCenterDescription = isTeacherDashboard
     ? "Classroom attendance, daily reports, incident notes, family messages, and ratio awareness for your assigned room."
     : isBillingDashboard
@@ -1117,7 +1124,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         ? "Your family portal, child updates, messages, documents, invoices, and payment actions."
         : isPickupDashboard
           ? "Authorized pickup access, child status, approved pickup details, and family account updates."
-          : "Enrollment, classroom operations, billing, compliance-ready documentation, and parent trust signals in one white-label operating system.";
+          : "Review enrollment, classroom operations, billing, required records, and family communication across your schools.";
   const aiBriefHref = isTeacherDashboard ? "/teacher-portal" : isBillingDashboard ? "/messages" : isParentDashboard || isPickupDashboard ? "/parent-portal" : "/ai-command";
   const visibleSnapshotPipeline = showEnrollment ? dashboardPipeline : [];
   const visibleSnapshotLeads = isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? dashboardLeads : [];
@@ -1136,9 +1143,9 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const visibleConfiguredWidgets = hasWidgetConfiguration ? configuredWidgets.filter((widget) => widget.visible) : [];
   const widgetSummaries: Partial<Record<DashboardWidgetId, { value: string; detail: string; href: string }>> = {
     aiBrief: { value: aiHighlights.length ? aiHighlights.join(" · ") : "Ready", detail: "Review before acting", href: aiBriefHref },
-    executiveRollup: { value: `${dashboardCenters.length}`, detail: "Visible centers", href: "/multi-location-dashboard" },
-    enrollmentPipeline: { value: kpiValue("New leads"), detail: kpiTrend("New leads", "Live enrollment pipeline"), href: "/crm-leads" },
-    toursAndTasks: { value: kpiValue("Tours today"), detail: kpiTrend("Tours today", "Open tour and CRM tasks"), href: "/tours" },
+    executiveRollup: { value: `${dashboardCenters.length}`, detail: "Schools in view", href: "/multi-location-dashboard" },
+    enrollmentPipeline: { value: kpiValue("New leads"), detail: kpiTrend("New leads", "Enrollment pipeline"), href: "/crm-leads" },
+    toursAndTasks: { value: kpiValue("Tours today"), detail: kpiTrend("Tours today", "Open tours and follow-up tasks"), href: "/tours" },
     attendanceSnapshot: attendanceSnapshot
       ? {
           value: `${attendanceSnapshot.present}/${attendanceSnapshot.total}`,
@@ -1473,7 +1480,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             <div className="min-w-0">
               <p className="text-sm font-medium text-primary">{asOfLabel}</p>
               <h1 className="mt-2 max-w-3xl text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">
-                The BEE Suite command center
+                {dashboardTitle}
               </h1>
               <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-muted-foreground">
                 {commandCenterDescription}
@@ -1751,7 +1758,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                               key={stage.name}
                               href={withQueryParam("/crm-leads", "q", stage.name)}
                               className="group rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              aria-label={`Open CRM leads for ${stage.name}`}
+                              aria-label={`Open enrollment inquiries for ${stage.name}`}
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <span className="text-sm font-medium">{stage.name}</span>
@@ -1776,14 +1783,14 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                           className="glass-panel"
                           contentClassName="flex flex-col gap-3"
                           title="Lead scoring and tours"
-                          description="Childcare-specific CRM records"
+                          description="Enrollment inquiries and tour follow-up"
                         >
                           {dashboardLeads.map((lead) => (
                             <Link
                               key={lead.family}
                               href={withQueryParam("/crm-leads", "q", lead.family)}
                               className="group grid gap-3 rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[1fr_auto]"
-                              aria-label={`Open CRM lead for ${lead.family}`}
+                              aria-label={`Open enrollment inquiry for ${lead.family}`}
                             >
                               <div>
                                 <div className="flex items-center gap-2">

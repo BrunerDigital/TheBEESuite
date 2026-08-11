@@ -34,7 +34,7 @@ test("approved ProCare parent welcome email explains the transition and guarded 
     assert.match(copy, /ProCare will remain available alongside The BEE Suite/i);
     assert.match(copy, /teachers and families/i);
     assert.match(copy, /has approved its billing cutover to The BEE Suite/i);
-    assert.match(copy, /open Billing/i);
+    assert.match(copy, /open Payments/i);
     assert.match(copy, /Do not pay the same tuition charge in both/i);
     assert.match(copy, /invoice (appearing in the portal )?is not an automatic charge/i);
     assert.match(copy, /autopay applies only after you authorize it/i);
@@ -82,8 +82,8 @@ test("standard parent welcome email does not announce a ProCare billing transiti
   for (const copy of [text, html]) {
     assert.doesNotMatch(copy, /transitioning from ProCare/i);
     assert.doesNotMatch(copy, /Tuition for next week will be billed through The BEE Suite/i);
-    assert.match(copy, /Set Up Card Autopay/i);
-    assert.match(copy, /Set Up Instant Bank/i);
+    assert.match(copy, /Save card/i);
+    assert.match(copy, /Connect bank account/i);
   }
 });
 

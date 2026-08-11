@@ -927,7 +927,7 @@ async function renderLivePage(
       programSetup: {
         recordReady: manualComplete("programs"),
         evidence: manualComplete("programs") ? "Director program notes captured." : "Program names, hours, holidays, and schedule rules still need director input.",
-        metrics: [`Classrooms available: ${classroomCount}`, `Calendar route: ready for events`],
+        metrics: [`Classrooms available: ${classroomCount}`, `Calendar: ready for events`],
         requiredActions: ["Provide program names, age groups, operating schedules, holiday closures, and after-school/VPK rules."],
       },
       staffSetup: {
@@ -4313,9 +4313,9 @@ async function renderLivePage(
           derived: [
             {
               title: `${openTasks.toLocaleString()} lead follow-up tasks are open`,
-              body: "Review the CRM pipeline and complete school-level follow-up work.",
+              body: "Review the enrollment pipeline and complete the open follow-up work.",
               priority: openTasks ? "high" : "normal",
-              type: "CRM",
+              type: "Enrollment",
             },
             {
               title: `${highIntentLeads.toLocaleString()} high-intent leads are visible`,
@@ -4325,7 +4325,7 @@ async function renderLivePage(
             },
             {
               title: `${pendingIncidents.toLocaleString()} incident reports need review`,
-              body: "Incident review is a human-led safety workflow. AI should not make final safety decisions.",
+              body: "Review the report details, family notification, and required follow-up. Staff make all final safety decisions.",
               priority: pendingIncidents ? "high" : "normal",
               type: "Safety",
             },
@@ -5031,8 +5031,8 @@ async function renderLivePage(
                 title: `${formatCenterName(center)} inquiry form embed`,
                 description:
                   user.branding.kind === "kid-city-usa"
-                    ? "Copy this Kid City USA form for this school's website page. It locks submissions to this school and sends new inquiries into The BEE Suite CRM."
-                    : "Copy this form for this school's website page. It sends new inquiries into The BEE Suite CRM for this center.",
+                    ? "Copy this Kid City USA form for this school's website page. Each submission is assigned to this school."
+                    : "Copy this form for this school's website page. Each submission is assigned to this school.",
                 embedCode:
                   user.branding.kind === "kid-city-usa"
                     ? getKidCityLocationInquiryEmbedCode({

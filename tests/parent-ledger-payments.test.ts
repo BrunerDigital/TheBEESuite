@@ -6,7 +6,7 @@ test("the parent portal places authoritative account activity ahead of invoice h
   const source = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
   const latestActivity = source.indexOf("Latest account activity");
   const accountLedger = source.indexOf("Account Activity");
-  const invoices = source.indexOf("Invoice History");
+  const invoices = source.indexOf("Invoice history");
 
   assert.ok(latestActivity >= 0);
   assert.ok(accountLedger > latestActivity);
@@ -50,7 +50,7 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(workspace, /Amount to pay/);
   assert.match(workspace, /amountCents: accountPaymentRequestCents/);
   assert.doesNotMatch(workspace, /Payment is blocked until the school separates agency and family responsibility/);
-  assert.match(workspace, /Pay Product by Card/);
+  assert.match(workspace, /Pay invoice by card/);
 });
 
 test("a positive family balance remains payable when no open invoice exists", () => {

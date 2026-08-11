@@ -37,7 +37,7 @@ function centerSettings(center: TuitionPaymentReminderCenter) {
 
 function settingSummary(settings: TuitionPaymentReminderSettings) {
   if (!settings.enabled) return "Paused";
-  return `Current-family balance reminder every ${settings.repeatEveryDays} day${settings.repeatEveryDays === 1 ? "" : "s"}`;
+  return `Balance reminder every ${settings.repeatEveryDays} day${settings.repeatEveryDays === 1 ? "" : "s"}`;
 }
 
 export function TuitionPaymentReminderSettingsPanel({ centers }: TuitionPaymentReminderSettingsPanelProps) {
@@ -119,7 +119,7 @@ export function TuitionPaymentReminderSettingsPanel({ centers }: TuitionPaymentR
             </Badge>
             <CardTitle>Parent tuition payment reminders</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
-              Send one friendly family-level reminder only when a current family has a positive, parent-payable balance and the school&apos;s secure checkout is ready.
+              Send one reminder per family when the family has a current balance they can pay online.
             </CardDescription>
           </div>
           <div className="rounded-xl border bg-background/50 p-3 text-sm">
@@ -151,8 +151,8 @@ export function TuitionPaymentReminderSettingsPanel({ centers }: TuitionPaymentR
           </div>
           <div className="flex items-center justify-between gap-4 rounded-xl border bg-background/40 p-4">
             <div>
-              <div className="text-sm font-medium">Send tuition payment notifications</div>
-              <div className="mt-1 text-xs leading-5 text-muted-foreground">Withdrawn families, zero or credit balances, pending payments, active autopay, and subsidy responsibility reviews are excluded.</div>
+              <div className="text-sm font-medium">Send tuition balance reminders</div>
+              <div className="mt-1 text-xs leading-5 text-muted-foreground">Families without current enrollment, accounts with no amount due or a credit, pending payments, active autopay, and balances awaiting subsidy review are excluded.</div>
             </div>
             <Switch checked={settings.enabled} onCheckedChange={(checked) => updateSettings({ enabled: Boolean(checked) })} />
           </div>
@@ -173,7 +173,7 @@ export function TuitionPaymentReminderSettingsPanel({ centers }: TuitionPaymentR
               />
             </div>
             <div className="rounded-lg border bg-background/50 p-3 text-xs leading-5 text-muted-foreground">
-              The default is every seven days. Each family receives at most one reminder in a cadence window, even when several invoices are open. Email links remain on <span className="font-medium text-foreground">https://thebeesuite.io</span> without tracking redirects.
+              The default is every seven days. Each family receives at most one reminder during that period, even when several invoices are open. Email links remain on <span className="font-medium text-foreground">https://thebeesuite.io</span> without tracking redirects.
             </div>
           </div>
         </div>
@@ -183,7 +183,7 @@ export function TuitionPaymentReminderSettingsPanel({ centers }: TuitionPaymentR
         <div className="flex justify-end">
           <Button type="button" onClick={saveSettings} disabled={!selectedCenter || saving}>
             <Save data-icon="inline-start" />
-            {saving ? "Saving" : "Save reminders"}
+            {saving ? "Saving…" : "Save reminders"}
           </Button>
         </div>
       </CardContent>

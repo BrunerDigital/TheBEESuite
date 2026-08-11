@@ -26,9 +26,9 @@ import { cn } from "@/lib/utils";
 
 const workspaceConfig = {
   enrollment: {
-    title: "Enrollment CRM",
-    description: "Move families from first inquiry through tour, waitlist, and enrollment in one connected workspace.",
-    note: "Lead journey workspace",
+    title: "Enrollment",
+    description: "Track prospective families from inquiry through tours, waitlists, and enrollment.",
+    note: "From inquiry to enrollment",
     columns: "sm:grid-cols-2 xl:grid-cols-4",
     views: [
       ["leads", "Leads", "Inbox and lead records", "/crm-leads", Users],
@@ -39,8 +39,8 @@ const workspaceConfig = {
   },
   growth: {
     title: "Campaigns & Automations",
-    description: "Plan outreach and connect it to the automated workflows that carry each campaign forward.",
-    note: "Growth workflow workspace",
+    description: "Plan outreach and review the automated steps connected to each campaign.",
+    note: "Campaign planning",
     columns: "sm:grid-cols-2",
     views: [
       ["campaigns", "Campaigns", "Audience communication", "/campaigns", Megaphone],
@@ -49,8 +49,8 @@ const workspaceConfig = {
   },
   operations: {
     title: "School Operations",
-    description: "Run the school day from one workspace—enrollment status, classrooms, live attendance, daily reports, and incident follow-up.",
-    note: "Daily operations workspace",
+    description: "Review enrollment, classrooms, attendance, daily reports, and incident follow-up.",
+    note: "Daily school tasks",
     columns: "sm:grid-cols-2 xl:grid-cols-5",
     views: [
       ["enrollment", "Enrollment status", "Current roster and exports", "/analytics?report=enrollment_status", ClipboardList],
@@ -62,8 +62,8 @@ const workspaceConfig = {
   },
   families: {
     title: "Families & Communication",
-    description: "Keep family records, child profiles, conversations, and shared media together without losing context.",
-    note: "Relationship workspace",
+    description: "Review family records, child profiles, messages, and shared photos.",
+    note: "Family records and messages",
     columns: "sm:grid-cols-2 xl:grid-cols-4",
     views: [
       ["families", "Families", "Guardians and household records", "/family-detail", Users],
@@ -74,8 +74,8 @@ const workspaceConfig = {
   },
   billing: {
     title: "Billing & Payments",
-    description: "Manage invoices, balances, payment collection, deposits, and transaction follow-up in one financial workspace.",
-    note: "School finance workspace",
+    description: "Manage invoices, balances, payments, deposits, and transaction follow-up.",
+    note: "Invoices and payments",
     columns: "sm:grid-cols-2",
     views: [
       ["billing", "Billing & invoices", "Accounts, charges, and balances", "/billing-invoices", CreditCard],
@@ -84,8 +84,8 @@ const workspaceConfig = {
   },
   records: {
     title: "Records & Compliance",
-    description: "Create forms, manage documents, and track compliance evidence from a single organized record center.",
-    note: "Documentation workspace",
+    description: "Create forms, manage documents, and track required records.",
+    note: "Forms and required records",
     columns: "sm:grid-cols-3",
     views: [
       ["forms", "Forms", "Templates and submissions", "/forms", FileText],
@@ -95,8 +95,8 @@ const workspaceConfig = {
   },
   insights: {
     title: "Insights & Reputation",
-    description: "Understand school performance and turn family feedback into clear, actionable reputation work.",
-    note: "Performance workspace",
+    description: "Review school performance, trends, and family feedback.",
+    note: "Reports and family feedback",
     columns: "sm:grid-cols-3",
     views: [
       ["enrollment", "Enrollment status", "Current roster and exports", "/analytics?report=enrollment_status", ClipboardList],
@@ -106,8 +106,8 @@ const workspaceConfig = {
   },
   staff: {
     title: "Staff & Access",
-    description: "Manage teacher records and control who can access each part of the school workspace.",
-    note: "Team administration workspace",
+    description: "Manage staff records, classroom assignments, roles, and access.",
+    note: "Team and permissions",
     columns: "sm:grid-cols-2",
     views: [
       ["teachers", "Teachers", "Staff profiles and classrooms", "/staff", HeartHandshake],
@@ -116,8 +116,8 @@ const workspaceConfig = {
   },
   settings: {
     title: "Settings & Setup",
-    description: "Keep integrations, billing preferences, launch setup, branding, and notifications in one low-frequency workspace.",
-    note: "Configuration workspace",
+    description: "Manage integrations, billing preferences, school setup, branding, and notifications.",
+    note: "School preferences and setup",
     columns: "sm:grid-cols-2 xl:grid-cols-5",
     views: [
       ["settings", "Settings", "Billing and school preferences", "/billing-settings", Settings],

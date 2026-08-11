@@ -807,7 +807,7 @@ export function TeacherMobileWorkspace({
           markDailyReportsLocally(targetChildIds, sendToParent ? "sent" : "draft");
           resetDailyReportDrafts();
           const reportLabel = targetChildIds.length === 1 ? "Daily report" : `${targetChildIds.length} daily reports`;
-          showStatus(sendToParent ? `${reportLabel} saved for parent view.` : `${reportLabel} saved as internal draft${targetChildIds.length === 1 ? "" : "s"}.`);
+          showStatus(sendToParent ? `${reportLabel} saved for parent view.` : `${reportLabel} saved as a staff-only draft${targetChildIds.length === 1 ? "" : "s"}.`);
         },
       });
     });
@@ -832,7 +832,7 @@ export function TeacherMobileWorkspace({
         onSuccess: () => {
           setIncidentDescription("");
           setActionTaken("");
-          showStatus("Incident report created and queued for director review.");
+          showStatus("Incident report sent to the director for review.");
         },
       });
     });
@@ -868,7 +868,7 @@ export function TeacherMobileWorkspace({
       <SetupChecklistPanel
         checklistKey="teacher_profile"
         title="Teacher profile setup checklist"
-        description="Check off each item after you confirm your account, classroom, roster, kiosk code, and classroom tablet workflows are ready."
+        description="Confirm your account, classroom, roster, staff kiosk code, and classroom tablet."
         tasks={teacherProfileChecklistTasks}
         initialCompletedIds={teacherChecklistCompletedIds}
         graphicHref="/brand/the-bee-suite/explainers/current/teacher-daily-flow.png"
@@ -878,25 +878,25 @@ export function TeacherMobileWorkspace({
       <section className="rounded-2xl border bg-card/80 p-5 shadow-2xl shadow-black/15">
         <Badge className="mb-3">
           <ClipboardCheck data-icon="inline-start" />
-          Teacher mobile
+          Classroom tools
         </Badge>
         <h1 className="text-2xl font-semibold tracking-tight">Hi {teacherName}</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Fast classroom task entry for attendance, parent daily reports, and incident documentation.
+          Record attendance, daily care, photos, and incidents for your classroom.
         </p>
       </section>
 
       {status ? (
         <Alert>
           <CheckCircle2 className="size-4" />
-          <AlertTitle>Saved</AlertTitle>
+          <AlertTitle>Update saved</AlertTitle>
           <AlertDescription>{status}</AlertDescription>
         </Alert>
       ) : null}
       {error ? (
         <Alert variant="destructive">
           <AlertCircle className="size-4" />
-          <AlertTitle>Needs attention</AlertTitle>
+          <AlertTitle>We couldn&apos;t complete this action</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
@@ -908,13 +908,13 @@ export function TeacherMobileWorkspace({
               <UserAvatar name={profileName || teacherName} src={teacherProfile?.profilePhotoUrl} size="lg" />
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle>Profile setup</CardTitle>
+                  <CardTitle>My profile</CardTitle>
                   <Badge variant={profileReady ? "default" : "outline"}>
                     {profileReady ? "Ready" : "Needs setup"}
                   </Badge>
                 </div>
                 <CardDescription className="mt-2">
-                  Confirm the teacher profile used for classroom access, parent updates, staff clock-in, and coverage.
+                  Review your contact information, classroom assignment, and staff kiosk code.
                 </CardDescription>
               </div>
             </div>
@@ -1023,7 +1023,7 @@ export function TeacherMobileWorkspace({
 
             <Button type="submit" className="h-11 w-full sm:w-fit" disabled={isPending || !teacherProfile?.centerId}>
               <Save data-icon="inline-start" />
-              Save Profile Setup
+              Save profile
             </Button>
           </form>
         </CardContent>
@@ -1035,7 +1035,7 @@ export function TeacherMobileWorkspace({
           <AlertTitle>{CUSTODY_WARNING_LABEL}: {selectedChild?.fullName}</AlertTitle>
           <AlertDescription>
             {selectedCustodyWarning}
-            {custodyWarningPreview(selectedChild?.family) ? ` Note preview: ${custodyWarningPreview(selectedChild?.family)}` : ""}
+            {custodyWarningPreview(selectedChild?.family) ? ` Pickup instruction: ${custodyWarningPreview(selectedChild?.family)}` : ""}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -1046,7 +1046,7 @@ export function TeacherMobileWorkspace({
           <span>
             {offlineQueue.length
               ? `${offlineQueue.length} classroom action${offlineQueue.length === 1 ? "" : "s"} waiting to sync from this tablet.`
-              : "Attendance, daily report, and incident actions will queue locally if the connection drops."}
+              : "If the connection drops, new attendance, daily report, and incident entries will wait on this tablet and sync when it reconnects."}
           </span>
           {offlineQueue.length ? (
             <Button type="button" size="sm" variant="outline" disabled={isPending || !isOnline} onClick={flushOfflineQueue}>
@@ -1105,7 +1105,7 @@ export function TeacherMobileWorkspace({
               </div>
               <div className="grid gap-2 text-sm sm:grid-cols-3">
                 <div className="rounded-lg border bg-background/40 px-3 py-2">
-                  <div className="text-xs text-muted-foreground">My stored hours</div>
+                  <div className="text-xs text-muted-foreground">Hours recorded</div>
                   <div className="font-medium">{formatHours(kioskAccess.timeClockSummary.totalMinutes)}</div>
                 </div>
                 <div className="rounded-lg border bg-background/40 px-3 py-2">
@@ -1133,7 +1133,7 @@ export function TeacherMobileWorkspace({
       <Card id="teacher-roster" className="glass-panel scroll-mt-28">
         <CardHeader>
           <CardTitle>Roster</CardTitle>
-          <CardDescription>{roster.length} children visible to your role</CardDescription>
+          <CardDescription>{roster.length} {roster.length === 1 ? "child" : "children"} in your assigned classrooms</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
           {byClassroom.map((classroom) => {
@@ -1424,7 +1424,7 @@ export function TeacherMobileWorkspace({
                 onChange={(event) => setPhoto(event.target.files?.[0] ?? null)}
               />
             </div>
-            <Textarea value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="Caption for parents" />
+            <Textarea aria-label="Photo caption for parents" value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="Caption for parents" />
             <Button disabled={isPending || !selectedChild || !photo} className="w-full" onClick={submitPhoto}>
               <Camera data-icon="inline-start" />
               Share Photo
@@ -1551,7 +1551,7 @@ export function TeacherMobileWorkspace({
                   </div>
                   <Button type="button" size="xs" variant="outline" onClick={() => setMealRows((current) => [...current, createMealDraft()])}>
                     <Plus data-icon="inline-start" />
-                    Add
+                    Add meal
                   </Button>
                 </div>
                 <div className="space-y-3">
@@ -1559,14 +1559,14 @@ export function TeacherMobileWorkspace({
                     <div key={row.id} className="grid gap-2 rounded-lg border bg-card/40 p-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-xs font-medium text-muted-foreground">Meal {index + 1}</div>
-                        <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeMeal(row.id)}>
+                        <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" aria-label={`Remove meal ${index + 1}`} onClick={() => removeMeal(row.id)}>
                           <Trash2 data-icon="inline-start" />
                           Remove
                         </Button>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
                         <Select value={row.mealType} onValueChange={(value) => updateMeal(row.id, { mealType: value ?? row.mealType })}>
-                          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="w-full" aria-label={`Meal ${index + 1} type`}><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Breakfast">Breakfast</SelectItem>
                             <SelectItem value="Morning snack">Morning snack</SelectItem>
@@ -1575,11 +1575,12 @@ export function TeacherMobileWorkspace({
                             <SelectItem value="Bottle">Bottle</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Input value={row.amount} onChange={(event) => updateMeal(row.id, { amount: event.target.value })} placeholder="Amount" />
+                        <Input aria-label={`Meal ${index + 1} amount`} value={row.amount} onChange={(event) => updateMeal(row.id, { amount: event.target.value })} placeholder="Amount eaten" />
                       </div>
                       <Textarea
                         value={row.food}
                         onChange={(event) => updateMeal(row.id, { food: event.target.value })}
+                        aria-label={`Meal ${index + 1} food and notes`}
                         placeholder="Food, bottle, or meal notes"
                         className="min-h-24 resize-y text-base leading-6 sm:text-sm"
                       />
@@ -1606,7 +1607,7 @@ export function TeacherMobileWorkspace({
                 </div>
                 {noNap ? (
                   <div className="mb-3 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
-                    No nap will be saved on this daily report.
+                    No nap today.
                   </div>
                 ) : null}
                 <div className={noNap ? "hidden" : "space-y-3"}>
@@ -1614,7 +1615,7 @@ export function TeacherMobileWorkspace({
                     <div key={row.id} className="grid gap-2 rounded-lg border bg-card/40 p-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-xs font-medium text-muted-foreground">Nap {index + 1}</div>
-                        <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeNap(row.id)}>
+                        <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" aria-label={`Remove nap ${index + 1}`} onClick={() => removeNap(row.id)}>
                           <Trash2 data-icon="inline-start" />
                           Remove
                         </Button>
@@ -1652,7 +1653,7 @@ export function TeacherMobileWorkspace({
                   </div>
                   <Button type="button" size="xs" variant="outline" onClick={() => setDiaperRows((current) => [...current, createDiaperDraft(timeZone)])}>
                     <Plus data-icon="inline-start" />
-                    Add
+                    Add entry
                   </Button>
                 </div>
                 <div className="space-y-3">
@@ -1660,14 +1661,14 @@ export function TeacherMobileWorkspace({
                     <div key={row.id} className="grid gap-2 rounded-lg border bg-card/40 p-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-xs font-medium text-muted-foreground">Log {index + 1}</div>
-                        <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeDiaper(row.id)}>
+                        <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" aria-label={`Remove diaper or potty entry ${index + 1}`} onClick={() => removeDiaper(row.id)}>
                           <Trash2 data-icon="inline-start" />
                           Remove
                         </Button>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                         <Select value={row.type} onValueChange={(value) => updateDiaper(row.id, { type: value ?? "" })}>
-                          <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
+                          <SelectTrigger aria-label={`Diaper or potty entry ${index + 1} type`}><SelectValue placeholder="Choose type" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Wet">Wet</SelectItem>
                             <SelectItem value="BM">BM</SelectItem>
@@ -1677,9 +1678,9 @@ export function TeacherMobileWorkspace({
                             <SelectItem value="Accident">Accident</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Input type="datetime-local" value={row.occurredAt} onChange={(event) => updateDiaper(row.id, { occurredAt: event.target.value })} />
+                        <Input aria-label={`Diaper or potty entry ${index + 1} time`} type="datetime-local" value={row.occurredAt} onChange={(event) => updateDiaper(row.id, { occurredAt: event.target.value })} />
                       </div>
-                      <Input value={row.notes} onChange={(event) => updateDiaper(row.id, { notes: event.target.value })} placeholder="Notes" />
+                      <Input aria-label={`Diaper or potty entry ${index + 1} notes`} value={row.notes} onChange={(event) => updateDiaper(row.id, { notes: event.target.value })} placeholder="Notes for parents" />
                     </div>
                   ))}
                 </div>
@@ -1693,7 +1694,7 @@ export function TeacherMobileWorkspace({
                   </div>
                   <Button type="button" size="xs" variant="outline" onClick={() => setActivityRows((current) => [...current, createActivityDraft()])}>
                     <Plus data-icon="inline-start" />
-                    Add
+                    Add activity
                   </Button>
                 </div>
                 <div className="space-y-3">
@@ -1701,13 +1702,13 @@ export function TeacherMobileWorkspace({
                     <div key={row.id} className="grid gap-2 rounded-lg border bg-card/40 p-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-xs font-medium text-muted-foreground">Activity {index + 1}</div>
-                        <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeActivity(row.id)}>
+                        <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" aria-label={`Remove activity ${index + 1}`} onClick={() => removeActivity(row.id)}>
                           <Trash2 data-icon="inline-start" />
                           Remove
                         </Button>
                       </div>
-                      <Input value={row.title} onChange={(event) => updateActivity(row.id, { title: event.target.value })} placeholder="Activity" />
-                      <Input value={row.notes} onChange={(event) => updateActivity(row.id, { notes: event.target.value })} placeholder="Notes" />
+                      <Input aria-label={`Activity ${index + 1} name`} value={row.title} onChange={(event) => updateActivity(row.id, { title: event.target.value })} placeholder="Activity name" />
+                      <Input aria-label={`Activity ${index + 1} notes`} value={row.notes} onChange={(event) => updateActivity(row.id, { notes: event.target.value })} placeholder="What the class did" />
                     </div>
                   ))}
                 </div>
@@ -1715,28 +1716,28 @@ export function TeacherMobileWorkspace({
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <Input value={suppliesNeeded} onChange={(event) => setSuppliesNeeded(event.target.value)} placeholder="Supplies needed" />
-              <Textarea value={teacherNote} onChange={(event) => setTeacherNote(event.target.value)} placeholder="Teacher note" />
+              <Input aria-label="Supplies needed" value={suppliesNeeded} onChange={(event) => setSuppliesNeeded(event.target.value)} placeholder="Supplies needed" />
+              <Textarea aria-label="Teacher note for parents" value={teacherNote} onChange={(event) => setTeacherNote(event.target.value)} placeholder="Note for parents" />
             </div>
             <Button disabled={isPending || !activeDailyReportChildIds.length} className="w-full" onClick={submitDailyReport}>
               <BookOpen data-icon="inline-start" />
-              {activeDailyReportChildIds.length > 1 ? `Save ${activeDailyReportChildIds.length} Reports` : "Save Report"}
+              {activeDailyReportChildIds.length > 1 ? `Save ${activeDailyReportChildIds.length} daily reports` : "Save daily report"}
             </Button>
           </CardContent>
         </Card>
 
         <Card id="teacher-incident" className="glass-panel scroll-mt-28">
           <CardHeader>
-            <CardTitle>Incident</CardTitle>
-            <CardDescription>Director review required</CardDescription>
+            <CardTitle>Incident report</CardTitle>
+            <CardDescription>Send an objective record to the director for review.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Input value={incidentType} onChange={(event) => setIncidentType(event.target.value)} placeholder="Incident type" />
-            <Textarea value={incidentDescription} onChange={(event) => setIncidentDescription(event.target.value)} placeholder="Objective description" />
-            <Textarea value={actionTaken} onChange={(event) => setActionTaken(event.target.value)} placeholder="Action taken" />
+            <Input aria-label="Incident type" value={incidentType} onChange={(event) => setIncidentType(event.target.value)} placeholder="Incident type" />
+            <Textarea aria-label="Objective incident description" value={incidentDescription} onChange={(event) => setIncidentDescription(event.target.value)} placeholder="Describe what happened using observable facts" />
+            <Textarea aria-label="Action taken after incident" value={actionTaken} onChange={(event) => setActionTaken(event.target.value)} placeholder="Action taken" />
             <Button disabled={isPending || !selectedChild} className="w-full" onClick={submitIncident}>
               <ShieldAlert data-icon="inline-start" />
-              Create Incident
+              Send incident report
             </Button>
           </CardContent>
         </Card>

@@ -26,11 +26,11 @@ test("family check-in route is fail-closed even when staff is requested", () => 
   }));
 
   assert.match(markup, /School Check-In/);
-  assert.match(markup, /Enter Your 4-Digit Family PIN/);
-  assert.match(markup, />Continue</);
+  assert.match(markup, /Enter your 4-digit Family PIN/);
+  assert.match(markup, />Verify Family PIN</);
   assert.doesNotMatch(markup, /Start Over|Clears in/);
   assert.doesNotMatch(markup, />Staff</);
-  assert.doesNotMatch(markup, /Staff Time Clock|Continue to Staff Clock|Work email|Clock In|Clock Out/);
+  assert.doesNotMatch(markup, /Staff time clock|Continue to Staff Clock|Work email|Clock In|Clock Out/);
 });
 
 test("shared lobby still renders its staff clock entry mode", () => {
@@ -39,9 +39,9 @@ test("shared lobby still renders its staff clock entry mode", () => {
     initialMode: "staff",
   }));
 
-  assert.match(markup, />Family</);
-  assert.match(markup, />Staff</);
-  assert.match(markup, /Staff Time Clock/);
+  assert.match(markup, />Family check-in</);
+  assert.match(markup, />Staff time clock</);
+  assert.match(markup, /Staff time clock/);
   assert.match(markup, /Work email \(optional\)/);
   assert.match(markup, /Continue to Staff Clock/);
 });
@@ -64,6 +64,6 @@ test("parent check-in card hides raw credentials and uses plain-language actions
   assert.doesNotMatch(credentialCardSource, /window\.location\.assign/);
   assert.match(credentialPanelSource, /if \(previewMode\) return/);
   assert.match(credentialPanelSource, /disabled=\{previewMode \|\| isPending/);
-  assert.match(kioskSource, /familyOnly \? "Scan Your QR Code" : "Scan a Family QR Code"/);
-  assert.match(kioskSource, /pendingAction === "family_lookup" \? "Checking…" : "Continue"/);
+  assert.match(kioskSource, /familyOnly \? "Scan your Family QR code" : "Scan a Family QR code"/);
+  assert.match(kioskSource, /pendingAction === "family_lookup" \? "Verifying…" : "Verify Family PIN"/);
 });

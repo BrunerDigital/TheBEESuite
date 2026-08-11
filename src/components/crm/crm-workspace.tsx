@@ -219,6 +219,16 @@ function getCenterLabel(center: CenterOption) {
   return place ? `${center.name} (${place})` : center.name;
 }
 
+function displayStatusLabel(value: string) {
+  return value
+    .replaceAll("_", " ")
+    .replaceAll("-", " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`)
+    .join(" ");
+}
+
 function getLeadOwner(lead?: CrmLead | null) {
   const fields = lead?.customFields;
   if (!fields || typeof fields !== "object" || Array.isArray(fields)) return "";
@@ -658,8 +668,8 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   function saveCurrentView() {
     const fallbackName =
       selectedCenter === "all"
-        ? `CRM view ${savedViews.length + 1}`
-        : centers.find((center) => center.id === selectedCenter)?.name ?? `CRM view ${savedViews.length + 1}`;
+        ? `Enrollment view ${savedViews.length + 1}`
+        : centers.find((center) => center.id === selectedCenter)?.name ?? `Enrollment view ${savedViews.length + 1}`;
     const view: CrmSavedView = {
       id: globalThis.crypto?.randomUUID?.() ?? String(Date.now()),
       name: savedViewName.trim() || fallbackName,
@@ -671,7 +681,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
     };
     persistSavedViews([view, ...savedViews].slice(0, 12));
     setSavedViewName("");
-    showStatus("CRM view saved on this device.");
+    showStatus("Enrollment view saved on this device.");
   }
 
   function applySavedView(view: CrmSavedView) {
@@ -685,7 +695,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
 
   function deleteSavedView(viewId: string) {
     persistSavedViews(savedViews.filter((view) => view.id !== viewId));
-    showStatus("CRM view removed from this device.");
+    showStatus("Enrollment view removed from this device.");
   }
 
   function exportVisibleLeads() {
@@ -1080,7 +1090,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
           }
         : current);
       setEmailSuggestions(makeLeadEmailOptions(nextLead, appBaseUrl, brandName));
-      showStatus("School-specific registration form sent and logged on this CRM lead.");
+      showStatus("Registration link sent and recorded on this family inquiry.");
     });
   }
 
@@ -1093,10 +1103,10 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   return (
     <div className="flex flex-col gap-6">
       <ReportPrintStyles />
-      <PrintableReport active={printActive} label="Printable CRM inquiry report">
+      <PrintableReport active={printActive} label="Printable enrollment inquiry report">
           <header className="mb-4 flex items-start justify-between gap-6">
             <div>
-              <h1 className="text-xl font-bold">CRM Inquiry Report</h1>
+              <h1 className="text-xl font-bold">Enrollment inquiry report</h1>
               <p className="mt-1 text-sm font-semibold">{printSchoolLabel}</p>
               <p className="mt-1 text-xs">{printFilterSummary}</p>
             </div>
@@ -1149,24 +1159,23 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
         <div className="grid gap-0 xl:grid-cols-[1fr_22rem]">
           <div className="p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-primary text-primary-foreground">{brandName} Live CRM</Badge>
-              <Badge variant="outline">SaaS tenant-ready</Badge>
-              <Badge variant="secondary">{filteredLeads.length.toLocaleString()} visible leads</Badge>
+              <Badge className="bg-primary text-primary-foreground">{brandName} enrollment</Badge>
+              <Badge variant="secondary">{filteredLeads.length.toLocaleString()} inquiries shown</Badge>
               <Badge variant="outline">
                 {centers.length === 1
-                  ? "School-scoped access"
-                  : `${centers.length.toLocaleString()} school access`}
+                  ? "1 school"
+                  : `${centers.length.toLocaleString()} schools`}
               </Badge>
               <Badge variant="secondary">Signed in: {currentUser.name}</Badge>
             </div>
             <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Enrollment CRM Command Center
+                  Enrollment pipeline
                 </h1>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                  Live lead intake, school routing, manual lead entry, pipeline movement,
-                  and Mr. Bee communication support for {brandName} enrollment operations.
+                  Review new inquiries, route families to the correct school, schedule
+                  follow-up, and track progress through enrollment.
                 </p>
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
@@ -1398,7 +1407,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                   value={savedViewName}
                   onChange={(event) => setSavedViewName(event.target.value)}
                   placeholder="Saved view name"
-                  aria-label="Saved CRM view name"
+                  aria-label="Saved enrollment view name"
                 />
                 <div className="grid gap-2 sm:grid-cols-3 xl:flex">
                   <Button variant="outline" onClick={saveCurrentView}>
@@ -1575,7 +1584,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                 </Select>
               </div>
               <Button onClick={createLead} disabled={isPending || !form.familyName}>
-                Add to CRM
+                Add inquiry
                 <ArrowRight data-icon="inline-end" />
               </Button>
             </CardContent>
@@ -1585,9 +1594,9 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Sparkles className="text-primary" />
-                Selected Lead
+                Selected inquiry
               </CardTitle>
-              <CardDescription>School users can update stage and follow up from here.</CardDescription>
+              <CardDescription>Update the inquiry stage or contact this family.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {selectedLead ? (
@@ -1813,7 +1822,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                     <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-2 text-xs leading-5">
                       {selectedLeadDetails?.enrollments.length
                         ? `${selectedLeadDetails.enrollments.length} director-approved linked enrollment record(s). Current onboarding record stage: ${stageLabels[selectedLeadDetails.enrollments[0].stage]}.`
-                        : "No director-approved linked enrollment record exists. The Enrolled CRM stage is blocked until registration approval creates one."}
+                        : "No director-approved enrollment record is linked yet. The Enrolled stage remains unavailable until registration is approved."}
                     </div>
                     <Select
                       value={selectedLead.stage}
@@ -1891,7 +1900,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                         <div key={tour.id} className="rounded-lg border bg-card/60 p-2">
                           <div className="text-xs font-medium">{formatTourDate(tour.startsAt, timeZone)}</div>
                           <div className="mt-1 text-[0.7rem] text-muted-foreground">
-                            {tour.status}{tour.notes ? ` - ${tour.notes}` : ""}
+                            {displayStatusLabel(tour.status)}{tour.notes ? ` · ${tour.notes}` : ""}
                           </div>
                         </div>
                       ))}
@@ -1910,7 +1919,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                         <div key={task.id} className="rounded-lg border bg-card/60 p-2">
                           <div className="text-xs font-medium">{task.title}</div>
                           <div className="mt-1 text-[0.7rem] text-muted-foreground">
-                            {task.dueAt ? safeDate(task.dueAt, timeZone) : "No due date"} · {task.status}
+                            {task.dueAt ? safeDate(task.dueAt, timeZone) : "No due date"} · {displayStatusLabel(task.status)}
                           </div>
                         </div>
                       ))}

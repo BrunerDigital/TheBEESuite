@@ -81,9 +81,9 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       documentId: document.id,
     });
     storageKey = upload.storageKey;
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Document could not be uploaded to secure storage." },
+      { ok: false, error: "We couldn't upload this document. It was not saved. Try again." },
       { status: 502 },
     );
   }

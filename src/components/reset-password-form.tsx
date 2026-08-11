@@ -156,7 +156,7 @@ export function ResetPasswordForm() {
         </div>
         <p className="text-sm text-slate-300">
           {parentPortalFlow
-            ? "Your family portal keeps child updates, messages, documents, billing, and check-in access in one place."
+            ? "Use your family portal for child updates, messages, documents, billing, and check-in."
             : "Your password protects the school information connected to your account."}
         </p>
       </section>
@@ -245,25 +245,25 @@ export function ResetPasswordForm() {
                     />
                   </div>
                   <Button className="h-11" size="lg" type="submit" disabled={isPending}>
-                    {isPending ? "Updating password…" : "Update Password"}
+                    {isPending ? "Updating password…" : "Update password"}
                   </Button>
                 </>
               ) : null}
             </form>
             {forceReset ? (
               <Link href={`${loginHrefForNextPath(next)}&reset=required`} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-slate-950 hover:underline">
-                Back to Login
+                Back to sign in
               </Link>
             ) : linkStatus === "invalid" ? (
               <Link href={freshResetHref} className={buttonVariants({ size: "lg", className: "mt-5 h-11 w-full" })}>
-                Request a New Reset Link
+                Request a new reset link
               </Link>
             ) : (
               <Link
                 href={freshResetHref}
                 className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-slate-950 hover:underline"
               >
-                Request a New Reset Link
+                Request a new reset link
               </Link>
             )}
           </CardContent>

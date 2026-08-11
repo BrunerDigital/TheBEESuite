@@ -118,7 +118,7 @@ test("app shell gives parent-facing users complete navigation without the empty 
     assert.match(shell, new RegExp(`view: ["']${view}["']`));
   }
   assert.match(shell, /const moreItems = parentFacing\s*\? \[\]/);
-  assert.match(shell, /aria-label=\{parentFacing \? "Family portal navigation" : "Role quick navigation"\}/);
+  assert.match(shell, /aria-label=\{parentFacing \? "Family portal navigation" : "Primary navigation"\}/);
   assert.match(shell, /\{parentFacing \? \(\s*<BrandLogo[\s\S]*compact[\s\S]*size="sm"/);
   assert.doesNotMatch(shell, /\/parent-portal#(?:today|messages|billing|daily-updates|photos)/);
   assert.match(shell, /searchParams\.get\(previewMode \? "screen" : "view"\)/);
@@ -152,4 +152,13 @@ test("parent account menu exposes real destinations while preview stays mutation
   assert.match(shell, /preferInitialsForDefault=\{parentFacing\}/);
   assert.match(avatar, /const showInitials = preferInitialsForDefault && \(!src \|\| defaultProfilePhotoUrls\.has\(src\)\)/);
   assert.match(avatar, /initialsForName\(name\)/);
+});
+
+test("parent correction deep link resolves to a labeled request section", () => {
+  const workspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
+
+  assert.match(workspace, /id="contact-request"[\s\S]*aria-labelledby="contact-request-heading"/);
+  assert.match(workspace, /id="contact-request-heading"/);
+  assert.match(workspace, /<Label htmlFor="contact-request-details">[\s\S]*<Textarea[\s\S]*id="contact-request-details"/);
+  assert.match(workspace, /hash: "contact-request"/);
 });

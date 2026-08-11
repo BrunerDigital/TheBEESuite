@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   title: "The BEE Suite",
   applicationName: "The BEE Suite",
   description:
-    "White-label childcare CRM, enrollment, billing, classroom operations, and parent engagement command center.",
+    "Childcare operations software for enrollment, billing, classrooms, family communication, and multi-location management.",
   manifest: "/manifest.webmanifest",
   alternates: {
     canonical: "/",

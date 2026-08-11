@@ -68,6 +68,15 @@ function statusLabel(status: SchoolSetupStatus) {
   return "Needs input";
 }
 
+function setupDisplayLabel(value: string) {
+  const words = value.trim().replaceAll("_", " ").replaceAll("-", " ").toLocaleLowerCase("en-US").split(/\s+/).filter(Boolean);
+  if (!words.length) return "Status unavailable";
+  return words.map((word, index) => {
+    if (word === "ein") return "EIN";
+    return index === 0 ? word.charAt(0).toLocaleUpperCase("en-US") + word.slice(1) : word;
+  }).join(" ");
+}
+
 function statusTone(status: SchoolSetupStatus) {
   if (status === "complete") return "default";
   if (status === "in_progress") return "secondary";
@@ -140,7 +149,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
         setSavedValues(canonicalValues);
         setSchoolEin(canonicalEin);
         setSavedSchoolEin(canonicalEin);
-        setMessage("Director setup input saved and verified.");
+        setMessage("School setup notes saved.");
         router.refresh();
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : "School setup could not be saved.");
@@ -153,10 +162,10 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
       <section className="flex flex-col gap-4 rounded-xl border bg-card/80 p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">School setup command center</h1>
+            <h1 className="text-3xl font-semibold tracking-tight">School setup</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Director-facing launch checklist for turning on every BEE Suite module at {data.centerLabel}.
-              Receipts use the saved school EIN when directors print payment and ledger records.
+              Review the records and decisions needed to finish setup for {data.centerLabel}.
+              Printed payment and ledger records use the saved school EIN.
             </p>
           </div>
           <div className="rounded-lg border bg-background/60 p-3 text-sm">
@@ -165,7 +174,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
               {hasUnsavedChanges ? <Badge variant="secondary">Unsaved changes</Badge> : null}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              {data.lastCapturedAt ? `Last saved ${data.lastCapturedAt}` : "No director setup save yet"}
+              {data.lastCapturedAt ? `Last saved ${data.lastCapturedAt}` : "No setup notes saved yet"}
             </div>
           </div>
         </div>
@@ -185,15 +194,15 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
           </div>
           <div className="rounded-lg border bg-background/50 p-3">
             <div className="text-xs text-muted-foreground">Setup status</div>
-            <div className="mt-1 text-sm font-semibold">{data.setupStatus.replaceAll("_", " ")}</div>
+            <div className="mt-1 text-sm font-semibold">{setupDisplayLabel(data.setupStatus)}</div>
           </div>
         </div>
       </section>
 
       <SetupChecklistPanel
         checklistKey="director_launch"
-        title="Director launch setup checklist"
-        description="Check off each setup task as your school finishes it. This is your per-user progress tracker for the director implementation guide."
+        title="School setup checklist"
+        description="Mark each task complete as your school finishes setup."
         tasks={directorLaunchChecklistTasks}
         initialCompletedIds={data.directorChecklistCompletedIds}
         automaticCompletedIds={data.directorChecklistAutomaticCompletedIds}
@@ -219,7 +228,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
               className="glass-panel"
               contentClassName="grid gap-3"
               title={group}
-              description="Complete these records and director decisions before turning on the related modules."
+              description="Complete these records and decisions before using the related school features."
             >
                 {sections.filter((section) => section.group === group).map((section) => {
                   const status = displayedStatus(section);
@@ -260,8 +269,8 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
             id="school-setup-receipt-details"
             className="glass-panel"
             contentClassName="space-y-3"
-            title="School Receipt Details"
-            description="Used on customer receipts and ledger printouts for this school."
+            title="School receipt details"
+            description="Shown on payment receipts and ledger printouts for this school."
           >
               <EditableDisplayField id="school-ein" label="School EIN" inputMode="numeric" value={schoolEin} onChange={setSchoolEin} placeholder="12-3456789" emptyLabel="Add the school EIN" />
               <p className="text-xs text-muted-foreground">
@@ -282,7 +291,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
                     <div key={metric} className="rounded-lg border bg-background/50 p-3 text-sm">{metric}</div>
                   ))}
                 </div>
-                <EditableDisplayField id="setup-notes" label="Director input" multiline value={values[activeSection.field] ?? ""} onChange={(value) => updateValue(activeSection.field, value)} placeholder={activeSection.placeholder} emptyLabel="Click the amber dot to add director notes" />
+                <EditableDisplayField id="setup-notes" label="Director notes" multiline value={values[activeSection.field] ?? ""} onChange={(value) => updateValue(activeSection.field, value)} placeholder={activeSection.placeholder} emptyLabel="Add director notes" />
                 <div className="rounded-lg border bg-background/50 p-3">
                   <div className="text-sm font-medium">Required actions</div>
                   <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
@@ -307,8 +316,8 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
           <CollapsibleCard
             id="school-setup-external-needs"
             className="glass-panel"
-            title="What we still need from you"
-            description="Items the app cannot reliably infer from existing records."
+            title="Information still needed"
+            description="Provide these details to finish school setup."
           >
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {data.externalNeeds.map((need) => <li key={need}>{need}</li>)}

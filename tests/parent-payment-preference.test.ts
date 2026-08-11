@@ -25,7 +25,7 @@ test("parent payment surfaces present debit and credit cards before bank options
       < requestForm.indexOf('startPayment(nextOpenInvoice.id, "link_bank")'),
   );
   assert.match(invitation, /secure payment options appear only when your school enables them/i);
-  assert.match(requestCopy, /pay an open invoice by debit\/credit card/i);
+  assert.match(requestCopy, /pay an open invoice using a debit or credit card/i);
 });
 
 test("payment-request setup defaults to card when no method was supplied", () => {

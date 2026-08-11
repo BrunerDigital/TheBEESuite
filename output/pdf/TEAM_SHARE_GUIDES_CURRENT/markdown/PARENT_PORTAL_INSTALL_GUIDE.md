@@ -1,6 +1,6 @@
 # Parent Step-By-Step Guide: Install The BEE Suite Parent Portal
 
-Last updated: July 29, 2026
+Last updated: August 11, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite.
 
@@ -11,24 +11,32 @@ Audience: parents and guardians whose school uses The BEE Suite.
 ## What You Need
 
 - The guardian email address your school has on file.
-- The first-login password included in the approved parent invitation from your school.
+- The password included in the approved parent invitation from your school.
 - A phone, tablet, or computer with internet access.
 
 ## Visual Preview
 
-![Parent access and secure installation flow](../assets/parent-access-install-0355a44526.png)
+![Parent access and secure installation flow](../assets/parent-access-install-729af0e5f7.png)
 
-![Parent multi-device portal guide](../assets/parent-multidevice-portal-guide-6697fb42a2.png)
+![Parent multi-device portal guide](../assets/parent-multidevice-portal-guide-46186338ba.png)
 
 ## Parent Portal On Each Device
 
 The iPhone view is the primary parent training screen. The iPad and desktop captures show the same portal at wider breakpoints.
 
-![Parent portal overview on iPhone](../assets/parent-iphone-overview-light-c1d1351c6d.png)
+![Parent portal overview on iPhone](../assets/parent-iphone-overview-light-042cd08e47.png)
 
-![Parent portal overview on iPad](../assets/parent-ipad-overview-light-bb44579628.png)
+![Parent portal overview on iPad](../assets/parent-ipad-overview-light-00a54fc69e.png)
 
-![Parent portal overview on desktop](../assets/parent-desktop-overview-light-93fc11faa4.png)
+![Parent portal overview on desktop](../assets/parent-desktop-overview-light-9013eb2e34.png)
+
+## Current Invitation And Installation Notes
+
+- New parents receive a secure `Start Parent Setup` link. The setup screen shows the connected school, family, and children before the parent confirms details and the 4 digit kiosk PIN.
+- A resent invitation preserves the parent's current password. Use `Forgot password` when needed.
+- The installed name may appear as `BEE Parents` or `BEE Suite Parent Portal`, depending on device and browser.
+- The installed home-screen app and `https://thebeesuite.io/parents` use the same guardian login and family access.
+- Stop and contact the school if the wrong family appears, a child is missing, or the guardian email is incorrect. Do not create a duplicate account.
 
 ## Start Here
 
@@ -92,7 +100,7 @@ Chrome and Edge may show an install icon in the address bar.
 
 1. Open the installed parent portal icon or go to `https://thebeesuite.io/parents`.
 2. Enter the personal email address on your guardian profile.
-3. On first access, enter the first-login password included in the approved school invitation.
+3. On first access, enter the password included in the approved school invitation.
 4. You may keep that password or choose a private password later from Parent Portal settings.
 5. If you forgot your current password, use the password recovery option.
 6. After login, open the parent portal.
@@ -116,12 +124,10 @@ If you log in but do not see your family, contact the school and ask them to con
 
 ## Troubleshooting
 
-Contact the school if:
+Contact the school with your name, child, school, and sign-in email if:
 
 - Your email is not recognized.
 - Your password does not work.
 - You log in but do not see your child.
 - A balance, invoice, photo, report, document, or incident looks wrong.
 - A payment button is missing or returns an error.
-
-Include your name, child name, school name, email address used to log in, and a screenshot if safe to share.

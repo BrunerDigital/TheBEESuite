@@ -111,11 +111,11 @@ export function tuitionPaymentReminderCopy(input: {
 }) {
   const balance = money(Math.max(0, input.balanceCents));
   return {
-    title: "Friendly reminder: your tuition balance is available",
+    title: "Tuition balance reminder",
     body: [
       "Hello,",
-      `This is a friendly reminder from ${input.centerName} that ${input.familyName}'s current tuition balance of ${balance} is available to review and pay in The BEE Suite Parent Portal.`,
-      `Sign in securely: ${BEE_SUITE_PARENT_PORTAL_URL}\nAfter signing in, open Billing to review your balance and payment options.`,
+      `${input.centerName} has a current tuition balance of ${balance} for ${input.familyName}. Review the balance and payment options in The BEE Suite Parent Portal.`,
+      `Sign in securely: ${BEE_SUITE_PARENT_PORTAL_URL}\nAfter signing in, open Payments to review your balance and payment options.`,
       "If you recently submitted a payment or one is processing, no action is needed. Bank payments can take several business days to appear on your account.",
       "Want easier access? Install the Parent Portal on your device:\n- iPhone or iPad: open the portal in Safari, tap Share, then Add to Home Screen.\n- Android: open it in Chrome, tap the menu, then Install app or Add to Home screen.\n- Computer: open it in Chrome or Edge and select the browser's Install option.",
       `For your security, always use ${BEE_SUITE_PARENT_PORTAL_URL} and never send card, bank, or password information through email or text. For questions about your balance, subsidies, credits, or payment arrangements, contact ${input.centerName} directly.`,

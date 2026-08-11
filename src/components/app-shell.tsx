@@ -55,6 +55,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { modules, navGroups } from "@/lib/demo-data";
 import { notificationCenterHrefForRole, storedNotificationHrefForRole } from "@/lib/notification-links";
 import { NOTIFICATIONS_CHANGED_EVENT } from "@/lib/notification-client-events";
+import { roleLabel } from "@/lib/notification-preferences";
 import { accessibleModuleRouteSlug } from "@/lib/rbac";
 import { canUseKidCityCorporateBilling, type WorkspaceBranding } from "@/lib/brand-assets";
 import { cn } from "@/lib/utils";
@@ -470,16 +471,16 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   const notificationScopeText = canViewEnrollment && canViewFteReports
     ? "New inquiries, tasks, FTE, tours, and review alerts"
     : canViewEnrollment
-      ? "New inquiries, tours, CRM tasks, and review alerts"
+      ? "New inquiries, tours, enrollment follow-ups, and review alerts"
       : canViewFteReports
         ? "FTE reminders, assigned tasks, and review alerts"
         : currentUser?.role === "TEACHER"
-          ? "Classroom messages, incidents, and assigned notifications"
+          ? "Classroom messages, incidents, and notifications"
           : currentUser?.role === "BILLING_ADMIN"
-            ? "Billing messages, payment follow-ups, and assigned notifications"
+            ? "Billing messages, payment follow-ups, and notifications"
             : currentUser?.role === "PARENT_GUARDIAN" || currentUser?.role === "AUTHORIZED_PICKUP"
               ? "Family portal updates, messages, documents, and account alerts"
-              : "Assigned notifications and review items";
+              : "Notifications and items that need review";
   const items = [
     ...(summary?.derived ?? []),
     ...(summary?.notifications.map((notification) => ({
@@ -567,7 +568,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
           {!summary ? (
             <div className="p-4 text-sm text-muted-foreground">Loading notification details…</div>
           ) : !items.length ? (
-            <div className="p-4 text-sm text-muted-foreground">No urgent notifications are queued for your scope.</div>
+            <div className="p-4 text-sm text-muted-foreground">No new notifications.</div>
           ) : null}
         </div>
         <DropdownMenuSeparator />
@@ -650,7 +651,7 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
                 {group.items.map(([label, slug, Icon]) => {
                   const href = shellModuleHref(currentUser, slug);
                   const active = pathname === href || (slug === "dashboard" && pathname === "/center-dashboard");
-                  const description = descriptionBySlug.get(slug) ?? `${label} workspace, tools, and related activity.`;
+                  const description = descriptionBySlug.get(slug) ?? `Go to ${label}.`;
                   return (
                     <Tooltip key={slug}>
                       <TooltipTrigger
@@ -689,7 +690,7 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
             <AccountMenu currentUser={currentUser} onLogout={onLogout} />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{shellUserViewText(currentUser.name, currentUser)}</div>
-              <div className="truncate text-xs text-muted-foreground">{currentUser.role.replaceAll("_", " ").toLocaleLowerCase()}</div>
+              <div className="truncate text-xs text-muted-foreground">{roleLabel(currentUser.role)}</div>
             </div>
           </div>
         </div>
@@ -758,7 +759,7 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
               <ProfilePhotoUploader name={displayName} email={displayEmail} profilePhotoUrl={currentUser.profilePhotoUrl} />
             </div>
             <div className="px-3 pb-2">
-              <span className="mt-1 block text-[0.65rem] font-normal text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</span>
+              <span className="mt-1 block text-[0.65rem] font-normal text-muted-foreground">{roleLabel(currentUser.role)}</span>
             </div>
           </>
         )}
@@ -820,13 +821,13 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
   const directorItems = [
     { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
     { label: "School", href: "/classroom-dashboard", slug: "classroom-dashboard", Icon: Building2 },
-    { label: "Actions", href: "/notifications", slug: "notifications", Icon: ClipboardList, featured: true },
+    { label: "Notifications", href: "/notifications", slug: "notifications", Icon: ClipboardList, featured: true },
     { label: "Inbox", href: "/messages", slug: "messages", Icon: MessageSquare },
   ];
   const executiveItems = [
     { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
     { label: "Schools", href: "/multi-location-dashboard", slug: "multi-location-dashboard", Icon: Building2 },
-    { label: "Actions", href: "/notifications", slug: "notifications", Icon: ClipboardList, featured: true },
+    { label: "Notifications", href: "/notifications", slug: "notifications", Icon: ClipboardList, featured: true },
     { label: "Inbox", href: "/messages", slug: "messages", Icon: MessageSquare },
   ];
   const billingItems = [
@@ -869,7 +870,7 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
 
   return (
     <nav
-      aria-label={parentFacing ? "Family portal navigation" : "Role quick navigation"}
+      aria-label={parentFacing ? "Family portal navigation" : "Primary navigation"}
       className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden"
     >
       <div className={cn(
@@ -929,7 +930,7 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
             <span>More</span>
           </SheetTrigger>
           <SheetContent side="bottom" className="max-h-[82dvh] overflow-hidden overscroll-contain rounded-t-3xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-            <SheetTitle className="shrink-0 text-left">More for your role</SheetTitle>
+            <SheetTitle className="shrink-0 text-left">More</SheetTitle>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
               <div className="grid gap-2 pb-px sm:grid-cols-2">
                 {moreItems.map(({ label, slug, Icon, group }) => {
@@ -1139,7 +1140,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
       data-honeyglass={honeyglassUiEnabled() ? "true" : "false"}
     >
       <a href="#workspace-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-xl">
-        Skip to workspace content
+        Skip to main content
       </a>
       <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-20 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl lg:block 2xl:hidden">
         <SidebarRail currentUser={currentUser} onLogout={previewMode ? undefined : logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
@@ -1176,7 +1177,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <Input
                   ref={searchInputRef}
-                  aria-label="Search workspace"
+                  aria-label="Search The BEE Suite"
                   aria-autocomplete="list"
                   aria-controls="global-search-results"
                   aria-expanded={searchOpen && searchQuery.trim().length >= 2}
@@ -1233,7 +1234,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                       </div>
                     ) : (
                       <div className="px-3 py-4 text-sm text-muted-foreground">
-                        No matching records. Press Enter to search {searchDestination.replaceAll("-", " ")}.
+                        No quick matches. Press Enter to search all records.
                       </div>
                     )}
                   </div>
@@ -1242,18 +1243,18 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
             </div> : null}
             <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
               {showWorkspaceTools ? <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
-                <DialogTrigger render={<Button variant="outline" size="icon" aria-label="Search workspace" className="touch-manipulation lg:hidden" />}>
+                <DialogTrigger render={<Button variant="outline" size="icon" aria-label="Search The BEE Suite" className="touch-manipulation lg:hidden" />}>
                   <Search aria-hidden="true" />
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-xl">
                   <DialogHeader>
-                    <DialogTitle>Search workspace</DialogTitle>
-                    <DialogDescription>Find families, child records, billing items, tasks, and messages for your role.</DialogDescription>
+                    <DialogTitle>Search The BEE Suite</DialogTitle>
+                    <DialogDescription>Find families, child records, billing items, tasks, and messages you can access.</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-3">
-                    <Input aria-label="Search workspace" autoComplete="off" name="mobile-workspace-search" placeholder={searchPlaceholder} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitGlobalSearch(); }} />
+                    <Input aria-label="Search The BEE Suite" autoComplete="off" name="mobile-workspace-search" placeholder={searchPlaceholder} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitGlobalSearch(); }} />
                     {trimmedSearchQuery.length < 2 ? (
-                      <p className="text-sm text-muted-foreground">Type at least two characters to search scoped workspace records.</p>
+                      <p className="text-sm text-muted-foreground">Type at least two characters to start searching.</p>
                     ) : searchPending ? (
                       <p className="text-sm text-muted-foreground" aria-live="polite">Searching…</p>
                     ) : activeSearchError ? (
@@ -1271,7 +1272,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">No matching records. Press Enter to search {searchDestination.replaceAll("-", " ")}.</p>
+                      <p className="text-sm text-muted-foreground">No quick matches. Press Enter to search all records.</p>
                     )}
                   </div>
                 </DialogContent>
@@ -1282,15 +1283,15 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                 <div className="hidden lg:block">
                   <Dialog>
                     <Tooltip>
-                      <DialogTrigger render={<TooltipTrigger render={<Button variant="outline" size="icon" aria-label="Open command menu" />} />}>
+                      <DialogTrigger render={<TooltipTrigger render={<Button variant="outline" size="icon" aria-label="Open quick navigation" />} />}>
                         <Command />
                       </DialogTrigger>
-                      <TooltipContent>Open command menu</TooltipContent>
+                      <TooltipContent>Open quick navigation</TooltipContent>
                     </Tooltip>
                     <DialogContent className="sm:max-w-xl">
                       <DialogHeader>
-                        <DialogTitle>Command menu</DialogTitle>
-                        <DialogDescription>Open the next workspace area for your role.</DialogDescription>
+                        <DialogTitle>Quick navigation</DialogTitle>
+                        <DialogDescription>Choose an area to open.</DialogDescription>
                       </DialogHeader>
                       <div className="grid gap-2">
                         {visibleCommandItems.map(({ label, slug, Icon, group }) => {
@@ -1329,7 +1330,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                     <AccountMenu currentUser={currentUser} onLogout={logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
                     <div className="hidden rounded-lg border bg-card/70 px-3 py-1.5 text-right 2xl:block">
                       <div className="text-xs font-medium leading-none">{displayUserName}</div>
-                      <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>
+                      <div className="mt-1 text-[0.65rem] text-muted-foreground">{roleLabel(currentUser.role)}</div>
                     </div>
                     {!previewMode ? (
                       <Button variant="outline" size="icon" className="hidden 2xl:inline-flex" aria-label="Sign out" onClick={logout}>
@@ -1340,7 +1341,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                 </>
               ) : (
                 <Button variant="secondary" className="hidden gap-2 sm:inline-flex" nativeButton={false} render={<Link href="/directors" />}>
-                  Live workspace
+                  Director tools
                   <ChevronDown data-icon="inline-end" />
                 </Button>
               )}

@@ -71,6 +71,20 @@ function numberValue(value: unknown, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function reputationDisplayLabel(value: string | null | undefined, fallback: string) {
+  if (!value) return fallback;
+  const normalized = value.trim();
+  if (!normalized) return fallback;
+  if (!normalized.includes("_") && !normalized.includes("-") && normalized !== normalized.toLocaleLowerCase("en-US") && normalized !== normalized.toLocaleUpperCase("en-US")) {
+    return normalized;
+  }
+  const words = normalized.replaceAll("_", " ").replaceAll("-", " ").toLocaleLowerCase("en-US").split(/\s+/);
+  return words.map((word, index) => {
+    if (word === "nps") return "NPS";
+    return index === 0 ? word.charAt(0).toLocaleUpperCase("en-US") + word.slice(1) : word;
+  }).join(" ");
+}
+
 function formatDate(value: Date | string, timeZone: string) {
   return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "Unknown");
 }
@@ -261,13 +275,13 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
       <Tabs defaultValue="reviews" className="gap-4">
         <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="reviews">Reviews</TabsTrigger>
-          <TabsTrigger value="requests">Review Requests</TabsTrigger>
+          <TabsTrigger value="requests">Review requests</TabsTrigger>
           <TabsTrigger value="surveys">Surveys/NPS</TabsTrigger>
         </TabsList>
         <TabsContent value="reviews">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Review Queue</CardTitle>
+              <CardTitle>Review queue</CardTitle>
               <CardDescription>AI-assisted drafts require staff approval before posting or sending.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -286,21 +300,21 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                   {data.reviews.map((review) => (
                     <TableRow key={review.id}>
                       <TableCell>
-                        <div className="font-medium">{review.source}</div>
+                        <div className="font-medium">{reputationDisplayLabel(review.source, "Source unavailable")}</div>
                         <div className="text-xs text-muted-foreground">{review.center?.name ?? "All locations"} · {formatDate(review.createdAt, timeZone)}</div>
                       </TableCell>
                       <TableCell>{review.rating}/5</TableCell>
                       <TableCell className="max-w-sm whitespace-normal text-muted-foreground">{review.body ?? ""}</TableCell>
                       <TableCell className="max-w-sm whitespace-normal">{review.responseDraft ?? "Not drafted"}</TableCell>
                       <TableCell>
-                        {review.approvedForPublicTestimonial ? <Badge>Approved</Badge> : <Badge variant="outline">{review.status}</Badge>}
+                        {review.approvedForPublicTestimonial ? <Badge>Approved</Badge> : <Badge variant="outline">{reputationDisplayLabel(review.status, "Status unavailable")}</Badge>}
                       </TableCell>
                       <TableCell><ReviewDraftButton review={review} /></TableCell>
                     </TableRow>
                   ))}
                   {!data.reviews.length ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-muted-foreground">No tenant reviews have been captured yet.</TableCell>
+                      <TableCell colSpan={6} className="text-muted-foreground">No reviews have been received for the selected schools.</TableCell>
                     </TableRow>
                   ) : null}
                 </TableBody>
@@ -311,8 +325,8 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
         <TabsContent value="requests" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Review Request Workflow</CardTitle>
-              <CardDescription>Send or schedule family review requests for selected centers.</CardDescription>
+              <CardTitle>Request reviews</CardTitle>
+              <CardDescription>Send now or schedule a family review request for the selected schools.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
@@ -324,7 +338,7 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                   }}>
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All accessible centers</SelectItem>
+                      <SelectItem value="all">All available schools</SelectItem>
                       {data.centers.map((center) => (
                         <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>
                       ))}
@@ -359,15 +373,15 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
               <div className="flex flex-wrap gap-2">
                 <Button disabled={isPending || !reviewBody} onClick={submitReviewRequest}>
                   <Send data-icon="inline-start" />
-                  Send / Schedule
+                  {reviewSendAt ? "Schedule review request" : "Send review request"}
                 </Button>
               </div>
             </CardContent>
           </Card>
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Review Request Rules</CardTitle>
-              <CardDescription>Recommended workflow controls for school directors.</CardDescription>
+              <CardTitle>Review request guidance</CardTitle>
+              <CardDescription>Check each request before sending it to families.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               {[
@@ -388,13 +402,13 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
           <div className="grid gap-4 xl:grid-cols-2">
             <Card className="glass-panel">
               <CardHeader>
-                <CardTitle>Survey Builder</CardTitle>
-                <CardDescription>Create NPS and satisfaction surveys for a tenant or center.</CardDescription>
+                <CardTitle>Survey builder</CardTitle>
+                <CardDescription>Create an NPS or satisfaction survey for one or more schools.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
-                    <Label>Saved Survey</Label>
+                    <Label>Saved survey</Label>
                     <Select value={surveyId || "new"} onValueChange={(value) => {
                       if (!value) return;
                       if (value === "new") {
@@ -463,13 +477,13 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                 </div>
                 <Button disabled={isPending || !surveyName} onClick={saveSurvey}>
                   <Save data-icon="inline-start" />
-                  Save Survey
+                  Save survey
                 </Button>
               </CardContent>
             </Card>
             <Card className="glass-panel">
               <CardHeader>
-                <CardTitle>Record NPS Response</CardTitle>
+                <CardTitle>Record NPS response</CardTitle>
                 <CardDescription>Manual entry for phone, paper, or director-entered family feedback.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -515,14 +529,14 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                 </div>
                 <Button disabled={isPending || !responseSurveyId} onClick={recordResponse}>
                   <MessageSquarePlus data-icon="inline-start" />
-                  Record Response
+                  Record response
                 </Button>
               </CardContent>
             </Card>
           </div>
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Survey Reporting</CardTitle>
+              <CardTitle>Survey reporting</CardTitle>
               <CardDescription>NPS score, response counts, and latest comments.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -533,7 +547,7 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                     <TableHead>Center</TableHead>
                     <TableHead>NPS</TableHead>
                     <TableHead>Responses</TableHead>
-                    <TableHead>Latest Feedback</TableHead>
+                    <TableHead>Latest feedback</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -544,7 +558,7 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                       <TableRow key={survey.id}>
                         <TableCell>
                           <div className="font-medium">{survey.name}</div>
-                          <div className="text-xs text-muted-foreground">POST /api/reputation/surveys/{survey.id}/responses</div>
+                          <div className="text-xs text-muted-foreground">Created {formatDate(survey.createdAt, timeZone)}</div>
                         </TableCell>
                         <TableCell>{survey.center?.name ?? "All locations"}</TableCell>
                         <TableCell>
@@ -558,13 +572,13 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                         <TableCell className="max-w-sm whitespace-normal text-muted-foreground">
                           {survey.responses[0]?.comment ?? "No comments yet"}
                         </TableCell>
-                        <TableCell><Badge variant={survey.status === "active" ? "default" : "outline"}>{survey.status}</Badge></TableCell>
+                        <TableCell><Badge variant={survey.status === "active" ? "default" : "outline"}>{reputationDisplayLabel(survey.status, "Status unavailable")}</Badge></TableCell>
                       </TableRow>
                     );
                   })}
                   {!data.surveys.length ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-muted-foreground">No tenant surveys have been configured yet.</TableCell>
+                      <TableCell colSpan={6} className="text-muted-foreground">No surveys have been created for the selected schools.</TableCell>
                     </TableRow>
                   ) : null}
                 </TableBody>

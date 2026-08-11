@@ -32,7 +32,7 @@ test("login and password recovery preserve controlled input when services are un
   assert.match(reset, /Your entries are still here/i);
   assert.match(reset, /linkStatus === "ready"/);
   assert.match(reset, /Reset link unavailable/);
-  assert.match(reset, /Request a New Reset Link/);
+  assert.match(reset, /Request a new reset link/);
   assert.match(reset, /addEventListener\("hashchange", resolveCurrentRecoveryState\)/);
   assert.match(reset, /removeEventListener\("hashchange", resolveCurrentRecoveryState\)/);
   assert.match(reset, /passwordRecoveryUrlWithoutSecrets\(window\.location\.href\)/);
@@ -55,7 +55,7 @@ test("parent sign-in and setup use invitation-specific credentials and current i
   const webPush = readFileSync("src/components/web-push-control.tsx", "utf8");
   const parentTrustSurfaces = [login, parentSetup, forgot, reset, webPush].join("\n");
 
-  assert.match(login, /temporary password from your school invitation/i);
+  assert.match(login, /password from your school invitation/i);
   assert.match(parentSetup, /Review Your Family/i);
   assert.doesNotMatch(parentSetup, /Use Your School Invitation/i);
   assert.match(login, /Forgot password/i);
@@ -78,11 +78,11 @@ test("payment return states cover expiry, cancellation, failure, retry, and conf
   assert.match(paymentForm, /paymentStatus === "cancelled"/);
   assert.match(paymentForm, /No payment was submitted/i);
   assert.match(paymentForm, /paymentStatus === "failed"/);
-  assert.match(paymentForm, /retry with Instant Bank Login or Debit\/Credit Card/i);
+  assert.match(paymentForm, /try again using a bank account or debit or credit card/i);
   assert.match(paymentForm, /paymentStatus === "success"/);
-  assert.match(paymentForm, /secure payment confirmation/i);
-  assert.match(paymentForm, /statement and receipt after processing/i);
-  assert.match(paymentForm, /Open parent portal for statement and receipt/i);
+  assert.match(paymentForm, /payment method was submitted/i);
+  assert.match(paymentForm, /review the current status and receipt/i);
+  assert.match(paymentForm, /Open the Parent Portal/i);
   assert.match(checkoutRoute, /successUrl/);
   assert.match(checkoutRoute, /cancelUrl/);
 });

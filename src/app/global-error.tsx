@@ -22,9 +22,9 @@ export default function GlobalError({
         <main className="flex min-h-screen items-center justify-center px-6">
           <section className="max-w-md space-y-5 text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">The BEE Suite</p>
-            <h1 className="text-3xl font-semibold">Something went wrong.</h1>
+            <h1 className="text-3xl font-semibold">We couldn&apos;t load this page.</h1>
             <p className="text-sm leading-6 text-slate-300">
-              The issue has been logged. Please try again, or contact support if it continues.
+              Try loading it again. If the problem continues, return to The BEE Suite home or contact support.
             </p>
             <Link href="/" className="inline-flex min-h-11 items-center justify-center rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20">
               Go to The BEE Suite home
@@ -34,7 +34,7 @@ export default function GlobalError({
               onClick={reset}
               className="rounded-md bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
             >
-              Try again
+              Try loading again
             </button>
           </section>
         </main>

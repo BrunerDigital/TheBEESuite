@@ -36,11 +36,11 @@ const loginCopy: Record<LoginPortal, {
   helpText: string;
 }> = {
   general: {
-    heroTitle: "Choose Your Sign-In Page",
+    heroTitle: "Choose your sign-in page",
     heroBody: "Directors, teachers, and parents each have a sign-in page for their daily work. Choose the one that matches your account.",
     heroFooter: "After sign-in, your account opens only the information and tools assigned to you.",
     heroItems: ["Directors", "Teachers", "Parents"],
-    cardTitle: "Sign In to The BEE Suite",
+    cardTitle: "Sign in to The BEE Suite",
     cardDescription: "Use the sign-in link your school or organization gave you. If you are not sure which page to use, you can sign in here.",
     emailLabel: "Email or username",
     emailPlaceholder: "Email or username",
@@ -48,35 +48,35 @@ const loginCopy: Record<LoginPortal, {
     helpText: "After sign-in, you will go to the workspace assigned to your account.",
   },
   parents: {
-    heroTitle: "Your Family’s Parent Portal",
+    heroTitle: "Your family’s Parent Portal",
     heroBody: "Sign in with the parent or guardian email your school invited. You will see only the children and family records connected to your account.",
     heroFooter: "Your school controls which family records are connected to your account.",
     heroItems: ["Updates", "Messages", "Documents & Billing"],
-    cardTitle: "Parent & Guardian Sign-In",
-    cardDescription: "Use the email and temporary password from your school invitation. If you already changed that password, use your current one.",
+    cardTitle: "Parent and guardian sign-in",
+    cardDescription: "Use the email and password from your school invitation. If you already changed that password, use your current one.",
     emailLabel: "Parent or guardian email",
     emailPlaceholder: "parent@example.com",
     passwordPlaceholder: "Your password",
-    helpText: "First time here? Use the temporary password in your school invitation. If you do not have it, choose Forgot password.",
+    helpText: "First time here? Use the password in your school invitation. If you do not have it, choose Forgot password.",
   },
   teachers: {
-    heroTitle: "Open your teacher workspace.",
+    heroTitle: "Your teacher workspace",
     heroBody: "Sign in to classroom tools for attendance, daily reports, incident notes, family messages, documents, and teacher tasks.",
-    heroFooter: "Teacher accounts stay focused on classroom workflows and assigned school records.",
+    heroFooter: "Your account shows only the school and classroom records assigned to you.",
     heroItems: ["Roster", "Reports", "Messages"],
-    cardTitle: "Log in to your teacher portal",
+    cardTitle: "Teacher sign-in",
     cardDescription: "Use the teacher username or email assigned by your school.",
     emailLabel: "Teacher email or username",
     emailPlaceholder: "teacher@school.com",
     passwordPlaceholder: "Password",
-    helpText: "Teachers are routed to the classroom-safe portal after sign-in. Director-only and billing tools stay out of the teacher landing flow.",
+    helpText: "After signing in, you will go to your assigned classroom workspace.",
   },
   directors: {
-    heroTitle: "Open your director workspace.",
+    heroTitle: "Your director workspace",
     heroBody: "Sign in to school operations for enrollment, staffing, classrooms, billing, FTE, compliance, messages, and parent support.",
-    heroFooter: "Director access stays scoped to assigned schools and approved workflows.",
+    heroFooter: "Your account shows only the schools assigned to you.",
     heroItems: ["Enrollment", "Billing", "Operations"],
-    cardTitle: "Log in as a director",
+    cardTitle: "Director sign-in",
     cardDescription: "Use your school leadership or billing account.",
     emailLabel: "Director email or username",
     emailPlaceholder: "director@school.com",
@@ -84,11 +84,11 @@ const loginCopy: Record<LoginPortal, {
     helpText: "Directors and school billing users land in the operations workspace after sign-in.",
   },
   executives: {
-    heroTitle: "Open your executive workspace.",
+    heroTitle: "Your executive workspace",
     heroBody: "Sign in to corporate office reporting, multi-location visibility, FTE review, account setup, billing oversight, integrations, and executive controls.",
     heroFooter: "Executive sign-in is separate from school sign-in and only shows locations assigned to your account.",
     heroItems: ["Multi-location", "FTE", "Controls"],
-    cardTitle: "Log in as an executive",
+    cardTitle: "Executive sign-in",
     cardDescription: "Use your corporate office or platform account.",
     emailLabel: "Executive email or username",
     emailPlaceholder: "executive@company.com",
@@ -231,7 +231,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                     href={`/forgot-password?next=${encodeURIComponent(next)}`}
                     className="inline-flex min-h-11 items-center text-xs font-semibold text-slate-600 hover:text-slate-950 hover:underline"
                   >
-                    Forgot Password?
+                    Forgot password?
                   </Link>
                 </div>
                 <Input
@@ -247,7 +247,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                 />
               </div>
               <button className={buttonVariants({ size: "lg", className: "h-11" })} type="submit" disabled={isPending}>
-                {isPending ? "Signing In…" : "Sign In"}
+                {isPending ? "Signing in…" : "Sign in"}
                 <LogIn data-icon="inline-end" />
               </button>
             </form>
@@ -258,7 +258,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
             ) : (
               <div className="mt-5 grid gap-3">
                 <div className="rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                  Parents and guardians use the email and temporary password from their school invitation.{" "}
+                  Parents and guardians use the email and password from their school invitation.{" "}
                   <Link href="/parents" className="inline-flex items-center font-semibold text-slate-950 hover:underline">
                     Open parent portal login <ArrowRight className="ml-1 size-3.5" />
                   </Link>

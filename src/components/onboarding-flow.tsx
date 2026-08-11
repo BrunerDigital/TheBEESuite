@@ -227,8 +227,8 @@ export function OnboardingFlow() {
             Set up your childcare brand.
           </h1>
           <p className="mt-4 text-base leading-7 text-slate-300">
-            This creates a gated BEE Suite trial workspace for your childcare brand, then walks you through profile setup,
-            inquiry form install, center imports, user invitations, and payout readiness before any live payment workflows are enabled.
+            This creates a BEE Suite workspace for your childcare organization, then guides you through school profile,
+            account, inquiry form, and payout setup before online payments are enabled.
           </p>
           <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
             <div className="flex items-center justify-between text-sm">
@@ -266,25 +266,25 @@ export function OnboardingFlow() {
                   <CheckCircle2 />
                 </div>
                 <CardTitle className="text-3xl">
-                  {workspace?.existingWorkspace ? "Workspace access is ready" : "Trial workspace is ready"}
+                  {workspace?.existingWorkspace ? "Workspace access is ready" : "Your workspace is ready"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5 text-slate-200">
                 <p className="leading-7">
                   {workspace?.existingWorkspace
-                    ? `${form.workEmail} already has BEE Suite access. We sent an account recovery email when Supabase Auth accepted the request.`
-                    : `${form.brandName || "Your brand"} now has a trial workspace with an ownership container, primary center profile, brand settings, setup integrations, and an owner account.`}
-                  {" "}Use the dashboard to finish center profiles, invite staff, install the inquiry form, and prepare payout onboarding.
+                    ? `${form.workEmail} already has BEE Suite access. We requested an account recovery email. If it does not arrive, use Forgot password or contact support.`
+                    : `${form.brandName || "Your organization"} now has a BEE Suite workspace, an owner account, and its first school profile.`}
+                  {" "}Use School Setup to finish school profiles, invite staff, install the inquiry form, and complete payout setup.
                 </p>
                 {!workspace?.auth?.passwordReset?.ok ? (
                   <div className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-4 text-sm leading-6 text-amber-100">
-                    The workspace record was created, but the password setup email may still need review. Admins can send a reset from Supabase Auth if the user does not receive it.
+                    We could not confirm the password setup email. If it does not arrive, use Forgot password on the sign-in page or contact support.
                   </div>
                 ) : null}
                 <div className="rounded-lg border border-white/10 bg-slate-950/50 p-4">
                   <div className="text-sm font-semibold text-white">Inquiry form embed setup</div>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
-                    This code is linked to the primary center profile created for the workspace. Additional center-specific codes are available inside each center dashboard as profiles are added.
+                    This code is connected to the first school created during setup. Each additional school has its own code in School Setup.
                   </p>
                   <pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-black/50 p-3 text-xs leading-5 text-slate-200">{workspace?.embedCode || draftEmbedCode}</pre>
                 </div>
@@ -296,9 +296,9 @@ export function OnboardingFlow() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
                     ["Brand", form.brandName],
-                    ["Owner group", workspace?.ownerGroupName || "Ownership container"],
-                    ["Workspace", workspace?.tenantSlug || "Trial setup"],
-                    ["Primary center", workspace?.centerName || "Primary Center"],
+                    ["Organization", workspace?.ownerGroupName || form.brandName || "Your organization"],
+                    ["Account", workspace?.tenantName || form.brandName || "The BEE Suite"],
+                    ["First school", workspace?.centerName || "School profile"],
                     ["Centers requested", form.centerCount],
                     ["School setup", workspace?.schoolSetupStatus || `${schoolOnboardingSetupSections.length} sections captured`],
                     ["Payout owner", form.payoutAdminName],
@@ -516,7 +516,7 @@ export function OnboardingFlow() {
                       ))}
                     </div>
                     <div className="rounded-lg border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-700">
-                      Finishing onboarding creates a gated trial workspace, owner account, primary center profile, and inquiry form embed. Live checkout remains disabled until payout onboarding is complete and reviewed.
+                      Finishing onboarding creates your BEE Suite organization, owner account, first school profile, and inquiry form. Online payments remain unavailable until payout setup is complete and approved.
                     </div>
                   </div>
                 ) : null}
@@ -539,7 +539,7 @@ export function OnboardingFlow() {
                   ) : null}
                   <div className="flex items-center gap-2 text-xs text-slate-500 sm:ml-auto">
                     <LockKeyhole className="size-4" />
-                    Role and data scope reviewed before launch
+                    Account access reviewed before launch
                   </div>
                 </div>
               </CardContent>
@@ -549,8 +549,8 @@ export function OnboardingFlow() {
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {[
               [Mail, "Account setup", "Owners receive a password setup email and can complete their profile from the workspace."],
-              [BadgeDollarSign, "Payout onboarding", "Schools complete connected payout setup before live checkout."],
-              [ShieldCheck, "Trial safeguards", "Live payments, parent engagement, and sensitive workflows stay gated until reviewed."],
+              [BadgeDollarSign, "Payout setup", "Schools complete payout setup before accepting online payments."],
+              [ShieldCheck, "Launch review", "Online payments, family access, and sensitive actions remain unavailable until setup is reviewed."],
             ].map(([Icon, title, body]) => (
               <div key={title as string} className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
                 <Icon className="size-5 text-primary" />

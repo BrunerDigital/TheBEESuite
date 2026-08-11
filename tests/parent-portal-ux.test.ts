@@ -24,7 +24,7 @@ test("Today is a summary and Updates is one date-based history", () => {
   assert.match(workspace, /See today’s check-in status, classroom, schedule, and latest\s+update from your school/);
   assert.match(workspace, /Choose a date to review that day’s report, activities, and photos/);
   assert.match(workspace, /aria-label="Updates for the selected date"/);
-  assert.match(workspace, /Daily Report · \{report\.child\.fullName\}/);
+  assert.match(workspace, /Daily report · \{report\.child\.fullName\}/);
   assert.doesNotMatch(workspace, /Photos and Moments|Daily Activities/);
 });
 

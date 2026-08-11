@@ -19,10 +19,10 @@ const currentGuides = [
   "docs/sops/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md",
 ];
 
-test("current guides are dated July 29 or later and exclude superseded workflow copy", () => {
+test("current guides reflect the August 11 copy review and exclude superseded workflow copy", () => {
   for (const path of currentGuides) {
     const content = readFileSync(path, "utf8");
-    assert.match(content, /(?:July (?:29|30|31)|August (?:1|2|3|4|5|6)), 2026/, path);
+    assert.match(content, /August 11, 2026/, path);
     assert.doesNotMatch(content, /creates? (?:a |the )?Friday invoice/i, path);
     assert.doesNotMatch(content, /bank payment is the preferred payment method/i, path);
     assert.doesNotMatch(content, /create your password.*setup link/i, path);
@@ -54,7 +54,7 @@ test("school transition announcement preserves per-school launch and billing gat
 test("public resources describe current parent, tuition, FTE, and launch flows", () => {
   const resources = readFileSync("src/app/resources/page.tsx", "utf8");
 
-  assert.match(resources, /temporary password from your school invitation/);
+  assert.match(resources, /password from your school invitation/);
   assert.doesNotMatch(resources, /school-issued first-login password/);
   assert.match(resources, /id: "director-parent-invites"/);
   assert.match(resources, /Add Family, Parent \+ Child/);
@@ -164,9 +164,10 @@ test("public guide sources do not point at versioned visual directories or publi
   assert.doesNotMatch(publicGuideSources, /sop-graphics\/2026-/);
   assert.doesNotMatch(publicGuideSources, /explainers\/[^"')\s]*2026-/);
   assert.doesNotMatch(publicGuideSources, /BusyBees/i);
+  assert.doesNotMatch(publicGuideSources, /first-login password/i);
 });
 
-test("role SOPs cover the August 6 UI and workflow baseline", () => {
+test("role SOPs cover the August 11 UI and workflow baseline", () => {
   const director = readFileSync("docs/sops/DIRECTOR_SOP.md", "utf8");
   const billing = readFileSync("docs/sops/BILLING_ADMIN_SOP.md", "utf8");
   const parent = readFileSync("docs/sops/PARENT_PORTAL_SOP.md", "utf8");
@@ -176,7 +177,7 @@ test("role SOPs cover the August 6 UI and workflow baseline", () => {
   const inviteUi = readFileSync("src/components/parent-portal-invite-button.tsx", "utf8");
 
   for (const [name, content] of Object.entries({ director, billing, parent, teacher, executive, manual })) {
-    assert.match(content, /August 6, 2026/, name);
+    assert.match(content, /August 11, 2026/, name);
   }
 
   assert.match(director, /Add Family, Parent \+ Child/);

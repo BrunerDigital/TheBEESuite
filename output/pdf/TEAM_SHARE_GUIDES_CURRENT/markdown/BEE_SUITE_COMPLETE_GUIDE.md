@@ -1,6 +1,6 @@
 # The BEE Suite: Complete Product, User, and Technical Guide
 
-**Documentation snapshot:** July 29, 2026
+**Documentation snapshot:** August 11, 2026
 
 **Purpose:** A single, narration-friendly explanation of what The BEE Suite is, what is included, who uses it, how information moves through it, and how the software is built.
 
@@ -157,13 +157,13 @@ The dashboard can also contain configurable widgets, saved views, date ranges, s
 
 ### 6.1 Launch and school setup
 
-The **School Setup Command Center** organizes launch readiness across center profile, classrooms, staff, families, tuition, forms, compliance, integrations, parent access, and sign-off. It shows progress, missing records, director inputs, external dependencies, and links to the relevant live modules.
+**School setup** organizes launch readiness across the school profile, classrooms, staff, families, tuition, forms, compliance, integrations, parent access, and sign-off. It shows progress, missing records, director inputs, external dependencies, and links to the relevant areas.
 
 Onboarding creates or configures tenant, organization, brand, center, and initial administrative access. Rollout scripts and checklists support corporate school creation, school logins, parent access, teacher access, payout preparation, and readiness validation.
 
 ### 6.2 Dashboards and executive oversight
 
-The **Dashboard** is the role-aware daily command center. Depending on the lens, it can summarize children, capacity, occupancy, leads, tours, balances, staffing, ratios, incidents, messages, compliance reminders, and priorities.
+The **Dashboard** is a daily operations overview based on the signed-in user's access. Depending on the lens, it can summarize children, capacity, occupancy, leads, tours, balances, staffing, ratios, incidents, messages, required records, and priorities.
 
 The **Multi-location Dashboard** compares assigned centers. It supports enrollment, occupancy, staffing, compliance, FTE, and financial rollups and highlights locations that need follow-up.
 
@@ -215,7 +215,7 @@ Child location records and transitions provide a current-location and movement h
 
 The **Parent Portal** is the family's unified view. It can show linked children, today's activity, daily reports, approved photos, messages, announcements, calendar information, invoices, payments, documents, incident acknowledgements, authorized pickups, kiosk credentials, preferences, and change requests.
 
-Parent invitations establish the relationship among the authentication user, guardian record, family, and children. The approved invitation supplies the secure parent URL, guardian email, and school-issued first-login password. The parent may change that password later from settings. Portal queries are family-scoped. A guardian should never be able to change a URL or identifier and retrieve another family's information.
+Parent invitations establish the relationship among the authentication user, guardian record, family, and children. The approved invitation supplies the secure parent URL, guardian email, and password from the school invitation. The parent may change that password later from settings. Portal queries are family-scoped. A guardian should never be able to change a URL or identifier and retrieve another family's information.
 
 The portal supports responsive web and progressive-web-app use. Install guides cover phones, tablets, and desktops. A Capacitor iOS parent shell and app-store assets exist, but the product notes distinguish the current web/PWA experience from a future fully native mobile product with native push and offline sync.
 
@@ -247,7 +247,7 @@ The intended financial chain is:
 
 **Tuition assignment → invoice and invoice items → family balance → payment method or hosted checkout → Stripe event → webhook verification → payment and ledger update → reconciliation → school payout.**
 
-Stripe Checkout provides hosted payment collection. The parent flow presents debit/credit card first and keeps Instant Bank and One-Time Bank available when enabled. Stripe Connect provides a connected account and payout path for each school or approved owner structure. Webhook records are deduplicated so a repeated provider event does not apply the same financial action twice. Payment-method request links are expiring, family-specific paths for securely collecting a method.
+Stripe Checkout provides hosted payment collection. The parent flow presents `Debit or credit card` first and keeps `Pay with Link` and `Bank account` available when enabled. `Pay with Link` opens Stripe Link; bank-account setup remains a separate action. Stripe Connect provides a connected account and payout path for each school or approved owner structure. Webhook records are deduplicated so a repeated provider event does not apply the same financial action twice. Payment-method request links are expiring, family-specific paths for securely collecting a method.
 
 Scheduled billing foundations include recurring tuition creation, autopay attempts, payment reminders, dunning for failures, and reconciliation reports. An eligible weekly assignment creates a Thursday invoice for the following week and the scheduled autopay run follows when the family has autopay enabled and a saved default method. A saved payment method is required for automatic collection, not invoice creation. `Charge This Child Now` creates an immediate invoice and is a separate manual action. “Dunning” means the controlled sequence used to notify a payer and recover a failed or overdue payment.
 

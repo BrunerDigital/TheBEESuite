@@ -675,8 +675,8 @@ export function FamilyProfilesEnrollmentPanel({
 
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Lobby Kiosk Credentials</CardTitle>
-          <CardDescription>Directors set the 4 digit guardian PIN and QR scan payload used on the check-in/check-out tablet.</CardDescription>
+          <CardTitle>Lobby kiosk credentials</CardTitle>
+          <CardDescription>Directors set the 4-digit guardian PIN and QR code used at the check-in and checkout tablet.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-2">
           {visibleFamilies.flatMap((family) =>
@@ -695,17 +695,17 @@ export function FamilyProfilesEnrollmentPanel({
             )),
           )}
           {!hasVisibleGuardians ? (
-            <p className="text-sm text-muted-foreground">No guardians are visible for this scope yet.</p>
+            <p className="text-sm text-muted-foreground">No guardians are available for the selected school.</p>
           ) : null}
         </CardContent>
       </Card>
 
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Parent Portal Access</CardTitle>
+          <CardTitle>Parent Portal access</CardTitle>
           <CardDescription>
-            Create parent portal access with the guardian email and BusyBees first-login password, send the welcome and app-install
-            steps, or send the separate parent feature guide and FAQ after the account is linked.
+            Create Parent Portal access for the guardian email, send the welcome and installation steps, or send the parent feature
+            guide after the account is linked. The invitation includes the password.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-2">
@@ -721,7 +721,7 @@ export function FamilyProfilesEnrollmentPanel({
             )),
           )}
           {!hasVisibleGuardians ? (
-            <p className="text-sm text-muted-foreground">No guardians are visible for this scope yet.</p>
+            <p className="text-sm text-muted-foreground">No guardians are available for the selected school.</p>
           ) : null}
         </CardContent>
       </Card>

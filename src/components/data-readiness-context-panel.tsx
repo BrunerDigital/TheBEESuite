@@ -32,16 +32,16 @@ export function DataReadinessContextPanel({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 id="context-readiness-heading" className="text-base font-semibold text-pretty">{copy.label}</h2>
-              {summary ? <Badge variant={critical ? "destructive" : summary.actionable ? "secondary" : "outline"}>{summary.actionable} actionable</Badge> : <Badge variant="outline">{loading ? "Loading…" : "Unavailable"}</Badge>}
+              {summary ? <Badge variant={critical ? "destructive" : summary.actionable ? "secondary" : "outline"}>{summary.actionable} need attention</Badge> : <Badge variant="outline">{loading ? "Loading…" : "Unavailable"}</Badge>}
             </div>
             <p className="mt-1 max-w-4xl text-sm leading-6 text-muted-foreground">{copy.description}</p>
             <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">
               {summary
                 ? summary.total === 0
-                  ? "No retained import tasks are currently classified in this area."
+                  ? "No import tasks are currently listed in this area."
                   : `${summary.BLOCKED} blocked · ${summary.CONFIRM} need confirmation · ${summary.FAILED} failed validation`
                 : loading
-                  ? "Loading the latest school-scoped readiness summary…"
+                  ? "Loading this school’s readiness summary…"
                   : "The summary could not be loaded. Open the readiness queue to retry."}
             </p>
           </div>

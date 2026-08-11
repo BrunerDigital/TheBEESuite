@@ -98,15 +98,15 @@ export default async function OnlineRegistrationPage({
                 Start {isTenantRegistration ? `a ${branding.name}` : "a childcare"} registration packet.
               </h1>
               <p className="mt-5 text-sm leading-6 text-zinc-300">
-                Families can submit registration details online. The BEE Suite routes the packet to the selected school, creates or updates the CRM lead, and queues a director review task.
+                Families can submit registration details online. The selected school receives the packet, reviews it, and follows up with next steps.
               </p>
             </div>
 
             <div className="grid gap-3">
               {[
-                [ShieldCheck, "Protected review", "Medical, custody, pickup, and emergency details stay in director-reviewed workflows."],
-                [BadgeCheck, "CRM connected", "The selected school gets a registration-stage lead with a follow-up task."],
-                [CreditCard, "Billing ready", "Tuition balances and payments are handled in the parent portal after school setup is active."],
+                [ShieldCheck, "School review", "Authorized school staff review medical, custody, pickup, and emergency details."],
+                [BadgeCheck, "Direct follow-up", "The selected school receives the packet and contacts the family about next steps."],
+                [CreditCard, "Payments after setup", "Tuition balances and payment options appear in the Parent Portal after the school enables them."],
               ].map(([Icon, title, body]) => (
                 <Card key={title as string} className="border-white/10 bg-black/35 text-white backdrop-blur-xl">
                   <CardHeader className="pb-2">

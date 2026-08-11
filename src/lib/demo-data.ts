@@ -221,38 +221,38 @@ export const notifications = [
   "8 compliance reminders due within 14 days",
   "5 classrooms have 22 total open seats",
   "3 invoices are overdue by more than 10 days",
-  "AI recommends prioritizing 4 high-fit tours",
+  "AI suggests reviewing 4 high-priority tours",
   "1 incident report needs director review",
   "2 staff certifications expire this month",
   "Birthday reminders: Amelie and Theo this week",
   "Meta lead ads sync needs credential review",
-  "White-label domain verification is pending",
+  "Custom domain verification is pending",
 ];
 
 export const integrations = [
-  ["Payment processor", "Connected payout, checkout, invoice, and webhook readiness", "Configure"],
+  ["Payment processor", "Payments, invoices, and payouts", "Configure"],
   ["Twilio", "SMS reminders and emergency alert delivery", "Not connected"],
   ["SendGrid/Mailgun", "Transactional email and campaign delivery", "Not connected"],
   ["Google Calendar", "Tour, closure, and classroom event sync", "Configure"],
-  ["Google Business Profile", "Review source and response workflow", "Configure"],
-  ["Meta Lead Ads", "Inquiry source ingestion", "Configure"],
+  ["Google Business Profile", "Reviews and response management", "Configure"],
+  ["Meta Lead Ads", "New inquiry import", "Configure"],
   ["OpenAI", "AI suggestions and summaries", "Configured"],
-  ["Zapier/Webhooks", "Workflow actions and external triggers", "Configure"],
+  ["Zapier/Webhooks", "Connected actions and external triggers", "Configure"],
   ["DocuSign-style signatures", "Form signature capture", "Configure"],
   ["Cloud storage", "Documents and media uploads", "Configure"],
 ];
 
 export const roleMatrix = [
-  ["Platform owner", "All tenants, feature flags, audit logs, support tools"],
+  ["Platform owner", "All organizations, system settings, activity history, and support tools"],
   ["Brand/franchise admin", "Brand settings, organizations, centers, analytics"],
   ["Regional manager", "Assigned center rollups, staffing, enrollment visibility"],
   ["Center director", "Center operations, families, classrooms, billing, compliance"],
-  ["Assistant director", "Operational workflows with restricted sensitive access"],
+  ["Assistant director", "Authorized school operations, families, classrooms, and staff"],
   ["Teacher", "Classroom roster, daily reports, attendance, parent notes"],
   ["Billing/admin staff", "Accounts, invoices, payments, deposits, billing reports"],
-  ["Parent/guardian", "Own family portal, messages, invoices, documents"],
+  ["Parent/guardian", "Family information, messages, payments, and documents"],
   ["Authorized pickup", "Pickup verification and kiosk credential access"],
-  ["Read-only auditor", "Export/report views and audit-safe evidence"],
+  ["Read-only auditor", "Reports, exports, and recorded activity without editing access"],
 ];
 
 export const navGroups = [
@@ -325,10 +325,10 @@ export type ModuleDefinition = {
 export const modules: ModuleDefinition[] = [
   {
     slug: "data-readiness",
-    title: "Director Data Readiness Center",
-    eyebrow: "Audited migration readiness",
+    title: "Data import review",
+    eyebrow: "Prepare school records",
     description:
-      "School-scoped ProCare action queue, source evidence, reviewed differences, append-only director decisions, guarded onboarding, and post-import verification.",
+      "Review imported ProCare records, resolve differences, record decisions, and confirm each school before launch.",
     owner: "Center director, assistant director, regional manager, brand admin",
     metrics: ["7 shared statuses", "7 risk priorities", "Append-only decisions", "Separate launch gates"],
     features: ["Prioritized action queue", "Focused review drawers", "Safe low-risk bulk confirmation", "CSV audit export"],
@@ -337,10 +337,10 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "school-setup",
-    title: "School Setup Command Center",
+    title: "School setup",
     eyebrow: "Launch readiness",
     description:
-      "Director-facing configuration workflow for turning on all BEE Suite modules, from classrooms and staff to billing, parent portal, compliance, integrations, and launch sign-off.",
+      "Set up classrooms, staff, billing, family access, required records, integrations, and final launch approval.",
     owner: "Center director, assistant director, brand admin",
     metrics: ["15 setup areas", "Director input tracker", "Record readiness", "Launch blockers"],
     features: ["Setup progress by feature area", "Director input capture", "Action links to live modules", "External-data needs panel"],
@@ -349,10 +349,10 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "dashboard",
-    title: "Executive Dashboard",
-    eyebrow: "Daily command center",
+    title: "Operations overview",
+    eyebrow: "Current school activity",
     description:
-      "A role-aware operating view for enrollment, ratios, revenue, parent response, safety review, and compliance-ready reminders.",
+      "Review enrollment, classroom ratios, revenue, family messages, safety follow-ups, and required records.",
     owner: "Center director, regional manager, brand admin",
     metrics: ["57 active children", "72.2% occupancy", "$131k monthly revenue", "5 incidents to review"],
     features: ["Platform, brand, regional, center, teacher, and parent dashboard variants", "AI-generated daily center summary", "Capacity and open-seat visibility by age group", "Staff attendance and ratio snapshot"],
@@ -364,7 +364,7 @@ export const modules: ModuleDefinition[] = [
     title: "Multi-location Dashboard",
     eyebrow: "Regional visibility",
     description:
-      "Roll up enrollment, occupancy, staffing, compliance reminders, and revenue trends across every owned center.",
+      "Compare enrollment, occupancy, staffing, required records, and revenue across authorized locations.",
     owner: "Brand admin, franchise admin, regional manager",
     metrics: ["1 location", "79 licensed capacity", "14 staff", "94% documentation health"],
     features: ["Center comparison table", "Regional occupancy trend", "At-risk enrollment flags", "Open seat forecast"],
@@ -373,15 +373,15 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "center-dashboard",
-    title: "Center Dashboard",
+    title: "School overview",
     eyebrow: "Today at Kid City USA",
     description:
-      "Director-facing view of current children, tours, check-ins, staff coverage, messages, birthdays, incidents, and billing alerts.",
+      "Review children present, tours, staff coverage, messages, birthdays, incidents, and billing alerts.",
     owner: "Center director, assistant director",
     metrics: ["57 active children", "5 tours today", "43 check-ins", "2 late pickup risks"],
     features: ["Today schedule", "Open tasks", "Message response queue", "Licensing reminder lane"],
     records: notifications.slice(0, 6),
-    ai: "Drafts the morning summary and flags workflow bottlenecks for human review.",
+    ai: "Drafts the morning summary and highlights items for staff to confirm.",
   },
   {
     slug: "fte-reports",
@@ -410,10 +410,10 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "crm-leads",
-    title: "Childcare CRM Leads",
-    eyebrow: "Inquiry lifecycle",
+    title: "Enrollment inquiries",
+    eyebrow: "Family follow-up",
     description:
-      "Childcare-specific lead tracking with age group interest, desired start, center interest, tags, scoring, and follow-up history.",
+      "Track each family’s age-group needs, preferred start date, school interest, and follow-up history.",
     owner: "Enrollment director, center director",
     metrics: ["30 leads", "12 high-fit", "17 tours", "8 applications"],
     features: ["Lead source tracking", "Custom fields", "Follow-up tasks", "Family timeline"],
@@ -422,10 +422,10 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "family-detail",
-    title: "Family / Contact Detail",
-    eyebrow: "Family relationship record",
+    title: "Family profile",
+    eyebrow: "Family and guardian details",
     description:
-      "Unified family profile with guardians, authorized pickups, emergency contacts, billing contact, documents, siblings, and timeline.",
+      "Review guardians, authorized pickups, emergency contacts, billing contacts, documents, siblings, and recent activity.",
     owner: "Director, assistant director, billing/admin staff",
     metrics: ["2 guardians", "2 children", "4 documents", "1 restricted note"],
     features: ["Guardian profiles", "Communication history", "Document checklist", "Custody note restrictions"],
@@ -435,15 +435,15 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "child-profile",
-    title: "Child Profile Detail",
-    eyebrow: "Safety-first child record",
+    title: "Child profile",
+    eyebrow: "Care and enrollment details",
     description:
       "Detailed child profile for enrollment, classroom, schedule, allergies, medications, permissions, emergency contacts, and daily history.",
     owner: "Director, teacher, authorized admin",
     metrics: ["Peanut allergy", "2 permissions pending", "10 daily reports", "5 incident records"],
     features: ["Medical and allergy protection", "Photo/video and field trip permissions", "Nap, feeding, potty, developmental notes", "Incident and activity history"],
     records: ["Sofia Rivera, infant", "Classroom: Infant Hive", "Schedule: Mon-Fri 8:00-4:30"],
-    ai: "Sensitive child, medical, custody, billing, and compliance suggestions require human review.",
+    ai: "Staff make all final decisions about child safety, medical care, custody, billing, and compliance.",
     sensitive: true,
   },
   {
@@ -451,7 +451,7 @@ export const modules: ModuleDefinition[] = [
     title: "Enrollment Pipeline",
     eyebrow: "Enrollment workflow",
     description:
-      "Opportunity-style pipeline for inquiry through enrolled, waitlisted, or lost, with stage tasks and conversion reporting.",
+      "Track families from inquiry through enrollment, waitlist, or closure, with follow-up tasks and reporting.",
     owner: "Enrollment director, regional manager",
     metrics: ["9 stages active", "$262k pipeline", "42% tour conversion", "8 enrolled YTD"],
     features: ["Stage board", "Stage automation hooks", "Deposit/document checkpoints", "Conversion analytics"],
@@ -494,10 +494,10 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "messages",
-    title: "Parent Messaging Inbox",
-    eyebrow: "Communication center",
+    title: "Family messages",
+    eyebrow: "Conversations and announcements",
     description:
-      "Unified family and internal messaging with announcements, templates, unread filters, AI suggestions, and sentiment indicators.",
+      "Read and send family or staff messages, use approved templates, and filter unread conversations.",
     owner: "Director, teacher, billing/admin staff",
     metrics: ["15 conversations", "5 unread", "3 priority", "2 AI drafts"],
     features: ["Parent/director messages", "Parent/teacher messages", "Broadcast targeting", "Email, SMS, and push delivery settings"],
@@ -510,7 +510,7 @@ export const modules: ModuleDefinition[] = [
     title: "Announcements",
     eyebrow: "Center broadcasts",
     description:
-      "Warm, professional announcements by center, classroom, age group, family status, or custom tag.",
+      "Create announcements by school, classroom, age group, family status, or custom tag.",
     owner: "Director, brand admin",
     metrics: ["4 drafts", "2 scheduled", "89% read rate", "1 urgent template"],
     features: ["Classroom targeting", "Emergency alert workflow", "Read receipt tracking", "Template library"],
@@ -526,7 +526,7 @@ export const modules: ModuleDefinition[] = [
     metrics: ["6 campaigns", "42% open rate", "18% click rate", "11 applications influenced"],
     features: ["Campaign templates", "Email builder", "SMS channel setup", "Audience filters by stage/tag/classroom"],
     records: ["New inquiry follow-up", "Tour confirmation", "Waitlist update", "Parent newsletter", "Review request"],
-    ai: "Generates campaign copy for human review and brand approval.",
+    ai: "Produces campaign drafts that staff approve before sending.",
   },
   {
     slug: "automations",
@@ -560,7 +560,7 @@ export const modules: ModuleDefinition[] = [
       "Family, child, enrollment, compliance, billing, and staff documents with uploads and expiration reminders.",
     owner: "Director, admin staff, auditor",
     metrics: ["112 documents", "8 expiring", "4 missing", "3 restricted"],
-    features: ["File upload", "Document checklist", "Expiration reminders", "Role-aware visibility"],
+    features: ["File upload", "Document checklist", "Expiration reminders", "Access-controlled visibility"],
     records: ["Immunization record", "Policy acknowledgment", "Staff certification PDF"],
     sensitive: true,
   },
@@ -596,7 +596,7 @@ export const modules: ModuleDefinition[] = [
       "Director review queue for teacher-uploaded photos that require human permission confirmation before parent portal sharing.",
     owner: "Director, assistant director, regional manager",
     metrics: ["Permission review queue", "Signed private media previews", "Parent visibility decision", "Audit trail"],
-    features: ["Private Supabase Storage media", "Photo/video permission confirmation", "Approve or reject sharing", "Teacher notification after review"],
+    features: ["Private photo and video storage", "Photo/video permission confirmation", "Approve or reject sharing", "Teacher notification after review"],
     records: ["Classroom photo held for review", "Director approval with permission update", "Rejected sharing kept internal"],
     sensitive: true,
   },
@@ -653,7 +653,7 @@ export const modules: ModuleDefinition[] = [
     slug: "asset-hub",
     title: "Corporate Asset Hub",
     eyebrow: "Brand resources",
-    description: "Search, preview, and securely download corporate-approved social media, brand, training, and school resources in one modern library.",
+    description: "Search, preview, and download approved social media, brand, training, and school resources.",
     owner: "Executive team and school directors",
     metrics: ["Private corporate library", "Fast search", "Common file formats", "Secure downloads"],
     features: ["Executive multi-file uploads", "Category and type filters", "Grid and list views", "Director downloads"],
@@ -685,10 +685,10 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "compliance",
-    title: "Compliance-Readiness",
-    eyebrow: "Documentation support",
+    title: "Licensing and compliance",
+    eyebrow: "Required records",
     description:
-      "Compliance-ready workflows for licensing checklists, certifications, immunizations, drills, incidents, medication logs, allergy lists, audit trails, and export-ready reports.",
+      "Track licensing checklists, certifications, immunizations, drills, incidents, medication logs, allergy lists, and required reports.",
     owner: "Director, regional manager, auditor",
     metrics: ["92% documentation health", "8 reminders", "2 staff expirations", "1 drill due"],
     features: ["Licensing checklist", "Emergency drill logs", "Expiring document reminders", "Audit trail"],
@@ -705,12 +705,12 @@ export const modules: ModuleDefinition[] = [
     metrics: ["4.8 avg rating", "12 testimonials", "5 surveys open", "3 review drafts"],
     features: ["Review request campaigns", "Testimonial approvals", "Survey collection", "Google Business Profile setup"],
     records: ["Tour family review request", "Parent newsletter survey", "Approved testimonial library"],
-    ai: "Generates response drafts for brand-approved human review.",
+    ai: "Produces response drafts that staff approve before publishing.",
   },
   {
     slug: "analytics",
-    title: "Reporting and Analytics",
-    eyebrow: "Operator intelligence",
+    title: "Reports and analytics",
+    eyebrow: "School performance",
     description:
       "Enrollment funnel, lead sources, tour conversion, occupancy, revenue, balances, attendance, ratios, response time, incidents, compliance, campaigns, reviews, and AI insights.",
     owner: "Brand admin, regional manager, director",
@@ -721,13 +721,13 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "ai-command",
-    title: "AI Command Center",
+    title: "AI assistant",
     eyebrow: "AI assistance",
     description:
-      "AI summaries, contact briefs, lead scoring, next steps, reply suggestions, announcement/campaign copy, workflow recommendations, task prioritization, incident wording, review responses, and compliance reminders.",
-    owner: "All roles with scoped permissions",
+      "Draft summaries, replies, announcements, campaign copy, follow-up suggestions, incident wording, and review responses with AI assistance.",
+    owner: "Authorized staff",
     metrics: ["14 suggestions", "9 awaiting review", "0 auto-decisions", "100% labeled drafts"],
-    features: ["OpenAI configuration", "Role-aware prompt context", "Sensitive output review gates", "AI guardrails documentation"],
+    features: ["AI service setup", "Uses only information the signed-in user can view", "Staff confirmation for sensitive drafts", "AI use guidance"],
     records: ["Daily center summary", "Tour follow-up generator", "Incident wording assistant", "Review response draft"],
     ai: "AI does not make final safety, medical, legal, custody, billing, or compliance decisions.",
     sensitive: true,
@@ -735,7 +735,7 @@ export const modules: ModuleDefinition[] = [
   {
     slug: "parent-portal",
     title: "Parent Portal",
-    eyebrow: "Warm family experience",
+    eyebrow: "Family account",
     description:
       "Family dashboard, child profile, daily reports, messages, announcements, calendar, invoices, documents, incident acknowledgments, authorized pickups, emergency contact requests, and preferences.",
     owner: "Parent/guardian",
@@ -746,7 +746,7 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "teacher-portal",
-    title: "Teacher Portal Mobile View",
+    title: "Teacher portal",
     eyebrow: "Classroom quick actions",
     description:
       "Mobile-first teacher workflow for attendance, child cards, logs, notes, incident creation, supply requests, and parent updates.",
@@ -758,10 +758,10 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "agency-admin",
-    title: "Executive / Franchise Admin",
-    eyebrow: "White-label enterprise control",
+    title: "Executive administration",
+    eyebrow: "Organizations and locations",
     description:
-      "Manage organizations, owner groups, locations, scoped users, passwords, subscriptions, analytics, feature flags, audit logs, impersonation warnings, and support access.",
+      "Manage organizations, owner groups, locations, authorized users, subscriptions, reports, settings, activity history, and support access.",
     owner: "Platform owner, brand/franchise admin",
     metrics: ["1 brand", "Live centers", "10 roles", "Audit logged"],
     features: ["Location lifecycle", "Owner group containers", "User and password controls", "Impersonation audit warning"],
@@ -770,8 +770,8 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "white-label",
-    title: "White-Label Settings",
-    eyebrow: "Brand-ready SaaS",
+    title: "Brand settings",
+    eyebrow: "Appearance and identity",
     description:
       "Brand name, logo, favicon, primary/accent colors, theme mode, sender, custom domain, parent portal branding, legal footer, and terms/privacy links.",
     owner: "Brand admin, platform owner",
@@ -781,13 +781,13 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "team-permissions",
-    title: "Team, Users, and Permissions",
-    eyebrow: "Role-based access",
+    title: "Users and access",
+    eyebrow: "Accounts and permissions",
     description:
-      "Auth-ready users, roles, permissions, center/classroom assignments, parent/guardian access, pickup roles, and read-only auditors.",
+      "Manage user accounts, roles, permissions, school and classroom assignments, family access, pickup roles, and read-only reviewers.",
     owner: "Platform owner, brand admin, director",
     metrics: ["10 roles", "54 permissions", "20 staff users", "50 family users"],
-    features: ["RBAC matrix", "Sensitive field visibility", "Audit logs", "Scoped support access"],
+    features: ["Access matrix", "Sensitive field visibility", "Activity history", "Authorized support access"],
     records: roleMatrix.map((role) => `${role[0]}: ${role[1]}`),
     sensitive: true,
   },
@@ -796,10 +796,10 @@ export const modules: ModuleDefinition[] = [
     title: "Integrations",
     eyebrow: "Credential setup",
     description:
-      "Integration setup for payments, SMS, email, calendars, reviews, lead ads, AI, webhooks, signatures, and storage.",
+      "Connect payments, SMS, email, calendars, reviews, lead ads, AI tools, signatures, and file storage.",
     owner: "Platform owner, brand admin",
     metrics: ["10 integration records", "Credential review", "Connection status", "Setup tasks"],
-    features: ["Environment variable guide", "Connection status", "Webhook configuration", "Tenant credential controls"],
+    features: ["Setup instructions", "Connection status", "Webhook configuration", "School connection settings"],
     records: integrations.map((integration) => `${integration[0]}: ${integration[2]}`),
   },
   {
@@ -807,7 +807,7 @@ export const modules: ModuleDefinition[] = [
     title: "Billing Settings",
     eyebrow: "Plan and account setup",
     description:
-      "SaaS billing plans, family billing defaults, products, tuition plans, discounts, taxes, subsidy fields, and processor settings.",
+      "Set software plans, family billing defaults, products, tuition, discounts, taxes, subsidies, and payment settings.",
     owner: "Platform owner, billing/admin staff",
     metrics: ["3 plan models", "6 tuition plans", "4 products/fees", "2 discounts"],
     features: ["Subscription settings", "Tuition plan settings", "Payment processor configuration", "Billing policy notes"],
@@ -816,20 +816,20 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "notifications",
-    title: "Notification Center",
-    eyebrow: "Action queue",
+    title: "Notifications",
+    eyebrow: "Items that need attention",
     description:
       "Parent messages, enrollment alerts, tours, billing, compliance, incidents, staff certification reminders, capacity warnings, AI actions, and system alerts.",
-    owner: "All roles with scoped queues",
+    owner: "Users with access to each notification type",
     metrics: ["10 notifications", "4 high priority", "3 due today", "2 AI recommended"],
-    features: ["Priority filters", "Role-aware routing", "Action buttons", "System alerts"],
+    features: ["Priority filters", "Notifications open the appropriate page", "Action buttons", "System alerts"],
     records: notifications,
-    ai: "Recommended actions appear as suggestions, never silent automation for sensitive workflows.",
+    ai: "AI suggestions are labeled, and staff choose whether to act on them.",
   },
   {
     slug: "audit-logs",
-    title: "Audit Logs",
-    eyebrow: "Sensitive workflow evidence",
+    title: "Activity history",
+    eyebrow: "Recorded account activity",
     description:
       "Audit trail for permission changes, restricted child data access, billing changes, incident reviews, impersonation, document updates, and integration events.",
     owner: "Platform owner, auditor, director",
@@ -840,14 +840,14 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "help",
-    title: "Help and Documentation",
-    eyebrow: "In-app enablement",
+    title: "Help and guides",
+    eyebrow: "Instructions and support",
     description:
-      "Getting started, director, teacher, parent portal, billing, enrollment, automation, AI assistant, white-label, integration setup, FAQ, and support workflows.",
+      "Find instructions for setup, school operations, teacher and parent access, billing, enrollment, automation, AI tools, branding, and integrations.",
     owner: "All users",
     metrics: ["10 guides", "18 FAQs", "4 setup checklists", "Support workflow"],
-    features: ["Role-specific guides", "Go-live checklist", "Integration setup guide", "Compliance-readiness notes"],
-    records: ["Director guide", "Teacher guide", "AI assistant guardrails", "Supabase setup"],
+    features: ["Role-specific guides", "Launch checklist", "Integration setup guide", "Required-record guidance"],
+    records: ["Director guide", "Teacher guide", "AI assistant guidance", "Account setup"],
   },
 ];
 

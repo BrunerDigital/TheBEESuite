@@ -441,14 +441,52 @@ function textField(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+const DISPLAY_ACRONYMS: Record<string, string> = {
+  ach: "ACH",
+  id: "ID",
+  qr: "QR",
+  sms: "SMS",
+};
+
+function displayTokenLabel(
+  value: string | null | undefined,
+  fallback = "Not available",
+) {
+  const normalized = value?.trim();
+  if (!normalized) return fallback;
+
+  return normalized
+    .replaceAll("_", " ")
+    .replaceAll("-", " ")
+    .split(/\s+/)
+    .map((word) => {
+      const lower = word.toLowerCase();
+      return (
+        DISPLAY_ACRONYMS[lower] ??
+        `${lower.charAt(0).toUpperCase()}${lower.slice(1)}`
+      );
+    })
+    .join(" ");
+}
+
+function communicationPreferenceLabel(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return "Not listed";
+  if (normalized === "sms" || normalized === "text") return "Text message";
+  if (normalized === "portal") return "Parent Portal";
+  if (normalized === "portal + sms") return "Parent Portal and text message";
+  if (normalized === "email + sms") return "Email and text message";
+  return displayTokenLabel(value);
+}
+
 function paymentMethodCategoryLabel(category: string | null | undefined) {
   switch (category) {
     case "ach":
-      return "ACH bank";
+      return "Bank account";
     case "link_bank":
-      return "Instant bank";
+      return "Stripe Link";
     case "card":
-      return "Debit/credit card";
+      return "Debit or credit card";
     default:
       return "Payment";
   }
@@ -467,8 +505,11 @@ function pendingPaymentCategory(
 
 function pendingPaymentMessage(payment: PendingInvoicePayment) {
   const label = paymentMethodCategoryLabel(pendingPaymentCategory(payment));
-  if (label === "Debit/credit card") {
+  if (label === "Debit or credit card") {
     return "A card checkout is already pending for this invoice. Complete or expire it before starting another checkout.";
+  }
+  if (label === "Stripe Link") {
+    return "A Stripe Link payment is processing. The invoice will update when the payment processor confirms it.";
   }
   return `${label} payment is processing. Bank payments can take a few business days to settle; the invoice will update when the payment processor confirms the funds.`;
 }
@@ -495,7 +536,7 @@ function paymentListLabel(payment: Payment, timeZone: string) {
   }
   if (payment.status === "PAID")
     return `Paid · ${formatDateInTimeZone(payment.paidAt, timeZone)}`;
-  return payment.status.toLowerCase();
+  return displayTokenLabel(payment.status);
 }
 
 function paymentProviderLabel(provider: string) {
@@ -554,7 +595,7 @@ function scheduleSummary(value: unknown) {
       .slice(0, 3)
       .map(
         ([key, item]) =>
-          `${key}: ${Array.isArray(item) ? item.join(", ") : String(item)}`,
+          `${displayTokenLabel(key)}: ${Array.isArray(item) ? item.join(", ") : String(item)}`,
       )
       .join(" · ");
   }
@@ -1415,7 +1456,7 @@ function ParentPortalWorkspaceView({
     if (
       action === "enable_autopay" &&
       !window.confirm(
-        "Enable autopay? The one selected saved method will pay open invoices on or after their due date. Weekly tuition invoices are created separately, and the amount charged is the unpaid invoice balance.",
+        "Enable autopay? Open invoices are processed on or after their due date. Account credit is applied first, and the selected saved method pays any remaining balance. Weekly tuition invoices are created separately.",
       )
     )
       return;
@@ -1890,9 +1931,7 @@ function ParentPortalWorkspaceView({
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
                         Document status:{" "}
-                        {documentsNeedingAction[0].status
-                          .replaceAll("_", " ")
-                          .toLowerCase()}
+                        {displayTokenLabel(documentsNeedingAction[0].status)}
                       </span>
                     </span>
                     <ArrowRight
@@ -1911,7 +1950,7 @@ function ParentPortalWorkspaceView({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold">
-                        Upcoming Payment
+                        Upcoming payment
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
                         {openInvoices[0].number} · due{" "}
@@ -2103,7 +2142,7 @@ function ParentPortalWorkspaceView({
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <h2 className="font-semibold">Daily Report · {report.child.fullName}</h2>
+                        <h2 className="font-semibold">Daily report · {report.child.fullName}</h2>
                         <p className="mt-1 text-xs text-muted-foreground">Shared by your child’s classroom</p>
                       </div>
                       <time className="text-xs text-muted-foreground">{formatDate(report.date)}</time>
@@ -2117,7 +2156,7 @@ function ParentPortalWorkspaceView({
                     <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
                       {report.meals?.map((meal) => (
                         <div key={meal.id} className="rounded-xl border bg-background p-3">
-                          <dt className="text-xs text-muted-foreground">{meal.mealType}</dt>
+                          <dt className="text-xs text-muted-foreground">{displayTokenLabel(meal.mealType)}</dt>
                           <dd className="mt-1 font-medium">{meal.food}{meal.amount ? ` · ${meal.amount}` : ""}</dd>
                         </div>
                       ))}
@@ -2128,8 +2167,8 @@ function ParentPortalWorkspaceView({
                         </div>
                       ) : (
                         <div key={`diaper-${event.id}`} className="rounded-xl border bg-background p-3">
-                          <dt className="text-xs text-muted-foreground">Potty or Diaper</dt>
-                          <dd className="mt-1 font-medium">{event.type} · {formatTime(event.occurredAt)}{event.notes ? ` · ${event.notes}` : ""}</dd>
+                          <dt className="text-xs text-muted-foreground">Diaper or potty</dt>
+                          <dd className="mt-1 font-medium">{displayTokenLabel(event.type)} · {formatTime(event.occurredAt)}{event.notes ? ` · ${event.notes}` : ""}</dd>
                         </div>
                       ))}
                       {report.activities?.slice(0, 4).map((activity) => (
@@ -2224,7 +2263,7 @@ function ParentPortalWorkspaceView({
                       </div>
                     </div>
                     <Badge variant="outline">
-                      {child.enrollmentStatus.replaceAll("_", " ")}
+                      {displayTokenLabel(child.enrollmentStatus)}
                     </Badge>
                   </div>
                   <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
@@ -2277,7 +2316,7 @@ function ParentPortalWorkspaceView({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <div className="font-medium">
-                        {incident.type} · {incident.child.fullName}
+                        {displayTokenLabel(incident.type)} · {incident.child.fullName}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {formatDate(incident.occurredAt)}
@@ -2314,8 +2353,8 @@ function ParentPortalWorkspaceView({
           <CardHeader>
             <CardTitle>Family Balance and Account</CardTitle>
             <CardDescription>
-              Review charges, payments, invoices, and payment methods in one
-              place. No processing fee is added to your payment.
+              Review charges, payments, invoices, and payment methods. No
+              processing fee is added to your payment.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -2488,7 +2527,7 @@ function ParentPortalWorkspaceView({
                     <div>
                       <div className="font-medium">{entry.description}</div>
                       <div className="text-xs text-muted-foreground">
-                        {entry.type.replaceAll("_", " ")} ·{" "}
+                        {displayTokenLabel(entry.type)} ·{" "}
                         {formatDate(entry.effectiveAt)}
                       </div>
                     </div>
@@ -2575,16 +2614,16 @@ function ParentPortalWorkspaceView({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 font-medium">
-                    Payment Methods and Autopay
+                    Payment methods and autopay
                     <InfoTip label="About payment methods and autopay">
-                      Saving a debit/credit card or bank account does not enable
+                      Saving a debit or credit card or bank account does not enable
                       autopay. Enable it separately, or make a one-time payment
                       on an open invoice below.
                     </InfoTip>
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {autopayStatus === "enabled"
-                      ? "Autopay is enabled and will charge eligible open tuition invoices automatically."
+                      ? "Autopay is enabled. Account credit is applied first, and the saved method pays any remaining balance on eligible invoices."
                       : paymentMethodManagement?.hasSavedPaymentMethod
                         ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}`
                         : paymentMethodManagement?.autopayStatus === "pending"
@@ -2628,8 +2667,8 @@ function ParentPortalWorkspaceView({
                 >
                   <CreditCard data-icon="inline-start" />
                   {paymentMethodManagement?.hasSavedPaymentMethod
-                    ? "Replace Saved Card"
-                    : "Save Card"}
+                    ? "Replace saved card"
+                    : "Save card"}
                 </Button>
                 <Button
                   className="w-full sm:w-auto"
@@ -2639,10 +2678,10 @@ function ParentPortalWorkspaceView({
                 >
                   <Building2 data-icon="inline-start" />
                   {paymentMethodManagement?.autopayStatus === "pending"
-                    ? "Verify Bank Instantly"
+                    ? "Verify bank account"
                     : paymentMethodManagement?.hasSavedPaymentMethod
-                      ? "Instant Bank Login"
-                      : "Set Up Instant Bank"}
+                      ? "Replace with bank account"
+                      : "Connect bank account"}
                 </Button>
                 <Button
                   className="w-full sm:w-auto"
@@ -2652,7 +2691,7 @@ function ParentPortalWorkspaceView({
                   onClick={() => managePaymentMethod("portal")}
                   variant="outline"
                 >
-                  Manage Payment Method
+                  Manage payment methods
                 </Button>
               </div>
             </div>
@@ -2747,7 +2786,7 @@ function ParentPortalWorkspaceView({
                       onClick={() => payBalance("card")}
                     >
                       <CreditCard data-icon="inline-start" />
-                      Debit/Credit Card
+                      Debit or credit card
                     </Button>
                     <Button
                       className="w-full sm:w-auto"
@@ -2757,8 +2796,8 @@ function ParentPortalWorkspaceView({
                       onClick={() => payBalance("link_bank")}
                       variant="outline"
                     >
-                      <Building2 data-icon="inline-start" />
-                      Instant Bank
+                      <CreditCard data-icon="inline-start" />
+                      Pay with Link
                     </Button>
                     <Button
                       className="w-full sm:w-auto"
@@ -2769,7 +2808,7 @@ function ParentPortalWorkspaceView({
                       variant="outline"
                     >
                       <Building2 data-icon="inline-start" />
-                      Pay by Bank
+                      Bank account
                     </Button>
                   </div>
                 </div>
@@ -2957,7 +2996,7 @@ function ParentPortalWorkspaceView({
                     onClick={() => buyUniform("card")}
                   >
                     <CreditCard data-icon="inline-start" />
-                    Buy With Card
+                    Buy with card
                   </Button>
                   <Button
                     className="w-full sm:w-auto"
@@ -2967,14 +3006,14 @@ function ParentPortalWorkspaceView({
                     onClick={() => buyUniform("link_bank")}
                     variant="outline"
                   >
-                    <Building2 data-icon="inline-start" />
-                    Buy With Instant Bank
+                    <CreditCard data-icon="inline-start" />
+                    Buy with Link
                   </Button>
                 </div>
               </div>
             ) : null}
             <div className="pt-2">
-              <div className="font-medium">Invoice History</div>
+              <div className="font-medium">Invoice history</div>
               <div className="text-xs text-muted-foreground">
                 Review invoice dates and payment status. The balance above is
                 the current amount due from your family.
@@ -3003,7 +3042,9 @@ function ParentPortalWorkspaceView({
                           : "default"
                     }
                   >
-                    {invoiceHasPendingPayment ? "PROCESSING" : invoice.status}
+                    {invoiceHasPendingPayment
+                      ? "Processing"
+                      : displayTokenLabel(invoice.status)}
                   </Badge>
                   {invoice.productCheckoutAvailable &&
                   invoice.status === "OPEN" &&
@@ -3015,7 +3056,7 @@ function ParentPortalWorkspaceView({
                         onClick={() => payProductInvoice(invoice.id, "card")}
                       >
                         <CreditCard data-icon="inline-start" />
-                        Pay Product by Card
+                        Pay invoice by card
                       </Button>
                       <Button
                         className="w-full sm:w-auto"
@@ -3025,8 +3066,8 @@ function ParentPortalWorkspaceView({
                         }
                         variant="outline"
                       >
-                        <Building2 data-icon="inline-start" />
-                        Pay Product by Bank
+                        <CreditCard data-icon="inline-start" />
+                        Pay invoice with Link
                       </Button>
                     </div>
                   ) : null}
@@ -3308,9 +3349,10 @@ function ParentPortalWorkspaceView({
           {parentPortalDocumentsEnabled ? (
             <Card id="documents" className="scroll-mt-28 shadow-none">
               <CardHeader>
-                <CardTitle>Documents and Requests</CardTitle>
+                <CardTitle>Documents and requests</CardTitle>
                 <CardDescription>
-                  Director-reviewed changes protect child safety data.
+                  Review requested documents or send contact and pickup changes
+                  to your school.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -3323,7 +3365,7 @@ function ParentPortalWorkspaceView({
                       <div>
                         <div className="font-medium">{document.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {document.type} · expires{" "}
+                          {displayTokenLabel(document.type)} · expires{" "}
                           {formatDate(document.expiresAt)}
                         </div>
                         {document.downloadUrl ? (
@@ -3337,7 +3379,7 @@ function ParentPortalWorkspaceView({
                           </a>
                         ) : null}
                       </div>
-                      <Badge>{document.status}</Badge>
+                      <Badge>{displayTokenLabel(document.status)}</Badge>
                     </div>
                     {document.status !== "APPROVED" ? (
                       <div className="space-y-2">
@@ -3435,10 +3477,14 @@ function ParentPortalWorkspaceView({
                     ) : null}
                   </div>
                 ))}
-                <div className="space-y-2">
-                  <Label htmlFor="contact-request">
+                <div
+                  id="contact-request"
+                  className="scroll-mt-28 space-y-2"
+                  aria-labelledby="contact-request-heading"
+                >
+                  <h3 id="contact-request-heading" className="text-sm font-medium">
                     Request an emergency contact or pickup change
-                  </Label>
+                  </h3>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="space-y-1 text-sm">
                       <span>Record type</span>
@@ -3513,36 +3559,51 @@ function ParentPortalWorkspaceView({
                   ) : null}
                   {requestOperation !== "remove" ? (
                     <div className="grid gap-3 sm:grid-cols-3">
-                      <Input
-                        aria-label="Contact name"
-                        placeholder="Full name"
-                        value={requestName}
-                        onChange={(event) => setRequestName(event.target.value)}
-                      />
-                      <Input
-                        aria-label="Contact phone"
-                        placeholder="Phone"
-                        value={requestPhone}
-                        onChange={(event) =>
-                          setRequestPhone(event.target.value)
-                        }
-                      />
-                      <Input
-                        aria-label="Contact relationship"
-                        placeholder="Relationship"
-                        value={requestRelation}
-                        onChange={(event) =>
-                          setRequestRelation(event.target.value)
-                        }
-                      />
+                      <div className="space-y-1">
+                        <Label htmlFor="contact-request-name">Full name</Label>
+                        <Input
+                          id="contact-request-name"
+                          value={requestName}
+                          onChange={(event) => setRequestName(event.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="contact-request-phone">Phone</Label>
+                        <Input
+                          id="contact-request-phone"
+                          type="tel"
+                          autoComplete="tel"
+                          value={requestPhone}
+                          onChange={(event) =>
+                            setRequestPhone(event.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="contact-request-relation">
+                          Relationship to child
+                        </Label>
+                        <Input
+                          id="contact-request-relation"
+                          value={requestRelation}
+                          onChange={(event) =>
+                            setRequestRelation(event.target.value)
+                          }
+                        />
+                      </div>
                     </div>
                   ) : null}
-                  <Textarea
-                    id="contact-request"
-                    placeholder="Reason or helpful details for the director"
-                    value={requestDetails}
-                    onChange={(event) => setRequestDetails(event.target.value)}
-                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="contact-request-details">
+                      Reason for request
+                    </Label>
+                    <Textarea
+                      id="contact-request-details"
+                      placeholder="Add details your school should review"
+                      value={requestDetails}
+                      onChange={(event) => setRequestDetails(event.target.value)}
+                    />
+                  </div>
                   <Button
                     className="w-full sm:w-auto"
                     disabled={
@@ -3559,7 +3620,7 @@ function ParentPortalWorkspaceView({
                     onClick={requestContactUpdate}
                   >
                     <FileText data-icon="inline-start" />
-                    Submit Request
+                    Send change request
                   </Button>
                 </div>
               </CardContent>
@@ -3631,16 +3692,17 @@ function ParentPortalWorkspaceView({
                     Preferred Contact
                   </dt>
                   <dd className="mt-1 font-medium">
-                    {currentGuardian?.preferredCommunication ??
-                      family.guardians[0]?.preferredCommunication ??
-                      "Not listed"}
+                    {communicationPreferenceLabel(
+                      currentGuardian?.preferredCommunication ??
+                        family.guardians[0]?.preferredCommunication,
+                    )}
                   </dd>
                 </div>
               </dl>
             </div>
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="text-xs text-muted-foreground">
-                Parent login email
+                Sign-in email
               </div>
               <div className="mt-1 break-words font-medium">
                 {currentGuardian?.email ??
@@ -3761,7 +3823,7 @@ function ParentPortalWorkspaceView({
                 })}
               >
                 <LifeBuoy data-icon="inline-start" aria-hidden="true" />
-                Open Support
+                Open support
               </Link>
             </div>
             <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
@@ -3780,7 +3842,7 @@ function ParentPortalWorkspaceView({
                 </div>
                 {accountDeletionRequest ? (
                   <Badge variant="outline">
-                    {accountDeletionRequest.status.replaceAll("_", " ")}
+                    {displayTokenLabel(accountDeletionRequest.status)}
                   </Badge>
                 ) : null}
               </div>
@@ -3791,7 +3853,7 @@ function ParentPortalWorkspaceView({
                     {formatDate(accountDeletionRequest.createdAt)}
                   </div>
                   <p className="mt-1 text-muted-foreground">
-                    Status: {accountDeletionRequest.status.replaceAll("_", " ")}
+                    Status: {displayTokenLabel(accountDeletionRequest.status)}
                     {accountDeletionRequest.dueAt
                       ? ` · target response by ${formatDate(accountDeletionRequest.dueAt)}`
                       : ""}

@@ -48,7 +48,7 @@ async function POSTHandler(request: NextRequest) {
   await prisma.notification.create({
     data: {
       userId: user.id,
-      title: result.ok ? "SMS sent" : result.configured ? "SMS failed" : "SMS queued as configuration task",
+      title: result.ok ? "SMS sent" : result.configured ? "SMS failed" : "SMS not sent",
       body: result.ok
         ? `Message sent to ${to}.`
         : result.error || "Twilio credentials are required before this SMS can be delivered.",

@@ -44,6 +44,11 @@ export function PaymentMethodRequestForm({
   const [isPending, startTransition] = useTransition();
   const nextOpenInvoice = openInvoices[0] ?? null;
   const showPendingBankVerification = autopayStatus === "pending" && paymentMethodStatus !== "success";
+  const autopayLabel = autopayStatus === "enabled"
+    ? "Autopay enabled"
+    : autopayStatus === "pending"
+      ? "Autopay setup pending"
+      : "Autopay off";
 
   function money(cents: number) {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -67,14 +72,14 @@ export function PaymentMethodRequestForm({
         });
         const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
         if (!response.ok) {
-          setErrorMessage(json?.error || "Payment setup could not be opened.");
+          setErrorMessage(json?.error || "The secure payment form could not be opened.");
           return;
         }
         if (json?.url) {
           window.location.href = json.url;
           return;
         }
-        setErrorMessage("Payment setup did not return a secure form link.");
+        setErrorMessage("The secure payment form could not be opened. Try again or contact your school.");
       } catch {
         setErrorMessage("We could not reach the secure payment service. Check your connection and try again. No payment was started.");
       }
@@ -92,14 +97,14 @@ export function PaymentMethodRequestForm({
         });
         const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
         if (!response.ok) {
-          setErrorMessage(json?.error || "Payment checkout could not be opened.");
+          setErrorMessage(json?.error || "The secure payment form could not be opened.");
           return;
         }
         if (json?.url) {
           window.location.href = json.url;
           return;
         }
-        setErrorMessage("Payment checkout did not return a secure form link.");
+        setErrorMessage("The secure payment form could not be opened. Try again or contact your school.");
       } catch {
         setErrorMessage("We could not reach the secure payment service. Check your connection and try again. No payment was started.");
       }
@@ -111,13 +116,13 @@ export function PaymentMethodRequestForm({
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>The BEE Suite Tuition Payment Profile</CardTitle>
+            <CardTitle>Tuition payment options</CardTitle>
             <CardDescription className="text-zinc-300">
-              {centerLabel} requested this branded secure payment setup for {familyName}.
+              {centerLabel} sent this secure payment link for {familyName}.
             </CardDescription>
           </div>
           <Badge variant={autopayStatus === "enabled" ? "default" : "outline"} className="capitalize">
-            {autopayStatus}
+            {autopayLabel}
           </Badge>
         </div>
       </CardHeader>
@@ -125,9 +130,9 @@ export function PaymentMethodRequestForm({
         {paymentMethodStatus === "success" ? (
           <Alert className="border-emerald-400/40 bg-emerald-400/10 text-emerald-50">
             <CheckCircle2 className="size-4" />
-            <AlertTitle>Payment information submitted</AlertTitle>
+            <AlertTitle>Payment method submitted</AlertTitle>
             <AlertDescription className="text-emerald-100">
-              The BEE Suite received the secure setup confirmation. If your bank needs an extra verification step, this profile will update automatically when the processor confirms it.
+              We received confirmation that the payment method was submitted. If your bank requires another verification step, the status will update after the bank confirms it.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -136,9 +141,9 @@ export function PaymentMethodRequestForm({
             <CheckCircle2 className="size-4" />
             <AlertTitle>Payment submitted</AlertTitle>
             <AlertDescription className="text-emerald-100">
-              The BEE Suite received the secure payment confirmation. Confirmed card payments post to the ledger as paid; ACH bank payments show as processing until bank settlement confirms the funds. Open the parent portal to review the updated statement and receipt after processing.
+              Confirmed card payments appear as paid. Bank payments may appear as processing until the bank confirms settlement. Sign in to the Parent Portal and choose Payments to review the current status and receipt.
               <Link href="/parents" className="mt-2 inline-flex min-h-11 items-center font-semibold underline underline-offset-4">
-                Open parent portal for statement and receipt
+                Open the Parent Portal
               </Link>
             </AlertDescription>
           </Alert>
@@ -148,7 +153,7 @@ export function PaymentMethodRequestForm({
             <AlertCircle className="size-4" />
             <AlertTitle>Payment was cancelled</AlertTitle>
             <AlertDescription className="text-amber-100">
-              No payment was submitted. You can reopen checkout whenever you are ready.
+              No payment was submitted. You can reopen the secure payment form whenever you are ready.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -157,7 +162,7 @@ export function PaymentMethodRequestForm({
             <AlertCircle className="size-4" />
             <AlertTitle>Payment was not completed</AlertTitle>
             <AlertDescription>
-              No completed payment was recorded. Review the invoice below and retry with Instant Bank Login or Debit/Credit Card.
+              No completed payment was recorded. Review the invoice below and try again using a bank account or debit or credit card.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -175,7 +180,7 @@ export function PaymentMethodRequestForm({
             <AlertCircle className="size-4" />
             <AlertTitle>Bank verification is pending</AlertTitle>
             <AlertDescription className="text-amber-100">
-              Use The BEE Suite Instant Bank Login to verify your account through your bank now. Verification saves the method but does not enable autopay; that is a separate choice in the parent portal or with your school. Open invoices do not block verification.
+              Connect your bank account to complete verification. Saving a bank account does not turn on autopay; you can choose autopay separately in the Parent Portal or with your school. Open invoices do not block verification.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -184,14 +189,14 @@ export function PaymentMethodRequestForm({
             <Building2 className="size-4" />
             <AlertTitle>Bank verification requested</AlertTitle>
             <AlertDescription className="text-sky-100">
-              Select Verify Bank Instantly to complete ACH verification through The BEE Suite. You will log into your bank through the secure processor; The BEE Suite does not store your bank login, and any open invoices stay separate from this setup.
+              Select Connect bank account to complete verification. Your bank may ask you to sign in through its secure form. The BEE Suite does not store your bank sign-in credentials, and any open invoices remain separate from this setup.
             </AlertDescription>
           </Alert>
         ) : null}
         {errorMessage ? (
           <Alert variant="destructive" className="bg-red-950/40">
             <AlertCircle className="size-4" />
-            <AlertTitle>Needs attention</AlertTitle>
+            <AlertTitle>We couldn&apos;t continue</AlertTitle>
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         ) : null}
@@ -212,9 +217,9 @@ export function PaymentMethodRequestForm({
             <ShieldCheck className="mt-0.5 size-5 text-amber-300" />
             <div>
               <div className="flex items-center gap-2 text-sm font-medium">
-                The BEE Suite payment profile
+                Payment method
                 <InfoTip label="About secure payment setup" side="right" className="text-zinc-400 hover:text-white">
-                  Verify a bank account or save a card for tuition payments. Stripe may appear during the secure processor step, but The BEE Suite never stores bank login credentials, full card numbers, or full bank account numbers.
+                  Connect a bank account or save a card for tuition payments. Stripe provides the secure form and may appear during setup, but The BEE Suite never stores bank sign-in credentials, full card numbers, or full bank account numbers.
                 </InfoTip>
               </div>
               <p className="mt-2 text-xs text-zinc-400">
@@ -232,7 +237,7 @@ export function PaymentMethodRequestForm({
             variant={focus === "instant-bank" ? "default" : "outline"}
           >
             <Building2 data-icon="inline-start" />
-            Verify Bank Instantly
+            Connect bank account
           </Button>
           <Button
             className={focus === "instant-bank" ? "order-2 h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" : "order-1 h-11"}
@@ -241,7 +246,7 @@ export function PaymentMethodRequestForm({
             variant={focus === "instant-bank" ? "outline" : "default"}
           >
             <CreditCard data-icon="inline-start" />
-            Save Debit/Credit Card
+            Save card
           </Button>
         </div>
 
@@ -261,13 +266,12 @@ export function PaymentMethodRequestForm({
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Button className="h-11" disabled={isPending} onClick={() => startPayment(nextOpenInvoice.id, "card")}>
                 <CreditCard data-icon="inline-start" />
-                <span className="sm:hidden">Debit/Credit</span>
-                <span className="hidden sm:inline">Pay With Debit/Credit Card</span>
+                <span className="sm:hidden">Card</span>
+                <span className="hidden sm:inline">Debit or credit card</span>
               </Button>
               <Button className="h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" disabled={isPending} variant="outline" onClick={() => startPayment(nextOpenInvoice.id, "link_bank")}>
-                <Building2 data-icon="inline-start" />
-                <span className="sm:hidden">Bank Login</span>
-                <span className="hidden sm:inline">Pay With Instant Bank Login</span>
+                <CreditCard data-icon="inline-start" />
+                <span>Pay with Link</span>
               </Button>
             </div>
             {openInvoices.length > 1 ? (

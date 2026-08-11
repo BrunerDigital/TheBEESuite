@@ -1,6 +1,6 @@
 # Director Day-One Quick Start Guide - The BEE Suite
 
-Last reviewed: August 5, 2026
+Last reviewed: August 11, 2026
 
 Audience: center directors and assistant directors who need to add families and children, prepare parent access, assign weekly tuition, set up a saved card and autopay, install the director app, and use Mr. Bee safely.
 
@@ -121,7 +121,7 @@ Parent access, the invitation email, the kiosk PIN, and billing are separate con
 4. Verify the result reports that the parent portal login is ready or the guardian displays `Portal linked`.
 5. Scroll to `Parent Portal Access`.
 6. Select `Send Parent App Invite` for a new guardian or `Resend Parent App Invite` for an already linked guardian.
-7. Confirm the provider accepted the email. Provider acceptance is not the same as confirmed delivery.
+7. Confirm the email status is `Accepted`. `Delivered` is a separate status that confirms delivery.
 8. Use `Send Parent Feature Guide & FAQ` only after the guardian is linked.
 9. Tell the parent to use the personal guardian email from the profile at `https://thebeesuite.io/parents`.
 
@@ -139,7 +139,7 @@ Navigation: `People` -> `Billing & Payments` -> `Billing & invoices`.
 2. Read the sticky `Currently editing billing data` header.
 3. Confirm the school, family, billing account, selected child, balance, open invoices, saved method status, and current weekly tuition.
 4. Review the family ledger for an existing invoice for the same child and service week.
-5. Confirm the school shows `Parent payments connected` before expecting online payment or autopay to work.
+5. Confirm the selected school is ready to accept parent payments before expecting online payment or autopay to work.
 6. Confirm the approved gross rate, weekly credits/discounts, net family responsibility, billing cycle, and start week.
 
 ### Choose or create the school rate
@@ -196,16 +196,16 @@ Saving a rate does not assign it to a child.
 The recommended flow is for the parent to enter card information in the secure processor handoff. Staff should never collect or store full card numbers in notes, messages, spreadsheets, or screenshots.
 
 1. In `Billing & invoices`, select the correct school and family.
-2. Confirm the school says `Parent payments connected`.
+2. Confirm the selected school is ready to accept parent payments.
 3. In `Branded parent payment and bank verification links`, select the intended guardian or billing email.
-4. Select `Send Payment Link`.
+4. Select `Send payment link`.
 5. Tell the parent to open the branded BEE Suite link and choose the card option.
 6. The parent enters the card directly in the secure Stripe flow and returns to The BEE Suite.
 7. Refresh or reopen the family billing record.
-8. Under `Family payment profile`, verify `Saved method` shows a masked card label rather than `No saved payment method`.
-9. Use `Manage Saved` only to review or replace the selected family method.
+8. Under `Family payment method`, verify the saved method shows a masked card label rather than `No payment method is saved`.
+9. Use `Manage saved method` only to review or replace the selected family method.
 
-If the parent is physically present and school policy allows it, `Add Card` can open the secure setup handoff. The parent should control the card-entry screen.
+If the parent is physically present and school policy allows it, `Save card` can open the secure setup form. The parent should control the card-entry screen.
 
 Important notes:
 
@@ -229,7 +229,7 @@ Autopay applies at the family billing-account level, not separately to each chil
 
 ### Turn it on
 
-1. In `Family payment profile`, select `Enable Autopay`.
+1. In `Family payment method`, select `Enable autopay`.
 2. Read the confirmation: one selected saved method will be used for eligible open invoices on or after their due date.
 3. Confirm only if the family has approved autopay and the ledger is correct.
 4. Verify the status badge changes to `enabled`.
@@ -245,7 +245,7 @@ For a normal weekly family, the intended sequence is:
 
 Do not manually retry a payment while it is pending or processing. If a payment succeeded but the ledger did not update, do not charge it again.
 
-`Disable Autopay` stops future automatic collection but keeps the saved card available for approved one-time charges.
+`Disable autopay` stops future automatic collection but keeps the saved card available for approved one-time charges.
 
 ## 9. Final Onboarding Verification
 
@@ -265,7 +265,7 @@ Before calling the family complete, verify every row:
 | Opening balance | Zero unless verified pre-cutover debt was intentionally added once |
 | Saved method | Correct masked card appears for this school's family account |
 | Autopay | `enabled` only after ledger review and family authorization |
-| Online payments | School shows `Parent payments connected` |
+| Online payments | Selected school is ready to accept parent payments |
 
 ## 10. Use Mr. Bee to Help With Director Work
 

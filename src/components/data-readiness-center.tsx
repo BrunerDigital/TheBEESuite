@@ -57,19 +57,19 @@ type DataReadinessCenterProps = {
 
 const statusCopy: Record<DataReadinessStatus, { label: string; detail: string; icon: typeof ShieldCheck }> = {
   BLOCKED: { label: "Blocked", detail: "Missing or unsafe", icon: ShieldAlert },
-  CONFIRM: { label: "Confirm", detail: "Human decision", icon: CircleDashed },
-  READY: { label: "Ready", detail: "Reviewed decision", icon: Check },
-  EXCLUDED: { label: "Excluded", detail: "Intentional holdout", icon: AlertTriangle },
-  IMPORTED: { label: "Imported", detail: "Committed batch", icon: Database },
-  VERIFIED: { label: "Verified", detail: "Post-import evidence", icon: ShieldCheck },
-  FAILED: { label: "Failed", detail: "Retry or investigate", icon: AlertTriangle },
+  CONFIRM: { label: "Confirm", detail: "Staff review needed", icon: CircleDashed },
+  READY: { label: "Ready", detail: "Ready for import", icon: Check },
+  EXCLUDED: { label: "Excluded", detail: "Intentionally left out", icon: AlertTriangle },
+  IMPORTED: { label: "Imported", detail: "Import completed", icon: Database },
+  VERIFIED: { label: "Verified", detail: "Import checked", icon: ShieldCheck },
+  FAILED: { label: "Failed", detail: "Review and retry", icon: AlertTriangle },
 };
 
 const decisionOptions: Array<{ action: DataReadinessDecision; label: string; detail: string }> = [
   { action: "confirm", label: "Confirm", detail: "Approve the reviewed source decision" },
   { action: "edit", label: "Edit", detail: "Record a corrected proposed value or instruction" },
   { action: "match_existing", label: "Match existing", detail: "Approve a stable existing-record match" },
-  { action: "create_new", label: "Create new", detail: "Approve creation only for a later guarded import" },
+  { action: "create_new", label: "Create new", detail: "Approve creation only for a later import after review" },
   { action: "exclude", label: "Exclude", detail: "Intentionally omit with a documented reason" },
   { action: "request_information", label: "Request information", detail: "Hold until the source owner responds" },
   { action: "defer", label: "Defer", detail: "Keep the task in confirmation state" },
@@ -90,6 +90,10 @@ function riskClass(risk: DataReadinessTask["risk"]) {
   if (risk === "high") return "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-100";
   if (risk === "medium") return "border-sky-500/35 bg-sky-500/10 text-sky-800 dark:text-sky-100";
   return "border-emerald-500/35 bg-emerald-500/10 text-emerald-800 dark:text-emerald-100";
+}
+
+function riskLabel(risk: DataReadinessTask["risk"]) {
+  return `${risk.charAt(0).toUpperCase()}${risk.slice(1)}`;
 }
 
 function decisionResultStatus(action: DataReadinessDecision): DataReadinessStatus {
@@ -379,8 +383,8 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
                     {visibleTasks.map((task) => (
                       <TableRow key={task.id}>
                         <TableCell>{task.bulkEligible ? <input type="checkbox" className="size-4" aria-label={`Select ${task.entity} for safe bulk confirmation`} checked={bulkTaskIds.includes(task.id)} onChange={() => toggleBulk(task.id)} /> : null}</TableCell>
-                        <TableCell><Badge variant={statusVariant(task.status)}>{task.status}</Badge></TableCell>
-                        <TableCell><div className="flex items-center gap-2"><span className="grid size-7 place-items-center rounded-lg bg-primary/12 text-xs font-semibold text-primary">{task.priority}</span><Badge variant="outline" className={riskClass(task.risk)}>{task.risk}</Badge></div></TableCell>
+                        <TableCell><Badge variant={statusVariant(task.status)}>{statusCopy[task.status].label}</Badge></TableCell>
+                        <TableCell><div className="flex items-center gap-2"><span className="grid size-7 place-items-center rounded-lg bg-primary/12 text-xs font-semibold text-primary">{task.priority}</span><Badge variant="outline" className={riskClass(task.risk)}>{riskLabel(task.risk)}</Badge></div></TableCell>
                         <TableCell><div className="font-medium">{task.entity}</div><div className="max-w-56 truncate text-xs text-muted-foreground">{task.centerName}</div></TableCell>
                         <TableCell className="max-w-[25rem] whitespace-normal"><div className="line-clamp-2 text-sm">{task.reason}</div><div className="mt-1 text-xs text-muted-foreground">{task.category}</div></TableCell>
                         <TableCell className="max-w-48"><div className="truncate text-xs">{task.sourceFilename}</div><div className="text-xs text-muted-foreground">{task.sourceRow ? `Row ${task.sourceRow}` : "Batch evidence"}</div></TableCell>
@@ -395,9 +399,9 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
               <div className="grid gap-3 lg:hidden">
                 {visibleTasks.map((task) => (
                   <button key={task.id} type="button" onClick={() => openTask(task)} className="rounded-2xl border bg-background/60 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <div className="flex items-start justify-between gap-3"><div><div className="font-medium">{task.entity}</div><div className="text-xs text-muted-foreground">{task.centerName}</div></div><Badge variant={statusVariant(task.status)}>{task.status}</Badge></div>
+                    <div className="flex items-start justify-between gap-3"><div><div className="font-medium">{task.entity}</div><div className="text-xs text-muted-foreground">{task.centerName}</div></div><Badge variant={statusVariant(task.status)}>{statusCopy[task.status].label}</Badge></div>
                     <p className="mt-3 line-clamp-3 text-sm leading-5">{task.reason}</p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2"><Badge variant="outline" className={riskClass(task.risk)}>{task.risk}</Badge><Badge variant="outline">Priority {task.priority}</Badge><span className="text-xs text-muted-foreground">{task.sourceRow ? `Row ${task.sourceRow}` : "Batch"}</span></div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2"><Badge variant="outline" className={riskClass(task.risk)}>{riskLabel(task.risk)}</Badge><Badge variant="outline">Priority {task.priority}</Badge><span className="text-xs text-muted-foreground">{task.sourceRow ? `Row ${task.sourceRow}` : "Batch"}</span></div>
                   </button>
                 ))}
                 {!visibleTasks.length ? <p className="rounded-xl border bg-background/50 p-8 text-center text-sm text-muted-foreground">No readiness tasks match these filters.</p> : null}
@@ -422,7 +426,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
           {selectedTask ? (
             <>
               <SheetHeader className="border-b p-5 pr-14">
-                <div className="flex flex-wrap items-center gap-2"><Badge variant={statusVariant(selectedTask.status)}>{selectedTask.status}</Badge><Badge variant="outline" className={riskClass(selectedTask.risk)}>{selectedTask.risk} risk</Badge><Badge variant="outline">Priority {selectedTask.priority}</Badge></div>
+                <div className="flex flex-wrap items-center gap-2"><Badge variant={statusVariant(selectedTask.status)}>{statusCopy[selectedTask.status].label}</Badge><Badge variant="outline" className={riskClass(selectedTask.risk)}>{riskLabel(selectedTask.risk)} risk</Badge><Badge variant="outline">Priority {selectedTask.priority}</Badge></div>
                 <SheetTitle className="mt-3 text-xl">{selectedTask.entity} · {selectedTask.centerName}</SheetTitle>
                 <SheetDescription>{selectedTask.reason}</SheetDescription>
               </SheetHeader>

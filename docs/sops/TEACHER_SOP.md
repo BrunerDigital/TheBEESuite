@@ -1,6 +1,6 @@
 # Teacher SOP - The BEE Suite
 
-Last updated: August 6, 2026
+Last updated: August 11, 2026
 
 Audience: teachers and classroom staff using The BEE Suite for attendance, daily reports, media, incidents, messages, and staff kiosk workflows.
 
@@ -39,12 +39,12 @@ Daily reports and parent-facing updates may include approved photos and reports 
 Have these ready:
 
 - Your BEE Suite username or work email.
-- Your school-issued first-login password, if the director gave you one.
+- Your sign-in password from the school, if the director gave you one.
 - Your 4 digit staff kiosk code, if your school uses staff clock-in/out.
 - Your assigned classroom name.
 - Your scheduled shift.
 
-Use only the first-login password issued directly by the school. Change it when the sign-in flow requires it, and never share it with another staff member.
+Use only the sign-in password issued directly by the school. Change it when the sign-in flow requires it, and never share it with another staff member.
 
 ## Login
 

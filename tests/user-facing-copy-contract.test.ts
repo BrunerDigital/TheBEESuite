@@ -63,7 +63,8 @@ test("limited-rollout values and accurate AI labels remain intact", () => {
   assert.match(tenantControls, /row\.rollout === "disabled" \? "pilot"/);
   assert.match(aiSurfaces, /Generate AI summary/);
   assert.match(aiSurfaces, /AI assist/);
-  assert.match(aiSurfaces, /AI can help draft wording/);
+  assert.match(aiSurfaces, /Staff must verify every fact before completing a report/);
+  assert.doesNotMatch(aiSurfaces, /AI can help draft wording/);
   assert.match(aiSurfaces, /AI daily brief/);
 });
 
@@ -81,18 +82,18 @@ test("delivery and account-scope copy explains outcomes in plain language", () =
   assert.match(login, /only shows locations assigned to your account/);
 });
 
-test("the current parent invitation guide sources use temporary-password language", () => {
+test("the current parent invitation guide sources match the existing invitation password policy", () => {
   const guideGraphicSources = [
     source("scripts/render-current-instruction-graphics.mjs"),
     source("public/brand/the-bee-suite/explainers/current/parent-access-install.svg"),
     source("public/brand/the-bee-suite/explainers/current/director-daily-flow.svg"),
   ].join("\n");
 
-  assert.match(guideGraphicSources, /temporary password from the invitation/);
-  assert.match(guideGraphicSources, /email, and temporary password/);
+  assert.match(guideGraphicSources, /password from the invitation/);
+  assert.match(guideGraphicSources, /email, and password/);
   assert.doesNotMatch(
     guideGraphicSources,
-    /school-issued first-login password|email, and first-login password|human-reviewed/i,
+    /temporary password|first-login password|human-reviewed/i,
   );
   assert.match(guideGraphicSources, /School staff must review custody, pickup, medical, incident, billing, and compliance decisions/);
 });
@@ -105,5 +106,61 @@ test("parent invitation and document errors do not expose server exceptions", ()
   assert.doesNotMatch(documentRoute, /error instanceof Error \? error\.message/);
   assert.match(invitationRoute, /We couldn't confirm whether the invitation finished/);
   assert.match(invitationRoute, /Refresh this family before trying again/);
+  assert.match(invitationRoute, /password issued in the school invitation/);
+  assert.doesNotMatch(invitationRoute, /temporary password|first-login password/i);
   assert.match(documentRoute, /It has not been submitted\. Try again\./);
+});
+
+test("public registration and onboarding copy does not expose implementation details", () => {
+  const registration = [
+    source("src/app/registration/page.tsx"),
+    source("src/components/online-registration-form.tsx"),
+  ].join("\n");
+  const onboarding = source("src/components/onboarding-flow.tsx");
+
+  assert.doesNotMatch(
+    registration,
+    /CRM connected|CRM follow-up task|database connection|director review task/i,
+  );
+  assert.doesNotMatch(
+    onboarding,
+    /trial workspace|Trial safeguards|Supabase Auth|ownership container|primary center profile|live checkout/i,
+  );
+  assert.match(registration, /School staff will review it and contact you with next steps/);
+  assert.match(onboarding, /Your workspace is ready/);
+});
+
+test("parent payment guidance uses the current portal labels", () => {
+  const guidance = [
+    source("src/app/resources/page.tsx"),
+    source("src/lib/parent-portal-invitations.ts"),
+    source("docs/sops/PARENT_ACH_PAYMENT_GUIDE.md"),
+    source("docs/sops/PARENT_PORTAL_SOP.md"),
+    source("scripts/render-current-instruction-graphics.mjs"),
+  ].join("\n");
+
+  assert.match(guidance, /Open Payments/);
+  assert.match(guidance, /Debit or credit card/);
+  assert.match(guidance, /Pay with Link/);
+  assert.doesNotMatch(guidance, /Bank account \(instant verification\)/);
+  assert.match(guidance, /Connect bank account/);
+  assert.match(guidance, /Save card/);
+  assert.doesNotMatch(
+    guidance,
+    /Open Billing|One-Time Bank|Instant Bank|Pay by Bank|Debit\/Credit Card|Set Up Instant Bank|Set Up Card Autopay|quick-start SOP|approved card recovery|separate recovery line/i,
+  );
+  assert.match(guidance, /no processing fee is added to the parent payment/i);
+});
+
+test("authentication copy consistently calls the action sign in", () => {
+  const login = source("src/components/login-form.tsx");
+  const reset = source("src/components/reset-password-form.tsx");
+
+  assert.match(login, /Teacher sign-in/);
+  assert.match(login, /Director sign-in/);
+  assert.match(login, /Executive sign-in/);
+  assert.match(login, /Signing in…/);
+  assert.doesNotMatch(login, /Log in to your|Log in as a|Forgot Password\?/);
+  assert.match(reset, /Back to sign in/);
+  assert.match(reset, /Request a new reset link/);
 });

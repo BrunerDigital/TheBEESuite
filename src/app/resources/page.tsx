@@ -176,7 +176,7 @@ const guides: ResourceGuide[] = [
     steps: [
       "Approve the school profile, rooms, staff roles, family records, tuition rules, billing cadence, and source-data reconciliation.",
       "Test real role and school isolation for executives, directors, billing admins, teachers, parents, and kiosk users.",
-      "Keep setup, parent invitations, kiosk/PIN, billing, parent payments, legacy-system archival, mobile stores, and wider-wave approval as independent dated gates.",
+      "Keep setup, parent invitations, kiosk/PIN, billing, parent payments, previous-system cutover, source-file archival, mobile stores, and wider-wave approval as independent dated gates.",
       "Train directors, teachers, billing staff, and families only on features approved for that school.",
       "Keep the previous system as the source of record until reconciliation, ownership, and the signed cutover decision are complete.",
       "A HELD OFF gate is not a PASS. Record each GO or NO-GO and its owner; stop the affected flow when evidence is missing.",

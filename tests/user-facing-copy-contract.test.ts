@@ -38,8 +38,10 @@ const importSetupStaticCopySurfaces = [
   "src/components/data-readiness-center.tsx",
   "src/components/live-ops-pages.tsx",
   "src/components/procare-import-panel.tsx",
+  "src/lib/data-readiness.ts",
   "src/lib/demo-data.ts",
   "src/lib/onboarding-setup.ts",
+  "src/lib/parent-invitation-readiness.ts",
   "src/lib/procare-duplicate-matching.ts",
   "src/lib/procare-import-fields.ts",
   "src/lib/setup-checklists.ts",
@@ -65,6 +67,9 @@ test("production copy avoids pilot and internal approval jargon", () => {
 
 test("authored import and setup UI copy omits the legacy vendor name", () => {
   assert.doesNotMatch(importSetupStaticCopySurfaces, /\b(?:ProCare|Procare)\b/);
+  assert.match(importSetupStaticCopySurfaces, /previous-system cutover/);
+  assert.match(importSetupStaticCopySurfaces, /source-file archival/);
+  assert.match(importSetupStaticCopySurfaces, /Enrollment, ParentInfo, Relationships, and ChildInfo/);
 });
 
 test("stored values, lookup keys, and import provenance remain exact", () => {

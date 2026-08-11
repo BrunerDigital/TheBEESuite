@@ -97,7 +97,7 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(panel, /Open school setup/);
   assert.match(panel, /billing-settings\?view=setup/);
   assert.match(panel, /Import does not activate the school by itself/);
-  assert.match(panel, /Parent invitations, kiosk\/PIN credentials, billing\/payment activation, and legacy-system archival stay held off/);
+  assert.match(panel, /Parent invitations, kiosk\/PIN credentials, billing\/payment activation, previous-system cutover, and source-file archival each stay held off/);
   assert.match(panel, /useRouter/);
   assert.match(panel, /router\.refresh\(\)/);
   assert.match(panel, /hasCompletedPreview/);

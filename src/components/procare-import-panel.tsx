@@ -576,7 +576,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     },
     {
       title: "Activation gates",
-      detail: "Parent invitations, kiosk/PIN credentials, billing/payment activation, and legacy-system archival stay held off until separately approved. When invitations are approved, each send reruns a fail-closed import and relationship preflight before any account or email change.",
+      detail: "Parent invitations, kiosk/PIN credentials, billing/payment activation, previous-system cutover, and source-file archival each stay held off until separately approved. When invitations are approved, each send reruns a fail-closed import and relationship preflight before any account or email change.",
       status: "held",
     },
   ] : [];
@@ -586,7 +586,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       <CardHeader>
         <CardTitle>Import Family Accounts</CardTitle>
         <CardDescription>
-          The four standard reports populate families, guardians, children, classrooms, enrollment details, allergies, emergency contacts, and pickups. Add staff, schedule, attendance, sign-in/out, health, and account-balance exports to the same upload or ZIP; supported rows are linked by source IDs, while reports without a safe destination mapping are identified for migration follow-up.
+          The four standard source reports—Enrollment, ParentInfo, Relationships, and ChildInfo—populate families, guardians, children, classrooms, enrollment details, allergies, emergency contacts, and pickups. Add staff, schedule, attendance, sign-in/out, health, and account-balance exports to the same upload or ZIP; supported rows are linked by source IDs, while reports without a safe destination mapping are identified for migration follow-up.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -776,7 +776,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               <AlertCircle className="size-4" />
               <AlertTitle>Import does not activate the school by itself</AlertTitle>
               <AlertDescription>
-                Parent invitations, kiosk/PIN credentials, billing/payment activation, and legacy-system archival stay held off until the director completes setup review and receives separate approval for each gate.
+                Parent invitations, kiosk/PIN credentials, billing/payment activation, previous-system cutover, and source-file archival each stay held off until the director completes setup review and receives separate approval for each gate.
               </AlertDescription>
             </Alert>
             <div className="flex flex-wrap gap-2">
@@ -1023,7 +1023,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                         );
                       })}
                       {!section.correlations.length ? (
-                        <div className="text-xs text-muted-foreground">The four standard source reports supply this relationship automatically.</div>
+                        <div className="text-xs text-muted-foreground">The four standard source reports (Enrollment, ParentInfo, Relationships, and ChildInfo) supply this relationship automatically.</div>
                       ) : null}
                     </div>
                     {section.required ? (

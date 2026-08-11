@@ -241,7 +241,7 @@ export function buildImportRowReadinessTask(input: {
 }) : DataReadinessTask {
   const entries = normalizedRawData(input.rawData);
   const entity = inferEntity(entries);
-  const message = clean(input.message, 500) || "This reviewed ProCare row needs a human decision before it can be treated as ready.";
+  const message = clean(input.message, 500) || "This reviewed source row needs a human decision before it can be treated as ready.";
   const categoryRule = categoryRules.find((rule) => rule.pattern.test(`${message} ${entries.map((entry) => entry.normalizedKey).join(" ")}`)) ?? categoryRules.at(-1)!;
   const sourceIds = entries
     .filter((entry) => stableIdPattern.test(entry.normalizedKey) && entry.value)
@@ -282,7 +282,7 @@ export function buildImportRowReadinessTask(input: {
     reason: message,
     currentValue,
     proposedValue,
-    difference: currentValue === proposedValue ? "No visible difference" : "The reviewed ProCare value is not yet a confirmed BEE value.",
+    difference: currentValue === proposedValue ? "No visible difference" : "The reviewed source value is not yet a confirmed BEE value.",
     sourceFilename: input.filename,
     sourceRow: input.rowNumber,
     sourceIds,
@@ -394,7 +394,7 @@ function csvCell(value: unknown) {
 export function dataReadinessCsv(tasks: DataReadinessTask[]) {
   const headers = [
     "Status", "Risk", "Priority", "Category", "Entity", "Location", "Reason", "Current BEE value",
-    "ProCare value", "Difference", "Source filename", "Source row", "Source IDs", "Confidence",
+    "Source value", "Difference", "Source filename", "Source row", "Source IDs", "Confidence",
     "Downstream impact", "Decision", "Decision note", "Updated at",
   ];
   const rows = tasks.map((task) => [

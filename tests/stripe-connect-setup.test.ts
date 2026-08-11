@@ -3,12 +3,14 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   completeStripeConnectedAccountBusinessProfile,
+  createStripeAccountLink,
   createStripeConnectedAccount,
   createStripeExpressDashboardLoginLink,
   createStripePayoutBankSelectionLink,
   listStripeConnectedAccountPayoutBanks,
   retrieveStripeConnectedAccount,
   setStripeConnectedAccountDailyPayouts,
+  setStripeConnectedAccountManualPayouts,
 } from "../src/lib/integrations";
 import {
   STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE,
@@ -158,6 +160,7 @@ test("Stripe connected account creation sends dashboard profile details to Accou
     const support = asRecord(merchant.support);
     const defaults = asRecord(payload.defaults);
     const profile = asRecord(defaults.profile);
+    const responsibilities = asRecord(defaults.responsibilities);
 
     assert.equal(businessDetails.registered_name, "Kokomo School LLC");
     assert.equal(businessDetails.phone, "+17655551234");
@@ -169,7 +172,11 @@ test("Stripe connected account creation sends dashboard profile details to Accou
     assert.equal(support.url, "https://kidcityusa.example/kokomo");
     assert.equal(profile.business_url, "https://kidcityusa.example/kokomo");
     assert.equal(profile.product_description, "Childcare tuition and registration fees.");
-    assert.deepEqual(payload.include, ["configuration.merchant", "configuration.recipient", "requirements"]);
+    assert.equal(payload.dashboard, "full");
+    assert.equal(responsibilities.fees_collector, "stripe");
+    assert.equal(responsibilities.losses_collector, "stripe");
+    assert.ok(asRecord(configuration.customer));
+    assert.deepEqual(payload.include, ["configuration.merchant", "configuration.recipient", "configuration.customer", "defaults", "requirements"]);
     assert.equal(JSON.stringify(payload).includes("external_account"), false);
     assert.equal(JSON.stringify(payload).includes("requirements_collector"), false);
   } finally {
@@ -211,6 +218,31 @@ test("Stripe connected account payout schedule is set to daily automatic payouts
     assert.equal(stripeAccount, "acct_123");
     assert.equal(params.get("payments[payouts][schedule][interval]"), "daily");
     assert.equal(params.get("payments[settlement_timing][delay_days_override]"), "");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe connected account payout hold uses a manual schedule without touching bank accounts", async () => {
+  const originalFetch = globalThis.fetch;
+  let body = "";
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    body = String(init?.body);
+    return new Response(JSON.stringify({ object: "balance_settings", payments: { payouts: { schedule: { interval: "manual" } } } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+  try {
+    const result = await setStripeConnectedAccountManualPayouts({
+      accountId: "acct_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+    const params = new URLSearchParams(body);
+    assert.equal(result.ok, true);
+    assert.equal(params.get("payments[payouts][schedule][interval]"), "manual");
+    assert.equal(body.includes("external_account"), false);
+    assert.equal(body.includes("bank"), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -311,6 +343,27 @@ test("Stripe payout bank selection falls back to onboarding before the Express D
       });
     }
 
+    if (requestedUrls.length === 2) {
+      return new Response(JSON.stringify({
+        id: "acct_123",
+        configuration: {
+          customer: {},
+          merchant: {},
+          recipient: {},
+        },
+        defaults: {
+          responsibilities: {
+            fees_collector: "stripe",
+            losses_collector: "stripe",
+          },
+        },
+        requirements: {},
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({
       url: "https://connect.stripe.com/setup/acct_123/secure",
     }), {
@@ -331,7 +384,61 @@ test("Stripe payout bank selection falls back to onboarding before the Express D
     assert.equal(result.mode, "onboarding");
     assert.equal(result.url, "https://connect.stripe.com/setup/acct_123/secure");
     assert.equal(requestedUrls[0], "https://api.stripe.com/v1/accounts/acct_123/login_links");
-    assert.equal(requestedUrls[1], "https://api.stripe.com/v2/core/account_links");
+    assert.match(requestedUrls[1], /^https:\/\/api\.stripe\.com\/v2\/core\/accounts\/acct_123\?/);
+    assert.equal(requestedUrls[2], "https://api.stripe.com/v2/core/account_links");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe account links match the configurations applied to the Accounts v2 account", async () => {
+  const originalFetch = globalThis.fetch;
+  let accountLinkBody: Record<string, unknown> = {};
+
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    if (String(url).startsWith("https://api.stripe.com/v2/core/accounts/acct_configured?")) {
+      return new Response(JSON.stringify({
+        id: "acct_configured",
+        configuration: {
+          customer: { capabilities: { automatic_indirect_tax: { requested: true } } },
+          merchant: { capabilities: { card_payments: { requested: true } } },
+          recipient: { capabilities: { stripe_balance: { stripe_transfers: { requested: true } } } },
+        },
+        defaults: {
+          responsibilities: {
+            fees_collector: "stripe",
+            losses_collector: "stripe",
+          },
+        },
+        requirements: {},
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    assert.equal(String(url), "https://api.stripe.com/v2/core/account_links");
+    accountLinkBody = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+    return new Response(JSON.stringify({
+      url: "https://connect.stripe.com/setup/acct_configured/secure",
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeAccountLink({
+      accountId: "acct_configured",
+      refreshUrl: "https://thebeesuite.io/api/billing/connect/refresh?centerId=center_123",
+      returnUrl: "https://thebeesuite.io/stripe-reauthorization?center=center_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+
+    assert.equal(result.ok, true);
+    const useCase = asRecord(accountLinkBody.use_case);
+    const onboarding = asRecord(useCase.account_onboarding);
+    assert.deepEqual(onboarding.configurations, ["customer", "merchant", "recipient"]);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -402,6 +509,7 @@ test("Stripe connected account retrieval uses indexed Accounts v2 include params
         merchant: { capabilities: { card_payments: { status: "active" } } },
         recipient: { capabilities: { stripe_balance: { stripe_transfers: { status: "active" } } } },
       },
+      defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
       requirements: { entries: [] },
     }), {
       status: 200,
@@ -418,9 +526,13 @@ test("Stripe connected account retrieval uses indexed Accounts v2 include params
     assert.equal(result.ok, true);
     assert.equal(result.account?.chargesEnabled, true);
     assert.equal(result.account?.payoutsEnabled, true);
+    assert.equal(result.account?.feesCollector, "stripe");
+    assert.equal(result.account?.lossesCollector, "stripe");
     assert.equal(url.searchParams.get("include[0]"), "configuration.merchant");
     assert.equal(url.searchParams.get("include[1]"), "configuration.recipient");
-    assert.equal(url.searchParams.get("include[2]"), "requirements");
+    assert.equal(url.searchParams.get("include[2]"), "configuration.customer");
+    assert.equal(url.searchParams.get("include[3]"), "defaults");
+    assert.equal(url.searchParams.get("include[4]"), "requirements");
     assert.equal(url.searchParams.has("include[]"), false);
   } finally {
     globalThis.fetch = originalFetch;

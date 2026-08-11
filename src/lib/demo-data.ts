@@ -99,7 +99,7 @@ export const kpis = [
   { label: "Occupancy", value: "72.2%", trend: "+3.1% vs last month", tone: "amber" },
   { label: "New leads", value: "30", trend: "12 high-fit", tone: "violet" },
   { label: "Tours today", value: "5", trend: "2 need prep", tone: "sky" },
-  { label: "Outstanding balances", value: "$18.6k", trend: "8 overdue", tone: "rose" },
+  { label: "Outstanding balances", value: "$18.6k", trend: "Current family balances", tone: "rose" },
   { label: "Staff present", value: "13/14", trend: "Ratios healthy", tone: "emerald" },
   { label: "Incidents to review", value: "5", trend: "3 parent acks", tone: "amber" },
 ];
@@ -664,9 +664,9 @@ export const modules: ModuleDefinition[] = [
     title: "Software Invoice",
     eyebrow: "Corporate billing",
     description:
-      "Kid City USA Enterprises monthly software invoice view for The BEE Suite access, calculated from active school users.",
+      "Kid City USA Enterprises monthly software fee view for The BEE Suite access, billed at a fixed amount per active school.",
     owner: "Kid City USA accounting, platform owner, brand admin",
-    metrics: ["$49 per active school user", "Monthly invoice", "Hosted payment", "Audit logged"],
+    metrics: ["$99 per active school", "Monthly subscription", "School-authorized payment", "Audit logged"],
     features: ["Current invoice preview", "Active school-user count", "Bee Suite-branded hosted invoice link", "Corporate billing audit trail"],
     records: ["Kid City USA Enterprises monthly software access invoice"],
     sensitive: true,

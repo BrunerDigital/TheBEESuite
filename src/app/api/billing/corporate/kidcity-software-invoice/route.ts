@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth";
-import { createStripeCustomer, createStripeInvoice } from "@/lib/integrations";
-import {
-  getKidCitySoftwareInvoiceSnapshot,
-  saveKidCitySoftwareStripeCustomerId,
-} from "@/lib/kidcity-software-billing";
+import { getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
 import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
 import { canUseKidCityCorporateBilling } from "@/lib/brand-assets";
@@ -43,88 +38,16 @@ async function POSTHandler(request: NextRequest) {
 
   const body = jsonObject(await request.json().catch(() => ({})));
   const sendInvoice = body.sendInvoice === true;
-  let snapshot = await getKidCitySoftwareInvoiceSnapshot(prisma);
+  const snapshot = await getKidCitySoftwareInvoiceSnapshot(prisma);
 
   if (!sendInvoice) {
     return NextResponse.json({ ok: true, mode: "preview", invoice: snapshot });
   }
-  if (snapshot.totalAmountCents <= 0 || snapshot.activeSchoolUserCount <= 0) {
-    return NextResponse.json({ ok: false, error: "No active Kid City school users were found for this invoice.", invoice: snapshot }, { status: 400 });
-  }
-  if (!snapshot.stripeCustomerId) {
-    const customer = await createStripeCustomer({
-      email: snapshot.billingEmail || "accounting@kidcityusa.com",
-      name: "Kid City USA Enterprises",
-      tenantId: user.tenantId,
-      metadata: {
-        tenantId: user.tenantId,
-        customerType: "kidcity_enterprises_monthly_software",
-        createdBy: user.email,
-      },
-    });
-    if (!customer.ok || !customer.id) {
-      return NextResponse.json({
-        ok: false,
-        error: customer.error || "Payment profile could not be created for Kid City USA Enterprises.",
-        invoice: snapshot,
-      }, { status: customer.configured ? 502 : 400 });
-    }
-    await saveKidCitySoftwareStripeCustomerId(prisma, customer.id);
-    snapshot = await getKidCitySoftwareInvoiceSnapshot(prisma);
-  }
-  if (!snapshot.stripeCustomerId) {
-    return NextResponse.json({ ok: false, error: "Payment profile setup did not complete.", invoice: snapshot }, { status: 502 });
-  }
-
-  const stripeInvoice = await createStripeInvoice({
-    customerId: snapshot.stripeCustomerId,
-    amountCents: snapshot.totalAmountCents,
-    description: snapshot.description,
-    invoiceNumber: snapshot.invoiceNumber,
-    daysUntilDue: snapshot.daysUntilDue,
-    sendInvoice: true,
-    tenantId: user.tenantId,
-    metadata: {
-      tenantId: user.tenantId,
-      invoiceType: "kidcity_monthly_software_fee",
-      tenant: "kid-city-usa",
-      period: snapshot.period,
-      activeSchoolUserCount: String(snapshot.activeSchoolUserCount),
-      unitAmountCents: String(snapshot.unitAmountCents),
-      totalAmountCents: String(snapshot.totalAmountCents),
-      createdBy: user.email,
-    },
-  });
-
-  await writeAuditLog(user, {
-    action: stripeInvoice.ok ? "billing.kidcity_software_invoice.sent" : "billing.kidcity_software_invoice.failed",
-    resource: "HostedInvoice",
-    resourceId: stripeInvoice.id || snapshot.invoiceNumber,
-    metadata: {
-      invoiceNumber: snapshot.invoiceNumber,
-      stripeInvoiceId: stripeInvoice.id || null,
-      stripeHostedInvoiceUrl: stripeInvoice.hostedInvoiceUrl || stripeInvoice.url || null,
-      activeSchoolUserCount: snapshot.activeSchoolUserCount,
-      unitAmountCents: snapshot.unitAmountCents,
-      totalAmountCents: snapshot.totalAmountCents,
-      error: stripeInvoice.ok ? null : stripeInvoice.error || null,
-    },
-  });
-
-  if (!stripeInvoice.ok) {
-    return NextResponse.json({ ok: false, error: stripeInvoice.error || "Hosted invoice could not be created.", invoice: snapshot }, { status: stripeInvoice.configured ? 502 : 400 });
-  }
-
   return NextResponse.json({
-    ok: true,
-    mode: "sent",
+    ok: false,
+    error: "Aggregate emailed software invoices are disabled. Each school is billed $99 through its separately authorized school subscription.",
     invoice: snapshot,
-    stripe: {
-      id: stripeInvoice.id,
-      url: stripeInvoice.hostedInvoiceUrl || stripeInvoice.url || null,
-      invoicePdf: stripeInvoice.invoicePdf || null,
-    },
-  });
+  }, { status: 409 });
 }
 
 export const GET = withApiLogging("GET", GETHandler);

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowUpRight, BadgeDollarSign, CheckCircle2, CreditCard, Landmark, LockKeyhole, RefreshCw, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, BadgeDollarSign, CheckCircle2, CreditCard, Landmark, LockKeyhole, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import {
   PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE,
 } from "@/lib/payment-disclosures";
 import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
+import { maskStripeAccountId, readStripeConnectMigration } from "@/lib/stripe-connect-migration";
 import {
   normalizeStripeConnectSetupInput,
   type StripeConnectSetupDetails,
@@ -112,6 +113,10 @@ export function StripeConnectPanel({
       needsSetup: Math.max(0, localCenters.length - started),
     };
   }, [localCenters]);
+  const migrationCount = useMemo(
+    () => localCenters.filter((center) => Boolean(readStripeConnectMigration(center.customFields).targetAccountId)).length,
+    [localCenters],
+  );
 
   function openSetupDialog(center: StripeConnectCenter) {
     const setup = normalizeStripeConnectSetupInput({}, center);
@@ -196,18 +201,26 @@ export function StripeConnectPanel({
     }
   }
 
-  async function startSoftwarePaymentSetup(centerId: string, method: "ach" | "card" | "default") {
+  async function startSoftwarePaymentSetup(centerId: string, method: "ach" | "card" | "default" | "stripe_balance") {
+    const approved = method !== "stripe_balance" || window.confirm(
+      "By clicking OK, you authorize The BEE Suite to debit this school's Stripe account balance for the $99 monthly recurring software fee arising from its use of The BEE Suite. You can opt out by cancelling the subscription.",
+    );
+    if (!approved) return;
     setBusyCenterId(centerId);
     setMessage(null);
     try {
       const response = await fetch("/api/billing/software-payment-method", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ centerId, method }),
+        body: JSON.stringify({ centerId, method, approved }),
       });
       const json = await response.json();
-      if (!response.ok || !json.ok || !json.url) throw new Error(json.error || "Software payment setup could not be opened.");
-      window.location.assign(json.url as string);
+      if (!response.ok || !json.ok) throw new Error(json.error || "Software payment setup could not be opened.");
+      if (json.url) window.location.assign(json.url as string);
+      else {
+        setMessage(json.message || "$99 monthly billing from this school's Stripe balance is authorized.");
+        window.location.reload();
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Software payment setup could not be opened.");
       setBusyCenterId(null);
@@ -446,6 +459,14 @@ export function StripeConnectPanel({
             Open one school at a time and enter the exact routing and account numbers for that location. This avoids the shared bank-login selector reusing the wrong account. You may select Skip for now and return later; bank setup never blocks login to The BEE Suite. After connecting a bank, select Check to confirm its name and last four digits.
           </span>
         </div>
+        {migrationCount ? (
+          <div className="flex gap-3 rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-800">
+            <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-700" />
+            <span>
+              {migrationCount} school{migrationCount === 1 ? " has" : "s have"} a prepared Stripe reauthorization. Parent payments remain on each existing account, and its current payout bank is protected. Use the branded reauthorization action for the new account; do not change the existing payout destination during migration.
+            </span>
+          </div>
+        ) : null}
 
         <Dialog open={Boolean(setupCenterId)} onOpenChange={(open) => {
           if (!open && !setupBusy) closeSetupDialog();
@@ -561,7 +582,11 @@ export function StripeConnectPanel({
               const softwareMethodType = text(centerFields.stripeSoftwarePaymentMethodType);
               const softwareLast4 = text(centerFields.stripeSoftwarePaymentMethodLast4);
               const hasConfirmedPayoutBank = Boolean(text(centerFields.stripePayoutBankLast4));
-              const softwareMethodLabel = softwareMethodType === "us_bank_account"
+              const migration = readStripeConnectMigration(center.customFields);
+              const migrationInProgress = Boolean(migration.targetAccountId && !migration.cutoverAt);
+              const softwareMethodLabel = softwareMethodType === "stripe_balance"
+                ? "$99 monthly from the school's Stripe balance"
+                : softwareMethodType === "us_bank_account"
                 ? `${text(centerFields.stripeSoftwarePaymentMethodBankName) || "Bank account"}${softwareLast4 ? ` •••• ${softwareLast4}` : ""}`
                 : softwareMethodType === "card"
                   ? `${text(centerFields.stripeSoftwarePaymentMethodBrand) || "Card"}${softwareLast4 ? ` •••• ${softwareLast4}` : ""}`
@@ -578,10 +603,21 @@ export function StripeConnectPanel({
                   <TableCell className="max-w-48 whitespace-normal">
                     <div className="text-xs font-medium">{payoutBankLabel(center)}</div>
                     {hasAccount ? <div className="mt-1 text-[11px] text-muted-foreground">{maskedAccount(center)}</div> : null}
+                    {migrationInProgress ? (
+                      <div className="mt-2 rounded-md border border-amber-300/50 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+                        Existing bank protected · new account {maskStripeAccountId(migration.targetAccountId)}
+                      </div>
+                    ) : null}
                   </TableCell>
                   <TableCell><Badge variant={statusVariant(status)}>{status}</Badge></TableCell>
                   <TableCell className="max-w-xs whitespace-normal text-xs text-muted-foreground">
-                    {readiness.requirementFields.length
+                    {migrationInProgress
+                      ? migration.status === "ready_for_cutover"
+                        ? "New account authorized and ready for controlled cutover"
+                        : migration.status === "balance_authorization_required"
+                          ? "New business and payout setup complete; $99 balance authorization required"
+                          : "Parent payments remain active on the current account while the new account is reauthorized"
+                      : readiness.requirementFields.length
                       ? readiness.requirementFields.slice(0, 4).join(", ")
                       : readiness.canAcceptParentPayments
                         ? "Parent payments enabled"
@@ -590,12 +626,21 @@ export function StripeConnectPanel({
                   </TableCell>
                   <TableCell className="max-w-xs whitespace-normal">
                     <div className="text-xs font-medium">{softwareMethodLabel}</div>
+                    {hasAccount && softwareMethodType !== "stripe_balance" ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Authorize $99 monthly from this school&apos;s Stripe balance. This does not change its payout bank.
+                      </p>
+                    ) : null}
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      <Button type="button" size="sm" variant="outline" disabled={busyCenterId === center.id || !stripeConfigured || !hasConfirmedPayoutBank} onClick={() => startSoftwarePaymentSetup(center.id, "ach")}>
+                      <Button type="button" size="sm" variant="outline" disabled={migrationInProgress || busyCenterId === center.id || !stripeConfigured || !readiness.canAcceptParentPayments || softwareMethodType === "stripe_balance"} onClick={() => startSoftwarePaymentSetup(center.id, "stripe_balance")}>
+                        <Landmark data-icon="inline-start" />
+                        {softwareMethodType === "stripe_balance" ? "Balance authorized" : "Authorize $99 balance fee"}
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" disabled={migrationInProgress || busyCenterId === center.id || !stripeConfigured || !hasConfirmedPayoutBank} onClick={() => startSoftwarePaymentSetup(center.id, "ach")}>
                         <BadgeDollarSign data-icon="inline-start" />
                         {softwareMethodType ? "Change fee bank" : hasConfirmedPayoutBank ? "Authorize fee bank" : "Available after payout bank"}
                       </Button>
-                      <Button type="button" size="sm" variant="outline" disabled={busyCenterId === center.id || !stripeConfigured} onClick={() => startSoftwarePaymentSetup(center.id, "card")}>
+                      <Button type="button" size="sm" variant="outline" disabled={migrationInProgress || busyCenterId === center.id || !stripeConfigured} onClick={() => startSoftwarePaymentSetup(center.id, "card")}>
                         <CreditCard data-icon="inline-start" />
                         {softwareMethodType ? "Change" : "Add card"}
                       </Button>
@@ -603,7 +648,17 @@ export function StripeConnectPanel({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap justify-end gap-2">
-                      {hasAccount ? (
+                      {migrationInProgress ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => window.location.assign(`/stripe-reauthorization?center=${encodeURIComponent(center.id)}`)}
+                          disabled={busyCenterId === center.id || !stripeConfigured}
+                        >
+                          <ShieldCheck data-icon="inline-start" />
+                          Reauthorize new account
+                        </Button>
+                      ) : hasAccount ? (
                         <Button
                           type="button"
                           size="sm"
@@ -614,7 +669,7 @@ export function StripeConnectPanel({
                           {hasConfirmedPayoutBank ? "Change payout bank" : "Connect payout bank"}
                         </Button>
                       ) : null}
-                      {hasAccount ? (
+                      {hasAccount && !migrationInProgress ? (
                         <Button
                           type="button"
                           size="sm"
@@ -626,7 +681,7 @@ export function StripeConnectPanel({
                           Check
                         </Button>
                       ) : null}
-                      <Button
+                      {!migrationInProgress ? <Button
                         type="button"
                         size="sm"
                         variant={hasAccount ? "outline" : "default"}
@@ -635,7 +690,7 @@ export function StripeConnectPanel({
                       >
                         {hasAccount ? "Requirements" : "Set up"}
                         <ArrowUpRight data-icon="inline-end" />
-                      </Button>
+                      </Button> : null}
                     </div>
                   </TableCell>
                 </TableRow>

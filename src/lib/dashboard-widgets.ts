@@ -123,7 +123,7 @@ export const dashboardWidgetCatalog: readonly DashboardWidgetDefinition[] = [
   {
     id: "billingRevenue",
     title: "Billing and revenue",
-    description: "Outstanding balances, invoice totals, and revenue trend widgets.",
+    description: "Current-family outstanding balances, invoice totals, and revenue trend widgets.",
     category: "Billing",
     roles: billingVisibleRoles,
   },

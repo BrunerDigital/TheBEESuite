@@ -85,6 +85,7 @@ test("notification external delivery sends through enabled channels and records 
     ],
     emailPurpose: "communication_email",
     smsPurpose: "communication_sms",
+    disableEmailClickTracking: true,
     statusCallbackUrl: "https://example.com/api/twilio/status",
     providers: {
       sendEmail: async (input) => {
@@ -112,6 +113,7 @@ test("notification external delivery sends through enabled channels and records 
   assert.equal(summary.sms.sent, 0);
   assert.equal(summary.sms.error, "Twilio returned 400.");
   assert.equal(emailInputs.length, 1);
+  assert.equal((emailInputs[0] as { disableClickTracking?: boolean }).disableClickTracking, true);
   assert.equal(smsInputs.length, 1);
   assert.equal(emailRecords.length, 1);
   assert.equal(smsRecords.length, 1);

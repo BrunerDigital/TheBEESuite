@@ -11,6 +11,7 @@ import {
   setStripeConnectedAccountDailyPayouts,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
+import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import {
   STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE,
@@ -97,6 +98,13 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const existingFields = jsonObject(center.customFields);
+  const migration = readStripeConnectMigration(existingFields);
+  if (migration.targetAccountId && !migration.cutoverAt) {
+    return NextResponse.json(
+      { ok: false, error: "This school has a prepared replacement Stripe account. Use Reauthorize new Stripe account so parent payments remain on the current account until cutover." },
+      { status: 409 },
+    );
+  }
   const setupInput = body.setup && typeof body.setup === "object" && !Array.isArray(body.setup)
     ? body.setup as StripeConnectSetupInput
     : {};

@@ -9,28 +9,28 @@ import {
   kidCitySchoolUserWhere,
 } from "../src/lib/kidcity-software-billing";
 
-const originalUnitAmount = process.env.STRIPE_KIDCITY_SOFTWARE_FEE_PER_SCHOOL_USER_CENTS;
+const originalUnitAmount = process.env.STRIPE_SCHOOL_SOFTWARE_FEE_CENTS;
 
 afterEach(() => {
-  if (originalUnitAmount === undefined) delete process.env.STRIPE_KIDCITY_SOFTWARE_FEE_PER_SCHOOL_USER_CENTS;
-  else process.env.STRIPE_KIDCITY_SOFTWARE_FEE_PER_SCHOOL_USER_CENTS = originalUnitAmount;
+  if (originalUnitAmount === undefined) delete process.env.STRIPE_SCHOOL_SOFTWARE_FEE_CENTS;
+  else process.env.STRIPE_SCHOOL_SOFTWARE_FEE_CENTS = originalUnitAmount;
 });
 
-test("Kid City software invoice defaults to $49 per active school user", () => {
-  delete process.env.STRIPE_KIDCITY_SOFTWARE_FEE_PER_SCHOOL_USER_CENTS;
+test("school software billing defaults to $99 per active school", () => {
+  delete process.env.STRIPE_SCHOOL_SOFTWARE_FEE_CENTS;
 
-  assert.equal(getKidCitySoftwareFeeUnitAmountCents(), 4_900);
-  assert.equal(getKidCitySoftwareInvoiceAmount(94), 460_600);
+  assert.equal(getKidCitySoftwareFeeUnitAmountCents(), 9_900);
+  assert.equal(getKidCitySoftwareInvoiceAmount(72), 712_800);
 });
 
-test("Kid City software invoice number and description include the monthly period and school user count", () => {
+test("Kid City software invoice number and description include the monthly period and school count", () => {
   const period = getKidCitySoftwareInvoicePeriod(new Date("2026-06-08T12:00:00.000Z"));
 
   assert.equal(period, "2026-06");
   assert.equal(getKidCitySoftwareInvoiceNumber(period), "BEE-KCUSA-SOFTWARE-2026-06");
   assert.equal(
-    getKidCitySoftwareInvoiceDescription({ period, userCount: 94, unitAmountCents: 4_900 }),
-    "The BEE Suite monthly software access fee for Kid City USA Enterprises - 2026-06 - 94 active school user(s) at $49.00 each",
+    getKidCitySoftwareInvoiceDescription({ period, schoolCount: 72, unitAmountCents: 9_900 }),
+    "The BEE Suite monthly software access fee for Kid City USA Enterprises - 2026-06 - 72 active school(s) at $99.00 each",
   );
 });
 

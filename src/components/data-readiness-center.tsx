@@ -325,7 +325,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
               <Card className="glass-panel">
                 <CardHeader><CardTitle>Independent launch gates</CardTitle><CardDescription>Readiness never silently activates the business.</CardDescription></CardHeader>
                 <CardContent className="grid gap-3">
-                  {["Parent invitations", "Payment and billing activation", "Kiosk and PIN activation", "School launch approval", "Legacy-system archival"].map((gate) => (
+                  {["Parent invitations", "Payment and billing activation", "Kiosk and PIN activation", "School launch approval", "Previous-system cutover", "Source-file archival"].map((gate) => (
                     <div key={gate} className="flex items-center justify-between gap-3 rounded-xl border bg-background/50 p-3"><span className="text-sm font-medium">{gate}</span><Badge variant="outline">Separate approval</Badge></div>
                   ))}
                 </CardContent>

@@ -70,6 +70,9 @@ test("authored import and setup UI copy omits the legacy vendor name", () => {
   assert.match(importSetupStaticCopySurfaces, /previous-system cutover/);
   assert.match(importSetupStaticCopySurfaces, /source-file archival/);
   assert.match(importSetupStaticCopySurfaces, /Enrollment, ParentInfo, Relationships, and ChildInfo/);
+  const dataReadinessCenter = source("src/components/data-readiness-center.tsx");
+  assert.match(dataReadinessCenter, /"Previous-system cutover", "Source-file archival"/);
+  assert.doesNotMatch(dataReadinessCenter, /Legacy-system archival/);
 });
 
 test("stored values, lookup keys, and import provenance remain exact", () => {

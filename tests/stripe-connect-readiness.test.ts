@@ -113,3 +113,25 @@ test("Stripe snapshot readiness maps active connected account to checkout ready"
   assert.equal(readiness.label, "Ready");
   assert.equal(readiness.canAcceptParentPayments, true);
 });
+
+test("replacement-account requirements do not create a director payment error while the active account is ready", () => {
+  const readiness = stripeCheckoutReadiness({
+    stripeConfigured: true,
+    webhookConfigured: true,
+    customFields: {
+      stripeConnectAccountId: "acct_active",
+      stripeChargesEnabled: true,
+      stripePayoutsEnabled: true,
+      stripeDetailsSubmitted: true,
+      stripePayoutRequirementFields: [],
+      stripeConnectMigrationSourceAccountId: "acct_active",
+      stripeConnectMigrationTargetAccountId: "acct_replacement",
+      stripeConnectMigrationStatus: "requirements_due",
+      stripeConnectMigrationTargetRequirementFields: ["person.id_numbers.us_ssn"],
+    },
+  });
+
+  assert.equal(readiness.status, "ready");
+  assert.equal(readiness.canAcceptParentPayments, true);
+  assert.equal(readiness.blockingReason, null);
+});

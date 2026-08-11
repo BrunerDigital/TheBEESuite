@@ -5,13 +5,12 @@ import test from "node:test";
 
 const root = process.cwd();
 
-test("school payout UI clearly separates payout banks from software-fee methods", () => {
+test("school payout UI focuses on payout readiness without exposing a software-fee requirement", () => {
   const panel = fs.readFileSync(path.join(root, "src/components/stripe-connect-panel.tsx"), "utf8");
 
-  assert.match(panel, /BEE Suite fee method \(not payouts\)/);
   assert.match(panel, /Connect payout bank/);
-  assert.match(panel, /Available after payout bank/);
-  assert.match(panel, /!hasConfirmedPayoutBank/);
+  assert.match(panel, /current verified account remains active until a controlled cutover/);
+  assert.doesNotMatch(panel, /\$99|software-payment-method|BEE Suite fee method/);
 });
 
 test("software-fee ACH cannot start before the payout destination is confirmed", () => {
@@ -25,7 +24,7 @@ test("software-fee ACH cannot start before the payout destination is confirmed",
   assert.match(route, /\{ status: 409 \}/);
 });
 
-test("$99 Stripe-balance billing requires recorded school approval and never edits payout banks", () => {
+test("legacy Stripe-balance billing API remains approval-gated and hidden from school payout UI", () => {
   const route = fs.readFileSync(
     path.join(root, "src/app/api/billing/software-payment-method/route.ts"),
     "utf8",
@@ -40,7 +39,7 @@ test("$99 Stripe-balance billing requires recorded school approval and never edi
   assert.match(route, /stripeSoftwareMonthlyAmountCents: monthlyAmountCents/);
   assert.match(integrations, /customer_account: accountId/);
   assert.match(integrations, /"payment_settings\[payment_method_types\]\[0\]": "stripe_balance"/);
-  assert.match(panel, /authorize The BEE Suite to debit this school's Stripe account balance/);
+  assert.doesNotMatch(panel, /authorize The BEE Suite to debit this school's Stripe account balance|software-payment-method|\$99/);
   assert.doesNotMatch(route, /external_accounts|bank_accounts|payoutBankId/);
 });
 

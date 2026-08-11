@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { UserRole } from "@prisma/client";
 import {
   canUseCorporateStripeVerification,
+  corporateStripeConfirmedPayoutBank,
   corporateStripePayoutBankIsConfirmed,
   corporateStripeVerificationBindingIsValid,
   CORPORATE_STRIPE_VERIFICATION_TARGETS,
@@ -193,6 +194,10 @@ test("corporate Stripe verification requires the correct active mapping and a de
   assert.equal(corporateStripePayoutBankIsConfirmed([
     { currency: "usd", defaultForCurrency: true, last4: null },
   ]), false);
+  const fallbackBank = { currency: "cad", defaultForCurrency: true, last4: "4242", bankName: "Fallback" };
+  assert.equal(corporateStripeConfirmedPayoutBank([fallbackBank]), null);
+  const confirmedBank = { currency: "usd", defaultForCurrency: true, last4: "6789", bankName: "Confirmed" };
+  assert.equal(corporateStripeConfirmedPayoutBank([fallbackBank, confirmedBank]), confirmedBank);
 });
 
 test("migration target requires Stripe-owned fees and losses, a bank, and active capabilities", () => {
@@ -319,6 +324,8 @@ test("approved corporate verification links are current-due only and cannot invo
   assert.match(standardCard, /I agree to the terms of service/);
   assert.doesNotMatch(standardCard, /\$99|software-payment-method|stripe_balance/);
   assert.match(migrationRoute, /collectionFields: corporateVerification \? "currently_due" : "eventually_due"/);
+  assert.match(migrationRoute, /stripeConnectMigrationTargetRequirementFields: target\.account\.currentlyDueRequirementFields/);
+  assert.match(migrationRoute, /const payoutBank = corporateStripeConfirmedPayoutBank\(banks\.banks\)/);
   assert.match(migrationRoute, /includeFutureRequirements: !corporateVerification/);
   assert.match(refreshRoute, /collectionFields: corporateVerification \? "currently_due" : "eventually_due"/);
   assert.match(refreshRoute, /includeFutureRequirements: !corporateVerification/);

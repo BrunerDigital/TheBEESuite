@@ -4,6 +4,7 @@ import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser 
 import { writeAuditLog } from "@/lib/audit";
 import {
   authorizeCorporateStripeVerificationCenter,
+  corporateStripeConfirmedPayoutBank,
   corporateStripePayoutBankIsConfirmed,
   corporateStripeVerificationBindingIsValid,
   readCorporateStripeVerificationTarget,
@@ -110,8 +111,8 @@ async function GETHandler(request: NextRequest) {
     if (!banks.ok) {
       return NextResponse.json({ ok: false, error: banks.error || "The Stripe payout bank could not be checked." }, { status: banks.configured ? 502 : 503 });
     }
-    const payoutBank = banks.defaultBank;
-    const verificationStatus = stripeVerificationState(target.account, corporateStripePayoutBankIsConfirmed(banks.banks));
+    const payoutBank = corporateStripeConfirmedPayoutBank(banks.banks);
+    const verificationStatus = stripeVerificationState(target.account, Boolean(payoutBank));
     const migrationStatus = verificationStatus === "stripe_verification_complete"
       ? "ready_for_cutover"
       : verificationStatus === "stripe_verification_required"
@@ -123,7 +124,7 @@ async function GETHandler(request: NextRequest) {
       stripeConnectMigrationTargetChargesEnabled: target.account.chargesEnabled,
       stripeConnectMigrationTargetPayoutsEnabled: target.account.payoutsEnabled,
       stripeConnectMigrationTargetDetailsSubmitted: target.account.detailsSubmitted,
-      stripeConnectMigrationTargetRequirementFields: target.account.requirementFields,
+      stripeConnectMigrationTargetRequirementFields: target.account.currentlyDueRequirementFields,
       stripeConnectMigrationTargetFeesCollector: target.account.feesCollector,
       stripeConnectMigrationTargetLossesCollector: target.account.lossesCollector,
       stripeConnectMigrationTargetPayoutBankName: payoutBank?.bankName || null,
@@ -144,7 +145,7 @@ async function GETHandler(request: NextRequest) {
       action: "billing.connect.migration.status_synced",
       resource: "Center",
       resourceId: center.id,
-      metadata: { sourceAccountId: migration.sourceAccountId, targetAccountId: migration.targetAccountId, status: migrationStatus, payoutBankConfirmed: Boolean(payoutBank?.last4) },
+      metadata: { sourceAccountId: migration.sourceAccountId, targetAccountId: migration.targetAccountId, status: migrationStatus, payoutBankConfirmed: Boolean(payoutBank) },
     });
     return NextResponse.json({ ok: true, centerId: center.id, status: verificationStatus });
   }

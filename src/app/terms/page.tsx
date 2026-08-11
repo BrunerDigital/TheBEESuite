@@ -15,14 +15,14 @@ const userResponsibilities = [
   "Keep login credentials private and report suspected unauthorized access promptly.",
   "Contact the school directly for urgent child safety, pickup, custody, medical, emergency, or same-day billing policy issues.",
   "Do not upload unlawful, harmful, malicious, infringing, or unauthorized content.",
-  "Do not attempt to bypass authentication, permissions, tenant scoping, rate limits, logging, or security controls.",
+  "Do not try to access records or tools that are not assigned to your account, or interfere with security controls.",
 ];
 
 const schoolResponsibilities = [
   "Configure authorized users, roles, centers, classrooms, families, and feature access accurately.",
   "Maintain accurate child, family, staff, medical, custody, pickup, attendance, billing, and school records.",
   "Obtain required parent, guardian, employee, regulatory, FERPA, COPPA, payment, and privacy authorizations.",
-  "Review and approve communications, records, billing actions, documents, incident records, and AI-assisted drafts.",
+  "Review and approve communications, records, billing actions, documents, incident records, and drafts created with automated assistance.",
   "Maintain emergency procedures outside The BEE Suite.",
 ];
 
@@ -58,7 +58,7 @@ export default function TermsPage() {
               <p className="mt-5 text-base leading-7 text-slate-300">
                 These terms govern access to The BEE Suite websites, parent portal, mobile app, support, documentation, and related childcare operations services.
               </p>
-              <p className="mt-3 text-sm leading-6 text-slate-400">Last updated: July 27, 2026</p>
+              <p className="mt-3 text-sm leading-6 text-slate-400">Last updated: August 11, 2026</p>
             </div>
 
             <div className="mt-10 grid gap-4 lg:grid-cols-3">
@@ -70,8 +70,8 @@ export default function TermsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-                  <p>The BEE Suite is role-based. Users may access only records and workflows they are authorized to use by their childcare provider, school, owner group, or The BEE Suite.</p>
-                  <p>Access may be limited by role, school, center, owner group, classroom, family, child, tenant, invitation status, and feature configuration.</p>
+                  <p>You may use only the records and tools assigned to your account by your school, its owner organization, or The BEE Suite.</p>
+                  <p>What you can see may depend on your account type, school, classroom, family relationship, invitation status, and the features your school has turned on.</p>
                 </CardContent>
               </Card>
 
@@ -83,7 +83,7 @@ export default function TermsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-                  <p>When enabled, parent payments are for childcare tuition, school fees, goods, or services consumed outside the app. Payment method entry is handled by Stripe or another approved payment provider.</p>
+                  <p>When enabled, parent payments are for childcare tuition, school fees, goods, or services received outside the app. Secure card or bank entry may open a separate payment screen operated by Stripe or another approved payment processor.</p>
                   <p>Unless waived or otherwise agreed in writing, The BEE Suite retains a school-paid tuition feature fee of 1.50% from each tuition payout. This fee is paid by the school and does not increase the family&apos;s tuition invoice.</p>
                   <p>The BEE Suite does not store full card numbers, full bank account numbers, or bank login credentials.</p>
                 </CardContent>
@@ -98,7 +98,7 @@ export default function TermsPage() {
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>The BEE Suite supports childcare communication and records. It is not an emergency alert system, medical device, custody decision tool, licensing authority, or legal service.</p>
-                  <p>For urgent child safety, pickup, medical, custody, or emergency matters, contact the childcare provider directly.</p>
+                  <p>For urgent child safety, pickup, medical, custody, or emergency matters, contact your school directly.</p>
                 </CardContent>
               </Card>
             </div>
@@ -146,7 +146,7 @@ export default function TermsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-                  <p>Use of The BEE Suite is subject to the Privacy Policy. Some records are controlled by the childcare provider and may need to be retained for licensing, safety, custody, billing, payment, audit, or legal reasons.</p>
+                  <p>Use of The BEE Suite is subject to the Privacy Policy. Some records are controlled by the school and may need to be retained for licensing, safety, custody, billing, payment, account-history, or legal reasons.</p>
                   <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/privacy" />}>
                     Privacy Policy
                   </Button>
@@ -155,20 +155,20 @@ export default function TermsPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>AI and Automation</CardTitle>
+                  <CardTitle>Automated Assistance</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-                  <p>AI-assisted drafts, summaries, and automation support must be reviewed by authorized humans. They do not provide legal, medical, licensing, safety, custody, billing, tax, employment, or compliance advice.</p>
+                  <p>Some tools can help authorized school staff draft or summarize content. School staff must review that work before using it. These tools do not provide legal, medical, licensing, safety, custody, billing, tax, employment, or regulatory advice.</p>
                 </CardContent>
               </Card>
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>Compliance Support</CardTitle>
+                  <CardTitle>Professional Decisions</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-                  <p>The BEE Suite provides workflow and documentation support, but does not provide legal, licensing, medical, custody, billing, tax, employment, or compliance advice.</p>
-                  <p>Schools, owner groups, and authorized users remain responsible for reviewing records, policies, disclosures, regulatory duties, and professional guidance before acting.</p>
+                  <p>The BEE Suite helps schools organize work and records, but does not provide legal, licensing, medical, custody, billing, tax, employment, or regulatory advice.</p>
+                  <p>Schools, owner organizations, and authorized users remain responsible for reviewing records, policies, disclosures, legal duties, and professional guidance before acting.</p>
                 </CardContent>
               </Card>
 
@@ -180,7 +180,7 @@ export default function TermsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-                  <p>For app support, account access, privacy requests, or billing workflow questions, contact support. Schools remain the first contact for urgent operational issues.</p>
+                  <p>For app support, account access, privacy requests, or questions about using billing features, contact support. Your school remains the first contact for urgent child, pickup, billing-policy, or record issues.</p>
                   <Button nativeButton={false} render={<Link href="/support" />}>
                     Contact Support
                   </Button>

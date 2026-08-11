@@ -32,7 +32,7 @@ test("login and password recovery preserve controlled input when services are un
   assert.match(reset, /Your entries are still here/i);
   assert.match(reset, /linkStatus === "ready"/);
   assert.match(reset, /Reset link unavailable/);
-  assert.match(reset, /Request one fresh reset link/);
+  assert.match(reset, /Request a New Reset Link/);
   assert.match(reset, /addEventListener\("hashchange", resolveCurrentRecoveryState\)/);
   assert.match(reset, /removeEventListener\("hashchange", resolveCurrentRecoveryState\)/);
   assert.match(reset, /passwordRecoveryUrlWithoutSecrets\(window\.location\.href\)/);
@@ -56,7 +56,8 @@ test("parent sign-in and setup use invitation-specific credentials and current i
   const parentTrustSurfaces = [login, parentSetup, forgot, reset, webPush].join("\n");
 
   assert.match(login, /temporary password from your school invitation/i);
-  assert.match(parentSetup, /temporary password from your school invitation/i);
+  assert.match(parentSetup, /Review Your Family/i);
+  assert.doesNotMatch(parentSetup, /Use Your School Invitation/i);
   assert.match(login, /Forgot password/i);
   assert.doesNotMatch([login, parentSetup].join("\n"), /BusyBees|default (?:first[- ]login )?password/i);
   assert.match(parentSetup, /Add the Parent Portal to your Home Screen/i);

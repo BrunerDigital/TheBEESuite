@@ -31,7 +31,7 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.ok(parentInvoiceData);
   assert.doesNotMatch(parentInvoiceData, /totalCents/);
   assert.doesNotMatch(workspace, /invoice\.totalCents|checkoutOptions/);
-  assert.match(workspace, /fetch\("\/api\/billing\/family-payment"/);
+  assert.match(workspace, /parentPortalRequest\(\s*"\/api\/billing\/family-payment"/);
   assert.match(workspace, /billingAccountId:\s*billingAccount\.id/);
   assert.match(route, /const userIsParentGuardian = isParentGuardian\(user\)/);
   assert.match(route, /guardians:\s*\{ select:\s*\{ userId: true \} \}/);

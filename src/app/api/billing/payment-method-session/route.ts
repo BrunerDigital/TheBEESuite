@@ -16,6 +16,10 @@ import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/li
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import {
+  PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE,
+  paymentServiceError,
+} from "@/lib/parent-payment-errors";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -72,6 +76,7 @@ async function POSTHandler(request: NextRequest) {
 
   const userCanManageBilling = canManageBilling(user);
   const userIsParentGuardian = isParentGuardian(user);
+  const parentFacing = userIsParentGuardian && !userCanManageBilling;
   if (!userCanManageBilling && !userIsParentGuardian) {
     return NextResponse.json({ ok: false, error: "Billing access is not allowed for this role." }, { status: 403 });
   }
@@ -234,7 +239,18 @@ async function POSTHandler(request: NextRequest) {
   const connectedAccountId = readStripeConnectedAccountId(center?.customFields);
   const billingApproval = stripeSchoolBillingApproval({ customFields: center?.customFields, centerName: center?.name });
   if (!billingApproval.approved) {
-    return NextResponse.json({ ok: false, error: billingApproval.blockingReason, billingApproval }, { status: 403 });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: paymentServiceError({
+          parentFacing,
+          providerError: billingApproval.blockingReason || "Online billing is not approved for this school.",
+          fallback: PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE,
+        }),
+        ...(parentFacing ? {} : { billingApproval }),
+      },
+      { status: 403 },
+    );
   }
 
   if (action === "enable_autopay") {
@@ -321,7 +337,15 @@ async function POSTHandler(request: NextRequest) {
     });
     if (!portal.ok || !portal.url) {
       return NextResponse.json(
-        { ok: false, configured: portal.configured, error: portal.error || "Payment method management could not be opened." },
+        {
+          ok: false,
+          configured: portal.configured,
+          error: paymentServiceError({
+            parentFacing,
+            providerError: portal.error || "Payment method management could not be opened.",
+            fallback: PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE,
+          }),
+        },
         { status: portal.configured ? 502 : 503 },
       );
     }
@@ -359,7 +383,15 @@ async function POSTHandler(request: NextRequest) {
     });
     if (!customer.ok || !customer.id) {
       return NextResponse.json(
-        { ok: false, configured: customer.configured, error: customer.error || "Payment profile could not be created." },
+        {
+          ok: false,
+          configured: customer.configured,
+          error: paymentServiceError({
+            parentFacing,
+            providerError: customer.error || "Payment profile could not be created.",
+            fallback: PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE,
+          }),
+        },
         { status: customer.configured ? 502 : 503 },
       );
     }
@@ -392,7 +424,15 @@ async function POSTHandler(request: NextRequest) {
   });
   if (!setup.ok || !setup.url) {
     return NextResponse.json(
-      { ok: false, configured: setup.configured, error: setup.error || "Payment method setup could not be created." },
+      {
+        ok: false,
+        configured: setup.configured,
+        error: paymentServiceError({
+          parentFacing,
+          providerError: setup.error || "Payment method setup could not be created.",
+          fallback: PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE,
+        }),
+      },
       { status: setup.configured ? 502 : 503 },
     );
   }

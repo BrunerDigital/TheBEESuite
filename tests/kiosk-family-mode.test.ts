@@ -28,8 +28,9 @@ test("family check-in route is fail-closed even when staff is requested", () => 
   assert.match(markup, /School Check-In/);
   assert.match(markup, /Enter Your 4-Digit Family PIN/);
   assert.match(markup, />Continue</);
+  assert.doesNotMatch(markup, /Start Over|Clears in/);
   assert.doesNotMatch(markup, />Staff</);
-  assert.doesNotMatch(markup, /Staff time clock|Find Staff Clock|Work email|Clock In|Clock Out/);
+  assert.doesNotMatch(markup, /Staff Time Clock|Continue to Staff Clock|Work email|Clock In|Clock Out/);
 });
 
 test("shared lobby still renders its staff clock entry mode", () => {
@@ -40,9 +41,9 @@ test("shared lobby still renders its staff clock entry mode", () => {
 
   assert.match(markup, />Family</);
   assert.match(markup, />Staff</);
-  assert.match(markup, /Staff clock-in\/out/);
+  assert.match(markup, /Staff Time Clock/);
   assert.match(markup, /Work email \(optional\)/);
-  assert.match(markup, /Find Staff Clock/);
+  assert.match(markup, /Continue to Staff Clock/);
 });
 
 test("family route opts into family-only presentation while the shared lobby keeps mode selection", () => {
@@ -50,14 +51,19 @@ test("family route opts into family-only presentation while the shared lobby kee
   assert.doesNotMatch(familyRouteSource, /searchParams|mode=staff/);
   assert.match(sharedRouteSource, /requestedMode === "staff" \? "staff" : "family"/);
   assert.doesNotMatch(sharedRouteSource, /familyOnly/);
+  assert.match(kioskSource, /const activeKioskMode: KioskMode = familyOnly \? "family" : kioskMode/);
+  assert.match(kioskSource, /if \(familyOnly && mode !== "family"\) return/);
+  assert.equal(kioskSource.match(/if \(familyOnly\) return/g)?.length, 2);
 });
 
 test("parent check-in card hides raw credentials and uses plain-language actions", () => {
   assert.doesNotMatch(credentialCardSource, /Copy QR|navigator\.clipboard|QR scan payload|Kiosk:\s*\{/);
   assert.match(credentialCardSource, /Print Check-In Card/);
   assert.match(credentialCardSource, /Open Family Check-In/);
+  assert.match(credentialCardSource, /<Link href=\{credential\.kioskPath\} prefetch=\{false\}/);
+  assert.doesNotMatch(credentialCardSource, /window\.location\.assign/);
   assert.match(credentialPanelSource, /if \(previewMode\) return/);
   assert.match(credentialPanelSource, /disabled=\{previewMode \|\| isPending/);
   assert.match(kioskSource, /familyOnly \? "Scan Your QR Code" : "Scan a Family QR Code"/);
-  assert.match(kioskSource, /familyOnly \? "Continue" : "Continue with PIN"/);
+  assert.match(kioskSource, /pendingAction === "family_lookup" \? "Checking…" : "Continue"/);
 });

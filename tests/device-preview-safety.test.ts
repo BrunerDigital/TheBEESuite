@@ -24,14 +24,16 @@ test("device preview is development-only and uses fake identifiers", () => {
   assert.match(previewSource, /normalizeParentPortalView\(screen\)/);
   assert.match(previewSource, /<AutomationWorkflowBuilder data=\{workflowData\} readOnly/);
   assert.match(previewSource, /<KioskCheckIn previewMode/);
+  assert.match(previewSource, /familyOnly=\{role === ["']kiosk["']\}/);
+  assert.match(previewSource, /initialMode=\{role === ["']kiosk-staff["'] \? ["']staff["'] : ["']family["']\}/);
   assert.match(workflowSource, /if \(readOnly\)/);
   assert.match(workflowSource, /disabled=\{readOnly \|\| isPending \|\| !name\}/);
   assert.match(kioskSource, /if \(previewMode\)/);
-  assert.match(kioskSource, /if \(previewMode \|\| kioskMode/);
+  assert.match(kioskSource, /if \(previewMode \|\| activeKioskMode/);
   assert.match(appShellSource, /const searchUserEmail = previewMode \? ""/);
   assert.match(appShellSource, /if \(previewMode && !parentFacing\) \{\s*return <UserAvatar/);
   assert.match(appShellSource, /\{previewMode \? \([\s\S]*Preview account[\s\S]*\) : \([\s\S]*ProfilePhotoUploader/);
-  assert.match(appShellSource, /parentPortalPreviewFamilySectionHref/);
+  assert.match(appShellSource, /parentPortalWorkspaceHref/);
   assert.match(appShellSource, /!previewMode && canViewAccountBalances\(currentUser\)/);
   assert.match(appShellSource, /\{!previewMode \? \([\s\S]*aria-label="Sign out"/);
 });

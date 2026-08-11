@@ -6,8 +6,8 @@ import { FormEvent, useEffect, useRef, useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, LockKeyhole } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginHrefForNextPath, safeLoginNextPath } from "@/lib/login-routing";
@@ -105,7 +105,7 @@ export function ResetPasswordForm() {
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError("Passwords do not match. Re-enter the new password in both fields.");
       return;
     }
 
@@ -139,9 +139,9 @@ export function ResetPasswordForm() {
       <section className="hidden min-h-[calc(100vh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 lg:flex">
         <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
-          <h1 className="text-5xl font-semibold leading-tight tracking-normal">
+          <div className="text-5xl font-semibold leading-tight tracking-normal" aria-hidden="true">
             {parentPortalFlow ? "Create Your Parent Portal Password" : "Create a New Password"}
-          </h1>
+          </div>
           <p className="mt-5 text-base leading-7 text-slate-300">
             {parentPortalFlow
               ? forceReset
@@ -167,12 +167,12 @@ export function ResetPasswordForm() {
             <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary text-primary-foreground">
               <LockKeyhole />
             </div>
-            <CardTitle className="mt-4 text-3xl">{parentPortalFlow ? "Set Your Parent Portal Password" : "Set a New Password"}</CardTitle>
-            <CardDescription>
+            <h1 className="mt-4 text-balance text-3xl font-semibold">{parentPortalFlow ? "Set Your Parent Portal Password" : "Set a New Password"}</h1>
+            <CardDescription id="reset-password-description">
               {linkStatus === "invalid"
                 ? "Use the recovery link from the newest email. Older links stop working after another reset is requested."
                 : linkStatus === "checking"
-                  ? "Checking your secure reset link."
+                  ? "Checking your secure reset link…"
                   : parentPortalFlow
                 ? "Use at least 8 characters. You will use this with the email from your invite."
                 : forceReset
@@ -181,7 +181,7 @@ export function ResetPasswordForm() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="flex flex-col gap-4" onSubmit={submit}>
+            <form className="flex flex-col gap-4" onSubmit={submit} aria-busy={isPending} aria-describedby="reset-password-description">
               {error ? (
                 <Alert variant="destructive">
                   <AlertCircle />
@@ -190,20 +190,21 @@ export function ResetPasswordForm() {
                 </Alert>
               ) : null}
               {message ? (
-                <Alert className="border-emerald-500/30 bg-emerald-500/10">
+                <Alert role="status" className="border-emerald-500/30 bg-emerald-500/10">
                   <CheckCircle2 />
                   <AlertTitle>Password updated</AlertTitle>
                   <AlertDescription>{message}</AlertDescription>
                 </Alert>
               ) : null}
               {linkStatus === "checking" ? (
-                <p role="status" className="py-4 text-center text-sm text-slate-600">Checking reset link…</p>
+                <p role="status" aria-live="polite" className="py-4 text-center text-sm text-slate-600">Checking reset link…</p>
               ) : null}
               {linkStatus === "ready" && forceReset ? (
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="currentPassword">Current password</Label>
                   <Input
                     id="currentPassword"
+                    name="currentPassword"
                     className="h-11"
                     value={currentPassword}
                     onChange={(event) => setCurrentPassword(event.target.value)}
@@ -219,6 +220,7 @@ export function ResetPasswordForm() {
                     <Label htmlFor="password">New password</Label>
                     <Input
                       id="password"
+                      name="newPassword"
                       className="h-11"
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
@@ -232,6 +234,7 @@ export function ResetPasswordForm() {
                     <Label htmlFor="confirmPassword">Confirm password</Label>
                     <Input
                       id="confirmPassword"
+                      name="confirmPassword"
                       className="h-11"
                       value={confirmPassword}
                       onChange={(event) => setConfirmPassword(event.target.value)}
@@ -249,18 +252,18 @@ export function ResetPasswordForm() {
             </form>
             {forceReset ? (
               <Link href={`${loginHrefForNextPath(next)}&reset=required`} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-slate-950 hover:underline">
-                Back to login
+                Back to Login
               </Link>
             ) : linkStatus === "invalid" ? (
-              <Button className="mt-5 h-11 w-full" size="lg" nativeButton={false} render={<Link href={freshResetHref} />}>
-                Request one fresh reset link
-              </Button>
+              <Link href={freshResetHref} className={buttonVariants({ size: "lg", className: "mt-5 h-11 w-full" })}>
+                Request a New Reset Link
+              </Link>
             ) : (
               <Link
                 href={freshResetHref}
                 className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-slate-950 hover:underline"
               >
-                Request a fresh reset link
+                Request a New Reset Link
               </Link>
             )}
           </CardContent>

@@ -69,9 +69,7 @@ import { dataReadinessCenterEnabled, honeyglassUiEnabled } from "@/lib/honeyglas
 import {
   PARENT_PORTAL_HREFS,
   normalizeParentPortalView,
-  parentPortalFamilySectionHref,
-  parentPortalPreviewHref,
-  parentPortalPreviewFamilySectionHref,
+  parentPortalWorkspaceHref,
   type ParentPortalView,
 } from "@/lib/parent-portal-navigation";
 import type { WorkspaceScopeContext } from "@/lib/workspace-scope";
@@ -142,8 +140,9 @@ const parentPortalShellItems = [
 function useParentPortalNavigationState(previewMode = false) {
   const searchParams = useSearchParams();
   const activeView = normalizeParentPortalView(searchParams.get(previewMode ? "screen" : "view"));
+  const familyId = searchParams.get("familyId");
 
-  return { activeView };
+  return { activeView, familyId };
 }
 
 function parentPortalShellHref(
@@ -151,10 +150,13 @@ function parentPortalShellHref(
   previewMode: boolean,
   previewHrefBase: string | undefined,
   pathname: string,
+  familyId: string | null,
 ) {
-  return previewMode
-    ? parentPortalPreviewHref(previewHrefBase ?? pathname, view)
-    : PARENT_PORTAL_HREFS[view];
+  return parentPortalWorkspaceHref({
+    view,
+    previewHrefBase: previewMode ? previewHrefBase ?? pathname : undefined,
+    familyId,
+  });
 }
 
 function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) {
@@ -257,12 +259,12 @@ function ScopeContextLink({ currentUser, compact = false, mobile = false }: { cu
 function SidebarRail({ currentUser, onLogout, previewMode = false, previewHrefBase }: { currentUser?: ShellUser; onLogout?: () => void; previewMode?: boolean; previewHrefBase?: string }) {
   const pathname = usePathname();
   const parentFacing = isParentFacingUser(currentUser);
-  const { activeView } = useParentPortalNavigationState(previewMode);
+  const { activeView, familyId } = useParentPortalNavigationState(previewMode);
   const visibleItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
     .filter((item) => canAccessShellModule(currentUser, item.slug));
   const brandHref = parentFacing
-    ? parentPortalShellHref("home", previewMode, previewHrefBase, pathname)
+    ? parentPortalShellHref("home", previewMode, previewHrefBase, pathname, familyId)
     : "/";
 
   return (
@@ -274,7 +276,7 @@ function SidebarRail({ currentUser, onLogout, previewMode = false, previewHrefBa
       <ScrollArea className="min-h-0 w-full flex-1 px-2">
         <nav className="flex flex-col items-center gap-2 py-2" aria-label="Tablet navigation rail">
           {parentFacing ? parentPortalShellItems.map(({ view, label, description, Icon }) => {
-            const href = parentPortalShellHref(view, previewMode, previewHrefBase, pathname);
+            const href = parentPortalShellHref(view, previewMode, previewHrefBase, pathname, familyId);
             const active = activeView === view;
             return (
               <Tooltip key={view}>
@@ -580,7 +582,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
 function SidebarNav({ close, currentUser, onLogout, previewMode = false, previewHrefBase }: { close?: () => void; currentUser?: ShellUser; onLogout?: () => void; previewMode?: boolean; previewHrefBase?: string }) {
   const pathname = usePathname();
   const parentFacing = isParentFacingUser(currentUser);
-  const { activeView } = useParentPortalNavigationState(previewMode);
+  const { activeView, familyId } = useParentPortalNavigationState(previewMode);
   const descriptionBySlug = new Map(modules.map((module) => [module.slug, module.description]));
   const visibleNavGroups = navGroups
     .map((group) => ({
@@ -589,7 +591,7 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
     }))
     .filter((group) => group.items.length);
   const brandHref = parentFacing
-    ? parentPortalShellHref("home", previewMode, previewHrefBase, pathname)
+    ? parentPortalShellHref("home", previewMode, previewHrefBase, pathname, familyId)
     : "/";
 
   return (
@@ -609,7 +611,7 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
               </div>
               <div className="flex flex-col gap-1">
                 {parentPortalShellItems.map(({ view, label, description, Icon }) => {
-                  const href = parentPortalShellHref(view, previewMode, previewHrefBase, pathname);
+                  const href = parentPortalShellHref(view, previewMode, previewHrefBase, pathname, familyId);
                   const active = activeView === view;
                   return (
                     <Link
@@ -700,18 +702,22 @@ function isParentFacingUser(currentUser?: ShellUser) {
 
 function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBase }: { currentUser: ShellUser; onLogout: () => void; previewMode?: boolean; previewHrefBase?: string }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const displayName = removeDemoMarkersFromUserView(currentUser.name);
   const displayEmail = removeDemoMarkersFromUserView(currentUser.email);
   const parentFacing = isParentFacingUser(currentUser);
   if (previewMode && !parentFacing) {
     return <UserAvatar name={displayName} src={currentUser.profilePhotoUrl} size="md" className="border shadow-none" />;
   }
-  const profileHref = previewMode
-    ? parentPortalPreviewFamilySectionHref(previewHrefBase ?? pathname, "profile")
-    : parentPortalFamilySectionHref("profile");
-  const notificationsHref = previewMode
-    ? parentPortalPreviewFamilySectionHref(previewHrefBase ?? pathname, "notifications")
-    : parentPortalFamilySectionHref("notifications");
+  const familyId = parentFacing ? searchParams.get("familyId") : null;
+  const accountDestination = (section: "profile" | "notifications") => parentPortalWorkspaceHref({
+    view: "family",
+    previewHrefBase: previewMode ? previewHrefBase ?? pathname : undefined,
+    familyId,
+    section,
+  });
+  const profileHref = accountDestination("profile");
+  const notificationsHref = accountDestination("notifications");
 
   return (
     <DropdownMenu>
@@ -784,7 +790,7 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
 function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { currentUser?: ShellUser; previewMode?: boolean; previewHrefBase?: string }) {
   const pathname = usePathname();
   const parentFacing = isParentFacingUser(currentUser);
-  const { activeView } = useParentPortalNavigationState(previewMode);
+  const { activeView, familyId } = useParentPortalNavigationState(previewMode);
   const [selectedTarget, setSelectedTarget] = useState(pathname);
   const [moreOpen, setMoreOpen] = useState(false);
   const teacherItems = [
@@ -858,7 +864,7 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
           const featured = Boolean("featured" in item && item.featured);
           const hrefPath = href.split(/[?#]/)[0];
           const previewHref = parentView
-            ? parentPortalShellHref(parentView, previewMode, previewHrefBase, pathname)
+            ? parentPortalShellHref(parentView, previewMode, previewHrefBase, pathname, familyId)
             : previewMode && href.includes("#")
             ? `${previewHrefBase ?? pathname}${href.slice(href.indexOf("#"))}`
             : previewMode
@@ -934,6 +940,7 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
 export function AppShell({ children, currentUser, previewMode = false, previewHrefBase }: { children: React.ReactNode; currentUser?: ShellUser; previewMode?: boolean; previewHrefBase?: string }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { familyId: activeParentFamilyId } = useParentPortalNavigationState(previewMode);
   const readinessContext = dataReadinessContextForPath(pathname);
   const canViewDataReadiness = !previewMode && canAccessShellModule(currentUser, "data-readiness");
   const readinessRequestKey = `${currentUser?.email ?? "anonymous"}:${readinessContext ?? "global"}`;
@@ -1127,7 +1134,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
           <div className="flex min-h-16 min-w-0 items-center gap-2 px-3 sm:px-4 lg:px-6">
             {parentFacing ? (
               <BrandLogo
-                href={parentPortalShellHref("home", previewMode, previewHrefBase, pathname)}
+                href={parentPortalShellHref("home", previewMode, previewHrefBase, pathname, activeParentFamilyId)}
                 branding={currentUser?.branding}
                 compact
                 size="sm"

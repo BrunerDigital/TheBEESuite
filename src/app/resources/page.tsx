@@ -24,9 +24,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "SOPs and Step-by-Step Guides | The BEE Suite",
+  title: "Help and Step-by-Step Guides | The BEE Suite",
   description:
-    "Current The BEE Suite setup guides, parent portal instructions, card and bank payment guidance, launch gates, kiosk workflows, and role-based operating procedures.",
+    "Step-by-step help for Parent Portal setup, payments, school administration, classroom use, and check-in.",
 };
 
 type ResourceGuide = {
@@ -55,8 +55,8 @@ const guides: ResourceGuide[] = [
   {
     id: "parent-portal-install",
     audience: "Parents and guardians",
-    title: "Install the BEE Suite Parent Portal",
-    summary: "Add the parent portal to an iPhone, iPad, Android phone, Fire tablet, or desktop browser.",
+    title: "Add the Parent Portal to Your Device",
+    summary: "Add the Parent Portal to the Home Screen on an iPhone, iPad, Android phone, Fire tablet, or computer.",
     graphicSrc: "/brand/the-bee-suite/explainers/current/parent-access-install.png",
     graphicAlt: "Current six-step parent access and installation flow for The BEE Suite",
     screenshots: [
@@ -82,11 +82,11 @@ const guides: ResourceGuide[] = [
     icon: Smartphone,
     steps: [
       "Open https://thebeesuite.io/parents and confirm the address starts with https://thebeesuite.io. In Safari, stop if the address bar says Not Secure.",
-      "Sign in with the guardian email and school-issued first-login password from the approved invitation.",
+      "Sign in with the guardian email and temporary password from your school invitation. If you already changed that password, use your current one.",
       "Confirm the correct family and child records before continuing.",
       "On iPhone or iPad, use Safari Share > Add to Home Screen. On Android or Fire, use the Chrome or Silk menu > Install app or Add to Home screen.",
       "Open the new BEE Suite icon and sign in again if the device asks.",
-      "Keep the issued password or change it later in Settings. Use password recovery if it is lost; never share or forward invitation credentials.",
+      "Use Forgot Password if you no longer have the temporary password. Never share or forward invitation credentials.",
     ],
     visual: [
       { label: "Open", detail: "Use Safari, Chrome, or Silk", icon: MonitorSmartphone },
@@ -115,7 +115,7 @@ const guides: ResourceGuide[] = [
       "Choose Save Debit/Credit Card to save a card, or Verify Bank Instantly to save a bank.",
       "For an open invoice, choose Debit/Credit Card, Instant Bank, or One-Time Bank.",
       "Enter card or bank details only inside the secure payment processor screen opened from The BEE Suite.",
-      "Review the exact authorized total before submitting; the school absorbs Stripe processing costs and no processing fee is added to the parent payment.",
+      "Review the exact total before submitting. No processing fee is added to your parent payment.",
       "Wait for the confirmation and current status. Do not repeat a pending bank payment or setup attempt.",
     ],
     visual: [
@@ -153,7 +153,7 @@ const guides: ResourceGuide[] = [
     ],
     icon: UsersRound,
     steps: [
-      "Log in from the installed app or parent login page.",
+      "Open the Parent Portal from its Home Screen icon or the parent login page.",
       "Confirm the child profile, school, classroom, and authorized contacts are correct.",
       "Review messages, classroom updates, daily reports, photos, documents, and balances.",
       "Send routine questions through the portal when available.",
@@ -190,7 +190,7 @@ const guides: ResourceGuide[] = [
   {
     id: "executive-admin",
     audience: "Executives and owners",
-    title: "Executive Admin SOP",
+    title: "Executive Admin Guide",
     summary: "Monitor multi-location operations, access controls, staffing signals, financial readiness, and reporting.",
     graphicSrc: "/brand/the-bee-suite/sop-graphics/current/executive-desktop-oversight-guide.png",
     graphicAlt: "Current executive desktop administration and FTE oversight guide",
@@ -226,7 +226,7 @@ const guides: ResourceGuide[] = [
   {
     id: "director-sop",
     audience: "Directors and assistant directors",
-    title: "Director SOP",
+    title: "Director Guide",
     summary: "Run daily school operations from enrollment through attendance, billing readiness, staffing, and family communication.",
     graphicSrc: "/brand/the-bee-suite/sop-graphics/current/director-desktop-operations-guide.png",
     graphicAlt: "Current director desktop daily reports and billing operations guide",
@@ -288,7 +288,7 @@ const guides: ResourceGuide[] = [
   {
     id: "teacher-sop",
     audience: "Teachers and classroom staff",
-    title: "Teacher SOP",
+    title: "Teacher Guide",
     summary: "Use the classroom workspace for attendance, daily reports, incidents, photos, and routine family updates.",
     graphicSrc: "/brand/the-bee-suite/sop-graphics/current/teacher-classroom-device-guide.png",
     graphicAlt: "Current teacher classroom guide using iPad for daily reports and desktop for roster review",
@@ -330,7 +330,7 @@ const guides: ResourceGuide[] = [
   {
     id: "billing-admin",
     audience: "Billing administrators",
-    title: "Billing Admin SOP",
+    title: "Billing Admin Guide",
     summary: "Manage invoices, balances, payment methods, autopay readiness, exceptions, and family payment questions.",
     graphicSrc: "/brand/the-bee-suite/explainers/current/weekly-tuition-flow.png",
     graphicAlt: "Current school-scoped weekly tuition, Thursday invoicing, autopay, and reconciliation flow",
@@ -375,7 +375,7 @@ const guides: ResourceGuide[] = [
 
 const quickLinks = [
   { label: "Parent login", href: "/parents" },
-  { label: "Install app launcher", href: "/app" },
+  { label: "Choose sign-in page", href: "/app" },
   { label: "Contact support", href: "/support" },
   { label: "Privacy policy", href: "/privacy" },
 ];
@@ -521,7 +521,7 @@ export default function ResourcesPage() {
                 Support
               </Button>
               <Button nativeButton={false} render={<Link href="/app" />}>
-                Install app
+                Choose Sign-In
               </Button>
             </div>
           </header>
@@ -533,10 +533,10 @@ export default function ResourcesPage() {
                 Public help center
               </Badge>
               <h1 className="mt-5 text-4xl font-semibold leading-tight tracking-normal sm:text-5xl lg:text-6xl">
-                SOPs and guides for every BEE Suite user.
+                Step-by-step help for every BEE Suite user.
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300">
-                Updated August 6, 2026. Use these guides for secure parent access, card and bank payments, independent school launch gates, daily operations, classroom workflows, billing, kiosk pickup, FTE reporting, and support escalation.
+                Choose the guide that matches what you need: Parent Portal setup, payments, classroom use, school administration, billing, or check-in.
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
                 <Button className="h-11 px-5" nativeButton={false} render={<Link href="#parent-portal-install" />}>
@@ -544,7 +544,7 @@ export default function ResourcesPage() {
                   <ArrowRight data-icon="inline-end" />
                 </Button>
                 <Button variant="outline" className="h-11 border-white/15 bg-white/[0.04] px-5 text-white hover:bg-white/10" nativeButton={false} render={<Link href="#school-launch" />}>
-                  School SOPs
+                  School & Staff Guides
                 </Button>
               </div>
             </div>
@@ -607,7 +607,7 @@ export default function ResourcesPage() {
               Privacy
             </Link>
             <Link className="hover:text-amber-200" href="/app">
-              Install app
+              Choose sign-in
             </Link>
           </div>
         </div>

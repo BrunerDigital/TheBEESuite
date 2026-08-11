@@ -7,7 +7,7 @@ import { AlertCircle, ArrowRight, CheckCircle2, LogIn, ShieldCheck } from "lucid
 import { BrandIcon, BrandLogo } from "@/components/brand-logo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { appModeFromPath } from "@/lib/device-sessions";
@@ -51,7 +51,7 @@ const loginCopy: Record<LoginPortal, {
     heroTitle: "Your Family’s Parent Portal",
     heroBody: "Sign in with the parent or guardian email your school invited. You will see only the children and family records connected to your account.",
     heroFooter: "Your school controls which family records are connected to your account.",
-    heroItems: ["Daily Updates", "Messages", "Documents & Billing"],
+    heroItems: ["Updates", "Messages", "Documents & Billing"],
     cardTitle: "Parent & Guardian Sign-In",
     cardDescription: "Use the email and temporary password from your school invitation. If you already changed that password, use your current one.",
     emailLabel: "Parent or guardian email",
@@ -150,9 +150,9 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
       <section className="auth-halo-story hidden min-h-[calc(100vh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 xl:flex">
         <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
-          <h1 className="text-5xl font-semibold leading-tight tracking-normal">
+          <div className="text-5xl font-semibold leading-tight tracking-normal" aria-hidden="true">
             {copy.heroTitle}
-          </h1>
+          </div>
           <p className="mt-5 text-base leading-7 text-slate-300">
             {copy.heroBody}
           </p>
@@ -176,22 +176,22 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
             <Link href="/" className="mx-auto block w-fit xl:hidden" aria-label="The BEE Suite home">
               <BrandIcon className="size-14 rounded-2xl" priority />
             </Link>
-            <CardTitle className="mt-4 text-3xl">{copy.cardTitle}</CardTitle>
-            <CardDescription>
+            <h1 className="mt-4 text-balance text-3xl font-semibold">{copy.cardTitle}</h1>
+            <CardDescription id="login-description">
               {copy.cardDescription}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="flex flex-col gap-4" onSubmit={submit}>
+            <form className="flex flex-col gap-4" onSubmit={submit} aria-busy={isPending} aria-describedby="login-description">
               {resetStatus === "complete" ? (
-                <Alert className="border-emerald-500/30 bg-emerald-500/10">
+                <Alert role="status" className="border-emerald-500/30 bg-emerald-500/10">
                   <CheckCircle2 />
                   <AlertTitle>Password updated</AlertTitle>
                   <AlertDescription>Sign in with your new password.</AlertDescription>
                 </Alert>
               ) : null}
               {resetStatus === "required" ? (
-                <Alert className="border-amber-500/30 bg-amber-500/10">
+                <Alert role="status" className="border-amber-500/30 bg-amber-500/10">
                   <ShieldCheck />
                   <AlertTitle>Password reset required</AlertTitle>
                   <AlertDescription>
@@ -212,12 +212,15 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                 <Label htmlFor="email">{copy.emailLabel}</Label>
                 <Input
                   id="email"
+                  name="email"
                   className="h-11"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder={copy.emailPlaceholder}
-                  type="text"
+                  type={portal === "parents" ? "email" : "text"}
+                  inputMode={portal === "parents" ? "email" : undefined}
                   autoComplete="username"
+                  spellCheck={false}
                   required
                 />
               </div>
@@ -228,11 +231,12 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                     href={`/forgot-password?next=${encodeURIComponent(next)}`}
                     className="inline-flex min-h-11 items-center text-xs font-semibold text-slate-600 hover:text-slate-950 hover:underline"
                   >
-                    Forgot password?
+                    Forgot Password?
                   </Link>
                 </div>
                 <Input
                   id="password"
+                  name="password"
                   className="h-11"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -243,7 +247,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                 />
               </div>
               <button className={buttonVariants({ size: "lg", className: "h-11" })} type="submit" disabled={isPending}>
-                {isPending ? "Signing in…" : "Sign in"}
+                {isPending ? "Signing In…" : "Sign In"}
                 <LogIn data-icon="inline-end" />
               </button>
             </form>

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { AlertCircle, ExternalLink, Printer, QrCode, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, ArrowRight, Printer, QrCode, ShieldCheck } from "lucide-react";
 import QRCode from "qrcode";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +40,12 @@ export function GuardianKioskCredentialCard({ credential, previewMode = false }:
         if (active) setQrImage({ token: credential.qrToken ?? "", dataUrl: nextDataUrl });
       })
       .catch(() => {
-        if (active) setQrError({ token: credential.qrToken ?? "", message: "QR code could not be rendered." });
+        if (active) {
+          setQrError({
+            token: credential.qrToken ?? "",
+            message: "The QR code did not load. Refresh this page, or use your Family PIN at the school.",
+          });
+        }
       });
 
     return () => {
@@ -100,10 +106,10 @@ export function GuardianKioskCredentialCard({ credential, previewMode = false }:
     <div className="space-y-3 rounded-lg border bg-background/45 p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <QrCode className="size-4 text-primary" />
+          <h3 className="flex items-center gap-2 text-sm font-medium">
+            <QrCode className="size-4 text-primary" aria-hidden="true" />
             {credential.guardianName}
-          </div>
+          </h3>
           <div className="text-xs text-muted-foreground">
             {credential.familyName}
             {credential.centerName ? ` · ${credential.centerName}` : ""}
@@ -123,33 +129,48 @@ export function GuardianKioskCredentialCard({ credential, previewMode = false }:
                 alt={`School check-in QR code for ${credential.guardianName}`}
                 width={160}
                 height={160}
-                className="size-40"
+                className="h-auto w-40 max-w-full"
                 unoptimized
               />
             ) : (
-              <QrCode className="size-10 text-slate-400" />
+              <div role="status" aria-live="polite" className="grid place-items-center gap-2 text-slate-500">
+                <QrCode className="size-10" aria-hidden="true" />
+                <span className="sr-only">Preparing QR code…</span>
+              </div>
             )}
           </div>
           <div className="space-y-2">
             <div className="grid gap-2 text-xs text-muted-foreground">
-              <span>PIN set: {formatDateTime(credential.pinSetAt, timeZone)}</span>
+              <span>PIN updated {formatDateTime(credential.pinSetAt, timeZone)}</span>
               <span>Use your Family PIN or this QR code at the school lobby.</span>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" size="sm" variant="outline" disabled={previewMode || !dataUrl} onClick={printCheckInCard}>
-                <Printer data-icon="inline-start" />
+                <Printer data-icon="inline-start" aria-hidden="true" />
                 Print Check-In Card
               </Button>
-              <Button type="button" size="sm" variant="outline" disabled={previewMode} onClick={() => window.location.assign(credential.kioskPath)}>
-                <ExternalLink data-icon="inline-start" />
-                Open Family Check-In
-              </Button>
+              {previewMode ? (
+                <Button type="button" size="sm" variant="outline" disabled>
+                  <ArrowRight data-icon="inline-start" aria-hidden="true" />
+                  Open Family Check-In
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  nativeButton={false}
+                  render={<Link href={credential.kioskPath} prefetch={false} />}
+                >
+                  <ArrowRight data-icon="inline-start" aria-hidden="true" />
+                  Open Family Check-In
+                </Button>
+              )}
             </div>
           </div>
         </div>
       ) : (
         <Alert>
-          <ShieldCheck className="size-4" />
+          <ShieldCheck className="size-4" aria-hidden="true" />
           <AlertTitle>Set up school check-in</AlertTitle>
           <AlertDescription>Set a 4-Digit Family PIN to create the matching QR code.</AlertDescription>
         </Alert>
@@ -157,7 +178,7 @@ export function GuardianKioskCredentialCard({ credential, previewMode = false }:
 
       {qrError.token === credential.qrToken && qrError.message ? (
         <Alert variant="destructive">
-          <AlertCircle className="size-4" />
+          <AlertCircle className="size-4" aria-hidden="true" />
           <AlertTitle>Needs attention</AlertTitle>
           <AlertDescription>{qrError.message}</AlertDescription>
         </Alert>

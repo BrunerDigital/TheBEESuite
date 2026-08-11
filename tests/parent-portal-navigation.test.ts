@@ -3,12 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   PARENT_PORTAL_HREFS,
+  PARENT_PORTAL_FAMILY_SECTIONS,
   PARENT_PORTAL_VIEWS,
   normalizeParentPortalView,
   parentPortalFamilySectionHref,
   parentPortalHref,
   parentPortalPreviewHref,
   parentPortalPreviewFamilySectionHref,
+  parentPortalWorkspaceHref,
 } from "@/lib/parent-portal-navigation";
 
 test("parent portal views normalize unknown input to a safe home view", () => {
@@ -46,6 +48,13 @@ test("parent preview hrefs preserve preview routing and select a read-only scree
 });
 
 test("parent account destinations open the exact family settings section", () => {
+  assert.deepEqual(PARENT_PORTAL_FAMILY_SECTIONS, [
+    "children",
+    "check-in",
+    "documents",
+    "profile",
+    "notifications",
+  ]);
   assert.equal(
     parentPortalFamilySectionHref("profile"),
     "/parent-portal?view=family&section=profile",
@@ -64,6 +73,44 @@ test("parent account destinations open the exact family settings section", () =>
   );
 });
 
+test("workspace hrefs preserve family scope and preview routing", () => {
+  assert.equal(
+    parentPortalWorkspaceHref({
+      view: "family",
+      familyId: "family A&B",
+      section: "documents",
+      hash: "contact-request",
+    }),
+    "/parent-portal?view=family&section=documents&familyId=family+A%26B#contact-request",
+  );
+  assert.equal(
+    parentPortalWorkspaceHref({
+      view: "family",
+      previewHrefBase: "/device-preview?view=parent&screen=home&campaign=safe#old-anchor",
+      familyId: "exec-demo-family",
+      section: "children",
+      hash: "#incidents",
+    }),
+    "/device-preview?view=parent&screen=family&campaign=safe&section=children&familyId=exec-demo-family#incidents",
+  );
+  assert.equal(
+    parentPortalWorkspaceHref({
+      view: "messages",
+      previewHrefBase: "/device-preview?view=parent&section=profile&familyId=family-2#keep-me",
+    }),
+    "/device-preview?view=parent&familyId=family-2&screen=messages#keep-me",
+  );
+  assert.equal(
+    parentPortalWorkspaceHref({
+      view: "payments",
+      previewHrefBase: "/device-preview?view=parent&familyId=family-2#old-anchor",
+      familyId: null,
+      hash: null,
+    }),
+    "/device-preview?view=parent&screen=payments",
+  );
+});
+
 test("app shell gives parent-facing users complete navigation without the empty mobile drawer", () => {
   const shell = readFileSync("src/components/app-shell.tsx", "utf8");
 
@@ -75,18 +122,29 @@ test("app shell gives parent-facing users complete navigation without the empty 
   assert.match(shell, /\{parentFacing \? \(\s*<BrandLogo[\s\S]*compact[\s\S]*size="sm"/);
   assert.doesNotMatch(shell, /\/parent-portal#(?:today|messages|billing|daily-updates|photos)/);
   assert.match(shell, /searchParams\.get\(previewMode \? "screen" : "view"\)/);
-  assert.match(shell, /parentPortalPreviewHref\(previewHrefBase \?\? pathname, view\)/);
   assert.match(shell, /const staticFamilyScope = isParentFacingUser\(currentUser\) && context\.kind === "family"/);
   assert.match(shell, /currentUser\?\.scopeContext && !parentFacing/);
   assert.doesNotMatch(shell, /Live pilot safeguards|AI suggestions require review/);
+  assert.match(shell, /const familyId = searchParams\.get\("familyId"\)/);
+  assert.match(shell, /return \{ activeView, familyId \}/);
+  assert.match(
+    shell,
+    /return parentPortalWorkspaceHref\(\{[\s\S]*previewHrefBase: previewMode \? previewHrefBase \?\? pathname : undefined,[\s\S]*familyId,[\s\S]*\}\)/,
+  );
+  assert.match(
+    shell,
+    /parentPortalShellHref\(parentView, previewMode, previewHrefBase, pathname, familyId\)/,
+  );
 });
 
 test("parent account menu exposes real destinations while preview stays mutation-free", () => {
   const shell = readFileSync("src/components/app-shell.tsx", "utf8");
   const avatar = readFileSync("src/components/user-avatar.tsx", "utf8");
 
-  assert.match(shell, /const profileHref = previewMode[\s\S]*parentPortalFamilySectionHref\("profile"\)/);
-  assert.match(shell, /const notificationsHref = previewMode[\s\S]*parentPortalFamilySectionHref\("notifications"\)/);
+  assert.match(shell, /const familyId = parentFacing \? searchParams\.get\("familyId"\) : null/);
+  assert.match(shell, /const accountDestination = \(section: "profile" \| "notifications"\) => parentPortalWorkspaceHref\(\{/);
+  assert.match(shell, /familyId,[\s\S]*section,[\s\S]*const profileHref = accountDestination\("profile"\)/);
+  assert.match(shell, /const notificationsHref = accountDestination\("notifications"\)/);
   assert.match(shell, /render=\{<Link href=\{profileHref\}[\s\S]*Profile &amp; security/);
   assert.match(shell, /render=\{<Link href=\{notificationsHref\}[\s\S]*Notifications/);
   assert.match(shell, /\{previewMode \? \([\s\S]*Preview account[\s\S]*\) : \([\s\S]*ProfilePhotoUploader/);

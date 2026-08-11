@@ -54,7 +54,8 @@ test("school transition announcement preserves per-school launch and billing gat
 test("public resources describe current parent, tuition, FTE, and launch flows", () => {
   const resources = readFileSync("src/app/resources/page.tsx", "utf8");
 
-  assert.match(resources, /school-issued first-login password/);
+  assert.match(resources, /temporary password from your school invitation/);
+  assert.doesNotMatch(resources, /school-issued first-login password/);
   assert.match(resources, /id: "director-parent-invites"/);
   assert.match(resources, /Add Family, Parent \+ Child/);
   assert.match(resources, /Accepted means the email provider accepted it/);

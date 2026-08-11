@@ -11,15 +11,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
-import { Button } from "@/components/ui/button";
-import { InfoTip } from "@/components/ui/info-tip";
+import { buttonVariants } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "The BEE Suite App",
-  description: "Role-based launcher for The BEE Suite parent, teacher, director, executive, and kiosk workflows.",
+  description: "Choose the family, classroom, school, executive, or check-in sign-in for The BEE Suite.",
 };
 
-const roleOptions: Array<{
+const signInOptions: Array<{
   title: string;
   eyebrow: string;
   href: string;
@@ -28,37 +27,37 @@ const roleOptions: Array<{
 }> = [
   {
     title: "Parents",
-    eyebrow: "Family phone app",
+    eyebrow: "Parents and guardians",
     href: "/parents",
     description: "Open the Parent Portal for child updates, documents, balances, messages, and tuition payments.",
     icon: UsersRound,
   },
   {
     title: "Teachers",
-    eyebrow: "Classroom tablet",
+    eyebrow: "Classroom staff",
     href: "/teachers",
-    description: "Open classroom attendance, daily reports, photos, family updates, and teacher clock-in tools.",
+    description: "Open attendance, daily reports, photos, family updates, and the staff time clock.",
     icon: GraduationCap,
   },
   {
     title: "Directors",
-    eyebrow: "School workspace",
+    eyebrow: "School leaders",
     href: "/directors",
-    description: "Open school operations for enrollment, billing, staffing, compliance, reports, and setup.",
+    description: "Open enrollment, billing, staff schedules, required records, reports, and school settings.",
     icon: Building2,
   },
   {
     title: "Executives",
-    eyebrow: "Corporate office",
+    eyebrow: "Multi-location leaders",
     href: "/executives",
-    description: "Open multi-location visibility, FTE review, account setup, reporting, and platform controls.",
+    description: "Review locations, enrollment, attendance, account setup, and company-wide reports.",
     icon: ShieldCheck,
   },
   {
     title: "Kiosk",
-    eyebrow: "Lobby tablet",
+    eyebrow: "School lobby tablet",
     href: "/check-in",
-    description: "Open family check-in/out, authorized pickup verification, and staff clock-in/out.",
+    description: "For school-managed lobby tablets only. Families use this screen at the school to check children in or out.",
     icon: DoorOpen,
   },
 ];
@@ -71,26 +70,24 @@ export default function AppLauncherPage() {
         <div className="relative mx-auto flex min-h-[calc(100svh-2rem)] max-w-[1180px] flex-col">
           <header className="flex flex-wrap items-center justify-between gap-3 py-1.5">
             <BrandLogo href="/" compact size="sm" priority />
-            <Button variant="outline" className="h-8 border-white/15 bg-white/[0.04] px-3 text-xs font-semibold text-white hover:bg-white/10" nativeButton={false} render={<Link href="/login" />}>
+            <Link href="/login" className={buttonVariants({ variant: "outline", className: "min-h-11 border-white/15 bg-white/[0.04] px-3 text-xs font-semibold text-white hover:bg-white/10" })}>
               <LogIn data-icon="inline-start" className="size-3.5" />
-              Log in
-            </Button>
+              Sign in
+            </Link>
           </header>
 
           <div className="flex flex-1 flex-col justify-center gap-4 py-3 sm:gap-6 sm:py-5 lg:py-7">
             <div className="max-w-3xl">
-              <div className="flex items-start gap-2">
-                <h1 className="text-2xl font-semibold leading-tight tracking-normal text-white sm:text-4xl lg:text-5xl">
-                  Choose how you are using The BEE Suite today.
-                </h1>
-                <InfoTip label="About these options" side="bottom" align="end" className="mt-1 text-slate-400 hover:text-white">
-                  Pick the workflow for this device. Each button opens the correct workspace in the same secure app.
-                </InfoTip>
-              </div>
+              <h1 className="text-2xl font-semibold leading-tight tracking-normal text-white sm:text-4xl lg:text-5xl">
+                Where do you want to go?
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
+                Choose the option that matches how you use The BEE Suite. Each one opens a separate page.
+              </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              {roleOptions.map((option) => (
+              {signInOptions.map((option) => (
                 <Link
                   key={option.title}
                   href={option.href}

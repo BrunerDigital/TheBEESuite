@@ -6,7 +6,7 @@ import { AlertCircle, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { BrandIcon, BrandLogo } from "@/components/brand-logo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginHrefForNextPath, safeLoginNextPath } from "@/lib/login-routing";
@@ -64,9 +64,9 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
       <section className="hidden min-h-[calc(100vh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 lg:flex">
         <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
-          <h1 className="text-5xl font-semibold leading-tight tracking-normal">
+          <div className="text-5xl font-semibold leading-tight tracking-normal" aria-hidden="true">
             {parentPortalFlow ? "Reset Your Parent Portal Password" : "Reset Your School Password"}
-          </h1>
+          </div>
           <p className="mt-5 text-base leading-7 text-slate-300">
             {parentPortalFlow
               ? parentSetupFlow
@@ -88,15 +88,15 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
             <Link href="/" className="mx-auto block w-fit lg:hidden" aria-label="The BEE Suite home">
               <BrandIcon className="size-14 rounded-2xl" priority />
             </Link>
-            <CardTitle className="mt-4 text-3xl">Reset Your Password</CardTitle>
-            <CardDescription>
+            <h1 className="mt-4 text-balance text-3xl font-semibold">Reset Your Password</h1>
+            <CardDescription id="forgot-password-description">
               {parentPortalFlow
                 ? "Enter the email from your parent portal invitation. For privacy, we show the same confirmation either way."
                 : "Enter the email tied to your school user account. For privacy, we show the same confirmation either way."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="flex flex-col gap-4" onSubmit={submit}>
+            <form className="flex flex-col gap-4" onSubmit={submit} aria-busy={isPending} aria-describedby="forgot-password-description">
               {error ? (
                 <Alert variant="destructive">
                   <AlertCircle />
@@ -105,7 +105,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
                 </Alert>
               ) : null}
               {message ? (
-                <Alert className="border-emerald-500/30 bg-emerald-500/10">
+                <Alert role="status" className="border-emerald-500/30 bg-emerald-500/10">
                   <CheckCircle2 />
                   <AlertTitle>Check your email</AlertTitle>
                   <AlertDescription>{message}</AlertDescription>
@@ -115,12 +115,14 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
+                  name="email"
                   className="h-11"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder={parentPortalFlow ? "parent@example.com" : "school@example.com"}
                   type="email"
                   autoComplete="email"
+                  spellCheck={false}
                   required
                 />
               </div>
@@ -133,7 +135,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
               className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-slate-950 hover:underline"
             >
               <ArrowLeft className="mr-1 size-3.5" />
-              Back to login
+              Back to Login
             </Link>
           </CardContent>
         </Card>

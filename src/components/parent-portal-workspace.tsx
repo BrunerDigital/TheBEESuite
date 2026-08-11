@@ -35,7 +35,7 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -63,7 +63,9 @@ import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { isParentVisiblePayment } from "@/lib/parent-billing-visibility";
 import type { ParentPortalTodayState } from "@/lib/parent-portal-today";
 import {
-  PARENT_PORTAL_HREFS,
+  PARENT_PORTAL_FAMILY_SECTIONS,
+  parentPortalWorkspaceHref,
+  type ParentPortalFamilySection,
   type ParentPortalView,
 } from "@/lib/parent-portal-navigation";
 import styles from "@/components/message-conversation.module.css";
@@ -248,20 +250,13 @@ type AccountDeletionRequestSummary = {
   schoolReviewRequired: boolean;
 };
 
-const parentFamilySections = [
-  "children",
-  "check-in",
-  "documents",
-  "profile",
-  "notifications",
-] as const;
-type ParentFamilySection = (typeof parentFamilySections)[number];
-
 function normalizeParentFamilySection(
   value: string | undefined,
-): ParentFamilySection {
-  return parentFamilySections.includes(value as ParentFamilySection)
-    ? (value as ParentFamilySection)
+): ParentPortalFamilySection {
+  return PARENT_PORTAL_FAMILY_SECTIONS.includes(
+    value as ParentPortalFamilySection,
+  )
+    ? (value as ParentPortalFamilySection)
     : "children";
 }
 
@@ -507,7 +502,7 @@ function paymentProviderLabel(provider: string) {
   if (provider === "stripe_terminal") return "In-person card payment";
   if (provider === "manual_check") return "Check payment";
   if (provider === "manual_cash") return "Cash payment";
-  return provider.replaceAll("_", " ");
+  return "Other payment";
 }
 
 function formatFileSize(bytes: number) {
@@ -596,7 +591,42 @@ function paymentAmountCents(value: string) {
   return Number.isFinite(dollars) ? Math.max(0, Math.round(dollars * 100)) : 0;
 }
 
-export function ParentPortalWorkspace({
+async function parentPortalRequest(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) {
+  try {
+    return await fetch(input, init);
+  } catch {
+    return new Response(
+      JSON.stringify({
+        error:
+          "We could not reach The BEE Suite. Check your connection and try again.",
+      }),
+      {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+}
+
+export function ParentPortalWorkspace(props: Props) {
+  const activeView = props.activeView ?? "home";
+  const familySection = normalizeParentFamilySection(props.familySection);
+  const familyId = props.family?.id ?? "no-family";
+
+  return (
+    <ParentPortalWorkspaceView
+      key={`${familyId}:${activeView}:${familySection}`}
+      {...props}
+      activeView={activeView}
+      familySection={familySection}
+    />
+  );
+}
+
+function ParentPortalWorkspaceView({
   activeView = "home",
   familySection,
   family,
@@ -633,6 +663,9 @@ export function ParentPortalWorkspace({
   const router = useRouter();
   const activeFamilySection = normalizeParentFamilySection(familySection);
   const activeViewCopy = parentViewCopy[activeView];
+  const previewHrefBase = previewMode
+    ? "/device-preview?view=parent"
+    : undefined;
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [subject, setSubject] = useState(
@@ -711,6 +744,32 @@ export function ParentPortalWorkspace({
   const [accountPaymentAmountDollars, setAccountPaymentAmountDollars] =
     useState("");
   const [isPending, startTransition] = useTransition();
+  const passwordLengthReady = newPassword.length >= 8;
+  const passwordsMatch =
+    Boolean(confirmPassword) && newPassword === confirmPassword;
+  const passwordUpdateReady =
+    Boolean(currentPassword) && passwordLengthReady && passwordsMatch;
+  let passwordGuidance = "Use at least 8 characters for your new password.";
+  if (newPassword && !passwordLengthReady) {
+    passwordGuidance = "Your new password needs at least 8 characters.";
+  } else if (confirmPassword && !passwordsMatch) {
+    passwordGuidance = "The new passwords do not match.";
+  }
+
+  function workspaceHref(
+    view: ParentPortalView,
+    options: {
+      familyId?: string | null;
+      section?: ParentPortalFamilySection | null;
+      hash?: string | null;
+    } = {},
+  ) {
+    return parentPortalWorkspaceHref({
+      view,
+      previewHrefBase,
+      ...options,
+    });
+  }
 
   function saveTuitionCadence(child: Child) {
     if (previewOnly()) return;
@@ -726,7 +785,7 @@ export function ParentPortalWorkspace({
     startTransition(async () => {
       setStatus("");
       setError("");
-      const response = await fetch("/api/parent/tuition-cadence", {
+      const response = await parentPortalRequest("/api/parent/tuition-cadence", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ childId: child.id, billingCadence }),
@@ -830,6 +889,8 @@ export function ParentPortalWorkspace({
     });
   }, [autopayEnableRequirements, autopayLocalRequirements]);
   const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
+  const checkoutBlockedMessage =
+    "Online payments are temporarily unavailable. Please contact your school if you need help.";
   const currentGuardian = useMemo(() => {
     if (!family) return null;
     return (
@@ -939,7 +1000,7 @@ export function ParentPortalWorkspace({
     const hash = window.location.hash.toLowerCase();
     const legacyDestination: {
       view: ParentPortalView;
-      section?: ParentFamilySection;
+      section?: ParentPortalFamilySection;
     } | null =
       hash === "#today" || hash === "#family-summary"
         ? { view: "home" }
@@ -973,13 +1034,25 @@ export function ParentPortalWorkspace({
       return;
 
     const next = new URL(window.location.href);
+    if (previewMode) {
+      router.replace(
+        parentPortalWorkspaceHref({
+          view: legacyDestination.view,
+          previewHrefBase: `${next.pathname}${next.search}`,
+          familyId: next.searchParams.get("familyId"),
+          section: legacyDestination.section,
+          hash: null,
+        }),
+      );
+      return;
+    }
     next.searchParams.set("view", legacyDestination.view);
     if (legacyDestination.section)
       next.searchParams.set("section", legacyDestination.section);
     else next.searchParams.delete("section");
     next.hash = "";
     router.replace(`${next.pathname}${next.search}`);
-  }, [activeFamilySection, activeView, router]);
+  }, [activeFamilySection, activeView, previewMode, router]);
 
   function showStatus(next: string) {
     setError("");
@@ -1043,7 +1116,7 @@ export function ParentPortalWorkspace({
         sendEmailCopy: true,
         sendPushCopy: true,
       };
-      const response = await fetch("/api/communications/messages", {
+      const response = await parentPortalRequest("/api/communications/messages", {
         method: "POST",
         ...(messageAttachments.length
           ? { body: buildMessageFormData(family.id) }
@@ -1084,7 +1157,7 @@ export function ParentPortalWorkspace({
     if (previewOnly()) return;
     if (!family) return;
     startTransition(async () => {
-      const response = await fetch("/api/parent/contact-requests", {
+      const response = await parentPortalRequest("/api/parent/contact-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1121,7 +1194,7 @@ export function ParentPortalWorkspace({
   function acknowledgeIncident(incidentId: string) {
     if (previewOnly()) return;
     startTransition(async () => {
-      const response = await fetch(
+      const response = await parentPortalRequest(
         `/api/parent/incidents/${incidentId}/acknowledge`,
         { method: "POST" },
       );
@@ -1140,8 +1213,7 @@ export function ParentPortalWorkspace({
     if (previewOnly()) return;
     if (checkoutBlocked) {
       return showError(
-        checkoutReadiness.blockingReason ||
-          "Parent payments are not ready for this school yet.",
+        checkoutBlockedMessage,
       );
     }
     if (!family || !billingAccount) {
@@ -1168,7 +1240,7 @@ export function ParentPortalWorkspace({
           : paymentMethodCategory === "link_bank"
             ? "instant_bank_checkout"
             : "ach_checkout";
-      const response = await fetch("/api/billing/family-payment", {
+      const response = await parentPortalRequest("/api/billing/family-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1207,8 +1279,7 @@ export function ParentPortalWorkspace({
     if (previewOnly()) return;
     if (checkoutBlocked) {
       return showError(
-        checkoutReadiness.blockingReason ||
-          "Parent payments are not ready for this school yet.",
+        checkoutBlockedMessage,
       );
     }
     const invoice = invoices.find((item) => item.id === invoiceId);
@@ -1219,7 +1290,7 @@ export function ParentPortalWorkspace({
       return showError(pendingPaymentMessage(invoice.pendingPayment));
     }
     startTransition(async () => {
-      const response = await fetch("/api/billing/checkout-session", {
+      const response = await parentPortalRequest("/api/billing/checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1275,15 +1346,14 @@ export function ParentPortalWorkspace({
     if (previewOnly()) return;
     if (checkoutBlocked) {
       return showError(
-        checkoutReadiness.blockingReason ||
-          "Parent payments are not ready for this school yet.",
+        checkoutBlockedMessage,
       );
     }
     if (!selectedUniformProduct) {
       return showError("Choose an available uniform shirt color and size.");
     }
     startTransition(async () => {
-      const purchaseResponse = await fetch("/api/parent/products/purchase", {
+      const purchaseResponse = await parentPortalRequest("/api/parent/products/purchase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1304,7 +1374,7 @@ export function ParentPortalWorkspace({
         );
       }
 
-      const checkoutResponse = await fetch("/api/billing/checkout-session", {
+      const checkoutResponse = await parentPortalRequest("/api/billing/checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1350,7 +1420,7 @@ export function ParentPortalWorkspace({
     startTransition(async () => {
       setAutopayConfirmation("");
       setAutopayEnableRequirements([]);
-      const response = await fetch("/api/billing/payment-method-session", {
+      const response = await parentPortalRequest("/api/billing/payment-method-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1425,7 +1495,7 @@ export function ParentPortalWorkspace({
     if (previewOnly()) return;
     if (!currentGuardianId) return;
     startTransition(async () => {
-      const response = await fetch("/api/parent/preferences", {
+      const response = await parentPortalRequest("/api/parent/preferences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ guardianId: currentGuardianId, preferences }),
@@ -1452,7 +1522,7 @@ export function ParentPortalWorkspace({
       return showError("New passwords do not match.");
 
     startTransition(async () => {
-      const response = await fetch("/api/profile/password", {
+      const response = await parentPortalRequest("/api/profile/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1495,7 +1565,7 @@ export function ParentPortalWorkspace({
     if (!accepted) return;
 
     startTransition(async () => {
-      const response = await fetch("/api/privacy/deletion-requests", {
+      const response = await parentPortalRequest("/api/privacy/deletion-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1541,7 +1611,7 @@ export function ParentPortalWorkspace({
       formData.append("signatureName", signatureNames[documentId] || "");
       const file = documentFiles[documentId];
       if (file) formData.append("file", file);
-      const response = await fetch(
+      const response = await parentPortalRequest(
         `/api/parent/documents/${documentId}/submit`,
         {
           method: "POST",
@@ -1600,21 +1670,25 @@ export function ParentPortalWorkspace({
             aria-label="Choose family profile"
           >
             {availableFamilies.map((item) => (
-              <Button
+              <Link
                 key={item.id}
-                size="sm"
-                variant={item.id === family.id ? "default" : "outline"}
-                nativeButton={false}
-                render={
-                  <Link
-                    href={`/parent-portal?view=${activeView}&familyId=${encodeURIComponent(item.id)}`}
-                  />
-                }
+                href={workspaceHref(activeView, {
+                  familyId: item.id,
+                  section:
+                    activeView === "family"
+                      ? activeFamilySection
+                      : undefined,
+                })}
+                aria-current={item.id === family.id ? "page" : undefined}
+                className={buttonVariants({
+                  size: "sm",
+                  variant: item.id === family.id ? "default" : "outline",
+                })}
               >
-                <Building2 data-icon="inline-start" />
+                <Building2 data-icon="inline-start" aria-hidden="true" />
                 {item.name}
                 {item.centerName ? ` · ${item.centerName}` : ""}
-              </Button>
+              </Link>
             ))}
           </div>
         ) : null}
@@ -1659,11 +1733,15 @@ export function ParentPortalWorkspace({
                 ["documents", "Documents"],
                 ["profile", "Profile & Security"],
                 ["notifications", "Notifications & Privacy"],
-              ] as Array<[ParentFamilySection, string]>
+              ] as Array<[ParentPortalFamilySection, string]>
             ).map(([section, label]) => (
               <Link
                 key={section}
-                href={`/parent-portal?view=family&section=${section}&familyId=${encodeURIComponent(family.id)}`}
+                href={workspaceHref("family", {
+                  familyId: family.id,
+                  section,
+                  hash: null,
+                })}
                 aria-current={
                   activeFamilySection === section ? "page" : undefined
                 }
@@ -1699,7 +1777,7 @@ export function ParentPortalWorkspace({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Link
-                    href={PARENT_PORTAL_HREFS.updates}
+                    href={workspaceHref("updates", { familyId: family.id })}
                     className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-primary/70 bg-background px-4 text-sm font-medium transition-colors hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <Camera className="size-4" aria-hidden="true" /> View
@@ -1795,7 +1873,10 @@ export function ParentPortalWorkspace({
               <div className="mt-4 divide-y">
                 {documentsNeedingAction[0] ? (
                   <Link
-                    href="/parent-portal?view=family&section=documents"
+                    href={workspaceHref("family", {
+                      familyId: family.id,
+                      section: "documents",
+                    })}
                     className="group flex min-h-16 items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -1820,7 +1901,7 @@ export function ParentPortalWorkspace({
                 ) : null}
                 {openInvoices[0] ? (
                   <Link
-                    href={PARENT_PORTAL_HREFS.payments}
+                    href={workspaceHref("payments", { familyId: family.id })}
                     className="group flex min-h-16 items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -1843,7 +1924,11 @@ export function ParentPortalWorkspace({
                 ) : null}
                 {incidentsNeedingReceipt[0] ? (
                   <Link
-                    href="/parent-portal?view=family&section=children#incidents"
+                    href={workspaceHref("family", {
+                      familyId: family.id,
+                      section: "children",
+                      hash: "incidents",
+                    })}
                     className="group flex min-h-16 items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -1919,19 +2004,22 @@ export function ParentPortalWorkspace({
               {(
                 [
                   [
-                    PARENT_PORTAL_HREFS.messages,
+                    workspaceHref("messages", { familyId: family.id }),
                     "Message the School",
                     "Ask a question or send a note",
                     MessageSquare,
                   ],
                   [
-                    PARENT_PORTAL_HREFS.payments,
+                    workspaceHref("payments", { familyId: family.id }),
                     "View Payments",
                     "Balance, invoices, and payment methods",
                     CreditCard,
                   ],
                   [
-                    "/parent-portal?view=family&section=check-in",
+                    workspaceHref("family", {
+                      familyId: family.id,
+                      section: "check-in",
+                    }),
                     "School Check-In",
                     "View your Family PIN and QR code",
                     KeyRound,
@@ -2410,32 +2498,26 @@ export function ParentPortalWorkspace({
                   </p>
                   <div className="flex gap-2">
                     {ledgerPagination.hasPrevious ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        nativeButton={false}
-                        render={
-                          <Link
-                            href={`/parent-portal?view=payments&familyId=${encodeURIComponent(family?.id ?? "")}&ledgerPage=${ledgerPagination.page - 1}`}
-                          />
-                        }
+                      <Link
+                        href={`${workspaceHref("payments", { familyId: family?.id })}&ledgerPage=${ledgerPagination.page - 1}`}
+                        className={buttonVariants({
+                          variant: "outline",
+                          size: "sm",
+                        })}
                       >
                         Previous
-                      </Button>
+                      </Link>
                     ) : null}
                     {ledgerPagination.hasNext ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        nativeButton={false}
-                        render={
-                          <Link
-                            href={`/parent-portal?view=payments&familyId=${encodeURIComponent(family?.id ?? "")}&ledgerPage=${ledgerPagination.page + 1}`}
-                          />
-                        }
+                      <Link
+                        href={`${workspaceHref("payments", { familyId: family?.id })}&ledgerPage=${ledgerPagination.page + 1}`}
+                        className={buttonVariants({
+                          variant: "outline",
+                          size: "sm",
+                        })}
                       >
                         Next
-                      </Button>
+                      </Link>
                     ) : null}
                   </div>
                 </div>
@@ -3023,27 +3105,51 @@ export function ParentPortalWorkspace({
                         </p>
                         {item.attachments?.length ? (
                           <div className="mt-3 flex flex-wrap gap-2">
-                            {item.attachments.map((attachment) => (
-                              <a
-                                key={attachment.id}
-                                className="inline-flex max-w-full items-center gap-2 rounded-lg border border-current/15 bg-background/35 px-2 py-1.5 text-xs font-medium transition hover:bg-background/55"
-                                href={attachment.downloadUrl ?? undefined}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                {attachment.kind === "image" ? (
-                                  <Camera className="size-3.5 shrink-0" />
-                                ) : (
-                                  <FileText className="size-3.5 shrink-0" />
-                                )}
-                                <span className="truncate">
-                                  {attachment.filename}
+                            {item.attachments.map((attachment) => {
+                              const attachmentContent = (
+                                <>
+                                  {attachment.kind === "image" ? (
+                                    <Camera
+                                      className="size-3.5 shrink-0"
+                                      aria-hidden="true"
+                                    />
+                                  ) : (
+                                    <FileText
+                                      className="size-3.5 shrink-0"
+                                      aria-hidden="true"
+                                    />
+                                  )}
+                                  <span className="truncate">
+                                    {attachment.filename}
+                                  </span>
+                                  <span className="shrink-0 opacity-70">
+                                    {formatFileSize(attachment.size)}
+                                  </span>
+                                </>
+                              );
+
+                              return attachment.downloadUrl ? (
+                                <a
+                                  key={attachment.id}
+                                  className="inline-flex max-w-full items-center gap-2 rounded-lg border border-current/15 bg-background/35 px-2 py-1.5 text-xs font-medium transition-colors hover:bg-background/55"
+                                  href={attachment.downloadUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {attachmentContent}
+                                </a>
+                              ) : (
+                                <span
+                                  key={attachment.id}
+                                  className="inline-flex max-w-full items-center gap-2 rounded-lg border border-current/15 bg-background/35 px-2 py-1.5 text-xs text-muted-foreground"
+                                >
+                                  {attachmentContent}
+                                  <span className="sr-only">
+                                    Download unavailable
+                                  </span>
                                 </span>
-                                <span className="shrink-0 opacity-70">
-                                  {formatFileSize(attachment.size)}
-                                </span>
-                              </a>
-                            ))}
+                              );
+                            })}
                           </div>
                         ) : null}
                         {!isFromFamily ? (
@@ -3158,9 +3264,9 @@ export function ParentPortalWorkspace({
                             variant="ghost"
                             size="icon-xs"
                             onClick={() => removeMessageAttachment(index)}
-                            title="Remove attachment"
+                            aria-label={`Remove ${file.name || "attachment"}`}
                           >
-                            <X className="size-3" />
+                            <X className="size-3" aria-hidden="true" />
                           </Button>
                         </span>
                       ))}
@@ -3225,38 +3331,61 @@ export function ParentPortalWorkspace({
                     {document.status !== "APPROVED" ? (
                       <div className="space-y-2">
                         {requiresDocumentSignature(document) ? (
-                          <Input
-                            value={signatureNames[document.id] ?? ""}
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor={`parent-document-signature-${document.id}`}
+                            >
+                              Type your full name
+                            </Label>
+                            <Input
+                              id={`parent-document-signature-${document.id}`}
+                              value={signatureNames[document.id] ?? ""}
+                              onChange={(event) =>
+                                setSignatureNames((current) => ({
+                                  ...current,
+                                  [document.id]: event.target.value,
+                                }))
+                              }
+                              autoComplete="name"
+                            />
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor={`parent-document-file-${document.id}`}
+                            >
+                              Completed document
+                            </Label>
+                            <Input
+                              id={`parent-document-file-${document.id}`}
+                              type="file"
+                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp,text/plain"
+                              onChange={(event) =>
+                                setDocumentFiles((current) => ({
+                                  ...current,
+                                  [document.id]: event.target.files?.[0] ?? null,
+                                }))
+                              }
+                            />
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <Label
+                            htmlFor={`parent-document-note-${document.id}`}
+                          >
+                            Note for the director (optional)
+                          </Label>
+                          <Textarea
+                            id={`parent-document-note-${document.id}`}
+                            value={documentNotes[document.id] ?? ""}
                             onChange={(event) =>
-                              setSignatureNames((current) => ({
+                              setDocumentNotes((current) => ({
                                 ...current,
                                 [document.id]: event.target.value,
                               }))
                             }
-                            placeholder="Typed signature"
                           />
-                        ) : (
-                          <Input
-                            type="file"
-                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp,text/plain"
-                            onChange={(event) =>
-                              setDocumentFiles((current) => ({
-                                ...current,
-                                [document.id]: event.target.files?.[0] ?? null,
-                              }))
-                            }
-                          />
-                        )}
-                        <Textarea
-                          value={documentNotes[document.id] ?? ""}
-                          onChange={(event) =>
-                            setDocumentNotes((current) => ({
-                              ...current,
-                              [document.id]: event.target.value,
-                            }))
-                          }
-                          placeholder="Optional note for the director"
-                        />
+                        </div>
                         <label className="flex items-start gap-2 text-xs text-muted-foreground">
                           <input
                             type="checkbox"
@@ -3278,9 +3407,10 @@ export function ParentPortalWorkspace({
                           className="w-full sm:w-auto"
                           disabled={
                             isPending ||
-                            (requiresDocumentSignature(document) &&
-                              (!signatureNames[document.id]?.trim() ||
-                                !signatureAcknowledgements[document.id]))
+                            !signatureAcknowledgements[document.id] ||
+                            (requiresDocumentSignature(document)
+                              ? !signatureNames[document.id]?.trim()
+                              : !documentFiles[document.id])
                           }
                           onClick={() => submitDocument(document.id)}
                           variant="outline"
@@ -3452,16 +3582,19 @@ export function ParentPortalWorkspace({
                     Contact information on file with your school
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  nativeButton={false}
-                  render={
-                    <Link href="/parent-portal?view=family&section=documents#contact-request" />
-                  }
+                <Link
+                  href={workspaceHref("family", {
+                    familyId: family.id,
+                    section: "documents",
+                    hash: "contact-request",
+                  })}
+                  className={buttonVariants({
+                    variant: "outline",
+                    size: "sm",
+                  })}
                 >
                   Request a Correction
-                </Button>
+                </Link>
               </div>
               <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
                 <div>
@@ -3514,67 +3647,90 @@ export function ParentPortalWorkspace({
                 <AlertDescription>{passwordConfirmation}</AlertDescription>
               </Alert>
             ) : null}
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowPasswords((visible) => !visible)}
-              >
-                {showPasswords ? (
-                  <EyeOff data-icon="inline-start" />
-                ) : (
-                  <Eye data-icon="inline-start" />
-                )}
-                {showPasswords ? "Hide passwords" : "Show passwords"}
-              </Button>
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-1">
-                <Label htmlFor="profile-current-password">
-                  Current password
-                </Label>
-                <Input
-                  id="profile-current-password"
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  type={showPasswords ? "text" : "password"}
-                  autoComplete="current-password"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="profile-new-password">New password</Label>
-                <Input
-                  id="profile-new-password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  type={showPasswords ? "text" : "password"}
-                  autoComplete="new-password"
-                  minLength={8}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="profile-confirm-password">
-                  Confirm password
-                </Label>
-                <Input
-                  id="profile-confirm-password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  type={showPasswords ? "text" : "password"}
-                  autoComplete="new-password"
-                  minLength={8}
-                />
-              </div>
-            </div>
-            <Button
-              className="w-full sm:w-auto"
-              disabled={isPending}
-              onClick={updateProfilePassword}
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                updateProfilePassword();
+              }}
             >
-              <KeyRound data-icon="inline-start" />
-              Update Password
-            </Button>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowPasswords((visible) => !visible)}
+                >
+                  {showPasswords ? (
+                    <EyeOff data-icon="inline-start" />
+                  ) : (
+                    <Eye data-icon="inline-start" />
+                  )}
+                  {showPasswords ? "Hide passwords" : "Show passwords"}
+                </Button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1">
+                  <Label htmlFor="profile-current-password">
+                    Current password
+                  </Label>
+                  <Input
+                    id="profile-current-password"
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    type={showPasswords ? "text" : "password"}
+                    autoComplete="current-password"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="profile-new-password">New password</Label>
+                  <Input
+                    id="profile-new-password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    type={showPasswords ? "text" : "password"}
+                    autoComplete="new-password"
+                    minLength={8}
+                    aria-describedby="profile-password-guidance"
+                    aria-invalid={
+                      newPassword.length > 0 && !passwordLengthReady
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="profile-confirm-password">
+                    Confirm password
+                  </Label>
+                  <Input
+                    id="profile-confirm-password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    type={showPasswords ? "text" : "password"}
+                    autoComplete="new-password"
+                    minLength={8}
+                    aria-describedby="profile-password-guidance"
+                    aria-invalid={
+                      confirmPassword.length > 0 && !passwordsMatch
+                    }
+                  />
+                </div>
+              </div>
+              <p
+                id="profile-password-guidance"
+                className="text-xs text-muted-foreground"
+                aria-live="polite"
+              >
+                {passwordGuidance}
+              </p>
+              <Button
+                type="submit"
+                className="w-full sm:w-auto"
+                disabled={isPending || !passwordUpdateReady}
+              >
+                <KeyRound data-icon="inline-start" />
+                Update Password
+              </Button>
+            </form>
             <div className="flex flex-col gap-3 rounded-xl border bg-background/40 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="font-medium">
@@ -3586,15 +3742,16 @@ export function ParentPortalWorkspace({
                   medical, or custody concerns.
                 </p>
               </div>
-              <Button
-                className="w-full shrink-0 sm:w-auto"
-                variant="outline"
-                nativeButton={false}
-                render={<Link href="/support" />}
+              <Link
+                href="/support"
+                className={buttonVariants({
+                  variant: "outline",
+                  className: "w-full shrink-0 sm:w-auto",
+                })}
               >
-                <LifeBuoy data-icon="inline-start" />
+                <LifeBuoy data-icon="inline-start" aria-hidden="true" />
                 Open Support
-              </Button>
+              </Link>
             </div>
             <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3631,13 +3788,19 @@ export function ParentPortalWorkspace({
                 </div>
               ) : (
                 <>
-                  <Textarea
-                    value={accountDeletionDetails}
-                    onChange={(event) =>
-                      setAccountDeletionDetails(event.target.value)
-                    }
-                    placeholder="Optional details for support or your school"
-                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="account-deletion-details">
+                      Additional details (optional)
+                    </Label>
+                    <Textarea
+                      id="account-deletion-details"
+                      value={accountDeletionDetails}
+                      onChange={(event) =>
+                        setAccountDeletionDetails(event.target.value)
+                      }
+                      placeholder="Share anything support or your school should know"
+                    />
+                  </div>
                   <label className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
                     <input
                       type="checkbox"

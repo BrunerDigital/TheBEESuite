@@ -178,7 +178,7 @@ export default async function DevicePreviewPage({ searchParams }: { searchParams
   const { view, screen, section } = await searchParams;
   const role: PreviewRole = view === "parent" || view === "teacher" || view === "workflow" || view === "kiosk" || view === "kiosk-staff" ? view : "director";
   if (role === "kiosk" || role === "kiosk-staff") {
-    return <KioskCheckIn previewMode center={{ id: "preview-center", name: "Sunshine Academy", place: "Carmel, Indiana", timeZone: "America/Indiana/Indianapolis" }} initialMode={role === "kiosk-staff" ? "staff" : "family"} />;
+    return <KioskCheckIn previewMode familyOnly={role === "kiosk"} center={{ id: "preview-center", name: "Sunshine Academy", place: "Carmel, Indiana", timeZone: "America/Indiana/Indianapolis" }} initialMode={role === "kiosk-staff" ? "staff" : "family"} />;
   }
   return <ShellPreview role={role} screen={screen} familySection={section} />;
 }

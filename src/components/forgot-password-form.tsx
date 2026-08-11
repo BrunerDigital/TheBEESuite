@@ -65,20 +65,20 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
         <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
           <h1 className="text-5xl font-semibold leading-tight tracking-normal">
-            {parentPortalFlow ? "Reset your parent portal password." : "Get back into your school workspace."}
+            {parentPortalFlow ? "Reset Your Parent Portal Password" : "Reset Your School Password"}
           </h1>
           <p className="mt-5 text-base leading-7 text-slate-300">
             {parentPortalFlow
               ? parentSetupFlow
                 ? "We will send a secure recovery link for the email your school invited. After updating your password, finish parent setup."
                 : "We will send a secure recovery link for the parent or guardian email your school has on file."
-              : "We’ll send a secure Supabase Auth recovery link so your school or BEE Suite account can set a fresh password."}
+              : "We will send a secure recovery link so you can choose a new password for your school account."}
           </p>
         </div>
         <p className="text-sm text-slate-300">
           {parentPortalFlow
             ? "Reset links should only be used by the parent or guardian who owns this account."
-            : "Reset links should only be used by the account owner and expire through Supabase Auth."}
+            : "Reset links should only be used by the account owner. Requesting a newer link makes older links stop working."}
         </p>
       </section>
 
@@ -88,7 +88,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
             <Link href="/" className="mx-auto block w-fit lg:hidden" aria-label="The BEE Suite home">
               <BrandIcon className="size-14 rounded-2xl" priority />
             </Link>
-            <CardTitle className="mt-4 text-3xl">Reset your password</CardTitle>
+            <CardTitle className="mt-4 text-3xl">Reset Your Password</CardTitle>
             <CardDescription>
               {parentPortalFlow
                 ? "Enter the email from your parent portal invitation. For privacy, we show the same confirmation either way."
@@ -125,7 +125,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
                 />
               </div>
               <Button className="h-11" size="lg" type="submit" disabled={isPending}>
-                {isPending ? "Sending reset link..." : "Send reset link"}
+                {isPending ? "Sending reset link…" : "Send Reset Link"}
               </Button>
             </form>
             <Link

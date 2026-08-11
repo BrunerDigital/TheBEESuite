@@ -67,6 +67,7 @@ type VerifiedCredential =
 
 type Props = {
   initialMode?: KioskMode;
+  familyOnly?: boolean;
   previewMode?: boolean;
   center: {
     id: string;
@@ -97,8 +98,8 @@ function shortDate(value?: string | Date | null) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
 }
 
-export function KioskCheckIn({ center, initialMode = "family", previewMode = false }: Props) {
-  const [kioskMode, setKioskMode] = useState<KioskMode>(initialMode);
+export function KioskCheckIn({ center, initialMode = "family", familyOnly = false, previewMode = false }: Props) {
+  const [kioskMode, setKioskMode] = useState<KioskMode>(familyOnly ? "family" : initialMode);
   const [credentialMode, setCredentialMode] = useState<VerificationMethod>("pin");
   const [pin, setPin] = useState("");
   const [qrToken, setQrToken] = useState("");
@@ -128,6 +129,7 @@ export function KioskCheckIn({ center, initialMode = "family", previewMode = fal
   const staffCredentialReady = staffPin.length === 4;
   const verificationLabel = verifiedCredential?.method === "qr" ? "QR scan" : "PIN";
   const staffIsClockedIn = staffLookup?.staff.clock.status === "clocked_in";
+  const activeKioskMode: KioskMode = familyOnly ? "family" : kioskMode;
 
   const reset = useCallback((nextStatus = "") => {
     qrControlsRef.current?.stop();
@@ -157,8 +159,9 @@ export function KioskCheckIn({ center, initialMode = "family", previewMode = fal
   }
 
   function selectKioskMode(mode: KioskMode) {
+    if (familyOnly && mode !== "family") return;
     markActivity();
-    if (mode === kioskMode) return;
+    if (mode === activeKioskMode) return;
     reset();
     setKioskMode(mode);
   }
@@ -350,6 +353,7 @@ export function KioskCheckIn({ center, initialMode = "family", previewMode = fal
   }
 
   function lookupStaffCredential() {
+    if (familyOnly) return;
     markActivity();
     if (previewMode) {
       setStatus("Preview only — staff lookup is disabled.");
@@ -383,6 +387,7 @@ export function KioskCheckIn({ center, initialMode = "family", previewMode = fal
   }
 
   function submitStaff(action: "clock_in" | "clock_out") {
+    if (familyOnly) return;
     markActivity();
     if (previewMode) {
       setStatus("Preview only — staff clock actions are disabled.");
@@ -414,7 +419,7 @@ export function KioskCheckIn({ center, initialMode = "family", previewMode = fal
         return;
       }
       reset(`${json.staff.name} ${action === "clock_in" ? "clocked in" : "clocked out"}.`);
-      setKioskMode("staff");
+      if (!familyOnly) setKioskMode("staff");
     });
   }
 
@@ -426,10 +431,12 @@ export function KioskCheckIn({ center, initialMode = "family", previewMode = fal
             <div className="min-w-0">
               <Badge className="mb-2">
                 <ShieldCheck data-icon="inline-start" />
-                Secure lobby kiosk
+                {familyOnly ? "School Check-In" : "Secure lobby kiosk"}
               </Badge>
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl 2xl:text-4xl">{center.name}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">{center.place || "Family check-in/out and staff clock-in/out"}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {center.place || (familyOnly ? "Family check-in and check-out" : "Family check-in/out and staff clock-in/out")}
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-background/60 p-2.5 sm:min-w-48 sm:justify-end">
               <div className="mr-auto hidden text-left xl:block sm:mr-0 sm:text-right">
@@ -469,28 +476,36 @@ export function KioskCheckIn({ center, initialMode = "family", previewMode = fal
         <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-[18rem_minmax(0,1fr)] lg:grid-cols-[20rem_minmax(0,1fr)] lg:gap-2 2xl:grid-cols-[24rem_minmax(0,1fr)] 2xl:gap-3">
           <Card className="kiosk-halo-panel glass-panel min-w-0 overflow-hidden">
             <CardHeader className="p-4 pb-2 lg:p-3 lg:pb-1 2xl:p-4 2xl:pb-2">
-              <CardTitle>{kioskMode === "family" ? (credentialMode === "pin" ? "Enter 4 digit PIN" : "Scan QR code") : "Staff clock-in/out"}</CardTitle>
-              <CardDescription>
-                {kioskMode === "family"
+              <CardTitle>
+                {activeKioskMode === "family"
                   ? credentialMode === "pin"
-                    ? "Use the PIN provided by your school director."
-                    : "Use the guardian QR card issued by your school director."
+                    ? familyOnly ? "Enter Your 4-Digit Family PIN" : "Enter 4 digit PIN"
+                    : familyOnly ? "Scan Your QR Code" : "Scan QR code"
+                  : "Staff clock-in/out"}
+              </CardTitle>
+              <CardDescription>
+                {activeKioskMode === "family"
+                  ? credentialMode === "pin"
+                    ? familyOnly ? "Enter the Family PIN from your parent portal." : "Use the PIN provided by your school director."
+                    : familyOnly ? "Hold the QR code from your parent portal inside the frame." : "Use the guardian QR card issued by your school director."
                   : "Use your staff kiosk code to clock in or clock out. Add work email only if the kiosk asks for it."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 p-4 pt-2 lg:space-y-2 lg:p-3 lg:pt-1 2xl:space-y-3 2xl:p-4 2xl:pt-2">
-              <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/60 p-1">
-                <Button type="button" variant={kioskMode === "family" ? "default" : "ghost"} onClick={() => selectKioskMode("family")}>
-                  <ShieldCheck data-icon="inline-start" />
-                  Family
-                </Button>
-                <Button type="button" variant={kioskMode === "staff" ? "default" : "ghost"} onClick={() => selectKioskMode("staff")}>
-                  <UserRound data-icon="inline-start" />
-                  Staff
-                </Button>
-              </div>
+              {!familyOnly ? (
+                <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/60 p-1">
+                  <Button type="button" variant={activeKioskMode === "family" ? "default" : "ghost"} onClick={() => selectKioskMode("family")}>
+                    <ShieldCheck data-icon="inline-start" />
+                    Family
+                  </Button>
+                  <Button type="button" variant={activeKioskMode === "staff" ? "default" : "ghost"} onClick={() => selectKioskMode("staff")}>
+                    <UserRound data-icon="inline-start" />
+                    Staff
+                  </Button>
+                </div>
+              ) : null}
 
-              {kioskMode === "family" ? (
+              {activeKioskMode === "family" ? (
                 <>
                   <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/60 p-1">
                     <Button type="button" variant={credentialMode === "pin" ? "default" : "ghost"} onClick={() => selectCredentialMode("pin")}>
@@ -539,7 +554,7 @@ export function KioskCheckIn({ center, initialMode = "family", previewMode = fal
                     </>
                   ) : (
                     <div className="grid gap-3">
-                      <Label className="text-base">Tablet camera</Label>
+                      <Label className="text-base">{familyOnly ? "Scan Your QR Code" : "Scan a Family QR Code"}</Label>
                       <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border bg-black">
                         <video ref={qrVideoRef} className="size-full object-cover" muted playsInline aria-label="QR code camera preview" />
                         <div className="pointer-events-none absolute inset-[12%] rounded-3xl border-4 border-white/90 shadow-[0_0_0_999px_rgba(0,0,0,0.35)]" />
@@ -566,7 +581,7 @@ export function KioskCheckIn({ center, initialMode = "family", previewMode = fal
                   )}
 
                   <Button className="h-14 w-full text-lg sm:h-16 lg:h-12 2xl:h-16" disabled={isPending || !credentialReady} onClick={() => lookupCredential()}>
-                    Find Family
+                    {familyOnly ? "Continue" : "Continue with PIN"}
                   </Button>
                 </>
               ) : (
@@ -625,7 +640,7 @@ export function KioskCheckIn({ center, initialMode = "family", previewMode = fal
           <Card className="kiosk-halo-panel glass-panel min-w-0 overflow-hidden">
             <CardHeader className="p-4 pb-2 lg:p-3 lg:pb-1 2xl:p-4 2xl:pb-2">
               <CardTitle>
-                {kioskMode === "staff"
+                {activeKioskMode === "staff"
                   ? staffLookup
                     ? staffLookup.staff.name
                     : "Staff time clock"
@@ -634,7 +649,7 @@ export function KioskCheckIn({ center, initialMode = "family", previewMode = fal
                     : "Select children"}
               </CardTitle>
               <CardDescription>
-                {kioskMode === "staff"
+                {activeKioskMode === "staff"
                   ? staffLookup
                     ? `${staffLookup.staff.title} verified for ${center.name}.`
                     : "Staff can clock in or clock out after code verification."
@@ -644,7 +659,7 @@ export function KioskCheckIn({ center, initialMode = "family", previewMode = fal
               </CardDescription>
             </CardHeader>
             <CardContent className="flex min-h-72 min-w-0 flex-col gap-4 p-4 pt-2 md:min-h-0 lg:gap-3 lg:p-3 lg:pt-1 2xl:gap-4 2xl:p-4 2xl:pt-2">
-              {kioskMode === "staff" ? (
+              {activeKioskMode === "staff" ? (
                 staffLookup ? (
                   <>
                     <div className="grid gap-3 md:grid-cols-3">

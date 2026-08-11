@@ -140,7 +140,7 @@ export function ResetPasswordForm() {
         <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
           <h1 className="text-5xl font-semibold leading-tight tracking-normal">
-            {parentPortalFlow ? "Create your parent portal password." : "Create a new secure password."}
+            {parentPortalFlow ? "Create Your Parent Portal Password" : "Create a New Password"}
           </h1>
           <p className="mt-5 text-base leading-7 text-slate-300">
             {parentPortalFlow
@@ -151,13 +151,13 @@ export function ResetPasswordForm() {
                   : "This secure link lets you create a password for the parent or guardian email your school has on file."
               : forceReset
                 ? "Passwords must be updated before workspace access is allowed."
-                : "This screen only works from a valid Supabase recovery link. After updating, sign in again with your email."}
+                : "This screen only works from a valid password recovery link. After updating, sign in again with your email."}
           </p>
         </div>
         <p className="text-sm text-slate-300">
           {parentPortalFlow
             ? "Your family portal keeps child updates, messages, documents, billing, and check-in access in one place."
-            : "Human review remains required for sensitive child, billing, and compliance workflows."}
+            : "Your password protects the school information connected to your account."}
         </p>
       </section>
 
@@ -167,7 +167,7 @@ export function ResetPasswordForm() {
             <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary text-primary-foreground">
               <LockKeyhole />
             </div>
-            <CardTitle className="mt-4 text-3xl">{parentPortalFlow ? "Set your parent portal password" : "Set a new password"}</CardTitle>
+            <CardTitle className="mt-4 text-3xl">{parentPortalFlow ? "Set Your Parent Portal Password" : "Set a New Password"}</CardTitle>
             <CardDescription>
               {linkStatus === "invalid"
                 ? "Use the recovery link from the newest email. Older links stop working after another reset is requested."
@@ -197,7 +197,7 @@ export function ResetPasswordForm() {
                 </Alert>
               ) : null}
               {linkStatus === "checking" ? (
-                <p role="status" className="py-4 text-center text-sm text-slate-600">Checking reset link...</p>
+                <p role="status" className="py-4 text-center text-sm text-slate-600">Checking reset link…</p>
               ) : null}
               {linkStatus === "ready" && forceReset ? (
                 <div className="flex flex-col gap-2">
@@ -242,7 +242,7 @@ export function ResetPasswordForm() {
                     />
                   </div>
                   <Button className="h-11" size="lg" type="submit" disabled={isPending}>
-                    {isPending ? "Updating password..." : "Update password"}
+                    {isPending ? "Updating password…" : "Update Password"}
                   </Button>
                 </>
               ) : null}

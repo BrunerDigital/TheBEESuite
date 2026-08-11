@@ -1,10 +1,13 @@
 import { notFound } from "next/navigation";
-import { BadgeDollarSign, BellRing, CheckCircle2, Clock3, MessageSquare, Users } from "lucide-react";
+import { BadgeDollarSign, BellRing, CheckCircle2, Clock3, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { AutomationWorkflowBuilder, type AutomationWorkflowBuilderData } from "@/components/automation-workflow-builder";
 import { KioskCheckIn } from "@/components/kiosk-check-in";
+import { ParentPortalWorkspace } from "@/components/parent-portal-workspace";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { executiveParentPortalDemo } from "@/lib/executive-demo-data";
+import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
 
 type PreviewRole = "director" | "parent" | "teacher" | "workflow" | "kiosk" | "kiosk-staff";
 
@@ -93,32 +96,50 @@ function DirectorPreview() {
   );
 }
 
-function ParentPreview() {
+function ParentPreview({ screen, familySection }: { screen: string | undefined; familySection: string | undefined }) {
+  const activeView = normalizeParentPortalView(screen);
+  const family = {
+    ...executiveParentPortalDemo.family,
+    children: executiveParentPortalDemo.family.children.map((child, index) => ({
+      ...child,
+      today: {
+        status: index === 0 ? "checked_in" as const : "checked_out" as const,
+        label: index === 0 ? "Checked in" : "Checked out",
+        latestEventAt: index === 0 ? "2026-08-10T12:04:00.000Z" : "2026-08-10T19:32:00.000Z",
+        currentLocationName: index === 0 ? child.classroom.name : null,
+        dailyReportShared: true,
+      },
+    })),
+  };
+
   return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <section id="today" className="scroll-mt-36 overflow-hidden rounded-3xl border bg-card/85 p-5 shadow-xl sm:p-7">
-        <Badge className="mb-4">Today</Badge>
-        <h1 className="text-pretty text-3xl font-semibold tracking-tight">Ava&apos;s day at a glance</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Checked in at 8:04 AM · Butterflies classroom</p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          {[
-            ["Status", "Checked in"],
-            ["Latest update", "Sensory garden"],
-            ["Pickup", "Daniel Rivera"],
-          ].map(([label, value]) => <div key={label} className="rounded-2xl border bg-background/55 p-4"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 font-semibold">{value}</div></div>)}
-        </div>
-      </section>
-      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-        <Card id="messages" className="glass-panel scroll-mt-36 min-w-0 overflow-hidden">
-          <CardHeader><CardTitle className="flex items-center gap-2"><MessageSquare className="size-5 text-primary" /> Messages</CardTitle><CardDescription>Your family conversation with Sunshine Academy</CardDescription></CardHeader>
-          <CardContent className="space-y-3"><div className="max-w-[85%] rounded-2xl rounded-bl-md bg-muted p-4 text-sm">Ava had a wonderful day and was proud of her art project.</div><div className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-primary p-4 text-sm text-primary-foreground">Thank you for the update!</div></CardContent>
-        </Card>
-        <Card id="billing" className="glass-panel scroll-mt-36 min-w-0 overflow-hidden">
-          <CardHeader><CardTitle>Payments</CardTitle><CardDescription>Family balance and saved payment method</CardDescription></CardHeader>
-          <CardContent><div className="text-3xl font-semibold tabular-nums">$245.00</div><p className="mt-2 text-sm text-muted-foreground">Visa ending in 4242 · Autopay enabled</p></CardContent>
-        </Card>
-      </div>
-    </div>
+    <ParentPortalWorkspace
+      {...executiveParentPortalDemo}
+      activeView={activeView}
+      familySection={familySection}
+      family={family}
+      centerName="Sunshine Academy"
+      currentGuardianId="exec-demo-guardian-a"
+      kioskCredentials={[{
+        guardianId: "exec-demo-guardian-a",
+        guardianName: "Jordan Rivera",
+        familyId: "exec-demo-family",
+        familyName: "Rivera Family",
+        centerId: "preview-center",
+        centerName: "Sunshine Academy",
+        hasPin: true,
+        pinSetAt: "2026-08-01T14:00:00.000Z",
+        qrToken: "preview-family-qr-token",
+        kioskPath: "/check-in/preview-center/family",
+      }]}
+      messages={executiveParentPortalDemo.messages.map((message, index) => ({
+        ...message,
+        isFromFamily: index % 2 === 1,
+        sender: { name: index % 2 === 1 ? "Jordan Rivera" : "Ms. Morgan" },
+      }))}
+      previewMode
+      demoMode
+    />
   );
 }
 
@@ -138,9 +159,9 @@ function TeacherPreview() {
   );
 }
 
-function ShellPreview({ role }: { role: Exclude<PreviewRole, "kiosk" | "kiosk-staff"> }) {
+function ShellPreview({ role, screen, familySection }: { role: Exclude<PreviewRole, "kiosk" | "kiosk-staff">; screen?: string; familySection?: string }) {
   if (role === "parent") {
-    return <AppShell previewMode previewHrefBase="/device-preview?view=parent" currentUser={{ name: "Jessica Rivera", email: "jessica@example.com", role: "PARENT_GUARDIAN", timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "family", label: "Family portal", detail: "Linked family access", href: "/parent-portal" } }}><ParentPreview /></AppShell>;
+    return <AppShell previewMode previewHrefBase="/device-preview?view=parent" currentUser={{ name: "Jordan Rivera", email: "parent@example.com", role: "PARENT_GUARDIAN", timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "family", label: "Rivera Family", detail: "Sunshine Academy", href: "/parent-portal" } }}><ParentPreview screen={screen} familySection={familySection} /></AppShell>;
   }
   if (role === "teacher") {
     return <AppShell previewMode previewHrefBase="/device-preview?view=teacher" currentUser={{ name: "Morgan Lee", email: "morgan@example.com", role: "TEACHER", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "classroom", label: "Butterflies", detail: "Sunshine Academy · Teacher", href: "/teacher-portal" } }}><TeacherPreview /></AppShell>;
@@ -151,13 +172,13 @@ function ShellPreview({ role }: { role: Exclude<PreviewRole, "kiosk" | "kiosk-st
   return <AppShell previewMode previewHrefBase="/device-preview?view=director" currentUser={{ name: "Avery Thompson", email: "avery@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Center Director · 1 school", href: "/dashboard" } }}><DirectorPreview /></AppShell>;
 }
 
-export default async function DevicePreviewPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function DevicePreviewPage({ searchParams }: { searchParams: Promise<{ view?: string; screen?: string; section?: string }> }) {
   if (process.env.NODE_ENV !== "development") notFound();
 
-  const { view } = await searchParams;
+  const { view, screen, section } = await searchParams;
   const role: PreviewRole = view === "parent" || view === "teacher" || view === "workflow" || view === "kiosk" || view === "kiosk-staff" ? view : "director";
   if (role === "kiosk" || role === "kiosk-staff") {
     return <KioskCheckIn previewMode center={{ id: "preview-center", name: "Sunshine Academy", place: "Carmel, Indiana", timeZone: "America/Indiana/Indianapolis" }} initialMode={role === "kiosk-staff" ? "staff" : "family"} />;
   }
-  return <ShellPreview role={role} />;
+  return <ShellPreview role={role} screen={screen} familySection={section} />;
 }

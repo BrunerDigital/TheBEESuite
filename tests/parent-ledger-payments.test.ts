@@ -5,17 +5,17 @@ import test from "node:test";
 test("the parent portal places authoritative account activity ahead of invoice history", () => {
   const source = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
   const latestActivity = source.indexOf("Latest account activity");
-  const accountLedger = source.indexOf("Account ledger");
-  const invoices = source.indexOf(">Invoice history<");
+  const accountLedger = source.indexOf("Account Activity");
+  const invoices = source.indexOf("Invoice History");
 
   assert.ok(latestActivity >= 0);
   assert.ok(accountLedger > latestActivity);
   assert.ok(invoices > accountLedger);
   assert.match(source, /ledgerEntries\.map\(\(entry\)/);
   assert.doesNotMatch(source, /ledgerEntries\.slice\(/);
-  assert.match(source, /Family-responsible charges, credits, payments, and adjustments/i);
-  assert.match(source, /Invoice records are listed without agency subsidy amounts\./);
-  assert.match(source, /Only your family responsibility is included\./);
+  assert.match(source, /Charges, credits, payments, and adjustments included in your\s+family balance/i);
+  assert.match(source, /Review invoice dates and payment status/);
+  assert.match(source, /This is the amount currently due from your family/);
   assert.doesNotMatch(source, /balanceAfterCents/);
   assert.doesNotMatch(source, /latestAccountLedgerEntry\.amountCents|money\(entry\.amountCents\)/);
 });
@@ -46,7 +46,7 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(invoiceCheckoutRoute, /userIsParentGuardian && !userCanManageBilling && !productCheckoutBranding/);
   assert.match(invoiceCheckoutRoute, /pay the family balance shown there/);
   assert.match(workspace, /payProductInvoice/);
-  assert.match(workspace, /parentBalanceReviewRequired \? "Agency split under review"/);
+  assert.match(workspace, /parentBalanceReviewRequired[\s\S]{0,80}\? "Being confirmed"/);
   assert.match(workspace, /Amount to pay/);
   assert.match(workspace, /amountCents: accountPaymentRequestCents/);
   assert.doesNotMatch(workspace, /Payment is blocked until the school separates agency and family responsibility/);
@@ -58,13 +58,13 @@ test("a positive family balance remains payable when no open invoice exists", ()
 
   assert.match(
     workspace,
-    /const showFamilyPaymentPanel = parentBalanceReviewRequired[\s\S]*balanceCents > 0 && openInvoices\.length === 0/,
+    /const showFamilyPaymentPanel\s*=\s*parentBalanceReviewRequired[\s\S]*balanceCents > 0 && openInvoices\.length === 0/,
   );
   assert.match(
     workspace,
     /if \(!nextOpenInvoice && balanceCents <= 0 && !parentBalanceReviewRequired\)/,
   );
-  assert.match(workspace, /available for secure account payment/);
+  assert.match(workspace, /available for\s+secure account payment/);
 });
 
 test("automated payment processing blocks unresolved subsidy responsibility before applying credit or charging Stripe", () => {
@@ -111,7 +111,7 @@ test("the parent portal keeps latest activity accurate while browsing older ledg
 
   assert.match(page, /prisma\.ledgerEntry\.findFirst\([\s\S]*?billingAccount:\s*\{ familyId \}/);
   assert.match(page, /latestLedgerEntry=\{latestLedgerEntry\}/);
-  assert.match(workspace, /latestAccountLedgerEntry = latestLedgerEntry \?\? ledgerEntries\[0\] \?\? null/);
+  assert.match(workspace, /latestAccountLedgerEntry =\s+latestLedgerEntry \?\? ledgerEntries\[0\] \?\? null/);
   assert.match(workspace, /Page \{ledgerPagination\.page\}/);
   assert.match(workspace, /ledgerPage=\$\{ledgerPagination\.page \+ 1\}/);
 });
@@ -121,7 +121,7 @@ test("parent account payments support custom partial amounts for split-payment w
   const workspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
   const visibility = readFileSync("src/lib/parent-billing-visibility.ts", "utf8");
 
-  assert.match(workspace, /Amount to pay\{parentBalanceReviewRequired \? "" : " \(optional\)"\}/);
+  assert.match(workspace, /Amount to pay\s+\{parentBalanceReviewRequired \? "" : " \(optional\)"\}/);
   assert.match(workspace, /split the balance across payment methods/);
   assert.match(workspace, /amountCents: accountPaymentRequestCents/);
   assert.match(workspace, /accountPaymentAmountEntered/);

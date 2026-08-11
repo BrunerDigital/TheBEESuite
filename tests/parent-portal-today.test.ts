@@ -54,6 +54,8 @@ test("parent Today projection stays inside the already authorized family childre
   assert.match(portalBranch, /buildParentPortalTodayState/);
   assert.doesNotMatch(portalBranch, /attendanceRecord\.(create|update|delete)/);
   assert.doesNotMatch(portalBranch, /checkInOutLog\.(create|update|delete)/);
-  assert.match(workspace, /Your Child’s Day at a Glance/);
-  assert.match(workspace, /Current check-in evidence/);
+  assert.match(workspace, /activeView === "home"/);
+  assert.match(workspace, /See today’s check-in status, classroom, schedule, and latest\s+update from your school/);
+  assert.match(workspace, /Last Check-In Update/);
+  assert.match(workspace, /View\s+Today’s Update/);
 });

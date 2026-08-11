@@ -87,6 +87,7 @@ import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
 import { buildParentPortalTodayState } from "@/lib/parent-portal-today";
 import { AD_INTEGRATION_PROVIDERS, buildIntegrationSetupViews, getIntegrationRuntimeStatus, hasRequiredMarketingAccountConfig, MARKETING_INTEGRATION_PROVIDERS, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
 import { integrationScopeForUser } from "@/lib/integration-scope";
@@ -1896,6 +1897,8 @@ async function renderLivePage(
   }
 
   if (slug === "parent-portal") {
+    const parentPortalView = normalizeParentPortalView(firstSearchParam(searchParams.view));
+    const parentFamilySection = firstSearchParam(searchParams.section) || "children";
     const parentFamilyScope = user.role === UserRole.PARENT_GUARDIAN
       ? await getParentPortalFamilyScope(user.id)
       : null;
@@ -2339,6 +2342,8 @@ async function renderLivePage(
     return (
       <ParentPortalWorkspace
         key={parentReplyToMessageId || "parent-portal"}
+        activeView={parentPortalView}
+        familySection={parentFamilySection}
         family={parentPortalFamily}
         billingAccount={billingAccount ? {
           id: billingAccount.id,

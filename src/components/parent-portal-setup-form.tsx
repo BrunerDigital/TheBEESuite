@@ -51,16 +51,16 @@ function pinDigits(value: string) {
 
 const setupSteps = [
   {
-    title: "Use your school login",
-    body: "Sign in with your guardian email and the BusyBees first-login password from your school invitation. You can change it anytime in Parent Portal settings.",
+    title: "Use Your School Invitation",
+    body: "Sign in with the guardian email and temporary password from your school invitation. If you already changed that password, use your current one.",
   },
   {
-    title: "Confirm this profile",
-    body: "Check your name, phone, relationship, and the email used for your login.",
+    title: "Confirm Your Information",
+    body: "Check the family, school, name, phone number, relationship, and login email shown here.",
   },
   {
-    title: "Set your PIN",
-    body: "Your first kiosk PIN is the last 4 digits of your phone number. You can replace it here or later in the portal.",
+    title: "Choose Your Check-In PIN",
+    body: "Enter the 4-digit PIN you will use at your school’s check-in kiosk. You can use the last 4 digits of your phone number or choose another 4 digits.",
   },
 ];
 
@@ -71,27 +71,27 @@ const homeScreenSteps = [
 
 const portalPreviews = [
   {
-    title: "Daily report",
-    meta: "Today",
-    body: "Meals, naps, activity notes, photos, and classroom updates appear in one family timeline.",
+    title: "Daily Updates",
+    meta: "Meals, naps & care",
+    body: "See meals, naps, activities, notes, photos, and classroom updates for each child.",
     Icon: Camera,
   },
   {
     title: "Messages",
-    meta: "Family inbox",
-    body: "Reply to school messages, review requests, and follow up on documents from the same portal.",
+    meta: "School conversation",
+    body: "Read and reply to school messages without searching through separate sections.",
     Icon: MessageSquare,
   },
   {
     title: "Check-in PIN",
-    meta: "Lobby ready",
-    body: "Use your 4 digit PIN for authorized sign-in and sign-out at your school's kiosk.",
+    meta: "At your school",
+    body: "Use your 4-digit PIN when an authorized adult checks a child in or out at the school kiosk.",
     Icon: KeyRound,
   },
   {
-    title: "Documents & billing",
-    meta: "When enabled",
-    body: "Review forms, sign requests, invoices, balances, and secure payment options from your account.",
+    title: "Documents & Billing",
+    meta: "When available",
+    body: "Review forms, signature requests, invoices, balances, and available payment options.",
     Icon: FileText,
   },
 ];
@@ -179,12 +179,12 @@ export function ParentPortalSetupForm({ guardians }: Props) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Badge variant="secondary" className="mb-3">
-            Parent portal invite
+            School invitation
           </Badge>
           <h1 className="text-3xl font-semibold tracking-normal">Finish Parent Portal Setup</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Confirm the parent login connected to your school invite, update your contact details, and create the PIN you will use
-            for child sign-in and sign-out.
+            Review the family and school connected to this account, confirm your contact information, and choose the 4-digit PIN
+            you will use at your school’s check-in kiosk.
           </p>
         </div>
       </div>
@@ -221,7 +221,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
           <section className="space-y-3 rounded-lg border bg-card p-4">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <ShieldCheck className="size-4 text-primary" />
-              Family access
+              Your Family & School
             </div>
             <div>
               <div className="text-sm text-muted-foreground">Family</div>
@@ -250,11 +250,11 @@ export function ParentPortalSetupForm({ guardians }: Props) {
           <section className="rounded-lg border bg-card p-4">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Smartphone className="size-4 text-primary" />
-              Open from your phone
+              Add to Your Home Screen
             </div>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              Add the web portal to your home screen now. The iOS App Store app is expected within about a week; until then,
-              the home-screen web app uses this same parent login.
+              Add the Parent Portal to your Home Screen for one-tap access. It uses the same sign-in and family information as
+              the browser.
             </p>
             <ol className="mt-3 space-y-2 text-xs leading-5 text-muted-foreground">
               {homeScreenSteps.map((step, index) => (
@@ -269,7 +269,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
           <section className="rounded-lg border bg-card p-4">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Home className="size-4 text-primary" />
-              What you will use here
+              What’s in the Parent Portal
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {portalPreviews.map(({ title, meta, body, Icon }) => (
@@ -296,9 +296,9 @@ export function ParentPortalSetupForm({ guardians }: Props) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UserRound className="text-primary" />
-              Confirm your details
+              Confirm Your Information
             </CardTitle>
-            <CardDescription>These details are used for your family portal and lobby check-in/out access.</CardDescription>
+            <CardDescription>Review the contact information your school has connected to this account.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={submit}>
@@ -357,7 +357,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
               <div className="rounded-lg border bg-background/50 p-4">
                 <Label htmlFor="parent-setup-pin" className="flex items-center gap-2">
                   <KeyRound className="size-4 text-primary" />
-                  4 digit sign-in/out PIN
+                  4-Digit Check-In PIN
                 </Label>
                 <Input
                   id="parent-setup-pin"
@@ -376,13 +376,13 @@ export function ParentPortalSetupForm({ guardians }: Props) {
                 />
                 <p id="parent-setup-pin-help" className="mt-2 text-xs leading-5 text-muted-foreground">
                   {selectedGuardian.hasPin
-                    ? "A kiosk PIN is already on file. Enter a new one only if you want to reset it."
-                    : "This PIN is required before you can sign a child in or out from the lobby kiosk."}
+                    ? "A check-in PIN is already on file. Leave this blank to keep it, or enter a new 4-digit PIN."
+                    : "Enter the 4-digit PIN you will use when you check a child in or out at your school’s kiosk."}
                 </p>
               </div>
 
               <Button className="h-11" type="submit" disabled={isPending}>
-                {isPending ? "Saving..." : "Finish setup and open portal"}
+                {isPending ? "Saving…" : "Finish Setup & Open Parent Portal"}
                 <ArrowRight data-icon="inline-end" />
               </Button>
             </form>

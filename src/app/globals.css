@@ -1475,4 +1475,50 @@
       inset 0 1px var(--glass-highlight),
       0 24px 58px color-mix(in oklch, var(--module-accent, var(--primary)) 7%, var(--glass-shadow-color));
   }
+
+  /* Parent surfaces favor a quiet, conventional application frame. The
+     operational glass treatment remains available to staff workspaces. */
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) {
+    background: var(--background);
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .dashboard-workspace {
+    background-color: var(--background);
+    background-image: none;
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) :is(.app-sidebar, .app-header) {
+    background-color: var(--background);
+    background-image: none;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) :is([data-slot="card"], .glass-panel) {
+    background-color: var(--card);
+    background-image: none;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .glass-panel:hover {
+    border-color: var(--border);
+    box-shadow: none;
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) [data-slot="button"][data-variant="outline"] {
+    background: var(--background);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) nav[aria-label="Family portal navigation"] {
+    background: var(--background);
+    box-shadow: 0 -1px 0 var(--border);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }

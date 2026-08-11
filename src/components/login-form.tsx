@@ -36,28 +36,28 @@ const loginCopy: Record<LoginPortal, {
   helpText: string;
 }> = {
   general: {
-    heroTitle: "Choose the right BEE Suite portal.",
-    heroBody: "Use the role-specific login page for your daily workspace. Each entry keeps the first screen focused on the tools that match your account.",
-    heroFooter: "Access is still verified after sign-in, so users only reach the data their role allows.",
+    heroTitle: "Choose Your Sign-In Page",
+    heroBody: "Directors, teachers, and parents each have a sign-in page for their daily work. Choose the one that matches your account.",
+    heroFooter: "After sign-in, your account opens only the information and tools assigned to you.",
     heroItems: ["Directors", "Teachers", "Parents"],
-    cardTitle: "Log in to The BEE Suite",
-    cardDescription: "Use the portal link your school or organization gave you, or sign in here if you are not sure.",
+    cardTitle: "Sign In to The BEE Suite",
+    cardDescription: "Use the sign-in link your school or organization gave you. If you are not sure which page to use, you can sign in here.",
     emailLabel: "Email or username",
     emailPlaceholder: "Email or username",
     passwordPlaceholder: "Password",
-    helpText: "After sign-in, The BEE Suite will route your account to the correct portal automatically.",
+    helpText: "After sign-in, you will go to the workspace assigned to your account.",
   },
   parents: {
-    heroTitle: "Welcome to your family portal.",
-    heroBody: "Use the personal parent or guardian email your school has on file. Your child records, balances, messages, documents, and check-in access stay linked in the existing parent portal.",
-    heroFooter: "Family data remains connected to the school records already assigned to your account.",
-    heroItems: ["Child updates", "Messages", "Tuition"],
-    cardTitle: "Log in to your parent portal",
-    cardDescription: "Use the parent or guardian email on file. For your first login, use the BusyBees password in your school invitation. You can change it later in Parent Portal settings.",
-    emailLabel: "Parent login email",
+    heroTitle: "Your Family’s Parent Portal",
+    heroBody: "Sign in with the parent or guardian email your school invited. You will see only the children and family records connected to your account.",
+    heroFooter: "Your school controls which family records are connected to your account.",
+    heroItems: ["Daily Updates", "Messages", "Documents & Billing"],
+    cardTitle: "Parent & Guardian Sign-In",
+    cardDescription: "Use the email and temporary password from your school invitation. If you already changed that password, use your current one.",
+    emailLabel: "Parent or guardian email",
     emailPlaceholder: "parent@example.com",
-    passwordPlaceholder: "BusyBees for first login",
-    helpText: "First visit: sign in with your guardian email and BusyBees. You can change it anytime in Parent Portal settings. If you already changed it or forgot it, use Forgot password.",
+    passwordPlaceholder: "Your password",
+    helpText: "First time here? Use the temporary password in your school invitation. If you do not have it, choose Forgot password.",
   },
   teachers: {
     heroTitle: "Open your teacher workspace.",
@@ -243,7 +243,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                 />
               </div>
               <button className={buttonVariants({ size: "lg", className: "h-11" })} type="submit" disabled={isPending}>
-                {isPending ? "Signing in..." : "Sign in"}
+                {isPending ? "Signing in…" : "Sign in"}
                 <LogIn data-icon="inline-end" />
               </button>
             </form>
@@ -254,7 +254,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
             ) : (
               <div className="mt-5 grid gap-3">
                 <div className="rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                  Parents and guardians sign in with their personal email and use BusyBees for their first login.{" "}
+                  Parents and guardians use the email and temporary password from their school invitation.{" "}
                   <Link href="/parents" className="inline-flex items-center font-semibold text-slate-950 hover:underline">
                     Open parent portal login <ArrowRight className="ml-1 size-3.5" />
                   </Link>

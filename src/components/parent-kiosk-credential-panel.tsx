@@ -13,20 +13,23 @@ import type { GuardianKioskCredential } from "@/lib/kiosk-credentials";
 
 type Props = {
   initialCredentials: GuardianKioskCredential[];
+  previewMode?: boolean;
 };
 
-export function ParentKioskCredentialPanel({ initialCredentials }: Props) {
+export function ParentKioskCredentialPanel({ initialCredentials, previewMode = false }: Props) {
   const [credentials, setCredentials] = useState(initialCredentials);
   const [pins, setPins] = useState<Record<string, string>>({});
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const readyCredentialCount = credentials.filter((credential) => credential.qrToken).length;
 
   function updatePin(guardianId: string, value: string) {
     setPins((current) => ({ ...current, [guardianId]: value.replace(/\D/g, "").slice(0, 4) }));
   }
 
   function savePin(guardianId: string) {
+    if (previewMode) return;
     const pin = pins[guardianId] ?? "";
     if (pin.length !== 4) return;
     startTransition(async () => {
@@ -42,14 +45,14 @@ export function ParentKioskCredentialPanel({ initialCredentials }: Props) {
         credential?: GuardianKioskCredential;
       } | null;
       if (!response.ok || !json?.credential) {
-        setError(json?.error || "Kiosk PIN could not be saved.");
+        setError(json?.error || "Family PIN could not be saved.");
         return;
       }
       setCredentials((current) => current.map((credential) => (
         credential.guardianId === guardianId ? json.credential as GuardianKioskCredential : credential
       )));
       setPins((current) => ({ ...current, [guardianId]: "" }));
-      setStatus("Kiosk PIN and QR code updated.");
+      setStatus("Family PIN and QR code updated.");
     });
   }
 
@@ -62,12 +65,14 @@ export function ParentKioskCredentialPanel({ initialCredentials }: Props) {
           <div>
             <CardTitle className="flex items-center gap-2">
               <QrCode className="text-primary" />
-              Check-In PIN And QR
+              School Check-In
             </CardTitle>
-            <CardDescription>Your school can start you with the last four digits of your phone number. You can save a different 4 digit PIN here.</CardDescription>
+            <CardDescription>
+              Use your 4-Digit Family PIN or QR code at the school lobby. Your school may start your PIN with the last four digits of your phone number, and you can change it here.
+            </CardDescription>
           </div>
-          <Badge variant={credentials.some((credential) => credential.qrToken) ? "default" : "outline"}>
-            {credentials.filter((credential) => credential.qrToken).length} ready
+          <Badge variant={readyCredentialCount ? "default" : "outline"}>
+            {readyCredentialCount} QR code{readyCredentialCount === 1 ? "" : "s"} ready
           </Badge>
         </div>
       </CardHeader>
@@ -92,7 +97,7 @@ export function ParentKioskCredentialPanel({ initialCredentials }: Props) {
             return (
               <div key={credential.guardianId} className="space-y-3">
                 <div className="rounded-lg border bg-background/40 p-3">
-                  <Label htmlFor={`parent-kiosk-pin-${credential.guardianId}`}>4 digit kiosk PIN</Label>
+                  <Label htmlFor={`parent-kiosk-pin-${credential.guardianId}`}>4-Digit Family PIN</Label>
                   <div className="mt-2 flex gap-2">
                     <Input
                       id={`parent-kiosk-pin-${credential.guardianId}`}
@@ -103,13 +108,13 @@ export function ParentKioskCredentialPanel({ initialCredentials }: Props) {
                       autoComplete="one-time-code"
                       placeholder={credential.hasPin ? "Reset PIN" : "Set PIN"}
                     />
-                    <Button disabled={isPending || pin.length !== 4} onClick={() => savePin(credential.guardianId)}>
+                    <Button disabled={previewMode || isPending || pin.length !== 4} onClick={() => savePin(credential.guardianId)}>
                       <KeyRound data-icon="inline-start" />
-                      Save
+                      Save PIN
                     </Button>
                   </div>
                 </div>
-                <GuardianKioskCredentialCard credential={credential} showToken={false} />
+                <GuardianKioskCredentialCard credential={credential} previewMode={previewMode} />
               </div>
             );
           })}

@@ -2,14 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Activity,
   ArrowRight,
   BadgeDollarSign,
   Bell,
   Building2,
-  Camera,
   CheckCheck,
   ChevronDown,
   ClipboardList,
@@ -22,7 +21,6 @@ import {
   MoreHorizontal,
   Search,
   ShieldCheck,
-  Sparkles,
   Sun,
   Users,
 } from "lucide-react";
@@ -68,6 +66,14 @@ import { DataReadinessContextBadge, type CountSummary } from "@/components/data-
 import { DataReadinessContextPanel } from "@/components/data-readiness-context-panel";
 import { dataReadinessContextForPath } from "@/lib/data-readiness-context";
 import { dataReadinessCenterEnabled, honeyglassUiEnabled } from "@/lib/honeyglass";
+import {
+  PARENT_PORTAL_HREFS,
+  normalizeParentPortalView,
+  parentPortalFamilySectionHref,
+  parentPortalPreviewHref,
+  parentPortalPreviewFamilySectionHref,
+  type ParentPortalView,
+} from "@/lib/parent-portal-navigation";
 import type { WorkspaceScopeContext } from "@/lib/workspace-scope";
 
 type ShellUser = {
@@ -82,6 +88,74 @@ type ShellUser = {
   timeZonesByCenterId?: Record<string, string>;
   scopeContext?: WorkspaceScopeContext;
 };
+
+const parentPortalShellItems = [
+  {
+    view: "home",
+    label: "Home",
+    description: "Your family overview and what needs attention today.",
+    href: PARENT_PORTAL_HREFS.home,
+    slug: "parent-portal",
+    Icon: Home,
+  },
+  {
+    view: "updates",
+    label: "Updates",
+    description: "Daily reports, photos, announcements, and recent activity.",
+    href: PARENT_PORTAL_HREFS.updates,
+    slug: "parent-portal",
+    Icon: Activity,
+  },
+  {
+    view: "messages",
+    label: "Messages",
+    description: "Conversations with your child care team.",
+    href: PARENT_PORTAL_HREFS.messages,
+    slug: "parent-portal",
+    Icon: MessageSquare,
+  },
+  {
+    view: "payments",
+    label: "Payments",
+    description: "Your balance, invoices, payment methods, and receipts.",
+    href: PARENT_PORTAL_HREFS.payments,
+    slug: "parent-portal",
+    Icon: BadgeDollarSign,
+  },
+  {
+    view: "family",
+    label: "Family",
+    description: "Child information, authorized people, and profile settings.",
+    href: PARENT_PORTAL_HREFS.family,
+    slug: "parent-portal",
+    Icon: Users,
+  },
+] as const satisfies ReadonlyArray<{
+  view: ParentPortalView;
+  label: string;
+  description: string;
+  href: string;
+  slug: "parent-portal";
+  Icon: typeof Home;
+}>;
+
+function useParentPortalNavigationState(previewMode = false) {
+  const searchParams = useSearchParams();
+  const activeView = normalizeParentPortalView(searchParams.get(previewMode ? "screen" : "view"));
+
+  return { activeView };
+}
+
+function parentPortalShellHref(
+  view: ParentPortalView,
+  previewMode: boolean,
+  previewHrefBase: string | undefined,
+  pathname: string,
+) {
+  return previewMode
+    ? parentPortalPreviewHref(previewHrefBase ?? pathname, view)
+    : PARENT_PORTAL_HREFS[view];
+}
 
 function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) {
   if (slug === "data-readiness" && !dataReadinessCenterEnabled()) return false;
@@ -104,8 +178,21 @@ function ScopeContextLink({ currentUser, compact = false, mobile = false }: { cu
   if (!context) return null;
   const label = shellUserViewText(context.label, currentUser);
   const detail = shellUserViewText(context.detail, currentUser);
+  const staticFamilyScope = isParentFacingUser(currentUser) && context.kind === "family";
 
   if (compact) {
+    if (staticFamilyScope) {
+      return (
+        <div
+          className="grid size-11 place-items-center rounded-xl border border-border/70 bg-muted/45 text-muted-foreground"
+          title={`${label} — ${detail}`}
+        >
+          <ScopeIcon kind={context.kind} className="size-5" />
+          <span className="sr-only">{label}. {detail}</span>
+        </div>
+      );
+    }
+
     return (
       <Tooltip>
         <TooltipTrigger
@@ -124,6 +211,25 @@ function ScopeContextLink({ currentUser, compact = false, mobile = false }: { cu
           <span className="opacity-80">{detail}</span>
         </TooltipContent>
       </Tooltip>
+    );
+  }
+
+  if (staticFamilyScope) {
+    return (
+      <div
+        className={cn(
+          "flex min-w-0 items-center gap-3 rounded-xl border border-border/70 bg-muted/35 p-3",
+          mobile && "mx-auto w-full max-w-xl bg-card/75 px-3 py-2 shadow-sm",
+        )}
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+          <ScopeIcon kind={context.kind} className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold">{label}</span>
+          <span className="block truncate text-xs text-muted-foreground">{detail}</span>
+        </span>
+      </div>
     );
   }
 
@@ -148,21 +254,52 @@ function ScopeContextLink({ currentUser, compact = false, mobile = false }: { cu
   );
 }
 
-function SidebarRail({ currentUser, onLogout }: { currentUser?: ShellUser; onLogout?: () => void }) {
+function SidebarRail({ currentUser, onLogout, previewMode = false, previewHrefBase }: { currentUser?: ShellUser; onLogout?: () => void; previewMode?: boolean; previewHrefBase?: string }) {
   const pathname = usePathname();
+  const parentFacing = isParentFacingUser(currentUser);
+  const { activeView } = useParentPortalNavigationState(previewMode);
   const visibleItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
     .filter((item) => canAccessShellModule(currentUser, item.slug));
+  const brandHref = parentFacing
+    ? parentPortalShellHref("home", previewMode, previewHrefBase, pathname)
+    : "/";
 
   return (
     <div className="flex h-full min-h-0 flex-col items-center gap-3 overflow-hidden py-4">
-      <Link href="/" aria-label={`${currentUser?.branding?.name ?? "The BEE Suite"} home`}>
+      <Link href={brandHref} aria-label={`${currentUser?.branding?.name ?? "The BEE Suite"} home`}>
         <BrandIcon branding={currentUser?.branding} className="size-10" />
       </Link>
       <ScopeContextLink currentUser={currentUser} compact />
       <ScrollArea className="min-h-0 w-full flex-1 px-2">
         <nav className="flex flex-col items-center gap-2 py-2" aria-label="Tablet navigation rail">
-          {visibleItems.map(({ label, slug, Icon, group }) => {
+          {parentFacing ? parentPortalShellItems.map(({ view, label, description, Icon }) => {
+            const href = parentPortalShellHref(view, previewMode, previewHrefBase, pathname);
+            const active = activeView === view;
+            return (
+              <Tooltip key={view}>
+                <TooltipTrigger
+                  render={(
+                    <Link
+                      href={href}
+                      aria-label={label}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "grid size-11 place-items-center rounded-xl border border-transparent text-muted-foreground transition hover:border-primary/20 hover:bg-primary/[0.08] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        active && "border-primary/30 bg-primary/15 text-primary shadow-sm",
+                      )}
+                    />
+                  )}
+                >
+                  <Icon className="size-5" aria-hidden="true" />
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-72">
+                  <span className="font-semibold">{label}</span>
+                  <span className="ml-1 opacity-75">· {description}</span>
+                </TooltipContent>
+              </Tooltip>
+            );
+          }) : visibleItems.map(({ label, slug, Icon, group }) => {
             const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
             const active = pathname === href || (slug === "dashboard" && pathname === "/center-dashboard");
             return (
@@ -235,8 +372,8 @@ type GlobalSearchResult = {
   badge?: string;
 };
 
-function BrandMark({ branding }: { branding?: WorkspaceBranding }) {
-  return <BrandLogo href="/" branding={branding} size="md" />;
+function BrandMark({ branding, href = "/" }: { branding?: WorkspaceBranding; href?: string }) {
+  return <BrandLogo href={href} branding={branding} size="md" />;
 }
 
 function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
@@ -440,8 +577,10 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   );
 }
 
-function SidebarNav({ close, currentUser, onLogout }: { close?: () => void; currentUser?: ShellUser; onLogout?: () => void }) {
+function SidebarNav({ close, currentUser, onLogout, previewMode = false, previewHrefBase }: { close?: () => void; currentUser?: ShellUser; onLogout?: () => void; previewMode?: boolean; previewHrefBase?: string }) {
   const pathname = usePathname();
+  const parentFacing = isParentFacingUser(currentUser);
+  const { activeView } = useParentPortalNavigationState(previewMode);
   const descriptionBySlug = new Map(modules.map((module) => [module.slug, module.description]));
   const visibleNavGroups = navGroups
     .map((group) => ({
@@ -449,18 +588,53 @@ function SidebarNav({ close, currentUser, onLogout }: { close?: () => void; curr
       items: group.items.filter(([, slug]) => canAccessShellModule(currentUser, slug)),
     }))
     .filter((group) => group.items.length);
+  const brandHref = parentFacing
+    ? parentPortalShellHref("home", previewMode, previewHrefBase, pathname)
+    : "/";
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="shrink-0 p-5">
-        <BrandMark branding={currentUser?.branding} />
+        <BrandMark branding={currentUser?.branding} href={brandHref} />
         <div className="mt-4">
           <ScopeContextLink currentUser={currentUser} />
         </div>
       </div>
       <ScrollArea className="min-h-0 flex-1 px-3">
-        <nav className="flex flex-col gap-5 pb-4">
-          {visibleNavGroups.map((group) => (
+        <nav className="flex flex-col gap-5 pb-4" aria-label={parentFacing ? "Family portal" : "Workspace navigation"}>
+          {parentFacing ? (
+            <div className="flex flex-col gap-2">
+              <div className="px-3 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Family portal
+              </div>
+              <div className="flex flex-col gap-1">
+                {parentPortalShellItems.map(({ view, label, description, Icon }) => {
+                  const href = parentPortalShellHref(view, previewMode, previewHrefBase, pathname);
+                  const active = activeView === view;
+                  return (
+                    <Link
+                      key={view}
+                      href={href}
+                      onClick={() => {
+                        close?.();
+                      }}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "group relative flex items-start gap-3 rounded-xl px-3 py-3 text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        active && "bg-sidebar-accent pl-4 text-sidebar-accent-foreground shadow-sm before:absolute before:left-1.5 before:top-3 before:h-9 before:w-1 before:rounded-full before:bg-primary",
+                      )}
+                    >
+                      <Icon className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold">{label}</span>
+                        <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">{description}</span>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ) : visibleNavGroups.map((group) => (
             <div key={group.title} className="flex flex-col gap-2">
               <div className="px-3 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 {group.title}
@@ -500,17 +674,6 @@ function SidebarNav({ close, currentUser, onLogout }: { close?: () => void; curr
             </div>
           ))}
         </nav>
-        <div className="border-t py-4">
-          <div className="rounded-xl border bg-background/60 p-3">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <ShieldCheck data-icon="inline-start" />
-              Live pilot safeguards
-            </div>
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              Sensitive child, custody, medical, billing, and compliance workflows stay role-gated and human-reviewed.
-            </p>
-          </div>
-        </div>
       </ScrollArea>
       {currentUser && onLogout ? (
         <div className="shrink-0 border-t p-3">
@@ -535,29 +698,84 @@ function isParentFacingUser(currentUser?: ShellUser) {
   return currentUser?.role === "PARENT_GUARDIAN" || currentUser?.role === "AUTHORIZED_PICKUP";
 }
 
-function AccountMenu({ currentUser, onLogout, previewMode = false }: { currentUser: ShellUser; onLogout: () => void; previewMode?: boolean }) {
+function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBase }: { currentUser: ShellUser; onLogout: () => void; previewMode?: boolean; previewHrefBase?: string }) {
+  const pathname = usePathname();
   const displayName = removeDemoMarkersFromUserView(currentUser.name);
   const displayEmail = removeDemoMarkersFromUserView(currentUser.email);
-  if (previewMode) {
+  const parentFacing = isParentFacingUser(currentUser);
+  if (previewMode && !parentFacing) {
     return <UserAvatar name={displayName} src={currentUser.profilePhotoUrl} size="md" className="border shadow-none" />;
   }
+  const profileHref = previewMode
+    ? parentPortalPreviewFamilySectionHref(previewHrefBase ?? pathname, "profile")
+    : parentPortalFamilySectionHref("profile");
+  const notificationsHref = previewMode
+    ? parentPortalPreviewFamilySectionHref(previewHrefBase ?? pathname, "notifications")
+    : parentPortalFamilySectionHref("notifications");
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Open account menu" className="overflow-hidden rounded-full p-0" />}>
-        <UserAvatar name={displayName} src={currentUser.profilePhotoUrl} size="md" className="border-0 shadow-none" />
+        <UserAvatar
+          name={displayName}
+          src={currentUser.profilePhotoUrl}
+          size="md"
+          className="border-0 shadow-none"
+          preferInitialsForDefault={parentFacing}
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
-        <div className="p-2">
-          <ProfilePhotoUploader name={displayName} email={displayEmail} profilePhotoUrl={currentUser.profilePhotoUrl} />
-        </div>
-        <div className="px-3 pb-2">
-          <span className="mt-1 block text-[0.65rem] font-normal text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</span>
-        </div>
+        {previewMode ? (
+          <div className="flex min-w-0 items-center gap-3 p-3">
+            <UserAvatar
+              name={displayName}
+              src={currentUser.profilePhotoUrl}
+              size="md"
+              className="border shadow-none"
+              preferInitialsForDefault
+            />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold">{displayName}</div>
+              <div className="truncate text-xs text-muted-foreground">{displayEmail}</div>
+              <div className="mt-1 text-[0.65rem] text-muted-foreground">Preview account</div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="p-2">
+              <ProfilePhotoUploader name={displayName} email={displayEmail} profilePhotoUrl={currentUser.profilePhotoUrl} />
+            </div>
+            <div className="px-3 pb-2">
+              <span className="mt-1 block text-[0.65rem] font-normal text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</span>
+            </div>
+          </>
+        )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onLogout} variant="destructive" className="py-2">
-          <LogOut data-icon="inline-start" />
-          Sign out
-        </DropdownMenuItem>
+        {parentFacing ? (
+          <>
+            <DropdownMenuItem
+              className="p-0"
+              render={<Link href={profileHref} className="flex w-full items-center gap-2 px-3 py-2" />}
+            >
+              <ShieldCheck data-icon="inline-start" aria-hidden="true" />
+              Profile &amp; security
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="p-0"
+              render={<Link href={notificationsHref} className="flex w-full items-center gap-2 px-3 py-2" />}
+            >
+              <Bell data-icon="inline-start" aria-hidden="true" />
+              Notifications
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+        {!previewMode ? (
+          <DropdownMenuItem onClick={onLogout} variant="destructive" className="py-2">
+            <LogOut data-icon="inline-start" />
+            Sign out
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -565,6 +783,8 @@ function AccountMenu({ currentUser, onLogout, previewMode = false }: { currentUs
 
 function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { currentUser?: ShellUser; previewMode?: boolean; previewHrefBase?: string }) {
   const pathname = usePathname();
+  const parentFacing = isParentFacingUser(currentUser);
+  const { activeView } = useParentPortalNavigationState(previewMode);
   const [selectedTarget, setSelectedTarget] = useState(pathname);
   const [moreOpen, setMoreOpen] = useState(false);
   const teacherItems = [
@@ -572,18 +792,6 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
     { label: "Roster", href: "/teacher-portal#teacher-roster", slug: "teacher-portal", Icon: Users },
     { label: "Log", href: "/teacher-portal#teacher-quick-log", slug: "teacher-portal", Icon: ClipboardList, featured: true },
     { label: "Messages", href: "/messages", slug: "messages", Icon: MessageSquare },
-  ];
-  const parentItems = [
-    { label: "Home", href: "/parent-portal", slug: "parent-portal", Icon: Home },
-    { label: "Day", href: "/parent-portal#today", slug: "parent-portal", Icon: Activity },
-    { label: "Messages", href: "/parent-portal#messages", slug: "parent-portal", Icon: MessageSquare },
-    { label: "Payments", href: "/parent-portal#billing", slug: "parent-portal", Icon: BadgeDollarSign },
-  ];
-  const pickupItems = [
-    { label: "Home", href: "/parent-portal", slug: "parent-portal", Icon: Home },
-    { label: "Day", href: "/parent-portal#today", slug: "parent-portal", Icon: Activity },
-    { label: "Photos", href: "/parent-portal#photos", slug: "parent-portal", Icon: Camera },
-    { label: "Updates", href: "/parent-portal#daily-updates", slug: "parent-portal", Icon: ClipboardList },
   ];
   const directorItems = [
     { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
@@ -612,10 +820,8 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
   const executiveRole = ["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER"].includes(currentUser?.role ?? "");
   const sourceItems = isTeacherUser(currentUser)
     ? teacherItems
-    : currentUser?.role === "PARENT_GUARDIAN"
-      ? parentItems
-      : currentUser?.role === "AUTHORIZED_PICKUP"
-        ? pickupItems
+    : parentFacing
+      ? parentPortalShellItems
       : currentUser?.role === "READ_ONLY_AUDITOR"
         ? auditorItems
       : currentUser?.role === "BILLING_ADMIN"
@@ -626,34 +832,20 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
             ? directorItems
             : [];
   const items = sourceItems.filter((item) => canAccessShellModule(currentUser, item.slug));
-  const moreItems = navGroups
-    .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
-    .filter((item) => canAccessShellModule(currentUser, item.slug))
-    .filter((item) => !items.some((quickItem) => quickItem.slug === item.slug))
-    .slice(0, 12);
+  const moreItems = parentFacing
+    ? []
+    : navGroups
+      .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
+      .filter((item) => canAccessShellModule(currentUser, item.slug))
+      .filter((item) => !items.some((quickItem) => quickItem.slug === item.slug))
+      .slice(0, 12);
   const bottomNavItemCount = items.length + (moreItems.length ? 1 : 0);
-
-  useEffect(() => {
-    if (currentUser?.role !== "PARENT_GUARDIAN" && currentUser?.role !== "AUTHORIZED_PICKUP") return;
-
-    function syncParentPortalTarget() {
-      const hash = window.location.hash;
-      const previewBase = currentUser?.role === "PARENT_GUARDIAN" || currentUser?.role === "AUTHORIZED_PICKUP"
-        ? "/parent-portal"
-        : "/teacher-portal";
-      setSelectedTarget(previewMode ? `${previewBase}${hash}` : `${pathname}${hash}`);
-    }
-
-    syncParentPortalTarget();
-    window.addEventListener("hashchange", syncParentPortalTarget);
-    return () => window.removeEventListener("hashchange", syncParentPortalTarget);
-  }, [currentUser?.role, pathname, previewMode]);
 
   if (!items.length) return null;
 
   return (
     <nav
-      aria-label="Role quick navigation"
+      aria-label={parentFacing ? "Family portal navigation" : "Role quick navigation"}
       className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden"
     >
       <div className={cn(
@@ -662,25 +854,32 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
       )}>
         {items.map((item) => {
           const { label, href, Icon } = item;
+          const parentView = "view" in item ? item.view : undefined;
           const featured = Boolean("featured" in item && item.featured);
-          const hrefPath = href.split("#")[0];
-          const previewHref = previewMode && href.includes("#")
+          const hrefPath = href.split(/[?#]/)[0];
+          const previewHref = parentView
+            ? parentPortalShellHref(parentView, previewMode, previewHrefBase, pathname)
+            : previewMode && href.includes("#")
             ? `${previewHrefBase ?? pathname}${href.slice(href.indexOf("#"))}`
             : previewMode
               ? previewHrefBase ?? pathname
               : href;
           const selectedPath = selectedTarget.split(/[?#]/)[0];
-          const active = previewMode
-            ? selectedTarget === href
-            : selectedPath === pathname
+          const active = parentView
+            ? activeView === parentView
+            : previewMode
               ? selectedTarget === href
-              : pathname === hrefPath && !href.includes("#") && !href.includes("?");
+              : selectedPath === pathname
+                ? selectedTarget === href
+                : pathname === hrefPath && !href.includes("#") && !href.includes("?");
           return (
             <Link
               key={href}
               href={previewHref}
               aria-current={active ? "page" : undefined}
-              onClick={() => setSelectedTarget(href)}
+              onClick={() => {
+                setSelectedTarget(href);
+              }}
               className={cn(
                 "relative flex min-h-12 touch-manipulation flex-col items-center justify-center gap-1 rounded-xl px-1.5 text-[0.68rem] font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 active && "bg-primary/12 text-primary shadow-sm",
@@ -918,15 +1117,23 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
         Skip to workspace content
       </a>
       <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-20 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl lg:block 2xl:hidden">
-        <SidebarRail currentUser={currentUser} onLogout={previewMode ? undefined : logout} />
+        <SidebarRail currentUser={currentUser} onLogout={previewMode ? undefined : logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
       </aside>
       <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl 2xl:block">
-        <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} />
+        <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
       </aside>
       <div className="min-w-0 lg:pl-20 2xl:pl-72">
         <header className="app-header sticky top-0 z-10 min-w-0 border-b bg-background/75 backdrop-blur-xl">
           <div className="flex min-h-16 min-w-0 items-center gap-2 px-3 sm:px-4 lg:px-6">
-            <Sheet>
+            {parentFacing ? (
+              <BrandLogo
+                href={parentPortalShellHref("home", previewMode, previewHrefBase, pathname)}
+                branding={currentUser?.branding}
+                compact
+                size="sm"
+                className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+              />
+            ) : <Sheet>
               <SheetTrigger
                 render={
                   <Button variant="outline" size="icon" className="shrink-0 touch-manipulation lg:hidden" aria-label="Open navigation" />
@@ -936,9 +1143,9 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
               </SheetTrigger>
               <SheetContent side="left" className="w-80 p-0">
                 <SheetTitle className="sr-only">Navigation</SheetTitle>
-                <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} />
+                <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
               </SheetContent>
-            </Sheet>
+            </Sheet>}
             {showWorkspaceTools ? <div className="hidden min-w-0 flex-1 items-center lg:flex">
               <div className="relative min-w-0 w-full max-w-2xl">
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -1043,12 +1250,6 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                   </div>
                 </DialogContent>
               </Dialog> : null}
-              {showWorkspaceTools ? (
-                <Badge variant="secondary" className="hidden gap-1 rounded-lg px-3 py-1 2xl:inline-flex">
-                  <Sparkles data-icon="inline-start" aria-hidden="true" />
-                  AI suggestions require review
-                </Badge>
-              ) : null}
               {canViewDataReadiness ? <DataReadinessContextBadge summary={readinessSummary} context={readinessContext} /> : null}
               {currentUser && !previewMode ? <LiveRefreshStatus role={currentUser.role} /> : null}
               {showWorkspaceTools ? (
@@ -1096,10 +1297,10 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
               {currentUser ? (
                 <>
                   <div className="sm:hidden">
-                    <AccountMenu currentUser={currentUser} onLogout={logout} previewMode={previewMode} />
+                    <AccountMenu currentUser={currentUser} onLogout={logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
                   </div>
                   <div className="hidden items-center gap-2 sm:flex">
-                    <AccountMenu currentUser={currentUser} onLogout={logout} previewMode={previewMode} />
+                    <AccountMenu currentUser={currentUser} onLogout={logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
                     <div className="hidden rounded-lg border bg-card/70 px-3 py-1.5 text-right 2xl:block">
                       <div className="text-xs font-medium leading-none">{displayUserName}</div>
                       <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>
@@ -1119,7 +1320,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
               )}
             </div>
           </div>
-          {currentUser?.scopeContext ? (
+          {currentUser?.scopeContext && !parentFacing ? (
             <div className="border-t border-border/60 px-3 py-2 lg:hidden">
               <ScopeContextLink currentUser={currentUser} mobile />
             </div>

@@ -15,7 +15,7 @@ test("dashboard shell adapts navigation and toolbar density by device width", ()
   assert.match(shell, /lg:pl-20 2xl:pl-72/);
   assert.match(shell, /hidden min-w-0 flex-1 items-center lg:flex/);
   assert.match(shell, /touch-manipulation lg:hidden/);
-  assert.match(shell, /hidden gap-1 rounded-lg px-3 py-1 2xl:inline-flex/);
+  assert.doesNotMatch(shell, /AI suggestions require review/);
   assert.match(shell, /hidden rounded-lg border bg-card\/70 px-3 py-1\.5 text-right 2xl:block/);
   assert.match(shell, /flex min-h-12 touch-manipulation flex-col items-center/);
   assert.match(shell, /env\(safe-area-inset-bottom\)/);

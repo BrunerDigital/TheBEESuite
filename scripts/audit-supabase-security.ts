@@ -47,9 +47,9 @@ async function main() {
   ]);
 
   const posture: DatabaseSecurityPosture = {
-    // 87 Prisma models plus Prisma's implicit _LeadTags relation table and
+    // 89 Prisma models plus Prisma's implicit _LeadTags relation table and
     // _prisma_migrations metadata table are present in the public schema.
-    expectedPublicTableCount: Number(process.env.EXPECTED_PUBLIC_TABLE_COUNT ?? "89"),
+    expectedPublicTableCount: Number(process.env.EXPECTED_PUBLIC_TABLE_COUNT ?? "91"),
     publicTableCount: Number(counts[0]?.public_table_count ?? 0),
     rlsEnabledCount: Number(counts[0]?.rls_enabled_count ?? 0),
     tablesWithoutRls: noRls.map((row) => row.name),

@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { GuardianKioskCredentialCard } from "@/components/guardian-kiosk-credential-card";
 import { Input } from "@/components/ui/input";
+import { kioskPathForCenter } from "@/lib/kiosk-credentials";
 
 type Props = {
   guardianId: string;
@@ -70,7 +71,7 @@ export function GuardianPinManager({
     hasPin: Boolean(pinSetAtState),
     pinSetAt: pinSetAtState,
     qrToken: qrToken || null,
-    kioskPath: kioskPath || (centerId ? `/check-in/${centerId}` : "/check-in"),
+    kioskPath: kioskPath || kioskPathForCenter(centerId, "family"),
   };
 
   return (
@@ -87,8 +88,8 @@ export function GuardianPinManager({
           value={pin}
           onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
           inputMode="numeric"
-          placeholder="Last 4 phone digits or custom PIN"
-          aria-label={`Set kiosk PIN for ${guardianName}`}
+          placeholder="Last 4 phone digits or a new Family PIN"
+          aria-label={`Set 4-Digit Family PIN for ${guardianName}`}
         />
         <Button disabled={isPending || pin.length !== 4} onClick={savePin}>
           Save

@@ -78,11 +78,11 @@ async function removeSubscription(subscription: PushSubscription) {
 export function WebPushControl() {
   const [state, setState] = useState<PushState>("loading");
   const [configuration, setConfiguration] = useState<PushConfiguration | null>(null);
-  const [detail, setDetail] = useState("Checking this device...");
+  const [detail, setDetail] = useState("Checking this device…");
 
   const inspect = useCallback(async () => {
     setState("loading");
-    setDetail("Checking this device...");
+    setDetail("Checking this device…");
 
     try {
       const response = await fetch("/api/notifications/push-subscription", { cache: "no-store" });
@@ -102,7 +102,7 @@ export function WebPushControl() {
       }
       if (!json.configured || !json.publicKey) {
         setState("unconfigured");
-        setDetail("Push delivery is awaiting secure server configuration.");
+        setDetail("Device alerts aren’t available yet.");
         return;
       }
 
@@ -142,7 +142,7 @@ export function WebPushControl() {
   async function enable() {
     if (!configuration?.publicKey) return void inspect();
     setState("working");
-    setDetail("Opening notification permission...");
+    setDetail("Opening notification permission…");
 
     try {
       const permission = Notification.permission === "granted"
@@ -173,7 +173,7 @@ export function WebPushControl() {
 
   async function disable() {
     setState("working");
-    setDetail("Turning off alerts on this device...");
+    setDetail("Turning off alerts on this device…");
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
@@ -190,20 +190,20 @@ export function WebPushControl() {
   const working = state === "loading" || state === "working";
   const actionable = ["enabled", "disabled", "error"].includes(state);
   const label = state === "enabled"
-    ? "Turn off device alerts"
+    ? "Turn Off Device Alerts"
     : state === "error"
-      ? "Try notification setup again"
+      ? "Check Alerts Again"
       : state === "disabled"
-        ? "Enable device alerts"
+        ? "Enable Device Alerts"
         : state === "needs_install"
-          ? "Add to Home Screen for alerts"
+          ? "Add to Home Screen"
           : state === "blocked"
-            ? "Blocked in device settings"
+            ? "Blocked in Device Settings"
             : state === "unconfigured"
-              ? "Push setup pending"
+              ? "Alerts Unavailable"
               : state === "unsupported"
-                ? "Alerts unavailable"
-                : "Checking alerts";
+                ? "Alerts Unavailable"
+                : "Checking Alerts…";
 
   return (
     <div className="mt-3 rounded-lg border bg-background/60 p-3" aria-live="polite">

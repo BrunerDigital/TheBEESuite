@@ -19,6 +19,9 @@ test("device preview is development-only and uses fake identifiers", () => {
   assert.match(previewSource, /preview-center/);
   assert.doesNotMatch(previewSource, /prisma\.|auth\.admin|method:\s*["'](?:POST|PUT|PATCH|DELETE)/i);
   assert.match(previewSource, /<AppShell previewMode/);
+  assert.match(previewSource, /<ParentPortalWorkspace/);
+  assert.match(previewSource, /previewMode/);
+  assert.match(previewSource, /normalizeParentPortalView\(screen\)/);
   assert.match(previewSource, /<AutomationWorkflowBuilder data=\{workflowData\} readOnly/);
   assert.match(previewSource, /<KioskCheckIn previewMode/);
   assert.match(workflowSource, /if \(readOnly\)/);
@@ -26,7 +29,9 @@ test("device preview is development-only and uses fake identifiers", () => {
   assert.match(kioskSource, /if \(previewMode\)/);
   assert.match(kioskSource, /if \(previewMode \|\| kioskMode/);
   assert.match(appShellSource, /const searchUserEmail = previewMode \? ""/);
-  assert.match(appShellSource, /if \(previewMode\) \{\s*return <UserAvatar/);
+  assert.match(appShellSource, /if \(previewMode && !parentFacing\) \{\s*return <UserAvatar/);
+  assert.match(appShellSource, /\{previewMode \? \([\s\S]*Preview account[\s\S]*\) : \([\s\S]*ProfilePhotoUploader/);
+  assert.match(appShellSource, /parentPortalPreviewFamilySectionHref/);
   assert.match(appShellSource, /!previewMode && canViewAccountBalances\(currentUser\)/);
   assert.match(appShellSource, /\{!previewMode \? \([\s\S]*aria-label="Sign out"/);
 });

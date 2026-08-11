@@ -35,7 +35,8 @@ export type GuardianKioskCredentialSummary = {
 
 export function kioskPathForCenter(centerId?: string | null, mode?: "family" | "staff") {
   const basePath = centerId ? `/check-in/${centerId}` : "/check-in";
-  return mode ? `${basePath}?mode=${mode}` : basePath;
+  if (mode === "family" && centerId) return `${basePath}/family`;
+  return mode === "staff" ? `${basePath}?mode=staff` : basePath;
 }
 
 function serializePinSetAt(value: Date | string | null | undefined) {
@@ -63,7 +64,7 @@ export function buildGuardianKioskCredential(record: GuardianCredentialRecord): 
     hasPin: Boolean(pinSetAt && record.checkInPinHash),
     pinSetAt,
     qrToken,
-    kioskPath: kioskPathForCenter(record.family.centerId),
+    kioskPath: kioskPathForCenter(record.family.centerId, "family"),
   };
 }
 

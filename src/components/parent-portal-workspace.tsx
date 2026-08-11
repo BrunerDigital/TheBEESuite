@@ -525,6 +525,10 @@ export function ParentPortalWorkspace({
   const [isPending, startTransition] = useTransition();
 
   function saveTuitionCadence(child: Child) {
+    if (child.tuitionAssignment?.cadence === "monthly") {
+      setError("Monthly tuition timing is managed by the school.");
+      return;
+    }
     const billingCadence = tuitionCadenceDrafts[child.id] ?? (child.tuitionAssignment?.cadence === "four_week" ? "four_week" : "weekly");
     startTransition(async () => {
       setStatus("");
@@ -1530,14 +1534,14 @@ export function ParentPortalWorkspace({
                 <div className="mt-1 font-medium capitalize">{autopayStatus}</div>
               </div>
             </div>
-            {family.children.some((child) => child.tuitionAssignment?.enabled && (child.tuitionAssignment.amountCents ?? 0) > 0) ? (
+            {family.children.some((child) => child.tuitionAssignment?.enabled && child.tuitionAssignment.cadence !== "monthly" && (child.tuitionAssignment.amountCents ?? 0) > 0) ? (
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="font-medium">Tuition billing cycle</div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Your weekly rate stays the same. Choose weekly invoices or one invoice every four weeks that covers the next four weeks. This choice does not create an opening balance or turn on autopay.
                 </p>
                 <div className="mt-3 space-y-3">
-                  {family.children.filter((child) => child.tuitionAssignment?.enabled && (child.tuitionAssignment.amountCents ?? 0) > 0).map((child) => {
+                  {family.children.filter((child) => child.tuitionAssignment?.enabled && child.tuitionAssignment.cadence !== "monthly" && (child.tuitionAssignment.amountCents ?? 0) > 0).map((child) => {
                     const cadence = tuitionCadenceDrafts[child.id] ?? (child.tuitionAssignment?.cadence === "four_week" ? "four_week" : "weekly");
                     const weeklyAmount = child.tuitionAssignment?.amountCents ?? 0;
                     return (

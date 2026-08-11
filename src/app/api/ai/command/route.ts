@@ -20,7 +20,7 @@ import {
 } from "@/lib/ai-command-mutations";
 import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
-import { defaultRecurringBillingPeriod, WEEKLY_TUITION_AUTOBILL_CADENCE, WEEKLY_TUITION_AUTOBILL_DAY } from "@/lib/billing-workflows";
+import { defaultRecurringBillingPeriod, normalizeBillingCadence, WEEKLY_TUITION_AUTOBILL_CADENCE, WEEKLY_TUITION_AUTOBILL_DAY } from "@/lib/billing-workflows";
 import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
 import { activeClassroomWhere } from "@/lib/classroom-status";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
@@ -374,6 +374,9 @@ async function applyAiProfileChange(
             data: { centerId: selectedCenterId, name: `Weekly tuition - $${(requestedAmountCents / 100).toFixed(2)}`, ageGroup: child.ageGroup, cadence: WEEKLY_TUITION_AUTOBILL_CADENCE, amountCents: requestedAmountCents },
           });
         }
+      }
+      if (normalizeBillingCadence(plan.cadence) !== WEEKLY_TUITION_AUTOBILL_CADENCE) {
+        throw new Error("The set_weekly_tuition action requires a weekly tuition plan. Monthly plans must be assigned through the school billing workspace.");
       }
       const creditsTotal = Number(existingFields.tuitionCreditsTotalCents) || 0;
       if (plan.amountCents > 0 && creditsTotal >= plan.amountCents) throw new Error("Existing weekly credits must be less than the new gross tuition rate.");

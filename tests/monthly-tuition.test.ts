@@ -29,3 +29,16 @@ test("monthly setup copy keeps invoice creation separate from charging and autop
   assert.match(workbench, /This does not enable family autopay/);
   assert.match(workbench, /effectiveAssignmentCadence !== "weekly"/);
 });
+
+test("weekly-only parent and AI controls cannot convert or select monthly plans", () => {
+  const parentRoute = readFileSync("src/app/api/parent/tuition-cadence/route.ts", "utf8");
+  const parentWorkspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
+  const aiRoute = readFileSync("src/app/api/ai/command/route.ts", "utf8");
+
+  assert.match(parentRoute, /previousCadence === "monthly"/);
+  assert.match(parentRoute, /cannot be changed to a weekly cycle from the parent portal/);
+  assert.match(parentWorkspace, /child\.tuitionAssignment\?\.cadence === "monthly"/);
+  assert.match(parentWorkspace, /child\.tuitionAssignment\.cadence !== "monthly"/);
+  assert.match(aiRoute, /normalizeBillingCadence\(plan\.cadence\) !== WEEKLY_TUITION_AUTOBILL_CADENCE/);
+  assert.match(aiRoute, /set_weekly_tuition action requires a weekly tuition plan/);
+});

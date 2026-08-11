@@ -3,6 +3,13 @@ import { Prisma } from "@prisma/client";
 import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import {
+  authorizeCorporateStripeVerificationCenter,
+  corporateStripePayoutBankIsConfirmed,
+  corporateStripeVerificationBindingIsValid,
+  readCorporateStripeVerificationTarget,
+  stripeVerificationState,
+} from "@/lib/corporate-stripe-verification";
+import {
   createStripeAccountLink,
   listStripeConnectedAccountPayoutBanks,
   readStripeConnectedAccountId,
@@ -30,36 +37,83 @@ async function authorizedCenter(request: NextRequest, method: "GET" | "POST") {
     authorizedRepresentative?: unknown;
     returnToCorporatePortfolio?: unknown;
   } : {};
-  if (!user) return { response: NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 }), user: null, center: null, body };
-  if (!canManageBilling(user) && !canManageOperations(user)) {
-    return { response: NextResponse.json({ ok: false, error: "Stripe migration is not allowed for this role." }, { status: 403 }), user: null, center: null, body };
-  }
+  if (!user) return { response: NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 }), user: null, center: null, body, corporateVerification: false };
   const centerId = method === "POST"
     ? clean(body.centerId) || user.primaryCenterId
     : request.nextUrl.searchParams.get("centerId") || user.primaryCenterId;
-  if (!centerId || !canAccessCenter(user, centerId)) {
-    return { response: NextResponse.json({ ok: false, error: "Choose a school you are allowed to manage." }, { status: 403 }), user: null, center: null, body };
+  if (!centerId) {
+    return { response: NextResponse.json({ ok: false, error: "Choose a school you are allowed to manage." }, { status: 403 }), user: null, center: null, body, corporateVerification: false };
   }
   const center = await prisma.center.findUnique({
     where: { id: centerId },
-    select: { id: true, name: true, crmLocationId: true, customFields: true },
+    select: { id: true, name: true, crmLocationId: true, customFields: true, organization: { select: { tenantId: true } } },
   });
-  if (!center) return { response: NextResponse.json({ ok: false, error: "School not found." }, { status: 404 }), user: null, center: null, body };
-  return { response: null, user, center, body };
+  if (!center) return { response: NextResponse.json({ ok: false, error: "School not found." }, { status: 404 }), user: null, center: null, body, corporateVerification: false };
+
+  const approvedTarget = readCorporateStripeVerificationTarget(center.id);
+  if (approvedTarget) {
+    const authorization = await authorizeCorporateStripeVerificationCenter({ user, center });
+    if (!authorization.ok) {
+      const targetChanged = authorization.reason === "target_changed";
+      return {
+        response: NextResponse.json(
+          { ok: false, error: targetChanged ? "The approved Stripe verification account changed. Setup was stopped." : "Corporate Stripe verification is not allowed for this account." },
+          { status: targetChanged ? 409 : 403 },
+        ),
+        user: null,
+        center: null,
+        body,
+        corporateVerification: false,
+      };
+    }
+    return { response: null, user, center, body, corporateVerification: true };
+  }
+
+  if ((!canManageBilling(user) && !canManageOperations(user)) || !canAccessCenter(user, center.id)) {
+    return { response: NextResponse.json({ ok: false, error: "Stripe migration is not allowed for this role or school." }, { status: 403 }), user: null, center: null, body, corporateVerification: false };
+  }
+  return { response: null, user, center, body, corporateVerification: false };
 }
 
 async function GETHandler(request: NextRequest) {
   const auth = await authorizedCenter(request, "GET");
   if (auth.response) return auth.response;
   if (!auth.user || !auth.center) return NextResponse.json({ ok: false, error: "Authorization could not be verified." }, { status: 403 });
-  const { user, center } = auth;
+  const { user, center, corporateVerification } = auth;
   const fields = jsonObject(center.customFields);
   const migration = readStripeConnectMigration(fields);
   if (!migration.targetAccountId || !migration.sourceAccountId) {
     return NextResponse.json({ ok: false, error: "This school does not have a prepared Stripe migration." }, { status: 409 });
   }
-  if (readStripeConnectedAccountId(fields) !== migration.sourceAccountId && !migration.cutoverAt) {
+  const activeAccountId = readStripeConnectedAccountId(fields);
+  if (corporateVerification && !corporateStripeVerificationBindingIsValid({
+    activeAccountId,
+    sourceAccountId: migration.sourceAccountId,
+    targetAccountId: migration.targetAccountId,
+    cutoverAt: migration.cutoverAt,
+  })) {
+    return NextResponse.json({ ok: false, error: "The school's active parent-payment account changed. Verification status was not updated." }, { status: 409 });
+  }
+  if (!corporateVerification && activeAccountId !== migration.sourceAccountId && !migration.cutoverAt) {
     return NextResponse.json({ ok: false, error: "The school's active parent-payment account changed. Migration status was not updated." }, { status: 409 });
+  }
+
+  if (corporateVerification) {
+    const [target, banks] = await Promise.all([
+      retrieveStripeConnectedAccount(migration.targetAccountId, { tenantId: user.tenantId }),
+      listStripeConnectedAccountPayoutBanks({ accountId: migration.targetAccountId, tenantId: user.tenantId }),
+    ]);
+    if (!target.ok || !target.account) {
+      return NextResponse.json({ ok: false, error: target.error || "The Stripe verification account could not be checked." }, { status: target.configured ? 502 : 503 });
+    }
+    if (!banks.ok) {
+      return NextResponse.json({ ok: false, error: banks.error || "The Stripe payout bank could not be checked." }, { status: banks.configured ? 502 : 503 });
+    }
+    return NextResponse.json({
+      ok: true,
+      centerId: center.id,
+      status: stripeVerificationState(target.account, corporateStripePayoutBankIsConfirmed(banks.banks)),
+    });
   }
 
   const [target, banks] = await Promise.all([
@@ -125,8 +179,8 @@ async function POSTHandler(request: NextRequest) {
   const auth = await authorizedCenter(request, "POST");
   if (auth.response) return auth.response;
   if (!auth.user || !auth.center) return NextResponse.json({ ok: false, error: "Authorization could not be verified." }, { status: 403 });
-  const { user, center } = auth;
-  if (auth.body.authorizedRepresentative !== true) {
+  const { user, center, corporateVerification } = auth;
+  if (!corporateVerification && auth.body.authorizedRepresentative !== true) {
     return NextResponse.json({ ok: false, error: "Confirm that you are authorized to act for this school before continuing." }, { status: 400 });
   }
   const fields = jsonObject(center.customFields);
@@ -134,18 +188,49 @@ async function POSTHandler(request: NextRequest) {
   if (!migration.targetAccountId || !migration.sourceAccountId) {
     return NextResponse.json({ ok: false, error: "This school does not have a prepared Stripe migration." }, { status: 409 });
   }
-  if (migration.cutoverAt) {
+  if (migration.cutoverAt && !corporateVerification) {
     return NextResponse.json({ ok: false, error: "This school's Stripe migration is already complete." }, { status: 409 });
   }
-  if (readStripeConnectedAccountId(fields) !== migration.sourceAccountId) {
+  const activeAccountId = readStripeConnectedAccountId(fields);
+  if (corporateVerification && !corporateStripeVerificationBindingIsValid({
+    activeAccountId,
+    sourceAccountId: migration.sourceAccountId,
+    targetAccountId: migration.targetAccountId,
+    cutoverAt: migration.cutoverAt,
+  })) {
+    return NextResponse.json({ ok: false, error: "The school's active parent-payment account changed. Verification was stopped." }, { status: 409 });
+  }
+  if (!corporateVerification && activeAccountId !== migration.sourceAccountId) {
     return NextResponse.json({ ok: false, error: "The school's active parent-payment account changed. Reauthorization was stopped." }, { status: 409 });
   }
   const target = await retrieveStripeConnectedAccount(migration.targetAccountId, { tenantId: user.tenantId });
-  if (!target.ok || !target.account || target.account.feesCollector !== "stripe" || target.account.lossesCollector !== "stripe") {
+  if (!target.ok || !target.account) {
+    return NextResponse.json({ ok: false, error: target.error || "The prepared Stripe account could not be checked." }, { status: target.configured ? 502 : 503 });
+  }
+  if (!corporateVerification && (target.account.feesCollector !== "stripe" || target.account.lossesCollector !== "stripe")) {
     return NextResponse.json({ ok: false, error: target.error || "The prepared Stripe account has the wrong fee or loss responsibility." }, { status: target.configured ? 409 : 503 });
   }
+  if (corporateVerification) {
+    const banks = await listStripeConnectedAccountPayoutBanks({ accountId: migration.targetAccountId, tenantId: user.tenantId });
+    if (!banks.ok) {
+      return NextResponse.json({ ok: false, error: banks.error || "The Stripe payout bank could not be checked." }, { status: banks.configured ? 502 : 503 });
+    }
+    const verificationStatus = stripeVerificationState(target.account, corporateStripePayoutBankIsConfirmed(banks.banks));
+    if (verificationStatus === "stripe_verification_blocked") {
+      return NextResponse.json({ ok: false, status: verificationStatus, error: "This Stripe account is not eligible for the approved verification flow. No session was created." }, { status: 409 });
+    }
+    if (verificationStatus !== "stripe_verification_required") {
+      return NextResponse.json({
+        ok: true,
+        centerId: center.id,
+        status: verificationStatus,
+        alreadyComplete: verificationStatus === "stripe_verification_complete",
+        pendingVerification: verificationStatus === "stripe_verification_pending",
+      });
+    }
+  }
   const baseUrl = getSecurePaymentAppBaseUrl(request.url);
-  const returnToCorporatePortfolio = auth.body.returnToCorporatePortfolio === true;
+  const returnToCorporatePortfolio = corporateVerification || auth.body.returnToCorporatePortfolio === true;
   const portfolioQuery = returnToCorporatePortfolio ? "&portfolio=corporate" : "";
   const returnUrl = `${baseUrl}/stripe-reauthorization?stripeMigration=return&center=${encodeURIComponent(center.id)}${portfolioQuery}`;
   const refreshUrl = `${baseUrl}/api/billing/connect/migration/refresh?centerId=${encodeURIComponent(center.id)}${portfolioQuery}`;
@@ -174,7 +259,8 @@ async function POSTHandler(request: NextRequest) {
     metadata: {
       sourceAccountId: migration.sourceAccountId,
       targetAccountId: migration.targetAccountId,
-      authorizedRepresentativeConfirmed: true,
+      authorizedRepresentativeConfirmed: corporateVerification ? false : true,
+      corporateVerification,
       returnToCorporatePortfolio,
       linkStored: false,
       linkSent: false,
@@ -190,7 +276,14 @@ async function POSTHandler(request: NextRequest) {
   if (!stillReserved) {
     return NextResponse.json({ ok: false, error: "The school's Stripe migration changed after setup was reserved. Refresh and try again." }, { status: 409 });
   }
-  const link = await createStripeAccountLink({ accountId: migration.targetAccountId, refreshUrl, returnUrl, tenantId: user.tenantId });
+  const link = await createStripeAccountLink({
+    accountId: migration.targetAccountId,
+    refreshUrl,
+    returnUrl,
+    collectionFields: corporateVerification ? "currently_due" : "eventually_due",
+    includeFutureRequirements: !corporateVerification,
+    tenantId: user.tenantId,
+  });
   if (!link.ok || !link.url) {
     const providerRejectedLink = Boolean(link.providerStatus && link.providerStatus >= 400 && link.providerStatus < 500);
     if (providerRejectedLink) {
@@ -239,7 +332,8 @@ async function POSTHandler(request: NextRequest) {
     metadata: {
       sourceAccountId: migration.sourceAccountId,
       targetAccountId: migration.targetAccountId,
-      authorizedRepresentativeConfirmed: true,
+      authorizedRepresentativeConfirmed: corporateVerification ? false : true,
+      corporateVerification,
       returnToCorporatePortfolio,
       linkStored: false,
       linkSent: false,

@@ -260,6 +260,7 @@ test("Stripe connected account business completion supplies childcare merchant f
     idempotencyKey = String((init?.headers as Record<string, string> | undefined)?.["Idempotency-Key"] ?? "");
     return new Response(JSON.stringify({
       id: "acct_123",
+      livemode: true,
       configuration: {
         merchant: { capabilities: { card_payments: { status: "restricted" } } },
         recipient: { capabilities: { stripe_balance: { stripe_transfers: { status: "restricted" } } } },
@@ -438,7 +439,62 @@ test("Stripe account links match the configurations applied to the Accounts v2 a
     assert.equal(result.ok, true);
     const useCase = asRecord(accountLinkBody.use_case);
     const onboarding = asRecord(useCase.account_onboarding);
+    const collectionOptions = asRecord(onboarding.collection_options);
     assert.deepEqual(onboarding.configurations, ["customer", "merchant", "recipient"]);
+    assert.equal(collectionOptions.fields, "eventually_due");
+    assert.equal(collectionOptions.future_requirements, "include");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe account links can collect only currently due requirements without future requirements", async () => {
+  const originalFetch = globalThis.fetch;
+  let accountLinkBody: Record<string, unknown> = {};
+
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    if (String(url).startsWith("https://api.stripe.com/v2/core/accounts/acct_current_due?")) {
+      return new Response(JSON.stringify({
+        id: "acct_current_due",
+        applied_configurations: ["merchant", "recipient"],
+        configuration: {
+          merchant: { capabilities: { card_payments: { status: "restricted" } } },
+          recipient: { capabilities: { stripe_balance: { stripe_transfers: { status: "restricted" } } } },
+        },
+        defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
+        requirements: {},
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    assert.equal(String(url), "https://api.stripe.com/v2/core/account_links");
+    accountLinkBody = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+    return new Response(JSON.stringify({ url: "https://connect.stripe.com/setup/acct_current_due/secure" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeAccountLink({
+      accountId: "acct_current_due",
+      refreshUrl: "https://thebeesuite.io/api/billing/connect/migration/refresh?centerId=center_123",
+      returnUrl: "https://thebeesuite.io/stripe-reauthorization?center=center_123",
+      collectionFields: "currently_due",
+      includeFutureRequirements: false,
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+
+    assert.equal(result.ok, true);
+    const useCase = asRecord(accountLinkBody.use_case);
+    const onboarding = asRecord(useCase.account_onboarding);
+    const collectionOptions = asRecord(onboarding.collection_options);
+    assert.equal(useCase.type, "account_onboarding");
+    assert.deepEqual(onboarding.configurations, ["merchant", "recipient"]);
+    assert.equal(collectionOptions.fields, "currently_due");
+    assert.equal(Object.hasOwn(collectionOptions, "future_requirements"), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -505,12 +561,36 @@ test("Stripe connected account retrieval uses indexed Accounts v2 include params
     requestedUrl = String(url);
     return new Response(JSON.stringify({
       id: "acct_123",
+      livemode: true,
       configuration: {
         merchant: { capabilities: { card_payments: { status: "active" } } },
         recipient: { capabilities: { stripe_balance: { stripe_transfers: { status: "active" } } } },
       },
       defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
-      requirements: { entries: [] },
+      requirements: {
+        entries: [
+          {
+            description: "external_account",
+            awaiting_action_from: "user",
+            minimum_deadline: { status: "currently_due" },
+          },
+          {
+            description: "identity.attestations.terms_of_service",
+            awaiting_action_from: "user",
+            minimum_deadline: { status: "past_due" },
+          },
+          {
+            description: "identity.future_requirement",
+            awaiting_action_from: "user",
+            minimum_deadline: { status: "eventually_due" },
+          },
+          {
+            description: "identity.business_details.address",
+            awaiting_action_from: "stripe",
+            minimum_deadline: { status: "currently_due" },
+          },
+        ],
+      },
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -524,10 +604,18 @@ test("Stripe connected account retrieval uses indexed Accounts v2 include params
     const url = new URL(requestedUrl);
 
     assert.equal(result.ok, true);
+    assert.equal(result.account?.livemode, true);
     assert.equal(result.account?.chargesEnabled, true);
     assert.equal(result.account?.payoutsEnabled, true);
     assert.equal(result.account?.feesCollector, "stripe");
     assert.equal(result.account?.lossesCollector, "stripe");
+    assert.deepEqual(result.account?.currentlyDueRequirementFields, [
+      "external_account",
+      "identity.attestations.terms_of_service",
+    ]);
+    assert.deepEqual(result.account?.pendingVerificationFields, [
+      "identity.business_details.address",
+    ]);
     assert.equal(url.searchParams.get("include[0]"), "configuration.merchant");
     assert.equal(url.searchParams.get("include[1]"), "configuration.recipient");
     assert.equal(url.searchParams.get("include[2]"), "configuration.customer");
@@ -557,10 +645,14 @@ test("Stripe connected account retrieval falls back to legacy account status", a
 
     return new Response(JSON.stringify({
       id: "acct_123",
+      livemode: true,
       charges_enabled: true,
       payouts_enabled: true,
       details_submitted: true,
-      requirements: { currently_due: [] },
+      requirements: {
+        currently_due: ["external_account"],
+        pending_verification: ["company.tax_id"],
+      },
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -574,8 +666,11 @@ test("Stripe connected account retrieval falls back to legacy account status", a
 
     assert.equal(result.ok, true);
     assert.equal(result.id, "acct_123");
+    assert.equal(result.account?.livemode, true);
     assert.equal(result.account?.chargesEnabled, true);
     assert.equal(result.account?.payoutsEnabled, true);
+    assert.deepEqual(result.account?.currentlyDueRequirementFields, ["external_account"]);
+    assert.deepEqual(result.account?.pendingVerificationFields, ["company.tax_id"]);
     assert.equal(requestedUrls.length, 2);
     assert.equal(requestedUrls[0].includes("/v2/core/accounts/acct_123"), true);
     assert.equal(requestedUrls[1], "https://api.stripe.com/v1/accounts/acct_123");

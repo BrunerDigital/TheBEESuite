@@ -126,6 +126,7 @@ export type StripeCheckoutSessionSnapshot = {
 
 export type StripeConnectedAccountSnapshot = {
   id: string;
+  livemode: boolean;
   displayName?: string | null;
   dashboard?: string | null;
   configurations: StripeAccountLinkConfiguration[];
@@ -137,6 +138,8 @@ export type StripeConnectedAccountSnapshot = {
   feesCollector?: "application" | "stripe" | null;
   lossesCollector?: "application" | "stripe" | null;
   requirementFields: string[];
+  currentlyDueRequirementFields: string[];
+  pendingVerificationFields: string[];
   raw?: unknown;
 };
 
@@ -473,11 +476,22 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
   const eventuallyDue = asStringArray(requirements.eventually_due);
   const futureCurrentDue = asStringArray(futureRequirements.currently_due);
   const futureEventuallyDue = asStringArray(futureRequirements.eventually_due);
-  const entries = Array.isArray(requirements.entries)
-    ? requirements.entries
-        .map((entry) => clean(asRecord(entry).field) || clean(asRecord(entry).description))
-        .filter((field): field is string => typeof field === "string")
-    : [];
+  const entryRecords = Array.isArray(requirements.entries) ? requirements.entries.map(asRecord) : [];
+  const entries = entryRecords
+    .map((entry) => clean(entry.field) || clean(entry.description))
+    .filter((field): field is string => typeof field === "string");
+  const currentlyDueEntries = entryRecords
+    .filter((entry) => {
+      const status = clean(asRecord(entry.minimum_deadline).status);
+      return clean(entry.awaiting_action_from) === "user" && (status === "currently_due" || status === "past_due");
+    })
+    .map((entry) => clean(entry.field) || clean(entry.description))
+    .filter((field): field is string => typeof field === "string");
+  const pendingVerificationEntries = entryRecords
+    .filter((entry) => clean(entry.awaiting_action_from) === "stripe")
+    .map((entry) => clean(entry.field) || clean(entry.description))
+    .filter((field): field is string => typeof field === "string");
+  const pendingVerification = asStringArray(requirements.pending_verification);
   const futureEntries = Array.isArray(futureRequirements.entries)
     ? futureRequirements.entries
         .map((entry) => clean(asRecord(entry).field) || clean(asRecord(entry).description))
@@ -491,6 +505,8 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
     ...entries,
     ...futureEntries,
   ]));
+  const currentlyDueRequirementFields = Array.from(new Set([...currentDue, ...currentlyDueEntries]));
+  const pendingVerificationFields = Array.from(new Set([...pendingVerification, ...pendingVerificationEntries]));
   const recipientTransferStatus = clean(stripeTransfers.status) || null;
   const merchantCapabilityStatus = clean(cardPayments.status) || null;
   const feesPayer = clean(controllerFees.payer);
@@ -508,6 +524,7 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
 
   return {
     id: clean(account.id),
+    livemode: account.livemode === true,
     displayName: clean(account.display_name) || clean(account.displayName) || null,
     dashboard: clean(account.dashboard) || null,
     configurations,
@@ -519,6 +536,8 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
     feesCollector,
     lossesCollector,
     requirementFields,
+    currentlyDueRequirementFields,
+    pendingVerificationFields,
     raw: json,
   };
 }
@@ -2449,12 +2468,16 @@ export async function createStripeAccountLink({
   accountId,
   refreshUrl,
   returnUrl,
+  collectionFields = "eventually_due",
+  includeFutureRequirements = true,
   tenantId,
   credentials,
 }: {
   accountId: string;
   refreshUrl: string;
   returnUrl: string;
+  collectionFields?: "currently_due" | "eventually_due";
+  includeFutureRequirements?: boolean;
   tenantId?: string | null;
   credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult> {
@@ -2499,8 +2522,8 @@ export async function createStripeAccountLink({
         account_onboarding: {
           configurations,
           collection_options: {
-            fields: "eventually_due",
-            future_requirements: "include",
+            fields: collectionFields,
+            ...(includeFutureRequirements ? { future_requirements: "include" } : {}),
           },
           refresh_url: refreshUrl,
           return_url: returnUrl,

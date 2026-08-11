@@ -78,11 +78,11 @@ export function preparedRenderedProcareDatasetCoverage(text: string) {
       || Array.isArray(coverage)
       || !Array.isArray((coverage as Record<string, unknown>).sourceInventory)
     ) {
-      throw new Error("The rendered ProCare coverage manifest is incomplete.");
+      throw new Error("The rendered source coverage manifest is incomplete.");
     }
     return coverage as Record<string, unknown>;
   } catch (error) {
-    throw new Error(error instanceof Error ? error.message : "The rendered ProCare coverage manifest is invalid.");
+    throw new Error(error instanceof Error ? error.message : "The rendered source coverage manifest is invalid.");
   }
 }
 

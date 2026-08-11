@@ -259,7 +259,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
             <Badge className="mb-4" variant="outline"><Sparkles data-icon="inline-start" /> Director workflow</Badge>
             <h1 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-5xl">Data Readiness Center</h1>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-              Resolve reviewed ProCare differences with school-scoped evidence. Decisions are append-only and do not change operational records, access, balances, invitations, payments, or launch state.
+              Resolve reviewed source-data differences with school-scoped evidence. Decisions are append-only and do not change operational records, access, balances, invitations, payments, or launch state.
             </p>
             <div className="mt-5 flex flex-wrap gap-2 text-xs text-muted-foreground">
               <Badge variant="outline">{data.summary.sourceRows.toLocaleString()} retained source rows</Badge>
@@ -292,7 +292,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
         <TabsList className="nectar-tabs h-auto w-full justify-start overflow-x-auto rounded-xl border bg-card/75 p-1 sm:w-fit" aria-label="Data readiness views">
           <TabsTrigger value="overview" className="min-h-10 px-4"><ShieldCheck /> Overview</TabsTrigger>
           <TabsTrigger value="queue" className="min-h-10 px-4"><ListChecks /> Action queue <Badge variant="secondary">{data.summary.actionable}</Badge></TabsTrigger>
-          <TabsTrigger value="procare" className="min-h-10 px-4"><Database /> ProCare onboarding</TabsTrigger>
+          <TabsTrigger value="procare" className="min-h-10 px-4"><Database /> Data onboarding</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="grid gap-6">
@@ -325,7 +325,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
               <Card className="glass-panel">
                 <CardHeader><CardTitle>Independent launch gates</CardTitle><CardDescription>Readiness never silently activates the business.</CardDescription></CardHeader>
                 <CardContent className="grid gap-3">
-                  {["Parent invitations", "Payment and billing activation", "Kiosk and PIN activation", "School launch approval", "ProCare retirement and archival"].map((gate) => (
+                  {["Parent invitations", "Payment and billing activation", "Kiosk and PIN activation", "School launch approval", "Previous-system cutover", "Source-file archival"].map((gate) => (
                     <div key={gate} className="flex items-center justify-between gap-3 rounded-xl border bg-background/50 p-3"><span className="text-sm font-medium">{gate}</span><Badge variant="outline">Separate approval</Badge></div>
                   ))}
                 </CardContent>
@@ -339,7 +339,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
                       <div className="mt-2 text-xs text-muted-foreground">{batch.importedRows} imported · {batch.unresolvedRows} unresolved · {formatDate(batch.createdAt)}</div>
                     </div>
                   ))}
-                  {!data.batches.length ? <p className="rounded-xl border bg-background/50 p-4 text-sm text-muted-foreground">No ProCare import batches are visible for this scope yet.</p> : null}
+                  {!data.batches.length ? <p className="rounded-xl border bg-background/50 p-4 text-sm text-muted-foreground">No import batches are visible for this scope yet.</p> : null}
                 </CardContent>
               </Card>
             </div>
@@ -432,7 +432,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
               </SheetHeader>
               <div className="min-h-0 flex-1 overflow-y-auto p-5">
                 <div className="grid gap-5">
-                  <section aria-labelledby="readiness-difference-heading"><h2 id="readiness-difference-heading" className="text-sm font-semibold">Reviewed difference</h2><div className="mt-3 grid gap-3 sm:grid-cols-2"><div className="rounded-xl border bg-background/55 p-4"><div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current BEE value</div><div className="mt-2 text-sm">{selectedTask.currentValue}</div></div><div className="rounded-xl border border-primary/30 bg-primary/[0.08] p-4"><div className="text-xs font-medium uppercase tracking-wide text-primary">Proposed ProCare value</div><div className="mt-2 text-sm">{selectedTask.proposedValue}</div></div></div><p className="mt-2 text-xs text-muted-foreground">{selectedTask.difference}</p></section>
+                  <section aria-labelledby="readiness-difference-heading"><h2 id="readiness-difference-heading" className="text-sm font-semibold">Reviewed difference</h2><div className="mt-3 grid gap-3 sm:grid-cols-2"><div className="rounded-xl border bg-background/55 p-4"><div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current BEE value</div><div className="mt-2 text-sm">{selectedTask.currentValue}</div></div><div className="rounded-xl border border-primary/30 bg-primary/[0.08] p-4"><div className="text-xs font-medium uppercase tracking-wide text-primary">Proposed source value</div><div className="mt-2 text-sm">{selectedTask.proposedValue}</div></div></div><p className="mt-2 text-xs text-muted-foreground">{selectedTask.difference}</p></section>
                   <section className="grid gap-3 rounded-xl border bg-background/45 p-4" aria-labelledby="readiness-evidence-heading"><h2 id="readiness-evidence-heading" className="text-sm font-semibold">Source evidence</h2><dl className="grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-muted-foreground">Filename</dt><dd className="break-all">{selectedTask.sourceFilename}</dd></div><div><dt className="text-xs text-muted-foreground">Source row</dt><dd>{selectedTask.sourceRow ?? "Batch-level evidence"}</dd></div><div><dt className="text-xs text-muted-foreground">Parsing confidence</dt><dd className="capitalize">{selectedTask.parsingConfidence}</dd></div><div><dt className="text-xs text-muted-foreground">Last updated</dt><dd>{formatDate(selectedTask.updatedAt)}</dd></div></dl>{selectedTask.sourceIds.length ? <div><div className="text-xs text-muted-foreground">Source IDs</div><div className="mt-2 flex flex-wrap gap-2">{selectedTask.sourceIds.map((id) => <Badge key={id} variant="outline" className="h-auto max-w-full whitespace-normal break-all py-1">{id}</Badge>)}</div></div> : <Alert variant="destructive"><AlertTriangle className="size-4" /><AlertTitle>No stable source ID detected</AlertTitle><AlertDescription>Do not use bulk confirmation. Resolve this row individually against the source export.</AlertDescription></Alert>}</section>
                   <section className="rounded-xl border bg-background/45 p-4"><h2 className="text-sm font-semibold">Downstream impact</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{selectedTask.downstreamImpact}</p>{selectedTask.relatedRecords.length ? <div className="mt-3 flex flex-wrap gap-2">{selectedTask.relatedRecords.map((record) => <Badge key={record} variant="outline">{record}</Badge>)}</div> : null}</section>
                   <section aria-labelledby="readiness-decision-heading"><h2 id="readiness-decision-heading" className="text-sm font-semibold">Director decision</h2><div className="mt-3 grid gap-2 sm:grid-cols-2">{decisionOptions.map((option) => <button key={option.action} type="button" aria-pressed={action === option.action} onClick={() => setAction(option.action)} className={cn("min-h-16 rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", action === option.action ? "border-primary/45 bg-primary/10" : "bg-background/55 hover:border-primary/30")}><span className="block text-sm font-medium">{option.label}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.detail}</span></button>)}</div></section>

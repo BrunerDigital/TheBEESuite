@@ -412,7 +412,7 @@ function detectReports(entries: Map<string, Buffer>) {
       continue;
     }
     if (candidates.length > 1 && candidates[0].candidate.score === candidates[1].candidate.score) {
-      throw new Error(`${entry.sourceName} matches more than one ProCare report type equally. Keep the original header row or remove unrelated columns so the director can review it safely.`);
+      throw new Error(`${entry.sourceName} matches more than one source report type equally. Keep the original header row or remove unrelated columns so the director can review it safely.`);
     }
     const selected = candidates[0];
     reports[selected.reportKind].push(selected.candidate);
@@ -426,7 +426,7 @@ function detectReports(entries: Map<string, Buffer>) {
 
   const missing = REPORT_KINDS.filter((reportKind) => !reports[reportKind].length);
   if (missing.length) {
-    throw new Error(`The uploaded files could not be identified safely by their columns. Missing or ambiguous report data: ${missing.join(", ")}. Filenames do not matter; include all four ProCare reports and keep their header rows.`);
+    throw new Error(`The uploaded files could not be identified safely by their columns. Missing or ambiguous report data: ${missing.join(", ")}. Filenames do not matter; include all four source reports and keep their header rows.`);
   }
   return { reports, inventory };
 }
@@ -462,7 +462,7 @@ function requireColumns(reportName: string, parsed: ParsedCsv, requiredColumns: 
 function zipEntries(buffer: Buffer) {
   return new Promise<Map<string, Buffer>>((resolve, reject) => {
     yauzl.fromBuffer(buffer, { lazyEntries: true }, (error, zip) => {
-      if (error || !zip) return reject(error ?? new Error("The ProCare ZIP could not be opened."));
+      if (error || !zip) return reject(error ?? new Error("The source ZIP could not be opened."));
       const entries = new Map<string, Buffer>();
       let totalUncompressedBytes = 0;
       zip.readEntry();
@@ -470,11 +470,11 @@ function zipEntries(buffer: Buffer) {
         totalUncompressedBytes += entry.uncompressedSize;
         if (entries.size >= 200 || totalUncompressedBytes > 100 * 1024 * 1024) {
           zip.close();
-          return reject(new Error("The ProCare ZIP exceeds the safe import size or file-count limit."));
+          return reject(new Error("The source ZIP exceeds the safe import size or file-count limit."));
         }
         if (/\/$/.test(entry.fileName)) return zip.readEntry();
         zip.openReadStream(entry, (streamError, stream) => {
-          if (streamError || !stream) return reject(streamError ?? new Error("A ProCare ZIP entry could not be read."));
+          if (streamError || !stream) return reject(streamError ?? new Error("A source ZIP entry could not be read."));
           const chunks: Buffer[] = [];
           stream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
           stream.on("error", reject);
@@ -482,7 +482,7 @@ function zipEntries(buffer: Buffer) {
             const filename = entry.fileName.replaceAll("\\", "/");
             if (entries.has(filename)) {
               zip.close();
-              return reject(new Error(`The ProCare ZIP contains more than one file named ${filename}.`));
+              return reject(new Error(`The source ZIP contains more than one file named ${filename}.`));
             }
             entries.set(filename, Buffer.concat(chunks));
             zip.readEntry();
@@ -516,7 +516,7 @@ export async function expandProcareSourceEntries(entries: Map<string, Buffer>) {
       expanded.set(expandedName, archivedBuffer);
     }
   }
-  if (expanded.size > 500) throw new Error("The selected ProCare sources contain more than 500 files. Split the handoff into reviewed batches.");
+  if (expanded.size > 500) throw new Error("The selected sources contain more than 500 files. Split the handoff into reviewed batches.");
   return expanded;
 }
 

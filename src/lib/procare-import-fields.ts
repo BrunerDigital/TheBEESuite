@@ -46,7 +46,7 @@ export const PROCARE_CORRELATION_GROUPS = [
   {
     id: "families",
     title: "Family identity",
-    description: "Confirm the ProCare account ID and household name before matching people.",
+    description: "Confirm the source account ID and household name before matching people.",
     fields: ["location", "account id", "family name"],
   },
   {

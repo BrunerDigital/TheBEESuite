@@ -940,9 +940,9 @@ async function renderLivePage(
       },
       familyImportSetup: {
         recordReady: familyCount > 0 && childCount > 0 && guardianCount > 0,
-        evidence: `${familyCount} families · ${childCount} children · ${guardianCount} guardians · ${procareImportCount} Procare imports`,
+        evidence: `${familyCount} families · ${childCount} children · ${guardianCount} guardians · ${procareImportCount} data imports`,
         metrics: [`Families: ${familyCount}`, `Children: ${childCount}`, `Guardians: ${guardianCount}`],
-        requiredActions: ["Import unencrypted Procare exports and review family, guardian, child, emergency contact, allergy, schedule, and classroom mappings."],
+        requiredActions: ["Import the approved source exports and review family, guardian, child, emergency contact, allergy, schedule, and classroom mappings."],
       },
       tuitionRateSetup: {
         recordReady: tuitionPlanCount > 0 || productCount > 0,
@@ -1069,7 +1069,7 @@ async function renderLivePage(
     });
     const externalNeeds = [
       selectedCenter && readSchoolEin(selectedCenter.customFields) ? null : "School EIN for customer payment receipts and ledger printouts.",
-      procareImportCount ? null : "Unencrypted Procare exports for each school: families, children, guardians, classrooms, balances, and staff.",
+      procareImportCount ? null : "Approved source data files for each school: families, children, guardians, classrooms, balances, and staff.",
       tuitionPlanCount || productCount ? null : "Final tuition and fee sheet by program, age group, cadence, discounts, deposits, and late fees.",
       staffCount ? null : "Current staff roster with emails, titles, classroom assignments, schedules, certifications, and background-check status.",
       guardianLoginCount ? null : "Approved parent/guardian invite list and any missing parent email addresses.",

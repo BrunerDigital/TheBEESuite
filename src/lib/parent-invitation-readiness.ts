@@ -168,7 +168,7 @@ export function evaluateProcareInvitationBatchReadiness(
   if (!batch) {
     return {
       ok: false,
-      blockers: ["No completed ProCare import batch is linked to this school or family."],
+      blockers: ["No completed source import batch is linked to this school or family."],
       importBatchId: null,
     };
   }
@@ -179,7 +179,7 @@ export function evaluateProcareInvitationBatchReadiness(
   const sourceType = clean(summary.sourceType);
   const isGuardedRenderedPackage = sourceType === "procare_rendered_report_files";
   if (batch.status !== "completed") {
-    blockers.push("The linked ProCare import is not complete and error-free.");
+    blockers.push("The linked source import is not complete and error-free.");
   }
   if (
     number(summary.errors)
@@ -187,10 +187,10 @@ export function evaluateProcareInvitationBatchReadiness(
     || number(summary.warningRows)
     || number(summary.disposed)
   ) {
-    blockers.push("The linked ProCare import still has errors, unresolved warnings, or disposed source rows.");
+    blockers.push("The linked source import still has errors, unresolved warnings, or disposed source rows.");
   }
   if (summary.sourceInventoryConfirmed !== true) {
-    blockers.push("The ProCare source-file inventory was not confirmed before import.");
+    blockers.push("The source-file inventory was not confirmed before import.");
   }
   if (isGuardedRenderedPackage) {
     const normalizedRows = record(datasetCoverage.normalizedRows);
@@ -200,21 +200,21 @@ export function evaluateProcareInvitationBatchReadiness(
       || number(normalizedRows.ready) <= 0
       || number(normalizedRows.needsResolution) !== number(summary.excludedUnresolvedRows)
     ) {
-      blockers.push("The rendered ProCare package was not fully reviewed or did not exclude every unresolved row.");
+      blockers.push("The rendered source package was not fully reviewed or did not exclude every unresolved row.");
     }
     if (!renderedReportDetectionComplete(datasetCoverage) || !renderedSourceRowsComplete(datasetCoverage)) {
-      blockers.push("The rendered ProCare account, registration, and enrollment-status reports are not all present.");
+      blockers.push("The rendered source account, registration, and enrollment-status reports are not all present.");
     }
   } else {
     if (!sourceType.startsWith("procare_multi_report_")) {
-      blockers.push("Parent invitations require a complete guarded ProCare import package.");
+      blockers.push("Parent invitations require a complete guarded source import package.");
     }
     if (!reportDetectionComplete(datasetCoverage) || !sourceRowsComplete(datasetCoverage)) {
-      blockers.push("The ProCare enrollment, parent, relationship, and child-information reports are not all present.");
+      blockers.push("The source enrollment, parent, relationship, and child-information reports are not all present.");
     }
   }
   if (warningCoverageCount(datasetCoverage)) {
-    blockers.push("The ProCare source package still contains unresolved account, child, or relationship coverage warnings.");
+    blockers.push("The source package still contains unresolved account, child, or relationship coverage warnings.");
   }
 
   return { ok: blockers.length === 0, blockers, importBatchId: batch.id };

@@ -176,9 +176,9 @@ const guides: ResourceGuide[] = [
     steps: [
       "Approve the school profile, rooms, staff roles, family records, tuition rules, billing cadence, and source-data reconciliation.",
       "Test real role and school isolation for executives, directors, billing admins, teachers, parents, and kiosk users.",
-      "Keep setup, parent invitations, kiosk/PIN, billing, parent payments, ProCare retirement, mobile stores, and wider-wave approval as independent dated gates.",
+      "Keep setup, parent invitations, kiosk/PIN, billing, parent payments, previous-system cutover, source-file archival, mobile stores, and wider-wave approval as independent dated gates.",
       "Train directors, teachers, billing staff, and families only on features approved for that school.",
-      "Keep ProCare as the source of record until reconciliation, ownership, and the signed cutover decision are complete.",
+      "Keep the previous system as the source of record until reconciliation, ownership, and the signed cutover decision are complete.",
       "A HELD OFF gate is not a PASS. Record each GO or NO-GO and its owner; stop the affected flow when evidence is missing.",
     ],
     visual: [
@@ -272,7 +272,7 @@ const guides: ResourceGuide[] = [
       "Open Families & Communication, choose Families, and use Add Family, Parent + Child for a new enrollment.",
       "Confirm School / center. Enter the family, guardian, and child; leave Prior balance owed at cutover blank or 0 unless a verified pre-BEE Suite debt exists.",
       "Save, reopen the family, and confirm the sticky school/family context, guardian relationship, personal email, phone, linked children, active or pending enrollment, classroom, and safety notes.",
-      "Scroll to Parent Portal Access, select the exact guardian, and choose Send Parent App Invite. A safely entered current family does not require a ProCare import batch.",
+      "Scroll to Parent Portal Access, select the exact guardian, and choose Send Parent App Invite. A safely entered current family does not require a prior import batch.",
       "Read the invitation result: Accepted means the email service received it for delivery; Delivered confirms it reached the recipient; Failed or Expired needs follow-up.",
       "If Copy Invitation for Manual Email appears, send that copy only from the approved school email account to the guardian email shown.",
       "Use Resend Parent App Invite for an existing linked parent. The current password is preserved; the parent can choose Forgot password.",

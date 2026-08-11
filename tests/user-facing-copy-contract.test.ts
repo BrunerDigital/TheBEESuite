@@ -32,6 +32,23 @@ const productionCopySurfaces = [
   "src/lib/integration-setup.ts",
 ].map(source).join("\n");
 
+const importSetupStaticCopySurfaces = [
+  "src/app/[slug]/page.tsx",
+  "src/app/resources/page.tsx",
+  "src/components/data-readiness-center.tsx",
+  "src/components/live-ops-pages.tsx",
+  "src/components/procare-import-panel.tsx",
+  "src/lib/data-readiness.ts",
+  "src/lib/demo-data.ts",
+  "src/lib/onboarding-setup.ts",
+  "src/lib/parent-invitation-readiness.ts",
+  "src/lib/procare-duplicate-matching.ts",
+  "src/lib/procare-import-fields.ts",
+  "src/lib/setup-checklists.ts",
+  "scripts/render-current-instruction-graphics.mjs",
+  "public/brand/the-bee-suite/explainers/current/school-launch-gates.svg",
+].map(source).join("\n");
+
 test("production copy avoids pilot and internal approval jargon", () => {
   assert.doesNotMatch(
     productionCopySurfaces,
@@ -46,6 +63,54 @@ test("production copy avoids pilot and internal approval jargon", () => {
     /No tenant campaigns|Internal thread · tenant scoped|using this tenant account data|tenant-specific encrypted credentials|Tenant Credentials|Enter tenant credential|Human review required/i,
   );
   assert.match(productionCopySurfaces, /value: "human_required", label: "Staff review required"/);
+});
+
+test("authored import and setup UI copy omits the legacy vendor name", () => {
+  assert.doesNotMatch(importSetupStaticCopySurfaces, /\b(?:ProCare|Procare)\b/);
+  assert.match(importSetupStaticCopySurfaces, /previous-system cutover/);
+  assert.match(importSetupStaticCopySurfaces, /source-file archival/);
+  assert.match(importSetupStaticCopySurfaces, /Enrollment, ParentInfo, Relationships, and ChildInfo/);
+  const dataReadinessCenter = source("src/components/data-readiness-center.tsx");
+  const instructionGraphics = source("scripts/render-current-instruction-graphics.mjs");
+  assert.match(dataReadinessCenter, /"Previous-system cutover", "Source-file archival"/);
+  assert.doesNotMatch(dataReadinessCenter, /Legacy-system archival/);
+  assert.match(instructionGraphics, /previous-system cutover, source-file archival, and wider rollout are separate decisions/);
+  assert.match(instructionGraphics, /Archive source files separately/);
+  const importPanel = source("src/components/procare-import-panel.tsx");
+  assert.match(importPanel, /supports only the previous-system export format built from Enrollment, ParentInfo, Relationships, and ChildInfo reports/);
+  assert.match(importPanel, /Do not upload an export from another provider/);
+});
+
+test("stored values, lookup keys, and import provenance remain exact", () => {
+  const route = source("src/app/api/imports/procare/route.ts");
+  const familyEditor = source("src/components/family-record-editor.tsx");
+  const billingWorkbench = source("src/components/billing-workbench.tsx");
+  const liveOps = source("src/components/live-ops-pages.tsx");
+  const dataReadinessCenter = source("src/components/data-readiness-center.tsx");
+  const dataReadinessContext = source("src/lib/data-readiness-context.ts");
+  const multiReport = source("src/lib/procare-multi-report-import.ts");
+  const renderedReport = source("src/lib/procare-rendered-report-import.ts");
+  const dynamicSurfaces = [familyEditor, billingWorkbench, liveOps, dataReadinessCenter].join("\n");
+
+  assert.doesNotMatch(dynamicSurfaces, /removeLegacySourceBrandFromUserView|formatLegacySourceLabel/);
+  assert.match(familyEditor, /useState\(selectedFamily\?\.name \?\? ""\)/);
+  assert.match(familyEditor, /useState\(selectedFamily\?\.notes \?\? ""\)/);
+  assert.match(billingWorkbench, /Textarea value=\{invoiceEditDescription\}/);
+  assert.match(liveOps, /crmLeadSearchHref\(lead\.familyName\)/);
+  assert.match(dataReadinessContext, /tab: "overview" \| "queue" \| "procare"/);
+  assert.match(dataReadinessCenter, /TabsTrigger value="procare"[^\n]+Data onboarding/);
+
+  assert.match(route, /sourceSystem:\s*"procare"/);
+  assert.match(route, /filename: "pasted-procare-import\.csv"/);
+  assert.match(route, /notes: "Imported from ProCare export\."/);
+  assert.match(route, /center: autoMap \? "Auto-mapped from source data" : defaultCenter/);
+  assert.match(route, /center: autoMap \? "Auto-mapped from ProCare export" : center/);
+  assert.match(route, /note: rows\.length < 2 \? "No data rows were found\." : "No supported ProCare import columns were recognized\."/);
+  assert.match(multiReport, /retainedAs: "procare relationship source records and procare relationship records\[\]\.sourceFields"/);
+  assert.match(renderedReport, /`ProCare \$\{accountId\}`/);
+  const importPanel = source("src/components/procare-import-panel.tsx");
+  assert.match(importPanel, /\/api\/imports\/procare/);
+  assert.match(importPanel, /rows from \$\{summary\?\.sourceType \?\? "the reviewed source package"\}/);
 });
 
 test("limited-rollout values and accurate AI labels remain intact", () => {

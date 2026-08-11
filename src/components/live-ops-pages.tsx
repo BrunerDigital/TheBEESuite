@@ -1326,7 +1326,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
         <StatCard label="Deliveries" value={data.stats.integrationDeliveries.toLocaleString()} />
         <StatCard label="Failed delivery" value={data.stats.failedDeliveries.toLocaleString()} />
         <StatCard label="Integration errors" value={data.stats.webhookErrors.toLocaleString()} />
-        <StatCard label="ProCare imports" value={data.stats.procareImports.toLocaleString()} />
+        <StatCard label="Data imports" value={data.stats.procareImports.toLocaleString()} />
       </div>
 
       {data.canManageOperations ? (
@@ -1464,7 +1464,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>ProCare Imports</CardTitle>
+            <CardTitle>Data Imports</CardTitle>
             <CardDescription>Newest import batches and row counts</CardDescription>
           </CardHeader>
           <CardContent>
@@ -1491,7 +1491,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
                 ))}
                 {!data.imports.length ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-muted-foreground">No ProCare imports are available for this account.</TableCell>
+                    <TableCell colSpan={4} className="text-muted-foreground">No data imports are available for this account.</TableCell>
                   </TableRow>
                 ) : null}
               </TableBody>
@@ -5135,7 +5135,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Billing and Invoices</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Family billing accounts, tuition invoices, balances, ProCare/imported ledger activity, and secure checkout readiness for parent tuition payments.
+          Family billing accounts, tuition invoices, balances, imported ledger activity, and secure checkout readiness for parent tuition payments.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">

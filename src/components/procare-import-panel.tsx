@@ -279,7 +279,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       || !Array.isArray(preview.warningRowNumbers)
       || !Array.isArray(preview.duplicateReviewRowNumbers)
     )) {
-      setError("Submit this exact ProCare export for review before committing it.");
+      setError("Submit this exact source export for review before committing it.");
       return;
     }
     submitLockedRef.current = true;
@@ -287,7 +287,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     setError("");
     setProgressPhase("uploading");
     setProgressPercent(5);
-    setProgressMessage(dryRun ? "Uploading ProCare data for analysis..." : "Uploading ProCare data...");
+    setProgressMessage(dryRun ? "Uploading source data for analysis..." : "Uploading source data...");
     startTransition(async () => {
       try {
         const formData = new FormData();
@@ -342,7 +342,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           setProgressPercent(0);
           setError(response.status === 504
             ? "The import request timed out before completing. Keep this page open and retry with the same selected files; they are still selected."
-            : json?.error || `ProCare import could not be processed${response.status ? ` (error ${response.status})` : ""}.`);
+            : json?.error || `Data import could not be processed${response.status ? ` (error ${response.status})` : ""}.`);
           if (dryRun && json?.summary) {
             setPreview(json.summary);
             setPreviewDialogOpen(true);
@@ -387,7 +387,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         setProgressPercent(100);
         setProgressMessage("Upload and import complete.");
         setStatus(
-          `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "ProCare"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.createdStaffLogins ?? 0} staff logins, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.${unresolved ? ` ${unresolved} row(s) were safely retained below for mapping or disposal.` : ""}`,
+          `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "the reviewed source package"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.createdStaffLogins ?? 0} staff logins, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.${unresolved ? ` ${unresolved} row(s) were safely retained below for mapping or disposal.` : ""}`,
         );
         router.refresh();
       } catch {
@@ -395,7 +395,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         setProgressPercent(0);
         setError(dryRun
           ? "Import review could not be prepared. Check the file and try again; the selected files remain attached."
-          : "ProCare import could not be committed. Keep this page open and retry with the same selected files; they remain attached.");
+          : "Data import could not be committed. Keep this page open and retry with the same selected files; they remain attached.");
       } finally {
         submitLockedRef.current = false;
       }
@@ -413,7 +413,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       });
       const json = await response.json().catch(() => null) as { error?: string; disposed?: number } | null;
       if (!response.ok) {
-        setError(json?.error || "The unresolved ProCare data could not be disposed.");
+        setError(json?.error || "The unresolved source data could not be disposed.");
         return;
       }
       if (!disposeAll) setDisposedRowNumbers((current) => [...new Set([...current, ...rowNumbers])]);
@@ -423,7 +423,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         warningRows: Math.max(current.warningRows - (json?.disposed ?? rowNumbers.length), 0),
         rowResults: disposeAll ? [] : current.rowResults?.filter((row) => !rowNumbers.includes(row.rowNumber)),
       } : current);
-      setStatus(`${json?.disposed ?? rowNumbers.length} unresolved ProCare row(s) were disposed with an audit record.`);
+      setStatus(`${json?.disposed ?? rowNumbers.length} unresolved source row(s) were disposed with an audit record.`);
     });
   }
 
@@ -474,9 +474,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       : hasMixedSources
       ? "Choose either uploaded files or pasted CSV text before submitting."
       : !hasCompletedPreview
-      ? "Submit this exact ProCare export for review before committing it."
+      ? "Submit this exact source export for review before committing it."
       : !sourceInventoryReady
-      ? "Confirm the detected ProCare source inventory before importing."
+      ? "Confirm the detected source inventory before importing."
       : missingCorrelationSections.length
       ? `Confirm each correlation step in order before importing: ${missingCorrelationSections.map((section) => section.title).join(", ")}.`
       : "";
@@ -532,7 +532,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       title: "Source package",
       detail: setupSourceCount
         ? `${setupSourceCount.toLocaleString()} recognized source file(s), ${setupRows.toLocaleString()} row(s) tracked in the import review.`
-        : `${setupRows.toLocaleString()} ProCare row(s) tracked in the import review.`,
+        : `${setupRows.toLocaleString()} source row(s) tracked in the import review.`,
       status: setupRows ? "ready" : "needs_review",
     },
     {
@@ -576,7 +576,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     },
     {
       title: "Activation gates",
-      detail: "Parent invitations, kiosk/PIN credentials, billing/payment activation, and ProCare retirement stay held off until separately approved. When invitations are approved, each send reruns a fail-closed import and relationship preflight before any account or email change.",
+      detail: "Parent invitations, kiosk/PIN credentials, billing/payment activation, previous-system cutover, and source-file archival each stay held off until separately approved. When invitations are approved, each send reruns a fail-closed import and relationship preflight before any account or email change.",
       status: "held",
     },
   ] : [];
@@ -584,12 +584,19 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   return (
     <Card className="glass-panel">
       <CardHeader>
-        <CardTitle>Import ProCare Family Accounts</CardTitle>
+        <CardTitle>Import Family Accounts</CardTitle>
         <CardDescription>
-          The four standard reports populate families, guardians, children, classrooms, enrollment details, allergies, emergency contacts, and pickups. Add staff, schedule, attendance, sign-in/out, health, and account-balance exports to the same upload or ZIP; supported rows are linked by ProCare IDs, while reports without a safe destination mapping are identified for migration follow-up.
+          This importer supports only the previous-system export format built from Enrollment, ParentInfo, Relationships, and ChildInfo reports. Those reports populate families, guardians, children, classrooms, enrollment details, allergies, emergency contacts, and pickups. Add staff, schedule, attendance, sign-in/out, health, and account-balance reports from that same supported format to the upload or ZIP; supported rows are linked by source IDs, while reports without a safe destination mapping are identified for migration follow-up.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <Alert>
+          <AlertCircle className="size-4" />
+          <AlertTitle>Supported previous-system export format only</AlertTitle>
+          <AlertDescription>
+            Use only the configured legacy reports named above. Do not upload an export from another provider; it requires a separately reviewed importer so its source identity and matching rules remain exact.
+          </AlertDescription>
+        </Alert>
         <div className="space-y-3 rounded-xl border bg-muted/20 p-4" aria-live="polite">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -598,7 +605,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             </div>
             <Badge variant="outline">{completedWorkflowSteps} of {workflowStages.length} steps</Badge>
           </div>
-          <Progress value={workflowPercent} aria-label="Overall ProCare onboarding import progress">
+          <Progress value={workflowPercent} aria-label="Overall data onboarding import progress">
             <ProgressLabel>Overall readiness</ProgressLabel>
             <ProgressValue>{() => `${workflowPercent}%`}</ProgressValue>
           </Progress>
@@ -611,7 +618,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
           <DialogContent className="max-h-[92vh] overflow-hidden p-0 sm:max-w-[min(96vw,76rem)]">
             <DialogHeader className="px-5 pt-5">
-              <DialogTitle>ProCare Import Review</DialogTitle>
+              <DialogTitle>Data Import Review</DialogTitle>
               <DialogDescription>
                 Review the mapped rows before committing. Directors can close this review and commit from the import panel when there are no blocking cleanup warnings.
               </DialogDescription>
@@ -707,7 +714,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             <AlertTitle>{progressPhase === "uploading" ? "Uploading" : progressPhase === "processing" ? "Processing import" : "Complete"}</AlertTitle>
             <AlertDescription className="space-y-3">
               <p>{progressMessage}</p>
-              <Progress value={progressPercent} aria-label="ProCare import progress">
+              <Progress value={progressPercent} aria-label="Data import progress">
                 <ProgressLabel>{progressPhase === "uploading" ? "File upload" : progressPhase === "processing" ? "Matching and saving" : "Finished"}</ProgressLabel>
                 <ProgressValue>{(_formattedValue, value) => `${value ?? 0}%`}</ProgressValue>
               </Progress>
@@ -776,7 +783,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               <AlertCircle className="size-4" />
               <AlertTitle>Import does not activate the school by itself</AlertTitle>
               <AlertDescription>
-                Parent invitations, kiosk/PIN credentials, billing/payment activation, and ProCare retirement stay held off until the director completes setup review and receives separate approval for each gate.
+                Parent invitations, kiosk/PIN credentials, billing/payment activation, previous-system cutover, and source-file archival each stay held off until the director completes setup review and receives separate approval for each gate.
               </AlertDescription>
             </Alert>
             <div className="flex flex-wrap gap-2">
@@ -813,7 +820,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             <AlertCircle className="size-4" />
             <AlertTitle>No assigned school found</AlertTitle>
             <AlertDescription>
-              This account needs an active school assignment before ProCare rows can be imported.
+              This account needs an active school assignment before source rows can be imported.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -827,7 +834,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               <SelectTrigger><SelectValue placeholder="Choose center" /></SelectTrigger>
               <SelectContent>
                 {allowBulkImport ? (
-                  <SelectItem value="auto">Auto-map by ProCare school/location column</SelectItem>
+                  <SelectItem value="auto">Auto-map by school/location column</SelectItem>
                 ) : null}
                 {centers.map((center) => (
                   <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>
@@ -841,7 +848,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             ) : null}
           </div>
           <div className="space-y-1">
-            <Label>ProCare export folder or files</Label>
+            <Label>Supported previous-system export folder or files</Label>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={() => folderRef.current?.click()}>
                 <Upload data-icon="inline-start" />
@@ -868,7 +875,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 event.target.value = "";
               }}
               className="sr-only"
-              aria-label="Choose a folder containing ProCare export files"
+              aria-label="Choose a folder containing source export files"
             />
             <input
               ref={fileRef}
@@ -880,7 +887,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 event.target.value = "";
               }}
               className="sr-only"
-              aria-label="Choose individual ProCare export files"
+              aria-label="Choose individual source export files"
             />
             {selectedFiles.length ? (
               <div className="space-y-2 rounded-lg border bg-background p-3">
@@ -908,7 +915,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               </div>
             ) : null}
             <p className="text-xs leading-5 text-muted-foreground">
-              Choose one folder containing any number or combination of the recommended ProCare exports, choose individual files, or choose a ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Each reviewed batch may contain up to 500 files and 100 MB.
+              Choose one folder containing any number or combination of the supported previous-system reports, choose individual files, or choose a ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Do not submit exports from another provider through this importer. Each reviewed batch may contain up to 500 files and 100 MB.
             </p>
             {hasMixedSources ? (
               <Alert variant="destructive">
@@ -974,7 +981,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         {preview?.correlationReview?.length ? (
           <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
             <div>
-              <div className="text-sm font-medium">Confirm ProCare correlations in order</div>
+              <div className="text-sm font-medium">Confirm source correlations in order</div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 Review every group from family identity through pickup relationships. You can change several field matches before submitting one updated review.
               </p>
@@ -1023,7 +1030,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                         );
                       })}
                       {!section.correlations.length ? (
-                        <div className="text-xs text-muted-foreground">The four standard ProCare reports supply this relationship automatically.</div>
+                        <div className="text-xs text-muted-foreground">The four supported previous-system reports (Enrollment, ParentInfo, Relationships, and ChildInfo) supply this relationship automatically.</div>
                       ) : null}
                     </div>
                     {section.required ? (
@@ -1054,7 +1061,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             <p className="text-xs text-muted-foreground">
               {unknownHeaders.length
                 ? `${unknownHeaders.length} column(s) are currently ignored because they do not match a known BEE Suite field.`
-                : "Every selected source column has a reviewed destination or is a recognized ProCare heading."}
+                : "Every selected source column has a reviewed destination or is a recognized source heading."}
             </p>
           </div>
         ) : null}
@@ -1157,7 +1164,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 <AlertCircle className="size-4" />
                 <AlertTitle>{ignoredSourceFiles.length} source file(s) were not imported</AlertTitle>
                 <AlertDescription className="space-y-1">
-                  <p>Remove or replace these files if they were meant to be part of the ProCare import.</p>
+                  <p>Remove or replace these files if they were meant to be part of the data import.</p>
                   {ignoredSourceFiles.slice(0, 12).map((source) => (
                     <div key={source.sourceName} className="break-all">{source.sourceName}: {source.note ?? "unrecognized"}</div>
                   ))}
@@ -1175,7 +1182,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 className="mt-0.5 size-4"
               />
               <span>
-                I confirm the imported, mapping-follow-up, and ignored ProCare sources above are correct for this import.
+                I confirm the imported, mapping-follow-up, and ignored sources above are correct for this import.
               </span>
             </label>
           </div>
@@ -1234,7 +1241,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           ) : null}
           <Button disabled={busy || importCommitted || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
             <Upload data-icon="inline-start" />
-            {importCommitted ? "Import Complete" : importWorking ? "Importing..." : "Import ProCare Data"}
+            {importCommitted ? "Import Complete" : importWorking ? "Importing..." : "Import Data"}
           </Button>
           <Button disabled={busy || !centerId} onClick={() => downloadBackup("latest")} variant="outline">
             <Download data-icon="inline-start" />
@@ -1247,9 +1254,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         {preview?.warningRows ? (
           <p className="text-xs text-muted-foreground">
             {blockingWarningRows
-              ? "Resolve or remove non-duplicate warning rows before committing. This prevents partially mapped ProCare data from being written to live school records."
+              ? "Resolve or remove non-duplicate warning rows before committing. This prevents partially mapped source data from being written to live school records."
               : duplicateReviewRows && !duplicateReviewConfirmed
-                ? "Review and confirm the duplicate match candidates before committing this ProCare import."
+                ? "Review and confirm the duplicate match candidates before committing this data import."
                 : "Duplicate-review rows are confirmed. The API will still block the import if the uploaded file changes and new cleanup warnings appear."}
           </p>
         ) : null}

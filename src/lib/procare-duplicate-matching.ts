@@ -98,7 +98,7 @@ export function scoreProcareDuplicateCandidate(
   const candidateExternalId = normalizeProcareDuplicateText(candidate.externalId);
   if (inputExternalId && candidateExternalId && inputExternalId === candidateExternalId) {
     score += 90;
-    reasons.push("same ProCare ID");
+    reasons.push("same source ID");
   }
 
   const inputEmail = normalizeProcareDuplicateEmail(input.email);

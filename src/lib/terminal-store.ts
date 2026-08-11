@@ -8,6 +8,7 @@ import {
   invalidPaymentRedirectUrl,
   isSecurePaymentUrl,
 } from "@/lib/payment-redirect-security";
+import { terminalStoreEnabled } from "@/lib/feature-availability";
 
 export type TerminalStoreCategory = "reader" | "accessory";
 
@@ -142,7 +143,7 @@ export const terminalStoreCatalog = [
 const catalogById = new Map(terminalStoreCatalog.map((catalogItem) => [catalogItem.id, catalogItem]));
 
 export function canAccessTerminalStore(user: { role: UserRole }) {
-  return terminalStoreRoles.has(user.role);
+  return terminalStoreEnabled() && terminalStoreRoles.has(user.role);
 }
 
 export function terminalStoreItemById(itemId: string) {

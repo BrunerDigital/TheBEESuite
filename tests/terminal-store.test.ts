@@ -1,18 +1,24 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import { canAccessModule } from "../src/lib/rbac";
 import {
+  canAccessTerminalStore,
   createTerminalStoreCheckoutSession,
   terminalStoreCatalog,
   terminalStoreOrderTotals,
   terminalStorePriceCents,
 } from "../src/lib/terminal-store";
+import { terminalStoreEnabled, terminalStoreReturnState } from "../src/lib/feature-availability";
 
 const originalStripeSecret = process.env.STRIPE_SECRET_KEY;
+const originalTerminalStoreEnabled = process.env.NEXT_PUBLIC_TERMINAL_STORE_ENABLED;
 
 afterEach(() => {
   if (originalStripeSecret === undefined) delete process.env.STRIPE_SECRET_KEY;
   else process.env.STRIPE_SECRET_KEY = originalStripeSecret;
+  if (originalTerminalStoreEnabled === undefined) delete process.env.NEXT_PUBLIC_TERMINAL_STORE_ENABLED;
+  else process.env.NEXT_PUBLIC_TERMINAL_STORE_ENABLED = originalTerminalStoreEnabled;
 });
 
 test("terminal store prices are exactly 20 percent above Stripe list prices", () => {
@@ -39,15 +45,40 @@ test("terminal store totals preserve base price and Bee Suite markup", () => {
   assert.equal(totals.markupCents, 12_940);
 });
 
-test("terminal store is visible to directors and executives only", () => {
-  assert.equal(canAccessModule({ role: "PLATFORM_OWNER", accessScope: "platform" }, "terminal-store"), true);
-  assert.equal(canAccessModule({ role: "BRAND_ADMIN", accessScope: "tenant" }, "terminal-store"), true);
-  assert.equal(canAccessModule({ role: "REGIONAL_MANAGER", accessScope: "tenant" }, "terminal-store"), true);
-  assert.equal(canAccessModule({ role: "CENTER_DIRECTOR", accessScope: "center", centerIds: ["center_1"] }, "terminal-store"), true);
-  assert.equal(canAccessModule({ role: "ASSISTANT_DIRECTOR", accessScope: "center", centerIds: ["center_1"] }, "terminal-store"), true);
+test("terminal store stays hidden and inaccessible until explicitly re-enabled", () => {
+  delete process.env.NEXT_PUBLIC_TERMINAL_STORE_ENABLED;
+
+  assert.equal(terminalStoreEnabled(), false);
+  assert.equal(canAccessModule({ role: "PLATFORM_OWNER", accessScope: "platform" }, "terminal-store"), false);
+  assert.equal(canAccessModule({ role: "BRAND_ADMIN", accessScope: "tenant" }, "terminal-store"), false);
+  assert.equal(canAccessModule({ role: "REGIONAL_MANAGER", accessScope: "tenant" }, "terminal-store"), false);
+  assert.equal(canAccessModule({ role: "CENTER_DIRECTOR", accessScope: "center", centerIds: ["center_1"] }, "terminal-store"), false);
+  assert.equal(canAccessModule({ role: "ASSISTANT_DIRECTOR", accessScope: "center", centerIds: ["center_1"] }, "terminal-store"), false);
   assert.equal(canAccessModule({ role: "BILLING_ADMIN", accessScope: "center", centerIds: ["center_1"] }, "terminal-store"), false);
   assert.equal(canAccessModule({ role: "TEACHER", accessScope: "center", centerIds: ["center_1"] }, "terminal-store"), false);
   assert.equal(canAccessModule({ role: "READ_ONLY_AUDITOR", accessScope: "tenant" }, "terminal-store"), false);
+  assert.equal(canAccessTerminalStore({ role: "PLATFORM_OWNER" }), false);
+});
+
+test("terminal store can be explicitly re-enabled for its approved roles", () => {
+  process.env.NEXT_PUBLIC_TERMINAL_STORE_ENABLED = "true";
+
+  assert.equal(terminalStoreEnabled(), true);
+  assert.equal(canAccessModule({ role: "PLATFORM_OWNER", accessScope: "platform" }, "terminal-store"), true);
+  assert.equal(canAccessModule({ role: "CENTER_DIRECTOR", accessScope: "center", centerIds: ["center_1"] }, "terminal-store"), true);
+  assert.equal(canAccessModule({ role: "BILLING_ADMIN", accessScope: "center", centerIds: ["center_1"] }, "terminal-store"), false);
+});
+
+test("disabled terminal store preserves only existing checkout return states", () => {
+  assert.equal(terminalStoreReturnState("success"), "success");
+  assert.equal(terminalStoreReturnState(["cancelled"]), "cancelled");
+  assert.equal(terminalStoreReturnState("pending"), null);
+  assert.equal(terminalStoreReturnState(["", "success"]), null);
+  assert.equal(terminalStoreReturnState(undefined), null);
+
+  const pageSource = readFileSync(new URL("../src/app/[slug]/page.tsx", import.meta.url), "utf8");
+  assert.match(pageSource, /!terminalStoreAvailable && !terminalStoreReturn\) notFound\(\)/);
+  assert.match(pageSource, /<TerminalStoreReturnPage status=\{terminalStoreReturn\} \/>/);
 });
 
 test("terminal store checkout uses platform Stripe checkout without a connected account", async () => {

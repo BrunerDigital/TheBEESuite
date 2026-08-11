@@ -5911,6 +5911,35 @@ export function TerminalStorePage({ data }: { data: TerminalStorePageData }) {
   );
 }
 
+export function TerminalStoreReturnPage({ status }: { status: "success" | "cancelled" }) {
+  const returnedFromCheckout = status === "success";
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <CreditCard data-icon="inline-start" />
+          Terminal store checkout
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          {returnedFromCheckout ? "Checkout returned" : "Checkout closed"}
+        </h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          {returnedFromCheckout
+            ? "Stripe is confirming the checkout that was already opened. This page will not start another order."
+            : "The checkout window was closed. If a payment finished before it closed, Stripe confirmation will still be processed."}
+        </p>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
+          The Terminal Store is temporarily unavailable.
+        </p>
+        <Link className={buttonVariants({ className: "mt-5" })} href="/dashboard">
+          Return to dashboard
+          <ArrowRight data-icon="inline-end" />
+        </Link>
+      </section>
+    </div>
+  );
+}
+
 export function CorporateBillingPage({ data }: { data: CorporateBillingPageData }) {
   const invoice = data.kidCitySoftwareInvoice;
   return (

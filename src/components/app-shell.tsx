@@ -67,6 +67,7 @@ import { DataReadinessContextBadge, type CountSummary } from "@/components/data-
 import { DataReadinessContextPanel } from "@/components/data-readiness-context-panel";
 import { dataReadinessContextForPath } from "@/lib/data-readiness-context";
 import { dataReadinessCenterEnabled, honeyglassUiEnabled } from "@/lib/honeyglass";
+import { terminalStoreEnabled } from "@/lib/feature-availability";
 import {
   PARENT_PORTAL_HREFS,
   normalizeParentPortalView,
@@ -162,6 +163,7 @@ function parentPortalShellHref(
 
 function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) {
   if (slug === "data-readiness" && !dataReadinessCenterEnabled()) return false;
+  if (slug === "terminal-store" && !terminalStoreEnabled()) return false;
   if (
     slug === "corporate-billing"
     && !canUseKidCityCorporateBilling(currentUser?.role, currentUser?.branding?.kind)

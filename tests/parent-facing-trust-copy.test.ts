@@ -14,6 +14,7 @@ const privacy = readFileSync("src/app/privacy/page.tsx", "utf8");
 const communicationsKit = readFileSync("src/lib/communications-kit.ts", "utf8");
 const installManager = readFileSync("src/components/pwa-install-manager.tsx", "utf8");
 const appLauncher = readFileSync("src/app/app/page.tsx", "utf8");
+const parentWorkspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
 
 test("parent trust surfaces exclude prototype, shared-password, and internal-review language", () => {
   const surfaces = [login, forgotPassword, resetPassword, parentSetup, webPush, support, terms, privacy].join("\n");
@@ -24,6 +25,12 @@ test("parent trust surfaces exclude prototype, shared-password, and internal-rev
   );
   assert.doesNotMatch(terms, /tenant scoping|rate limits|AI and Automation|authorized humans/i);
   assert.doesNotMatch(privacy, /tenant access rules|communication providers|related school workflows/i);
+});
+
+test("parents see a limited-downtime message during a school payment account transition", () => {
+  assert.match(parentWorkspace, /Card and bank payments should remain available/);
+  assert.match(parentWorkspace, /retry in a few minutes/);
+  assert.match(parentWorkspace, /balance, payment history, and saved payment details remain protected/);
 });
 
 test("parent sign-in, recovery, and setup forms expose real labels and recovery states", () => {

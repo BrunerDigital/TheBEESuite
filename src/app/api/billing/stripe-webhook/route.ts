@@ -922,15 +922,19 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
   const paymentMethodDetails = paymentMethodLookup?.ok ? paymentMethodLookup.paymentMethod : null;
 
   try {
-    await prisma.$transaction(async (tx) => {
+    const outcome = await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       const billingAccount = await tx.billingAccount.findUnique({
         where: { id: billingAccountId },
         select: { autopayPlaceholder: true, customFields: true },
       });
-      if (!billingAccount) return;
+      if (!billingAccount) return "missing" as const;
 
       const currentFields = jsonObject(billingAccount.customFields);
+      const latestSetupSessionId = clean(currentFields.stripeSetupCheckoutSessionId);
+      if (latestSetupSessionId && latestSetupSessionId !== session.id) {
+        return "stale" as const;
+      }
       const customerId = setupIntent?.setupIntent?.customerId || clean(session.customer) || clean(currentFields.stripeCustomerId);
       const previousPaymentMethodId = clean(currentFields.stripeDefaultPaymentMethodId);
       const paymentMethodId = setupPaymentMethodId || previousPaymentMethodId;
@@ -972,7 +976,9 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
           },
         },
       });
+      return "applied" as const;
     });
+    if (outcome === "stale") return NextResponse.json({ ok: true, staleSetupSessionIgnored: true });
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) {
       return NextResponse.json({ ok: true, duplicate: true });

@@ -31,6 +31,7 @@ import {
   stripeConnectReadinessFromFields,
   stripeConnectReadinessFromSnapshot,
 } from "@/lib/stripe-connect-readiness";
+import { stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
 import { stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import {
   applyAccountCreditToInvoice,
@@ -490,7 +491,21 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
 
-    const connectedAccountId = readStripeConnectedAccountId(center.customFields);
+    const activeConnectedAccountId = readStripeConnectedAccountId(center.customFields);
+    const savedMethodConnectedAccountId = clean(billingAccountFields.stripeDefaultPaymentMethodConnectedAccountId);
+    const connectedAccountId = stripeConnectSavedMethodAccount({
+      activeAccountId: activeConnectedAccountId,
+      savedMethodAccountId: savedMethodConnectedAccountId,
+      centerCustomFields: center.customFields,
+    });
+    if (savedMethodConnectedAccountId && !connectedAccountId) {
+      results.push({
+        ...baseResult,
+        status: "skipped",
+        reason: "The saved payment method is not linked to this school's active or retained transition account.",
+      });
+      continue;
+    }
     let schoolPaysStripeFeesDirectly = jsonRecord(center.customFields).stripeFeesCollector === "stripe";
     if (!connectedAccountId && !allowPlatformOnlyPayments) {
       results.push({ ...baseResult, status: "skipped", reason: "School payout account is not connected." });
@@ -498,33 +513,44 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     }
 
     if (connectedAccountId && requireActiveConnectedAccount) {
-      let accountReadiness = connectedAccountCache.get(center.id);
+      let accountReadiness = connectedAccountCache.get(connectedAccountId);
       if (!accountReadiness) {
         if (dryRun) {
-          const readiness = stripeConnectReadinessFromFields(center.customFields);
-          accountReadiness = {
-            ok: readiness.canAcceptParentPayments,
-            accountId: readiness.accountId,
-            reason: readiness.blockingReason,
-            schoolPaysStripeFeesDirectly: jsonRecord(center.customFields).stripeFeesCollector === "stripe",
-          };
+          if (connectedAccountId === activeConnectedAccountId) {
+            const readiness = stripeConnectReadinessFromFields(center.customFields);
+            accountReadiness = {
+              ok: readiness.canAcceptParentPayments,
+              accountId: readiness.accountId,
+              reason: readiness.blockingReason,
+              schoolPaysStripeFeesDirectly: jsonRecord(center.customFields).stripeFeesCollector === "stripe",
+            };
+          } else {
+            accountReadiness = {
+              ok: true,
+              accountId: connectedAccountId,
+              reason: null,
+              schoolPaysStripeFeesDirectly: false,
+            };
+          }
         } else {
           const retrieved = await retrieveStripeConnectedAccount(connectedAccountId, { tenantId });
           if (retrieved.ok && retrieved.account) {
             const readiness = stripeConnectReadinessFromSnapshot(retrieved.account);
-            await prisma.center.update({
-              where: { id: center.id },
-              data: {
-                customFields: jsonInput({
-                  ...jsonRecord(center.customFields),
-                  ...stripeConnectCustomFieldPatch(readiness),
-                  stripeMerchantCapabilityStatus: retrieved.account.merchantCapabilityStatus || null,
-                  stripeRecipientTransferStatus: retrieved.account.recipientTransferStatus || null,
-                  stripeFeesCollector: retrieved.account.feesCollector || null,
-                  stripeLossesCollector: retrieved.account.lossesCollector || null,
-                }),
-              },
-            });
+            if (connectedAccountId === activeConnectedAccountId) {
+              await prisma.center.update({
+                where: { id: center.id },
+                data: {
+                  customFields: jsonInput({
+                    ...jsonRecord(center.customFields),
+                    ...stripeConnectCustomFieldPatch(readiness),
+                    stripeMerchantCapabilityStatus: retrieved.account.merchantCapabilityStatus || null,
+                    stripeRecipientTransferStatus: retrieved.account.recipientTransferStatus || null,
+                    stripeFeesCollector: retrieved.account.feesCollector || null,
+                    stripeLossesCollector: retrieved.account.lossesCollector || null,
+                  }),
+                },
+              });
+            }
             accountReadiness = {
               ok: readiness.canAcceptParentPayments,
               accountId: readiness.accountId,
@@ -540,7 +566,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
             };
           }
         }
-        connectedAccountCache.set(center.id, accountReadiness);
+        connectedAccountCache.set(connectedAccountId, accountReadiness);
       }
       if (!accountReadiness.ok) {
         results.push({ ...baseResult, status: "skipped", reason: accountReadiness.reason || "School payout account is not ready." });

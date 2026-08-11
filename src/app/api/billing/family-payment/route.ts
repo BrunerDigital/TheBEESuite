@@ -43,6 +43,7 @@ import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
+import { stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { applySucceededStripeFamilyBalancePayment } from "@/lib/stripe-payment-application";
@@ -325,7 +326,22 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
   }
 
-  const connectedAccountId = readStripeConnectedAccountId(center.customFields);
+  const billingAccountFields = jsonRecord(billingAccount.customFields);
+  const activeConnectedAccountId = readStripeConnectedAccountId(center.customFields);
+  const savedPaymentMethodConnectedAccountId = clean(billingAccountFields.stripeDefaultPaymentMethodConnectedAccountId);
+  const connectedAccountId = method === "saved_method"
+    ? stripeConnectSavedMethodAccount({
+        activeAccountId: activeConnectedAccountId,
+        savedMethodAccountId: savedPaymentMethodConnectedAccountId,
+        centerCustomFields: center.customFields,
+      })
+    : activeConnectedAccountId;
+  if (method === "saved_method" && savedPaymentMethodConnectedAccountId && !connectedAccountId) {
+    return NextResponse.json(
+      { ok: false, error: "The saved payment method is not linked to this school's active or retained transition account." },
+      { status: 409 },
+    );
+  }
   let schoolPaysStripeFeesDirectly = jsonRecord(center.customFields).stripeFeesCollector === "stripe";
   const allowPlatformOnlyPayments = process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true";
   const billingApproval = stripeSchoolBillingApproval({ customFields: center.customFields, centerName: center.name });
@@ -368,19 +384,21 @@ async function POSTHandler(request: NextRequest) {
     }
     const readiness = stripeConnectReadinessFromSnapshot(accountStatus.account);
     schoolPaysStripeFeesDirectly = stripeConnectedAccountPaysFeesDirectly(accountStatus.account);
-    await prisma.center.update({
-      where: { id: center.id },
-      data: {
-        customFields: {
-          ...jsonRecord(center.customFields),
-          ...stripeConnectCustomFieldPatch(readiness),
-          stripeMerchantCapabilityStatus: accountStatus.account.merchantCapabilityStatus || null,
-          stripeRecipientTransferStatus: accountStatus.account.recipientTransferStatus || null,
-          stripeFeesCollector: accountStatus.account.feesCollector || null,
-          stripeLossesCollector: accountStatus.account.lossesCollector || null,
+    if (connectedAccountId === activeConnectedAccountId) {
+      await prisma.center.update({
+        where: { id: center.id },
+        data: {
+          customFields: {
+            ...jsonRecord(center.customFields),
+            ...stripeConnectCustomFieldPatch(readiness),
+            stripeMerchantCapabilityStatus: accountStatus.account.merchantCapabilityStatus || null,
+            stripeRecipientTransferStatus: accountStatus.account.recipientTransferStatus || null,
+            stripeFeesCollector: accountStatus.account.feesCollector || null,
+            stripeLossesCollector: accountStatus.account.lossesCollector || null,
+          },
         },
-      },
-    });
+      });
+    }
     if (!readiness.canAcceptParentPayments) {
       return NextResponse.json(
         {
@@ -404,7 +422,6 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
-  const billingAccountFields = jsonRecord(billingAccount.customFields);
   let stripeCustomerId = stripeCustomerIdForAccount(billingAccountFields, connectedAccountId);
   if (!stripeCustomerId) {
     if (method === "saved_method") {
@@ -465,13 +482,6 @@ async function POSTHandler(request: NextRequest) {
       ...stripeCustomerCustomFieldPatch(billingAccountFields, stripeCustomerId, connectedAccountId),
     },
   });
-  const savedPaymentMethodConnectedAccountId = clean(billingAccountFields.stripeDefaultPaymentMethodConnectedAccountId);
-  if (method === "saved_method" && connectedAccountId && savedPaymentMethodConnectedAccountId && savedPaymentMethodConnectedAccountId !== connectedAccountId) {
-    return NextResponse.json(
-      { ok: false, error: "The saved payment method belongs to a different school payout account. Replace the family payment method before charging it." },
-      { status: 400 },
-    );
-  }
   const requestedPaymentMethodCategory = method === "saved_method"
     ? paymentMethodAutopayCategory(savedPaymentMethod)
     : checkoutCategory(method);

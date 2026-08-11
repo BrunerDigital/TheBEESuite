@@ -156,12 +156,6 @@ async function main() {
     const billingFields = record(billingAccount.customFields);
     return billingAccount.autopayPlaceholder || billingFields.autopayEnabled === true;
   });
-  if (sourceScopedSavedMethods.length > 0) {
-    throw new Error(
-      `Cutover stopped: ${sourceScopedSavedMethods.length} saved payment method(s), including ${sourceScopedAutopay.length} autopay enrollment(s), still belong to the source account. Re-establish them on the target account before cutover; the source methods remain unchanged.`,
-    );
-  }
-
   const plan = {
     centerId: center.id,
     sourceAccountId,
@@ -177,7 +171,7 @@ async function main() {
   };
   const fingerprint = createHash("sha256").update(JSON.stringify(plan)).digest("hex");
   if (!apply) {
-    console.log(JSON.stringify({ mode: "preview", fingerprint, school: center.name, ready: true, parentPaymentsAccountBefore: sourceAccountId, parentPaymentsAccountAfter: targetAccountId, sourceBankUnchanged: true, sourcePayoutsHeld: true, targetPayoutsHeld: true, savedPaymentMethodsPreserved: true, softwareFeeRequired: false }, null, 2));
+    console.log(JSON.stringify({ mode: "preview", fingerprint, school: center.name, ready: true, parentPaymentsAccountBefore: sourceAccountId, parentPaymentsAccountAfter: targetAccountId, sourceBankUnchanged: true, sourcePayoutsHeld: true, targetPayoutsHeld: true, savedPaymentMethodsPreserved: true, sourceSavedMethodsRemaining: sourceScopedSavedMethods.length, sourceAutopayRemaining: sourceScopedAutopay.length, softwareFeeRequired: false }, null, 2));
     return;
   }
   if (confirmedFingerprint !== fingerprint) throw new Error("The confirmation fingerprint does not match the current live cutover plan.");
@@ -209,6 +203,8 @@ async function main() {
         stripeConnectMigrationParentPaymentsAccountId: targetAccountId,
         stripeConnectMigrationParentPaymentsRemainActive: true,
         stripeConnectMigrationSourceAccountRetainedForReconciliation: true,
+        stripeConnectMigrationSourceSavedMethodsRemaining: sourceScopedSavedMethods.length,
+        stripeConnectMigrationSourceAutopayRemaining: sourceScopedAutopay.length,
         stripeConnectMigrationSourcePayoutHoldStatus: "manual_confirmed",
         stripeConnectMigrationTargetPayoutHoldStatus: "manual_confirmed",
         stripeConnectMigrationPayoutReleaseStatus: "blocked_until_parent_payment_and_reconciliation_verified",

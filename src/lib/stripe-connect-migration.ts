@@ -117,6 +117,27 @@ export function stripeConnectMigrationTargetIsReady(input: {
     Boolean(clean(input.payoutBankLast4));
 }
 
+export function stripeConnectSavedMethodAccount(input: {
+  activeAccountId?: string | null;
+  savedMethodAccountId?: string | null;
+  centerCustomFields: unknown;
+}) {
+  const activeAccountId = accountId(input.activeAccountId);
+  const savedMethodAccountId = accountId(input.savedMethodAccountId);
+  if (!savedMethodAccountId || savedMethodAccountId === activeAccountId) return activeAccountId;
+
+  const fields = record(input.centerCustomFields);
+  const migration = readStripeConnectMigration(fields);
+  const sourceIsRetained = fields.stripeConnectMigrationSourceAccountRetainedForReconciliation === true;
+  const isControlledSourceTransition =
+    Boolean(migration.cutoverAt) &&
+    sourceIsRetained &&
+    activeAccountId === migration.targetAccountId &&
+    savedMethodAccountId === migration.sourceAccountId;
+
+  return isControlledSourceTransition ? savedMethodAccountId : null;
+}
+
 export function maskStripeAccountId(value: string | null) {
   if (!value) return "Not prepared";
   return `${value.slice(0, 8)}...${value.slice(-4)}`;

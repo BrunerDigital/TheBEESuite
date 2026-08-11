@@ -11,7 +11,11 @@ import {
   stripeVerificationState,
 } from "../src/lib/corporate-stripe-verification";
 import { readStripeConnectAccountId } from "../src/lib/stripe-connect-readiness";
-import { readStripeConnectMigration, stripeConnectMigrationTargetIsReady } from "../src/lib/stripe-connect-migration";
+import {
+  readStripeConnectMigration,
+  stripeConnectMigrationTargetIsReady,
+  stripeConnectSavedMethodAccount,
+} from "../src/lib/stripe-connect-migration";
 import { buildStripeReauthorizationInvite } from "../src/lib/stripe-reauthorization-invite";
 
 test("prepared migration never changes the active parent-payment account", () => {
@@ -30,6 +34,41 @@ test("prepared migration never changes the active parent-payment account", () =>
   assert.equal(migration.status, "prepared");
   assert.equal(migration.sourcePayoutsHeld, true);
   assert.equal(migration.targetPayoutsHeld, true);
+});
+
+test("saved methods remain chargeable only on the retained source after a verified cutover", () => {
+  const cutover = {
+    stripeConnectMigrationSourceAccountId: "acct_source",
+    stripeConnectMigrationTargetAccountId: "acct_target",
+    stripeConnectMigrationCutoverAt: "2026-08-11T16:00:00.000Z",
+    stripeConnectMigrationSourceAccountRetainedForReconciliation: true,
+  };
+  assert.equal(stripeConnectSavedMethodAccount({
+    activeAccountId: "acct_target",
+    savedMethodAccountId: "acct_source",
+    centerCustomFields: cutover,
+  }), "acct_source");
+  assert.equal(stripeConnectSavedMethodAccount({
+    activeAccountId: "acct_target",
+    savedMethodAccountId: "acct_target",
+    centerCustomFields: cutover,
+  }), "acct_target");
+  assert.equal(stripeConnectSavedMethodAccount({
+    activeAccountId: "acct_target",
+    savedMethodAccountId: "acct_other",
+    centerCustomFields: cutover,
+  }), null);
+  assert.equal(stripeConnectSavedMethodAccount({
+    activeAccountId: "acct_target",
+    savedMethodAccountId: "acct_source",
+    centerCustomFields: { ...cutover, stripeConnectMigrationSourceAccountRetainedForReconciliation: false },
+  }), null);
+});
+
+test("payment setup completion cannot let an older source session replace a newer method", () => {
+  const webhook = readFileSync("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(webhook, /latestSetupSessionId && latestSetupSessionId !== session\.id/);
+  assert.match(webhook, /staleSetupSessionIgnored: true/);
 });
 
 test("corporate Stripe verification is pinned to the eight approved school accounts", () => {
@@ -298,14 +337,14 @@ test("approved corporate verification links are current-due only and cannot invo
   assert.doesNotMatch(refreshRoute, /stripeConnectAccountId\s*:/);
 });
 
-test("cutover is one-school-at-a-time and remains blocked behind bank, payout, readiness, and saved-method continuity checks", () => {
+test("cutover is one-school-at-a-time and records the retained saved-method transition", () => {
   const cutover = readFileSync("scripts/cutover-stripe-connect-migration.ts", "utf8");
   assert.match(cutover, /--center-id is required/);
   assert.match(cutover, /--acknowledge-parent-payment-cutover/);
   assert.match(cutover, /currentSourceBankFingerprint !== storedSourceBankFingerprint/);
   assert.match(cutover, /sourcePayoutInterval !== "manual" \|\| targetPayoutInterval !== "manual"/);
-  assert.match(cutover, /sourceScopedSavedMethods\.length > 0/);
-  assert.match(cutover, /saved payment method\(s\).*still belong to the source account/);
+  assert.match(cutover, /stripeConnectMigrationSourceSavedMethodsRemaining: sourceScopedSavedMethods\.length/);
+  assert.match(cutover, /stripeConnectMigrationSourceAutopayRemaining: sourceScopedAutopay\.length/);
   assert.match(cutover, /stripeConnectMigrationPayoutReleaseStatus: "blocked_until_parent_payment_and_reconciliation_verified"/);
   assert.doesNotMatch(cutover, /createStripeBalanceSoftwareSubscription|getKidCitySoftwareFeeUnitAmountCents/);
   assert.match(cutover, /stripeConnectAccountId: targetAccountId/);

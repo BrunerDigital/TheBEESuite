@@ -39,6 +39,7 @@ import {
   TeamPermissionsPage,
   TeacherDocumentsPage,
   TerminalStorePage,
+  TerminalStoreReturnPage,
   ToursPage,
   WaitlistPage,
   WhiteLabelPage,
@@ -167,6 +168,7 @@ import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripeCheckoutReadiness, stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { terminalStoreCatalog } from "@/lib/terminal-store";
+import { terminalStoreEnabled, terminalStoreReturnState } from "@/lib/feature-availability";
 import { readSchoolEin } from "@/lib/school-tax-id";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
 import { canUseKidCityCorporateBilling, isMissHoneysBrandText } from "@/lib/brand-assets";
@@ -6134,16 +6136,31 @@ export async function renderAuthenticatedModulePage(
   slug: string,
   resolvedSearchParams: Record<string, string | string[] | undefined> = {},
 ) {
+  const isTerminalStoreRoute = slug === "terminal-store";
+  const terminalStoreAvailable = !isTerminalStoreRoute || terminalStoreEnabled();
+  const terminalStoreReturn = isTerminalStoreRoute && !terminalStoreAvailable
+    ? terminalStoreReturnState(resolvedSearchParams.purchase)
+    : null;
+  if (isTerminalStoreRoute && !terminalStoreAvailable && !terminalStoreReturn) notFound();
+
   if (slug === "forgot-password" || slug === "onboarding") {
     return <AuthLikePage type={slug} nextPath={safeAuthNextPath(resolvedSearchParams.next)} />;
   }
 
+  const authenticationNextPath = terminalStoreReturn
+    ? `/terminal-store?purchase=${encodeURIComponent(terminalStoreReturn)}`
+    : `/${slug}`;
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) {
-    redirect(loginHrefForNextPath(`/${slug}`));
+    redirect(loginHrefForNextPath(authenticationNextPath));
   }
   if (requiresPasswordResetGate(user)) {
-    redirect(`/reset-password?force=1&next=/${encodeURIComponent(slug)}`);
+    redirect(`/reset-password?force=1&next=${encodeURIComponent(authenticationNextPath)}`);
+  }
+  if (terminalStoreReturn) {
+    return <AppShell currentUser={user}>
+      <TerminalStoreReturnPage status={terminalStoreReturn} />
+    </AppShell>;
   }
 
   if (slug === "enrollment-pipeline") redirect("/crm-leads?view=pipeline");

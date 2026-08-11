@@ -3,7 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { ParentPortalSetupForm } from "@/components/parent-portal-setup-form";
 import { ParentPortalAccessBlocked } from "@/components/parent-portal-access-blocked";
 import { getCurrentUser, isParentGuardian, requiresPasswordResetGate } from "@/lib/auth";
-import { resolveParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +18,11 @@ export default async function ParentPortalSetupPage() {
   }
   if (!isParentGuardian(user)) {
     redirect("/dashboard");
+  }
+
+  const familyScope = await getParentPortalFamilyScope(user.id);
+  if (!familyScope.ok && familyScope.reason === "multiple_linked_families") {
+    return <AppShell currentUser={user}><ParentPortalAccessBlocked /></AppShell>;
   }
 
   const guardians = await prisma.guardian.findMany({
@@ -37,11 +42,10 @@ export default async function ParentPortalSetupPage() {
       },
     },
   });
-  const familyScope = resolveParentPortalFamilyScope(guardians);
-  if (!familyScope.ok && familyScope.reason === "multiple_linked_families") {
-    return <AppShell currentUser={user}><ParentPortalAccessBlocked /></AppShell>;
-  }
-  const centerIds = Array.from(new Set(guardians.map((guardian) => guardian.family.centerId).filter((value): value is string => Boolean(value))));
+  const scopedGuardians = familyScope.ok
+    ? guardians.filter((guardian) => guardian.familyId === familyScope.familyId)
+    : guardians;
+  const centerIds = Array.from(new Set(scopedGuardians.map((guardian) => guardian.family.centerId).filter((value): value is string => Boolean(value))));
   const centers = centerIds.length
     ? await prisma.center.findMany({
         where: { id: { in: centerIds } },
@@ -50,7 +54,7 @@ export default async function ParentPortalSetupPage() {
     : [];
   const centerNameById = new Map(centers.map((center) => [center.id, center.crmLocationId ?? center.name]));
 
-  const setupGuardians = guardians.map((guardian) => ({
+  const setupGuardians = scopedGuardians.map((guardian) => ({
     id: guardian.id,
     fullName: guardian.fullName,
     email: guardian.email,

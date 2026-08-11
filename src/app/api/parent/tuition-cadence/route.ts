@@ -46,6 +46,12 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "The school must first enable a positive weekly tuition assignment for this child." }, { status: 409 });
   }
   const previousCadence = normalizeBillingCadence(fields.tuitionBillingCadence ?? fields.tuitionPlanCadence);
+  if (previousCadence === "monthly") {
+    return NextResponse.json({
+      ok: false,
+      error: "Monthly tuition timing is managed by the school and cannot be changed to a weekly cycle from the parent portal.",
+    }, { status: 409 });
+  }
   const existingInvoices = previousCadence === cadence ? [] : await prisma.invoice.findMany({
     where: { billingAccount: { familyId: scope.familyId }, status: { not: "VOID" } },
     orderBy: { createdAt: "desc" },

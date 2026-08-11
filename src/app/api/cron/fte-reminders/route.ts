@@ -397,6 +397,12 @@ async function GETHandler(request: NextRequest) {
             statusCallbackUrl,
             result: sms,
             purpose: "fte_reminder_sms",
+            metadata: {
+              weekStart: weekLabel,
+              phase: dueState.phase,
+              escalationWindow: escalationWindow.key,
+              userId: recipient.id,
+            },
           });
           if (smsDedupeKey) existingExternalDeliveryKeys.add(smsDedupeKey);
         }

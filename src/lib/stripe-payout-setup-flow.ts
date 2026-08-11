@@ -8,6 +8,7 @@ export const PAYOUT_SETUP_SETTINGS_PATH = "/billing-settings#payout-setup";
 type PayoutSetupCenter = {
   id: string;
   customFields: unknown;
+  stripeReauthorizationAvailable?: boolean;
 };
 
 export function stripeReauthorizationHref(centerId: string) {
@@ -36,7 +37,7 @@ export function stripePayoutSetupFlowForCenters(
   const corporatePortfolio = options.userEmail?.trim().toLowerCase() === CORPORATE_STRIPE_PORTFOLIO_EMAIL;
   const href = corporatePortfolio && migrationCenters.length
     ? CORPORATE_STRIPE_PORTFOLIO_PATH
-    : migrationCenters.length === 1
+    : migrationCenters.length === 1 && migrationCenters[0].stripeReauthorizationAvailable !== false
       ? stripeReauthorizationHref(migrationCenters[0].id)
       : PAYOUT_SETUP_SETTINGS_PATH;
 

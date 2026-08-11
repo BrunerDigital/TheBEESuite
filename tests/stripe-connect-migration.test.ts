@@ -343,6 +343,13 @@ test("dashboard payout entry uses the same stable school-specific reauthorizatio
     { id: "center_2", customFields: { ...activeSource, stripeConnectMigrationTargetAccountId: "acct_target_2" } },
   ]);
   assert.equal(ordinaryMultiSchoolFlow.href, PAYOUT_SETUP_SETTINGS_PATH);
+
+  const operatorOnlyCenterFlow = stripePayoutSetupFlowForCenters([{
+    id: "center_1",
+    customFields: activeSource,
+    stripeReauthorizationAvailable: false,
+  }]);
+  assert.equal(operatorOnlyCenterFlow.href, PAYOUT_SETUP_SETTINGS_PATH);
 });
 
 test("dashboard and setup checklists route prepared schools through secure reauthorization", () => {
@@ -357,6 +364,10 @@ test("dashboard and setup checklists route prepared schools through secure reaut
   assert.match(schoolSetup, /directorChecklistTasks: directorLaunchChecklistTasksForPayoutSetup/);
   assert.match(payoutPanel, /id="payout-setup"/);
   assert.match(payoutPanel, /stripeReauthorizationHref\(center\.id\)/);
+  assert.match(payoutPanel, /center\.stripeReauthorizationAvailable !== false/);
+  assert.match(payoutPanel, /authorized corporate representative/);
+  assert.match(schoolSetup, /readCorporateStripeVerificationTarget/);
+  assert.match(schoolSetup, /canUseCorporateStripeVerification/);
 });
 
 test("approved corporate verification links are current-due only and cannot invoke the software-fee action", () => {

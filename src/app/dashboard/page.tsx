@@ -17,6 +17,7 @@ import { getDashboardWidgetPreferenceValue, normalizeDashboardWidgetPreferences 
 import type { DashboardWidgetId } from "@/lib/dashboard-widgets";
 import { activeClassroomWhere } from "@/lib/classroom-status";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
+import { canUseCorporateStripeVerification, readCorporateStripeVerificationTarget } from "@/lib/corporate-stripe-verification";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { dataReadinessCenterEnabled } from "@/lib/honeyglass";
 import { loadDataReadinessWorkspace } from "@/lib/data-readiness-server";
@@ -514,7 +515,11 @@ export default async function DashboardPage() {
     enrolled: bucket.enrolled,
     revenue: bucket.revenue,
   }));
-  const payoutSetupFlow = stripePayoutSetupFlowForCenters(centers, { userEmail: user.email });
+  const canUseCorporateVerification = canUseCorporateStripeVerification(user);
+  const payoutSetupFlow = stripePayoutSetupFlowForCenters(centers.map((center) => ({
+    ...center,
+    stripeReauthorizationAvailable: !readCorporateStripeVerificationTarget(center.id) || canUseCorporateVerification,
+  })), { userEmail: user.email });
   const directorChecklistAutomaticCompletedIds = deriveDirectorLaunchAutoCompletedIds({
     centerCount: centers.length,
     classroomCount: classroomSnapshotRows.length,

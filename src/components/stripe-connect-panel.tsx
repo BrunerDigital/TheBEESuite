@@ -34,6 +34,7 @@ export type StripeConnectCenter = {
   state: string | null;
   postalCode: string | null;
   customFields: unknown;
+  stripeReauthorizationAvailable?: boolean;
 };
 
 type StripeConnectPanelProps = {
@@ -579,7 +580,7 @@ export function StripeConnectPanel({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap justify-end gap-2">
-                      {migrationInProgress ? (
+                      {migrationInProgress && center.stripeReauthorizationAvailable !== false ? (
                         <Button
                           type="button"
                           size="sm"
@@ -589,6 +590,10 @@ export function StripeConnectPanel({
                           <ShieldCheck data-icon="inline-start" />
                           Continue secure setup
                         </Button>
+                      ) : migrationInProgress ? (
+                        <span className="max-w-52 text-right text-xs leading-5 text-muted-foreground">
+                          An authorized corporate representative completes this setup from the secure corporate portfolio.
+                        </span>
                       ) : hasAccount ? (
                         <Button
                           type="button"

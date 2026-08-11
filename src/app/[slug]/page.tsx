@@ -91,6 +91,7 @@ import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
 import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
 import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
+import { canUseCorporateStripeVerification, readCorporateStripeVerificationTarget } from "@/lib/corporate-stripe-verification";
 import { buildParentPortalTodayState } from "@/lib/parent-portal-today";
 import { AD_INTEGRATION_PROVIDERS, buildIntegrationSetupViews, getIntegrationRuntimeStatus, hasRequiredMarketingAccountConfig, MARKETING_INTEGRATION_PROVIDERS, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
 import { integrationScopeForUser } from "@/lib/integration-scope";
@@ -1047,7 +1048,10 @@ async function renderLivePage(
     const completedSections = sections.filter((section) => section.status === "complete").length;
     const blockingSections = sections.filter((section) => section.status === "missing").length;
     const progress = sections.length ? Math.round((completedSections / sections.length) * 100) : 0;
-    const payoutSetupFlow = stripePayoutSetupFlowForCenters(selectedCenter ? [selectedCenter] : [], { userEmail: user.email });
+    const payoutSetupFlow = stripePayoutSetupFlowForCenters(selectedCenter ? [{
+      ...selectedCenter,
+      stripeReauthorizationAvailable: !readCorporateStripeVerificationTarget(selectedCenter.id) || canUseCorporateStripeVerification(user),
+    }] : [], { userEmail: user.email });
     const directorChecklistAutomaticCompletedIds = deriveDirectorLaunchAutoCompletedIds({
       centerCount: selectedCenter ? 1 : 0,
       schoolProfileReady: Boolean(selectedCenter?.email && selectedCenter?.state && selectedCenter.licensedCapacity > 0),
@@ -4227,7 +4231,10 @@ async function renderLivePage(
           products,
           tuitionPlans,
           subscriptions,
-          centers: billingCenters,
+          centers: billingCenters.map((center) => ({
+            ...center,
+            stripeReauthorizationAvailable: !readCorporateStripeVerificationTarget(center.id) || canUseCorporateStripeVerification(user),
+          })),
           stripeConfigured,
           webhookConfigured: stripeWebhookConfigured,
           parentProcessingRecoveryApproved: isStripeParentProcessingRecoveryApproved(),

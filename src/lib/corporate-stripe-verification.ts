@@ -113,5 +113,13 @@ export function corporateStripePayoutBankIsConfirmed(banks: Array<{
   defaultForCurrency: boolean;
   last4: string | null;
 }>) {
-  return banks.some((bank) => bank.currency === "usd" && bank.defaultForCurrency && Boolean(bank.last4));
+  return Boolean(corporateStripeConfirmedPayoutBank(banks));
+}
+
+export function corporateStripeConfirmedPayoutBank<T extends {
+  currency: string | null;
+  defaultForCurrency: boolean;
+  last4: string | null;
+}>(banks: T[]) {
+  return banks.find((bank) => bank.currency === "usd" && bank.defaultForCurrency && Boolean(bank.last4)) ?? null;
 }

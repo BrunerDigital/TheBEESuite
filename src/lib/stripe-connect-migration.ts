@@ -3,6 +3,8 @@ export type StripeConnectMigrationStatus =
   | "prepared"
   | "onboarding_opened"
   | "requirements_due"
+  // Legacy stored value from the original migration flow. Software billing is
+  // no longer a payment-readiness or cutover requirement.
   | "balance_authorization_required"
   | "ready_for_cutover"
   | "cutover_complete";
@@ -76,8 +78,7 @@ export function readStripeConnectMigration(customFields: unknown): StripeConnect
       Boolean(targetPayoutBankLast4);
     if (!targetReady) {
       status = storedStatus === "onboarding_opened" ? "onboarding_opened" : targetRequirementFields.length ? "requirements_due" : "prepared";
-    } else if (!balanceAuthorized) status = "balance_authorization_required";
-    else status = "ready_for_cutover";
+    } else status = "ready_for_cutover";
   }
 
   return {
@@ -114,6 +115,27 @@ export function stripeConnectMigrationTargetIsReady(input: {
     input.feesCollector === "stripe" &&
     input.lossesCollector === "stripe" &&
     Boolean(clean(input.payoutBankLast4));
+}
+
+export function stripeConnectSavedMethodAccount(input: {
+  activeAccountId?: string | null;
+  savedMethodAccountId?: string | null;
+  centerCustomFields: unknown;
+}) {
+  const activeAccountId = accountId(input.activeAccountId);
+  const savedMethodAccountId = accountId(input.savedMethodAccountId);
+  if (!savedMethodAccountId || savedMethodAccountId === activeAccountId) return activeAccountId;
+
+  const fields = record(input.centerCustomFields);
+  const migration = readStripeConnectMigration(fields);
+  const sourceIsRetained = fields.stripeConnectMigrationSourceAccountRetainedForReconciliation === true;
+  const isControlledSourceTransition =
+    Boolean(migration.cutoverAt) &&
+    sourceIsRetained &&
+    activeAccountId === migration.targetAccountId &&
+    savedMethodAccountId === migration.sourceAccountId;
+
+  return isControlledSourceTransition ? savedMethodAccountId : null;
 }
 
 export function maskStripeAccountId(value: string | null) {

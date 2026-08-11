@@ -2,14 +2,12 @@ import { createHash } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
 import type { Prisma } from "@prisma/client";
 import {
-  createStripeBalanceSoftwareSubscription,
   getStripeSecretKey,
   listStripeConnectedAccountPayoutBanks,
   listStripePayouts,
   readStripeConnectedAccountId,
   retrieveStripeConnectedAccount,
 } from "@/lib/integrations";
-import { getKidCitySoftwareFeeUnitAmountCents } from "@/lib/kidcity-software-billing";
 import { prisma } from "@/lib/prisma";
 import { stripeConnectMigrationTargetIsReady } from "@/lib/stripe-connect-migration";
 
@@ -97,15 +95,6 @@ async function main() {
   if (clean(fields.stripeConnectMigrationCutoverAt)) throw new Error("This school has already completed its Stripe cutover.");
   if (activeAccountId !== sourceAccountId) throw new Error("The active parent-payment account no longer matches the prepared source account.");
 
-  const paymentMethodId = clean(fields.stripeConnectMigrationBalancePaymentMethodId);
-  const priceId = clean(fields.stripeConnectMigrationBalancePriceId);
-  const approvalAt = clean(fields.stripeConnectMigrationBalanceApprovalAt);
-  if (!paymentMethodId.startsWith("pm_") || !priceId.startsWith("price_") || !approvalAt) {
-    throw new Error("The authorized representative has not completed the $99 Stripe-balance authorization.");
-  }
-  if (clean(fields.stripeSoftwareSubscriptionId)) throw new Error("A software subscription already exists. Cutover stopped to prevent duplicate billing.");
-  if (getKidCitySoftwareFeeUnitAmountCents() !== 9_900) throw new Error("The configured school software fee is not exactly $99 per month.");
-
   const [source, target, sourceBanks, targetBanks] = await Promise.all([
     retrieveStripeConnectedAccount(sourceAccountId, { tenantId: center.organization.tenantId }),
     retrieveStripeConnectedAccount(targetAccountId, { tenantId: center.organization.tenantId }),
@@ -152,6 +141,21 @@ async function main() {
   const openPayouts = recentSourcePayouts.payouts.filter((payout) => ["pending", "in_transit"].includes(payout.status));
   if (openPayouts.length) throw new Error("The source account still has an open payout. Cutover stopped until it settles.");
 
+  const currentBillingAccounts = await prisma.billingAccount.findMany({
+    where: {
+      family: { centerId: center.id },
+    },
+    select: { autopayPlaceholder: true, customFields: true },
+  });
+  const sourceScopedSavedMethods = currentBillingAccounts.filter((billingAccount) => {
+    const billingFields = record(billingAccount.customFields);
+    return clean(billingFields.stripeDefaultPaymentMethodId).startsWith("pm_") &&
+      clean(billingFields.stripeDefaultPaymentMethodConnectedAccountId) === sourceAccountId;
+  });
+  const sourceScopedAutopay = sourceScopedSavedMethods.filter((billingAccount) => {
+    const billingFields = record(billingAccount.customFields);
+    return billingAccount.autopayPlaceholder || billingFields.autopayEnabled === true;
+  });
   const plan = {
     centerId: center.id,
     sourceAccountId,
@@ -160,9 +164,6 @@ async function main() {
     targetBankFingerprint: bankFingerprint(targetAccountId, targetBanks.banks),
     sourcePayoutInterval,
     targetPayoutInterval,
-    paymentMethodId,
-    priceId,
-    approvalAt,
     targetChargesEnabled: targetAccount.chargesEnabled,
     targetPayoutsEnabled: targetAccount.payoutsEnabled,
     targetFeesCollector: targetAccount.feesCollector,
@@ -170,19 +171,10 @@ async function main() {
   };
   const fingerprint = createHash("sha256").update(JSON.stringify(plan)).digest("hex");
   if (!apply) {
-    console.log(JSON.stringify({ mode: "preview", fingerprint, school: center.name, ready: true, parentPaymentsAccountBefore: sourceAccountId, parentPaymentsAccountAfter: targetAccountId, sourceBankUnchanged: true, sourcePayoutsHeld: true, targetPayoutsHeld: true, monthlySoftwareFeeCents: 9_900 }, null, 2));
+    console.log(JSON.stringify({ mode: "preview", fingerprint, school: center.name, ready: true, parentPaymentsAccountBefore: sourceAccountId, parentPaymentsAccountAfter: targetAccountId, sourceBankUnchanged: true, sourcePayoutsHeld: true, targetPayoutsHeld: true, savedPaymentMethodsPreserved: true, sourceSavedMethodsRemaining: sourceScopedSavedMethods.length, sourceAutopayRemaining: sourceScopedAutopay.length, softwareFeeRequired: false }, null, 2));
     return;
   }
   if (confirmedFingerprint !== fingerprint) throw new Error("The confirmation fingerprint does not match the current live cutover plan.");
-
-  const subscription = await createStripeBalanceSoftwareSubscription({
-    accountId: targetAccountId,
-    paymentMethodId,
-    priceId,
-    tenantId: center.organization.tenantId,
-    centerId: center.id,
-  });
-  if (!subscription.ok || !subscription.subscription) throw new Error(subscription.error || "The $99 target-account subscription could not be created.");
 
   const cutoverAt = new Date().toISOString();
   await prisma.$transaction(async (tx) => {
@@ -192,7 +184,6 @@ async function main() {
     if (readStripeConnectedAccountId(current) !== sourceAccountId || clean(current.stripeConnectMigrationTargetAccountId) !== targetAccountId) {
       throw new Error("The school Stripe binding changed during cutover. The database switch was stopped.");
     }
-    if (clean(current.stripeConnectMigrationBalanceApprovalAt) !== approvalAt) throw new Error("The $99 balance authorization changed during cutover.");
     await tx.center.update({
       where: { id: center.id },
       data: { customFields: jsonInput({
@@ -212,32 +203,16 @@ async function main() {
         stripeConnectMigrationParentPaymentsAccountId: targetAccountId,
         stripeConnectMigrationParentPaymentsRemainActive: true,
         stripeConnectMigrationSourceAccountRetainedForReconciliation: true,
+        stripeConnectMigrationSourceSavedMethodsRemaining: sourceScopedSavedMethods.length,
+        stripeConnectMigrationSourceAutopayRemaining: sourceScopedAutopay.length,
         stripeConnectMigrationSourcePayoutHoldStatus: "manual_confirmed",
         stripeConnectMigrationTargetPayoutHoldStatus: "manual_confirmed",
-        stripeConnectMigrationPayoutReleaseStatus: "blocked_until_software_invoice_and_reconciliation_verified",
-        stripeSoftwareCustomerId: targetAccountId,
-        stripeSoftwareDefaultPaymentMethodId: paymentMethodId,
-        stripeSoftwarePaymentMethodType: "stripe_balance",
-        stripeSoftwarePaymentPreference: "stripe_balance",
-        stripeSoftwarePaymentStatus: subscription.subscription.status === "active" ? "authorized" : "cutover_payment_pending",
-        stripeSoftwareBalanceApprovalAt: approvalAt,
-        stripeSoftwareSubscriptionId: subscription.subscription.id,
-        stripeSoftwareSubscriptionStatus: subscription.subscription.status,
-        stripeSoftwarePriceId: subscription.subscription.priceId,
-        stripeSoftwareSubscriptionItemId: subscription.subscription.itemId,
-        stripeSoftwareQuantity: subscription.subscription.quantity,
-        stripeSoftwareCurrentPeriodStart: subscription.subscription.currentPeriodStart,
-        stripeSoftwareCurrentPeriodEnd: subscription.subscription.currentPeriodEnd,
-        stripeSoftwareCancelAtPeriodEnd: subscription.subscription.cancelAtPeriodEnd,
-        stripeSoftwareLatestInvoiceId: subscription.subscription.latestInvoiceId,
-        stripeSoftwareSubscriptionSyncedAt: cutoverAt,
-        stripeSoftwareMonthlyAmountCents: 9_900,
-        stripeSoftwareBillingBasis: "per_school",
+        stripeConnectMigrationPayoutReleaseStatus: "blocked_until_parent_payment_and_reconciliation_verified",
       }) },
     });
   });
 
-  console.log(JSON.stringify({ mode: "apply", school: center.name, cutoverAt, parentPaymentsAccount: targetAccountId, sourceAccountRetained: sourceAccountId, sourceBankUnchanged: true, sourcePayoutsHeld: true, targetPayoutsHeld: true, subscriptionId: subscription.subscription.id, subscriptionStatus: subscription.subscription.status, payoutReleaseStatus: "blocked" }, null, 2));
+  console.log(JSON.stringify({ mode: "apply", school: center.name, cutoverAt, parentPaymentsAccount: targetAccountId, sourceAccountRetained: sourceAccountId, sourceBankUnchanged: true, sourcePayoutsHeld: true, targetPayoutsHeld: true, savedPaymentMethodsPreserved: true, softwareFeeRequired: false, payoutReleaseStatus: "blocked" }, null, 2));
 }
 
 void main()

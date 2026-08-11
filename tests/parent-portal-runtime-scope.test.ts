@@ -60,3 +60,10 @@ test("every parent setup and billing mutation enforces unambiguous family scope"
     assert.match(readFileSync(path, "utf8"), /getParentPortalFamilyScope\(user\.id\)/, path);
   }
 });
+
+test("parent setup page uses current-family scope and excludes historical family rows", () => {
+  const page = readFileSync("src/app/parent-portal/setup/page.tsx", "utf8");
+  assert.match(page, /getParentPortalFamilyScope\(user\.id\)/);
+  assert.match(page, /guardians\.filter\(\(guardian\) => guardian\.familyId === familyScope\.familyId\)/);
+  assert.doesNotMatch(page, /resolveParentPortalFamilyScope\(guardians\)/);
+});

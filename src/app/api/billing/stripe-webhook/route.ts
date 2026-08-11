@@ -832,12 +832,14 @@ async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeC
       return NextResponse.json({ ok: false, error: "Missing billing account metadata." }, { status: 400 });
     }
     try {
-      await prisma.$transaction(async (tx) => {
+      const outcome = await prisma.$transaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event);
         const account = await tx.billingAccount.findUnique({
           where: { id: billingAccountId },
           select: { customFields: true },
         });
+        const currentSetupSessionId = clean(jsonObject(account?.customFields).stripeSetupCheckoutSessionId);
+        if (currentSetupSessionId && currentSetupSessionId !== session.id) return "stale" as const;
         const expirationPatch = paymentMethodSetupExpirationPatch({
           currentFields: account?.customFields,
           sessionId: session.id,
@@ -850,7 +852,9 @@ async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeC
             customFields: expirationPatch.customFields as Prisma.InputJsonObject,
           },
         });
+        return "expired" as const;
       });
+      if (outcome === "stale") return NextResponse.json({ ok: true, staleSetupExpirationIgnored: true });
     } catch (error) {
       if (isDuplicateWebhookEvent(error)) {
         return NextResponse.json({ ok: true, duplicate: true });
@@ -922,15 +926,19 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
   const paymentMethodDetails = paymentMethodLookup?.ok ? paymentMethodLookup.paymentMethod : null;
 
   try {
-    await prisma.$transaction(async (tx) => {
+    const outcome = await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       const billingAccount = await tx.billingAccount.findUnique({
         where: { id: billingAccountId },
         select: { autopayPlaceholder: true, customFields: true },
       });
-      if (!billingAccount) return;
+      if (!billingAccount) return "missing" as const;
 
       const currentFields = jsonObject(billingAccount.customFields);
+      const latestSetupSessionId = clean(currentFields.stripeSetupCheckoutSessionId);
+      if (latestSetupSessionId && latestSetupSessionId !== session.id) {
+        return "stale" as const;
+      }
       const customerId = setupIntent?.setupIntent?.customerId || clean(session.customer) || clean(currentFields.stripeCustomerId);
       const previousPaymentMethodId = clean(currentFields.stripeDefaultPaymentMethodId);
       const paymentMethodId = setupPaymentMethodId || previousPaymentMethodId;
@@ -972,7 +980,9 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
           },
         },
       });
+      return "applied" as const;
     });
+    if (outcome === "stale") return NextResponse.json({ ok: true, staleSetupSessionIgnored: true });
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) {
       return NextResponse.json({ ok: true, duplicate: true });

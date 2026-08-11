@@ -88,6 +88,7 @@ import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
+import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
 import { buildParentPortalTodayState } from "@/lib/parent-portal-today";
 import { AD_INTEGRATION_PROVIDERS, buildIntegrationSetupViews, getIntegrationRuntimeStatus, hasRequiredMarketingAccountConfig, MARKETING_INTEGRATION_PROVIDERS, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
 import { integrationScopeForUser } from "@/lib/integration-scope";
@@ -2320,6 +2321,12 @@ async function renderLivePage(
       webhookConfigured: stripeWebhookConfigured || process.env.STRIPE_REQUIRE_WEBHOOK_FOR_CHECKOUT === "false",
       allowPlatformOnlyPayments: process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true",
     });
+    const parentCenterFields = jsonRecord(familyCenter?.customFields);
+    const parentStripeMigration = readStripeConnectMigration(parentCenterFields);
+    const paymentTransitionActive = Boolean(
+      parentStripeMigration.targetAccountId &&
+      parentCenterFields.stripeConnectMigrationPayoutReleaseStatus !== "released",
+    );
     const parentReplyToMessageId = firstSearchParam(searchParams.replyToMessageId) || "";
     const parentReplySubject = firstSearchParam(searchParams.subject) || "";
     const parentBalanceCents = billingAccount
@@ -2356,6 +2363,7 @@ async function renderLivePage(
         } : null}
         invoices={parentInvoices}
         checkoutReadiness={parentCheckoutReadiness}
+        paymentTransitionActive={paymentTransitionActive}
         parentBalanceReviewRequired={parentBalanceReviewRequired}
         payments={billingAccount?.payments ?? []}
         latestLedgerEntry={latestLedgerEntry}

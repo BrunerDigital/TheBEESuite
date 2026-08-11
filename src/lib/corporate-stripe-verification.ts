@@ -29,8 +29,11 @@ export function readCorporateStripeVerificationTarget(centerId: string) {
   return (CORPORATE_STRIPE_VERIFICATION_TARGETS as Record<string, CorporateStripeVerificationTarget>)[centerId] ?? null;
 }
 
-export function canUseCorporateStripeVerification(user: Pick<CurrentUser, "role">) {
-  return corporateVerificationRoles.has(user.role);
+export function canUseCorporateStripeVerification(user: Pick<CurrentUser, "role" | "email">) {
+  return corporateVerificationRoles.has(user.role) || (
+    user.role === UserRole.BILLING_ADMIN &&
+    user.email.trim().toLowerCase() === CORPORATE_SCHOOLS_EMAIL
+  );
 }
 
 export async function authorizeCorporateStripeVerificationCenter({
@@ -113,5 +116,13 @@ export function corporateStripePayoutBankIsConfirmed(banks: Array<{
   defaultForCurrency: boolean;
   last4: string | null;
 }>) {
-  return banks.some((bank) => bank.currency === "usd" && bank.defaultForCurrency && Boolean(bank.last4));
+  return Boolean(corporateStripeConfirmedPayoutBank(banks));
+}
+
+export function corporateStripeConfirmedPayoutBank<T extends {
+  currency: string | null;
+  defaultForCurrency: boolean;
+  last4: string | null;
+}>(banks: T[]) {
+  return banks.find((bank) => bank.currency === "usd" && bank.defaultForCurrency && Boolean(bank.last4)) ?? null;
 }

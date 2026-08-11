@@ -13,6 +13,7 @@ import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
 import { canCreatePaymentMethodManagementSession, paymentMethodManagementSummary } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
+import { stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
@@ -237,6 +238,12 @@ async function POSTHandler(request: NextRequest) {
     : null;
   const tenantId = center?.organization.tenantId ?? billingAccount.family.children[0]?.classroom?.center?.organization.tenantId ?? user.tenantId;
   const connectedAccountId = readStripeConnectedAccountId(center?.customFields);
+  const savedPaymentMethodConnectedAccountId = clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId);
+  const savedMethodChargeAccountId = stripeConnectSavedMethodAccount({
+    activeAccountId: connectedAccountId,
+    savedMethodAccountId: savedPaymentMethodConnectedAccountId,
+    centerCustomFields: center?.customFields,
+  });
   const billingApproval = stripeSchoolBillingApproval({ customFields: center?.customFields, centerName: center?.name });
   if (!billingApproval.approved) {
     return NextResponse.json(
@@ -278,8 +285,7 @@ async function POSTHandler(request: NextRequest) {
         { status: 400 },
       );
     }
-    const paymentMethodConnectedAccountId = clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId);
-    if ((connectedAccountId || paymentMethodConnectedAccountId) && connectedAccountId !== paymentMethodConnectedAccountId) {
+    if ((connectedAccountId || savedPaymentMethodConnectedAccountId) && !savedMethodChargeAccountId) {
       return NextResponse.json(
         {
           ok: false,
@@ -321,7 +327,10 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: true, status: "enabled" });
   }
 
-  const existingCustomerId = stripeCustomerIdForAccount(currentFields, connectedAccountId);
+  const portalConnectedAccountId = action === "portal" && savedMethodChargeAccountId
+    ? savedMethodChargeAccountId
+    : connectedAccountId;
+  const existingCustomerId = stripeCustomerIdForAccount(currentFields, portalConnectedAccountId);
   if (action === "portal") {
     if (!existingCustomerId) {
       return NextResponse.json(
@@ -332,7 +341,7 @@ async function POSTHandler(request: NextRequest) {
     const portal = await createStripeBillingPortalSession({
       customerId: existingCustomerId,
       returnUrl: `${baseUrl}${appendQuery(returnPath, "paymentMethod", "portal_return")}`,
-      connectedAccountId,
+      connectedAccountId: portalConnectedAccountId,
       tenantId,
     });
     if (!portal.ok || !portal.url) {

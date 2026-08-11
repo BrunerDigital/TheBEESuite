@@ -25,7 +25,7 @@ const completedStatuses = new Set<StripeConnectMigrationStatus>(["ready_for_cuto
 function statusContent(status: StripeConnectMigrationStatus) {
   if (status === "cutover_complete") return { label: "Migration complete", tone: "text-emerald-700 bg-emerald-50 border-emerald-200" };
   if (status === "ready_for_cutover") return { label: "Authorization complete", tone: "text-emerald-700 bg-emerald-50 border-emerald-200" };
-  if (status === "balance_authorization_required") return { label: "Monthly fee authorization remaining", tone: "text-amber-800 bg-amber-50 border-amber-200" };
+  if (status === "balance_authorization_required") return { label: "Stripe verification complete", tone: "text-emerald-700 bg-emerald-50 border-emerald-200" };
   if (status === "requirements_due") return { label: "Stripe needs more information", tone: "text-amber-800 bg-amber-50 border-amber-200" };
   if (status === "onboarding_opened") return { label: "Setup started", tone: "text-blue-700 bg-blue-50 border-blue-200" };
   if (status === "prepared") return { label: "Ready to begin", tone: "text-slate-700 bg-slate-50 border-slate-200" };

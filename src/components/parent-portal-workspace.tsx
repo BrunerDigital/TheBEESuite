@@ -311,6 +311,7 @@ type Props = {
     };
   } | null;
   checkoutReadiness?: StripeCheckoutReadiness;
+  paymentTransitionActive?: boolean;
   parentBalanceReviewRequired?: boolean;
   invoices: Invoice[];
   payments?: Payment[];
@@ -673,6 +674,7 @@ function ParentPortalWorkspaceView({
   family,
   billingAccount,
   checkoutReadiness = fallbackCheckoutReadiness,
+  paymentTransitionActive = false,
   parentBalanceReviewRequired = false,
   invoices,
   payments = [],
@@ -2356,6 +2358,15 @@ function ParentPortalWorkspaceView({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {paymentTransitionActive ? (
+              <Alert>
+                <AlertCircle className="size-4" />
+                <AlertTitle>School payment account update</AlertTitle>
+                <AlertDescription>
+                  Card and bank payments should remain available while your school updates its payment account. If a payment option is briefly unavailable, please retry in a few minutes. Your balance, payment history, and saved payment details remain protected.
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {checkoutBlocked ? (
               <Alert variant="destructive">
                 <AlertCircle className="size-4" />

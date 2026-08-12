@@ -257,6 +257,7 @@ model User {
   organization              Organization?             @relation(fields: [organizationId], references: [id])
   staffProfile              StaffProfile?
   guardians                 Guardian[]
+  authorizedPickup          AuthorizedPickup?
   notes                     Note[]
   messages                  Message[]                 @relation("MessageSender")
   assignedMessages          Message[]                 @relation("MessageAssignee")
@@ -570,6 +571,7 @@ model ChildLocationTransition {
 model AuthorizedPickup {
   id                String  @id @default(cuid())
   familyId          String
+  userId            String? @unique
   fullName          String
   phone             String?
   relation          String?
@@ -579,6 +581,7 @@ model AuthorizedPickup {
   customFields      Json?
 
   family Family @relation(fields: [familyId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
 
   @@index([sourceSystem, externalId])
 }

@@ -16,7 +16,7 @@ import {
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
-import { normalizeTuitionCredits, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
+import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -136,9 +136,11 @@ async function GETHandler(request: NextRequest) {
         const plan = plansById.get(entry.planId);
         const description = clean(entry.fields.tuitionBillingDescription) || plan?.name || clean(entry.fields.tuitionPlanName) || "Tuition";
         const amountCents = plan?.amountCents ?? entry.snapshotAmountCents;
+        const tuitionAdditionalCharges = normalizeTuitionAdditionalCharges(entry.fields.tuitionAdditionalCharges);
+        const tuitionAdditionalChargesTotalCents = totalTuitionAdditionalChargesCents(tuitionAdditionalCharges);
         const tuitionCredits = normalizeTuitionCredits(entry.fields.tuitionCredits);
         const tuitionCreditsTotalCents = totalTuitionCreditsCents(tuitionCredits);
-        if (tuitionCreditsTotalCents >= amountCents) {
+        if (tuitionCreditsTotalCents >= amountCents + tuitionAdditionalChargesTotalCents) {
           throw new Error(`Weekly credits must be less than tuition for child ${entry.child.id}.`);
         }
         const invoiceWeekCount = tuitionInvoiceWeekCount(entry.cadence);
@@ -154,8 +156,9 @@ async function GETHandler(request: NextRequest) {
           childIds: [entry.child.id],
         });
         const lineDescription = `${description} - ${entry.child.fullName}${invoiceWeekCount === 4 ? " (4 weeks ahead)" : ""}`;
-        const invoiceItems = tuitionInvoiceItems({ description: lineDescription, grossAmountCents: amountCents, credits: tuitionCredits })
+        const invoiceItems = tuitionInvoiceItems({ description: lineDescription, grossAmountCents: amountCents, additionalCharges: tuitionAdditionalCharges, credits: tuitionCredits })
           .map((item) => ({ ...item, amountCents: item.amountCents * invoiceWeekCount }));
+        const grossTuitionCents = (amountCents + tuitionAdditionalChargesTotalCents) * invoiceWeekCount;
 
         const invoice = await prisma.$transaction(async (tx) => {
           const equivalentInvoice = await tx.invoice.findFirst({
@@ -193,10 +196,17 @@ async function GETHandler(request: NextRequest) {
               tuitionPlanCadence: (plan?.cadence ?? clean(entry.fields.tuitionPlanCadence)) || entry.cadence,
               invoiceWeekCount,
               coverageStartsPeriod: entry.billingPeriod,
-              grossTuitionCents: amountCents * invoiceWeekCount,
+              grossTuitionCents,
+              baseTuitionCents: amountCents * invoiceWeekCount,
+              tuitionAdditionalCharges,
+              tuitionAdditionalChargesTotalCents: tuitionAdditionalChargesTotalCents * invoiceWeekCount,
+              tuitionChargeLines: invoiceItems.filter((item) => item.ledgerType === "tuition_charge").map((item) => ({
+                description: item.description,
+                amountCents: item.amountCents,
+              })),
               tuitionCredits,
               tuitionCreditsTotalCents: tuitionCreditsTotalCents * invoiceWeekCount,
-              netTuitionCents: (amountCents - tuitionCreditsTotalCents) * invoiceWeekCount,
+              netTuitionCents: grossTuitionCents - (tuitionCreditsTotalCents * invoiceWeekCount),
               dedupeKey,
               ...(suppressAutopay ? {
                 autopaySuppressed: true,

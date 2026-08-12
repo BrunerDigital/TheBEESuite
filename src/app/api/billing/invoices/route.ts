@@ -18,7 +18,7 @@ import { productInvoiceFieldsForProduct, productPurchaseTotals } from "@/lib/pro
 import { prisma } from "@/lib/prisma";
 import { issueFamilyRefund, validateFamilyRefundAvailability } from "@/lib/family-refunds";
 import { refundSubmissionMode } from "@/lib/refund-approval";
-import { normalizeTuitionCredits, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
+import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
 import { invoiceLedgerBalanceCents, invoiceVoidBlocker } from "@/lib/invoice-void";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -184,12 +184,16 @@ async function createSingleInvoice(user: CurrentBillingUser, body: Record<string
   const tuitionCredits = charge.chargeSource === "tuitionPlan" && child
     ? normalizeTuitionCredits(jsonObject(child.customFields).tuitionCredits)
     : [];
+  const tuitionAdditionalCharges = charge.chargeSource === "tuitionPlan" && child
+    ? normalizeTuitionAdditionalCharges(jsonObject(child.customFields).tuitionAdditionalCharges)
+    : [];
   const tuitionCreditsTotalCents = totalTuitionCreditsCents(tuitionCredits);
-  if (tuitionCreditsTotalCents >= charge.amountCents) {
+  const tuitionAdditionalChargesTotalCents = totalTuitionAdditionalChargesCents(tuitionAdditionalCharges);
+  if (tuitionCreditsTotalCents >= charge.amountCents + tuitionAdditionalChargesTotalCents) {
     return NextResponse.json({ ok: false, error: "Weekly credits must be less than the gross weekly tuition rate." }, { status: 400 });
   }
   const invoiceItems = charge.chargeSource === "tuitionPlan" && child
-    ? tuitionInvoiceItems({ description: itemDescription, grossAmountCents: charge.amountCents, credits: tuitionCredits })
+    ? tuitionInvoiceItems({ description: itemDescription, grossAmountCents: charge.amountCents, additionalCharges: tuitionAdditionalCharges, credits: tuitionCredits })
     : [{ description: itemDescription, amountCents: charge.amountCents, productId: charge.productId }];
 
   const result = await prisma.$transaction((tx) =>
@@ -208,10 +212,17 @@ async function createSingleInvoice(user: CurrentBillingUser, body: Record<string
         centerId: familyAccess.centerId,
         childId: child?.id ?? null,
         ...(charge.chargeSource === "tuitionPlan" && child ? {
-          grossTuitionCents: charge.amountCents,
+          grossTuitionCents: charge.amountCents + tuitionAdditionalChargesTotalCents,
+          baseTuitionCents: charge.amountCents,
+          tuitionAdditionalCharges,
+          tuitionAdditionalChargesTotalCents,
+          tuitionChargeLines: invoiceItems.filter((item) => "ledgerType" in item && item.ledgerType === "tuition_charge").map((item) => ({
+            description: item.description,
+            amountCents: item.amountCents,
+          })),
           tuitionCredits,
           tuitionCreditsTotalCents,
-          netTuitionCents: charge.amountCents - tuitionCreditsTotalCents,
+          netTuitionCents: charge.amountCents + tuitionAdditionalChargesTotalCents - tuitionCreditsTotalCents,
         } : {}),
         dedupeKey,
       },

@@ -99,6 +99,8 @@ export type BillingWorkbenchFamily = {
       cadence: string | null;
       amountCents: number | null;
       grossAmountCents: number | null;
+      additionalCharges: Array<{ description: string; amountCents: number }>;
+      additionalChargesTotalCents: number;
       credits: Array<{ category: TuitionCreditCategory; amountCents: number }>;
       creditsTotalCents: number;
       netAmountCents: number | null;
@@ -215,6 +217,14 @@ function tuitionCreditInputs(credits: Array<{ category: TuitionCreditCategory; a
     values[category.id] = credit ? String(credit.amountCents / 100) : "";
   }
   return values;
+}
+
+function tuitionAdditionalChargeInputs(charges: Array<{ description: string; amountCents: number }> | null | undefined) {
+  const normalized = Array.isArray(charges) ? charges.slice(0, 2) : [];
+  return [0, 1].map((index) => ({
+    description: normalized[index]?.description ?? "",
+    amountDollars: normalized[index]?.amountCents ? String(normalized[index].amountCents / 100) : "",
+  }));
 }
 
 function centsToDollarsInput(cents: number) {
@@ -388,6 +398,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [assignmentCredits, setAssignmentCredits] = useState<Record<TuitionCreditCategory, string>>(
     tuitionCreditInputs(initialAssignment?.credits ?? []),
   );
+  const [assignmentAdditionalCharges, setAssignmentAdditionalCharges] = useState(
+    tuitionAdditionalChargeInputs(initialAssignment?.additionalCharges),
+  );
   const [planEditorId, setPlanEditorId] = useState(initialAssignedPlan?.id ?? "new");
   const [planName, setPlanName] = useState(initialAssignedPlan?.name ?? "");
   const [planAgeGroup, setPlanAgeGroup] = useState(initialAssignedPlan?.ageGroup ?? initialAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0]);
@@ -456,9 +469,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const amountCents = dollarsToCents(assignmentCredits[id]);
     return amountCents > 0 ? [{ category: id, amountCents }] : [];
   });
+  const effectiveAssignmentAdditionalCharges = assignmentAdditionalCharges.flatMap((line) => {
+    const description = line.description.trim();
+    const amountCents = dollarsToCents(line.amountDollars);
+    return description && amountCents > 0 ? [{ description, amountCents }] : [];
+  });
+  const effectiveAssignmentAdditionalChargesTotalCents = effectiveAssignmentAdditionalCharges.reduce((total, line) => total + line.amountCents, 0);
   const effectiveAssignmentCreditsTotalCents = effectiveAssignmentCredits.reduce((total, credit) => total + credit.amountCents, 0);
   const effectiveAssignmentGrossCents = effectiveAssignmentPlan?.amountCents ?? 0;
-  const effectiveAssignmentNetCents = effectiveAssignmentGrossCents - effectiveAssignmentCreditsTotalCents;
+  const effectiveAssignmentNetCents = effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents - effectiveAssignmentCreditsTotalCents;
   const savedSelectedWeeklyTuitionCents = selectedAssignment?.enabled
     && typeof selectedAssignment.amountCents === "number"
     && selectedAssignment.amountCents >= 0
@@ -866,6 +885,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     );
     setAssignmentDescription(assignment?.description ?? assignment?.tuitionPlanName ?? "");
     setAssignmentCredits(tuitionCreditInputs(assignment?.credits ?? []));
+    setAssignmentAdditionalCharges(tuitionAdditionalChargeInputs(assignment?.additionalCharges));
     setAssignmentChildProgram(child?.ageGroup ?? defaultAgeGroupOptions[0]);
     setAssignmentChildClassroomId(child?.classroomId ?? "");
     setAssignmentChildCareScheduleType(child?.careScheduleType ?? "unknown");
@@ -1238,7 +1258,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitAssignment() {
     if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving tuition.");
-    if (!assignmentIsVoucherFunded && assignmentEnabled === "true" && effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents) {
+    if (!assignmentIsVoucherFunded && assignmentEnabled === "true" && effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents) {
       return setErrorMessage("Credits must be less than the gross recurring tuition rate.");
     }
     const action = assignmentIsVoucherFunded
@@ -1260,6 +1280,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           billingDay: effectiveAssignmentBillingDay,
           billingStartPeriod: effectiveAssignmentStartPeriod,
           description: effectiveAssignmentDescription,
+          tuitionAdditionalCharges: effectiveAssignmentAdditionalCharges,
           tuitionCredits: effectiveAssignmentCredits,
         }),
       });
@@ -2059,6 +2080,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                       <span>Care schedule: {careScheduleLabel(child.careScheduleType)}</span>
                       <span>Rate name: {child.tuitionAssignment?.description || child.tuitionAssignment?.tuitionPlanName || "Not assigned"}</span>
                       <span>Tuition: {child.tuitionAssignment?.enabled && typeof child.tuitionAssignment.amountCents === "number" ? `${money(child.tuitionAssignment.amountCents)}/${tuitionCadenceUnit(child.tuitionAssignment.cadence)}` : "Not assigned"}</span>
+                      {child.tuitionAssignment?.additionalChargesTotalCents ? <span>Additional lines: {money(child.tuitionAssignment.additionalChargesTotalCents)}</span> : null}
                     </div>
                   </button>
                 );
@@ -2218,6 +2240,46 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
             <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
               <div>
+                <div className="text-sm font-medium">{effectiveRateCadence === "monthly" ? "Monthly" : "Weekly"} additional invoice lines</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Use separate positive lines when state audit records need parent fees and gap tuition itemized on the invoice.
+                </p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {assignmentAdditionalCharges.map((line, index) => (
+                  <div key={index} className="grid gap-2 rounded-md border bg-background/60 p-2 sm:grid-cols-[1fr_9rem]">
+                    <div className="space-y-1">
+                      <Label htmlFor={`billing-tuition-additional-description-${index}`}>Line {index + 1} label</Label>
+                      <Input
+                        id={`billing-tuition-additional-description-${index}`}
+                        value={line.description}
+                        onChange={(event) => setAssignmentAdditionalCharges((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, description: event.target.value } : item))}
+                        placeholder={index === 0 ? "Parent fee" : "Gap tuition"}
+                        disabled={assignmentIsVoucherFunded}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`billing-tuition-additional-amount-${index}`}>Amount</Label>
+                      <Input
+                        id={`billing-tuition-additional-amount-${index}`}
+                        inputMode="decimal"
+                        value={line.amountDollars}
+                        onChange={(event) => setAssignmentAdditionalCharges((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, amountDollars: event.target.value } : item))}
+                        placeholder="0.00"
+                        disabled={assignmentIsVoucherFunded}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <DisplayValue label={`Base ${effectiveRateCadence} tuition`} value={money(effectiveAssignmentGrossCents)} />
+                <DisplayValue label="Additional lines" value={money(effectiveAssignmentAdditionalChargesTotalCents)} />
+                <DisplayValue label={`Gross ${effectiveRateCadence} total`} value={money(effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents)} />
+              </div>
+            </div>
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+              <div>
                 <div className="text-sm font-medium">{effectiveRateCadence === "monthly" ? "Monthly" : "Weekly"} invoice credits</div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Enter approved {effectiveRateCadence} amounts. Each credit appears as its own negative invoice line and categorized ledger entry.
@@ -2239,12 +2301,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 ))}
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
-                <DisplayValue label={`Gross ${effectiveRateCadence} tuition`} value={money(effectiveAssignmentGrossCents)} />
+                <DisplayValue label={`Gross ${effectiveRateCadence} tuition`} value={money(effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents)} />
                 <DisplayValue label={`${effectiveRateCadence === "monthly" ? "Monthly" : "Weekly"} credits`} value={`−${money(effectiveAssignmentCreditsTotalCents)}`} />
                 <DisplayValue
                   label={effectiveAssignmentCadence === "four_week" ? "Every-4-weeks invoice" : `Net ${effectiveRateCadence} invoice`}
                   value={money(Math.max(0, effectiveAssignmentNetCents) * (effectiveAssignmentCadence === "four_week" ? 4 : 1))}
-                  detail={effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents && !assignmentIsVoucherFunded
+                  detail={effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents && !assignmentIsVoucherFunded
                     ? "Credits must be less than gross tuition"
                     : "Amount added to the family ledger"}
                 />
@@ -2264,7 +2326,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
-                disabled={isPending || !selectedFamily || !selectedAssignmentChild || (assignmentEnabled === "true" && (!effectiveAssignmentPlanId || (!assignmentIsVoucherFunded && effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents)))}
+                disabled={isPending || !selectedFamily || !selectedAssignmentChild || (assignmentEnabled === "true" && (!effectiveAssignmentPlanId || (!assignmentIsVoucherFunded && effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents)))}
                 onClick={submitAssignment}
               >
                 <CalendarClock data-icon="inline-start" />

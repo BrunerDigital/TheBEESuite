@@ -12,7 +12,7 @@ import {
   WEEKLY_TUITION_AUTOBILL_DAY,
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
-import { normalizeTuitionCredits, totalTuitionCreditsCents } from "@/lib/tuition-credits";
+import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents } from "@/lib/tuition-credits";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -139,10 +139,17 @@ async function POSTHandler(request: NextRequest) {
   const voucherFunded = isVoucherFundedTuitionAmount(plan.amountCents);
   const tuitionCredits = normalizeTuitionCredits(body.tuitionCredits);
   const tuitionCreditsTotalCents = totalTuitionCreditsCents(tuitionCredits);
+  const tuitionAdditionalCharges = normalizeTuitionAdditionalCharges(body.tuitionAdditionalCharges);
+  const tuitionAdditionalChargesTotalCents = totalTuitionAdditionalChargesCents(tuitionAdditionalCharges);
   if (voucherFunded && tuitionCreditsTotalCents > 0) {
     return NextResponse.json({ ok: false, error: "Credits cannot be added to a $0 voucher-funded tuition assignment." }, { status: 400 });
   }
-  if (!voucherFunded && tuitionCreditsTotalCents >= plan.amountCents) {
+  if (voucherFunded && tuitionAdditionalChargesTotalCents > 0) {
+    return NextResponse.json({ ok: false, error: "Additional charge lines cannot be added to a $0 voucher-funded tuition assignment." }, { status: 400 });
+  }
+  const tuitionGrossAmountCents = plan.amountCents + tuitionAdditionalChargesTotalCents;
+  const tuitionNetAmountCents = tuitionGrossAmountCents - tuitionCreditsTotalCents;
+  if (!voucherFunded && tuitionCreditsTotalCents >= tuitionGrossAmountCents) {
     return NextResponse.json({ ok: false, error: "Credits must be less than the gross recurring tuition rate." }, { status: 400 });
   }
 
@@ -159,9 +166,12 @@ async function POSTHandler(request: NextRequest) {
           tuitionPlanCadence: cadence,
           tuitionBillingCadence: cadence,
           tuitionPlanAmountCents: plan.amountCents,
+          tuitionAdditionalCharges,
+          tuitionAdditionalChargesTotalCents,
           tuitionCredits,
           tuitionCreditsTotalCents,
-          tuitionNetAmountCents: plan.amountCents - tuitionCreditsTotalCents,
+          tuitionGrossAmountCents,
+          tuitionNetAmountCents,
           tuitionFundingType: voucherFunded ? "voucher" : "family",
           tuitionAutobillEligible: !voucherFunded,
           tuitionBillingDay: billingDay,
@@ -231,7 +241,10 @@ async function POSTHandler(request: NextRequest) {
       amountCents: plan.amountCents,
       tuitionCredits,
       tuitionCreditsTotalCents,
-      tuitionNetAmountCents: plan.amountCents - tuitionCreditsTotalCents,
+      tuitionAdditionalCharges,
+      tuitionAdditionalChargesTotalCents,
+      tuitionGrossAmountCents,
+      tuitionNetAmountCents,
       fundingType: voucherFunded ? "voucher" : "family",
       invoicesScheduled: !voucherFunded,
       cadence,

@@ -13,6 +13,11 @@ export type TuitionCredit = {
   amountCents: number;
 };
 
+export type TuitionAdditionalCharge = {
+  description: string;
+  amountCents: number;
+};
+
 const categoryLabels = new Map<string, string>(
   TUITION_CREDIT_CATEGORIES.map((category) => [category.id, category.label]),
 );
@@ -46,13 +51,38 @@ export function totalTuitionCreditsCents(credits: TuitionCredit[]) {
   return credits.reduce((total, credit) => total + credit.amountCents, 0);
 }
 
+export function normalizeTuitionAdditionalCharges(value: unknown): TuitionAdditionalCharge[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    const description = typeof record.description === "string" ? record.description.trim() : "";
+    const amountCents = typeof record.amountCents === "number" && Number.isFinite(record.amountCents)
+      ? Math.round(record.amountCents)
+      : 0;
+    if (!description || amountCents <= 0) return [];
+    return [{ description, amountCents }];
+  });
+}
+
+export function totalTuitionAdditionalChargesCents(charges: TuitionAdditionalCharge[]) {
+  return charges.reduce((total, charge) => total + charge.amountCents, 0);
+}
+
 export function tuitionInvoiceItems(input: {
   description: string;
   grossAmountCents: number;
+  additionalCharges?: TuitionAdditionalCharge[];
   credits: TuitionCredit[];
 }) {
   return [
     { description: input.description, amountCents: input.grossAmountCents, ledgerType: "tuition_charge" },
+    ...(input.additionalCharges ?? []).map((charge) => ({
+      description: charge.description,
+      amountCents: charge.amountCents,
+      ledgerType: "tuition_charge",
+      tuitionChargeLine: true,
+    })),
     ...input.credits.map((credit) => ({
       description: `${tuitionCreditLabel(credit.category)} - ${input.description}`,
       amountCents: -credit.amountCents,

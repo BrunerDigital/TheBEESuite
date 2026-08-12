@@ -49,6 +49,7 @@ import { AuthLikePage } from "@/components/module-page";
 import { AssetHubWorkspace } from "@/components/asset-hub-workspace";
 import { ParentPortalWorkspace } from "@/components/parent-portal-workspace";
 import { ParentPortalAccessBlocked } from "@/components/parent-portal-access-blocked";
+import { AuthorizedPickupAccessBlocked, AuthorizedPickupWorkspace } from "@/components/authorized-pickup-workspace";
 import {
   SchoolSetupCommandCenter,
   type SchoolSetupCommandCenterData,
@@ -1907,6 +1908,72 @@ async function renderLivePage(
   }
 
   if (slug === "parent-portal") {
+    if (user.role === UserRole.AUTHORIZED_PICKUP) {
+      const pickup = await prisma.authorizedPickup.findFirst({
+        where: { userId: user.id },
+        select: {
+          family: {
+            select: {
+              name: true,
+              centerId: true,
+              children: {
+                where: currentlyEnrolledChildWhere(),
+                orderBy: { fullName: "asc" },
+                select: {
+                  id: true,
+                  fullName: true,
+                  preferredName: true,
+                  classroom: { select: { name: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!pickup) return <AuthorizedPickupAccessBlocked />;
+
+      const pickupCenter = pickup.family.centerId
+        ? await prisma.center.findFirst({
+            where: {
+              id: pickup.family.centerId,
+              organization: { tenantId: user.tenantId },
+            },
+            select: { name: true, timezone: true },
+          })
+        : null;
+      if (!pickupCenter) return <AuthorizedPickupAccessBlocked />;
+
+      const serviceDay = centerServiceDayWindow(today, pickupCenter);
+      const childIds = pickup.family.children.map((child) => child.id);
+      const latestChecks = childIds.length
+        ? await prisma.checkInOutLog.findMany({
+            where: {
+              childId: { in: childIds },
+              occurredAt: { gte: serviceDay.start, lt: serviceDay.end },
+            },
+            orderBy: { occurredAt: "desc" },
+            select: { childId: true, type: true, occurredAt: true },
+          })
+        : [];
+      const latestCheckByChild = latestLogMap(latestChecks);
+
+      return <AuthorizedPickupWorkspace
+        familyName={pickup.family.name}
+        centerName={pickupCenter.name}
+        pickupChildren={pickup.family.children.map((child) => {
+          const latestCheck = latestCheckByChild.get(child.id);
+          return {
+            id: child.id,
+            name: child.preferredName || child.fullName,
+            classroomName: child.classroom?.name ?? null,
+            isAtSchool: latestCheck?.type === "check_in",
+            latestActivityAt: latestCheck?.occurredAt ?? null,
+          };
+        })}
+      />;
+    }
+
     const parentPortalView = normalizeParentPortalView(firstSearchParam(searchParams.view));
     const parentFamilySection = firstSearchParam(searchParams.section) || "children";
     const parentFamilyScope = user.role === UserRole.PARENT_GUARDIAN

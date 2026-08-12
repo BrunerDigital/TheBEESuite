@@ -29,6 +29,7 @@ import {
   MessageSquare,
   PanelsTopLeft,
   PenTool,
+  RadioTower,
   ShieldCheck,
   Star,
   Workflow,
@@ -76,6 +77,7 @@ import {
 } from "@/components/child-location-tracker-panel";
 import { DashboardOptionsSettingsPanel } from "@/components/dashboard-options-settings-panel";
 import { EnrollmentStatusShortcut } from "@/components/enrollment-status-shortcut";
+import { EndOfDayClosingBoard, type EndOfDayReconciliationData } from "@/components/end-of-day-closing-board";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import {
   ExecutiveMarketingPortfolio,
@@ -83,6 +85,7 @@ import {
 } from "@/components/executive-marketing-portfolio";
 import { DeveloperSubscriptionConsole, type DeveloperSubscriptionSchool } from "@/components/developer-subscription-console";
 import { DeviceSessionPanel, type DeviceSessionPanelRow } from "@/components/device-session-panel";
+import { DirectorPaymentTerminalWorkspace } from "@/components/director-payment-terminal-workspace";
 import { DocumentReviewActions } from "@/components/document-review-actions";
 import { DocumentUploadActions } from "@/components/document-upload-actions";
 import {
@@ -2792,33 +2795,7 @@ export type AttendancePageData = {
   liveTrackerClassrooms: ChildLocationTrackerClassroom[];
   liveTrackerChildren: ChildLocationTrackerChild[];
   canMoveChildren: boolean;
-  reconciliation: {
-    serviceDate: Date | string;
-    checkIns: number;
-    checkOuts: number;
-    stillCheckedIn: number;
-    latePickups: number;
-    authorizationWarnings: number;
-    signaturesCaptured: number;
-    pinVerified: number;
-    qrVerified: number;
-    staffVerified: number;
-    logs: Array<{
-      id: string;
-      type: string;
-      occurredAt: Date | string;
-      pickupName: string | null;
-      verificationStatus: string | null;
-      pinVerified: boolean;
-      signatureCaptured: boolean;
-      latePickup: boolean;
-      pickupAuthorizationWarning: boolean;
-      child: { fullName: string; ageGroup: string } | null;
-      guardian: { fullName: string; email: string | null } | null;
-      classroom: { name: string } | null;
-      center: { name: string; crmLocationId: string | null } | null;
-    }>;
-  };
+  reconciliation: EndOfDayReconciliationData;
 };
 
 export function AttendancePage({ data }: { data: AttendancePageData }) {
@@ -2847,13 +2824,14 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
         title="Schoolwide Attendance Rooms"
         description="Drag checked-in or enrolled children into their current room or school area for class combinations, playground time, temporary coverage, and subs. Assigned classroom stays unchanged."
       />
-      <Card id="end-of-day-reconciliation" className="glass-panel scroll-mt-24">
+      <EndOfDayClosingBoard data={data.reconciliation} />
+      <Card id="attendance-reconciliation-ledger" className="glass-panel scroll-mt-24">
         <CardHeader>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle as="h2">End-of-Day Reconciliation</CardTitle>
               <CardDescription>
-                Kiosk activity for {formatDate(data.reconciliation.serviceDate)} with unresolved check-ins and front desk review flags.
+                Detailed kiosk activity for {formatDate(data.reconciliation.serviceDate)} with verification and front desk review flags.
               </CardDescription>
             </div>
             {data.reconciliation.stillCheckedIn > 0 ? (
@@ -4882,7 +4860,7 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
           </div>
         </CardContent>
       </Card>
-      <Card className="glass-panel">
+      <Card id="guardian-change-requests" className="glass-panel scroll-mt-36">
         <CardHeader>
           <CardTitle as="h2">Guardian Self-Service Change Requests</CardTitle>
           <CardDescription>
@@ -4996,6 +4974,7 @@ export type BillingInvoicesPageData = {
     centerId?: string;
     childId?: string;
     searchQuery?: string;
+    workspace?: "terminal";
   };
   receiptSchools: BillingReceiptSchool[];
   workbench: {
@@ -5097,6 +5076,16 @@ export type BillingInvoicesPageData = {
 };
 
 export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData }) {
+  if (data.initialSelection?.workspace === "terminal") {
+    return (
+      <DirectorPaymentTerminalWorkspace
+        families={data.workbench.families}
+        centers={data.workbench.centers}
+        initialFamilyId={data.initialSelection.familyId}
+      />
+    );
+  }
+
   const ledgerFamilyOptions = Array.from(new Map([
     ...data.workbench.families.map((family) => [family.id, { id: family.id, name: family.name }] as const),
     ...data.ledgerEntries.map((entry) => [
@@ -5124,14 +5113,22 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
-          <BadgeDollarSign data-icon="inline-start" />
-          Billing workbench
-        </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">Billing and Invoices</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Family billing accounts, tuition invoices, balances, imported ledger activity, and secure checkout readiness for parent tuition payments.
-        </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <Badge className="mb-4">
+              <BadgeDollarSign data-icon="inline-start" />
+              Billing workbench
+            </Badge>
+            <h1 className="text-balance text-3xl font-semibold tracking-tight">Billing and Invoices</h1>
+            <p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-muted-foreground">
+              Family billing accounts, tuition invoices, balances, imported ledger activity, and secure checkout readiness for parent tuition payments.
+            </p>
+          </div>
+          <Link href="/billing-invoices?workspace=terminal" className={buttonVariants({ size: "lg" })}>
+            <RadioTower data-icon="inline-start" />
+            Open Payment Terminal
+          </Link>
+        </div>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="All invoices" value={data.stats.total} />

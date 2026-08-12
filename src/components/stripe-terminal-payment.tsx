@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useState } from "react";
-import { CreditCard, LoaderCircle, RadioTower } from "lucide-react";
+import { CreditCard, LoaderCircle, RadioTower, Settings2, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -40,6 +39,9 @@ type Props = {
   amountCents: number;
   description: string;
   disabled?: boolean;
+  presentation?: "dialog" | "embedded";
+  contextLabel?: string;
+  previewMode?: boolean;
 };
 
 function money(cents: number) {
@@ -54,6 +56,9 @@ export function StripeTerminalPayment({
   amountCents,
   description,
   disabled,
+  presentation = "dialog",
+  contextLabel,
+  previewMode = false,
 }: Props) {
   const router = useRouter();
   const controlId = useId();
@@ -62,19 +67,22 @@ export function StripeTerminalPayment({
   const readerLabelId = `${controlId}-reader-label`;
   const parentPresentId = `${controlId}-parent-present`;
   const [open, setOpen] = useState(false);
-  const [readers, setReaders] = useState<TerminalReader[]>([]);
-  const [readerId, setReaderId] = useState("");
+  const [readers, setReaders] = useState<TerminalReader[]>(previewMode ? [{ id: "preview-reader", label: "Front Desk Reader", deviceType: "Stripe S700", status: "online", actionStatus: null }] : []);
+  const [readerId, setReaderId] = useState(previewMode ? "preview-reader" : "");
   const [registrationCode, setRegistrationCode] = useState("");
   const [readerLabel, setReaderLabel] = useState("");
-  const [amounts, setAmounts] = useState<TerminalAmounts | null>(null);
+  const [amounts, setAmounts] = useState<TerminalAmounts | null>(previewMode ? { invoiceAmountCents: amountCents, parentProcessingRecoveryAmountCents: 0, checkoutTotalCents: amountCents } : null);
   const [parentPresent, setParentPresent] = useState(false);
   const [paymentId, setPaymentId] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "processing" | "succeeded" | "failed">("idle");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const embedded = presentation === "embedded";
+  const active = embedded || open;
 
   const loadReaders = useCallback(async () => {
     if (!centerId || amountCents <= 0) return;
+    if (previewMode) return;
     setStatus("loading");
     setError("");
     const response = await fetch(
@@ -98,10 +106,10 @@ export function StripeTerminalPayment({
       ? current
       : nextReaders.find((reader) => reader.status === "online")?.id || nextReaders[0]?.id || "");
     setStatus("idle");
-  }, [amountCents, centerId]);
+  }, [amountCents, centerId, previewMode]);
 
   useEffect(() => {
-    if (!open || !paymentId || status !== "processing") return;
+    if (!active || !paymentId || status !== "processing") return;
     let stopped = false;
     const check = async () => {
       const response = await fetch("/api/billing/terminal-payment", {
@@ -128,9 +136,19 @@ export function StripeTerminalPayment({
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [open, paymentId, router, status]);
+  }, [active, paymentId, router, status]);
+
+  useEffect(() => {
+    if (!embedded) return;
+    const timer = window.setTimeout(() => void loadReaders(), 0);
+    return () => window.clearTimeout(timer);
+  }, [embedded, loadReaders]);
 
   async function registerReader() {
+    if (previewMode) {
+      setMessage("Preview only. Reader settings are not saved.");
+      return;
+    }
     if (!registrationCode.trim()) {
       setError("Enter the registration code shown on the reader.");
       return;
@@ -167,6 +185,11 @@ export function StripeTerminalPayment({
     }
     if (!parentPresent) {
       setError("Confirm that the parent is present to review the amount on the reader.");
+      return;
+    }
+    if (previewMode) {
+      setStatus("succeeded");
+      setMessage("Preview approved. No payment was submitted or recorded.");
       return;
     }
     setStatus("loading");
@@ -220,22 +243,9 @@ export function StripeTerminalPayment({
     void loadReaders();
   }
 
-  return (
+  const terminalBody = (
     <>
-      <Button type="button" disabled={disabled || !centerId || !billingAccountId || !familyId || amountCents <= 0} onClick={openTerminal}>
-        <RadioTower data-icon="inline-start" />
-        In-person card reader
-      </Button>
-      <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && status !== "processing" && setOpen(false)}>
-        <DialogContent className="max-w-xl" aria-busy={status === "loading" || status === "processing"}>
-          <DialogHeader>
-            <DialogTitle>The BEE Suite in-person card payment</DialogTitle>
-            <DialogDescription>
-              The parent pays on a certified reader. Card details are encrypted by the payment hardware and never enter The BEE Suite.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
+      <div className="space-y-4">
             <div className="grid gap-2 rounded-lg border bg-muted/25 p-3 sm:grid-cols-3">
               <div>
                 <div className="text-xs text-muted-foreground">Account payment</div>
@@ -273,21 +283,25 @@ export function StripeTerminalPayment({
               </div>
             ) : null}
 
-            <div className="space-y-2 rounded-lg border p-3">
-              <div className="font-medium">{readers.length ? "Register another reader" : "Register this school's reader"}</div>
+            <details className="group rounded-lg border p-3">
+              <summary className="flex cursor-pointer list-none items-center gap-2 font-medium focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <Settings2 className="size-4" aria-hidden="true" />
+                {readers.length ? "Reader Settings" : "Register This School’s Reader"}
+              </summary>
               <p className="text-xs text-muted-foreground">
                 On a Stripe S700/S710 or WisePOS E, generate a pairing code in reader settings. The web app controls smart readers over the network. A direct USB data connection is available only through Stripe&apos;s Android mobile-reader SDK.
               </p>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <div className="space-y-1">
                   <Label htmlFor={registrationCodeId}>Registration code</Label>
                   <Input
                     id={registrationCodeId}
                     name="terminalRegistrationCode"
                     autoComplete="off"
+                    spellCheck={false}
                     value={registrationCode}
                     onChange={(event) => setRegistrationCode(event.target.value)}
-                    placeholder="Pairing code"
+                    placeholder="Enter pairing code…"
                   />
                 </div>
                 <div className="space-y-1">
@@ -295,16 +309,17 @@ export function StripeTerminalPayment({
                   <Input
                     id={readerLabelId}
                     name="terminalReaderLabel"
+                    autoComplete="off"
                     value={readerLabel}
                     onChange={(event) => setReaderLabel(event.target.value)}
-                    placeholder="Front desk"
+                    placeholder="Example: Front desk…"
                   />
                 </div>
               </div>
               <Button type="button" variant="outline" disabled={status === "loading" || status === "processing"} onClick={registerReader}>
                 {status === "loading" ? "Working…" : "Register reader"}
               </Button>
-            </div>
+            </details>
 
             <label htmlFor={parentPresentId} className="flex min-h-11 items-start gap-3 rounded-lg border p-3 text-sm">
               <input
@@ -322,29 +337,78 @@ export function StripeTerminalPayment({
             </label>
 
             {message ? (
-              <Alert>
+              <Alert aria-live="polite">
                 <CreditCard className="size-4" />
                 <AlertTitle>{status === "succeeded" ? "Payment recorded" : "Reader status"}</AlertTitle>
                 <AlertDescription>{message}</AlertDescription>
               </Alert>
             ) : null}
             {error ? (
-              <Alert variant="destructive">
+              <Alert variant="destructive" aria-live="polite">
                 <AlertTitle>Card reader needs attention</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             ) : null}
           </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" disabled={status === "processing"} onClick={() => setOpen(false)}>
-              {status === "succeeded" ? "Done" : "Close"}
-            </Button>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            {!embedded ? (
+              <Button type="button" variant="outline" disabled={status === "processing"} onClick={() => setOpen(false)}>
+                {status === "succeeded" ? "Done" : "Close"}
+              </Button>
+            ) : null}
             <Button type="button" disabled={!canProcess} onClick={startPayment}>
               {status === "loading" || status === "processing" ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <CreditCard data-icon="inline-start" />}
               {status === "processing" ? "Waiting for card" : status === "loading" ? "Starting…" : `Charge ${money(amounts?.checkoutTotalCents ?? amountCents)}`}
             </Button>
-          </DialogFooter>
+          </div>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <section className="glass-panel overflow-hidden rounded-2xl border border-primary/25 bg-card shadow-2xl shadow-primary/5" aria-labelledby="embedded-terminal-title">
+        <div className="border-b bg-gradient-to-br from-primary/12 via-card to-amber-500/10 p-5 sm:p-6">
+          <div className="flex items-start gap-3">
+            <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg" aria-hidden="true"><RadioTower className="size-6" /></span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 id="embedded-terminal-title" className="text-balance text-xl font-bold">2. Confirm Reader & Collect</h2>
+                <Badge variant="outline"><ShieldCheck data-icon="inline-start" />Certified hardware</Badge>
+              </div>
+              <p className="mt-1 text-pretty text-sm text-muted-foreground">{contextLabel || "Choose a family and amount to prepare the terminal."}</p>
+            </div>
+          </div>
+        </div>
+        <div className="p-4 sm:p-6">
+          {disabled || !centerId || !billingAccountId || !familyId || amountCents <= 0 ? (
+            <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed bg-muted/20 p-6 text-center">
+              <div className="max-w-sm">
+                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-muted text-muted-foreground" aria-hidden="true"><CreditCard className="size-6" /></span>
+                <h3 className="mt-4 font-semibold">Complete the Payment Context</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Choose a current family with a billing account and an exact invoice or account amount.</p>
+              </div>
+            </div>
+          ) : terminalBody}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <>
+      <Button disabled={disabled || !centerId || !billingAccountId || !familyId || amountCents <= 0} onClick={openTerminal}>
+        <RadioTower data-icon="inline-start" />
+        In-Person Card Reader
+      </Button>
+      <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && status !== "processing" && setOpen(false)}>
+        <DialogContent className="max-w-xl overscroll-contain">
+          <DialogHeader>
+            <DialogTitle>The BEE Suite In-Person Card Payment</DialogTitle>
+            <DialogDescription>
+              The parent pays on a certified reader. Card details are encrypted by the payment hardware and never enter The BEE Suite.
+            </DialogDescription>
+          </DialogHeader>
+          {terminalBody}
         </DialogContent>
       </Dialog>
     </>

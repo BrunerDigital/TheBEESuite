@@ -14,7 +14,7 @@ import {
   retrieveStripeConnectedAccount,
   type StripePaymentMethodCategory,
 } from "@/lib/integrations";
-import { getKidCitySoftwareFeeUnitAmountCents } from "@/lib/kidcity-software-billing";
+import { formatSchoolSoftwareFeeAmount, getSchoolSoftwareFeePolicyForCenter } from "@/lib/kidcity-software-billing";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { saveSoftwareSubscriptionSnapshot } from "@/lib/school-software-subscriptions";
@@ -44,15 +44,33 @@ async function POSTHandler(request: NextRequest) {
   }
   const center = await prisma.center.findUnique({
     where: { id: centerId },
-    select: { id: true, name: true, crmLocationId: true, email: true, customFields: true },
+    select: {
+      id: true,
+      name: true,
+      crmLocationId: true,
+      email: true,
+      customFields: true,
+      ownerGroup: {
+        select: {
+          name: true,
+          ownerType: true,
+          billingEmail: true,
+          contactName: true,
+          customFields: true,
+        },
+      },
+    },
   });
   if (!center) return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
 
   const fields = jsonObject(center.customFields);
+  const feePolicy = getSchoolSoftwareFeePolicyForCenter(center);
+  const monthlyAmountCents = feePolicy.unitAmountCents;
+  const monthlyAmountLabel = formatSchoolSoftwareFeeAmount(monthlyAmountCents);
   const requested = clean(body.method);
   if (requested === "stripe_balance") {
     if (body.approved !== true) {
-      return NextResponse.json({ ok: false, error: "Confirm authorization before enabling the $99 monthly Stripe-balance subscription." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: `Confirm authorization before enabling the ${monthlyAmountLabel} monthly Stripe-balance subscription.` }, { status: 400 });
     }
     if (clean(fields.stripeSoftwareSubscriptionId)) {
       return NextResponse.json({ ok: false, error: "This school already has a software subscription." }, { status: 409 });
@@ -83,7 +101,7 @@ async function POSTHandler(request: NextRequest) {
         payoutBankLast4: banks.defaultBank?.last4,
       });
       if (!targetReady) {
-        return NextResponse.json({ ok: false, error: banks.error || "Complete the new Stripe account and payout bank before authorizing its $99 balance fee." }, { status: 409 });
+        return NextResponse.json({ ok: false, error: banks.error || `Complete the new Stripe account and payout bank before authorizing its ${monthlyAmountLabel} balance fee.` }, { status: 409 });
       }
     }
     const customerConfiguration = await ensureStripeConnectedAccountCustomerConfiguration({ accountId: connectedAccountId, tenantId: user.tenantId });
@@ -94,7 +112,6 @@ async function POSTHandler(request: NextRequest) {
     if (!paymentMethod.ok) {
       return NextResponse.json({ ok: false, error: paymentMethod.error }, { status: paymentMethod.configured ? 502 : 503 });
     }
-    const monthlyAmountCents = getKidCitySoftwareFeeUnitAmountCents();
     const price = await ensureStripeSoftwareRecurringPrice({ tenantId: user.tenantId, unitAmountCents: monthlyAmountCents });
     if (!price.ok) return NextResponse.json({ ok: false, error: price.error }, { status: price.configured ? 502 : 503 });
     const approvedAt = new Date().toISOString();
@@ -106,6 +123,8 @@ async function POSTHandler(request: NextRequest) {
           stripeConnectMigrationBalancePaymentMethodId: paymentMethod.paymentMethodId,
           stripeConnectMigrationBalancePriceId: price.priceId,
           stripeConnectMigrationBalanceApprovalAt: approvedAt,
+          stripeConnectMigrationBalanceMonthlyAmountCents: monthlyAmountCents,
+          stripeConnectMigrationBalanceFeeTier: feePolicy.tier,
           stripeConnectMigrationBalanceApprovedByUserId: user.id,
           stripeConnectMigrationBalanceApprovedByEmail: user.email,
           stripeConnectMigrationStatus: "ready_for_cutover",
@@ -119,9 +138,9 @@ async function POSTHandler(request: NextRequest) {
         action: "billing.software_stripe_balance.migration_authorized",
         resource: "Center",
         resourceId: center.id,
-        metadata: { sourceAccountId: migration.sourceAccountId, targetAccountId: connectedAccountId, monthlyAmountCents, subscriptionCreated: false },
+        metadata: { sourceAccountId: migration.sourceAccountId, targetAccountId: connectedAccountId, monthlyAmountCents, feeTier: feePolicy.tier, subscriptionCreated: false },
       });
-      return NextResponse.json({ ok: true, deferred: true, message: "$99 monthly Stripe-balance billing is authorized for the new account and will start at cutover. Parent payments remain on the current account until then." });
+      return NextResponse.json({ ok: true, deferred: true, message: `${monthlyAmountLabel} monthly Stripe-balance billing is authorized for the new account and will start at cutover. Parent payments remain on the current account until then.` });
     }
     const result = await createStripeBalanceSoftwareSubscription({
       accountId: connectedAccountId,
@@ -131,7 +150,7 @@ async function POSTHandler(request: NextRequest) {
       centerId: center.id,
     });
     if (!result.ok || !result.subscription) {
-      return NextResponse.json({ ok: false, error: result.error || "The $99 school subscription could not be started." }, { status: result.configured ? 502 : 503 });
+      return NextResponse.json({ ok: false, error: result.error || `The ${monthlyAmountLabel} school subscription could not be started.` }, { status: result.configured ? 502 : 503 });
     }
     await prisma.center.update({
       where: { id: center.id },
@@ -145,11 +164,14 @@ async function POSTHandler(request: NextRequest) {
         stripeSoftwareBalanceApprovalAt: approvedAt,
         stripeSoftwareBalanceApprovedByUserId: user.id,
         stripeSoftwareBalanceApprovedByEmail: user.email,
+        stripeSoftwareMonthlyAmountCents: monthlyAmountCents,
+        stripeSoftwareFeeTier: feePolicy.tier,
       } },
     });
     await saveSoftwareSubscriptionSnapshot(prisma, center.id, result.subscription, {
       stripeSoftwareMonthlyAmountCents: monthlyAmountCents,
       stripeSoftwareBillingBasis: "per_school",
+      stripeSoftwareFeeTier: feePolicy.tier,
       stripeSoftwareBalanceApprovalAt: approvedAt,
     });
     await writeAuditLog(user, {
@@ -157,9 +179,9 @@ async function POSTHandler(request: NextRequest) {
       action: "billing.software_stripe_balance.authorized",
       resource: "Center",
       resourceId: center.id,
-      metadata: { connectedAccountId, subscriptionId: result.subscription.id, monthlyAmountCents },
+      metadata: { connectedAccountId, subscriptionId: result.subscription.id, monthlyAmountCents, feeTier: feePolicy.tier },
     });
-    return NextResponse.json({ ok: true, message: "$99 monthly billing from this school's Stripe balance is authorized.", subscription: result.subscription });
+    return NextResponse.json({ ok: true, message: `${monthlyAmountLabel} monthly billing from this school's Stripe balance is authorized.`, subscription: result.subscription });
   }
   const paymentMethodCategory: StripePaymentMethodCategory = requested === "card" ? "card" : requested === "ach" ? "ach" : "default";
   if (paymentMethodCategory === "ach" && !clean(fields.stripePayoutBankLast4)) {

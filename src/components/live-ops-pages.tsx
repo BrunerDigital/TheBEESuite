@@ -30,7 +30,6 @@ import {
   PanelsTopLeft,
   PenTool,
   ShieldCheck,
-  Sparkles,
   Star,
   Workflow,
   ShieldAlert,
@@ -298,18 +297,14 @@ function StatCard({
   detail?: string;
 }) {
   return (
-    <Card className="group/stat relative overflow-hidden border-foreground/10 bg-card/90 shadow-lg shadow-black/5 transition duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-xl hover:shadow-primary/5">
-      <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary via-amber-300 to-transparent opacity-70" />
-      <CardHeader className="pb-1 pt-1">
-        <div className="flex items-center justify-between gap-3">
-          <CardDescription className="text-[0.68rem] font-semibold uppercase tracking-[0.12em]">{label}</CardDescription>
-          <span className="size-1.5 rounded-full bg-primary shadow-[0_0_10px_var(--primary)]" aria-hidden="true" />
-        </div>
-        <CardTitle className="mt-2 text-2xl font-semibold tracking-tight xl:text-3xl">{value}</CardTitle>
+    <Card className="border border-border bg-card shadow-none">
+      <CardHeader className="gap-1 pb-1 pt-1">
+        <CardDescription className="text-sm font-medium">{label}</CardDescription>
+        <CardTitle as="div" className="text-2xl font-semibold tabular-nums tracking-tight">{value}</CardTitle>
       </CardHeader>
       {detail ? (
         <CardContent className="pt-1">
-          <p className="text-xs leading-5 text-muted-foreground">{detail}</p>
+          <p className="text-sm leading-5 text-muted-foreground">{detail}</p>
         </CardContent>
       ) : null}
     </Card>
@@ -326,10 +321,9 @@ function MetricTile({
   detail?: string;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border bg-background/55 p-3 shadow-sm transition hover:border-primary/30 hover:bg-primary/[0.035]">
-      <div className="absolute inset-y-3 left-0 w-0.5 rounded-full bg-primary/70" />
-      <div className="pl-1 text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{label}</div>
-      <div className="mt-1 pl-1 text-lg font-semibold tracking-tight">{value}</div>
+    <div className="rounded-lg border bg-background p-3 shadow-none">
+      <div className="text-sm font-medium text-muted-foreground">{label}</div>
+      <div className="mt-1 text-lg font-semibold tabular-nums tracking-tight">{value}</div>
       {detail ? <div className="mt-1 text-xs text-muted-foreground">{detail}</div> : null}
     </div>
   );
@@ -442,7 +436,7 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>Current notifications</CardTitle>
+              <CardTitle as="h2">Current notifications</CardTitle>
               <CardDescription>Newest notifications and follow-up items</CardDescription>
             </div>
             <NotificationReadAction label="Mark my notifications read" />
@@ -591,7 +585,7 @@ export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
       />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>User Directory</CardTitle>
+          <CardTitle as="h2">User Directory</CardTitle>
           <CardDescription>{data.brandName} accounts and assigned location access</CardDescription>
         </CardHeader>
         <CardContent>
@@ -736,7 +730,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Owner groups</CardTitle>
+            <CardTitle as="h2">Owner groups</CardTitle>
             <CardDescription>Franchisees, multi-location owners, and single-school operators</CardDescription>
           </CardHeader>
           <CardContent>
@@ -772,7 +766,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
         </Card>
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Assigned access</CardTitle>
+            <CardTitle as="h2">Assigned access</CardTitle>
             <CardDescription>Location and organization access assigned to each user</CardDescription>
           </CardHeader>
           <CardContent>
@@ -809,7 +803,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>School profiles</CardTitle>
+          <CardTitle as="h2">School profiles</CardTitle>
           <CardDescription>Contact information, capacity, ownership, and status</CardDescription>
         </CardHeader>
         <CardContent>
@@ -922,7 +916,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
       {data.deliveryStats ? (
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Email delivery follow-up</CardTitle>
+            <CardTitle as="h2">Email delivery follow-up</CardTitle>
             <CardDescription>Email deliveries that have not completed after 24 hours need review. Deferred messages remain in progress while the email provider retries.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-5">
@@ -940,7 +934,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <CardTitle>{integration.name}</CardTitle>
+                  <CardTitle as="div">{integration.name}</CardTitle>
                   <CardDescription>{integration.purpose}</CardDescription>
                 </div>
                 <Badge variant={integration.status === "Connected" || integration.status === "Configured" ? "default" : "outline"}>
@@ -970,7 +964,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
       {data.recentDeliveries ? (
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Message delivery status</CardTitle>
+            <CardTitle as="h2">Message delivery status</CardTitle>
             <CardDescription>
               Recent email, text message, and connected-service deliveries. Pending items will retry automatically.
             </CardDescription>
@@ -1252,7 +1246,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
       </section>
 
       <Card className="glass-panel border-amber-500/35">
-        <CardHeader><CardTitle>Reliability Alerts</CardTitle><CardDescription>These counts do not include parent, child, family, message, or credential information.</CardDescription></CardHeader>
+        <CardHeader><CardTitle as="h2">Reliability Alerts</CardTitle><CardDescription>These counts do not include parent, child, family, message, or credential information.</CardDescription></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           <StatCard label="Client exceptions (24h)" value={data.stats.unresolvedClientErrors24h} detail="Unresolved, deduplicated reports" />
           <StatCard label="Push failures (24h)" value={data.stats.failedPushDeliveries24h} detail="Failed delivery attempts" />
@@ -1263,7 +1257,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
       <DeveloperSubscriptionConsole schools={data.softwareSubscriptions} />
 
       <Card className="glass-panel border-primary/25">
-        <CardHeader><CardTitle className="flex items-center gap-2"><Users className="size-5 text-primary" />Users, roles, and access</CardTitle><CardDescription>Create users, assign roles and locations, manage sign-in access, and sign users out of active devices.</CardDescription></CardHeader>
+        <CardHeader><CardTitle as="h2" className="flex items-center gap-2"><Users className="size-5 text-primary" />Users, roles, and access</CardTitle><CardDescription>Create users, assign roles and locations, manage sign-in access, and sign users out of active devices.</CardDescription></CardHeader>
         <CardContent className="flex flex-wrap items-center gap-3"><Badge variant="outline">{data.stats.activeUsers} active</Badge><Badge variant="outline">{data.stats.inactiveUsers} inactive</Badge><Link className={buttonVariants()} href="/agency-admin#existing-user-accounts">Open user access control <ArrowRight /></Link></CardContent>
       </Card>
 
@@ -1284,7 +1278,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
           {projectAccountGroups.map((group) => (
             <Card key={group.title} className="glass-panel">
               <CardHeader>
-                <CardTitle className="text-lg">{group.title}</CardTitle>
+                <CardTitle as="h3" className="text-lg">{group.title}</CardTitle>
                 <CardDescription>{group.description}</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -1341,7 +1335,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Connected services</CardTitle>
+            <CardTitle as="h2">Connected services</CardTitle>
             <CardDescription>Current service status and most recent update</CardDescription>
           </CardHeader>
           <CardContent>
@@ -1375,7 +1369,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
 
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Recent payment events</CardTitle>
+            <CardTitle as="h2">Recent payment events</CardTitle>
             <CardDescription>Recent payment updates and any processing errors</CardDescription>
           </CardHeader>
           <CardContent>
@@ -1415,7 +1409,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
 
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Message delivery attempts</CardTitle>
+          <CardTitle as="h2">Message delivery attempts</CardTitle>
           <CardDescription>Recent email, text message, spreadsheet, and connected-service deliveries</CardDescription>
         </CardHeader>
         <CardContent>
@@ -1464,7 +1458,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Data Imports</CardTitle>
+            <CardTitle as="h2">Data Imports</CardTitle>
             <CardDescription>Newest import batches and row counts</CardDescription>
           </CardHeader>
           <CardContent>
@@ -1501,7 +1495,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
 
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Recent administrative activity</CardTitle>
+            <CardTitle as="h2">Recent administrative activity</CardTitle>
             <CardDescription>Account, access, and other sensitive changes</CardDescription>
           </CardHeader>
           <CardContent>
@@ -1625,7 +1619,7 @@ export function HelpPage({ data }: { data: HelpPageData }) {
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Current Alerts</CardTitle>
+            <CardTitle as="h2">Current Alerts</CardTitle>
             <CardDescription>Notifications assigned to this user account</CardDescription>
           </CardHeader>
           <CardContent>
@@ -1665,7 +1659,7 @@ export function HelpPage({ data }: { data: HelpPageData }) {
 
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Support Access History</CardTitle>
+            <CardTitle as="h2">Support Access History</CardTitle>
             <CardDescription>Audited support-access requests and related support events</CardDescription>
           </CardHeader>
           <CardContent>
@@ -1807,7 +1801,7 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
       ) : null}
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Recent Leads</CardTitle>
+          <CardTitle as="h2">Recent Leads</CardTitle>
           <CardDescription>Newest inquiries and manually added records</CardDescription>
         </CardHeader>
         <CardContent>
@@ -1854,7 +1848,7 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
       {data.centerId ? (
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Lobby Check-In Kiosk</CardTitle>
+            <CardTitle as="h2">Lobby Check-In Kiosk</CardTitle>
             <CardDescription>Open this on the lobby tablet or front desk computer for parent PIN or QR check-in/out.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -1945,7 +1939,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <CardTitle>{stage.label}</CardTitle>
+                  <CardTitle as="h2">{stage.label}</CardTitle>
                   <CardDescription>{stage.highIntent} high-intent</CardDescription>
                 </div>
                 <Badge>{stage.count}</Badge>
@@ -1956,7 +1950,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Registration Application Review</CardTitle>
+          <CardTitle as="h2">Registration Application Review</CardTitle>
           <CardDescription>Submitted online registration packets requiring director approval, rejection, or parent portal setup.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -2016,7 +2010,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
       </Card>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Enrollment Readiness Checklists</CardTitle>
+          <CardTitle as="h2">Enrollment Readiness Checklists</CardTitle>
           <CardDescription>Approved applications by child/family with next setup blockers for documents, signatures, billing, classroom, and start date.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -2077,7 +2071,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
       </Card>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Newest Pipeline Activity</CardTitle>
+          <CardTitle as="h2">Newest Pipeline Activity</CardTitle>
           <CardDescription>Use Prospective Families to update stages, add notes, schedule tours, and contact families.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -2161,7 +2155,7 @@ export function ToursPage({ data }: { data: ToursPageData }) {
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Tour Schedule</CardTitle>
+          <CardTitle as="h2">Tour Schedule</CardTitle>
           <CardDescription>Newest and upcoming tours by school</CardDescription>
         </CardHeader>
         <CardContent>
@@ -2263,7 +2257,7 @@ export function WaitlistPage({ data }: { data: WaitlistPageData }) {
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Waitlist</CardTitle>
+          <CardTitle as="h2">Waitlist</CardTitle>
           <CardDescription>Leads currently in the Waitlisted stage</CardDescription>
         </CardHeader>
         <CardContent>
@@ -2315,7 +2309,7 @@ export function WaitlistPage({ data }: { data: WaitlistPageData }) {
       </Card>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Imported Waitlist Entries</CardTitle>
+          <CardTitle as="h2">Imported Waitlist Entries</CardTitle>
           <CardDescription>Waitlist records imported from existing school data</CardDescription>
         </CardHeader>
         <CardContent>
@@ -2488,7 +2482,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
           <Card className="glass-panel">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <CardTitle>Message History</CardTitle>
+                <CardTitle as="h2">Message History</CardTitle>
                 <InfoTip label="About message history">Conversation history appears here when portal messages are linked to your family account.</InfoTip>
               </div>
             </CardHeader>
@@ -2604,7 +2598,7 @@ export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Broadcast Queue</CardTitle>
+          <CardTitle as="h2">Broadcast Queue</CardTitle>
           <CardDescription>Audience, center, status, and scheduled delivery</CardDescription>
         </CardHeader>
         <CardContent>
@@ -2857,7 +2851,7 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
         <CardHeader>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <CardTitle>End-of-Day Reconciliation</CardTitle>
+              <CardTitle as="h2">End-of-Day Reconciliation</CardTitle>
               <CardDescription>
                 Kiosk activity for {formatDate(data.reconciliation.serviceDate)} with unresolved check-ins and front desk review flags.
               </CardDescription>
@@ -2962,7 +2956,7 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
       </Card>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Recent Attendance</CardTitle>
+          <CardTitle as="h2">Recent Attendance</CardTitle>
           <CardDescription>Absences, sick days, vacations, and ratio-supporting classroom records</CardDescription>
         </CardHeader>
         <CardContent>
@@ -3042,7 +3036,7 @@ export function DailyReportsPage({ data }: { data: DailyReportsPageData }) {
         <CardHeader>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <CardTitle>Recent Daily Reports</CardTitle>
+              <CardTitle as="h2">Recent Daily Reports</CardTitle>
               <CardDescription>Classroom-ready activity summaries</CardDescription>
             </div>
             <ReportPrintAction
@@ -3268,7 +3262,7 @@ export function ParentMediaReviewPage({ data }: { data: ParentMediaReviewPageDat
         {!data.media.length ? (
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>No photos need review</CardTitle>
+              <CardTitle as="h2">No photos need review</CardTitle>
               <CardDescription>
                 Teacher-uploaded parent photos with missing permission will appear here before they can be shared.
               </CardDescription>
@@ -3325,7 +3319,7 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
         <CardHeader>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <CardTitle>Incident Queue</CardTitle>
+              <CardTitle as="h2">Incident Queue</CardTitle>
               <CardDescription>Director review and parent acknowledgment status</CardDescription>
             </div>
             <ReportPrintAction
@@ -3529,7 +3523,7 @@ export function StaffPage({ data }: { data: StaffPageData }) {
       <StaffOnboardingChecklistPanel items={data.staffChecklist.items} summary={data.staffChecklist.summary} />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Teacher Directory</CardTitle>
+          <CardTitle as="h2">Teacher Directory</CardTitle>
           <CardDescription>Role, classroom, and certification snapshot</CardDescription>
         </CardHeader>
         <CardContent>
@@ -3602,7 +3596,7 @@ export function StaffPage({ data }: { data: StaffPageData }) {
         />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Upcoming Staff Schedule</CardTitle>
+          <CardTitle as="h2">Upcoming Staff Schedule</CardTitle>
           <CardDescription>Published teacher coverage for the schools you can access</CardDescription>
         </CardHeader>
         <CardContent>
@@ -3707,7 +3701,7 @@ export function FormsPage({ data }: { data: FormsPageData }) {
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Form Library</CardTitle>
+          <CardTitle as="h2">Form Library</CardTitle>
           <CardDescription>Form builder fields and review settings</CardDescription>
         </CardHeader>
         <CardContent>
@@ -3738,7 +3732,7 @@ export function FormsPage({ data }: { data: FormsPageData }) {
       <FormBuilderPanel forms={data.forms} />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Recent Submissions</CardTitle>
+          <CardTitle as="h2">Recent Submissions</CardTitle>
           <CardDescription>Online registration packets and other submitted forms visible to this account.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -3887,7 +3881,7 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Visibility Rules</CardTitle>
+          <CardTitle as="h2">Visibility Rules</CardTitle>
           <CardDescription>
             Teachers see classroom safety records only. Billing, payroll, staff files, raw legal/court records, and admin compliance packages stay hidden.
           </CardDescription>
@@ -3899,7 +3893,7 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <CardTitle>{child.preferredName || child.fullName}</CardTitle>
+                  <CardTitle as="div">{child.preferredName || child.fullName}</CardTitle>
                   <CardDescription>
                     {child.fullName} · {child.classroom?.name ?? "Unassigned classroom"} · {child.ageGroup}
                   </CardDescription>
@@ -3981,7 +3975,7 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Teacher-Visible Files</CardTitle>
+          <CardTitle as="h2">Teacher-Visible Files</CardTitle>
           <CardDescription>Read-only files relevant to classroom care, safety, permissions, and emergency response.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -4052,7 +4046,7 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
       <Card className="glass-panel">
         <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <CardTitle>Licensing / Records Package</CardTitle>
+            <CardTitle as="h2">Licensing / Records Package</CardTitle>
             <CardDescription>
               Download a manifest-backed package for visible schools with family, child, staff, document, incident, medication, drill, attendance, and form records.
             </CardDescription>
@@ -4076,7 +4070,7 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
       <SignatureRequestPanel families={data.signatureFamilies} />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Document Records</CardTitle>
+          <CardTitle as="h2">Document Records</CardTitle>
           <CardDescription>Compliance-ready document tracking without legal compliance guarantees</CardDescription>
         </CardHeader>
         <CardContent>
@@ -4231,7 +4225,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
       <MedicationLogPanel childrenOptions={data.medicationChildren} />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Recent Medication Logs</CardTitle>
+          <CardTitle as="h2">Recent Medication Logs</CardTitle>
           <CardDescription>Medication administration records for the schools you can access</CardDescription>
         </CardHeader>
         <CardContent>
@@ -4272,7 +4266,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Certification Reminders</CardTitle>
+            <CardTitle as="h2">Certification Reminders</CardTitle>
             <CardDescription>Expiring teacher documentation</CardDescription>
           </CardHeader>
           <CardContent>
@@ -4300,7 +4294,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
         </Card>
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Allergy List</CardTitle>
+            <CardTitle as="h2">Allergy List</CardTitle>
             <CardDescription>Restricted child safety information</CardDescription>
           </CardHeader>
           <CardContent>
@@ -4415,7 +4409,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
       />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Current Week Submission Tracker</CardTitle>
+          <CardTitle as="h2">Current Week Submission Tracker</CardTitle>
           <CardDescription>Visible schools without a report for the current FTE week</CardDescription>
         </CardHeader>
         <CardContent>
@@ -4449,7 +4443,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
       {data.fte ? (
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>FTE Report Snapshot</CardTitle>
+            <CardTitle as="h2">FTE Report Snapshot</CardTitle>
             <CardDescription>
               {data.fte.status === "ready"
                 ? `Synced from ${data.fte.sourceMode === "template_week_tab" ? "template" : "rolling"} Google Sheets tab "${data.fte.sheetName}".`
@@ -4502,7 +4496,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
       ) : null}
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>School Network</CardTitle>
+          <CardTitle as="h2">School Network</CardTitle>
           <CardDescription>School contact details, readiness, and enrollment inquiry volume</CardDescription>
         </CardHeader>
         <CardContent>
@@ -4655,7 +4649,7 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Weekly FTE Trend</CardTitle>
+              <CardTitle as="h2">Weekly FTE Trend</CardTitle>
               <CardDescription>Last visible reporting weeks by total FTE, submitted schools, and missing reports</CardDescription>
             </CardHeader>
             <CardContent>
@@ -4664,8 +4658,9 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
                   <div key={week.weekStart} className="flex min-w-24 flex-1 flex-col items-center gap-2">
                     <div className="flex h-44 w-full items-end rounded-t-xl bg-muted/35 px-3 pt-3">
                       <div
-                        className="w-full rounded-t-lg bg-gradient-to-t from-amber-500 to-yellow-300"
+                        className="w-full rounded-t-sm bg-primary"
                         style={{ height: `${Math.max(8, (week.fteTotal / maxTrendFte) * 100)}%` }}
+                        role="img"
                         aria-label={`${week.fteTotal} FTE for week of ${formatUtcDate(week.weekStart)}`}
                       />
                     </div>
@@ -4685,7 +4680,7 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
 
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>School FTE Snapshot</CardTitle>
+              <CardTitle as="h2">School FTE Snapshot</CardTitle>
               <CardDescription>Current week status by visible school</CardDescription>
             </CardHeader>
             <CardContent>
@@ -4734,7 +4729,7 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
 
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>{isExecutive ? "Current Week Due Tracker" : "Assigned School Tracker"}</CardTitle>
+          <CardTitle as="h2">{isExecutive ? "Current Week Due Tracker" : "Assigned School Tracker"}</CardTitle>
           <CardDescription>
             {isExecutive
               ? "Schools without a report for the current reporting week"
@@ -4773,7 +4768,7 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
       {isExecutive && data.fte ? (
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Google Sheet Backup Snapshot</CardTitle>
+            <CardTitle as="h2">Google Sheet Backup Snapshot</CardTitle>
             <CardDescription>
               {data.fte.status === "ready"
                 ? `Synced from ${data.fte.sourceMode === "template_week_tab" ? "template" : "rolling"} Google Sheets tab "${data.fte.sheetName}".`
@@ -4863,7 +4858,7 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
       />
       <Card className="glass-panel border-amber-500/35">
         <CardHeader>
-          <CardTitle>Parent Family-Link Review</CardTitle>
+          <CardTitle as="h2">Parent Family-Link Review</CardTitle>
           <CardDescription>
             Parent logins linked to more than one family are held for director review. Do not merge or unlink records until identity and guardianship are confirmed; families outside your school remain hidden.
           </CardDescription>
@@ -4889,7 +4884,7 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
       </Card>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Guardian Self-Service Change Requests</CardTitle>
+          <CardTitle as="h2">Guardian Self-Service Change Requests</CardTitle>
           <CardDescription>
             Parent portal requests stay restricted until a director approves or rejects them. Approval automatically applies the requested emergency-contact or authorized-pickup change to the family record.
           </CardDescription>
@@ -5146,7 +5141,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Recurring tuition</CardTitle>
+          <CardTitle as="h2">Recurring tuition</CardTitle>
           <CardDescription>Review active tuition assignments and the invoices due to be created.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -5163,7 +5158,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       </Card>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Current-family Accounts Receivable Aging</CardTitle>
+          <CardTitle as="h2">Current-family Accounts Receivable Aging</CardTitle>
           <CardDescription>Open invoices for currently enrolled families by due-date bucket. Past-family balances are excluded.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -5183,7 +5178,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       </Card>
       <Card className="glass-panel border-amber-500/30">
         <CardHeader>
-          <CardTitle>Past family balances — excluded from current outstanding</CardTitle>
+          <CardTitle as="h2">Past family balances — excluded from current outstanding</CardTitle>
           <CardDescription>
             Historical debt is retained for account review, but it is not included in current-family outstanding totals, active AR aging, report AR fields, or dashboards.
           </CardDescription>
@@ -5197,7 +5192,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       </Card>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Ledger Reconciliation Report</CardTitle>
+          <CardTitle as="h2">Ledger Reconciliation Report</CardTitle>
           <CardDescription>Control report across current and historical accounts; it is separate from current-family outstanding reporting.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -5241,7 +5236,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       </Card>
       <Card className="glass-panel" id="needs-enrollment-setup">
         <CardHeader>
-          <CardTitle>Needs enrollment setup</CardTitle>
+          <CardTitle as="h2">Needs enrollment setup</CardTitle>
           <CardDescription>
             Current-status children without a classroom are shown here for correction. They remain non-chargeable and excluded from active Billing and Accounts Receivable totals.
           </CardDescription>
@@ -5294,7 +5289,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Invoices</CardTitle>
+          <CardTitle as="h2">Invoices</CardTitle>
           <CardDescription>Review invoice status, due dates, and family balances.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -5447,7 +5442,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
       <PaymentAutopayActions />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Payment attempts</CardTitle>
+          <CardTitle as="h2">Payment attempts</CardTitle>
           <CardDescription>Review payment status, family, and any follow-up needed.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -5694,7 +5689,7 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
     <div className="flex flex-col gap-6">
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
         <Badge className="mb-4">
-          <Sparkles data-icon="inline-start" />
+          <PenTool data-icon="inline-start" />
           White-label controls
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">White-Label Settings</h1>
@@ -5718,7 +5713,7 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
       />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Branding Settings</CardTitle>
+          <CardTitle as="h2">Branding Settings</CardTitle>
           <CardDescription>Set brand defaults and school- or owner-group-specific overrides.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -5761,7 +5756,7 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
       </Card>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Asset Registry</CardTitle>
+          <CardTitle as="h2">Asset Registry</CardTitle>
           <CardDescription>Where logos, mascot art, favicon, login, and parent portal assets are attached.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -5819,7 +5814,7 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
         {data.settings.map((setting) => (
           <Card key={setting.id} className="glass-panel">
             <CardHeader>
-              <CardTitle>{setting.brandName}</CardTitle>
+              <CardTitle as="div">{setting.brandName}</CardTitle>
               <CardDescription>{setting.brand.name} · {setting.brand.slug}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
@@ -5966,7 +5961,7 @@ export function CorporateBillingPage({ data }: { data: CorporateBillingPageData 
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <CardTitle>{invoice.invoiceNumber}</CardTitle>
+              <CardTitle as="div">{invoice.invoiceNumber}</CardTitle>
               <CardDescription className="mt-2 max-w-3xl">{invoice.description}</CardDescription>
             </div>
             <Badge variant={invoice.stripeCustomerConfigured ? "default" : "destructive"}>
@@ -6041,7 +6036,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Parent payments</CardTitle>
+            <CardTitle as="h2">Parent payments</CardTitle>
             <CardDescription>
               Parents can review open invoices and choose an available payment option in the Parent Portal.
             </CardDescription>
@@ -6049,7 +6044,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         </Card>
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>School payouts</CardTitle>
+            <CardTitle as="h2">School payouts</CardTitle>
             <CardDescription>
               Each school completes payout onboarding before live parent payments are accepted for that school.
             </CardDescription>
@@ -6059,7 +6054,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Tuition plans</CardTitle>
+            <CardTitle as="h2">Tuition plans</CardTitle>
             <CardDescription>Age group, billing frequency, and amount</CardDescription>
           </CardHeader>
           <CardContent>
@@ -6089,7 +6084,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         </Card>
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Products and Fees</CardTitle>
+            <CardTitle as="h2">Products and Fees</CardTitle>
             <CardDescription>One-time and recurring billing items</CardDescription>
           </CardHeader>
           <CardContent>

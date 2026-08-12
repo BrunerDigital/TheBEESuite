@@ -176,6 +176,10 @@ function clockEditRowId() {
   return `clock-row-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function clockEditControlId(rowId: string, control: "action" | "occurred-at" | "notes" | "remove") {
+  return `payroll-punch-${rowId}-${control}`.replace(/[^A-Za-z0-9_-]/g, "-");
+}
+
 function sortClockEditRows(rows: ClockEditRow[]) {
   return [...rows].sort((left, right) => {
     const leftTime = new Date(left.occurredAt).getTime();
@@ -1062,7 +1066,7 @@ export function StaffManagementPanel({
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>
+          <CardTitle as="h2">
             <UserRoundCog data-icon="inline-start" />
             Classroom Assignment Tool
           </CardTitle>
@@ -1158,8 +1162,9 @@ export function StaffManagementPanel({
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
-                  <Label>Teacher</Label>
+                  <Label htmlFor="quick-assignment-teacher">Teacher</Label>
                   <select
+                    id="quick-assignment-teacher"
                     className={nativeSelectClassName}
                     value={assignmentStaffId}
                     onChange={(event) => setAssignmentStaffId(event.target.value)}
@@ -1170,8 +1175,9 @@ export function StaffManagementPanel({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Classroom</Label>
+                  <Label htmlFor="quick-assignment-classroom">Classroom</Label>
                   <select
+                    id="quick-assignment-classroom"
                     className={nativeSelectClassName}
                     value={assignmentClassroomId}
                     onChange={(event) => setAssignmentClassroomId(event.target.value)}
@@ -1198,8 +1204,9 @@ export function StaffManagementPanel({
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1">
-                  <Label>Classroom</Label>
+                  <Label htmlFor="weekly-coverage-classroom">Classroom</Label>
                   <select
+                    id="weekly-coverage-classroom"
                     className={nativeSelectClassName}
                     value={weeklyClassroomId}
                     onChange={(event) => setWeeklyClassroomId(event.target.value)}
@@ -1215,20 +1222,21 @@ export function StaffManagementPanel({
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <Label>Week starts</Label>
-                  <Input type="date" value={weeklyStartsAt} onChange={(event) => setWeeklyStartsAt(event.target.value)} required />
+                  <Label htmlFor="weekly-coverage-start-date">Week starts</Label>
+                  <Input id="weekly-coverage-start-date" type="date" value={weeklyStartsAt} onChange={(event) => setWeeklyStartsAt(event.target.value)} required />
                 </div>
                 <div className="space-y-1">
-                  <Label>Start time</Label>
-                  <Input type="time" value={weeklyStartTime} onChange={(event) => setWeeklyStartTime(event.target.value)} required />
+                  <Label htmlFor="weekly-coverage-start-time">Start time</Label>
+                  <Input id="weekly-coverage-start-time" type="time" value={weeklyStartTime} onChange={(event) => setWeeklyStartTime(event.target.value)} required />
                 </div>
                 <div className="space-y-1">
-                  <Label>End time</Label>
-                  <Input type="time" value={weeklyEndTime} onChange={(event) => setWeeklyEndTime(event.target.value)} required />
+                  <Label htmlFor="weekly-coverage-end-time">End time</Label>
+                  <Input id="weekly-coverage-end-time" type="time" value={weeklyEndTime} onChange={(event) => setWeeklyEndTime(event.target.value)} required />
                 </div>
                 <div className="space-y-1">
-                  <Label>Status</Label>
+                  <Label htmlFor="weekly-coverage-status">Status</Label>
                   <select
+                    id="weekly-coverage-status"
                     className={nativeSelectClassName}
                     value={weeklyStatus}
                     onChange={(event) => setWeeklyStatus(event.target.value)}
@@ -1237,8 +1245,8 @@ export function StaffManagementPanel({
                     <option value="confirmed">Confirmed</option>
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Days</Label>
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-medium leading-none">Days</legend>
                   <div className="flex flex-wrap gap-2">
                     {[
                       [1, "Mon"],
@@ -1250,6 +1258,7 @@ export function StaffManagementPanel({
                     ].map(([day, label]) => (
                       <label key={day} className="flex items-center gap-1 rounded-lg border bg-card/50 px-2 py-1 text-xs">
                         <input
+                          id={`weekly-coverage-day-${day}`}
                           type="checkbox"
                           checked={weeklyDays.includes(Number(day))}
                           onChange={() => toggleWeeklyDay(Number(day))}
@@ -1258,7 +1267,7 @@ export function StaffManagementPanel({
                       </label>
                     ))}
                   </div>
-                </div>
+                </fieldset>
               </div>
               <Button type="submit" className="mt-4" disabled={isPending || !weeklyClassroomId || !weeklyClassroomTeachers.length || !weeklyDays.length}>
                 <CalendarClock data-icon="inline-start" />
@@ -1279,8 +1288,9 @@ export function StaffManagementPanel({
             </div>
             <div className="grid gap-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto]">
               <div className="space-y-1">
-                <Label>Teacher</Label>
+                <Label htmlFor="staff-clock-teacher">Teacher</Label>
                 <select
+                  id="staff-clock-teacher"
                   className={nativeSelectClassName}
                   value={clockTeacher?.id ?? ""}
                   disabled={clockEditsDirty}
@@ -1297,8 +1307,8 @@ export function StaffManagementPanel({
                 </p>
               </div>
               <div className="space-y-1">
-                <Label>Notes</Label>
-                <Input value={clockNotes} onChange={(event) => setClockNotes(event.target.value)} placeholder="Optional director note" />
+                <Label htmlFor="staff-clock-notes">Notes</Label>
+                <Input id="staff-clock-notes" value={clockNotes} onChange={(event) => setClockNotes(event.target.value)} placeholder="Optional director note" />
               </div>
               <Button type="button" className="self-end" disabled={isPending || !clockTeacher || !clockTeacher.user.isActive} onClick={saveClockAction}>
                 <Clock data-icon="inline-start" />
@@ -1333,8 +1343,9 @@ export function StaffManagementPanel({
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <Label>Start</Label>
+                  <Label htmlFor="punch-pay-period-start">Start</Label>
                   <Input
+                    id="punch-pay-period-start"
                     type="date"
                     value={payrollStartDate}
                     disabled={clockEditsDirty}
@@ -1342,8 +1353,9 @@ export function StaffManagementPanel({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label>End</Label>
+                  <Label htmlFor="punch-pay-period-end">End</Label>
                   <Input
+                    id="punch-pay-period-end"
                     type="date"
                     value={payrollEndDate}
                     disabled={clockEditsDirty}
@@ -1363,42 +1375,64 @@ export function StaffManagementPanel({
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {sortClockEditRows(visibleClockEditRows).map((row) => (
-                      <tr key={row.id}>
-                        <td className="px-3 py-2">
-                          <select
-                            className={nativeSelectClassName}
-                            value={row.action}
-                            disabled={isPending}
-                            onChange={(event) => updateClockEditRow(row.id, { action: event.target.value as StaffClockAction })}
-                          >
-                            <option value="clock_in">Clock in</option>
-                            <option value="clock_out">Clock out</option>
-                          </select>
-                        </td>
-                        <td className="px-3 py-2">
-                          <Input
-                            type="datetime-local"
-                            value={row.occurredAt}
-                            disabled={isPending}
-                            onChange={(event) => updateClockEditRow(row.id, { occurredAt: event.target.value })}
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <Input
-                            value={row.notes}
-                            disabled={isPending}
-                            onChange={(event) => updateClockEditRow(row.id, { notes: event.target.value })}
-                            placeholder="Optional note"
-                          />
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <Button type="button" variant="ghost" size="icon-sm" disabled={isPending} onClick={() => removeClockEditRow(row.id)}>
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                    {sortClockEditRows(visibleClockEditRows).map((row) => {
+                      const rowAccessibleName = `payroll punch ${row.id} for ${clockTeacher?.user.name ?? "the selected staff member"}`;
+                      const actionId = clockEditControlId(row.id, "action");
+                      const occurredAtId = clockEditControlId(row.id, "occurred-at");
+                      const notesId = clockEditControlId(row.id, "notes");
+                      const removeId = clockEditControlId(row.id, "remove");
+
+                      return (
+                        <tr key={row.id}>
+                          <td className="px-3 py-2">
+                            <select
+                              id={actionId}
+                              aria-label={`Action for ${rowAccessibleName}`}
+                              className={nativeSelectClassName}
+                              value={row.action}
+                              disabled={isPending}
+                              onChange={(event) => updateClockEditRow(row.id, { action: event.target.value as StaffClockAction })}
+                            >
+                              <option value="clock_in">Clock in</option>
+                              <option value="clock_out">Clock out</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <Input
+                              id={occurredAtId}
+                              aria-label={`Date and time for ${rowAccessibleName}`}
+                              type="datetime-local"
+                              value={row.occurredAt}
+                              disabled={isPending}
+                              onChange={(event) => updateClockEditRow(row.id, { occurredAt: event.target.value })}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <Input
+                              id={notesId}
+                              aria-label={`Notes for ${rowAccessibleName}`}
+                              value={row.notes}
+                              disabled={isPending}
+                              onChange={(event) => updateClockEditRow(row.id, { notes: event.target.value })}
+                              placeholder="Optional note"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <Button
+                              id={removeId}
+                              aria-label={`Remove ${rowAccessibleName}`}
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              disabled={isPending}
+                              onClick={() => removeClockEditRow(row.id)}
+                            >
+                              <Trash2 className="size-4" aria-hidden="true" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {!payrollRangeIsValid ? (
                       <tr>
                         <td colSpan={4} className="px-3 py-4 text-sm text-muted-foreground">Select a valid pay period to view punches.</td>
@@ -1569,12 +1603,12 @@ export function StaffManagementPanel({
                 </div>
               ) : null}
               <div className="space-y-1">
-                <Label>Start</Label>
-                <Input type="date" value={payrollStartDate} disabled={clockEditsDirty} onChange={(event) => changePayrollStartDate(event.target.value)} />
+                <Label htmlFor="payroll-report-start">Start</Label>
+                <Input id="payroll-report-start" type="date" value={payrollStartDate} disabled={clockEditsDirty} onChange={(event) => changePayrollStartDate(event.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label>End</Label>
-                <Input type="date" value={payrollEndDate} disabled={clockEditsDirty} onChange={(event) => changePayrollEndDate(event.target.value)} />
+                <Label htmlFor="payroll-report-end">End</Label>
+                <Input id="payroll-report-end" type="date" value={payrollEndDate} disabled={clockEditsDirty} onChange={(event) => changePayrollEndDate(event.target.value)} />
               </div>
               <Button type="button" variant="outline" disabled={!payrollRangeIsValid || !staffHoursRows.length} onClick={printTimeCards}>
                 <Printer data-icon="inline-start" />
@@ -1845,8 +1879,9 @@ export function StaffManagementPanel({
             ) : null}
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
-                <Label>Teacher</Label>
+                <Label htmlFor="staff-profile-teacher">Teacher</Label>
                 <select
+                  id="staff-profile-teacher"
                   className={nativeSelectClassName}
                   value={selectedStaffId}
                   onChange={(event) => loadTeacher(event.target.value)}
@@ -1866,8 +1901,9 @@ export function StaffManagementPanel({
                 ) : null}
               </div>
               <div className="space-y-1">
-                <Label>Center</Label>
+                <Label htmlFor="staff-profile-center">Center</Label>
                 <select
+                  id="staff-profile-center"
                   className={nativeSelectClassName}
                   value={centerId}
                   onChange={(event) => updateCenter(event.target.value)}
@@ -1878,24 +1914,25 @@ export function StaffManagementPanel({
                 </select>
               </div>
               <div className="space-y-1">
-                <Label>Full name</Label>
-                <Input value={name} onChange={(event) => setName(event.target.value)} required autoComplete="name" />
+                <Label htmlFor="staff-profile-name">Full name</Label>
+                <Input id="staff-profile-name" value={name} onChange={(event) => setName(event.target.value)} required autoComplete="name" />
               </div>
               <div className="space-y-1">
-                <Label>Contact email</Label>
-                <Input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
+                <Label htmlFor="staff-profile-email">Contact email</Label>
+                <Input id="staff-profile-email" value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
               </div>
               <div className="space-y-1">
-                <Label>Phone</Label>
-                <Input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" autoComplete="tel" />
+                <Label htmlFor="staff-profile-phone">Phone</Label>
+                <Input id="staff-profile-phone" value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" autoComplete="tel" />
               </div>
               <div className="space-y-1">
-                <Label>Title</Label>
-                <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Lead Teacher" />
+                <Label htmlFor="staff-profile-title">Title</Label>
+                <Input id="staff-profile-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Lead Teacher" />
               </div>
               <div className="space-y-1">
-                <Label>Classroom</Label>
+                <Label htmlFor="staff-profile-classroom">Classroom</Label>
                 <select
+                  id="staff-profile-classroom"
                   className={nativeSelectClassName}
                   value={classroomId}
                   onChange={(event) => setClassroomId(event.target.value)}
@@ -1909,8 +1946,9 @@ export function StaffManagementPanel({
                 </select>
               </div>
               <div className="space-y-1">
-                <Label>Background status</Label>
+                <Label htmlFor="staff-profile-background-status">Background status</Label>
                 <select
+                  id="staff-profile-background-status"
                   className={nativeSelectClassName}
                   value={backgroundCheckStatus}
                   onChange={(event) => setBackgroundCheckStatus(event.target.value)}
@@ -1921,8 +1959,9 @@ export function StaffManagementPanel({
                 </select>
               </div>
               <div className="space-y-1">
-                <Label>Staff kiosk code</Label>
+                <Label htmlFor="staff-profile-kiosk-code">Staff kiosk code</Label>
                 <Input
+                  id="staff-profile-kiosk-code"
                   value={staffKioskPin}
                   onChange={(event) => setStaffKioskPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
                   placeholder="Optional 4 digit code"
@@ -1936,8 +1975,9 @@ export function StaffManagementPanel({
                 <div className="mb-3 text-sm font-medium">Payroll & compensation</div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
-                    <Label>Pay type</Label>
+                    <Label htmlFor="staff-pay-type">Pay type</Label>
                     <select
+                      id="staff-pay-type"
                       className={nativeSelectClassName}
                       value={staffPayType}
                       onChange={(event) => setStaffPayType(event.target.value as StaffPayType)}
@@ -1947,8 +1987,9 @@ export function StaffManagementPanel({
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <Label>{staffPayType === "salary" ? "Yearly salary" : "Hourly rate"}</Label>
+                    <Label htmlFor="staff-pay-rate">{staffPayType === "salary" ? "Yearly salary" : "Hourly rate"}</Label>
                     <Input
+                      id="staff-pay-rate"
                       value={staffPayType === "salary" ? annualSalary : hourlyRate}
                       onChange={(event) => {
                         if (staffPayType === "salary") {
@@ -1962,12 +2003,13 @@ export function StaffManagementPanel({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label>Payroll ID</Label>
-                    <Input value={payrollId} onChange={(event) => setPayrollId(event.target.value)} />
+                    <Label htmlFor="staff-payroll-id">Payroll ID</Label>
+                    <Input id="staff-payroll-id" value={payrollId} onChange={(event) => setPayrollId(event.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label>Payroll status</Label>
+                    <Label htmlFor="staff-payroll-status">Payroll status</Label>
                     <select
+                      id="staff-payroll-status"
                       className={nativeSelectClassName}
                       value={payrollStatus}
                       onChange={(event) => setPayrollStatus(event.target.value as StaffPayrollStatus)}
@@ -1978,19 +2020,20 @@ export function StaffManagementPanel({
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Pay code</Label>
-                    <Input value={payCode} onChange={(event) => setPayCode(event.target.value)} placeholder="Teacher" />
+                    <Label htmlFor="staff-pay-code">Pay code</Label>
+                    <Input id="staff-pay-code" value={payCode} onChange={(event) => setPayCode(event.target.value)} placeholder="Teacher" />
                   </div>
                   <div className="space-y-1">
-                    <Label>Payroll department</Label>
-                    <Input value={payDepartment} onChange={(event) => setPayDepartment(event.target.value)} placeholder="Classroom or center" />
+                    <Label htmlFor="staff-pay-department">Payroll department</Label>
+                    <Input id="staff-pay-department" value={payDepartment} onChange={(event) => setPayDepartment(event.target.value)} placeholder="Classroom or center" />
                   </div>
                   <div className="space-y-1">
-                    <Label>Effective date</Label>
-                    <Input type="date" value={payEffectiveDate} onChange={(event) => setPayEffectiveDate(event.target.value)} />
+                    <Label htmlFor="staff-pay-effective-date">Effective date</Label>
+                    <Input id="staff-pay-effective-date" type="date" value={payEffectiveDate} onChange={(event) => setPayEffectiveDate(event.target.value)} />
                   </div>
-                  <label className="flex items-center gap-2 self-end rounded-lg border bg-card/50 px-3 py-2 text-sm">
+                  <label htmlFor="staff-overtime-eligible" className="flex items-center gap-2 self-end rounded-lg border bg-card/50 px-3 py-2 text-sm">
                     <input
+                      id="staff-overtime-eligible"
                       type="checkbox"
                       checked={overtimeEligible}
                       onChange={(event) => setOvertimeEligible(event.target.checked)}
@@ -2056,14 +2099,15 @@ export function StaffManagementPanel({
 
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Certification</CardTitle>
+          <CardTitle as="h2">Certification</CardTitle>
           <CardDescription>Add CPR, first aid, background, training, or licensing documentation reminders.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={saveCertification}>
             <div className="space-y-1">
-              <Label>Teacher</Label>
+              <Label htmlFor="certification-teacher">Teacher</Label>
               <select
+                id="certification-teacher"
                 className={nativeSelectClassName}
                 value={certStaffId}
                 onChange={(event) => setCertStaffId(event.target.value)}
@@ -2074,12 +2118,13 @@ export function StaffManagementPanel({
               </select>
             </div>
             <div className="space-y-1">
-              <Label>Certification name</Label>
-              <Input value={certName} onChange={(event) => setCertName(event.target.value)} placeholder="CPR / First Aid" required />
+              <Label htmlFor="certification-name">Certification name</Label>
+              <Input id="certification-name" value={certName} onChange={(event) => setCertName(event.target.value)} placeholder="CPR / First Aid" required />
             </div>
             <div className="space-y-1">
-              <Label>Status</Label>
+              <Label htmlFor="certification-status">Status</Label>
               <select
+                id="certification-status"
                 className={nativeSelectClassName}
                 value={certStatus}
                 onChange={(event) => setCertStatus(event.target.value)}
@@ -2090,8 +2135,8 @@ export function StaffManagementPanel({
               </select>
             </div>
             <div className="space-y-1">
-              <Label>Expiration</Label>
-              <Input value={certExpiresAt} onChange={(event) => setCertExpiresAt(event.target.value)} type="date" />
+              <Label htmlFor="certification-expiration">Expiration</Label>
+              <Input id="certification-expiration" value={certExpiresAt} onChange={(event) => setCertExpiresAt(event.target.value)} type="date" />
             </div>
             <Button type="submit" disabled={isPending || !certStaffId}>
               <Save data-icon="inline-start" />
@@ -2103,7 +2148,7 @@ export function StaffManagementPanel({
 
       <Card className="glass-panel lg:col-span-2">
         <CardHeader>
-          <CardTitle>
+          <CardTitle as="h2">
             <CalendarClock data-icon="inline-start" />
             Staff Schedule
           </CardTitle>
@@ -2112,8 +2157,9 @@ export function StaffManagementPanel({
         <CardContent>
           <form className="grid gap-3 md:grid-cols-2 lg:grid-cols-5" onSubmit={saveSchedule}>
             <div className="space-y-1">
-              <Label>Schedule row</Label>
+              <Label htmlFor="staff-schedule-row">Schedule row</Label>
               <select
+                id="staff-schedule-row"
                 className={nativeSelectClassName}
                 value={scheduleId}
                 onChange={(event) => loadSchedule(event.target.value)}
@@ -2127,8 +2173,9 @@ export function StaffManagementPanel({
               </select>
             </div>
             <div className="space-y-1">
-              <Label>Teacher</Label>
+              <Label htmlFor="staff-schedule-teacher">Teacher</Label>
               <select
+                id="staff-schedule-teacher"
                 className={nativeSelectClassName}
                 value={scheduleStaffId}
                 onChange={(event) => setScheduleStaffId(event.target.value)}
@@ -2139,16 +2186,17 @@ export function StaffManagementPanel({
               </select>
             </div>
             <div className="space-y-1">
-              <Label>Starts</Label>
-              <Input value={scheduleStartsAt} onChange={(event) => setScheduleStartsAt(event.target.value)} type="datetime-local" required />
+              <Label htmlFor="staff-schedule-starts">Starts</Label>
+              <Input id="staff-schedule-starts" value={scheduleStartsAt} onChange={(event) => setScheduleStartsAt(event.target.value)} type="datetime-local" required />
             </div>
             <div className="space-y-1">
-              <Label>Ends</Label>
-              <Input value={scheduleEndsAt} onChange={(event) => setScheduleEndsAt(event.target.value)} type="datetime-local" required />
+              <Label htmlFor="staff-schedule-ends">Ends</Label>
+              <Input id="staff-schedule-ends" value={scheduleEndsAt} onChange={(event) => setScheduleEndsAt(event.target.value)} type="datetime-local" required />
             </div>
             <div className="space-y-1">
-              <Label>Status</Label>
+              <Label htmlFor="staff-schedule-status">Status</Label>
               <select
+                id="staff-schedule-status"
                 className={nativeSelectClassName}
                 value={scheduleStatus}
                 onChange={(event) => setScheduleStatus(event.target.value)}

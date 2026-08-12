@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Copy, Plus, Save, Trash2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -124,6 +124,14 @@ function emptyField(): FormBuilderField {
 
 export function FormBuilderPanel({ forms }: Props) {
   const router = useRouter();
+  const controlPrefix = useId();
+  const controlIds = {
+    existingForm: `${controlPrefix}-existing-form`,
+    status: `${controlPrefix}-status`,
+    submissions: `${controlPrefix}-submissions`,
+    name: `${controlPrefix}-name`,
+    type: `${controlPrefix}-type`,
+  };
   const [selectedId, setSelectedId] = useState("new");
   const selectedForm = useMemo(() => forms.find((form) => form.id === selectedId) ?? null, [forms, selectedId]);
   const [formId, setFormId] = useState("");
@@ -233,20 +241,20 @@ export function FormBuilderPanel({ forms }: Props) {
       <CardHeader>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <CardTitle>Form Builder</CardTitle>
+            <CardTitle as="h2">Form Builder</CardTitle>
             <CardDescription>Build enrollment, medical, permission, staff, and policy forms with field-level visibility and signature requirements.</CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => applyTemplate("enrollment")}>
+            <Button type="button" variant="outline" onClick={() => applyTemplate("enrollment")}>
               <Copy data-icon="inline-start" />
               Enrollment
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => applyTemplate("medical")}>Medical</Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => applyTemplate("staff")}>Staff</Button>
+            <Button type="button" variant="outline" onClick={() => applyTemplate("medical")}>Medical</Button>
+            <Button type="button" variant="outline" onClick={() => applyTemplate("staff")}>Staff</Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-5" aria-busy={isPending}>
         {message ? (
           <Alert>
             <CheckCircle2 className="size-4" />
@@ -263,9 +271,9 @@ export function FormBuilderPanel({ forms }: Props) {
         ) : null}
         <div className="grid gap-3 md:grid-cols-4">
           <div className="space-y-1 md:col-span-2">
-            <Label>Load existing form</Label>
+            <Label htmlFor={controlIds.existingForm}>Load existing form</Label>
             <Select value={selectedId} onValueChange={loadForm}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id={controlIds.existingForm}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="new">New form</SelectItem>
                 {forms.map((form) => (
@@ -277,9 +285,9 @@ export function FormBuilderPanel({ forms }: Props) {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Status</Label>
+            <Label htmlFor={controlIds.status}>Status</Label>
             <Select value={status} onValueChange={(value) => value && setStatus(value)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id={controlIds.status}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
@@ -288,18 +296,18 @@ export function FormBuilderPanel({ forms }: Props) {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Submissions</Label>
-            <div className="flex h-8 items-center rounded-lg border bg-background px-2 text-sm">
+            <Label htmlFor={controlIds.submissions}>Submissions</Label>
+            <output id={controlIds.submissions} className="flex min-h-10 items-center rounded-lg border bg-background px-3 text-sm">
               {selectedForm?._count?.submissions ?? 0}
-            </div>
+            </output>
           </div>
           <div className="space-y-1 md:col-span-2">
-            <Label>Form name</Label>
-            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Enrollment packet" />
+            <Label htmlFor={controlIds.name}>Form name</Label>
+            <Input id={controlIds.name} value={name} onChange={(event) => setName(event.target.value)} placeholder="Enrollment packet" />
           </div>
           <div className="space-y-1 md:col-span-2">
-            <Label>Form type</Label>
-            <Input value={type} onChange={(event) => setType(event.target.value)} placeholder="enrollment, medical, policy" />
+            <Label htmlFor={controlIds.type}>Form type</Label>
+            <Input id={controlIds.type} value={type} onChange={(event) => setType(event.target.value)} placeholder="enrollment, medical, policy" />
           </div>
         </div>
 
@@ -318,48 +326,57 @@ export function FormBuilderPanel({ forms }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {fields.map((field) => (
-                <TableRow key={field.id}>
-                  <TableCell>
-                    <Input value={field.label} onChange={(event) => updateField(field.id, { label: event.target.value })} placeholder="Field label" />
-                  </TableCell>
-                  <TableCell>
-                    <Input value={field.key} onChange={(event) => updateField(field.id, { key: slugKey(event.target.value) })} placeholder="field_key" />
-                  </TableCell>
-                  <TableCell>
-                    <Select value={field.type} onValueChange={(value) => value && updateField(field.id, { type: value })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {fieldTypes.map((fieldType) => (
-                          <SelectItem key={fieldType} value={fieldType}>{fieldType}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      value={field.type === "select" ? field.options : field.helpText}
-                      onChange={(event) => updateField(field.id, field.type === "select" ? { options: event.target.value } : { helpText: event.target.value })}
-                      placeholder={field.type === "select" ? "Comma-separated options" : "Optional help text"}
-                    />
-                  </TableCell>
-                  <TableCell><Switch checked={field.required} onCheckedChange={(checked) => updateField(field.id, { required: checked })} /></TableCell>
-                  <TableCell><Switch checked={field.parentVisible} onCheckedChange={(checked) => updateField(field.id, { parentVisible: checked })} /></TableCell>
-                  <TableCell><Switch checked={field.staffOnly} onCheckedChange={(checked) => updateField(field.id, { staffOnly: checked })} /></TableCell>
-                  <TableCell>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setFields((current) => current.filter((item) => item.id !== field.id))}
-                      disabled={fields.length === 1}
-                    >
-                      <Trash2 />
-                      <span className="sr-only">Remove field</span>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {fields.map((field, index) => {
+                const fieldName = field.label.trim() || `Field ${index + 1}`;
+                const fieldPrefix = `${controlPrefix}-field-${field.id}`;
+                return (
+                  <TableRow key={field.id}>
+                    <TableCell>
+                      <Label className="sr-only" htmlFor={`${fieldPrefix}-label`}>{fieldName} label</Label>
+                      <Input id={`${fieldPrefix}-label`} value={field.label} onChange={(event) => updateField(field.id, { label: event.target.value })} placeholder="Field label" />
+                    </TableCell>
+                    <TableCell>
+                      <Label className="sr-only" htmlFor={`${fieldPrefix}-key`}>{fieldName} key</Label>
+                      <Input id={`${fieldPrefix}-key`} value={field.key} onChange={(event) => updateField(field.id, { key: slugKey(event.target.value) })} placeholder="field_key" />
+                    </TableCell>
+                    <TableCell>
+                      <Label className="sr-only" htmlFor={`${fieldPrefix}-type`}>{fieldName} type</Label>
+                      <Select value={field.type} onValueChange={(value) => value && updateField(field.id, { type: value })}>
+                        <SelectTrigger id={`${fieldPrefix}-type`}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {fieldTypes.map((fieldType) => (
+                            <SelectItem key={fieldType} value={fieldType}>{fieldType}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Label className="sr-only" htmlFor={`${fieldPrefix}-help`}>{field.type === "select" ? `${fieldName} options` : `${fieldName} help text`}</Label>
+                      <Input
+                        id={`${fieldPrefix}-help`}
+                        value={field.type === "select" ? field.options : field.helpText}
+                        onChange={(event) => updateField(field.id, field.type === "select" ? { options: event.target.value } : { helpText: event.target.value })}
+                        placeholder={field.type === "select" ? "Comma-separated options" : "Optional help text"}
+                      />
+                    </TableCell>
+                    <TableCell><Switch id={`${fieldPrefix}-required`} aria-label={`${fieldName}: required`} checked={field.required} onCheckedChange={(checked) => updateField(field.id, { required: checked })} /></TableCell>
+                    <TableCell><Switch id={`${fieldPrefix}-parent-visible`} aria-label={`${fieldName}: visible to parents`} checked={field.parentVisible} onCheckedChange={(checked) => updateField(field.id, { parentVisible: checked })} /></TableCell>
+                    <TableCell><Switch id={`${fieldPrefix}-staff-only`} aria-label={`${fieldName}: staff only`} checked={field.staffOnly} onCheckedChange={(checked) => updateField(field.id, { staffOnly: checked })} /></TableCell>
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setFields((current) => current.filter((item) => item.id !== field.id))}
+                        disabled={fields.length === 1}
+                        aria-label={`Remove ${fieldName}`}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -374,7 +391,7 @@ export function FormBuilderPanel({ forms }: Props) {
               <Plus data-icon="inline-start" />
               Add Field
             </Button>
-            <Button type="button" onClick={save} disabled={isPending}>
+            <Button type="button" onClick={save} disabled={isPending} aria-busy={isPending}>
               <Save data-icon="inline-start" />
               {isPending ? "Saving..." : "Save Form"}
             </Button>

@@ -15,7 +15,7 @@ test("the family editor defaults to a family with guardian contacts", () => {
 test("the school-scoped family page lists guardians without requiring portal links", () => {
   const enrollmentPanel = readFileSync(new URL("../src/components/enrollment-visibility-panels.tsx", import.meta.url), "utf8");
 
-  assert.match(enrollmentPanel, /<CardTitle>Parent \/ Guardian Directory<\/CardTitle>/);
+  assert.match(enrollmentPanel, /<CardTitle as="h2">Parent \/ Guardian Directory<\/CardTitle>/);
   assert.match(enrollmentPanel, /Billing contacts need their own email and phone before an invitation can be reviewed/);
   assert.match(enrollmentPanel, /visibleFamilies[\s\S]*?\.flatMap\(\(family\) => family\.guardians\.map/);
   assert.doesNotMatch(enrollmentPanel, /guardianDirectoryRows[\s\S]{0,300}\.filter\(\(guardian\) => guardian\.userId\)/);

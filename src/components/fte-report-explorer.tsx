@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, useTransition } from "react";
+import { Fragment, useId, useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, FilterX, MapPin, Printer, Save, Search } from "lucide-react";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
@@ -144,6 +144,7 @@ function correctionFromReport(report: FteReportRow): InlineCorrectionState {
 
 export function FteReportExplorer({ centers, reports }: Props) {
   const timeZone = useSchoolTimeZone();
+  const fieldIdPrefix = useId();
   const searchParams = useSearchParams();
   const requestedCenterId = searchParams.get("centerId") || ALL;
   const requestedWeekStart = searchParams.get("weekStart") || ALL;
@@ -330,7 +331,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
   }
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <ReportPrintStyles />
       <PrintableReport active={printActive} label="Printable FTE explorer report">
         <header>
@@ -443,7 +444,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
       <CardHeader>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle as="h2" className="flex items-center gap-2">
               <BarChart3 className="size-5 text-primary" />
               Historical FTE Explorer
             </CardTitle>
@@ -481,53 +482,70 @@ export function FteReportExplorer({ centers, reports }: Props) {
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           <div className="relative xl:col-span-2">
+            <Label className="sr-only" htmlFor={`${fieldIdPrefix}-search`}>Search FTE reports</Label>
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              id={`${fieldIdPrefix}-search`}
               className="pl-9"
               placeholder="Search school, owner, notes..."
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
           </div>
-          <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
-            <SelectTrigger><SelectValue placeholder="All schools" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All schools</SelectItem>
-              {centers.map((center) => (
-                <SelectItem key={center.id} value={center.id}>{centerLabel(center)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={state} onValueChange={(value) => value && setState(value)}>
-            <SelectTrigger><SelectValue placeholder="All states" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All states</SelectItem>
-              {options.states.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={ownerGroup} onValueChange={(value) => value && setOwnerGroup(value)}>
-            <SelectTrigger><SelectValue placeholder="All owner groups" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All owner groups</SelectItem>
-              {options.ownerGroups.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={weekStart} onValueChange={(value) => value && setWeekStart(value)}>
-            <SelectTrigger><SelectValue placeholder="All weeks" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All weeks</SelectItem>
-              {options.weeks.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div>
+            <Label className="sr-only" htmlFor={`${fieldIdPrefix}-school-filter`}>Filter by school</Label>
+            <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
+              <SelectTrigger id={`${fieldIdPrefix}-school-filter`} className="w-full"><SelectValue placeholder="All schools" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All schools</SelectItem>
+                {centers.map((center) => (
+                  <SelectItem key={center.id} value={center.id}>{centerLabel(center)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="sr-only" htmlFor={`${fieldIdPrefix}-state-filter`}>Filter by state or region</Label>
+            <Select value={state} onValueChange={(value) => value && setState(value)}>
+              <SelectTrigger id={`${fieldIdPrefix}-state-filter`} className="w-full"><SelectValue placeholder="All states" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All states</SelectItem>
+                {options.states.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="sr-only" htmlFor={`${fieldIdPrefix}-owner-filter`}>Filter by owner group</Label>
+            <Select value={ownerGroup} onValueChange={(value) => value && setOwnerGroup(value)}>
+              <SelectTrigger id={`${fieldIdPrefix}-owner-filter`} className="w-full"><SelectValue placeholder="All owner groups" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All owner groups</SelectItem>
+                {options.ownerGroups.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="sr-only" htmlFor={`${fieldIdPrefix}-week-filter`}>Filter by week</Label>
+            <Select value={weekStart} onValueChange={(value) => value && setWeekStart(value)}>
+              <SelectTrigger id={`${fieldIdPrefix}-week-filter`} className="w-full"><SelectValue placeholder="All weeks" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All weeks</SelectItem>
+                {options.weeks.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[14rem_repeat(4,minmax(0,1fr))]">
-          <Select value={status} onValueChange={(value) => value && setStatus(value)}>
-            <SelectTrigger><SelectValue placeholder="All statuses" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All statuses</SelectItem>
-              {options.statuses.map((item) => <SelectItem key={item} value={item}>{item.replaceAll("_", " ")}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div>
+            <Label className="sr-only" htmlFor={`${fieldIdPrefix}-status-filter`}>Filter by status</Label>
+            <Select value={status} onValueChange={(value) => value && setStatus(value)}>
+              <SelectTrigger id={`${fieldIdPrefix}-status-filter`} className="w-full"><SelectValue placeholder="All statuses" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All statuses</SelectItem>
+                {options.statuses.map((item) => <SelectItem key={item} value={item}>{item.replaceAll("_", " ")}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="rounded-xl border bg-background/50 p-3">
             <div className="text-xs text-muted-foreground">Filtered reports</div>
             <div className="text-lg font-semibold">{filteredReports.length.toLocaleString()}</div>
@@ -591,9 +609,9 @@ export function FteReportExplorer({ centers, reports }: Props) {
             <div className="flex min-h-48 items-end gap-3 overflow-x-auto border-b pb-4">
               {trendWeeks.map((week) => (
                 <div key={week.week} className="flex min-w-24 flex-1 flex-col items-center gap-2">
-                  <div className="flex h-32 w-full items-end rounded-t-xl bg-muted/35 px-3 pt-3">
+                  <div aria-hidden="true" className="flex h-32 w-full items-end rounded-t-xl bg-muted/35 px-3 pt-3">
                     <div
-                      className="w-full rounded-t-lg bg-gradient-to-t from-amber-500 to-yellow-300"
+                      className="w-full rounded-t-lg bg-amber-500"
                       style={{ height: `${Math.max(8, (week.fte / maxTrendFte) * 100)}%` }}
                     />
                   </div>
@@ -649,7 +667,13 @@ export function FteReportExplorer({ centers, reports }: Props) {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button variant={row.center.id === centerId ? "secondary" : "outline"} size="sm" onClick={() => setCenterId(row.center.id)}>
+                      <Button
+                        variant={row.center.id === centerId ? "secondary" : "outline"}
+                        size="sm"
+                        className="min-h-10"
+                        aria-label={`View FTE reports for ${centerLabel(row.center)}`}
+                        onClick={() => setCenterId(row.center.id)}
+                      >
                         <ArrowRight data-icon="inline-start" />
                         View
                       </Button>
@@ -706,7 +730,13 @@ export function FteReportExplorer({ centers, reports }: Props) {
                       <TableCell><Badge variant="outline">{report.status.replaceAll("_", " ")}</Badge></TableCell>
                       <TableCell>{formatDate(report.updatedAt)}</TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm" onClick={() => startCorrection(report)}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="min-h-10"
+                          aria-label={`Correct FTE report for ${centerLabel(center)}, week of ${formatDate(report.weekStart)}`}
+                          onClick={() => startCorrection(report)}
+                        >
                           Correct
                         </Button>
                       </TableCell>
@@ -754,9 +784,9 @@ export function FteReportExplorer({ centers, reports }: Props) {
                             </div>
                             <div className="grid gap-3 lg:grid-cols-[12rem_1fr]">
                               <div className="space-y-1">
-                                <Label>Status</Label>
+                                <Label htmlFor={`${fieldIdPrefix}-correction-status`}>Status</Label>
                                 <Select value={correction.status} onValueChange={(value) => value && setCorrectionField("status", value)}>
-                                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger id={`${fieldIdPrefix}-correction-status`} className="w-full"><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="submitted">Submitted</SelectItem>
                                     <SelectItem value="draft">Draft</SelectItem>
@@ -766,8 +796,9 @@ export function FteReportExplorer({ centers, reports }: Props) {
                                 </Select>
                               </div>
                               <div className="space-y-1">
-                                <Label>Correction notes</Label>
+                                <Label htmlFor={`${fieldIdPrefix}-correction-notes`}>Correction notes</Label>
                                 <Textarea
+                                  id={`${fieldIdPrefix}-correction-notes`}
                                   value={correction.notes}
                                   onChange={(event) => setCorrectionField("notes", event.target.value)}
                                   placeholder="Explain the correction for audit history and operations review."
@@ -775,9 +806,9 @@ export function FteReportExplorer({ centers, reports }: Props) {
                               </div>
                             </div>
                             <div className="flex flex-wrap gap-3">
-                              <Button disabled={isPending} onClick={saveCorrection}>
+                              <Button aria-busy={isPending} disabled={isPending} onClick={saveCorrection}>
                                 <Save data-icon="inline-start" />
-                                Save correction
+                                {isPending ? "Saving correction..." : "Save correction"}
                               </Button>
                               <Button variant="outline" disabled={isPending} onClick={() => setCorrection(null)}>
                                 Cancel
@@ -804,19 +835,23 @@ export function FteReportExplorer({ centers, reports }: Props) {
 }
 
 function InlineNumberField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const inputId = useId();
+
   return (
     <div className="space-y-1">
-      <Label>{label}</Label>
-      <Input value={value} onChange={(event) => onChange(event.target.value)} inputMode="decimal" />
+      <Label htmlFor={inputId}>{label}</Label>
+      <Input id={inputId} value={value} onChange={(event) => onChange(event.target.value)} inputMode="decimal" />
     </div>
   );
 }
 
 function InlineTextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const inputId = useId();
+
   return (
     <div className="space-y-1">
-      <Label>{label}</Label>
-      <Input value={value} onChange={(event) => onChange(event.target.value)} />
+      <Label htmlFor={inputId}>{label}</Label>
+      <Input id={inputId} value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }

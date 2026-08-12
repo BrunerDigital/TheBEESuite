@@ -110,7 +110,7 @@ export default async function OnlineRegistrationPage({
               ].map(([Icon, title, body]) => (
                 <Card key={title as string} className="border-white/10 bg-black/35 text-white backdrop-blur-xl">
                   <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-base">
+                    <CardTitle as="h2" className="flex items-center gap-2 text-base">
                       <Icon className="size-4 text-amber-300" />
                       {title as string}
                     </CardTitle>

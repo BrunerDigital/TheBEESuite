@@ -139,7 +139,7 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
       <CardHeader className="space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <CardTitle className="text-base">{guardianName}</CardTitle>
+            <CardTitle as="div" className="text-base">{guardianName}</CardTitle>
             <CardDescription>{email || "No guardian email on file"}</CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">

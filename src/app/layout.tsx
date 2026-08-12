@@ -8,6 +8,7 @@ import { CANONICAL_APP_BASE_URL } from "@/lib/public-app-url";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
+import "./product-ui.css";
 
 const browserIcon = "/brand/the-bee-suite/browser-icon.png";
 
@@ -68,6 +69,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const collectVercelTelemetry = process.env.NODE_ENV === "production";
+
   return (
     <html
       lang="en"
@@ -82,8 +85,8 @@ export default function RootLayout({
         <ClientErrorReporter />
         <PwaInstallManager />
         <SubmissionFeedback />
-        <Analytics />
-        <SpeedInsights />
+        {collectVercelTelemetry ? <Analytics /> : null}
+        {collectVercelTelemetry ? <SpeedInsights /> : null}
       </body>
     </html>
   );

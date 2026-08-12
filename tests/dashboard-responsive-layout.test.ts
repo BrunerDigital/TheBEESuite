@@ -10,9 +10,9 @@ test("dashboard shell adapts navigation and toolbar density by device width", ()
   const shell = source("src/components/app-shell.tsx");
   const refresh = source("src/components/live-refresh-status.tsx");
 
-  assert.match(shell, /lg:block 2xl:hidden/);
-  assert.match(shell, /2xl:block/);
-  assert.match(shell, /lg:pl-20 2xl:pl-72/);
+  assert.match(shell, /lg:block xl:hidden/);
+  assert.match(shell, /xl:block/);
+  assert.match(shell, /lg:pl-20 xl:pl-72/);
   assert.match(shell, /hidden min-w-0 flex-1 items-center lg:flex/);
   assert.match(shell, /aria-label="Search The BEE Suite"[\s\S]*name="workspace-search"/);
   assert.match(shell, /aria-label="Search The BEE Suite"[\s\S]*name="mobile-workspace-search"/);
@@ -23,10 +23,10 @@ test("dashboard shell adapts navigation and toolbar density by device width", ()
   assert.match(shell, /touch-manipulation lg:hidden/);
   assert.doesNotMatch(shell, /AI suggestions require review/);
   assert.match(shell, /hidden rounded-lg border bg-card\/70 px-3 py-1\.5 text-right 2xl:block/);
-  assert.match(shell, /flex min-h-12 touch-manipulation flex-col items-center/);
+  assert.match(shell, /flex h-full min-h-12 touch-manipulation flex-col items-center/);
   assert.match(shell, /env\(safe-area-inset-bottom\)/);
   assert.match(shell, /function ScopeContextLink/);
-  assert.match(shell, /"mx-auto grid max-w-md items-end gap-1"/);
+  assert.match(shell, /"mx-auto grid max-w-md items-stretch gap-1"/);
   assert.match(shell, /bottomNavItemCount === 4 \? "grid-cols-4"/);
   assert.match(shell, /<SheetTitle[^>]*>More<\/SheetTitle>/);
   assert.match(shell, /teacher-quick-log/);
@@ -36,7 +36,7 @@ test("dashboard shell adapts navigation and toolbar density by device width", ()
 test("shared workflow controls expose headings, labels, and live feedback", () => {
   const workflow = source("src/components/automation-workflow-builder.tsx");
 
-  assert.match(workflow, /<CardTitle><h1>Automation workflow builder<\/h1><\/CardTitle>/);
+  assert.match(workflow, /<CardTitle as="h1">Automation workflow builder<\/CardTitle>/);
   assert.match(workflow, /role="status" aria-live="polite"/);
   assert.match(workflow, /role="alert"/);
   for (const id of [
@@ -73,7 +73,8 @@ test("dashboard content reflows before constrained laptop and touch layouts", ()
   const dashboard = source("src/components/dashboard.tsx");
   const css = source("src/app/globals.css");
 
-  assert.match(dashboard, /p-4 shadow-2xl[\s\S]*sm:p-6/);
+  assert.match(dashboard, /dashboard-command-center min-w-0 rounded-xl border bg-card p-4 sm:p-6/);
+  assert.doesNotMatch(dashboard, /dashboard-command-center[^"\n]*shadow-2xl/);
   assert.match(dashboard, /min-\[112rem\]:grid-cols-\[minmax\(0,1fr\)_28rem\]/);
   assert.match(dashboard, /min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto/);
   assert.match(dashboard, /dashboard-ai-brief order-first[\s\S]*min-\[112rem\]:order-none/);

@@ -16,7 +16,6 @@ import {
   Route,
   Settings,
   ShieldCheck,
-  Sparkles,
   Star,
   Users,
   WalletCards,
@@ -134,7 +133,7 @@ const workspaceConfig = {
       ["integrations", "Integrations", "Connected services", "/billing-settings?view=integrations", Workflow],
       ["setup", "School setup", "Launch and readiness", "/billing-settings?view=setup", ClipboardCheck],
       ["notifications", "Notifications", "Alerts and delivery rules", "/billing-settings?view=notifications", Bell],
-      ["branding", "White-label", "Brand presentation", "/billing-settings?view=branding", Sparkles],
+      ["branding", "White-label", "Brand presentation", "/billing-settings?view=branding", ImageIcon],
     ],
   },
 } as const;
@@ -145,18 +144,17 @@ export function ConsolidatedWorkspaceNav({ workspace, activeView, allowedViews }
   const config = workspaceConfig[workspace];
   const visibleViews = allowedViews ? config.views.filter(([id]) => allowedViews.includes(id)) : config.views;
   return (
-    <section className="mb-6 overflow-hidden rounded-2xl border border-primary/25 bg-card/75 shadow-xl shadow-black/10">
-      <div className="flex flex-col gap-3 border-b border-border/70 bg-gradient-to-r from-primary/[0.10] via-transparent to-transparent px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+    <section className="mb-6 overflow-hidden rounded-xl border bg-card shadow-none">
+      <div className="flex flex-col gap-3 border-b px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2 text-lg font-semibold">
-            <Sparkles className="size-5 text-primary" />
             <span>{config.title}</span>
             {config.brandAlias ? (
               <span
                 aria-hidden="true"
-                className="whitespace-nowrap rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-foreground"
+                className="whitespace-nowrap text-sm font-normal text-muted-foreground"
               >
-                {config.brandAlias}
+                · {config.brandAlias}
               </span>
             ) : null}
           </div>
@@ -167,7 +165,7 @@ export function ConsolidatedWorkspaceNav({ workspace, activeView, allowedViews }
       <nav className={cn("grid", config.columns)} aria-label={`${config.title} views`}>
         {visibleViews.map(([id, label, detail, href, Icon]) => {
           const active = activeView === id;
-          return <Link key={id} href={href} aria-current={active ? "page" : undefined} className={cn("group relative flex min-h-20 items-center gap-3 border-b border-border/60 px-5 py-3 transition hover:bg-primary/[0.06] sm:border-r", active && "bg-primary/[0.10] text-foreground before:absolute before:inset-x-5 before:bottom-0 before:h-0.5 before:rounded-full before:bg-primary")}><span className={cn("grid size-9 shrink-0 place-items-center rounded-lg border bg-background/70 text-muted-foreground transition", active && "border-primary/40 bg-primary/15 text-primary")}><Icon className="size-4" /></span><span><span className="block text-sm font-semibold">{label}</span><span className="mt-0.5 block text-xs text-muted-foreground">{detail}</span></span></Link>;
+          return <Link key={id} href={href} aria-current={active ? "page" : undefined} className={cn("relative flex min-h-20 items-center gap-3 border-b border-border/60 px-5 py-3 transition-colors hover:bg-muted/50 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:border-r", active && "bg-muted/70 text-foreground")}><span className={cn("grid size-9 shrink-0 place-items-center rounded-lg border bg-background text-muted-foreground transition-colors", active && "border-primary/45 text-primary")}><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0"><span className="block text-sm font-semibold">{label}</span><span className="mt-0.5 block text-xs text-muted-foreground">{detail}</span></span></Link>;
         })}
       </nav>
     </section>

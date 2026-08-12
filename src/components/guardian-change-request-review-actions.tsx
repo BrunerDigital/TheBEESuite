@@ -42,22 +42,22 @@ export function GuardianChangeRequestReviewActions({
     <div className="min-w-52 space-y-2">
       {canReview ? (
         <>
-          <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Review note" />
+          <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Review note" aria-label="Guardian change request review note" />
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" disabled={isPending} onClick={() => review("approved")}>
+            <Button type="button" size="sm" disabled={isPending} aria-busy={isPending} onClick={() => review("approved")}>
               <CheckCircle2 data-icon="inline-start" />
-              Approve
+              {isPending ? "Saving…" : "Approve"}
             </Button>
-            <Button size="sm" variant="outline" disabled={isPending} onClick={() => review("rejected")}>
+            <Button type="button" size="sm" variant="outline" disabled={isPending} aria-busy={isPending} onClick={() => review("rejected")}>
               <XCircle data-icon="inline-start" />
-              Reject
+              {isPending ? "Saving…" : "Reject"}
             </Button>
           </div>
         </>
       ) : (
         <span className="text-xs text-muted-foreground">Reviewed</span>
       )}
-      {message ? <div className="text-xs text-muted-foreground">{message}</div> : null}
+      {message ? <div className="text-xs text-muted-foreground" role="status" aria-live="polite">{message}</div> : null}
     </div>
   );
 }

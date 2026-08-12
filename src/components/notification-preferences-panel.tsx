@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -200,11 +201,11 @@ export function NotificationPreferencesPanel({
   }
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <CardHeader>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Notification Preferences</CardTitle>
+            <CardTitle as="h2">Notification preferences</CardTitle>
             <CardDescription>Email, text message, and app-alert defaults by role, with settings for individual users.</CardDescription>
           </div>
           <Badge variant="outline">
@@ -213,7 +214,7 @@ export function NotificationPreferencesPanel({
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4" aria-busy={isPending}>
         {status ? (
           <Alert>
             <AlertTitle>Saved</AlertTitle>
@@ -226,32 +227,41 @@ export function NotificationPreferencesPanel({
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
-        <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_auto]">
-          <Select value={targetMode} onValueChange={(value) => setTargetMode(value === "role" ? "role" : "user")}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="user">{canManageRoleDefaults ? "User settings" : "My user settings"}</SelectItem>
-              {canManageRoleDefaults ? <SelectItem value="role">Role default</SelectItem> : null}
-            </SelectContent>
-          </Select>
+        <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_auto] lg:items-end">
+          <div className="space-y-1.5">
+            <Label htmlFor="notification-target-type">Settings for</Label>
+            <Select value={targetMode} onValueChange={(value) => setTargetMode(value === "role" ? "role" : "user")}>
+              <SelectTrigger id="notification-target-type"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">{canManageRoleDefaults ? "User settings" : "My user settings"}</SelectItem>
+                {canManageRoleDefaults ? <SelectItem value="role">Role default</SelectItem> : null}
+              </SelectContent>
+            </Select>
+          </div>
           {targetMode === "role" ? (
-            <Select value={targetRole} onValueChange={(value) => setTargetRole(value ?? currentRole)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {normalizedRoles.map((item) => (
-                  <SelectItem key={item.role} value={item.role}>{item.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="space-y-1.5">
+              <Label htmlFor="notification-target-role">Role</Label>
+              <Select value={targetRole} onValueChange={(value) => setTargetRole(value ?? currentRole)}>
+                <SelectTrigger id="notification-target-role"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {normalizedRoles.map((item) => (
+                    <SelectItem key={item.role} value={item.role}>{item.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           ) : (
-            <Select value={selectedUser.id} onValueChange={(value) => setTargetUserId(value ?? currentUserId)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {normalizedUsers.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>{item.name} · {roleLabel(item.role)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="space-y-1.5">
+              <Label htmlFor="notification-target-user">User</Label>
+              <Select value={selectedUser.id} onValueChange={(value) => setTargetUserId(value ?? currentUserId)}>
+                <SelectTrigger id="notification-target-user"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {normalizedUsers.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>{item.name} · {roleLabel(item.role)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           )}
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" disabled={isPending} onClick={resetDrafts}>
@@ -260,17 +270,17 @@ export function NotificationPreferencesPanel({
             </Button>
             <Button type="button" disabled={isPending || !hasChanges} onClick={save}>
               <Save data-icon="inline-start" />
-              Save Matrix
+              {isPending ? "Saving…" : "Save settings"}
             </Button>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-background/40 p-3 text-xs text-muted-foreground">
           <SlidersHorizontal className="size-4 text-primary" />
           <span className="font-medium text-foreground">Bulk channel:</span>
-          <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("emailEnabled", true)}>Email on</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("smsEnabled", true)}>SMS on</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("pushEnabled", true)}>App alerts on</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("smsEnabled", false)}>SMS off</Button>
+          <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => setChannelForAll("emailEnabled", true)}>Email on</Button>
+          <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => setChannelForAll("smsEnabled", true)}>SMS on</Button>
+          <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => setChannelForAll("pushEnabled", true)}>App alerts on</Button>
+          <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => setChannelForAll("smsEnabled", false)}>SMS off</Button>
           <span>
             {targetMode === "role"
               ? "Role defaults apply across this account unless a user has saved different settings."
@@ -302,10 +312,12 @@ export function NotificationPreferencesPanel({
                 </TableCell>
                 {(["emailEnabled", "smsEnabled", "pushEnabled"] as const).map((channel) => (
                   <TableCell key={channel}>
-                    <label className="inline-flex items-center gap-2 text-sm">
+                    <label className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 text-sm">
                       <input
                         type="checkbox"
+                        aria-label={`${channel === "emailEnabled" ? "Email" : channel === "smsEnabled" ? "SMS" : "App alerts"} for ${typeLabel.get(preference.type) ?? preference.type}`}
                         checked={preference[channel]}
+                        disabled={isPending}
                         onChange={(event) => setDraftChannel(preference.type, channel, event.target.checked)}
                       />
                       {preference[channel] ? "On" : "Off"}

@@ -95,25 +95,25 @@ export function DashboardOptionsSettingsPanel({ centers }: Props) {
   }
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <CardHeader>
-        <CardTitle>Dashboard Dropdown Options</CardTitle>
+        <CardTitle as="h2">Dashboard dropdown options</CardTitle>
         <CardDescription>
           Manage the school-specific menu values directors use when setting tuition rates, classrooms, and child profiles.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {message ? (
-          <Alert>
+          <Alert aria-live="polite">
             <AlertTitle>Settings</AlertTitle>
             <AlertDescription>{message}</AlertDescription>
           </Alert>
         ) : null}
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <div className="space-y-1">
-            <Label>School</Label>
+            <Label htmlFor="dashboard-options-school">School</Label>
             <Select value={selectedCenter?.id ?? ""} onValueChange={(value) => value && setSelectedCenterId(value)}>
-              <SelectTrigger><SelectValue placeholder="Choose school" /></SelectTrigger>
+              <SelectTrigger id="dashboard-options-school"><SelectValue placeholder="Choose school" /></SelectTrigger>
               <SelectContent>
                 {centers.map((center) => (
                   <SelectItem key={center.id} value={center.id}>{centerLabel(center)}</SelectItem>
@@ -123,24 +123,35 @@ export function DashboardOptionsSettingsPanel({ centers }: Props) {
           </div>
           <Button type="button" disabled={!selectedCenter || saving} onClick={saveOptions}>
             <Save data-icon="inline-start" />
-            Save options
+            {saving ? "Saving…" : "Save options"}
           </Button>
         </div>
         <section className="rounded-xl border bg-background/40 p-4">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-medium">Age groups</div>
+              <h3 className="text-sm font-medium">Age groups</h3>
               <p className="text-xs text-muted-foreground">Used by tuition rates, batch billing, classroom setup, and child profiles.</p>
             </div>
             <Button type="button" size="sm" variant="outline" onClick={addAgeGroup} disabled={!selectedCenter || saving}>
               <Plus data-icon="inline-start" />
-              Add
+              Add age group
             </Button>
           </div>
           <div className="grid gap-2">
             {options.ageGroups.map((group, index) => (
               <div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                <Input value={group} onChange={(event) => updateAgeGroup(index, event.target.value)} placeholder="Age group" />
+                <div className="space-y-1">
+                  <Label className="sr-only" htmlFor={`dashboard-age-group-${selectedCenter?.id ?? "none"}-${index}`}>
+                    Age group {index + 1}
+                  </Label>
+                  <Input
+                    id={`dashboard-age-group-${selectedCenter?.id ?? "none"}-${index}`}
+                    name={`dashboardAgeGroup${index + 1}`}
+                    value={group}
+                    onChange={(event) => updateAgeGroup(index, event.target.value)}
+                    placeholder="Age group"
+                  />
+                </div>
                 <Button type="button" size="icon" variant="outline" aria-label={`Remove ${group || "age group"}`} onClick={() => removeAgeGroup(index)} disabled={saving}>
                   <Trash2 />
                 </Button>

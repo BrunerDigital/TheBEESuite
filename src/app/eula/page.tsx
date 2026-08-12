@@ -56,7 +56,7 @@ export default function EulaPage() {
             <div className="mt-10 grid gap-4 lg:grid-cols-3">
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle as="h2" className="flex items-center gap-2">
                     <ShieldCheck className="size-5 text-amber-300" />
                     License
                   </CardTitle>
@@ -69,7 +69,7 @@ export default function EulaPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle as="h2" className="flex items-center gap-2">
                     <FileText className="size-5 text-amber-300" />
                     Related Terms
                   </CardTitle>
@@ -84,7 +84,7 @@ export default function EulaPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle as="h2" className="flex items-center gap-2">
                     <AlertTriangle className="size-5 text-amber-300" />
                     No Emergency Use
                   </CardTitle>
@@ -99,7 +99,7 @@ export default function EulaPage() {
             <div className="mt-8 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>Restrictions</CardTitle>
+                  <CardTitle as="h2">Restrictions</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ul className="grid gap-2 text-sm leading-6 text-slate-300">
@@ -115,7 +115,7 @@ export default function EulaPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle as="h2" className="flex items-center gap-2">
                     <LockKeyhole className="size-5 text-amber-300" />
                     Privacy and Records
                   </CardTitle>
@@ -133,7 +133,7 @@ export default function EulaPage() {
             <div className="mt-8 grid gap-4 lg:grid-cols-3">
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>Payments</CardTitle>
+                  <CardTitle as="h2">Payments</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>Where enabled, payments shown in the app are for childcare tuition, fees, goods, or services consumed outside the app. Payment method entry is handled by Stripe or another approved provider.</p>
@@ -142,7 +142,7 @@ export default function EulaPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>Apple</CardTitle>
+                  <CardTitle as="h2">Apple</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>This agreement is between the user and The BEE Suite/BrunerDigital, not Apple. Apple is not responsible for the app, its content, maintenance, or support except where Apple&apos;s rules or law require otherwise.</p>
@@ -151,7 +151,7 @@ export default function EulaPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle as="h2" className="flex items-center gap-2">
                     <LifeBuoy className="size-5 text-amber-300" />
                     Support
                   </CardTitle>

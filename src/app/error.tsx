@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { reportClientError } from "@/components/client-error-reporter";
+import { PageState } from "@/components/page-state";
+import { Button } from "@/components/ui/button";
 
 export default function AppError({
   error,
@@ -16,24 +18,19 @@ export default function AppError({
   }, [error]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#05070a] px-6 text-white">
-      <section className="max-w-md space-y-5 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">The BEE Suite</p>
-        <h1 className="text-3xl font-semibold">We couldn&apos;t load this page.</h1>
-        <p className="text-sm leading-6 text-slate-300">
-          Try loading it again. If the problem continues, return to The BEE Suite home or contact support.
-        </p>
-        <Link href="/" className="inline-flex min-h-11 items-center justify-center rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20">
-          Go to The BEE Suite home
-        </Link>
-        <button
-          type="button"
-          onClick={reset}
-          className="rounded-md bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
-        >
-          Try loading again
-        </button>
-      </section>
-    </main>
+    <PageState
+      title="We couldn't load this page"
+      description="Try loading it again. If the problem continues, return to The BEE Suite home or contact support."
+      actions={(
+        <>
+          <Button variant="outline" nativeButton={false} render={<Link href="/" />}>
+            Go to home
+          </Button>
+          <Button type="button" onClick={reset}>
+            Try again
+          </Button>
+        </>
+      )}
+    />
   );
 }

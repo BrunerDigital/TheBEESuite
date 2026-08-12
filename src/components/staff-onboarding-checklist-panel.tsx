@@ -107,7 +107,7 @@ export function StaffOnboardingChecklistPanel({ items, summary }: Props) {
     <Card className="glass-panel">
       <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <CardTitle>
+          <CardTitle as="h2">
             <ClipboardCheck data-icon="inline-start" />
             Staff Onboarding Checklist
           </CardTitle>

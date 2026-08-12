@@ -287,7 +287,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     setError("");
     setProgressPhase("uploading");
     setProgressPercent(5);
-    setProgressMessage(dryRun ? "Uploading source data for analysis..." : "Uploading source data...");
+    setProgressMessage(dryRun ? "Uploading source data for analysis…" : "Uploading source data…");
     startTransition(async () => {
       try {
         const formData = new FormData();
@@ -322,10 +322,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             if (uploaded) {
               setProgressPhase("processing");
               setProgressMessage(dryRun
-                ? "Analyzing records and preparing the review..."
+                ? "Analyzing records and preparing the review…"
                 : resumeBatchId
-                  ? `Continuing the resumable import from row ${nextRow.toLocaleString()}...`
-                  : "Upload complete. Matching and importing records...");
+                  ? `Continuing the resumable import from row ${nextRow.toLocaleString()}…`
+                  : "Upload complete. Matching and importing records…");
             }
           });
           json = response.json;
@@ -335,7 +335,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           const totalRows = Math.max(json.totalRows ?? 1, 1);
           const completedRows = Number(json.summary?.rows ?? Math.max(nextRow - 1, 0));
           setProgressPercent(Math.min(95, 10 + Math.round((completedRows / totalRows) * 85)));
-          setProgressMessage(`Imported ${completedRows.toLocaleString()} of ${totalRows.toLocaleString()} records. Continuing automatically...`);
+          setProgressMessage(`Imported ${completedRows.toLocaleString()} of ${totalRows.toLocaleString()} records. Continuing automatically…`);
         } while (json?.partial);
         if (!response.ok) {
           setProgressPhase("idle");
@@ -582,9 +582,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   ] : [];
 
   return (
-    <Card className="glass-panel">
+    <Card className="shadow-none [&_button]:min-h-10" aria-busy={busy}>
       <CardHeader>
-        <CardTitle>Import Family Accounts</CardTitle>
+        <CardTitle as="h2">Import Family Accounts</CardTitle>
         <CardDescription>
           This importer supports only the previous-system export format built from Enrollment, ParentInfo, Relationships, and ChildInfo reports. Those reports populate families, guardians, children, classrooms, enrollment details, allergies, emergency contacts, and pickups. Add staff, schedule, attendance, sign-in/out, health, and account-balance reports from that same supported format to the upload or ZIP; supported rows are linked by source IDs, while reports without a safe destination mapping are identified for migration follow-up.
         </CardDescription>
@@ -703,13 +703,13 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               </Button>
               <Button disabled={busy || importCommitted || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
                 <Upload data-icon="inline-start" />
-                {importCommitted ? "Import Complete" : importWorking ? "Working..." : "Commit Import"}
+                {importCommitted ? "Import Complete" : importWorking ? "Working…" : "Commit Import"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
         {progressPhase !== "idle" ? (
-          <Alert aria-live="polite">
+          <Alert role="status" aria-live="polite">
             {progressPhase === "complete" ? <CheckCircle2 className="size-4" /> : <LoaderCircle className="size-4 animate-spin" />}
             <AlertTitle>{progressPhase === "uploading" ? "Uploading" : progressPhase === "processing" ? "Processing import" : "Complete"}</AlertTitle>
             <AlertDescription className="space-y-3">
@@ -723,7 +723,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           </Alert>
         ) : null}
         {status ? (
-          <Alert>
+          <Alert role="status" aria-live="polite">
             <CheckCircle2 className="size-4" />
             <AlertTitle>Import complete</AlertTitle>
             <AlertDescription className="space-y-3">
@@ -809,14 +809,14 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           </div>
         ) : null}
         {error ? (
-          <Alert variant="destructive">
+          <Alert variant="destructive" role="alert">
             <AlertCircle className="size-4" />
             <AlertTitle>Needs attention</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
         {noCentersAvailable ? (
-          <Alert variant="destructive">
+          <Alert variant="destructive" role="alert">
             <AlertCircle className="size-4" />
             <AlertTitle>No assigned school found</AlertTitle>
             <AlertDescription>
@@ -826,12 +826,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         ) : null}
         <div className="grid gap-3 md:grid-cols-[18rem_1fr]">
           <div className="space-y-1">
-            <Label>Center</Label>
+            <Label htmlFor="procare-center">Center</Label>
             <Select value={centerId} onValueChange={(value) => {
               if (value) setCenterId(value);
               clearPreview();
             }}>
-              <SelectTrigger><SelectValue placeholder="Choose center" /></SelectTrigger>
+              <SelectTrigger id="procare-center"><SelectValue placeholder="Choose center" /></SelectTrigger>
               <SelectContent>
                 {allowBulkImport ? (
                   <SelectItem value="auto">Auto-map by school/location column</SelectItem>
@@ -848,8 +848,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             ) : null}
           </div>
           <div className="space-y-1">
-            <Label>Supported previous-system export folder or files</Label>
-            <div className="flex flex-wrap gap-2">
+            <div id="procare-source-files-label" className="text-sm font-medium">Supported previous-system export folder or files</div>
+            <div className="flex flex-wrap gap-2" aria-labelledby="procare-source-files-label">
               <Button type="button" variant="outline" onClick={() => folderRef.current?.click()}>
                 <Upload data-icon="inline-start" />
                 Choose one folder
@@ -918,7 +918,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               Choose one folder containing any number or combination of the supported previous-system reports, choose individual files, or choose a ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Do not submit exports from another provider through this importer. Each reviewed batch may contain up to 500 files and 100 MB.
             </p>
             {hasMixedSources ? (
-              <Alert variant="destructive">
+              <Alert variant="destructive" role="alert">
                 <AlertCircle className="size-4" />
                 <AlertTitle>Choose one source type</AlertTitle>
                 <AlertDescription className="space-y-2">
@@ -934,12 +934,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         </div>
         <div className="grid gap-3 rounded-xl border bg-muted/20 p-4 md:grid-cols-[18rem_1fr]">
           <div className="space-y-1">
-            <Label>Duplicate matching</Label>
+            <Label htmlFor="procare-duplicate-matching">Duplicate matching</Label>
             <Select value={duplicateMatchMode} onValueChange={(value) => {
               setDuplicateMatchMode(value || "review");
               clearPreview();
             }}>
-              <SelectTrigger><SelectValue placeholder="Choose matching mode" /></SelectTrigger>
+              <SelectTrigger id="procare-duplicate-matching"><SelectValue placeholder="Choose matching mode" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="review">Balanced review</SelectItem>
                 <SelectItem value="strict">Strict review</SelectItem>
@@ -952,12 +952,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               Balanced review flags ambiguous family, child, and guardian matches. Strict review flags every likely duplicate. Auto-match still stops on ambiguous matches, but lets high-confidence exact matches proceed.
             </p>
             {duplicateReviewRows ? (
-              <label className="flex items-start gap-2 rounded-lg border bg-background p-3 text-foreground">
+              <label className="flex min-h-11 items-start gap-2 rounded-lg border bg-background p-3 text-foreground">
                 <input
                   type="checkbox"
                   checked={duplicateReviewConfirmed}
                   onChange={(event) => setDuplicateReviewConfirmed(event.target.checked)}
-                  className="mt-0.5 size-4"
+                  className="mt-0.5 size-5 shrink-0 accent-primary"
                 />
                 <span>
                   I reviewed the duplicate match candidates and approve committing the import with these match decisions.
@@ -975,7 +975,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               setCsv(event.target.value);
               clearPreview();
             }}
-            placeholder="Family Name,Child Name,Guardian Name,Email,Phone,Balance..."
+            placeholder="Family Name, Child Name, Guardian Name, Email, Phone, Balance…"
           />
         </div>
         {preview?.correlationReview?.length ? (
@@ -1000,12 +1000,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                       </div>
                     </div>
                     <div className="grid gap-2 md:grid-cols-2">
-                      {section.correlations.map((correlation) => {
+                      {section.correlations.map((correlation, correlationIndex) => {
                         const editable = preview.fieldOptions?.some((option) => option.key === correlation.destination);
                         const header = preview.headerAnalysis?.find((item) => item.source === correlation.source);
                         return (
                           <div key={`${section.id}-${correlation.source}`} className="grid gap-1 rounded-md border bg-muted/20 p-2">
-                            <Label className="text-xs">{correlation.source}</Label>
+                            <Label htmlFor={`procare-correlation-${sectionIndex}-${correlationIndex}`} className="break-all text-xs">{correlation.source}</Label>
                             {editable ? (
                               <Select
                                 value={fieldMapping[correlation.source] || header?.suggestedField || correlation.destination || "ignore"}
@@ -1015,7 +1015,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                                   markReviewStale();
                                 }}
                               >
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger id={`procare-correlation-${sectionIndex}-${correlationIndex}`} aria-label={`Map ${correlation.source} source column`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="ignore">Ignore this column</SelectItem>
                                   {preview.fieldOptions?.map((option) => (
@@ -1034,7 +1034,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                       ) : null}
                     </div>
                     {section.required ? (
-                      <label className="flex items-start gap-2 text-xs">
+                      <label className="flex min-h-11 items-start gap-2 rounded-lg px-1 py-2 text-xs">
                         <input
                           type="checkbox"
                           checked={correlationConfirmations.includes(section.id)}
@@ -1042,7 +1042,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                           onChange={(event) => setCorrelationConfirmations((current) => event.target.checked
                             ? [...new Set([...current, section.id])]
                             : current.filter((id) => id !== section.id))}
-                          className="mt-0.5 size-4"
+                          className="mt-0.5 size-5 shrink-0 accent-primary"
                         />
                         <span>I confirm these {section.title.toLowerCase()} correlations.</span>
                       </label>
@@ -1052,7 +1052,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               })}
             </div>
             {reviewStale ? (
-              <Alert>
+              <Alert role="status" aria-live="polite">
                 <AlertCircle className="size-4" />
                 <AlertTitle>Correlation changes need a fresh review</AlertTitle>
                 <AlertDescription>Finish all field changes, then select Submit for Review once to refresh counts and confirmations.</AlertDescription>
@@ -1066,7 +1066,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           </div>
         ) : null}
         {preview ? (
-          <Alert>
+          <Alert role="status" aria-live="polite">
             <CheckCircle2 className="size-4" />
             <AlertTitle>Preview ready - no records written yet</AlertTitle>
             <AlertDescription>
@@ -1087,7 +1087,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 <div key={`${match.rowNumber}-${match.entity}-${match.importLabel}`} className="rounded-lg border bg-background p-3">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span className="font-medium">Row {match.rowNumber}</span>
-                    <span className="rounded-full bg-muted px-2 py-0.5 uppercase text-muted-foreground">{match.entity}</span>
+                    <span className="rounded-md bg-muted px-2 py-1 text-muted-foreground">{match.entity}</span>
                     <span>{match.importLabel}</span>
                     <span className="text-muted-foreground">
                       {match.resolution === "auto_match" ? "High-confidence match" : "Needs review"}
@@ -1174,12 +1174,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 </AlertDescription>
               </Alert>
             ) : null}
-            <label className="flex items-start gap-2 rounded-lg border bg-background p-3 text-xs text-foreground">
+            <label className="flex min-h-11 items-start gap-2 rounded-lg border bg-background p-3 text-xs text-foreground">
               <input
                 type="checkbox"
                 checked={sourceInventoryConfirmed}
                 onChange={(event) => setSourceInventoryConfirmed(event.target.checked)}
-                className="mt-0.5 size-4"
+                className="mt-0.5 size-5 shrink-0 accent-primary"
               />
               <span>
                 I confirm the imported, mapping-follow-up, and ignored sources above are correct for this import.
@@ -1231,7 +1231,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button disabled={!canPreview} onClick={() => submit(true)} variant="outline">
             <Eye data-icon="inline-start" />
-            {importWorking ? "Preparing Review..." : "Submit for Review"}
+            {importWorking ? "Preparing Review…" : "Submit for Review"}
           </Button>
           {preview ? (
             <Button disabled={busy} onClick={() => setPreviewDialogOpen(true)} variant="outline">
@@ -1241,7 +1241,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           ) : null}
           <Button disabled={busy || importCommitted || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
             <Upload data-icon="inline-start" />
-            {importCommitted ? "Import Complete" : importWorking ? "Importing..." : "Import Data"}
+            {importCommitted ? "Import Complete" : importWorking ? "Importing…" : "Import Data"}
           </Button>
           <Button disabled={busy || !centerId} onClick={() => downloadBackup("latest")} variant="outline">
             <Download data-icon="inline-start" />

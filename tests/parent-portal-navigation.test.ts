@@ -111,14 +111,14 @@ test("workspace hrefs preserve family scope and preview routing", () => {
   );
 });
 
-test("app shell gives parent-facing users complete navigation without the empty mobile drawer", () => {
+test("app shell retains complete guardian navigation without the empty mobile drawer", () => {
   const shell = readFileSync("src/components/app-shell.tsx", "utf8");
 
   for (const view of PARENT_PORTAL_VIEWS) {
     assert.match(shell, new RegExp(`view: ["']${view}["']`));
   }
   assert.match(shell, /const moreItems = parentFacing\s*\? \[\]/);
-  assert.match(shell, /aria-label=\{parentFacing \? "Family portal navigation" : "Primary navigation"\}/);
+  assert.match(shell, /aria-label=\{parentFacing \? parentNavigationLabel : "Primary navigation"\}/);
   assert.match(shell, /\{parentFacing \? \(\s*<BrandLogo[\s\S]*compact[\s\S]*size="sm"/);
   assert.doesNotMatch(shell, /\/parent-portal#(?:today|messages|billing|daily-updates|photos)/);
   assert.match(shell, /searchParams\.get\(previewMode \? "screen" : "view"\)/);
@@ -135,6 +135,33 @@ test("app shell gives parent-facing users complete navigation without the empty 
     shell,
     /parentPortalShellHref\(parentView, previewMode, previewHrefBase, pathname, familyId\)/,
   );
+});
+
+test("authorized pickup shell navigation stays limited to the parent portal home entry point", () => {
+  const shell = readFileSync("src/components/app-shell.tsx", "utf8");
+
+  assert.match(
+    shell,
+    /const authorizedPickupShellItems = parentPortalShellItems\s*\.filter\(\(\{ view \}\) => view === "home"\)\s*\.map\(\(item\) => \(\{[\s\S]*label: "Pickup access"/,
+  );
+  assert.match(
+    shell,
+    /if \(currentUser\?\.role === "AUTHORIZED_PICKUP"\) return authorizedPickupShellItems/,
+  );
+  assert.equal(
+    shell.match(/parentNavigationItems\.map\(\(\{ view, label, description, Icon \}\) =>/g)?.length,
+    2,
+  );
+  assert.match(shell, /: parentFacing\s*\? parentNavigationItems/);
+  assert.match(shell, /const parentGuardian = currentUser\.role === "PARENT_GUARDIAN"/);
+  assert.match(shell, /\{parentGuardian \? \(\s*<>[\s\S]*Profile &amp; security/);
+  assert.match(
+    shell,
+    /function roleUsesBottomNavigation\(currentUser\?: ShellUser\) \{\s*return Boolean\(currentUser && currentUser\.role !== "AUTHORIZED_PICKUP"\);\s*\}/,
+  );
+  assert.match(shell, /if \(!roleUsesBottomNavigation\(currentUser\)\) return null/);
+  assert.match(shell, /const hasRoleBottomNav = roleUsesBottomNavigation\(currentUser\)/);
+  assert.match(shell, /hasRoleBottomNav && "pb-24 lg:pb-6 xl:pb-8"/);
 });
 
 test("parent account menu exposes real destinations while preview stays mutation-free", () => {

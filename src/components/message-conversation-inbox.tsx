@@ -141,7 +141,7 @@ export function MessageConversationInbox({
     : null;
 
   return (
-    <section className={`${styles.staffShell} min-w-0 overflow-hidden rounded-3xl border`} aria-label="Parent conversations">
+    <section className={`${styles.staffShell} min-w-0 overflow-hidden rounded-xl border`} aria-label="Parent conversations">
       <div className="grid min-h-[42rem] min-w-0 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(17rem,21rem)_minmax(0,1fr)]">
         <aside className={`${styles.conversationList} min-w-0 border-b lg:border-r lg:border-b-0`} aria-label="Family conversation list">
           <div className="border-b p-4">
@@ -154,7 +154,7 @@ export function MessageConversationInbox({
             </div>
             <label className="relative block">
               <span className="sr-only">Search family conversations</span>
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -189,7 +189,7 @@ export function MessageConversationInbox({
                       {lastMessage?.isFromFamily ? "Parent: " : "School: "}{lastMessage?.body ?? "No messages yet"}
                     </span>
                     <span className="mt-1 flex items-center gap-2 text-[0.68rem] text-muted-foreground">
-                      {thread.unread ? <span className="size-2 rounded-full bg-primary" aria-label={`${thread.unread} unread`} /> : null}
+                      {thread.unread ? <><span className="size-2 rounded-full bg-primary" aria-hidden="true" /><span className="sr-only">{thread.unread} unread messages</span></> : null}
                       <span className="truncate">{thread.centerLabel ?? "School conversation"}</span>
                       {thread.priority ? <span className="font-medium text-destructive">Priority</span> : null}
                     </span>
@@ -199,7 +199,7 @@ export function MessageConversationInbox({
             })}
             {!filteredThreads.length ? (
               <div className="p-8 text-center text-sm text-muted-foreground">
-                <Search className="mx-auto mb-2 size-5" />
+                <Search aria-hidden="true" className="mx-auto mb-2 size-5" />
                 No conversations match that search.
               </div>
             ) : null}
@@ -280,7 +280,7 @@ export function MessageConversationInbox({
             </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-muted-foreground">
-              <Inbox className="mb-3 size-8" />
+              <Inbox aria-hidden="true" className="mb-3 size-8" />
               <h2 className="font-medium text-foreground">No family conversations yet</h2>
               <p className="mt-1 max-w-sm text-sm">New parent messages will appear here as conversation threads.</p>
             </div>

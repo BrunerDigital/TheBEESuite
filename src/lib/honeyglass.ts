@@ -1,5 +1,5 @@
 export function honeyglassUiEnabled() {
-  return process.env.NEXT_PUBLIC_HONEYGLASS_UI_ENABLED !== "false";
+  return process.env.NEXT_PUBLIC_HONEYGLASS_UI_ENABLED === "true";
 }
 
 export function dataReadinessCenterEnabled() {

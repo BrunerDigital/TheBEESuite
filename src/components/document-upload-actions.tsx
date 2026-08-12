@@ -46,14 +46,20 @@ export function DocumentUploadActions({ documentId }: { documentId: string }) {
       <Input
         ref={fileRef}
         type="file"
+        aria-label="Choose document file"
         accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp,text/plain"
       />
-      <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Upload note" />
-      <Button size="sm" variant="outline" disabled={isPending} onClick={upload}>
+      <Input
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+        placeholder="Upload note"
+        aria-label="Document upload note"
+      />
+      <Button type="button" size="sm" variant="outline" disabled={isPending} aria-busy={isPending} onClick={upload}>
         <UploadCloud data-icon="inline-start" />
-        {isPending ? "Uploading" : "Upload"}
+        {isPending ? "Uploading…" : "Upload"}
       </Button>
-      {message ? <div className="text-xs text-muted-foreground">{message}</div> : null}
+      {message ? <div className="text-xs text-muted-foreground" role="status" aria-live="polite">{message}</div> : null}
     </div>
   );
 }

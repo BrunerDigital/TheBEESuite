@@ -88,6 +88,7 @@ export function ComplianceTaskPanel({
   const [nowMs] = useState(() => Date.now());
   const [isPending, startTransition] = useTransition();
   const [isUpdating, startUpdateTransition] = useTransition();
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
   const visibleStaffOptions = useMemo(() => staffOptions.filter((staff) => !staff.centerId || !centerId || staff.centerId === centerId), [centerId, staffOptions]);
   const openTasks = rows.filter((row) => taskOpen(row.status)).length;
@@ -131,63 +132,68 @@ export function ComplianceTaskPanel({
   }
 
   function updateStatus(taskId: string, status: string) {
+    setUpdatingTaskId(taskId);
     startUpdateTransition(async () => {
-      setError("");
-      const response = await fetch(`/api/compliance/tasks/${taskId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      const json = await response.json().catch(() => null) as { error?: string; task?: ComplianceTaskRow } | null;
-      if (!response.ok || !json?.task) {
-        setError(json?.error ?? "Compliance task could not be updated.");
-        return;
+      try {
+        setError("");
+        const response = await fetch(`/api/compliance/tasks/${taskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        const json = await response.json().catch(() => null) as { error?: string; task?: ComplianceTaskRow } | null;
+        if (!response.ok || !json?.task) {
+          setError(json?.error ?? "Compliance task could not be updated.");
+          return;
+        }
+        setRows((current) => current.map((row) => row.id === taskId ? json.task as ComplianceTaskRow : row));
+        router.refresh();
+      } finally {
+        setUpdatingTaskId(null);
       }
-      setRows((current) => current.map((row) => row.id === taskId ? json.task as ComplianceTaskRow : row));
-      router.refresh();
     });
   }
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <CardHeader>
-        <CardTitle>Compliance Tasks And Reminders</CardTitle>
+        <CardTitle as="h2">Compliance tasks and reminders</CardTitle>
         <CardDescription>Assign licensing, drill, document, medication, and incident follow-up tasks with due dates and reminders.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {error ? (
           <Alert variant="destructive">
-            <AlertCircle className="size-4" />
+            <AlertCircle aria-hidden="true" className="size-4" />
             <AlertTitle>Needs attention</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
         {saved ? (
           <Alert>
-            <ClipboardCheck className="size-4" />
+            <ClipboardCheck aria-hidden="true" className="size-4" />
             <AlertTitle>Saved</AlertTitle>
             <AlertDescription>{saved}</AlertDescription>
           </Alert>
         ) : null}
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-lg border bg-background/40 p-3">
+          <div className="rounded-lg border bg-card p-3">
             <div className="text-xs text-muted-foreground">Open tasks</div>
             <div className="mt-1 text-2xl font-semibold">{openTasks}</div>
           </div>
-          <div className="rounded-lg border bg-background/40 p-3">
+          <div className="rounded-lg border bg-card p-3">
             <div className="text-xs text-muted-foreground">Reminder attention</div>
             <div className="mt-1 text-2xl font-semibold">{remindersDue}</div>
           </div>
-          <div className="rounded-lg border bg-background/40 p-3">
+          <div className="rounded-lg border bg-card p-3">
             <div className="text-xs text-muted-foreground">Assigned rows</div>
             <div className="mt-1 text-2xl font-semibold">{rows.filter((row) => row.assignedTo).length}</div>
           </div>
         </div>
         <div className="grid gap-3 lg:grid-cols-4">
           <div className="space-y-1">
-            <Label>School</Label>
+            <Label htmlFor="compliance-task-school">School</Label>
             <Select value={centerId} onValueChange={(value) => value && setCenterId(value)} disabled={!canManage}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="compliance-task-school"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {centers.map((center) => (
                   <SelectItem key={center.id} value={center.id}>{centerLabel(center)}</SelectItem>
@@ -196,13 +202,13 @@ export function ComplianceTaskPanel({
             </Select>
           </div>
           <div className="space-y-1 lg:col-span-2">
-            <Label>Task</Label>
-            <Input value={title} disabled={!canManage} onChange={(event) => setTitle(event.target.value)} placeholder="Review emergency drill binder" />
+            <Label htmlFor="compliance-task-title">Task</Label>
+            <Input id="compliance-task-title" value={title} disabled={!canManage} onChange={(event) => setTitle(event.target.value)} placeholder="Review emergency drill binder" />
           </div>
           <div className="space-y-1">
-            <Label>Assigned to</Label>
+            <Label htmlFor="compliance-task-assignee">Assigned to</Label>
             <Select value={assignedToId} onValueChange={(value) => value && setAssignedToId(value)} disabled={!canManage}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="compliance-task-assignee"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="unassigned">Unassigned</SelectItem>
                 {visibleStaffOptions.map((staff) => (
@@ -212,9 +218,9 @@ export function ComplianceTaskPanel({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Category</Label>
+            <Label htmlFor="compliance-task-category">Category</Label>
             <Select value={category} onValueChange={(value) => value && setCategory(value)} disabled={!canManage}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="compliance-task-category"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="licensing">Licensing</SelectItem>
                 <SelectItem value="drill">Drill</SelectItem>
@@ -226,9 +232,9 @@ export function ComplianceTaskPanel({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Priority</Label>
+            <Label htmlFor="compliance-task-priority">Priority</Label>
             <Select value={priority} onValueChange={(value) => value && setPriority(value)} disabled={!canManage}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="compliance-task-priority"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="normal">Normal</SelectItem>
                 <SelectItem value="high">High</SelectItem>
@@ -237,23 +243,23 @@ export function ComplianceTaskPanel({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Due date</Label>
-            <Input type="date" value={dueAt} disabled={!canManage} onChange={(event) => setDueAt(event.target.value)} />
+            <Label htmlFor="compliance-task-due-date">Due date</Label>
+            <Input id="compliance-task-due-date" type="date" value={dueAt} disabled={!canManage} onChange={(event) => setDueAt(event.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>Reminder date</Label>
-            <Input type="date" value={reminderAt} disabled={!canManage} onChange={(event) => setReminderAt(event.target.value)} />
+            <Label htmlFor="compliance-task-reminder-date">Reminder date</Label>
+            <Input id="compliance-task-reminder-date" type="date" value={reminderAt} disabled={!canManage} onChange={(event) => setReminderAt(event.target.value)} />
           </div>
         </div>
         <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
           <div className="space-y-1">
-            <Label>Notes</Label>
-            <Textarea value={notes} disabled={!canManage} onChange={(event) => setNotes(event.target.value)} className="min-h-20" />
+            <Label htmlFor="compliance-task-notes">Notes</Label>
+            <Textarea id="compliance-task-notes" value={notes} disabled={!canManage} onChange={(event) => setNotes(event.target.value)} className="min-h-20" />
           </div>
           <div className="flex items-end">
-            <Button disabled={isPending || !canManage || !centerId || !title.trim()} onClick={createTask}>
-              <Save data-icon="inline-start" />
-              Assign Task
+            <Button disabled={isPending || !canManage || !centerId || !title.trim()} aria-busy={isPending} onClick={createTask}>
+              <Save aria-hidden="true" data-icon="inline-start" />
+              {isPending ? "Assigning task…" : "Assign task"}
             </Button>
           </div>
         </div>
@@ -284,13 +290,14 @@ export function ComplianceTaskPanel({
                 <TableCell>{dateLabel(task.dueAt)}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <Bell className="size-4 text-muted-foreground" />
+                    <Bell aria-hidden="true" className="size-4 text-muted-foreground" />
                     {dateLabel(task.reminderAt)}
                   </div>
                 </TableCell>
                 <TableCell>
+                  <Label htmlFor={`compliance-task-status-${task.id}`} className="sr-only">Status for {task.title}</Label>
                   <Select value={task.status} onValueChange={(value) => value && updateStatus(task.id, value)} disabled={!canManage || isUpdating}>
-                    <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id={`compliance-task-status-${task.id}`} aria-busy={updatingTaskId === task.id} className="w-40"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="open">Open</SelectItem>
                       <SelectItem value="in_progress">In progress</SelectItem>

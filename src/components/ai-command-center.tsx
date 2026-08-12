@@ -21,7 +21,6 @@ import {
   RefreshCw,
   Send,
   ShieldCheck,
-  Sparkles,
   Users,
   XCircle,
 } from "lucide-react";
@@ -183,6 +182,8 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [queueFilter, setQueueFilter] = useState("pending_review");
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [copyingSuggestionId, setCopyingSuggestionId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const selectedCenterIds = useMemo(() => {
@@ -213,8 +214,19 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
     setErrorMessage("");
   }
 
-  function generateSummary() {
+  function runPendingAction(action: string, task: () => Promise<void>) {
+    setPendingAction(action);
     startTransition(async () => {
+      try {
+        await task();
+      } finally {
+        setPendingAction(null);
+      }
+    });
+  }
+
+  function generateSummary() {
+    runPendingAction("summary", async () => {
       clearNotices();
       try {
         const json = await jsonRequest<{ ok: boolean; summary: AiSummaryRow }>("/api/ai/command", {
@@ -236,7 +248,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
       setErrorMessage("Tell Mr. Bee what you want to review, correct, or update.");
       return;
     }
-    startTransition(async () => {
+    runPendingAction("command", async () => {
       clearNotices();
       setCommandResponse("");
       setPendingChangePlan(null);
@@ -261,7 +273,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
 
   function resolveChangePlan(decision: "confirm" | "cancel") {
     if (!pendingChangePlan) return;
-    startTransition(async () => {
+    runPendingAction(decision === "confirm" ? "confirm-plan" : "cancel-plan", async () => {
       clearNotices();
       try {
         const json = await jsonRequest<{ ok: boolean; message: string; changes?: Array<{ action: string; recordId: string }> }>("/api/ai/command", {
@@ -283,7 +295,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
       setErrorMessage("Choose an enrollment inquiry before drafting a follow-up.");
       return;
     }
-    startTransition(async () => {
+    runPendingAction("lead-draft", async () => {
       clearNotices();
       try {
         const json = await jsonRequest<{ ok: boolean; suggestion: string; suggestionId: string; guardrailNote: string }>("/api/ai/mr-bee", {
@@ -317,7 +329,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
       return;
     }
 
-    startTransition(async () => {
+    runPendingAction("message-draft", async () => {
       clearNotices();
       try {
         const json = await jsonRequest<{
@@ -354,7 +366,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
   }
 
   function updateSuggestionStatus(suggestionId: string, status: string, review?: { selectedSubject?: string; selectedBody?: string; destination?: string }) {
-    startTransition(async () => {
+    runPendingAction(`suggestion:${suggestionId}:${status}`, async () => {
       clearNotices();
       try {
         const json = await jsonRequest<{ ok: boolean; suggestion: AiSuggestionRow }>("/api/ai/command", {
@@ -391,28 +403,30 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
 
   async function copySuggestion(suggestion: AiSuggestionRow) {
     clearNotices();
+    setCopyingSuggestionId(suggestion.id);
     try {
       await navigator.clipboard.writeText(aiSuggestionDisplayText(suggestion.suggestion));
       setStatusMessage("Suggestion copied.");
     } catch {
       setErrorMessage("Clipboard access was not available.");
+    } finally {
+      setCopyingSuggestionId(null);
     }
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="relative overflow-hidden rounded-[28px] border border-amber-400/30 bg-[#090909] p-5 text-white shadow-2xl shadow-amber-950/20 md:p-8">
-        <div className="pointer-events-none absolute -right-24 -top-28 size-80 rounded-full bg-amber-400/10 blur-3xl" />
-        <div className="relative">
+      <section className="rounded-2xl border bg-card p-5 text-card-foreground md:p-6">
+        <div>
           <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">Ask Mr. Bee about school activity</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Review current school information, prepare family communication, and open the related task.</p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Review current school information, prepare family communication, and open the related task.</p>
             </div>
             <div className="w-full lg:w-72">
               <Label htmlFor="mr-bee-school" className="sr-only">School</Label>
               <Select value={centerId} onValueChange={(value) => { if (value) { setCenterId(value); setPendingChangePlan(null); } }}>
-                <SelectTrigger id="mr-bee-school" className="h-11 w-full border-zinc-700 bg-zinc-900 text-white">
+                <SelectTrigger id="mr-bee-school" className="h-11 w-full bg-background text-foreground">
                   <SelectValue placeholder="Choose school" />
                 </SelectTrigger>
                 <SelectContent>
@@ -423,60 +437,59 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-amber-400/50 bg-zinc-950/90 p-3 shadow-[0_0_40px_rgba(245,158,11,0.08)] md:p-4">
+          <div className="rounded-xl border bg-muted/30 p-3 md:p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-amber-400 text-black"><Sparkles className="size-5" /></div>
-                <Input aria-label="Request for Mr. Bee" value={commandText} onChange={(event) => setCommandText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") runDirectorCommand(); }} className="h-11 border-0 bg-transparent px-0 text-base text-white shadow-none placeholder:text-zinc-500 focus-visible:ring-0" placeholder="Ask for a summary, follow-up, or message…" />
+              <div className="min-w-0 flex-1">
+                <Input id="mr-bee-request" aria-label="Request for Mr. Bee" value={commandText} onChange={(event) => setCommandText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !isPending) runDirectorCommand(); }} className="h-11 bg-background text-base text-foreground" placeholder="Ask for a summary, follow-up, or message…" />
               </div>
-              <Button onClick={runDirectorCommand} disabled={isPending} className="h-11 bg-amber-400 px-6 text-black hover:bg-amber-300">
-                <Send data-icon="inline-start" /> Ask Mr. Bee
+              <Button onClick={runDirectorCommand} disabled={isPending} aria-busy={pendingAction === "command"} className="h-11 px-6">
+                <Send aria-hidden="true" data-icon="inline-start" /> {pendingAction === "command" ? "Working…" : "Ask Mr. Bee"}
               </Button>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-800 pt-3">
+            <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
               {["What needs my attention today?", "Summarize enrollment follow-ups.", "Show attendance items that need review.", "Draft a family update for me to review."].map((command) => (
-                <button key={command} type="button" onClick={() => setCommandText(command)} className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-amber-400/60 hover:text-amber-300">{command}</button>
+                <Button key={command} type="button" variant="outline" size="sm" onClick={() => setCommandText(command)} className="h-auto min-h-9 whitespace-normal text-left text-xs font-normal">{command}</Button>
               ))}
             </div>
           </div>
           {commandResponse ? (
-            <div className="mt-4 rounded-2xl border border-zinc-700 bg-zinc-900/80 p-4 text-sm leading-6 text-zinc-200" aria-live="polite">
-              <div className="mb-1 flex items-center gap-2 font-medium text-amber-300"><Bot className="size-4" /> Mr. Bee</div>
+            <div className="mt-4 rounded-xl border bg-muted/40 p-4 text-sm leading-6 text-foreground" aria-live="polite">
+              <div className="mb-1 flex items-center gap-2 font-medium"><Bot aria-hidden="true" className="size-4 text-amber-600 dark:text-amber-400" /> Mr. Bee</div>
               <p className="whitespace-pre-wrap">{commandResponse}</p>
             </div>
           ) : null}
           {pendingChangePlan ? (
-            <div className="mt-4 rounded-2xl border border-amber-400/60 bg-amber-400/5 p-4" aria-live="polite">
+            <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-50/50 p-4 dark:bg-amber-950/20" aria-live="polite">
               <div className="flex items-start gap-3">
-                <ShieldCheck className="mt-0.5 size-5 shrink-0 text-amber-300" />
+                <ShieldCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-amber-200">Confirm the exact changes</h3>
-                  <p className="mt-1 text-xs leading-5 text-zinc-400">Nothing will be changed until you confirm. Review every target and new value.</p>
+                  <h3 className="font-semibold text-foreground">Confirm the exact changes</h3>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">Nothing will be changed until you confirm. Review every target and new value.</p>
                   <div className="mt-3 space-y-3">
                     {pendingChangePlan.entries.map((entry, index) => (
-                      <div key={`${entry.action}-${index}`} className="rounded-xl border border-zinc-700 bg-zinc-950/70 p-3">
-                        <div className="text-sm font-medium text-white">{aiDisplayLabel(entry.action, "Proposed change")}</div>
-                        <div className="mt-1 text-xs text-zinc-400">{entry.targets.length} record{entry.targets.length === 1 ? "" : "s"}: {entry.targets.slice(0, 8).map((target) => target.label).join(", ")}{entry.targets.length > 8 ? `, and ${entry.targets.length - 8} more` : ""}</div>
-                        <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-black/40 p-2 text-xs text-zinc-300">{JSON.stringify(entry.patch, null, 2)}</pre>
+                      <div key={`${entry.action}-${index}`} className="rounded-lg border bg-background p-3">
+                        <div className="text-sm font-medium text-foreground">{aiDisplayLabel(entry.action, "Proposed change")}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">{entry.targets.length} record{entry.targets.length === 1 ? "" : "s"}: {entry.targets.slice(0, 8).map((target) => target.label).join(", ")}{entry.targets.length > 8 ? `, and ${entry.targets.length - 8} more` : ""}</div>
+                        <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-muted p-2 text-xs text-foreground">{JSON.stringify(entry.patch, null, 2)}</pre>
                       </div>
                     ))}
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <Button onClick={() => resolveChangePlan("confirm")} disabled={isPending} className="bg-amber-400 text-black hover:bg-amber-300"><CheckCircle2 data-icon="inline-start" /> Confirm and apply</Button>
-                    <Button onClick={() => resolveChangePlan("cancel")} disabled={isPending} variant="outline" className="border-zinc-600 text-zinc-200"><XCircle data-icon="inline-start" /> Cancel</Button>
+                    <Button onClick={() => resolveChangePlan("confirm")} disabled={isPending} aria-busy={pendingAction === "confirm-plan"} className="bg-amber-400 text-black hover:bg-amber-300"><CheckCircle2 aria-hidden="true" data-icon="inline-start" /> {pendingAction === "confirm-plan" ? "Applying…" : "Confirm and apply"}</Button>
+                    <Button onClick={() => resolveChangePlan("cancel")} disabled={isPending} aria-busy={pendingAction === "cancel-plan"} variant="outline"><XCircle aria-hidden="true" data-icon="inline-start" /> {pendingAction === "cancel-plan" ? "Cancelling…" : "Cancel"}</Button>
                   </div>
                 </div>
               </div>
             </div>
           ) : null}
-          <p className="mt-3 text-xs leading-5 text-zinc-500">Mr. Bee can review information and propose changes for the selected school. You must confirm proposed changes before they are applied. Payments, account access, messages, and deletions are not completed here.</p>
+          <p className="mt-3 text-xs leading-5 text-muted-foreground">Mr. Bee can review information and propose changes for the selected school. You must confirm proposed changes before they are applied. Payments, account access, messages, and deletions are not completed here.</p>
         </div>
       </section>
 
       <section>
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h2 className="flex items-center gap-2 text-xl font-semibold"><Activity className="size-5 text-amber-500" /> School activity</h2>
+            <h2 className="flex items-center gap-2 text-xl font-semibold"><Activity aria-hidden="true" className="size-5 text-amber-500" /> School activity</h2>
             <p className="mt-1 text-sm text-muted-foreground">Current attendance, staffing, enrollment, billing, messages, and compliance.</p>
           </div>
           <div className="text-xs text-muted-foreground">{stats.pendingReview} draft{stats.pendingReview === 1 ? "" : "s"} awaiting review</div>
@@ -490,12 +503,12 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
             { label: "Family messages", value: data.pulse.unreadMessages.toLocaleString(), detail: data.pulse.unreadMessages ? "Unread · requires response" : "Inbox is clear", icon: MessageSquare, href: "/messages", tone: "text-violet-400", barClass: "bg-violet-400", bar: Math.max(10, 100 - data.pulse.unreadMessages * 10) },
             { label: "Compliance", value: data.pulse.openComplianceTasks.toLocaleString(), detail: data.pulse.openComplianceTasks ? "Items need attention" : "All items on track", icon: ShieldCheck, href: "/compliance", tone: "text-orange-400", barClass: "bg-orange-400", bar: data.pulse.openComplianceTasks ? Math.max(15, 100 - data.pulse.openComplianceTasks * 8) : 100 },
           ].map((item) => (
-            <Link key={item.label} href={item.href} className="group rounded-xl border bg-[#0b0d10] p-4 text-white transition hover:-translate-y-0.5 hover:border-amber-400/50 hover:shadow-lg hover:shadow-amber-950/20">
-              <div className="flex items-center justify-between"><item.icon className={`size-5 ${item.tone}`} /><ArrowRight className="size-4 text-muted-foreground transition group-hover:translate-x-1" /></div>
-              <div className="mt-4 text-xs text-zinc-400">{item.label}</div>
+            <Link key={item.label} href={item.href} className="group rounded-xl border bg-card p-4 text-card-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <div className="flex items-center justify-between"><item.icon aria-hidden="true" className={`size-5 ${item.tone}`} /><ArrowRight aria-hidden="true" className="size-4 text-muted-foreground transition group-hover:translate-x-1" /></div>
+              <div className="mt-4 text-xs text-muted-foreground">{item.label}</div>
               <div className="mt-1 text-2xl font-semibold tracking-tight">{item.value}</div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800"><div className={`h-full rounded-full ${item.barClass}`} style={{ width: `${Math.max(4, Math.min(100, item.bar))}%` }} /></div>
-              <div className="mt-2 text-[11px] leading-4 text-zinc-500">{item.detail}</div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${item.barClass}`} style={{ width: `${Math.max(4, Math.min(100, item.bar))}%` }} /></div>
+              <div className="mt-2 text-[11px] leading-4 text-muted-foreground">{item.detail}</div>
             </Link>
           ))}
         </div>
@@ -504,7 +517,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,.75fr)]">
         <Card className="overflow-hidden border-amber-400/30">
           <CardHeader className="border-b bg-amber-400/[0.04]">
-            <CardTitle className="flex items-center gap-2"><ClipboardCheck className="size-5 text-amber-500" /> Items to review</CardTitle>
+            <CardTitle as="h2" className="flex items-center gap-2"><ClipboardCheck aria-hidden="true" className="size-5 text-amber-500" /> Items to review</CardTitle>
             <CardDescription>Tasks that may need attention based on current school records.</CardDescription>
           </CardHeader>
           <CardContent className="divide-y p-0">
@@ -516,30 +529,30 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
             ].map((item) => (
               <div key={item.title} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                 <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted"><item.icon className="size-5" /></div>
+                  <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted"><item.icon aria-hidden="true" className="size-5" /></div>
                   <div><div className="font-medium">{item.title}</div><div className="mt-1 text-xs leading-5 text-muted-foreground">{item.detail}</div></div>
                 </div>
-                <Button variant="outline" size="sm" nativeButton={false} render={<Link href={item.href} />}>Review <ArrowRight data-icon="inline-end" /></Button>
+                <Button variant="outline" size="sm" nativeButton={false} render={<Link href={item.href} />}>Review <ArrowRight aria-hidden="true" data-icon="inline-end" /></Button>
               </div>
             ))}
           </CardContent>
         </Card>
         <div className="grid gap-4">
           <Card className="border-amber-400/30">
-            <CardHeader className="border-b py-4"><CardTitle className="flex items-center gap-2"><Bot className="size-5 text-amber-500" /> Review queue</CardTitle><CardDescription>Drafts and decisions waiting for you.</CardDescription></CardHeader>
+            <CardHeader className="border-b py-4"><CardTitle as="h2" className="flex items-center gap-2"><Bot aria-hidden="true" className="size-5 text-amber-500" /> Review queue</CardTitle><CardDescription>Drafts and decisions waiting for you.</CardDescription></CardHeader>
             <CardContent className="divide-y p-0">
               {suggestions.filter((suggestion) => suggestion.status === "pending_review").slice(0, 4).map((suggestion) => (
                 <div key={suggestion.id} className="flex items-center gap-3 px-4 py-3">
-                  <MessageSquare className="size-4 shrink-0 text-amber-500" />
+                  <MessageSquare aria-hidden="true" className="size-4 shrink-0 text-amber-500" />
                   <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{aiDisplayLabel(suggestion.type, "Draft")}</div><div className="text-xs text-muted-foreground">{aiDisplayLabel(suggestion.status)}</div></div>
-                  <Button variant="ghost" size="icon-sm" onClick={() => document.getElementById("suggestion-review-queue")?.scrollIntoView({ behavior: "smooth", block: "start" })} title="Review draft"><ArrowRight /></Button>
+                  <Button variant="ghost" size="icon-sm" onClick={() => document.getElementById("suggestion-review-queue")?.scrollIntoView({ behavior: "smooth", block: "start" })} aria-label="Review draft"><ArrowRight aria-hidden="true" /></Button>
                 </div>
               ))}
               {!suggestions.some((suggestion) => suggestion.status === "pending_review") ? <div className="p-4 text-sm text-muted-foreground">No drafts are waiting for review.</div> : null}
             </CardContent>
           </Card>
           <Card className="border-amber-400/30">
-            <CardHeader className="border-b py-4"><CardTitle className="flex items-center gap-2"><Sparkles className="size-5 text-amber-500" /> Recent summaries</CardTitle><CardDescription>Latest school summaries prepared for review.</CardDescription></CardHeader>
+            <CardHeader className="border-b py-4"><CardTitle as="h2" className="flex items-center gap-2"><ClipboardCheck aria-hidden="true" className="size-5 text-amber-600 dark:text-amber-400" /> Recent summaries</CardTitle><CardDescription>Latest school summaries prepared for review.</CardDescription></CardHeader>
             <CardContent className="divide-y p-0">
               {summaries.slice(0, 3).map((summary) => <div key={summary.id} className="px-4 py-3"><div className="text-sm font-medium">{summary.title}</div><div className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{summary.body}</div></div>)}
               {!summaries.length ? <div className="p-4 text-sm text-muted-foreground">Generate a school summary to begin the review history.</div> : null}
@@ -550,14 +563,14 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
 
       {statusMessage ? (
         <Alert>
-          <CheckCircle2 />
+          <CheckCircle2 aria-hidden="true" />
           <AlertTitle>Request completed</AlertTitle>
           <AlertDescription>{statusMessage}</AlertDescription>
         </Alert>
       ) : null}
       {errorMessage ? (
         <Alert variant="destructive">
-          <XCircle />
+          <XCircle aria-hidden="true" />
           <AlertTitle>Request could not be completed</AlertTitle>
           <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
@@ -566,7 +579,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
       <Card className="glass-panel" id="ai-action-studio">
         <CardHeader>
           <div>
-            <CardTitle>Drafting tools</CardTitle>
+            <CardTitle as="h2">Drafting tools</CardTitle>
             <CardDescription>Prepare a school summary, enrollment follow-up, or family message for review.</CardDescription>
           </div>
         </CardHeader>
@@ -575,13 +588,13 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="glass-panel" id="suggestion-review-queue">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Sparkles /> School summary</CardTitle>
+            <CardTitle as="h3" className="flex items-center gap-2"><ClipboardCheck aria-hidden="true" /> School summary</CardTitle>
             <CardDescription>Prepare a current summary of enrollment inquiries, attendance, staffing, family messages, billing, and incidents.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button onClick={generateSummary} disabled={isPending || !data.centers.length}>
-              <RefreshCw data-icon="inline-start" />
-              Generate summary
+            <Button onClick={generateSummary} disabled={isPending || !data.centers.length} aria-busy={pendingAction === "summary"}>
+              <RefreshCw aria-hidden="true" data-icon="inline-start" />
+              {pendingAction === "summary" ? "Generating…" : "Generate summary"}
             </Button>
             <p className="text-xs text-muted-foreground">{AI_COMMAND_GUARDRAIL_NOTE}</p>
           </CardContent>
@@ -589,14 +602,14 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
 
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Bot /> Enrollment follow-up</CardTitle>
+            <CardTitle as="h3" className="flex items-center gap-2"><Bot aria-hidden="true" /> Enrollment follow-up</CardTitle>
             <CardDescription>Prepare a follow-up draft for an active enrollment inquiry.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-2">
-              <Label>Enrollment inquiry</Label>
+              <Label htmlFor="ai-lead-inquiry">Enrollment inquiry</Label>
               <Select value={effectiveLeadId} onValueChange={(value) => value && setLeadId(value)} disabled={!filteredLeads.length}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="ai-lead-inquiry" className="w-full">
                   <SelectValue placeholder="Choose inquiry" />
                 </SelectTrigger>
                 <SelectContent>
@@ -609,9 +622,9 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Purpose</Label>
+              <Label htmlFor="ai-lead-purpose">Purpose</Label>
               <Select value={leadPurpose} onValueChange={(value) => value && setLeadPurpose(value)}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="ai-lead-purpose" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -621,16 +634,16 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={draftLeadFollowUp} disabled={isPending || !effectiveLeadId}>
-              <MailPlus data-icon="inline-start" />
-              Draft follow-up
+            <Button onClick={draftLeadFollowUp} disabled={isPending || !effectiveLeadId} aria-busy={pendingAction === "lead-draft"}>
+              <MailPlus aria-hidden="true" data-icon="inline-start" />
+              {pendingAction === "lead-draft" ? "Drafting…" : "Draft follow-up"}
             </Button>
           </CardContent>
         </Card>
 
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Megaphone /> Family message draft</CardTitle>
+            <CardTitle as="h3" className="flex items-center gap-2"><Megaphone aria-hidden="true" /> Family message draft</CardTitle>
             <CardDescription>Create family or broadcast message options for staff review.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -644,9 +657,9 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
               </TabsContent>
               <TabsContent value="family" className="space-y-3">
                 <div className="grid gap-2">
-                  <Label>Family</Label>
+                  <Label htmlFor="ai-message-family">Family</Label>
                   <Select value={effectiveFamilyId} onValueChange={(value) => value && setFamilyId(value)} disabled={!filteredFamilies.length}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger id="ai-message-family" className="w-full">
                       <SelectValue placeholder="Choose family" />
                     </SelectTrigger>
                     <SelectContent>
@@ -659,9 +672,9 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
               </TabsContent>
             </Tabs>
             <div className="grid gap-2">
-              <Label>Purpose</Label>
+              <Label htmlFor="ai-message-purpose">Purpose</Label>
               <Select value={messagePurpose} onValueChange={(value) => value && setMessagePurpose(value)}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="ai-message-purpose" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -674,16 +687,16 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Subject</Label>
-              <Input value={messageSubject} onChange={(event) => setMessageSubject(event.target.value)} />
+              <Label htmlFor="ai-message-subject">Subject</Label>
+              <Input id="ai-message-subject" value={messageSubject} onChange={(event) => setMessageSubject(event.target.value)} />
             </div>
             <div className="grid gap-2">
-              <Label>Context</Label>
-              <Textarea value={messageBody} onChange={(event) => setMessageBody(event.target.value)} placeholder="Paste the key update, question, or office note to turn into message options." rows={4} />
+              <Label htmlFor="ai-message-context">Context</Label>
+              <Textarea id="ai-message-context" value={messageBody} onChange={(event) => setMessageBody(event.target.value)} placeholder="Paste the key update, question, or office note to turn into message options." rows={4} />
             </div>
-            <Button onClick={draftMessage} disabled={isPending || (messageMode === "family" ? !effectiveFamilyId : !selectedCenterIds.length)}>
-              <Send data-icon="inline-start" />
-              Draft message options
+            <Button onClick={draftMessage} disabled={isPending || (messageMode === "family" ? !effectiveFamilyId : !selectedCenterIds.length)} aria-busy={pendingAction === "message-draft"}>
+              <Send aria-hidden="true" data-icon="inline-start" />
+              {pendingAction === "message-draft" ? "Drafting…" : "Draft message options"}
             </Button>
           </CardContent>
         </Card>
@@ -693,7 +706,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
         <Card className="glass-panel">
           <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <CardTitle>Suggestion review queue</CardTitle>
+              <CardTitle as="h2">Suggestion review queue</CardTitle>
               <CardDescription>Review the recipient and draft, then open the related screen to finish the action.</CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -722,6 +735,10 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                     const lead = data.leads.find((item) => item.id === leadId);
                     const family = data.families.find((item) => item.id === familyId);
                     const choices = variants.length ? variants : [{ label: "Draft", subject: "", body: displayText }];
+                    const approvingSuggestion = pendingAction === `suggestion:${suggestion.id}:approved`;
+                    const rejectingSuggestion = pendingAction === `suggestion:${suggestion.id}:rejected`;
+                    const archivingSuggestion = pendingAction === `suggestion:${suggestion.id}:archived`;
+                    const copyingSuggestion = copyingSuggestionId === suggestion.id;
                     return (
                       <TableRow key={suggestion.id}>
                         <TableCell className="min-w-40 align-top">
@@ -734,7 +751,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                             {displayText}
                           </div>
                           {variants.length ? <div className="mt-2 text-xs text-muted-foreground">{variants.length} draft options</div> : null}
-                          {suggestion.status === "pending_review" ? <div className="mt-3 flex flex-wrap gap-2">{choices.map((choice) => <Button key={choice.label} size="sm" onClick={() => applySuggestion(suggestion, choice)}><CheckCircle2 data-icon="inline-start" />Use {choice.label}</Button>)}</div> : null}
+                          {suggestion.status === "pending_review" ? <div className="mt-3 flex flex-wrap gap-2">{choices.map((choice) => <Button key={choice.label} size="sm" onClick={() => applySuggestion(suggestion, choice)} disabled={isPending} aria-busy={approvingSuggestion}><CheckCircle2 aria-hidden="true" data-icon="inline-start" />{approvingSuggestion ? "Applying…" : `Use ${choice.label}`}</Button>)}</div> : null}
                         </TableCell>
                         <TableCell className="align-top">
                           <Badge variant={statusVariant(suggestion.status)}>{aiDisplayLabel(suggestion.status)}</Badge>
@@ -742,16 +759,16 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                         <TableCell className="min-w-36 align-top text-xs text-muted-foreground">{formatDate(suggestion.createdAt, timeZone)}</TableCell>
                         <TableCell className="min-w-52 align-top">
                           <div className="flex flex-wrap gap-2">
-                            <Button variant="outline" size="icon-sm" onClick={() => copySuggestion(suggestion)} title="Copy suggestion">
-                              <Copy />
+                            <Button variant="outline" size="icon-sm" onClick={() => copySuggestion(suggestion)} disabled={copyingSuggestionId !== null} aria-label={copyingSuggestion ? "Copying suggestion…" : "Copy suggestion"} aria-busy={copyingSuggestion}>
+                              <Copy aria-hidden="true" />
                             </Button>
-                            {lead ? <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/crm-leads?q=${encodeURIComponent(lead.familyName)}`} />}><ArrowRight data-icon="inline-end" />Open inquiry</Button> : null}
-                            {family ? <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/messages?familyId=${encodeURIComponent(family.id)}`} />}><ArrowRight data-icon="inline-end" />Messages</Button> : null}
-                            <Button variant="outline" size="icon-sm" onClick={() => updateSuggestionStatus(suggestion.id, "rejected")} disabled={isPending} title="Reject">
-                              <XCircle />
+                            {lead ? <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/crm-leads?q=${encodeURIComponent(lead.familyName)}`} />}><ArrowRight aria-hidden="true" data-icon="inline-end" />Open inquiry</Button> : null}
+                            {family ? <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/messages?familyId=${encodeURIComponent(family.id)}`} />}><ArrowRight aria-hidden="true" data-icon="inline-end" />Messages</Button> : null}
+                            <Button variant="outline" size="icon-sm" onClick={() => updateSuggestionStatus(suggestion.id, "rejected")} disabled={isPending} aria-label={rejectingSuggestion ? "Rejecting suggestion…" : "Reject suggestion"} aria-busy={rejectingSuggestion}>
+                              <XCircle aria-hidden="true" />
                             </Button>
-                            <Button variant="outline" size="icon-sm" onClick={() => updateSuggestionStatus(suggestion.id, "archived")} disabled={isPending} title="Archive">
-                              <Archive />
+                            <Button variant="outline" size="icon-sm" onClick={() => updateSuggestionStatus(suggestion.id, "archived")} disabled={isPending} aria-label={archivingSuggestion ? "Archiving suggestion…" : "Archive suggestion"} aria-busy={archivingSuggestion}>
+                              <Archive aria-hidden="true" />
                             </Button>
                           </div>
                         </TableCell>
@@ -771,7 +788,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
 
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Recent summaries</CardTitle>
+            <CardTitle as="h2">Recent summaries</CardTitle>
             <CardDescription>Generated school snapshots for director review.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

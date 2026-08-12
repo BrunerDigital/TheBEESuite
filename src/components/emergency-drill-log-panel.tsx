@@ -106,31 +106,31 @@ export function EmergencyDrillLogPanel({
   }
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <CardHeader>
-        <CardTitle>Emergency Drill Logs</CardTitle>
+        <CardTitle as="h2">Emergency drill logs</CardTitle>
         <CardDescription>Record school-level fire, lockdown, weather, evacuation, and shelter drill documentation.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {error ? (
           <Alert variant="destructive">
-            <AlertCircle className="size-4" />
+            <AlertCircle aria-hidden="true" className="size-4" />
             <AlertTitle>Needs attention</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
         {saved ? (
           <Alert>
-            <Flame className="size-4" />
+            <Flame aria-hidden="true" className="size-4" />
             <AlertTitle>Saved</AlertTitle>
             <AlertDescription>{saved}</AlertDescription>
           </Alert>
         ) : null}
         <div className="grid gap-3 lg:grid-cols-4">
           <div className="space-y-1">
-            <Label>School</Label>
+            <Label htmlFor="emergency-drill-school">School</Label>
             <Select value={centerId} onValueChange={(value) => value && setCenterId(value)} disabled={!canManage}>
-              <SelectTrigger><SelectValue placeholder="Choose school" /></SelectTrigger>
+              <SelectTrigger id="emergency-drill-school"><SelectValue placeholder="Choose school" /></SelectTrigger>
               <SelectContent>
                 {centers.map((center) => (
                   <SelectItem key={center.id} value={center.id}>{centerLabel(center)}</SelectItem>
@@ -139,9 +139,9 @@ export function EmergencyDrillLogPanel({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Drill type</Label>
+            <Label htmlFor="emergency-drill-type">Drill type</Label>
             <Select value={drillType} onValueChange={(value) => value && setDrillType(value)} disabled={!canManage}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="emergency-drill-type"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="Fire drill">Fire drill</SelectItem>
                 <SelectItem value="Lockdown drill">Lockdown drill</SelectItem>
@@ -152,21 +152,21 @@ export function EmergencyDrillLogPanel({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Conducted at</Label>
-            <Input type="datetime-local" value={conductedAt} disabled={!canManage} onChange={(event) => setConductedAt(event.target.value)} />
+            <Label htmlFor="emergency-drill-conducted-at">Conducted at</Label>
+            <Input id="emergency-drill-conducted-at" type="datetime-local" value={conductedAt} disabled={!canManage} onChange={(event) => setConductedAt(event.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>Duration minutes</Label>
-            <Input inputMode="numeric" value={durationMinutes} disabled={!canManage} onChange={(event) => setDurationMinutes(event.target.value)} />
+            <Label htmlFor="emergency-drill-duration">Duration minutes</Label>
+            <Input id="emergency-drill-duration" inputMode="numeric" value={durationMinutes} disabled={!canManage} onChange={(event) => setDurationMinutes(event.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>Participants</Label>
-            <Input value={participants} disabled={!canManage} onChange={(event) => setParticipants(event.target.value)} placeholder="All classrooms, staff only" />
+            <Label htmlFor="emergency-drill-participants">Participants</Label>
+            <Input id="emergency-drill-participants" value={participants} disabled={!canManage} onChange={(event) => setParticipants(event.target.value)} placeholder="All classrooms, staff only" />
           </div>
           <div className="space-y-1">
-            <Label>Outcome</Label>
+            <Label htmlFor="emergency-drill-outcome">Outcome</Label>
             <Select value={outcome} onValueChange={(value) => value && setOutcome(value)} disabled={!canManage}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="emergency-drill-outcome"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="partial">Partial</SelectItem>
@@ -176,19 +176,19 @@ export function EmergencyDrillLogPanel({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Next due</Label>
-            <Input type="date" value={nextDueAt} disabled={!canManage} onChange={(event) => setNextDueAt(event.target.value)} />
+            <Label htmlFor="emergency-drill-next-due">Next due</Label>
+            <Input id="emergency-drill-next-due" type="date" value={nextDueAt} disabled={!canManage} onChange={(event) => setNextDueAt(event.target.value)} />
           </div>
           <div className="flex items-end">
-            <Button disabled={isPending || !canManage || !centerId} onClick={submit}>
-              <Save data-icon="inline-start" />
-              Save Drill
+            <Button disabled={isPending || !canManage || !centerId} aria-busy={isPending} onClick={submit}>
+              <Save aria-hidden="true" data-icon="inline-start" />
+              {isPending ? "Saving drill…" : "Save drill"}
             </Button>
           </div>
         </div>
         <div className="space-y-1">
-          <Label>Notes</Label>
-          <Textarea value={notes} disabled={!canManage} onChange={(event) => setNotes(event.target.value)} className="min-h-20" />
+          <Label htmlFor="emergency-drill-notes">Notes</Label>
+          <Textarea id="emergency-drill-notes" value={notes} disabled={!canManage} onChange={(event) => setNotes(event.target.value)} className="min-h-20" />
         </div>
         <Table>
           <TableHeader>
@@ -207,7 +207,7 @@ export function EmergencyDrillLogPanel({
                 <TableCell>{dateTime(row.conductedAt, timeZone)}</TableCell>
                 <TableCell className="font-medium">{centerLabel(row.center)}</TableCell>
                 <TableCell>{row.drillType}</TableCell>
-                <TableCell><Badge variant={row.outcome === "completed" ? "default" : "outline"}>{row.outcome}</Badge></TableCell>
+                <TableCell><Badge className="capitalize" variant={row.outcome === "completed" ? "default" : "outline"}>{row.outcome}</Badge></TableCell>
                 <TableCell>{row.participants ?? "Not recorded"}</TableCell>
                 <TableCell>{dateTime(row.nextDueAt, timeZone)}</TableCell>
               </TableRow>

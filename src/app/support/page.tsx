@@ -85,7 +85,7 @@ export default function SupportPage() {
             <div className="grid gap-4">
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>Contact Support</CardTitle>
+                  <CardTitle as="h2">Contact Support</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>Email: <a className="font-semibold text-amber-200 underline-offset-4 hover:underline" href="mailto:support@thebeesuite.io">support@thebeesuite.io</a></p>
@@ -97,7 +97,7 @@ export default function SupportPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>Support Can Help With</CardTitle>
+                  <CardTitle as="h2">Support Can Help With</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ul className="grid gap-2 text-sm leading-6 text-slate-300">
@@ -113,7 +113,7 @@ export default function SupportPage() {
 
               <Card className="border-amber-300/25 bg-amber-300/10 text-amber-50 shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle as="h2" className="flex items-center gap-2">
                     <TriangleAlert className="size-5" />
                     Contact Your School Directly For Urgent Items
                   </CardTitle>

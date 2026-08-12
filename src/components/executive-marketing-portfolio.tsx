@@ -244,7 +244,7 @@ export function ExecutiveMarketingPortfolio({ centers, managerConnections }: Pro
       <CardHeader>
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <CardTitle>School social profile portfolio</CardTitle>
+        <CardTitle as="h2">School social profile portfolio</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
               Sign in once with an executive business manager or ad manager, select multiple available profiles, and map each one to the correct active school. Directors can still connect or reconnect their own school when they have provider access.
             </CardDescription>

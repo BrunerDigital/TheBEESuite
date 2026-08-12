@@ -118,7 +118,7 @@ export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
   }
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <ReportPrintStyles />
       <PrintableReport active={printActive} label="Printable audit event report">
         <header>
@@ -163,15 +163,15 @@ export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
       <CardHeader>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <CardTitle>Recent Events</CardTitle>
+          <CardTitle as="h2">Recent events</CardTitle>
             <CardDescription>Filter and export the scoped audit trail currently visible to this role.</CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={exportCsv}>
+            <Button type="button" variant="outline" onClick={exportCsv}>
               <Download data-icon="inline-start" />
               Export CSV
             </Button>
-            <Button variant="outline" onClick={printReport}>
+            <Button type="button" variant="outline" onClick={printReport}>
               <Printer data-icon="inline-start" />
               Print events
             </Button>
@@ -181,12 +181,13 @@ export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
       <CardContent className="flex flex-col gap-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_14rem_14rem_14rem_12rem]">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-10"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search actor, action, resource, center..."
+              aria-label="Search audit events"
             />
           </div>
           <Select value={actionFilter} onValueChange={(value) => value && setActionFilter(value)}>
@@ -244,7 +245,7 @@ export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{filteredLogs.length.toLocaleString()} visible</Badge>
           <Badge variant="outline">{logs.length.toLocaleString()} loaded</Badge>
-          {statusMessage ? <span className="text-xs text-muted-foreground">{statusMessage}</span> : null}
+          {statusMessage ? <span className="text-xs text-muted-foreground" role="status" aria-live="polite">{statusMessage}</span> : null}
         </div>
         <Table>
           <TableHeader>

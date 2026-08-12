@@ -28,6 +28,8 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "test:api": "tsx scripts/api-route-smoke.ts",
     "test:smoke": "tsx scripts/playwright-smoke.ts",
+    "qa:ui-preview": "tsx scripts/qa-device-preview.ts",
+    "qa:responsive": "tsx scripts/qa-responsive.ts",
     "qa:parent-login": "tsx scripts/qa-synthetic-parent-login.ts",
     "procare:import-reviewed": "tsx scripts/import-reviewed-procare-package.ts",
     "procare:prepare-multi": "tsx scripts/prepare-procare-multi-report-import.ts",

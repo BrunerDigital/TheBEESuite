@@ -64,7 +64,7 @@ export default function TermsPage() {
             <div className="mt-10 grid gap-4 lg:grid-cols-3">
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle as="h2" className="flex items-center gap-2">
                     <ShieldCheck className="size-5 text-amber-300" />
                     Authorized Access
                   </CardTitle>
@@ -77,7 +77,7 @@ export default function TermsPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle as="h2" className="flex items-center gap-2">
                     <CreditCard className="size-5 text-amber-300" />
                     Payments
                   </CardTitle>
@@ -91,7 +91,7 @@ export default function TermsPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle as="h2" className="flex items-center gap-2">
                     <AlertTriangle className="size-5 text-amber-300" />
                     No Emergency Use
                   </CardTitle>
@@ -106,7 +106,7 @@ export default function TermsPage() {
             <div className="mt-8 grid gap-4 lg:grid-cols-2">
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>User Responsibilities</CardTitle>
+                  <CardTitle as="h2">User Responsibilities</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ul className="grid gap-2 text-sm leading-6 text-slate-300">
@@ -122,7 +122,7 @@ export default function TermsPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>School Responsibilities</CardTitle>
+                  <CardTitle as="h2">School Responsibilities</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ul className="grid gap-2 text-sm leading-6 text-slate-300">
@@ -140,7 +140,7 @@ export default function TermsPage() {
             <div className="mt-8 grid gap-4 lg:grid-cols-3">
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle as="h2" className="flex items-center gap-2">
                     <LockKeyhole className="size-5 text-amber-300" />
                     Privacy and Records
                   </CardTitle>
@@ -155,7 +155,7 @@ export default function TermsPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>Automated Assistance</CardTitle>
+                  <CardTitle as="h2">Automated Assistance</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>Some tools can help authorized school staff draft or summarize content. School staff must review that work before using it. These tools do not provide legal, medical, licensing, safety, custody, billing, tax, employment, or regulatory advice.</p>
@@ -164,7 +164,7 @@ export default function TermsPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>Professional Decisions</CardTitle>
+                  <CardTitle as="h2">Professional Decisions</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>The BEE Suite helps schools organize work and records, but does not provide legal, licensing, medical, custody, billing, tax, employment, or regulatory advice.</p>
@@ -174,7 +174,7 @@ export default function TermsPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle as="h2" className="flex items-center gap-2">
                     <LifeBuoy className="size-5 text-amber-300" />
                     Support
                   </CardTitle>

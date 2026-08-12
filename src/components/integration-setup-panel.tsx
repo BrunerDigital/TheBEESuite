@@ -91,6 +91,10 @@ function credentialMap(integrations: IntegrationSetupRow[]) {
   ])) as Record<IntegrationProvider, Record<string, string>>;
 }
 
+function integrationControlId(provider: IntegrationProvider, section: string, key: string) {
+  return `integration-${provider}-${section}-${key}`.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
 export function IntegrationSetupPanel({ integrations, canManage, manageableProviders }: Props) {
   const timeZone = useSchoolTimeZone();
   const router = useRouter();
@@ -116,6 +120,7 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
     return "";
   });
   const [selectedAccounts, setSelectedAccounts] = useState<Record<string, string>>({});
+  const [pendingAction, setPendingAction] = useState<"save" | "check" | "select-account" | "disconnect" | null>(null);
   const [isPending, startTransition] = useTransition();
   const draft = active ? drafts[active.provider] ?? active.config : {};
   const credentialDraft = active ? credentialDrafts[active.provider] ?? {} : {};
@@ -152,32 +157,37 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
   function submit(action: "save" | "check") {
     if (!active) return;
     startTransition(async () => {
+      setPendingAction(action);
       setMessage("");
-      const response = await fetch("/api/integrations/setup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: active.provider,
-          action,
-          setupStatus,
-          config: draft,
-          credentials: credentialDraft,
-        }),
-      });
-      const json = await response.json().catch(() => null) as { ok?: boolean; error?: string; integration?: IntegrationSetupRow } | null;
-      if (!response.ok || !json?.ok || !json.integration) {
-        setMessage(json?.error || "Integration setup could not be saved.");
-        return;
+      try {
+        const response = await fetch("/api/integrations/setup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: active.provider,
+            action,
+            setupStatus,
+            config: draft,
+            credentials: credentialDraft,
+          }),
+        });
+        const json = await response.json().catch(() => null) as { ok?: boolean; error?: string; integration?: IntegrationSetupRow } | null;
+        if (!response.ok || !json?.ok || !json.integration) {
+          setMessage(json?.error || "Integration setup could not be saved.");
+          return;
+        }
+        const savedIntegration = json.integration;
+        setRows((current) => current.map((row) => row.provider === savedIntegration.provider ? savedIntegration : row));
+        setDrafts((current) => ({ ...current, [savedIntegration.provider]: savedIntegration.config }));
+        setCredentialDrafts((current) => ({
+          ...current,
+          [savedIntegration.provider]: Object.fromEntries(savedIntegration.credentialFields.map((field) => [field.key, ""])),
+        }));
+        setSetupStatusesByProvider((current) => ({ ...current, [savedIntegration.provider]: savedIntegration.setupStatus }));
+        setMessage(action === "check" ? "Server configuration checked." : "Integration setup saved.");
+      } finally {
+        setPendingAction(null);
       }
-      const savedIntegration = json.integration;
-      setRows((current) => current.map((row) => row.provider === savedIntegration.provider ? savedIntegration : row));
-      setDrafts((current) => ({ ...current, [savedIntegration.provider]: savedIntegration.config }));
-      setCredentialDrafts((current) => ({
-        ...current,
-        [savedIntegration.provider]: Object.fromEntries(savedIntegration.credentialFields.map((field) => [field.key, ""])),
-      }));
-      setSetupStatusesByProvider((current) => ({ ...current, [savedIntegration.provider]: savedIntegration.setupStatus }));
-      setMessage(action === "check" ? "Server configuration checked." : "Integration setup saved.");
     });
   }
 
@@ -189,47 +199,60 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
       return;
     }
     startTransition(async () => {
+      setPendingAction("select-account");
       setMessage("");
-      const response = await fetch(`/api/integrations/oauth/${active.provider}/select-account`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId }),
-      });
-      const json = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
-      if (!response.ok || !json?.ok) {
-        setMessage(json?.error || "The provider account could not be selected.");
-        return;
+      try {
+        const response = await fetch(`/api/integrations/oauth/${active.provider}/select-account`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accountId }),
+        });
+        const json = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+        if (!response.ok || !json?.ok) {
+          setMessage(json?.error || "The provider account could not be selected.");
+          return;
+        }
+        setMessage("School account selected.");
+        router.refresh();
+      } finally {
+        setPendingAction(null);
       }
-      setMessage("School account selected.");
-      router.refresh();
     });
   }
 
   function disconnectOAuth() {
     if (!active || !window.confirm(`Disconnect ${active.name} from this school? Saved provider tokens and account selection will be removed.`)) return;
     startTransition(async () => {
+      setPendingAction("disconnect");
       setMessage("");
-      const response = await fetch(`/api/integrations/oauth/${active.provider}/disconnect`, {
-        method: "POST",
-      });
-      const json = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
-      if (!response.ok || !json?.ok) {
-        setMessage(json?.error || "The provider could not be disconnected.");
-        return;
+      try {
+        const response = await fetch(`/api/integrations/oauth/${active.provider}/disconnect`, {
+          method: "POST",
+        });
+        const json = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+        if (!response.ok || !json?.ok) {
+          setMessage(json?.error || "The provider could not be disconnected.");
+          return;
+        }
+        setMessage(`${active.name} disconnected. Revoke The BEE Suite in the provider account too if you want to withdraw its authorization there.`);
+        router.refresh();
+      } finally {
+        setPendingAction(null);
       }
-      setMessage(`${active.name} disconnected. Revoke The BEE Suite in the provider account too if you want to withdraw its authorization there.`);
-      router.refresh();
     });
   }
 
   if (!active) return null;
 
+  const accountSelectionId = integrationControlId(active.provider, "oauth", "account");
+  const setupStatusId = integrationControlId(active.provider, "setup", "status");
+
   return (
-    <Card className="glass-panel">
+    <Card aria-busy={isPending}>
       <CardHeader>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <CardTitle>Integration Setup</CardTitle>
+            <CardTitle as="h2">Integration Setup</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
               Setup records show who owns each connection, its public identifiers, review status, saved connection details, and server readiness.
             </CardDescription>
@@ -251,6 +274,8 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
                 setActiveProvider(integration.provider);
                 setMessage("");
               }}
+              aria-pressed={integration.provider === active.provider}
+              aria-label={`${integration.name}: ${setupStatusLabel(integration.setupStatus)}, ${integration.status}`}
             >
               <span className="text-left">
                 <span className="block font-medium">{integration.name}</span>
@@ -263,26 +288,26 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
 
         <div className="grid gap-5">
           <div className="grid gap-3 lg:grid-cols-3">
-            <div className="rounded-xl border bg-background/40 p-4">
+            <div className="rounded-lg border bg-background p-4">
               <div className="text-sm text-muted-foreground">Runtime status</div>
               <div className="mt-1 font-semibold">{active.status}</div>
             </div>
-            <div className="rounded-xl border bg-background/40 p-4">
+            <div className="rounded-lg border bg-background p-4">
               <div className="text-sm text-muted-foreground">Setup status</div>
               <div className="mt-1 font-semibold">{setupStatusLabel(active.setupStatus)}</div>
             </div>
-            <div className="rounded-xl border bg-background/40 p-4">
+            <div className="rounded-lg border bg-background p-4">
               <div className="text-sm text-muted-foreground">Last checked</div>
               <div className="mt-1 font-semibold">{formatDateTime(active.lastSyncAt, timeZone)}</div>
             </div>
           </div>
 
-          <div className="rounded-xl border bg-background/40 p-4">
+          <div className="rounded-lg border bg-background p-4">
             <div className="flex items-start gap-3">
               {active.env.configured ? (
-                <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
+                <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
               ) : (
-                <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-600" />
+                <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-600" aria-hidden="true" />
               )}
               <div className="min-w-0 flex-1">
                 <div className="font-medium">{active.name}</div>
@@ -300,11 +325,11 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
           </div>
 
           {active.oauth.supported ? (
-            <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
+            <div className="rounded-lg border border-primary/25 bg-primary/5 p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 font-medium">
-                    <Link2 className="size-4 text-primary" />
+                    <Link2 className="size-4 text-primary" aria-hidden="true" />
                     Provider login
                   </div>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
@@ -332,15 +357,16 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
                         nativeButton={false}
                         variant={active.oauth.connected ? "outline" : "default"}
                         render={<a href={active.oauth.connectHref} />}
+                        aria-label={`${active.oauth.connected ? "Reconnect" : "Connect"} ${active.name} provider login`}
                       >
-                        <ExternalLink data-icon="inline-start" />
+                        <ExternalLink data-icon="inline-start" aria-hidden="true" />
                         {active.oauth.connected ? "Reconnect" : `Connect ${active.name}`}
                       </Button>
                     ) : null}
                     {active.oauth.connected ? (
-                      <Button type="button" variant="outline" onClick={disconnectOAuth} disabled={isPending}>
-                        <Unplug data-icon="inline-start" />
-                        Disconnect
+                      <Button type="button" variant="outline" onClick={disconnectOAuth} disabled={isPending} aria-busy={pendingAction === "disconnect"} aria-label={`Disconnect ${active.name} provider login`}>
+                        <Unplug data-icon="inline-start" aria-hidden="true" />
+                        {pendingAction === "disconnect" ? "Disconnecting…" : "Disconnect"}
                       </Button>
                     ) : null}
                   </div>
@@ -348,11 +374,12 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
               </div>
 
               {active.oauth.accountSelectionRequired && active.availableAccounts.length ? (
-                <div className="mt-4 grid gap-3 rounded-xl border bg-background/60 p-3 md:grid-cols-[1fr_auto] md:items-end">
+                <div className="mt-4 grid gap-3 rounded-lg border bg-background p-3 md:grid-cols-[1fr_auto] md:items-end">
                   <div className="space-y-1">
-                    <Label>School account or profile</Label>
+                    <Label htmlFor={accountSelectionId}>School account or profile</Label>
                     <select
-                      className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      id={accountSelectionId}
+                      className="h-10 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                       value={selectedAccounts[active.provider] || ""}
                       onChange={(event) => setSelectedAccounts((current) => ({ ...current, [active.provider]: event.target.value }))}
                       disabled={isPending}
@@ -363,8 +390,8 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
                       ))}
                     </select>
                   </div>
-                  <Button type="button" onClick={selectOAuthAccount} disabled={isPending || !selectedAccounts[active.provider]}>
-                    Use this account
+                  <Button type="button" onClick={selectOAuthAccount} disabled={isPending || !selectedAccounts[active.provider]} aria-busy={pendingAction === "select-account"}>
+                    {pendingAction === "select-account" ? "Selecting account…" : "Use this account"}
                   </Button>
                 </div>
               ) : null}
@@ -379,9 +406,10 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1">
-              <Label>Setup status</Label>
+              <Label htmlFor={setupStatusId}>Setup status</Label>
               <select
-                className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                id={setupStatusId}
+                className="h-10 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 value={setupStatus}
                 onChange={(event) => updateSetupStatus(event.target.value as IntegrationSetupStatus)}
                 disabled={!activeCanManage || isPending}
@@ -391,12 +419,16 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
                 ))}
               </select>
             </div>
-            {active.fields.map((field) => (
+            {active.fields.map((field) => {
+              const fieldId = integrationControlId(active.provider, "field", field.key);
+              return (
               <div key={field.key} className={field.type === "textarea" ? "space-y-1 md:col-span-2" : "space-y-1"}>
                 {field.type === "checkbox" ? (
-                  <label className="flex min-h-16 items-center gap-3 rounded-xl border bg-background/40 px-3 py-2 text-sm">
+                  <label htmlFor={fieldId} className="flex min-h-16 items-center gap-3 rounded-lg border bg-background px-3 py-2 text-sm">
                     <input
+                      id={fieldId}
                       type="checkbox"
+                      className="size-5 shrink-0 accent-primary"
                       checked={draft[field.key] === true}
                       onChange={(event) => updateDraft(field.key, event.target.checked)}
                       disabled={!activeCanManage || isPending}
@@ -405,8 +437,9 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
                   </label>
                 ) : field.type === "textarea" ? (
                   <>
-                    <Label>{field.label}</Label>
+                    <Label htmlFor={fieldId}>{field.label}</Label>
                     <Textarea
+                      id={fieldId}
                       value={fieldValue(draft[field.key])}
                       onChange={(event) => updateDraft(field.key, event.target.value)}
                       placeholder={field.placeholder}
@@ -415,9 +448,10 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
                   </>
                 ) : field.type === "select" ? (
                   <>
-                    <Label>{field.label}</Label>
+                    <Label htmlFor={fieldId}>{field.label}</Label>
                     <select
-                      className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      id={fieldId}
+                      className="h-10 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                       value={fieldValue(draft[field.key]) || field.options?.[0]?.value || ""}
                       onChange={(event) => updateDraft(field.key, event.target.value)}
                       disabled={!activeCanManage || isPending}
@@ -429,8 +463,9 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
                   </>
                 ) : (
                   <>
-                    <Label>{field.label}</Label>
+                    <Label htmlFor={fieldId}>{field.label}</Label>
                     <Input
+                      id={fieldId}
                       type={field.type}
                       value={fieldValue(draft[field.key])}
                       onChange={(event) => updateDraft(field.key, event.target.value)}
@@ -440,13 +475,14 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
                   </>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {active.credentialFields.length && !active.oauth.supported ? (
-            <div className="rounded-xl border bg-background/40 p-4">
+            <div className="rounded-lg border bg-background p-4">
               <div className="flex flex-col gap-1">
-                <div className="font-medium">Secure Connection Details</div>
+                <div className="font-medium">Secure connection details</div>
                 <p className="text-sm text-muted-foreground">
                   Saved connection details are encrypted on the server and hidden after save. Leave a field blank to keep the existing value.
                 </p>
@@ -454,10 +490,11 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {active.credentialFields.map((field) => {
                   const presence = active.credentials.find((credential) => credential.key === field.key);
+                  const credentialId = integrationControlId(active.provider, "credential", field.key);
                   return (
                     <div key={field.key} className="space-y-1">
                       <div className="flex items-center justify-between gap-2">
-                        <Label>{field.label}</Label>
+                        <Label htmlFor={credentialId}>{field.label}</Label>
                         {presence?.configured ? (
                           <Badge variant="outline">Saved{presence.lastFour ? ` ••••${presence.lastFour}` : ""}</Badge>
                         ) : (
@@ -465,6 +502,7 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
                         )}
                       </div>
                       <Input
+                        id={credentialId}
                         type="password"
                         value={credentialDraft[field.key] ?? ""}
                         onChange={(event) => updateCredentialDraft(field.key, event.target.value)}
@@ -479,16 +517,16 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
             </div>
           ) : null}
 
-          {message ? <div className="rounded-xl border bg-background/50 p-3 text-sm text-muted-foreground">{message}</div> : null}
+          {message ? <div role="status" aria-live="polite" className="rounded-lg border bg-background p-3 text-sm text-muted-foreground">{message}</div> : null}
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => submit("save")} disabled={!activeCanManage || isPending}>
-              <Save data-icon="inline-start" />
-              Save setup
+            <Button type="button" onClick={() => submit("save")} disabled={!activeCanManage || isPending} aria-busy={pendingAction === "save"}>
+              <Save data-icon="inline-start" aria-hidden="true" />
+              {pendingAction === "save" ? "Saving setup…" : "Save setup"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => submit("check")} disabled={!activeCanManage || isPending}>
-              <RefreshCw data-icon="inline-start" />
-              Check server config
+            <Button type="button" variant="outline" onClick={() => submit("check")} disabled={!activeCanManage || isPending} aria-busy={pendingAction === "check"}>
+              <RefreshCw data-icon="inline-start" aria-hidden="true" />
+              {pendingAction === "check" ? "Checking server config…" : "Check server config"}
             </Button>
           </div>
         </div>

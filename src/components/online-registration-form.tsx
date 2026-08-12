@@ -387,8 +387,8 @@ function SelectField({
 
 function CheckboxCard({ name, children, required }: { name: string; children: string; required?: boolean }) {
   return (
-    <label className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6">
-      <input className="mt-1 size-4" name={name} type="checkbox" required={required} />
+    <label htmlFor={name} className="flex min-h-11 gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6">
+      <input id={name} className="mt-1 size-5 shrink-0" name={name} type="checkbox" required={required} />
       <span>{children}</span>
     </label>
   );
@@ -396,17 +396,17 @@ function CheckboxCard({ name, children, required }: { name: string; children: st
 
 function CheckboxGroup({ label, name, options, columns = "sm:grid-cols-2" }: { label: string; name: string; options: Option[]; columns?: string }) {
   return (
-    <div className="space-y-2 md:col-span-2">
-      <Label>{label}</Label>
+    <fieldset id={name} className="space-y-2 md:col-span-2">
+      <legend className="text-sm font-medium">{label}</legend>
       <div className={`grid gap-2 ${columns}`}>
         {options.map((option) => (
-          <label key={option.value} className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
-            <input className="size-4" name={name} type="checkbox" value={option.value} />
+          <label key={option.value} htmlFor={`${name}-${encodeURIComponent(option.value)}`} className="flex min-h-11 items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+            <input id={`${name}-${encodeURIComponent(option.value)}`} className="size-5 shrink-0" name={name} type="checkbox" value={option.value} />
             {option.label}
           </label>
         ))}
       </div>
-    </div>
+    </fieldset>
   );
 }
 
@@ -449,7 +449,7 @@ export function OnlineRegistrationForm({
   }
 
   return (
-    <form className="min-w-0 space-y-5" onSubmit={submitRegistration}>
+    <form className="min-w-0 space-y-5" aria-busy={isPending} onSubmit={submitRegistration}>
       {result?.ok ? (
         <Alert className="border-emerald-500/30 bg-emerald-500/10">
           <CheckCircle2 className="size-4" />
@@ -459,11 +459,20 @@ export function OnlineRegistrationForm({
           </AlertDescription>
         </Alert>
       ) : null}
-      {result?.error ? (
+      {result?.error || (result?.errors && Object.keys(result.errors).length) ? (
         <Alert variant="destructive">
           <AlertCircle className="size-4" />
           <AlertTitle>Review the form</AlertTitle>
-          <AlertDescription>{result.error}</AlertDescription>
+          <AlertDescription>
+            {result.error ? <p>{result.error}</p> : null}
+            {result.errors && Object.keys(result.errors).length ? (
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {Object.entries(result.errors).map(([field, fieldError]) => (
+                  <li key={field}><a className="underline underline-offset-2" href={`#${field}`}>{fieldError}</a></li>
+                ))}
+              </ul>
+            ) : null}
+          </AlertDescription>
         </Alert>
       ) : null}
       {!centers.length ? (
@@ -476,13 +485,13 @@ export function OnlineRegistrationForm({
         </Alert>
       ) : null}
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
           <Badge className="w-fit">
             <ShieldCheck data-icon="inline-start" />
             Step 1
           </Badge>
-          <CardTitle>School and Program</CardTitle>
+          <CardTitle as="h2">School and Program</CardTitle>
           <CardDescription>
             {lockedCenter
               ? `This packet is linked to ${centerLabel(lockedCenter)}.`
@@ -495,13 +504,13 @@ export function OnlineRegistrationForm({
             {lockedCenter ? (
               <>
                 <input type="hidden" name="centerId" value={lockedCenter.id} />
-                <div
+                <output
                   id="centerId"
-                  className={`${registrationSelectTriggerClassName} flex items-center border-emerald-500/30 bg-emerald-500/10`}
+                  className={`${registrationSelectTriggerClassName} flex items-center rounded-md border border-emerald-500/30 bg-emerald-500/10`}
                 >
                   <ShieldCheck className="mr-2 size-4 shrink-0 text-emerald-400" />
                   <span className="truncate">{centerLabel(lockedCenter)}</span>
-                </div>
+                </output>
                 <p className="text-xs leading-5 text-muted-foreground">
                   School-specific registration link. Submitted details route only to this school.
                 </p>
@@ -530,27 +539,27 @@ export function OnlineRegistrationForm({
           <SelectField id="program" label="Program" options={programs} required emptyLabel="Choose a program" />
           <SelectField id="schedule" label="Schedule" options={schedules} required emptyLabel="Choose a schedule" />
           <TextField id="desiredStartDate" label="Desired start date" type="date" required />
-          <div className="space-y-2 md:col-span-2">
-            <Label>Requested days</Label>
+          <fieldset id="scheduleDays" className="space-y-2 md:col-span-2">
+            <legend className="text-sm font-medium">Requested days</legend>
             <div className="grid gap-2 sm:grid-cols-5">
               {scheduleDays.map((day) => (
-                <label key={day} className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
-                  <input className="size-4" name="scheduleDays" type="checkbox" value={day} />
+                <label key={day} htmlFor={`schedule-day-${day.toLowerCase()}`} className="flex min-h-11 items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+                  <input id={`schedule-day-${day.toLowerCase()}`} className="size-5 shrink-0" name="scheduleDays" type="checkbox" value={day} />
                   {day}
                 </label>
               ))}
             </div>
-          </div>
+          </fieldset>
         </CardContent>
       </Card>
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
           <Badge className="w-fit">
             <FileCheck2 data-icon="inline-start" />
             Step 2
           </Badge>
-          <CardTitle>Parent or Guardian</CardTitle>
+          <CardTitle as="h2">Parent or Guardian</CardTitle>
           <CardDescription>Contact, employment, billing, and identification details from the registration packet.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
@@ -586,9 +595,9 @@ export function OnlineRegistrationForm({
         </CardContent>
       </Card>
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
-          <CardTitle>Child Information</CardTitle>
+          <CardTitle as="h2">Child Information</CardTitle>
           <CardDescription>Identity, household, previous care, and daily routine details.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
@@ -606,9 +615,9 @@ export function OnlineRegistrationForm({
         </CardContent>
       </Card>
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
-          <CardTitle>What Makes My Child Special</CardTitle>
+          <CardTitle as="h2">What Makes My Child Special</CardTitle>
           <CardDescription>Eating, sleeping, development, toileting, goals, and family participation notes.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
@@ -635,9 +644,9 @@ export function OnlineRegistrationForm({
         </CardContent>
       </Card>
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
-          <CardTitle>Medical, Allergy, and Care Plan</CardTitle>
+          <CardTitle as="h2">Medical, Allergy, and Care Plan</CardTitle>
           <CardDescription>Medical, allergy, medication, insurance, and emergency treatment details are protected for director review.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
@@ -672,9 +681,9 @@ export function OnlineRegistrationForm({
         </CardContent>
       </Card>
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
-          <CardTitle>Emergency Contacts and Permissions</CardTitle>
+          <CardTitle as="h2">Emergency Contacts and Permissions</CardTitle>
           <CardDescription>The director will review these before they are added to the family account.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
@@ -696,9 +705,9 @@ export function OnlineRegistrationForm({
         </CardContent>
       </Card>
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
-          <CardTitle>Nutrition, Food Activities, and Uniforms</CardTitle>
+          <CardTitle as="h2">Nutrition, Food Activities, and Uniforms</CardTitle>
           <CardDescription>Policies, food activity choices, and uniform order details from the Kid City packet.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
@@ -727,9 +736,9 @@ export function OnlineRegistrationForm({
         </CardContent>
       </Card>
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
-          <CardTitle>Food Program Free/Reduced Meal Application</CardTitle>
+          <CardTitle as="h2">Food Program Free/Reduced Meal Application</CardTitle>
           <CardDescription>Optional household and income information for the child care food program application.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
@@ -751,9 +760,9 @@ export function OnlineRegistrationForm({
         </CardContent>
       </Card>
 
-      <Card className="glass-panel border-primary/25">
+      <Card>
         <CardHeader>
-          <CardTitle>Financial Agreement and Handbook Receipt</CardTitle>
+          <CardTitle as="h2">Financial Agreement and Handbook Receipt</CardTitle>
           <CardDescription>
             Initial each financial term and acknowledge the handbook, emergency procedures, and policy receipts.
           </CardDescription>
@@ -762,7 +771,7 @@ export function OnlineRegistrationForm({
           <div className="grid gap-3 md:grid-cols-2">
             {financialAgreementItems.map(([name, label]) => (
               <div key={name} className="grid grid-cols-[5rem_1fr] items-center gap-3 rounded-xl border bg-background/40 p-3">
-                <Input name={name} maxLength={4} required className="h-9 text-center uppercase" aria-label={`${label} initials`} />
+                <Input id={name} name={name} maxLength={4} required className="h-10 text-center uppercase" aria-label={`${label} initials`} />
                 <span className="text-sm leading-5">{label}</span>
               </div>
             ))}
@@ -788,7 +797,7 @@ export function OnlineRegistrationForm({
           <TextField id="signatureDate" label="Signature date" type="date" />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Button type="submit" disabled={isPending || !centers.length} className="h-11 px-5">
-              Submit registration packet
+              {isPending ? "Submitting…" : "Submit registration packet"}
               <ArrowRight data-icon="inline-end" />
             </Button>
             <Button type="button" variant="outline" nativeButton={false} render={<Link href="/" />}>

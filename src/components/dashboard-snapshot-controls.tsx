@@ -264,7 +264,7 @@ export function DashboardSnapshotControls({
   }
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <CardContent className="flex flex-col gap-3 p-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[12rem_14rem_1fr_auto_auto_auto]">
           <Select value={dateRange} onValueChange={(value) => value && setDateRange(value as SnapshotDateRange)}>
@@ -297,15 +297,15 @@ export function DashboardSnapshotControls({
             placeholder="Saved dashboard view name"
             aria-label="Saved dashboard view name"
           />
-          <Button variant="outline" onClick={saveView}>
+          <Button type="button" variant="outline" onClick={saveView}>
             <Save data-icon="inline-start" />
             Save view
           </Button>
-          <Button variant="outline" onClick={exportSnapshot}>
+          <Button type="button" variant="outline" onClick={exportSnapshot}>
             <Download data-icon="inline-start" />
             Export CSV
           </Button>
-          <Button variant="outline" onClick={copySnapshot}>
+          <Button type="button" variant="outline" onClick={copySnapshot}>
             <Clipboard data-icon="inline-start" />
             Copy summary
           </Button>
@@ -313,18 +313,20 @@ export function DashboardSnapshotControls({
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{dateRangeLabels[dateRange]}</Badge>
           <Badge variant="outline">{lensLabels[lens] ?? lens}</Badge>
-          {statusMessage ? <span className="text-xs text-muted-foreground">{statusMessage}</span> : null}
+          {statusMessage ? <span className="text-xs text-muted-foreground" role="status" aria-live="polite">{statusMessage}</span> : null}
         </div>
         {savedViews.length ? (
           <div className="flex flex-wrap gap-2 border-t pt-3">
             {savedViews.map((view) => (
               <div key={view.id} className="flex items-center gap-1 rounded-lg border bg-background/55 p-1">
-                <Button size="xs" variant="ghost" onClick={() => applyView(view)}>
+                <Button type="button" size="sm" variant="ghost" className="min-h-11" onClick={() => applyView(view)}>
                   {view.name}
                 </Button>
                 <Button
-                  size="icon-xs"
+                  type="button"
+                  size="icon"
                   variant="ghost"
+                  className="min-h-11 min-w-11"
                   onClick={() => deleteView(view.id)}
                   aria-label={`Delete saved dashboard view ${view.name}`}
                 >

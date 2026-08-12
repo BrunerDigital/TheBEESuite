@@ -62,13 +62,13 @@ const recurrenceOptions = [
 ];
 
 const weekdayOptions = [
-  { value: "MO", label: "M" },
-  { value: "TU", label: "T" },
-  { value: "WE", label: "W" },
-  { value: "TH", label: "T" },
-  { value: "FR", label: "F" },
-  { value: "SA", label: "S" },
-  { value: "SU", label: "S" },
+  { value: "MO", label: "Mo", accessibleLabel: "Monday" },
+  { value: "TU", label: "Tu", accessibleLabel: "Tuesday" },
+  { value: "WE", label: "We", accessibleLabel: "Wednesday" },
+  { value: "TH", label: "Th", accessibleLabel: "Thursday" },
+  { value: "FR", label: "Fr", accessibleLabel: "Friday" },
+  { value: "SA", label: "Sa", accessibleLabel: "Saturday" },
+  { value: "SU", label: "Su", accessibleLabel: "Sunday" },
 ];
 
 function dateInputValue(timeZone: string, offsetDays = 1) {
@@ -271,7 +271,7 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+      <section className="rounded-xl border bg-card p-5 sm:p-6">
         <Badge className="mb-4">
           <CalendarDays data-icon="inline-start" />
           Operational calendar
@@ -283,22 +283,22 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
       </section>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="glass-panel"><CardHeader><CardDescription>Visible events</CardDescription><CardTitle>{filteredEvents.length}</CardTitle></CardHeader></Card>
-        <Card className="glass-panel"><CardHeader><CardDescription>Next 7 days</CardDescription><CardTitle>{nextSevenDays.length}</CardTitle></CardHeader></Card>
-        <Card className="glass-panel"><CardHeader><CardDescription>Closures and holidays</CardDescription><CardTitle>{closureAndHolidayCount}</CardTitle></CardHeader></Card>
-        <Card className="glass-panel"><CardHeader><CardDescription>Needs sync</CardDescription><CardTitle>{unsyncedCount}</CardTitle></CardHeader></Card>
+        <Card><CardHeader><CardDescription>Visible events</CardDescription><CardTitle as="div">{filteredEvents.length}</CardTitle></CardHeader></Card>
+        <Card><CardHeader><CardDescription>Next 7 days</CardDescription><CardTitle as="div">{nextSevenDays.length}</CardTitle></CardHeader></Card>
+        <Card><CardHeader><CardDescription>Closures and holidays</CardDescription><CardTitle as="div">{closureAndHolidayCount}</CardTitle></CardHeader></Card>
+        <Card><CardHeader><CardDescription>Needs sync</CardDescription><CardTitle as="div">{unsyncedCount}</CardTitle></CardHeader></Card>
       </div>
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
-          <CardTitle>Filters</CardTitle>
+          <CardTitle as="h2">Filters</CardTitle>
           <CardDescription>Filter by center, event type, or keyword without leaving the page.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1">
-            <Label>Center</Label>
+            <Label htmlFor="calendar-filter-center">Center</Label>
             <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
-              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="calendar-filter-center" className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All visible centers</SelectItem>
                 {centers.map((center) => (
@@ -308,22 +308,22 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Type</Label>
+            <Label htmlFor="calendar-filter-type">Type</Label>
             <Select value={type} onValueChange={(value) => value && setType(value)}>
-              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="calendar-filter-type" className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All event types</SelectItem>
                 {eventTypes.map((eventType) => (
-                  <SelectItem key={eventType} value={eventType}>{eventType.replaceAll("_", " ")}</SelectItem>
+                  <SelectItem key={eventType} value={eventType}>{calendarDisplayLabel(eventType, "Event")}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Search</Label>
+            <Label htmlFor="calendar-filter-search">Search</Label>
             <div className="relative">
-              <Search className="pointer-events-none absolute left-2 top-2 size-4 text-muted-foreground" />
-              <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-8" placeholder="Find events" />
+              <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input id="calendar-filter-search" value={search} onChange={(event) => setSearch(event.target.value)} className="pl-8" placeholder="Find events" />
             </div>
           </div>
         </CardContent>
@@ -331,16 +331,16 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
 
       {canManageCalendar ? (
         <div className="grid gap-4 xl:grid-cols-[1.4fr_0.8fr]">
-          <Card className="glass-panel">
+          <Card>
             <CardHeader>
-              <CardTitle>Create School Calendar Item</CardTitle>
+              <CardTitle as="h2">Create school calendar item</CardTitle>
               <CardDescription>Add recurring events, closures, and holidays with staff or parent visibility.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1">
-                <Label>Center</Label>
+                <Label htmlFor="calendar-event-center">Center</Label>
                 <Select value={draft.centerId} onValueChange={(value) => value && updateDraft("centerId", value)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="calendar-event-center" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {centers.map((center) => (
                       <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>
@@ -349,7 +349,7 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Type</Label>
+                <Label htmlFor="calendar-event-type">Type</Label>
                 <Select
                   value={draft.eventType}
                   onValueChange={(value) => {
@@ -362,7 +362,7 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
                     }
                   }}
                 >
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="calendar-event-type" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {eventTypeOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
@@ -371,17 +371,17 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
                 </Select>
               </div>
               <div className="space-y-1 md:col-span-2">
-                <Label>Title</Label>
-                <Input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} placeholder="Presidents Day closure" />
+                <Label htmlFor="calendar-event-title">Title</Label>
+                <Input id="calendar-event-title" value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} placeholder="Presidents Day closure" />
               </div>
-              <label className="flex min-h-10 items-center gap-3 rounded-lg border bg-background/40 px-3 text-sm">
-                <input type="checkbox" checked={draft.allDay} onChange={(event) => updateDraft("allDay", event.target.checked)} />
+              <label htmlFor="calendar-event-all-day" className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border bg-background px-3 text-sm">
+                <input id="calendar-event-all-day" className="size-5 shrink-0 accent-primary" type="checkbox" checked={draft.allDay} onChange={(event) => updateDraft("allDay", event.target.checked)} />
                 <span>All day</span>
               </label>
               <div className="space-y-1">
-                <Label>Visibility</Label>
+                <Label htmlFor="calendar-event-visibility">Visibility</Label>
                 <Select value={draft.visibility} onValueChange={(value) => value && updateDraft("visibility", value)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="calendar-event-visibility" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="staff">Staff only</SelectItem>
                     <SelectItem value="parents">Parents and staff</SelectItem>
@@ -390,17 +390,17 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Starts</Label>
-                <Input type={dateType} value={draft.startsAt} onChange={(event) => updateDraft("startsAt", event.target.value)} />
+                <Label htmlFor="calendar-event-starts">Starts</Label>
+                <Input id="calendar-event-starts" type={dateType} value={draft.startsAt} onChange={(event) => updateDraft("startsAt", event.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label>Ends</Label>
-                <Input type={dateType} value={draft.endsAt} onChange={(event) => updateDraft("endsAt", event.target.value)} placeholder={draft.allDay ? "Optional end date" : "Optional end time"} />
+                <Label htmlFor="calendar-event-ends">Ends</Label>
+                <Input id="calendar-event-ends" type={dateType} value={draft.endsAt} onChange={(event) => updateDraft("endsAt", event.target.value)} placeholder={draft.allDay ? "Optional end date" : "Optional end time"} />
               </div>
               <div className="space-y-1">
-                <Label>Repeats</Label>
+                <Label htmlFor="calendar-event-repeats">Repeats</Label>
                 <Select value={draft.recurrenceFrequency} onValueChange={(value) => value && updateDraft("recurrenceFrequency", value)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="calendar-event-repeats" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {recurrenceOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
@@ -409,12 +409,12 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Every</Label>
-                <Input type="number" min="1" max="52" value={draft.recurrenceInterval} onChange={(event) => updateDraft("recurrenceInterval", event.target.value)} disabled={draft.recurrenceFrequency === "none"} />
+                <Label htmlFor="calendar-event-interval">Every</Label>
+                <Input id="calendar-event-interval" type="number" min="1" max="52" value={draft.recurrenceInterval} onChange={(event) => updateDraft("recurrenceInterval", event.target.value)} disabled={draft.recurrenceFrequency === "none"} />
               </div>
               {draft.recurrenceFrequency === "weekly" ? (
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Weekdays</Label>
+                <fieldset className="space-y-2 md:col-span-2">
+                  <legend className="text-sm font-medium">Weekdays</legend>
                   <div className="flex flex-wrap gap-2">
                     {weekdayOptions.map((day) => (
                       <Button
@@ -422,26 +422,28 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
                         type="button"
                         size="sm"
                         variant={draft.recurrenceWeekdays.includes(day.value) ? "default" : "outline"}
-                        className="h-8 w-8 p-0"
+                        className="size-11 p-0"
+                        aria-label={day.accessibleLabel}
+                        aria-pressed={draft.recurrenceWeekdays.includes(day.value)}
                         onClick={() => toggleWeekday(day.value)}
                       >
                         {day.label}
                       </Button>
                     ))}
                   </div>
-                </div>
+                </fieldset>
               ) : null}
               <div className="space-y-1">
-                <Label>Repeat until</Label>
-                <Input type="date" value={draft.recurrenceUntil} onChange={(event) => updateDraft("recurrenceUntil", event.target.value)} disabled={draft.recurrenceFrequency === "none"} />
+                <Label htmlFor="calendar-event-repeat-until">Repeat until</Label>
+                <Input id="calendar-event-repeat-until" type="date" value={draft.recurrenceUntil} onChange={(event) => updateDraft("recurrenceUntil", event.target.value)} disabled={draft.recurrenceFrequency === "none"} />
               </div>
               <div className="space-y-1 md:col-span-2">
-                <Label>Notes</Label>
-                <Textarea value={draft.notes} onChange={(event) => updateDraft("notes", event.target.value)} placeholder="Details for staff, parent-facing context, or closure reason" />
+                <Label htmlFor="calendar-event-notes">Notes</Label>
+                <Textarea id="calendar-event-notes" value={draft.notes} onChange={(event) => updateDraft("notes", event.target.value)} placeholder="Details for staff, parent-facing context, or closure reason" />
               </div>
-              {eventMessage ? <div className="rounded-lg border bg-background/50 p-3 text-sm text-muted-foreground md:col-span-2">{eventMessage}</div> : null}
+              {eventMessage ? <div role="status" aria-live="polite" className="rounded-lg border bg-background p-3 text-sm text-muted-foreground md:col-span-2">{eventMessage}</div> : null}
               <div className="md:col-span-2">
-                <Button type="button" onClick={createEvent} disabled={isPending || !draft.centerId || !draft.title}>
+                <Button type="button" aria-busy={isPending} onClick={createEvent} disabled={isPending || !draft.centerId || !draft.title}>
                   <Plus data-icon="inline-start" />
                   Add calendar item
                 </Button>
@@ -449,13 +451,13 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
             </CardContent>
           </Card>
 
-          <Card className="glass-panel">
+          <Card>
             <CardHeader>
-              <CardTitle>Google Calendar sync</CardTitle>
+              <CardTitle as="h2">Google Calendar sync</CardTitle>
               <CardDescription>Push local calendar items and import external Google events for the selected center.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
-              <div className="rounded-xl border bg-background/40 p-4">
+              <div className="rounded-xl border bg-background p-4">
                 <div className="flex items-start gap-3">
                   <Cloud className="mt-0.5 size-5 shrink-0 text-primary" />
                   <div>
@@ -470,19 +472,19 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
                   </div>
                 </div>
               </div>
-              <Button type="button" onClick={syncGoogleCalendar} disabled={isPending || !draft.centerId}>
+              <Button type="button" aria-busy={isPending} onClick={syncGoogleCalendar} disabled={isPending || !draft.centerId}>
                 <RefreshCw data-icon="inline-start" />
                 Sync Google Calendar
               </Button>
-              {syncMessage ? <div className="rounded-lg border bg-background/50 p-3 text-sm text-muted-foreground">{syncMessage}</div> : null}
+              {syncMessage ? <div role="status" aria-live="polite" className="rounded-lg border bg-background p-3 text-sm text-muted-foreground">{syncMessage}</div> : null}
             </CardContent>
           </Card>
         </div>
       ) : null}
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
-          <CardTitle>Schedule</CardTitle>
+          <CardTitle as="h2">Schedule</CardTitle>
           <CardDescription>Events for the schools shown above, sorted by date and time.</CardDescription>
         </CardHeader>
         <CardContent>

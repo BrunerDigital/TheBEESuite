@@ -27,7 +27,7 @@ test("staff and administrative surfaces do not expose implementation or prototyp
 
 test("shared navigation names the destination and accessible action", () => {
   assert.match(shell, /label: "Notifications", href: "\/notifications"/);
-  assert.match(shell, /"Family portal navigation" : "Primary navigation"/);
+  assert.match(shell, /parentNavigationLabel : "Primary navigation"/);
   assert.match(shell, /aria-label="Search The BEE Suite"/);
   assert.match(shell, /aria-label="Open quick navigation"/);
   assert.match(shell, /<DialogTitle>Quick navigation<\/DialogTitle>/);
@@ -71,7 +71,7 @@ test("administrative copy formats display labels without changing stored values"
 });
 
 test("global fallback pages provide role-neutral recovery copy", () => {
-  assert.match(errorPage, /We couldn&apos;t load this page/);
+  assert.match(errorPage, /We couldn't load this page/);
   assert.match(globalErrorPage, /We couldn&apos;t load this page/);
   assert.match(notFoundPage, /The link may be outdated, or the page may have moved/);
   assert.doesNotMatch(notFoundPage, /parent and family workspace/i);

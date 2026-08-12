@@ -13,7 +13,6 @@ import {
   Printer,
   ShieldAlert,
   ShieldCheck,
-  Sparkles,
   Users,
 } from "lucide-react";
 import {
@@ -292,7 +291,7 @@ function ExecutiveLensDashboard({
       children: (
         <CollapsibleCard
           id={`dashboard-${lens}-executive-summary`}
-          className="glass-panel"
+          className="bg-card"
           contentClassName="grid gap-3 md:grid-cols-4"
           title={title}
           description="Company-level KPI visualizations across visible schools."
@@ -337,7 +336,7 @@ function ExecutiveLensDashboard({
       children: (
         <CollapsibleCard
           id={`dashboard-${lens}-refund-approval-queue`}
-          className="glass-panel"
+          className="bg-card"
           title="Refund approval queue"
           description="Review director refund requests. Approval sends the refund; denial leaves the family ledger unchanged. Every decision requires a reason."
         >
@@ -352,7 +351,7 @@ function ExecutiveLensDashboard({
       children: (
         <CollapsibleCard
           id={`dashboard-${lens}-all-location-records`}
-          className="glass-panel"
+          className="bg-card"
           title="All-location records"
           description="Open operational records for every school available to this executive account."
           contentClassName="flex flex-wrap gap-2"
@@ -371,7 +370,7 @@ function ExecutiveLensDashboard({
       children: (
         <CollapsibleCard
           id={`dashboard-${lens}-executive-account-balances`}
-          className="glass-panel"
+          className="bg-card"
           title="Accounts receivable by school"
           description="Family balances across every school visible to this executive login."
         >
@@ -386,7 +385,7 @@ function ExecutiveLensDashboard({
       children: (
         <CollapsibleCard
           id={`dashboard-${lens}-weekly-fte-progress`}
-          className="glass-panel"
+          className="bg-card"
           title="Weekly FTE progress"
           description="Submitted schools, missing schools, and total FTE by week."
         >
@@ -415,7 +414,7 @@ function ExecutiveLensDashboard({
       children: (
         <CollapsibleCard
           id={`dashboard-${lens}-current-week-fte`}
-          className="glass-panel"
+          className="bg-card"
           contentClassName="grid gap-3"
           title="Current-week FTE by school"
           description="Schools missing this week are highlighted for follow-up."
@@ -454,7 +453,7 @@ function ExecutiveLensDashboard({
       children: (
         <CollapsibleCard
           id={`dashboard-${lens}-school-fte-submissions`}
-          className="glass-panel"
+          className="bg-card"
           title="School FTE submissions"
           description="Submission-level FTE history from every visible school."
           headerActions={(
@@ -537,7 +536,7 @@ function ExecutiveLensDashboard({
       children: (
         <CollapsibleCard
           id={`dashboard-${lens}-payroll-summary-submissions`}
-          className="glass-panel"
+          className="bg-card"
           title="Payroll summaries"
           description="Payroll summaries sent by directors for executive review, including totals for each employee."
         >
@@ -545,9 +544,9 @@ function ExecutiveLensDashboard({
             <div className="space-y-3">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div className="w-full max-w-sm space-y-1">
-                  <div className="text-xs font-medium uppercase text-muted-foreground">School</div>
+                  <div className="text-xs font-medium text-muted-foreground">School</div>
                   <Select value={payrollSchoolFilter} onValueChange={(value) => value && setPayrollSchoolFilter(value)}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full" aria-label="Filter payroll summaries by school"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All visible schools</SelectItem>
                       {payrollSchools.map((school) => (
@@ -592,7 +591,13 @@ function ExecutiveLensDashboard({
                           <div className="text-xs text-muted-foreground">{formatDashboardDateTime(summary.submittedAt, timeZone)}</div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button type="button" variant="outline" size="sm" onClick={() => setSelectedPayrollSummaryId(summary.id)}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            aria-label={`Open payroll report for ${compactSchoolName(summary.schoolName)}, ${summary.periodStart} to ${summary.periodEnd}`}
+                            onClick={() => setSelectedPayrollSummaryId(summary.id)}
+                          >
                             Open report
                           </Button>
                         </TableCell>
@@ -621,7 +626,7 @@ function ExecutiveLensDashboard({
       children: (
         <CollapsibleCard
           id={`dashboard-${lens}-occupancy-comparison`}
-          className="glass-panel"
+          className="bg-card"
           contentClassName="grid gap-3"
           title="Occupancy comparison"
           description="Top schools by current child count against licensed capacity."
@@ -644,7 +649,7 @@ function ExecutiveLensDashboard({
       children: (
         <CollapsibleCard
           id={`dashboard-${lens}-revenue-comparison`}
-          className="glass-panel"
+          className="bg-card"
           contentClassName="grid gap-3"
           title="Revenue comparison"
           description="Invoice total snapshot by school."
@@ -667,7 +672,7 @@ function ExecutiveLensDashboard({
       children: (
         <CollapsibleCard
           id={`dashboard-${lens}-lead-tour-pressure`}
-          className="glass-panel"
+          className="bg-card"
           contentClassName="grid gap-3"
           title="Lead and tour pressure"
           description="Schools with the highest active inquiry load."
@@ -699,7 +704,7 @@ function ExecutiveLensDashboard({
       children: (
         <CollapsibleCard
           id={`dashboard-${lens}-company-trend-snapshot`}
-          className="glass-panel"
+          className="bg-card"
           title="Company trend snapshot"
           description="Enrollment funnel and revenue trend for visible schools."
         >
@@ -937,7 +942,7 @@ function AttendanceSnapshotCard({
   return (
     <CollapsibleCard
       id="dashboard-attendance-snapshot"
-      className="glass-panel"
+          className="bg-card"
       contentClassName="grid gap-5"
       title="Attendance Snapshot"
       description={isTeacherDashboard
@@ -1184,7 +1189,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         className={cn("group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", honeycomb && "honeycomb-kpi-link")}
         aria-label={`Open ${kpi.label}`}
       >
-        <Card className={cn("glass-panel h-full transition group-hover:border-primary/40 group-hover:bg-background/70", honeycomb && "honeycomb-kpi-card")}>
+        <Card className={cn("h-full transition-colors group-hover:border-primary/40 group-hover:bg-muted/30", honeycomb && "honeycomb-kpi-card")}>
           <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
             <CardDescription>{kpi.label}</CardDescription>
             <Icon className="text-primary" />
@@ -1213,7 +1218,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
       title: "Data readiness",
       children: (
         <Link href="/data-readiness" className="honeycomb-kpi-link group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Open Data Readiness Center with ${live.dataReadiness.actionable} actionable tasks`}>
-          <Card className="glass-panel honeycomb-kpi-card h-full transition group-hover:border-primary/40 group-hover:bg-background/70">
+          <Card className="honeycomb-kpi-card h-full transition-colors group-hover:border-primary/40 group-hover:bg-muted/30">
             <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2"><CardDescription>Data readiness</CardDescription><ShieldCheck className="text-sky-500" /></CardHeader>
             <CardContent><div className="text-3xl font-semibold">{live.dataReadiness.actionable}</div><p className="mt-1 text-xs text-muted-foreground">{live.dataReadiness.blocked} blocked · {live.dataReadiness.failed} failed · {live.dataReadiness.completionPercent}% resolved</p><span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">Open queue <ArrowUpRight className="size-3" /></span></CardContent>
           </Card>
@@ -1474,9 +1479,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           </>
         ) : null}
       </PrintableReport>
-      <section className="honeyglass-hero dashboard-command-center relative min-w-0 overflow-hidden rounded-2xl border bg-card/80 p-4 shadow-2xl shadow-black/20 sm:p-6">
-        <div className="hive-texture absolute inset-0 opacity-[0.08]" />
-        <div className="relative flex min-w-0 flex-col gap-5">
+      <section className="dashboard-command-center min-w-0 rounded-xl border bg-card p-4 sm:p-6">
+        <div className="flex min-w-0 flex-col gap-5">
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-sm font-medium text-primary">{asOfLabel}</p>
@@ -1488,12 +1492,12 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               </p>
             </div>
             <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2 lg:flex lg:flex-wrap">
-                {canPrintDashboard ? <Button className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" variant="outline" onClick={printDashboard}>
+                {canPrintDashboard ? <Button type="button" className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" variant="outline" onClick={printDashboard}>
                   <Printer data-icon="inline-start" aria-hidden="true" />
                   Print dashboard
                 </Button> : null}
                 {showAiBrief ? <Button className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" nativeButton={false} render={<Link href={aiBriefHref} />}>
-                  <Sparkles data-icon="inline-start" aria-hidden="true" />
+                  <MessageSquare data-icon="inline-start" aria-hidden="true" />
                   {isTeacherDashboard ? "Open teacher portal" : isBillingDashboard ? "Open messages" : isParentDashboard || isPickupDashboard ? "Open family portal" : "Review AI brief"}
                 </Button> : null}
                 {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? <Button className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" variant="outline" nativeButton={false} render={<Link href="/crm-leads" />}>
@@ -1522,7 +1526,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 className="dashboard-ai-brief order-first border-primary/30 bg-primary/10 min-[112rem]:order-none"
                 title={(
                   <span className="flex items-center gap-2 text-lg">
-                    <Sparkles className="text-primary" aria-hidden="true" />
+                    <MessageSquare className="text-primary" aria-hidden="true" />
                     AI daily center summary
                   </span>
                 )}
@@ -1648,7 +1652,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                       children: (
                         <CollapsibleCard
                           id="dashboard-director-enrollment-revenue"
-                          className="glass-panel"
+          className="bg-card"
                           title="Enrollment and revenue snapshot"
                           description="Leads, tours, enrollments, and revenue index"
                         >
@@ -1685,7 +1689,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                       children: (
                         <CollapsibleCard
                           id="dashboard-director-account-balances"
-                          className="glass-panel"
+          className="bg-card"
                           title={live.accountsReceivable ? "School account balances" : "Accounts receivable by school"}
                           description={live.accountsReceivable
                             ? "Current family accounts, with balances owed listed first"
@@ -1705,7 +1709,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                       children: (
                         <CollapsibleCard
                           id="dashboard-director-capacity-by-classroom"
-                          className="glass-panel"
+          className="bg-card"
                           contentClassName="flex flex-col gap-4"
                           title="Capacity by classroom"
                           description="Open seats and ratio pulse"
@@ -1749,7 +1753,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                       children: (
                         <CollapsibleCard
                           id="dashboard-director-enrollment-pipeline"
-                          className="glass-panel"
+          className="bg-card"
                           contentClassName="grid gap-3 sm:grid-cols-2"
                           title="Enrollment pipeline"
                           description="Board-ready stages"
@@ -1781,7 +1785,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                       children: (
                         <CollapsibleCard
                           id="dashboard-director-lead-scoring-tours"
-                          className="glass-panel"
+          className="bg-card"
                           contentClassName="flex flex-col gap-3"
                           title="Lead scoring and tours"
                           description="Enrollment inquiries and tour follow-up"
@@ -1834,7 +1838,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     children: (
                       <CollapsibleCard
                         id="dashboard-director-action-queue"
-                        className="glass-panel"
+          className="bg-card"
                         contentClassName="flex flex-col gap-3"
                         title="Action queue"
                         description="Notifications, reminders, and review items"
@@ -1873,7 +1877,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     children: (
                       <CollapsibleCard
                         id="dashboard-director-parent-messages"
-                        className="glass-panel"
+          className="bg-card"
                         contentClassName="flex flex-col gap-4"
                         title="Parent messages"
                         description="Unread and priority conversations"
@@ -1936,7 +1940,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               children: (
                 <CollapsibleCard
                   id="dashboard-billing-account-balances"
-                  className="glass-panel"
+          className="bg-card"
                   title="School account balances"
                   description="Current family accounts, with balances owed listed first"
                 >
@@ -1954,7 +1958,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 children: (
                   <CollapsibleCard
                     id={`dashboard-${tab}-widget-${widget.id}`}
-                    className="glass-panel"
+          className="bg-card"
                     contentClassName="flex flex-col gap-3"
                     eyebrow={<Badge variant="outline">{widget.category}</Badge>}
                     title={widget.title}
@@ -2005,7 +2009,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             <TabsContent key={tab} value={tab} className="mt-0">
               <CollapsibleCard
                 id={`dashboard-${tab}-lens-container`}
-                className="glass-panel"
+          className="bg-card"
                 contentClassName="grid gap-4"
                 title={<span className="capitalize">{tab} dashboard lens</span>}
                 description={`${live?.dashboardWidgetRoleLabel ?? "Role"} widgets from the current permission scope`}
@@ -2034,7 +2038,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               children: (
                 <CollapsibleCard
                   id="dashboard-enrollment-funnel"
-                  className="glass-panel"
+          className="bg-card"
                   title="Enrollment funnel"
                   description="Inquiry to enrolled conversion snapshot"
                 >
@@ -2065,7 +2069,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               children: (
                 <CollapsibleCard
                   id="dashboard-open-seats-by-age-group"
-                  className="glass-panel"
+          className="bg-card"
                   title="Open seats by age group"
                   description="Capacity planning for enrollment"
                 >

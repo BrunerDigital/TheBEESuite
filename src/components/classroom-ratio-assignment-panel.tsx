@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowRightLeft, CheckCircle2, Pencil, UserMinus } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -57,6 +57,9 @@ function scrollToAssignmentAction() {
 
 export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = false, demoMode = false }: Props) {
   const router = useRouter();
+  const controlId = useId();
+  const classroomSelectId = `${controlId}-classroom`;
+  const teacherSelectId = `${controlId}-teacher`;
   const ratioRows = useMemo(
     () => classrooms.map((classroom) => ({
       classroom,
@@ -139,9 +142,9 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
 
   if (!classrooms.length) {
     return (
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
-          <CardTitle>Ratio Warnings And Staff Assignment</CardTitle>
+          <CardTitle as="h2">Ratio warnings and staff assignment</CardTitle>
           <CardDescription>
             {canManage ? "Add classrooms before assigning teacher coverage." : "No classroom coverage records are visible for this login."}
           </CardDescription>
@@ -159,9 +162,9 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
   }
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <CardHeader>
-        <CardTitle>Ratio Warnings And Staff Assignment</CardTitle>
+        <CardTitle as="h2">Ratio warnings and staff assignment</CardTitle>
         <CardDescription>
           {canManage
             ? "Review rooms that need coverage and move active teachers into the selected classroom."
@@ -170,21 +173,21 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
       </CardHeader>
       <CardContent className="space-y-4">
         {demoMode ? (
-          <Alert>
+          <Alert role="status">
             <AlertCircle className="size-4" />
             <AlertTitle>Read-only workspace</AlertTitle>
             <AlertDescription>Assignment actions are unavailable in this workspace.</AlertDescription>
           </Alert>
         ) : null}
         {statusMessage ? (
-          <Alert>
+          <Alert role="status" aria-live="polite">
             <CheckCircle2 className="size-4" />
             <AlertTitle>Saved</AlertTitle>
             <AlertDescription>{statusMessage}</AlertDescription>
           </Alert>
         ) : null}
         {errorMessage ? (
-          <Alert variant="destructive">
+          <Alert variant="destructive" role="alert">
             <AlertCircle className="size-4" />
             <AlertTitle>Needs attention</AlertTitle>
             <AlertDescription>{errorMessage}</AlertDescription>
@@ -195,8 +198,10 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
             <button
               key={classroom.id}
               type="button"
-              className={`rounded-xl border bg-background/45 p-3 text-left transition hover:bg-background/70 ${selectedClassroom?.id === classroom.id ? "border-foreground/60" : ""}`}
+              className={`rounded-xl border bg-background p-3 text-left transition-colors hover:bg-muted/50 ${selectedClassroom?.id === classroom.id ? "border-foreground/60" : ""}`}
               aria-label={`Select ${classroom.name} to review ${warning.label}`}
+              aria-pressed={selectedClassroom?.id === classroom.id}
+              disabled={isPending}
               onClick={() => {
                 setSelectedClassroomId(classroom.id);
                 const nextTeacher = staff.find((teacher) => teacher.user.isActive && teacher.centerId === classroom.centerId && !teacher.classroomId)
@@ -217,14 +222,20 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
           ))}
         </div>
         <div className={canManage ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]" : "grid gap-4"}>
-          <div className="rounded-xl border bg-background/40 p-4">
+          <div className="rounded-xl border bg-background p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-medium">{selectedClassroom?.name ?? "Classroom"}</div>
                 <p className="text-xs text-muted-foreground">
                   {selectedClassroom?.ageGroup ?? "Age group"} · {selectedClassroom?.ratioRule ?? "ratio not set"}
                   {canManage && selectedClassroom && !selectedClassroom.ratioRule ? (
-                    <Button type="button" variant="link" className="ml-1 h-auto p-0 text-xs" onClick={() => openClassroomEditor(selectedClassroom.id)}>
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="ml-1 min-h-10 px-2 py-1 text-xs"
+                      onClick={() => openClassroomEditor(selectedClassroom.id)}
+                      aria-label={`Add a staff-to-child ratio for ${selectedClassroom.name}`}
+                    >
                       Add ratio
                     </Button>
                   ) : null}
@@ -234,6 +245,7 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
                 canManage && selectedRatio.status !== "healthy" ? (
                   <Badge
                     variant={selectedRatio.tone}
+                    className="min-h-10 px-3"
                     render={(
                       <button
                         type="button"
@@ -271,16 +283,20 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
           </div>
 
           {canManage ? (
-          <div id="ratio-assignment-action" className="scroll-mt-24 rounded-xl border bg-background/40 p-4">
+          <div
+            id="ratio-assignment-action"
+            className="scroll-mt-24 rounded-xl border bg-background p-4"
+            aria-busy={isPending}
+          >
             <div className="mb-3">
               <div className="text-sm font-medium">Assignment action</div>
               <p className="text-xs text-muted-foreground">Assign, move, or unassign one active teacher.</p>
             </div>
             <div className="grid gap-3">
               <div className="space-y-1">
-                <Label>Classroom</Label>
+                <Label htmlFor={classroomSelectId}>Classroom</Label>
                 <Select value={selectedClassroom?.id ?? ""} onValueChange={(value) => value && setSelectedClassroomId(value)}>
-                  <SelectTrigger><SelectValue placeholder="Choose classroom" /></SelectTrigger>
+                  <SelectTrigger id={classroomSelectId}><SelectValue placeholder="Choose classroom" /></SelectTrigger>
                   <SelectContent>
                     {classrooms.map((classroom) => (
                       <SelectItem key={classroom.id} value={classroom.id}>{classroom.name} · {classroom.ageGroup}</SelectItem>
@@ -290,9 +306,9 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
               </div>
               {eligibleStaff.length ? (
                 <div className="space-y-1">
-                  <Label>Teacher</Label>
+                  <Label htmlFor={teacherSelectId}>Teacher</Label>
                   <Select value={effectiveSelectedStaffId} onValueChange={(value) => value && setSelectedStaffId(value)}>
-                    <SelectTrigger><SelectValue placeholder="Choose teacher" /></SelectTrigger>
+                    <SelectTrigger id={teacherSelectId}><SelectValue placeholder="Choose teacher" /></SelectTrigger>
                     <SelectContent>
                       {eligibleStaff.map((teacher) => (
                         <SelectItem key={teacher.id} value={teacher.id}>{staffLabel(teacher)}</SelectItem>
@@ -306,13 +322,24 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
                 </p>
               )}
               <div className="flex flex-wrap gap-2">
-                <Button type="button" disabled={demoMode || isPending || !selectedClassroom || !selectedStaff} onClick={() => saveAssignment(selectedClassroom?.id ?? null)}>
+                <Button
+                  type="button"
+                  disabled={demoMode || isPending || !selectedClassroom || !selectedStaff}
+                  onClick={() => saveAssignment(selectedClassroom?.id ?? null)}
+                  aria-label={selectedStaff && selectedClassroom ? `Assign ${selectedStaff.user.name} to ${selectedClassroom.name}` : "Assign selected teacher to selected classroom"}
+                >
                   <ArrowRightLeft data-icon="inline-start" />
-                  Assign to room
+                  {isPending ? "Saving assignment…" : "Assign to room"}
                 </Button>
-                <Button type="button" variant="outline" disabled={demoMode || isPending || !selectedStaff} onClick={() => saveAssignment(null)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={demoMode || isPending || !selectedStaff}
+                  onClick={() => saveAssignment(null)}
+                  aria-label={selectedStaff ? `Unassign ${selectedStaff.user.name} from classroom coverage` : "Unassign selected teacher from classroom coverage"}
+                >
                   <UserMinus data-icon="inline-start" />
-                  Unassign
+                  {isPending ? "Saving assignment…" : "Unassign"}
                 </Button>
               </div>
             </div>

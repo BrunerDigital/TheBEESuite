@@ -49,7 +49,7 @@ export default function PrivacyPage() {
         <div className="mx-auto max-w-6xl">
           <header className="flex flex-wrap items-center justify-between gap-3">
             <BrandLogo href="/" size="md" priority />
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
               <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/support" />}>
                 Support
               </Button>
@@ -84,7 +84,7 @@ export default function PrivacyPage() {
               {collectedData.map(({ title, body, Icon }) => (
                 <Card key={title} className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                    <CardTitle as="h2" className="flex items-center gap-2">
                       <Icon className="size-5 text-amber-300" />
                       {title}
                     </CardTitle>
@@ -99,7 +99,7 @@ export default function PrivacyPage() {
             <div className="mt-8 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>How Data Is Used</CardTitle>
+                  <CardTitle as="h2">How Data Is Used</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>We use data to provide secure school operations, Parent Portal access, family communication, document handling, child updates, billing views, payment handoff, support, security, change history, and service reliability.</p>
@@ -110,7 +110,7 @@ export default function PrivacyPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>Privacy and Security Practices</CardTitle>
+                  <CardTitle as="h2">Privacy and Security Practices</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ul className="grid gap-2 text-sm leading-6 text-slate-300">
@@ -128,7 +128,7 @@ export default function PrivacyPage() {
             <div className="mt-8 grid gap-4 lg:grid-cols-3">
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>Parent Choices</CardTitle>
+                  <CardTitle as="h2">Parent Choices</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>Parents can update notification preferences where available, change their password, submit contact change requests, request account deletion under Family → Profile &amp; Security, and ask their school to review incorrect family or child records.</p>
@@ -138,7 +138,7 @@ export default function PrivacyPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>Children&apos;s Privacy</CardTitle>
+                  <CardTitle as="h2">Children&apos;s Privacy</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>The Parent Portal is for parents and guardians. Authorized school staff use separate school workspaces. The platform does not create child self-service accounts for the Parent Portal.</p>
@@ -148,7 +148,7 @@ export default function PrivacyPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
-                  <CardTitle>Contact</CardTitle>
+                  <CardTitle as="h2">Contact</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>For privacy or support questions, email <a className="font-semibold text-amber-200 underline-offset-4 hover:underline" href="mailto:support@thebeesuite.io">support@thebeesuite.io</a>.</p>

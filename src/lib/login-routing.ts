@@ -28,6 +28,22 @@ export function firstSearchParam(value: unknown) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+export function pathWithSearchParams(
+  pathname: string,
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (Array.isArray(value)) {
+      value.forEach((item) => params.append(key, item));
+    } else if (typeof value === "string") {
+      params.append(key, value);
+    }
+  }
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
 export function safeLoginNextPath(value: unknown, fallback = DEFAULT_LOGIN_NEXT_PATH) {
   const path = typeof firstSearchParam(value) === "string" ? firstSearchParam(value) as string : fallback;
   if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("/login")) return fallback;
@@ -49,16 +65,20 @@ export function isTeacherLoginRole(role?: string | null) {
   return Boolean(role && teacherLoginRoles.has(role));
 }
 
+function hasPathPrefix(nextPath: string, prefix: string) {
+  return nextPath === prefix || ["/", "?", "#"].some((separator) => nextPath.startsWith(`${prefix}${separator}`));
+}
+
 function isAllowedNextPath(nextPath: string, allowedPrefixes: string[]) {
-  return allowedPrefixes.some((prefix) => nextPath === prefix || nextPath.startsWith(`${prefix}/`) || nextPath.startsWith(`${prefix}#`));
+  return allowedPrefixes.some((prefix) => hasPathPrefix(nextPath, prefix));
 }
 
 function isTeacherPortalPath(nextPath: string) {
-  return nextPath === TEACHER_LOGIN_NEXT_PATH || nextPath.startsWith(`${TEACHER_LOGIN_NEXT_PATH}/`) || nextPath.startsWith(`${TEACHER_LOGIN_NEXT_PATH}#`);
+  return hasPathPrefix(nextPath, TEACHER_LOGIN_NEXT_PATH);
 }
 
 function isParentPortalPath(nextPath: string) {
-  return nextPath === PARENT_LOGIN_NEXT_PATH || nextPath.startsWith(`${PARENT_LOGIN_NEXT_PATH}/`) || nextPath.startsWith(`${PARENT_LOGIN_NEXT_PATH}#`);
+  return hasPathPrefix(nextPath, PARENT_LOGIN_NEXT_PATH);
 }
 
 export function defaultNextPathForLoginPortal(portal: LoginPortal) {

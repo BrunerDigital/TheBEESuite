@@ -35,6 +35,24 @@ test("payment method request tokens validate family, center, tenant, and email",
   assert.equal(result.ok ? result.payload.email : "", "parent@example.com");
 });
 
+test("payment method reauthorization is signed into the request token and uses no-charge copy", () => {
+  process.env.AUTH_SECRET = "test-payment-method-request-secret";
+  const token = createPaymentMethodRequestToken({
+    familyId: "family_1", centerId: "center_1", tenantId: "tenant_1",
+    email: "parent@example.com", intent: "payment_method_reauthorization",
+    now: new Date("2026-08-12T12:00:00.000Z"),
+  });
+  const result = validatePaymentMethodRequestToken(token, new Date("2026-08-12T13:00:00.000Z"));
+  assert.equal(result.ok ? result.payload.intent : null, "payment_method_reauthorization");
+  const email = buildPaymentMethodRequestEmailText({
+    recipientLabel: "Alex Parent", familyName: "Johnson Family", centerLabel: "Centennial",
+    formUrl: "https://thebeesuite.io/payment-method-form/token", intent: "payment_method_reauthorization",
+  });
+  assert.match(email, /No payment will be charged today/i);
+  assert.match(email, /autopay choice will remain unchanged/i);
+  assert.doesNotMatch(email, /pay an open invoice/i);
+});
+
 test("bank account request copy separates verification from autopay consent", () => {
   const formUrl = buildPaymentMethodRequestFocusedFormUrl("https://thebeesuite.io/", "token_123", "instant_bank_verification");
   const email = buildPaymentMethodRequestEmailText({

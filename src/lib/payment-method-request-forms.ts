@@ -6,7 +6,7 @@ export const PAYMENT_METHOD_REQUEST_TOKEN_VERSION = 1;
 export const PAYMENT_METHOD_REQUEST_TOKEN_TTL_DAYS = 14;
 export const PAYMENT_METHOD_REQUEST_NOTIFICATION_TYPE = "payment_method_form";
 export const PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE = "payment_method_request_email";
-export type PaymentMethodRequestIntent = "payment_steps" | "instant_bank_verification";
+export type PaymentMethodRequestIntent = "payment_steps" | "instant_bank_verification" | "payment_method_reauthorization";
 
 export type PaymentMethodRequestTokenPayload = {
   v: typeof PAYMENT_METHOD_REQUEST_TOKEN_VERSION;
@@ -17,6 +17,7 @@ export type PaymentMethodRequestTokenPayload = {
   iat: number;
   exp: number;
   nonce: string;
+  intent?: PaymentMethodRequestIntent;
 };
 
 export type PaymentMethodRequestRecipient = {
@@ -128,6 +129,7 @@ export function createPaymentMethodRequestToken(input: {
   email: string;
   now?: Date;
   ttlDays?: number;
+  intent?: PaymentMethodRequestIntent;
 }) {
   const now = input.now ?? new Date();
   const ttlDays = input.ttlDays ?? PAYMENT_METHOD_REQUEST_TOKEN_TTL_DAYS;
@@ -140,6 +142,7 @@ export function createPaymentMethodRequestToken(input: {
     iat: Math.floor(now.getTime() / 1000),
     exp: Math.floor(now.getTime() / 1000) + ttlDays * 24 * 60 * 60,
     nonce: randomUUID(),
+    ...(input.intent ? { intent: input.intent } : {}),
   };
   const data = base64Url(JSON.stringify(payload));
   return `${data}.${sign(data)}`;
@@ -154,6 +157,7 @@ export function validatePaymentMethodRequestToken(token: unknown, now = new Date
 
   try {
     const payload = JSON.parse(fromBase64Url(data)) as Partial<PaymentMethodRequestTokenPayload>;
+    const validIntent = payload.intent === undefined || ["payment_steps", "instant_bank_verification", "payment_method_reauthorization"].includes(payload.intent);
     if (
       payload.v !== PAYMENT_METHOD_REQUEST_TOKEN_VERSION ||
       !payload.familyId ||
@@ -161,7 +165,8 @@ export function validatePaymentMethodRequestToken(token: unknown, now = new Date
       !payload.tenantId ||
       !payload.email ||
       !isValidPaymentRequestEmail(payload.email) ||
-      typeof payload.exp !== "number"
+      typeof payload.exp !== "number" ||
+      !validIntent
     ) {
       return { ok: false as const, error: "This payment setup link is invalid." };
     }
@@ -254,6 +259,9 @@ export function buildPaymentMethodRequestEmailSubject(input: {
   if (input.intent === "instant_bank_verification") {
     return `${sender}: secure bank account verification requested`;
   }
+  if (input.intent === "payment_method_reauthorization") {
+    return `${sender}: securely update your tuition payment method`;
+  }
   return `${sender}: tuition payment options`;
 }
 
@@ -267,11 +275,14 @@ export function buildPaymentMethodRequestCheckoutBranding(input: {
   const sender = paymentMethodRequestBrandSender(input.centerLabel);
   const familyName = clean(input.familyName) || "your family";
   const instantBank = input.intent === "instant_bank_verification";
+  const reauthorization = input.intent === "payment_method_reauthorization";
   return {
     displayName: sender,
     logoUrl: input.logoUrl ?? null,
     iconUrl: input.iconUrl ?? null,
-    submitMessage: instantBank
+    submitMessage: reauthorization
+      ? `Securely save a replacement payment method for future tuition payments. No payment will be charged today, and your existing autopay choice will not change.`
+      : instantBank
       ? `Connect your bank account through this secure form for future tuition payments in The BEE Suite. This does not turn on autopay. The BEE Suite does not store your bank sign-in credentials or full account number.`
       : `${sender} uses this secure form for tuition payments. The BEE Suite does not store full card or bank details.`,
     afterSubmitMessage: `You will return to The BEE Suite after this secure step is complete.`,
@@ -309,6 +320,16 @@ export function buildPaymentMethodRequestEmailText({
       "If you were not expecting this request, please contact the school before continuing.",
     ].join("\n");
   }
+  if (intent === "payment_method_reauthorization") {
+    return [
+      `Hi ${recipientLabel || "there"},`, "",
+      `${paymentMethodRequestBrandSender(centerLabel)} has updated its secure tuition payment account. Please use the BEE Suite link below to save a replacement payment method for ${familyName}.`,
+      "No payment will be charged today, and your existing autopay choice will remain unchanged.",
+      "The BEE Suite and your school do not store full card or bank details. Stripe provides the secure form.", "",
+      `Update your payment method in The BEE Suite: ${formUrl}`, "",
+      "If you were not expecting this request, please contact the school before continuing.",
+    ].join("\n");
+  }
 
   return [
     `Hi ${recipientLabel || "there"},`,
@@ -331,6 +352,9 @@ export function buildPaymentMethodRequestNotificationBody(input: {
 }) {
   if (input.intent === "instant_bank_verification") {
     return `Verify a bank account for ${input.familyName}'s future tuition payments. This does not turn on autopay: ${input.formUrl}`;
+  }
+  if (input.intent === "payment_method_reauthorization") {
+    return `Securely update the payment method for ${input.familyName}. No payment will be charged and your autopay choice will not change: ${input.formUrl}`;
   }
   return `Review tuition payment options for ${input.familyName} in The BEE Suite: ${input.formUrl}`;
 }

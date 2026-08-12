@@ -8,9 +8,21 @@ function clean(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function stringFields(value: unknown): Prisma.InputJsonObject {
+  return Object.fromEntries(
+    Object.entries(fields(value)).flatMap(([key, item]) => {
+      const normalized = clean(item);
+      return normalized ? [[key, normalized]] : [];
+    }),
+  );
+}
+
 export function stripeCustomerIdForAccount(customFields: unknown, connectedAccountId?: string | null) {
   const custom = fields(customFields);
   const accountId = clean(connectedAccountId);
+  const customerIdsByAccount = fields(custom.stripeCustomerIdsByConnectedAccount);
+  const mappedCustomerId = accountId ? clean(customerIdsByAccount[accountId]) : null;
+  if (mappedCustomerId) return mappedCustomerId;
   const scopedAccountId = clean(custom.stripeCustomerConnectedAccountId);
   const connectedCustomerId = clean(custom.stripeConnectedCustomerId);
   const primaryCustomerId = clean(custom.stripeCustomerId);
@@ -42,6 +54,13 @@ export function stripeCustomerCustomFieldPatch(
       stripeConnectedCustomerId: customerId,
       stripeCustomerConnectedAccountId: accountId,
       stripeCustomerScope: "connected",
+      stripeCustomerIdsByConnectedAccount: {
+        ...stringFields(custom.stripeCustomerIdsByConnectedAccount),
+        [accountId]: customerId,
+        ...(clean(custom.stripeCustomerConnectedAccountId) && existingCustomerId
+          ? { [clean(custom.stripeCustomerConnectedAccountId)!]: existingCustomerId }
+          : {}),
+      },
     } satisfies Prisma.InputJsonObject;
   }
 

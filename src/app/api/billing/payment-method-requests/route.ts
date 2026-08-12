@@ -37,6 +37,7 @@ function stringArray(value: unknown) {
 }
 
 function paymentRequestIntent(value: unknown): PaymentMethodRequestIntent {
+  if (clean(value) === "payment_method_reauthorization") return "payment_method_reauthorization";
   return clean(value) === "instant_bank_verification" ? "instant_bank_verification" : "payment_steps";
 }
 
@@ -135,6 +136,7 @@ async function POSTHandler(request: NextRequest) {
       centerId: center.id,
       tenantId: center.organization.tenantId,
       email,
+      intent,
     });
     const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
     let formUrl = intent === "instant_bank_verification"

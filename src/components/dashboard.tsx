@@ -33,6 +33,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardWidgetConfigurator } from "@/components/dashboard-widget-configurator";
+import { DirectorReviewInbox, type DirectorReviewInboxItem } from "@/components/director-review-inbox";
 import { DashboardSnapshotControls } from "@/components/dashboard-snapshot-controls";
 import { EnrollmentStatusShortcut } from "@/components/enrollment-status-shortcut";
 import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
@@ -127,6 +128,7 @@ export type LiveDashboardData = {
     completionPercent: number;
     lastUpdated: string | null;
   };
+  reviewInbox?: DirectorReviewInboxItem[];
   executiveMetrics?: {
     currentWeekStart: string;
     currentWeekKey: string;
@@ -1551,6 +1553,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
       </section>
 
       {isDirectorDashboard ? <EnrollmentStatusShortcut /> : null}
+
+      {isDirectorDashboard && live?.reviewInbox ? <DirectorReviewInbox items={live.reviewInbox} /> : null}
 
       {configuredWidgets.length ? (
         <DashboardWidgetConfigurator

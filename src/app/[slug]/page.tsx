@@ -3524,6 +3524,7 @@ async function renderLivePage(
     const requestedBillingCenterId = firstSearchParam(searchParams.centerId) || "";
     const requestedBillingChildId = firstSearchParam(searchParams.childId) || "";
     const requestedBillingSearch = firstSearchParam(searchParams.q) || "";
+    const requestedBillingWorkspace = firstSearchParam(searchParams.workspace) === "terminal" ? "terminal" as const : undefined;
     const billingClassroomsByCenter = new Map<string, Array<{ id: string; name: string; ageGroup: string }>>();
     for (const classroom of billingClassrooms) {
       const current = billingClassroomsByCenter.get(classroom.centerId) ?? [];
@@ -3544,6 +3545,7 @@ async function renderLivePage(
             centerId: requestedBillingCenterId,
             childId: requestedBillingChildId,
             searchQuery: requestedBillingSearch,
+            workspace: requestedBillingWorkspace,
           },
           workbench: {
             currentRole: user.role,

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { EnrollmentStage, UserRole } from "@prisma/client";
+import { DocumentStatus, EnrollmentStage, UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import { ExecutiveDashboard, type LiveDashboardData } from "@/components/dashboard";
 import {
@@ -18,12 +18,15 @@ import type { DashboardWidgetId } from "@/lib/dashboard-widgets";
 import { activeClassroomWhere } from "@/lib/classroom-status";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { canUseCorporateStripeVerification, readCorporateStripeVerificationTarget } from "@/lib/corporate-stripe-verification";
+import { visibleFormSubmissionWhere } from "@/lib/corporate-view-scope";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
+import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { dataReadinessCenterEnabled } from "@/lib/honeyglass";
 import { loadDataReadinessWorkspace } from "@/lib/data-readiness-server";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
 import { buildRegistrationShareUrl } from "@/lib/registration-sharing";
+import { registrationReviewFromData } from "@/lib/registration-packet";
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { dashboardLensesForRole } from "@/lib/rbac";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
@@ -171,6 +174,10 @@ export default async function DashboardPage() {
     attendanceClassroomRows,
     accountsReceivableFamilyRows,
     executiveAccountsReceivableFamilyRows,
+    pendingMediaReviewCount,
+    submittedDocumentReviewCount,
+    guardianChangeRequestRows,
+    registrationReviewRows,
   ] = await Promise.all([
     prisma.child.count({
       where: {
@@ -401,6 +408,38 @@ export default async function DashboardPage() {
           select: accountsReceivableSummaryFamilySelect,
         })
       : Promise.resolve([]),
+    prisma.childMedia.count({
+      where: {
+        status: "permission_review",
+        sharedWithParents: false,
+        child: { family: { centerId: scopedCenterFilter } },
+      },
+    }),
+    prisma.document.count({
+      where: {
+        status: DocumentStatus.SUBMITTED,
+        OR: [
+          { family: { centerId: scopedCenterFilter } },
+          { child: { family: { centerId: scopedCenterFilter } } },
+        ],
+      },
+    }),
+    prisma.note.findMany({
+      where: {
+        restricted: true,
+        body: { contains: " request:" },
+        family: currentFamilyWhere,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 250,
+      select: { body: true },
+    }),
+    prisma.formSubmission.findMany({
+      where: visibleFormSubmissionWhere(centerIds, "online_registration"),
+      orderBy: { submittedAt: "desc" },
+      take: 250,
+      select: { data: true },
+    }),
   ]);
 
   const attendanceServiceDayByCenter = new Map(
@@ -942,6 +981,16 @@ export default async function DashboardPage() {
     completionPercent: readinessWorkspace.summary.completionPercent,
     lastUpdated: readinessWorkspace.summary.lastUpdated,
   } : undefined;
+  const pendingRegistrationReviewCount = registrationReviewRows.filter((row) => registrationReviewFromData(row.data).status === "submitted").length;
+  const guardianChangeRequestCount = guardianChangeRequestRows.filter((row) => parseGuardianChangeRequestNote(row.body)?.status === "pending").length;
+  const reviewInbox = [
+    { id: "incidents", label: "Incident Reports", count: pendingIncidents, detail: "Safety documentation awaiting director review.", href: "/classroom-dashboard?view=incidents", tone: "urgent" as const },
+    { id: "media", label: "Parent Media", count: pendingMediaReviewCount, detail: "Photos or videos waiting for sharing approval.", href: "/family-detail?view=media", tone: "attention" as const },
+    { id: "registration", label: "Registration Packets", count: pendingRegistrationReviewCount, detail: "Submitted applications requiring placement review.", href: "/forms", tone: "attention" as const },
+    { id: "documents", label: "Submitted Documents", count: submittedDocumentReviewCount, detail: "Family or child documents ready for review.", href: "/forms?view=documents", tone: "standard" as const },
+    { id: "guardian-changes", label: "Guardian Changes", count: guardianChangeRequestCount, detail: "Parent-submitted contact or pickup changes.", href: "/family-detail#guardian-change-requests", tone: "attention" as const },
+    { id: "messages", label: "Family Messages", count: unreadMessages, detail: "Unread family conversations that may need a response.", href: "/family-detail?view=messages", tone: "standard" as const },
+  ];
   const live: LiveDashboardData = {
     kpis: [
       { label: "Active children", value: activeChildren.toLocaleString(), trend: `${centers.length} visible centers`, tone: "emerald" },
@@ -1008,6 +1057,7 @@ export default async function DashboardPage() {
     dashboardWidgets: dashboardWidgetConfig.widgets,
     dashboardWidgetRoleLabel: dashboardWidgetConfig.roleLabel,
     dataReadiness,
+    reviewInbox,
     setupChecklists: [
       ...(user.role === UserRole.TEACHER ? [{
         key: "teacher_profile" as const,

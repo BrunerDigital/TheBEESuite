@@ -21,7 +21,7 @@ test("message reply paths target parent and staff in-app threads", () => {
       familyId: "family-1",
       subject: "Classroom photo",
     }),
-    "/parent-portal?replyToMessageId=message-1&subject=Re%3A+Classroom+photo&familyId=family-1#messages",
+    "/parent-portal?view=messages&replyToMessageId=message-1&subject=Re%3A+Classroom+photo&familyId=family-1",
   );
   assert.equal(
     buildMessageReplyPath({
@@ -30,7 +30,7 @@ test("message reply paths target parent and staff in-app threads", () => {
       staffId: "teacher-1",
       subject: "Schedule",
     }),
-    "/messages?replyToMessageId=message-2&subject=Re%3A+Schedule&targetMode=staff&staffId=teacher-1#message-composer",
+    "/family-detail?view=messages&replyToMessageId=message-2&subject=Re%3A+Schedule&targetMode=staff&staffId=teacher-1#message-composer",
   );
 });
 
@@ -43,7 +43,7 @@ test("message reply email copy points users back to Bee Suite", () => {
     subject: "Hello",
   });
 
-  assert.equal(url, "https://thebeesuite.io/messages?replyToMessageId=message-1&subject=Re%3A+Hello&targetMode=family&familyId=family-1#message-composer");
+  assert.equal(url, "https://thebeesuite.io/family-detail?view=messages&replyToMessageId=message-1&subject=Re%3A+Hello&targetMode=family&familyId=family-1#message-composer");
   assert.match(appendInAppMessageReplyInstructions("Body", url), /Reply in The Bee Suite:/);
   assert.match(appendInAppMessageReplyInstructions("Body", url), /Email replies are not attached/);
 });

@@ -3266,6 +3266,8 @@ function ParentPortalWorkspaceView({
                   <Label htmlFor="portal-subject">Subject</Label>
                   <Input
                     id="portal-subject"
+                    name="message-subject"
+                    autoComplete="off"
                     className="bg-background/75"
                     value={subject}
                     onChange={(event) => setSubject(event.target.value)}
@@ -3275,6 +3277,8 @@ function ParentPortalWorkspaceView({
                   <Label htmlFor="portal-message">Message</Label>
                   <Textarea
                     id="portal-message"
+                    name="message-body"
+                    autoComplete="off"
                     className="min-h-24 resize-y rounded-xl bg-background/75"
                     placeholder={`Message ${centerName ?? "your school"}`}
                     value={message}
@@ -3294,6 +3298,7 @@ function ParentPortalWorkspaceView({
                   <Input
                     key={messageAttachmentInputKey}
                     id="portal-message-attachments"
+                    name="message-attachments"
                     type="file"
                     multiple
                     accept="image/*,.pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"

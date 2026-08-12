@@ -104,19 +104,38 @@ export function MessageConversationInbox({
   threads,
   initialThreadKey,
   initialReplyToMessageId,
+  initialSearchQuery,
   composer,
 }: {
   threads: MessageConversationThread[];
   initialThreadKey?: string | null;
   initialReplyToMessageId?: string | null;
+  initialSearchQuery?: string | null;
   composer: ConversationComposerProps;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialSearchQuery ?? "");
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
   const [selectedThreadKey, setSelectedThreadKey] = useState(() => {
     if (initialThreadKey && threads.some((thread) => thread.key === initialThreadKey)) return initialThreadKey;
     return threads[0]?.key ?? "";
   });
+
+  function updateBrowserMessagingParam(name: "q" | "familyId", value: string) {
+    const url = new URL(window.location.href);
+    if (value) url.searchParams.set(name, value);
+    else url.searchParams.delete(name);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function updateQuery(value: string) {
+    setQuery(value);
+    updateBrowserMessagingParam("q", value.trim());
+  }
+
+  function selectThread(thread: MessageConversationThread) {
+    setSelectedThreadKey(thread.key);
+    updateBrowserMessagingParam("familyId", thread.familyId ?? "");
+  }
 
   const filteredThreads = useMemo(() => {
     if (!deferredQuery) return threads;
@@ -127,7 +146,9 @@ export function MessageConversationInbox({
     });
   }, [deferredQuery, threads]);
 
-  const selectedThread = threads.find((thread) => thread.key === selectedThreadKey) ?? filteredThreads[0] ?? threads[0] ?? null;
+  const selectedThread = filteredThreads.find((thread) => thread.key === selectedThreadKey)
+    ?? filteredThreads[0]
+    ?? (deferredQuery ? null : threads[0] ?? null);
   const latestMessage = selectedThread?.messages.at(-1) ?? null;
   const replyTarget = selectedThread?.familyId && latestMessage
     ? {
@@ -156,8 +177,9 @@ export function MessageConversationInbox({
               <span className="sr-only">Search family conversations</span>
               <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                name="conversation-search"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => updateQuery(event.target.value)}
                 className="pl-9"
                 placeholder="Search families or messages"
                 type="search"
@@ -165,7 +187,7 @@ export function MessageConversationInbox({
             </label>
           </div>
 
-          <div className="max-h-[24rem] overflow-y-auto lg:max-h-[calc(42rem-7.8rem)]">
+          <div className={`${styles.threadList} max-h-[24rem] overflow-y-auto lg:max-h-[calc(42rem-7.8rem)]`}>
             {filteredThreads.map((thread) => {
               const lastMessage = thread.messages.at(-1);
               const isSelected = selectedThread?.key === thread.key;
@@ -175,7 +197,7 @@ export function MessageConversationInbox({
                   type="button"
                   className={`${styles.threadButton} ${isSelected ? styles.threadButtonActive : ""} flex w-full gap-3 border-b px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset`}
                   aria-pressed={isSelected}
-                  onClick={() => setSelectedThreadKey(thread.key)}
+                  onClick={() => selectThread(thread)}
                 >
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary" aria-hidden="true">
                     {initials(thread.familyName)}

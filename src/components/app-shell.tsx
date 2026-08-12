@@ -67,6 +67,7 @@ import { DataReadinessContextBadge, type CountSummary } from "@/components/data-
 import { DataReadinessContextPanel } from "@/components/data-readiness-context-panel";
 import { dataReadinessContextForPath } from "@/lib/data-readiness-context";
 import { dataReadinessCenterEnabled, honeyglassUiEnabled } from "@/lib/honeyglass";
+import { STAFF_MESSAGING_HREF } from "@/lib/messaging-navigation";
 import { terminalStoreEnabled } from "@/lib/feature-availability";
 import {
   PARENT_PORTAL_HREFS,
@@ -887,25 +888,25 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
     { label: "Today", href: "/teacher-portal", slug: "teacher-portal", Icon: Home },
     { label: "Roster", href: "/teacher-portal#teacher-roster", slug: "teacher-portal", Icon: Users },
     { label: "Log", href: "/teacher-portal#teacher-quick-log", slug: "teacher-portal", Icon: ClipboardList },
-    { label: "Messages", href: "/messages", slug: "messages", Icon: MessageSquare },
+    { label: "Messages", href: STAFF_MESSAGING_HREF, slug: "messages", Icon: MessageSquare },
   ];
   const directorItems = [
     { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
     { label: "School", href: "/classroom-dashboard", slug: "classroom-dashboard", Icon: Building2 },
     { label: "Notifications", href: "/notifications", slug: "notifications", Icon: ClipboardList },
-    { label: "Inbox", href: "/messages", slug: "messages", Icon: MessageSquare },
+    { label: "Inbox", href: STAFF_MESSAGING_HREF, slug: "messages", Icon: MessageSquare },
   ];
   const executiveItems = [
     { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
     { label: "Schools", href: "/multi-location-dashboard", slug: "multi-location-dashboard", Icon: Building2 },
     { label: "Notifications", href: "/notifications", slug: "notifications", Icon: ClipboardList },
-    { label: "Inbox", href: "/messages", slug: "messages", Icon: MessageSquare },
+    { label: "Inbox", href: STAFF_MESSAGING_HREF, slug: "messages", Icon: MessageSquare },
   ];
   const billingItems = [
     { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
     { label: "Billing", href: "/billing-invoices", slug: "billing-invoices", Icon: BadgeDollarSign },
     { label: "Payments", href: "/billing-invoices?view=payments", slug: "payments", Icon: Activity },
-    { label: "Inbox", href: "/messages", slug: "messages", Icon: MessageSquare },
+    { label: "Inbox", href: STAFF_MESSAGING_HREF, slug: "messages", Icon: MessageSquare },
   ];
   const auditorItems = [
     { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },

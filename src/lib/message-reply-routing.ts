@@ -1,3 +1,5 @@
+import { staffMessagingHref } from "@/lib/messaging-navigation";
+
 export type MessageReplyAudience = "staff" | "parent";
 export type MessageReplyTargetMode = "family" | "staff";
 
@@ -26,12 +28,13 @@ export function buildMessageReplyPath({
   staffId,
 }: MessageReplyPathInput) {
   const params = new URLSearchParams();
+  if (audience === "parent") params.set("view", "messages");
   params.set("replyToMessageId", replyToMessageId);
   params.set("subject", replySubject(subject));
 
   if (audience === "parent") {
     if (familyId) params.set("familyId", familyId);
-    return `/parent-portal?${params.toString()}#messages`;
+    return `/parent-portal?${params.toString()}`;
   }
 
   if (staffId) {
@@ -42,7 +45,7 @@ export function buildMessageReplyPath({
     params.set("familyId", familyId);
   }
 
-  return `/messages?${params.toString()}#message-composer`;
+  return staffMessagingHref(Object.fromEntries(params), "message-composer");
 }
 
 export function buildAbsoluteMessageReplyUrl({

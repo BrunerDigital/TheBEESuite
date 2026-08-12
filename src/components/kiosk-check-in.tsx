@@ -873,7 +873,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                             nativeButton={false}
                             render={(
                               <a
-                                href={lookup.billing.paymentUrl || "/parent-portal#billing"}
+                                href={lookup.billing.paymentUrl || "/parent-portal?view=payments"}
                                 target="_blank"
                                 rel="noopener noreferrer"
                               />

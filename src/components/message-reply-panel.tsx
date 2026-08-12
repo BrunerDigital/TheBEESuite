@@ -382,6 +382,8 @@ export function MessageReplyPanel({
           <Label htmlFor={fieldId("message")} className="sr-only">Message</Label>
           <Textarea
             id={fieldId("message")}
+            name="message-body"
+            autoComplete="off"
             value={message}
             onChange={(event) => setMessage(event.target.value)}
             className="min-h-24 resize-y bg-background"
@@ -396,6 +398,7 @@ export function MessageReplyPanel({
               <Input
                 key={attachmentInputKey}
                 id={fieldId("attachments")}
+                name="message-attachments"
                 className="h-11"
                 type="file"
                 multiple
@@ -617,11 +620,11 @@ export function MessageReplyPanel({
             ) : null}
             <div className="space-y-1">
               <Label htmlFor={fieldId("subject")}>Subject</Label>
-              <Input id={fieldId("subject")} className="h-11" value={subject} onChange={(event) => setSubject(event.target.value)} />
+              <Input id={fieldId("subject")} name="message-subject" autoComplete="off" className="h-11" value={subject} onChange={(event) => setSubject(event.target.value)} />
             </div>
             <div className="space-y-1">
               <Label htmlFor={fieldId("message")}>Message</Label>
-              <Textarea id={fieldId("message")} value={message} onChange={(event) => setMessage(event.target.value)} className="min-h-28" />
+              <Textarea id={fieldId("message")} name="message-body" autoComplete="off" value={message} onChange={(event) => setMessage(event.target.value)} className="min-h-28" />
             </div>
             <div className="space-y-2 rounded-lg border bg-background p-3">
               <Label htmlFor={fieldId("attachments")} className="flex items-center gap-2">
@@ -631,6 +634,7 @@ export function MessageReplyPanel({
               <Input
                 key={attachmentInputKey}
                 id={fieldId("attachments")}
+                name="message-attachments"
                 className="h-11"
                 type="file"
                 multiple

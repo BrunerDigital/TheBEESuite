@@ -1,3 +1,5 @@
+import { STAFF_MESSAGING_HREF } from "@/lib/messaging-navigation";
+
 export const schoolOnboardingSetupSections = [
   {
     field: "schoolProfileSetup",
@@ -94,7 +96,7 @@ export const schoolOnboardingSetupSections = [
     storageKey: "communications",
     label: "Messages, announcements, and notifications",
     owner: "Director",
-    href: "/messages",
+    href: STAFF_MESSAGING_HREF,
     description: "Configure message templates, announcement approval rules, notification preferences, SMS/email sender identity, and response ownership.",
     placeholder: "Director approves announcements\nTeachers can message assigned classrooms\nSMS only for urgent reminders\nSender email/domain to use",
   },

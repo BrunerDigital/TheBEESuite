@@ -12,6 +12,9 @@ const conversationStyles = readFileSync("src/components/message-conversation.mod
 test("director messaging uses a searchable, accessible conversation inbox", () => {
   assert.match(inbox, /aria-label="Family conversation list"/);
   assert.match(inbox, /Search family conversations/);
+  assert.match(inbox, /initialSearchQuery/);
+  assert.match(inbox, /window\.history\.replaceState/);
+  assert.match(inbox, /updateBrowserMessagingParam\("familyId", thread\.familyId \?\? ""\)/);
   assert.match(inbox, /aria-pressed=\{isSelected\}/);
   assert.match(inbox, /data-message-origin=\{message\.isFromFamily \? "family" : "school"\}/);
   assert.match(inbox, /Messages with \$\{selectedThread\.familyName\}/);
@@ -21,6 +24,7 @@ test("director messaging uses a searchable, accessible conversation inbox", () =
   assert.match(inbox, /Staff conversation/);
   assert.match(conversationStyles, /\.bubbleSchool/);
   assert.match(conversationStyles, /backdrop-filter: blur\(22px\)/);
+  assert.match(conversationStyles, /overscroll-behavior: contain/);
 });
 
 test("selected family threads offer an in-context reply without bypassing the guarded send route", () => {

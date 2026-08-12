@@ -70,22 +70,22 @@ export function MedicationLogPanel({ childrenOptions }: { childrenOptions: Medic
   }
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <CardHeader>
-        <CardTitle>Medication Log</CardTitle>
+        <CardTitle as="h2">Medication log</CardTitle>
         <CardDescription>Record administration details for director review and export.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {error ? (
           <Alert variant="destructive">
-            <AlertCircle className="size-4" />
+            <AlertCircle aria-hidden="true" className="size-4" />
             <AlertTitle>Needs attention</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
         {saved ? (
           <Alert>
-            <Pill className="size-4" />
+            <Pill aria-hidden="true" className="size-4" />
             <AlertTitle>Saved</AlertTitle>
             <AlertDescription>{saved}</AlertDescription>
           </Alert>
@@ -94,9 +94,9 @@ export function MedicationLogPanel({ childrenOptions }: { childrenOptions: Medic
           <>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
-                <Label>Child</Label>
+                <Label htmlFor="medication-log-child">Child</Label>
                 <Select value={childId} onValueChange={(value) => value && setChildId(value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="medication-log-child"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {childrenOptions.map((child) => (
                       <SelectItem key={child.id} value={child.id}>
@@ -107,25 +107,25 @@ export function MedicationLogPanel({ childrenOptions }: { childrenOptions: Medic
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Administered at</Label>
-                <Input type="datetime-local" value={administeredAt} onChange={(event) => setAdministeredAt(event.target.value)} />
+                <Label htmlFor="medication-log-administered-at">Administered at</Label>
+                <Input id="medication-log-administered-at" type="datetime-local" value={administeredAt} onChange={(event) => setAdministeredAt(event.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label>Medication</Label>
-                <Input value={medicationName} onChange={(event) => setMedicationName(event.target.value)} />
+                <Label htmlFor="medication-log-medication">Medication</Label>
+                <Input id="medication-log-medication" value={medicationName} onChange={(event) => setMedicationName(event.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label>Dosage</Label>
-                <Input value={dosage} onChange={(event) => setDosage(event.target.value)} />
+                <Label htmlFor="medication-log-dosage">Dosage</Label>
+                <Input id="medication-log-dosage" value={dosage} onChange={(event) => setDosage(event.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label>Route</Label>
-                <Input value={route} onChange={(event) => setRoute(event.target.value)} placeholder="Oral, topical, inhaler" />
+                <Label htmlFor="medication-log-route">Route</Label>
+                <Input id="medication-log-route" value={route} onChange={(event) => setRoute(event.target.value)} placeholder="Oral, topical, inhaler" />
               </div>
               <div className="space-y-1">
-                <Label>Status</Label>
+                <Label htmlFor="medication-log-status">Status</Label>
                 <Select value={status} onValueChange={(value) => value && setStatus(value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="medication-log-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="administered">Administered</SelectItem>
                     <SelectItem value="missed">Missed</SelectItem>
@@ -136,16 +136,16 @@ export function MedicationLogPanel({ childrenOptions }: { childrenOptions: Medic
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Notes</Label>
-              <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} className="min-h-20" />
+              <Label htmlFor="medication-log-notes">Notes</Label>
+              <Textarea id="medication-log-notes" value={notes} onChange={(event) => setNotes(event.target.value)} className="min-h-20" />
             </div>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <input type="checkbox" checked={parentNotified} onChange={(event) => setParentNotified(event.target.checked)} />
+            <label htmlFor="medication-log-parent-notified" className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm text-muted-foreground">
+              <input id="medication-log-parent-notified" type="checkbox" checked={parentNotified} onChange={(event) => setParentNotified(event.target.checked)} className="size-5 shrink-0 accent-primary" />
               Parent/guardian was notified
             </label>
-            <Button disabled={isPending || !childId || !medicationName.trim() || !dosage.trim()} onClick={submit}>
-              <Save data-icon="inline-start" />
-              Save Medication Log
+            <Button disabled={isPending || !childId || !medicationName.trim() || !dosage.trim()} aria-busy={isPending} onClick={submit}>
+              <Save aria-hidden="true" data-icon="inline-start" />
+              {isPending ? "Saving medication log…" : "Save medication log"}
             </Button>
           </>
         ) : (

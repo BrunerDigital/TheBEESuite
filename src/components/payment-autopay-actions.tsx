@@ -88,7 +88,7 @@ export function PaymentAutopayActions() {
       <CardHeader>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <CardTitle>Autopay invoices</CardTitle>
+            <CardTitle as="h2">Autopay invoices</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
               Review eligible due invoices before processing them. Account credit is applied first; any remaining balance is charged to each family&apos;s authorized autopay payment method.
             </CardDescription>

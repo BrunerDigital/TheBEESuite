@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Bot, CheckCircle2, MessageSquare, Paperclip, Send, Sparkles, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, MessageSquare, Paperclip, Send, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,25 +73,32 @@ function SegmentChecklist({
   values: string[];
   onToggle: (value: string) => void;
 }) {
+  const checklistId = useId();
+
   return (
-    <div className="rounded-lg border bg-background/40 p-3">
-      <div className="mb-2 text-sm font-medium">{title}</div>
+    <fieldset className="rounded-lg border bg-background p-3">
+      <legend className="px-1 text-sm font-medium">{title}</legend>
       <div className="max-h-36 space-y-2 overflow-auto pr-1">
-        {options.length ? options.map((option) => (
-          <label key={option.value} className="flex items-start gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              className="mt-0.5 size-4 rounded border-input"
-              checked={values.includes(option.value)}
-              onChange={() => onToggle(option.value)}
-            />
-            <span className="leading-5">{option.label}</span>
-          </label>
-        )) : (
+        {options.length ? options.map((option) => {
+          const optionId = `${checklistId}-${encodeURIComponent(option.value)}`;
+
+          return (
+            <label key={option.value} htmlFor={optionId} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-ring/50">
+              <input
+                id={optionId}
+                type="checkbox"
+                className="size-5 shrink-0 rounded border-input"
+                checked={values.includes(option.value)}
+                onChange={() => onToggle(option.value)}
+              />
+              <span className="leading-5">{option.label}</span>
+            </label>
+          );
+        }) : (
           <div className="text-xs text-muted-foreground">No options available</div>
         )}
       </div>
-    </div>
+    </fieldset>
   );
 }
 
@@ -117,6 +124,8 @@ export function MessageReplyPanel({
   composerId?: string;
 }) {
   const router = useRouter();
+  const instanceId = useId();
+  const fieldId = (name: string) => `${composerId}-${instanceId}-${name}`;
   const templateOptions = templates.length ? templates : [];
   const initialTargetMode = replyDraft?.targetMode ?? (familyOptions[0]?.id ? "family" : "staff");
   const [familyId, setFamilyId] = useState(
@@ -354,7 +363,7 @@ export function MessageReplyPanel({
             </div>
             <Badge variant="outline">School reply</Badge>
           </div>
-          <div aria-live="polite">
+          <div aria-live="polite" aria-atomic="true">
             {statusMessage ? (
               <Alert>
                 <CheckCircle2 className="size-4" />
@@ -370,30 +379,31 @@ export function MessageReplyPanel({
               </Alert>
             ) : null}
           </div>
-          <Label htmlFor={`${composerId}-message`} className="sr-only">Message</Label>
+          <Label htmlFor={fieldId("message")} className="sr-only">Message</Label>
           <Textarea
-            id={`${composerId}-message`}
+            id={fieldId("message")}
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            className="min-h-24 resize-y rounded-2xl bg-background/75 shadow-inner"
+            className="min-h-24 resize-y bg-background"
             placeholder={`Message ${selectedFamily?.name ?? "this family"}`}
           />
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
             <div className="space-y-1.5">
-              <Label htmlFor={`${composerId}-attachments`} className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Paperclip className="size-3.5" />
+              <Label htmlFor={fieldId("attachments")} className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Paperclip aria-hidden="true" className="size-3.5" />
                 Add photos or files
               </Label>
               <Input
                 key={attachmentInputKey}
-                id={`${composerId}-attachments`}
+                id={fieldId("attachments")}
+                className="h-11"
                 type="file"
                 multiple
                 accept="image/*,.pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
                 onChange={(event) => addAttachments(event.target.files)}
               />
             </div>
-            <Button disabled={isPending || !canSubmit} onClick={submit} className="rounded-full px-5">
+            <Button size="lg" disabled={isPending || !canSubmit} aria-busy={isPending} onClick={submit}>
               <Send data-icon="inline-start" />
               {isPending ? "Sending" : "Send reply"}
             </Button>
@@ -401,41 +411,51 @@ export function MessageReplyPanel({
           {attachmentFiles.length ? (
             <div className="flex flex-wrap gap-2">
               {attachmentFiles.map((file, index) => (
-                <span key={`${file.name}-${file.size}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-full border bg-background/60 px-2.5 py-1 text-xs">
+                <span key={`${file.name}-${file.size}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-md border bg-background px-2.5 py-1 text-xs">
                   <span className="truncate">{file.name || "attachment"}</span>
                   <span className="shrink-0 text-muted-foreground">{formatFileSize(file.size)}</span>
-                  <Button type="button" variant="ghost" size="icon-xs" onClick={() => removeAttachment(index)} title="Remove attachment">
-                    <X className="size-3" />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-lg"
+                    onClick={() => removeAttachment(index)}
+                    aria-label={`Remove attachment ${index + 1}: ${file.name || "unnamed file"}`}
+                    title={`Remove attachment ${index + 1}: ${file.name || "unnamed file"}`}
+                  >
+                    <X aria-hidden="true" className="size-4" />
                   </Button>
                 </span>
               ))}
             </div>
           ) : null}
-          <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
-            <label className="flex items-center gap-2">
+          <div className="flex flex-wrap gap-x-2 gap-y-2 text-xs text-muted-foreground">
+            <label htmlFor={fieldId("email-copy")} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 focus-within:ring-2 focus-within:ring-ring/50">
               <input
+                id={fieldId("email-copy")}
                 type="checkbox"
-                className="size-4 rounded border-input"
+                className="size-5 shrink-0 rounded border-input"
                 checked={sendEmailCopy}
                 onChange={(event) => setSendEmailCopy(event.target.checked)}
               />
               Email copy
             </label>
             {canSendSmsCopy ? (
-              <label className="flex items-center gap-2">
+              <label htmlFor={fieldId("sms-copy")} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 focus-within:ring-2 focus-within:ring-ring/50">
                 <input
+                  id={fieldId("sms-copy")}
                   type="checkbox"
-                  className="size-4 rounded border-input"
+                  className="size-5 shrink-0 rounded border-input"
                   checked={sendSmsCopy}
                   onChange={(event) => setSendSmsCopy(event.target.checked)}
                 />
                 SMS copy ({smsRecipientCount})
               </label>
             ) : null}
-            <label className="flex items-center gap-2">
+            <label htmlFor={fieldId("in-app-copy")} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 focus-within:ring-2 focus-within:ring-ring/50">
               <input
+                id={fieldId("in-app-copy")}
                 type="checkbox"
-                className="size-4 rounded border-input"
+                className="size-5 shrink-0 rounded border-input"
                 checked={sendPushCopy}
                 onChange={(event) => setSendPushCopy(event.target.checked)}
               />
@@ -448,9 +468,9 @@ export function MessageReplyPanel({
   }
 
   return (
-    <Card className="glass-panel">
+    <Card aria-busy={isPending || isSuggesting}>
       <CardHeader id={composerId} className="scroll-mt-28">
-        <CardTitle>Message Composer</CardTitle>
+        <CardTitle as="h2">Message Composer</CardTitle>
         <CardDescription>Family, classroom, broadcast, and director/teacher messages are stored in scoped threads.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -477,13 +497,13 @@ export function MessageReplyPanel({
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="lg"
                 onClick={() => {
                   setReplyToMessageId("");
                   setReplyingToLabel("");
                 }}
               >
-                <X data-icon="inline-start" />
+                <X data-icon="inline-start" aria-hidden="true" />
                 Cancel reply
               </Button>
             </AlertDescription>
@@ -493,24 +513,24 @@ export function MessageReplyPanel({
           <>
             <div className="grid gap-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_minmax(0,0.8fr)]">
               <div className="space-y-1">
-                <Label>Target</Label>
+                <Label htmlFor={fieldId("target")}>Target</Label>
                 <Select value={targetMode} onValueChange={(value) => setTargetMode(value === "broadcast" ? "broadcast" : value === "staff" ? "staff" : "family")}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={fieldId("target")} className="h-11 w-full" aria-describedby={fieldId("target-description")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {familyOptions.length ? <SelectItem value="family">Single family</SelectItem> : null}
                     {canUseBroadcast ? <SelectItem value="broadcast">Broadcast segment</SelectItem> : null}
                     {staffRecipientOptions.length ? <SelectItem value="staff">Staff member</SelectItem> : null}
                   </SelectContent>
                 </Select>
-                <div className="text-xs text-muted-foreground">
+                <div id={fieldId("target-description")} className="text-xs text-muted-foreground">
                   {targetMode === "staff" ? "Director/teacher thread" : `${targetFamilyCount} recipient family${targetFamilyCount === 1 ? "" : "ies"}`}
                 </div>
               </div>
               {targetMode === "family" ? (
                 <div className="space-y-1">
-                  <Label>Family</Label>
+                  <Label htmlFor={fieldId("family")}>Family</Label>
                   <Select value={familyId} onValueChange={(value) => value && setFamilyId(value)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose family" /></SelectTrigger>
+                    <SelectTrigger id={fieldId("family")} className="h-11 w-full" aria-describedby={fieldId("family-description")}><SelectValue placeholder="Choose family" /></SelectTrigger>
                     <SelectContent>
                       {familyOptions.map((family) => (
                         <SelectItem key={family.id} value={family.id}>
@@ -519,20 +539,20 @@ export function MessageReplyPanel({
                       ))}
                     </SelectContent>
                   </Select>
-                  <div className="text-xs text-muted-foreground">{selectedFamily?.billingEmail ?? "No billing email on file"}</div>
+                  <div id={fieldId("family-description")} className="text-xs text-muted-foreground">{selectedFamily?.billingEmail ?? "No billing email on file"}</div>
                 </div>
               ) : targetMode === "broadcast" ? (
                 <div className="space-y-1">
-                  <Label>Broadcast recipients</Label>
-                  <div className="rounded-md border bg-background/40 px-3 py-2 text-sm">
+                  <div className="text-sm font-medium">Broadcast recipients</div>
+                  <div className="flex min-h-11 items-center rounded-md border bg-background px-3 py-2 text-sm">
                     {targetFamilyCount} matching families
                   </div>
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <Label>Staff recipient</Label>
+                  <Label htmlFor={fieldId("staff-recipient")}>Staff recipient</Label>
                   <Select value={assignedToId} onValueChange={(value) => value && setAssignedToId(value)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose staff" /></SelectTrigger>
+                    <SelectTrigger id={fieldId("staff-recipient")} className="h-11 w-full" aria-describedby={fieldId("staff-recipient-description")}><SelectValue placeholder="Choose staff" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="unassigned">Choose staff</SelectItem>
                       {staffRecipientOptions.map((staff) => (
@@ -542,13 +562,13 @@ export function MessageReplyPanel({
                       ))}
                     </SelectContent>
                   </Select>
-                  <div className="text-xs text-muted-foreground">{selectedStaffRecipient?.email ?? "In-app staff thread"}</div>
+                  <div id={fieldId("staff-recipient-description")} className="text-xs text-muted-foreground">{selectedStaffRecipient?.email ?? "In-app staff thread"}</div>
                 </div>
               )}
               <div className="space-y-1">
-                <Label>Template</Label>
+                <Label htmlFor={fieldId("template")}>Template</Label>
                 <Select value={templateId} onValueChange={(value) => value && applyTemplate(value)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={fieldId("template")} className="h-11 w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {templateOptions.map((template) => (
                       <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
@@ -557,9 +577,9 @@ export function MessageReplyPanel({
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Priority</Label>
+                <Label htmlFor={fieldId("priority")}>Priority</Label>
                 <Select value={priority} onValueChange={(value) => value && setPriority(value)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={fieldId("priority")} className="h-11 w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="normal">Normal</SelectItem>
                     <SelectItem value="high">High</SelectItem>
@@ -569,9 +589,9 @@ export function MessageReplyPanel({
               </div>
               {targetMode !== "staff" ? (
                 <div className="space-y-1">
-                  <Label>Assigned staff</Label>
+                  <Label htmlFor={fieldId("assigned-staff")}>Assigned staff</Label>
                   <Select value={assignedToId} onValueChange={(value) => value && setAssignedToId(value)}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id={fieldId("assigned-staff")} className="h-11 w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="unassigned">Unassigned</SelectItem>
                       {staffOptions.map((staff) => (
@@ -582,8 +602,8 @@ export function MessageReplyPanel({
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <Label>Delivery</Label>
-                  <div className="rounded-md border bg-background/40 px-3 py-2 text-sm">In-app staff thread</div>
+                  <div className="text-sm font-medium">Delivery</div>
+                  <div className="flex min-h-11 items-center rounded-md border bg-background px-3 py-2 text-sm">In-app staff thread</div>
                 </div>
               )}
             </div>
@@ -596,21 +616,22 @@ export function MessageReplyPanel({
               </div>
             ) : null}
             <div className="space-y-1">
-              <Label>Subject</Label>
-              <Input value={subject} onChange={(event) => setSubject(event.target.value)} />
+              <Label htmlFor={fieldId("subject")}>Subject</Label>
+              <Input id={fieldId("subject")} className="h-11" value={subject} onChange={(event) => setSubject(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Message</Label>
-              <Textarea value={message} onChange={(event) => setMessage(event.target.value)} className="min-h-28" />
+              <Label htmlFor={fieldId("message")}>Message</Label>
+              <Textarea id={fieldId("message")} value={message} onChange={(event) => setMessage(event.target.value)} className="min-h-28" />
             </div>
-            <div className="space-y-2 rounded-lg border bg-background/40 p-3">
-              <Label htmlFor="message-attachments" className="flex items-center gap-2">
-                <Paperclip className="size-4" />
+            <div className="space-y-2 rounded-lg border bg-background p-3">
+              <Label htmlFor={fieldId("attachments")} className="flex items-center gap-2">
+                <Paperclip aria-hidden="true" className="size-4" />
                 Attach photos or files
               </Label>
               <Input
                 key={attachmentInputKey}
-                id="message-attachments"
+                id={fieldId("attachments")}
+                className="h-11"
                 type="file"
                 multiple
                 accept="image/*,.pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
@@ -622,8 +643,15 @@ export function MessageReplyPanel({
                     <span key={`${file.name}-${file.size}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-2 py-1 text-xs">
                       <span className="truncate">{file.name || "attachment"}</span>
                       <span className="shrink-0 text-muted-foreground">{formatFileSize(file.size)}</span>
-                      <Button type="button" variant="ghost" size="icon-xs" onClick={() => removeAttachment(index)} title="Remove attachment">
-                        <X className="size-3" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-lg"
+                        onClick={() => removeAttachment(index)}
+                        aria-label={`Remove attachment ${index + 1}: ${file.name || "unnamed file"}`}
+                        title={`Remove attachment ${index + 1}: ${file.name || "unnamed file"}`}
+                      >
+                        <X aria-hidden="true" className="size-4" />
                       </Button>
                     </span>
                   ))}
@@ -632,17 +660,25 @@ export function MessageReplyPanel({
             </div>
             <div className="flex flex-wrap gap-2">
               {mergeFields.map((field) => (
-                <Button key={field.token} type="button" variant="outline" size="sm" onClick={() => insertMergeField(field.token)}>
+                <Button
+                  key={field.token}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11"
+                  aria-label={`Insert ${field.label} merge field`}
+                  onClick={() => insertMergeField(field.token)}
+                >
                   {field.label}
                 </Button>
               ))}
             </div>
-            <div className="rounded-lg border bg-background/40 p-3">
+            <div className="rounded-lg border bg-background p-3">
               <div className="grid gap-3 md:grid-cols-[minmax(0,0.6fr)_auto]">
                 <div className="space-y-1">
-                  <Label>AI reply purpose</Label>
+                  <Label htmlFor={fieldId("draft-purpose")}>Reply draft purpose</Label>
                   <Select value={aiPurpose} onValueChange={(value) => value && setAiPurpose(value)}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id={fieldId("draft-purpose")} className="h-11 w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="reply">General reply</SelectItem>
                       <SelectItem value="documents">Documents</SelectItem>
@@ -654,28 +690,25 @@ export function MessageReplyPanel({
                   </Select>
                 </div>
                 <div className="flex items-end">
-                  <Button type="button" variant="outline" disabled={isSuggesting || targetMode === "staff" || (targetMode === "family" && !familyId)} onClick={requestSuggestions}>
-                    <Sparkles data-icon="inline-start" />
+                  <Button size="lg" type="button" variant="outline" disabled={isSuggesting || targetMode === "staff" || (targetMode === "family" && !familyId)} aria-busy={isSuggesting} onClick={requestSuggestions}>
                     {isSuggesting ? "Drafting" : "Suggest replies"}
                   </Button>
                 </div>
               </div>
               {suggestions.length ? (
                 <div className="mt-3 grid gap-2 md:grid-cols-3">
-                  {suggestions.map((suggestion) => (
+                  {suggestions.map((suggestion, index) => (
                     <button
-                      key={suggestion.label}
+                      key={`${suggestion.label}-${index}`}
                       type="button"
-                      className="rounded-md border bg-card/70 p-3 text-left text-sm transition-colors hover:bg-accent"
+                      className="min-h-11 rounded-md border bg-card p-3 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                      aria-label={`Use reply suggestion ${index + 1}: ${suggestion.label}`}
                       onClick={() => {
                         setSubject(suggestion.subject || subject);
                         setMessage(suggestion.body);
                       }}
                     >
-                      <div className="mb-1 flex items-center gap-2 font-medium">
-                        <Bot className="size-4" />
-                        {suggestion.label}
-                      </div>
+                      <div className="mb-1 font-medium">{suggestion.label}</div>
                       <div className="line-clamp-4 whitespace-pre-wrap text-xs text-muted-foreground">{suggestion.body}</div>
                     </button>
                   ))}
@@ -685,19 +718,21 @@ export function MessageReplyPanel({
             </div>
             {targetMode !== "staff" ? (
               <>
-                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <label htmlFor={fieldId("email-copy")} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-ring/50">
                   <input
+                    id={fieldId("email-copy")}
                     type="checkbox"
-                    className="size-4 rounded border-input"
+                    className="size-5 shrink-0 rounded border-input"
                     checked={sendEmailCopy}
                     onChange={(event) => setSendEmailCopy(event.target.checked)}
                   />
                   Email a copy to family contacts
                 </label>
-                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <label htmlFor={fieldId("sms-copy")} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-ring/50">
                   <input
+                    id={fieldId("sms-copy")}
                     type="checkbox"
-                    className="size-4 rounded border-input"
+                    className="size-5 shrink-0 rounded border-input"
                     checked={sendSmsCopy && canSendSmsCopy}
                     disabled={!canSendSmsCopy}
                     onChange={(event) => setSendSmsCopy(event.target.checked)}
@@ -706,18 +741,19 @@ export function MessageReplyPanel({
                 </label>
               </>
             ) : null}
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <label htmlFor={fieldId("in-app-copy")} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-ring/50">
               <input
+                id={fieldId("in-app-copy")}
                 type="checkbox"
-                className="size-4 rounded border-input"
+                className="size-5 shrink-0 rounded border-input"
                 checked={sendPushCopy}
                 onChange={(event) => setSendPushCopy(event.target.checked)}
               />
               Queue in-app notifications for linked portal users
             </label>
-            <Button disabled={isPending || !canSubmit} onClick={submit}>
+            <Button size="lg" disabled={isPending || !canSubmit} aria-busy={isPending} onClick={submit}>
               <Send data-icon="inline-start" />
-              {targetMode === "broadcast" ? "Send Broadcast" : "Send Reply"}
+              {isPending ? "Sending" : targetMode === "broadcast" ? "Send broadcast" : "Send reply"}
             </Button>
           </>
         ) : (

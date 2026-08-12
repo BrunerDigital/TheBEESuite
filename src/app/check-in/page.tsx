@@ -41,7 +41,7 @@ export default async function CheckInLauncherPage() {
             <Link key={center.id} href={`/check-in/${center.id}`} target="_blank" rel="noreferrer">
               <Card className="glass-panel h-full transition hover:border-primary/60 hover:shadow-xl hover:shadow-primary/10">
                 <CardHeader>
-                  <CardTitle>{center.crmLocationId ?? center.name}</CardTitle>
+                  <CardTitle as="h2">{center.crmLocationId ?? center.name}</CardTitle>
                   <CardDescription>{[center.city, center.state].filter(Boolean).join(", ") || "School kiosk"}</CardDescription>
                 </CardHeader>
                 <CardContent className="text-sm text-primary">Open family and staff kiosk screen</CardContent>

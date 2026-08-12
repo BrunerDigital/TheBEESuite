@@ -22,13 +22,12 @@ import {
   Search,
   Send,
   Save,
-  Sparkles,
   TriangleAlert,
   Trash2,
   Wand2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useId, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { EnrollmentStage } from "@prisma/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -488,6 +487,36 @@ function subscribeCrmSavedViews(callback: () => void) {
 
 export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }: Props) {
   const timeZone = useSchoolTimeZone();
+  const controlId = useId();
+  const emailSubjectId = `${controlId}-email-subject`;
+  const emailPurposeId = `${controlId}-email-purpose`;
+  const emailDraftId = `${controlId}-email-draft`;
+  const emailAttachmentsId = `${controlId}-email-attachments`;
+  const leadSearchId = `${controlId}-lead-search`;
+  const centerFilterId = `${controlId}-center-filter`;
+  const stageFilterId = `${controlId}-stage-filter`;
+  const scoreFilterId = `${controlId}-score-filter`;
+  const dateFilterId = `${controlId}-date-filter`;
+  const savedViewNameId = `${controlId}-saved-view-name`;
+  const newFamilyNameId = `${controlId}-new-family-name`;
+  const newEmailId = `${controlId}-new-email`;
+  const newPhoneId = `${controlId}-new-phone`;
+  const newProgramId = `${controlId}-new-program`;
+  const newSchoolId = `${controlId}-new-school`;
+  const editFamilyNameId = `${controlId}-edit-family-name`;
+  const editChildNameId = `${controlId}-edit-child-name`;
+  const editEmailId = `${controlId}-edit-email`;
+  const editPhoneId = `${controlId}-edit-phone`;
+  const editProgramId = `${controlId}-edit-program`;
+  const editAgeGroupId = `${controlId}-edit-age-group`;
+  const editStartDateId = `${controlId}-edit-start-date`;
+  const editSourceId = `${controlId}-edit-source`;
+  const pipelineStageId = `${controlId}-pipeline-stage`;
+  const leadNoteId = `${controlId}-lead-note`;
+  const taskTitleId = `${controlId}-task-title`;
+  const taskDueAtId = `${controlId}-task-due-at`;
+  const tourStartsAtId = `${controlId}-tour-starts-at`;
+  const tourNotesId = `${controlId}-tour-notes`;
   const brandName = currentUser.branding.name;
   const searchParams = useSearchParams();
   const routeQuery = searchParams.get("q") ?? "";
@@ -511,6 +540,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [form, setForm] = useState({
     familyName: "",
     email: "",
@@ -738,6 +768,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
       current.map((lead) => (lead.id === leadId ? { ...lead, stage } : lead)),
     );
 
+    setPendingAction("stage");
     startTransition(async () => {
       const response = await fetch(`/api/leads/${leadId}`, {
         method: "PATCH",
@@ -760,6 +791,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   function saveLeadDetails() {
     if (!selectedLead) return;
 
+    setPendingAction("lead-details");
     startTransition(async () => {
       const response = await fetch(`/api/leads/${selectedLead.id}`, {
         method: "PATCH",
@@ -785,6 +817,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   function updateLeadOwner(ownerAction: "assign_self" | "clear") {
     if (!selectedLead) return;
 
+    setPendingAction(ownerAction === "assign_self" ? "assign-owner" : "clear-owner");
     startTransition(async () => {
       const response = await fetch(`/api/leads/${selectedLead.id}`, {
         method: "PATCH",
@@ -806,6 +839,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   }
 
   function createLead() {
+    setPendingAction("create-lead");
     startTransition(async () => {
       const response = await fetch("/api/leads", {
         method: "POST",
@@ -829,6 +863,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   function saveNote() {
     if (!selectedLead || !noteBody.trim()) return;
 
+    setPendingAction("note");
     startTransition(async () => {
       const response = await fetch(`/api/leads/${selectedLead.id}/notes`, {
         method: "POST",
@@ -853,6 +888,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   function createTask() {
     if (!selectedLead || !taskTitle.trim()) return;
 
+    setPendingAction("task");
     startTransition(async () => {
       const response = await fetch(`/api/leads/${selectedLead.id}/tasks`, {
         method: "POST",
@@ -878,6 +914,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   function scheduleTour() {
     if (!selectedLead || !tourStartsAt) return;
 
+    setPendingAction("tour");
     startTransition(async () => {
       const response = await fetch(`/api/leads/${selectedLead.id}/tours`, {
         method: "POST",
@@ -905,6 +942,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   function mergeDuplicateLead(duplicateLeadId: string) {
     if (!selectedLead) return;
 
+    setPendingAction(`merge-${duplicateLeadId}`);
     startTransition(async () => {
       const response = await fetch(`/api/leads/${selectedLead.id}/merge`, {
         method: "POST",
@@ -933,6 +971,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   function refreshMrBeeDraft() {
     if (!selectedLead) return;
 
+    setPendingAction("refresh-draft");
     startTransition(async () => {
       const response = await fetch("/api/ai/mr-bee", {
         method: "POST",
@@ -954,6 +993,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   function generateEmailSuggestions() {
     if (!selectedLead) return;
 
+    setPendingAction("email-options");
     startTransition(async () => {
       const response = await fetch("/api/ai/mr-bee", {
         method: "POST",
@@ -1023,6 +1063,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   function sendReviewedEmail() {
     if (!selectedLead) return;
 
+    setPendingAction("send-email");
     startTransition(async () => {
       const response = await fetch(`/api/leads/${selectedLead.id}/messages`, {
         method: "POST",
@@ -1056,6 +1097,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   function sendRegistrationForm() {
     if (!selectedLead) return;
 
+    setPendingAction("send-registration");
     startTransition(async () => {
       const response = await fetch("/api/registration/share", {
         method: "POST",
@@ -1100,8 +1142,10 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
     showStatus("School-specific registration link copied.");
   }
 
+  const activePendingAction = isPending ? pendingAction : null;
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6" aria-busy={isPending}>
       <ReportPrintStyles />
       <PrintableReport active={printActive} label="Printable enrollment inquiry report">
           <header className="mb-4 flex items-start justify-between gap-6">
@@ -1155,7 +1199,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
             </tbody>
           </table>
       </PrintableReport>
-      <section className="overflow-hidden rounded-2xl border bg-card/80 shadow-2xl shadow-black/20">
+      <section className="overflow-hidden rounded-2xl border bg-card">
         <div className="grid gap-0 xl:grid-cols-[1fr_22rem]">
           <div className="p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
@@ -1209,24 +1253,34 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                 </p>
               </div>
             </div>
-            <Input
-              className="mt-4"
-              value={emailSubject}
-              onChange={(event) => setEmailSubject(event.target.value)}
-              aria-label="Reviewed email subject"
-              placeholder="Subject"
-            />
-            <Textarea
-              className="mt-3 min-h-20"
-              value={emailPurposePrompt}
-              onChange={(event) => setEmailPurposePrompt(event.target.value)}
-              aria-label="Email purpose for Mr. Bee"
-              placeholder="Tell Mr. Bee the purpose, such as invite them to tour, send the school registration form, request paperwork, explain availability, or follow up after a call."
-            />
+            <div className="mt-4 grid gap-1.5">
+              <Label htmlFor={emailSubjectId}>Email subject</Label>
+              <Input
+                id={emailSubjectId}
+                value={emailSubject}
+                onChange={(event) => setEmailSubject(event.target.value)}
+                placeholder="Subject"
+              />
+            </div>
+            <div className="mt-3 grid gap-1.5">
+              <Label htmlFor={emailPurposeId}>Drafting instructions</Label>
+              <Textarea
+                id={emailPurposeId}
+                className="min-h-20"
+                value={emailPurposePrompt}
+                onChange={(event) => setEmailPurposePrompt(event.target.value)}
+                placeholder="Describe the purpose, such as inviting the family to tour, requesting paperwork, or following up after a call."
+              />
+            </div>
             <div className="mt-3 grid gap-2">
-              <Button variant="outline" disabled={!selectedLead || isPending} onClick={generateEmailSuggestions}>
-                <Sparkles data-icon="inline-start" />
-                Generate options
+              <Button
+                variant="outline"
+                disabled={!selectedLead || isPending}
+                onClick={generateEmailSuggestions}
+                aria-label={selectedLead ? `Generate email options for ${selectedLead.familyName}` : "Generate email options for the selected inquiry"}
+              >
+                <Bot data-icon="inline-start" />
+                {activePendingAction === "email-options" ? "Generating options…" : "Generate options"}
               </Button>
               {emailSuggestions.length ? (
                 <div className="grid gap-2">
@@ -1234,8 +1288,9 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                     <button
                       key={`${suggestion.label}-${suggestion.subject}`}
                       type="button"
-                      className="rounded-lg border bg-background/65 p-3 text-left text-xs transition hover:border-primary/50 hover:bg-background"
+                      className="rounded-lg border bg-background p-3 text-left text-xs transition-colors hover:border-primary/50 hover:bg-muted/50"
                       onClick={() => applyEmailSuggestion(suggestion)}
+                      disabled={isPending}
                     >
                       <span className="font-medium text-foreground">{suggestion.label}</span>
                       <span className="mt-1 block truncate text-muted-foreground">{suggestion.subject}</span>
@@ -1245,12 +1300,15 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                 </div>
               ) : null}
             </div>
-            <Textarea
-              className="mt-3 min-h-32"
-              value={emailDraft}
-              onChange={(event) => setEmailDraft(event.target.value)}
-              aria-label="Mr. Bee reviewed draft"
-            />
+            <div className="mt-3 grid gap-1.5">
+              <Label htmlFor={emailDraftId}>Reviewed email draft</Label>
+              <Textarea
+                id={emailDraftId}
+                className="min-h-32"
+                value={emailDraft}
+                onChange={(event) => setEmailDraft(event.target.value)}
+              />
+            </div>
             <div className="mt-3 rounded-lg border bg-background/55 p-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
@@ -1262,14 +1320,14 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                   </div>
                 </div>
                 <Label
-                  htmlFor="lead-email-attachments"
-                  className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border bg-background px-2.5 text-sm font-medium transition hover:bg-muted"
+                  htmlFor={emailAttachmentsId}
+                  className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
                 >
                   <Paperclip className="size-4" />
                   Add files
                 </Label>
                 <Input
-                  id="lead-email-attachments"
+                  id={emailAttachmentsId}
                   type="file"
                   multiple
                   className="sr-only"
@@ -1287,7 +1345,13 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                         <div className="truncate font-medium">{attachment.filename}</div>
                         <div className="text-muted-foreground">{formatBytes(attachment.size)}</div>
                       </div>
-                      <Button variant="ghost" size="icon-xs" onClick={() => removeEmailAttachment(attachment.id)} title="Remove attachment">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeEmailAttachment(attachment.id)}
+                        aria-label={`Remove attachment ${attachment.filename}`}
+                        disabled={isPending}
+                      >
                         <X />
                       </Button>
                     </div>
@@ -1296,17 +1360,31 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
               ) : null}
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
-              <Button variant="outline" disabled={!selectedLead || isPending} onClick={refreshMrBeeDraft}>
+              <Button
+                variant="outline"
+                disabled={!selectedLead || isPending}
+                onClick={refreshMrBeeDraft}
+                aria-label={selectedLead ? `Refresh email draft for ${selectedLead.familyName}` : "Refresh email draft for the selected inquiry"}
+              >
                 <Wand2 data-icon="inline-start" />
-                Refresh draft
+                {activePendingAction === "refresh-draft" ? "Refreshing draft…" : "Refresh draft"}
               </Button>
-              <Button variant="outline" disabled={!selectedLead || !emailDraft} onClick={copyDraft}>
+              <Button
+                variant="outline"
+                disabled={!selectedLead || !emailDraft}
+                onClick={copyDraft}
+                aria-label={selectedLead ? `Copy email draft for ${selectedLead.familyName}` : "Copy email draft for the selected inquiry"}
+              >
                 <Clipboard data-icon="inline-start" />
                 Copy draft
               </Button>
-              <Button disabled={!selectedLead?.email || !emailDraft || isPending} onClick={sendReviewedEmail}>
+              <Button
+                disabled={!selectedLead?.email || !emailDraft || isPending}
+                onClick={sendReviewedEmail}
+                aria-label={selectedLead ? `Send reviewed email to ${selectedLead.familyName}` : "Send reviewed email to the selected inquiry"}
+              >
                 <Send data-icon="inline-start" />
-                Send reviewed email
+                {activePendingAction === "send-email" ? "Sending email…" : "Send reviewed email"}
               </Button>
             </div>
           </div>
@@ -1314,7 +1392,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
       </section>
 
       {statusMessage ? (
-        <Alert className="border-emerald-400/30 bg-emerald-400/10">
+        <Alert className="border-emerald-400/30 bg-emerald-400/10" role="status" aria-live="polite">
           <CheckCircle2 />
           <AlertTitle>Saved</AlertTitle>
           <AlertDescription>{statusMessage}</AlertDescription>
@@ -1322,7 +1400,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
       ) : null}
 
       {errorMessage ? (
-        <Alert variant="destructive">
+        <Alert variant="destructive" role="alert">
           <AlertTitle>Action needed</AlertTitle>
           <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
@@ -1330,85 +1408,102 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
 
       <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
         <div className="flex flex-col gap-4">
-          <Card className="glass-panel">
+          <Card>
             <CardContent className="flex flex-col gap-3 p-4">
               <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
                 <div className="relative">
+                  <Label htmlFor={leadSearchId} className="sr-only">Search enrollment inquiries</Label>
                   <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
+                    id={leadSearchId}
                     className="pl-10"
                     value={query}
                     onChange={(event) => setQueryState({ routeQuery, value: event.target.value })}
                     placeholder="Search parent, child, email, phone, program, or school..."
                   />
                 </div>
-                <Select value={selectedCenter} onValueChange={(value) => value && setSelectedCenter(value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All schools" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All available schools</SelectItem>
-                    {centers.map((center) => (
-                      <SelectItem key={center.id} value={center.id}>
-                        {getCenterLabel(center)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div>
+                  <Label htmlFor={centerFilterId} className="sr-only">Filter by school</Label>
+                  <Select value={selectedCenter} onValueChange={(value) => value && setSelectedCenter(value)}>
+                    <SelectTrigger id={centerFilterId}>
+                      <SelectValue placeholder="All schools" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All available schools</SelectItem>
+                      {centers.map((center) => (
+                        <SelectItem key={center.id} value={center.id}>
+                          {getCenterLabel(center)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[13rem_12rem_12rem_1fr_auto]">
-                <Select
-                  value={stageFilter}
-                  onValueChange={(value) => value && setStageFilter(value as EnrollmentStage | "all")}
-                >
-                  <SelectTrigger aria-label="Pipeline stage filter">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All stages</SelectItem>
-                    {enrollmentStages.map((stage) => (
-                      <SelectItem key={stage} value={stage}>
-                        {stageLabels[stage]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={scoreFilter}
-                  onValueChange={(value) => value && setScoreFilter(value as ScoreFilter)}
-                >
-                  <SelectTrigger aria-label="Lead score filter">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(scoreFilterLabels) as ScoreFilter[]).map((filter) => (
-                      <SelectItem key={filter} value={filter}>
-                        {scoreFilterLabels[filter]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={createdRange}
-                  onValueChange={(value) => value && setCreatedRange(value as CreatedRangeFilter)}
-                >
-                  <SelectTrigger aria-label="Lead date filter">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(createdRangeLabels) as CreatedRangeFilter[]).map((filter) => (
-                      <SelectItem key={filter} value={filter}>
-                        {createdRangeLabels[filter]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  value={savedViewName}
-                  onChange={(event) => setSavedViewName(event.target.value)}
-                  placeholder="Saved view name"
-                  aria-label="Saved enrollment view name"
-                />
+                <div>
+                  <Label htmlFor={stageFilterId} className="sr-only">Filter by pipeline stage</Label>
+                  <Select
+                    value={stageFilter}
+                    onValueChange={(value) => value && setStageFilter(value as EnrollmentStage | "all")}
+                  >
+                    <SelectTrigger id={stageFilterId}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All stages</SelectItem>
+                      {enrollmentStages.map((stage) => (
+                        <SelectItem key={stage} value={stage}>
+                          {stageLabels[stage]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor={scoreFilterId} className="sr-only">Filter by lead score</Label>
+                  <Select
+                    value={scoreFilter}
+                    onValueChange={(value) => value && setScoreFilter(value as ScoreFilter)}
+                  >
+                    <SelectTrigger id={scoreFilterId}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(scoreFilterLabels) as ScoreFilter[]).map((filter) => (
+                        <SelectItem key={filter} value={filter}>
+                          {scoreFilterLabels[filter]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor={dateFilterId} className="sr-only">Filter by inquiry date</Label>
+                  <Select
+                    value={createdRange}
+                    onValueChange={(value) => value && setCreatedRange(value as CreatedRangeFilter)}
+                  >
+                    <SelectTrigger id={dateFilterId}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(createdRangeLabels) as CreatedRangeFilter[]).map((filter) => (
+                        <SelectItem key={filter} value={filter}>
+                          {createdRangeLabels[filter]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor={savedViewNameId} className="sr-only">Saved enrollment view name</Label>
+                  <Input
+                    id={savedViewNameId}
+                    value={savedViewName}
+                    onChange={(event) => setSavedViewName(event.target.value)}
+                    placeholder="Saved view name"
+                  />
+                </div>
                 <div className="grid gap-2 sm:grid-cols-3 xl:flex">
                   <Button variant="outline" onClick={saveCurrentView}>
                     <Save data-icon="inline-start" />
@@ -1428,11 +1523,11 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                 <div className="flex flex-wrap gap-2 border-t pt-3">
                   {savedViews.map((view) => (
                     <div key={view.id} className="flex items-center gap-1 rounded-lg border bg-background/55 p-1">
-                      <Button size="xs" variant="ghost" onClick={() => applySavedView(view)}>
+                      <Button variant="ghost" onClick={() => applySavedView(view)}>
                         {view.name}
                       </Button>
                       <Button
-                        size="icon-xs"
+                        size="icon"
                         variant="ghost"
                         onClick={() => deleteSavedView(view.id)}
                         aria-label={`Delete saved view ${view.name}`}
@@ -1458,13 +1553,13 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                   moveDraggedLead(stage);
                 }}
                 className={cn(
-                  "min-h-72 border-primary/15 bg-card/75 transition",
+                  "min-h-72 border-primary/15 bg-card transition-colors",
                   draggingLeadId && "border-dashed border-primary/50 ring-1 ring-primary/25",
                 )}
               >
                 <CardHeader className="p-4">
                   <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-sm">{stageLabels[stage]}</CardTitle>
+                    <CardTitle as="h2" className="text-sm">{stageLabels[stage]}</CardTitle>
                     <Badge variant="secondary">{byStage[stage]?.length ?? 0}</Badge>
                   </div>
                 </CardHeader>
@@ -1483,10 +1578,12 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                       onDragEnd={() => setDraggingLeadId(null)}
                       onClick={() => selectLead(lead)}
                       className={cn(
-                        "cursor-grab rounded-xl border bg-background/55 p-3 text-left transition hover:border-primary/60 active:cursor-grabbing",
+                        "cursor-grab rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/60 active:cursor-grabbing",
                         selectedLeadId === lead.id && "border-primary bg-primary/10",
                         draggingLeadId === lead.id && "opacity-60",
                       )}
+                      aria-pressed={selectedLeadId === lead.id}
+                      aria-label={`Review ${lead.familyName} inquiry in ${stageLabels[lead.stage]}`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex min-w-0 items-start gap-2">
@@ -1513,28 +1610,29 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
         </div>
 
         <aside className="flex flex-col gap-4">
-          <Card className="glass-panel">
+          <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
+              <CardTitle as="h2" className="flex items-center gap-2 text-base">
                 <Plus className="text-primary" />
-                Add Lead
+                Add inquiry
               </CardTitle>
               <CardDescription>Manual entries route to the selected school profile.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <div className="grid gap-2">
-                <Label htmlFor="familyName">Parent / family name</Label>
+                <Label htmlFor={newFamilyNameId}>Parent / family name</Label>
                 <Input
-                  id="familyName"
+                  id={newFamilyNameId}
                   value={form.familyName}
                   onChange={(event) => setForm({ ...form, familyName: event.target.value })}
                   placeholder="Jane Parent"
+                  required
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor={newEmailId}>Email</Label>
                 <Input
-                  id="email"
+                  id={newEmailId}
                   value={form.email}
                   onChange={(event) => setForm({ ...form, email: event.target.value })}
                   placeholder="parent@example.com"
@@ -1542,18 +1640,18 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor={newPhoneId}>Phone</Label>
                 <Input
-                  id="phone"
+                  id={newPhoneId}
                   value={form.phone}
                   onChange={(event) => setForm({ ...form, phone: event.target.value })}
                   placeholder="555-555-1212"
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Program</Label>
+                <Label htmlFor={newProgramId}>Program</Label>
                 <Select value={form.program} onValueChange={(program) => program && setForm({ ...form, program })}>
-                  <SelectTrigger>
+                  <SelectTrigger id={newProgramId}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1566,12 +1664,12 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>School</Label>
+                <Label htmlFor={newSchoolId}>School</Label>
                 <Select
                   value={form.locationId}
                   onValueChange={(locationId) => locationId && setForm({ ...form, locationId })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id={newSchoolId}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1583,17 +1681,16 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={createLead} disabled={isPending || !form.familyName}>
-                Add inquiry
+              <Button onClick={createLead} disabled={isPending || !form.familyName.trim()}>
+                {activePendingAction === "create-lead" ? "Adding inquiry…" : "Add inquiry"}
                 <ArrowRight data-icon="inline-end" />
               </Button>
             </CardContent>
           </Card>
 
-          <Card className="glass-panel">
+          <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Sparkles className="text-primary" />
+              <CardTitle as="h2" className="flex items-center gap-2 text-base">
                 Selected inquiry
               </CardTitle>
               <CardDescription>Update the inquiry stage or contact this family.</CardDescription>
@@ -1635,11 +1732,21 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                       </p>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <Button size="sm" variant="outline" onClick={() => updateLeadOwner("assign_self")} disabled={isPending}>
-                        Assign to me
+                      <Button
+                        variant="outline"
+                        onClick={() => updateLeadOwner("assign_self")}
+                        disabled={isPending}
+                        aria-label={`Assign ${selectedLead.familyName} inquiry to me`}
+                      >
+                        {activePendingAction === "assign-owner" ? "Assigning…" : "Assign to me"}
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => updateLeadOwner("clear")} disabled={isPending || !getLeadOwner(selectedLead)}>
-                        Clear owner
+                      <Button
+                        variant="ghost"
+                        onClick={() => updateLeadOwner("clear")}
+                        disabled={isPending || !getLeadOwner(selectedLead)}
+                        aria-label={`Clear owner for ${selectedLead.familyName} inquiry`}
+                      >
+                        {activePendingAction === "clear-owner" ? "Clearing…" : "Clear owner"}
                       </Button>
                     </div>
                   </div>
@@ -1653,19 +1760,23 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
                       <Button
-                        size="sm"
                         disabled={!selectedLead.email || isPending}
                         onClick={sendRegistrationForm}
+                        aria-label={`Send ${getCenterLabel(selectedLead.center)} registration form to ${selectedLead.familyName}`}
                       >
                         <Send data-icon="inline-start" />
-                        Send registration form
+                        {activePendingAction === "send-registration" ? "Sending form…" : "Send registration form"}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => void copyRegistrationLink()}>
+                      <Button
+                        variant="outline"
+                        onClick={() => void copyRegistrationLink()}
+                        disabled={isPending}
+                        aria-label={`Copy registration link for ${selectedLead.familyName}`}
+                      >
                         <Clipboard data-icon="inline-start" />
                         Copy registration link
                       </Button>
                       <Button
-                        size="sm"
                         variant="ghost"
                         className="sm:col-span-2"
                         nativeButton={false}
@@ -1674,6 +1785,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                             href={registrationHandoffHref(selectedLead.center.id)}
                             target="_blank"
                             rel="noreferrer"
+                            aria-label={`Preview ${getCenterLabel(selectedLead.center)} application for ${selectedLead.familyName}`}
                           />
                         )}
                       >
@@ -1723,12 +1835,21 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                               ))}
                             </div>
                             <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                              <Button size="sm" variant="outline" onClick={() => selectLead(lead)}>
+                              <Button
+                                variant="outline"
+                                onClick={() => selectLead(lead)}
+                                aria-label={`Review possible duplicate ${lead.familyName}`}
+                                disabled={isPending}
+                              >
                                 Review
                               </Button>
-                              <Button size="sm" onClick={() => mergeDuplicateLead(lead.id)} disabled={isPending}>
+                              <Button
+                                onClick={() => mergeDuplicateLead(lead.id)}
+                                disabled={isPending}
+                                aria-label={`Merge possible duplicate ${lead.familyName} into ${selectedLead.familyName}`}
+                              >
                                 <GitMerge data-icon="inline-start" />
-                                Merge
+                                {activePendingAction === `merge-${lead.id}` ? "Merging…" : "Merge"}
                               </Button>
                             </div>
                           </div>
@@ -1737,45 +1858,45 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                     </div>
                   ) : null}
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-family-name">Parent / family name</Label>
+                    <Label htmlFor={editFamilyNameId}>Parent / family name</Label>
                     <Input
-                      id="edit-family-name"
+                      id={editFamilyNameId}
                       value={editForm.familyName}
                       onChange={(event) => setEditForm({ ...editForm, familyName: event.target.value })}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-child-name">Child name</Label>
+                    <Label htmlFor={editChildNameId}>Child name</Label>
                     <Input
-                      id="edit-child-name"
+                      id={editChildNameId}
                       value={editForm.childName}
                       onChange={(event) => setEditForm({ ...editForm, childName: event.target.value })}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-email">Email</Label>
+                    <Label htmlFor={editEmailId}>Email</Label>
                     <Input
-                      id="edit-email"
+                      id={editEmailId}
                       value={editForm.email}
                       onChange={(event) => setEditForm({ ...editForm, email: event.target.value })}
                       type="email"
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-phone">Phone</Label>
+                    <Label htmlFor={editPhoneId}>Phone</Label>
                     <Input
-                      id="edit-phone"
+                      id={editPhoneId}
                       value={editForm.phone}
                       onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Program interest</Label>
+                    <Label htmlFor={editProgramId}>Program interest</Label>
                     <Select
                       value={editForm.programInterest || "Preschool"}
                       onValueChange={(programInterest) => programInterest && setEditForm({ ...editForm, programInterest })}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id={editProgramId}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1788,36 +1909,41 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                     </Select>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-age-group">Age group interest</Label>
+                    <Label htmlFor={editAgeGroupId}>Age group interest</Label>
                     <Input
-                      id="edit-age-group"
+                      id={editAgeGroupId}
                       value={editForm.ageGroupInterest}
                       onChange={(event) => setEditForm({ ...editForm, ageGroupInterest: event.target.value })}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-start-date">Desired start date</Label>
+                    <Label htmlFor={editStartDateId}>Desired start date</Label>
                     <Input
-                      id="edit-start-date"
+                      id={editStartDateId}
                       value={editForm.desiredStartDate}
                       onChange={(event) => setEditForm({ ...editForm, desiredStartDate: event.target.value })}
                       type="date"
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-source">Lead source</Label>
+                    <Label htmlFor={editSourceId}>Lead source</Label>
                     <Input
-                      id="edit-source"
+                      id={editSourceId}
                       value={editForm.leadSource}
                       onChange={(event) => setEditForm({ ...editForm, leadSource: event.target.value })}
                     />
                   </div>
-                  <Button variant="outline" onClick={saveLeadDetails} disabled={isPending || !editForm.familyName.trim()}>
-                    Save lead details
+                  <Button
+                    variant="outline"
+                    onClick={saveLeadDetails}
+                    disabled={isPending || !editForm.familyName.trim()}
+                    aria-label={`Save lead details for ${selectedLead.familyName}`}
+                  >
+                    {activePendingAction === "lead-details" ? "Saving lead details…" : "Save lead details"}
                     <ArrowRight data-icon="inline-end" />
                   </Button>
                   <div className="grid gap-2">
-                    <Label>Move pipeline stage</Label>
+                    <Label htmlFor={pipelineStageId}>Move pipeline stage</Label>
                     <p className="text-xs leading-5 text-muted-foreground">{crmPipelineStageDisclosure}</p>
                     <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-2 text-xs leading-5">
                       {selectedLeadDetails?.enrollments.length
@@ -1827,8 +1953,9 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                     <Select
                       value={selectedLead.stage}
                       onValueChange={(stage) => updateLeadStage(selectedLead.id, stage as EnrollmentStage)}
+                      disabled={isPending}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id={pipelineStageId}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1841,52 +1968,70 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                     </Select>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="lead-note">Internal note</Label>
+                    <Label htmlFor={leadNoteId}>Internal note</Label>
                     <Textarea
-                      id="lead-note"
+                      id={leadNoteId}
                       value={noteBody}
                       onChange={(event) => setNoteBody(event.target.value)}
                       placeholder="Add a school-visible follow-up note..."
                     />
-                    <Button variant="outline" onClick={saveNote} disabled={isPending || !noteBody.trim()}>
-                      Save note
+                    <Button
+                      variant="outline"
+                      onClick={saveNote}
+                      disabled={isPending || !noteBody.trim()}
+                      aria-label={`Save internal note for ${selectedLead.familyName}`}
+                    >
+                      {activePendingAction === "note" ? "Saving note…" : "Save note"}
                       <ArrowRight data-icon="inline-end" />
                     </Button>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="task-title">Follow-up task</Label>
+                    <Label htmlFor={taskTitleId}>Follow-up task</Label>
                     <Input
-                      id="task-title"
+                      id={taskTitleId}
                       value={taskTitle}
                       onChange={(event) => setTaskTitle(event.target.value)}
                       placeholder="Call family tomorrow"
                     />
+                    <Label htmlFor={taskDueAtId}>Due date</Label>
                     <Input
+                      id={taskDueAtId}
                       value={taskDueAt}
                       onChange={(event) => setTaskDueAt(event.target.value)}
                       type="datetime-local"
-                      aria-label="Task due date"
                     />
-                    <Button variant="outline" onClick={createTask} disabled={isPending || !taskTitle.trim()}>
-                      Create task
+                    <Button
+                      variant="outline"
+                      onClick={createTask}
+                      disabled={isPending || !taskTitle.trim()}
+                      aria-label={`Create follow-up task for ${selectedLead.familyName}`}
+                    >
+                      {activePendingAction === "task" ? "Creating task…" : "Create task"}
                       <Plus data-icon="inline-end" />
                     </Button>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="tour-starts-at">Schedule tour</Label>
+                    <Label htmlFor={tourStartsAtId}>Tour date and time</Label>
                     <Input
-                      id="tour-starts-at"
+                      id={tourStartsAtId}
                       value={tourStartsAt}
                       onChange={(event) => setTourStartsAt(event.target.value)}
                       type="datetime-local"
                     />
+                    <Label htmlFor={tourNotesId}>Tour notes</Label>
                     <Textarea
+                      id={tourNotesId}
                       value={tourNotes}
                       onChange={(event) => setTourNotes(event.target.value)}
                       placeholder="Tour notes, prep items, or family questions..."
                     />
-                    <Button variant="outline" onClick={scheduleTour} disabled={isPending || !tourStartsAt}>
-                      Schedule tour
+                    <Button
+                      variant="outline"
+                      onClick={scheduleTour}
+                      disabled={isPending || !tourStartsAt}
+                      aria-label={`Schedule tour for ${selectedLead.familyName}`}
+                    >
+                      {activePendingAction === "tour" ? "Scheduling tour…" : "Schedule tour"}
                       <ArrowRight data-icon="inline-end" />
                     </Button>
                   </div>
@@ -1974,8 +2119,13 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                       ) : null}
                     </div>
                   </div>
-                  <Button variant="outline" onClick={refreshMrBeeDraft} disabled={isPending}>
-                    Contact with Mr. Bee
+                  <Button
+                    variant="outline"
+                    onClick={refreshMrBeeDraft}
+                    disabled={isPending}
+                    aria-label={`Open a contact draft for ${selectedLead.familyName}`}
+                  >
+                    {activePendingAction === "refresh-draft" ? "Preparing draft…" : "Prepare contact draft"}
                     <Bot data-icon="inline-end" />
                   </Button>
                 </>

@@ -413,8 +413,8 @@
   }
 }
 
-/* Honeyglass modernization. Set NEXT_PUBLIC_HONEYGLASS_UI_ENABLED=false to
-   return to the preserved glass presentation without reverting application data. */
+/* Legacy Honeyglass compatibility. The restrained product layer is the default;
+   this selector remains only while older class names are migrated safely. */
 @layer utilities {
   .bee-app-frame[data-honeyglass="true"] {
     --honey-blue: oklch(0.76 0.12 225);

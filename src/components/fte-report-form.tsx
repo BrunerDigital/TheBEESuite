@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, Printer, Save } from "lucide-react";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -210,6 +210,7 @@ export function FteReportForm({
   mode = allowCenterSelect ? "executive" : "director",
 }: Props) {
   const timeZone = useSchoolTimeZone();
+  const fieldIdPrefix = useId();
   const defaultCenterId = centers[0]?.id ?? "";
   const defaultCenter = centers[0];
   const [form, setForm] = useState<FormState>(() => emptyForm(defaultCenterId, defaultValuesForCenter(defaultCenterId, prefills), defaultCenter));
@@ -357,7 +358,7 @@ export function FteReportForm({
   }
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <ReportPrintStyles />
       <PrintableReport active={printActive} label="Printable FTE report history">
         <header>
@@ -418,7 +419,7 @@ export function FteReportForm({
       <CardHeader>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <CardTitle>{title}</CardTitle>
+            <CardTitle as="h2">{title}</CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
           <Button variant="outline" onClick={printReport}>
@@ -486,13 +487,13 @@ export function FteReportForm({
 
         <div className="grid gap-3 lg:grid-cols-4">
           <div className="space-y-1 lg:col-span-2">
-            <Label>School</Label>
+            <Label htmlFor={`${fieldIdPrefix}-school`}>School</Label>
             <Select
               value={form.centerId}
               onValueChange={setCenter}
               disabled={!allowCenterSelect || centers.length <= 1}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger id={`${fieldIdPrefix}-school`} className="w-full">
                 <SelectValue placeholder="Choose school">{selectedCenter?.name ?? "Choose school"}</SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -503,35 +504,36 @@ export function FteReportForm({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="fte-week-start">Week start</Label>
-            <Input id="fte-week-start" type="date" value={form.weekStart} onChange={(event) => setWeekStart(event.target.value)} />
+            <Label htmlFor={`${fieldIdPrefix}-week-start`}>Week start</Label>
+            <Input id={`${fieldIdPrefix}-week-start`} type="date" value={form.weekStart} onChange={(event) => setWeekStart(event.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="fte-week-end">Week end</Label>
-            <Input id="fte-week-end" type="date" value={form.weekEnd} onChange={(event) => setField("weekEnd", event.target.value)} />
+            <Label htmlFor={`${fieldIdPrefix}-week-end`}>Week end</Label>
+            <Input id={`${fieldIdPrefix}-week-end`} type="date" value={form.weekEnd} onChange={(event) => setField("weekEnd", event.target.value)} />
           </div>
           <div className="space-y-1 lg:col-span-2">
-            <Label>Location data</Label>
-            <Input value={form.locationData} onChange={(event) => setField("locationData", event.target.value)} placeholder="ABee Schools, franchised location, owner group..." />
+            <Label htmlFor={`${fieldIdPrefix}-location-data`}>Location data</Label>
+            <Input id={`${fieldIdPrefix}-location-data`} value={form.locationData} onChange={(event) => setField("locationData", event.target.value)} placeholder="ABee Schools, franchised location, owner group..." />
           </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1">
-            <Label>Enrolled children</Label>
-            <Input value={form.enrolledCount} onChange={(event) => setField("enrolledCount", event.target.value)} inputMode="numeric" />
+            <Label htmlFor={`${fieldIdPrefix}-enrolled-count`}>Enrolled children</Label>
+            <Input id={`${fieldIdPrefix}-enrolled-count`} value={form.enrolledCount} onChange={(event) => setField("enrolledCount", event.target.value)} inputMode="numeric" />
           </div>
           <div className="space-y-1">
-            <Label>Full-time children</Label>
-            <Input value={form.fullTimeCount} onChange={(event) => setField("fullTimeCount", event.target.value)} inputMode="numeric" />
+            <Label htmlFor={`${fieldIdPrefix}-full-time-count`}>Full-time children</Label>
+            <Input id={`${fieldIdPrefix}-full-time-count`} value={form.fullTimeCount} onChange={(event) => setField("fullTimeCount", event.target.value)} inputMode="numeric" />
           </div>
           <div className="space-y-1">
-            <Label>Part-time children</Label>
-            <Input value={form.partTimeCount} onChange={(event) => setField("partTimeCount", event.target.value)} inputMode="numeric" />
+            <Label htmlFor={`${fieldIdPrefix}-part-time-count`}>Part-time children</Label>
+            <Input id={`${fieldIdPrefix}-part-time-count`} value={form.partTimeCount} onChange={(event) => setField("partTimeCount", event.target.value)} inputMode="numeric" />
           </div>
           <div className="space-y-1">
-            <Label>FTE count</Label>
+            <Label htmlFor={`${fieldIdPrefix}-fte-count`}>FTE count</Label>
             <Input
+              id={`${fieldIdPrefix}-fte-count`}
               value={form.fteCount}
               onChange={(event) => setField("fteCount", event.target.value)}
               inputMode="decimal"
@@ -539,8 +541,9 @@ export function FteReportForm({
             />
           </div>
           <div className="space-y-1">
-            <Label>Payroll %</Label>
+            <Label htmlFor={`${fieldIdPrefix}-payroll-percent`}>Payroll %</Label>
             <Input
+              id={`${fieldIdPrefix}-payroll-percent`}
               value={form.payrollPercent}
               onChange={(event) => setField("payrollPercent", event.target.value)}
               inputMode="decimal"
@@ -558,20 +561,21 @@ export function FteReportForm({
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">
-              <Label>Current-family accounts receivable</Label>
-              <Input value={form.accountReceivableAmount} onChange={(event) => setField("accountReceivableAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
+              <Label htmlFor={`${fieldIdPrefix}-accounts-receivable`}>Current-family accounts receivable</Label>
+              <Input id={`${fieldIdPrefix}-accounts-receivable`} value={form.accountReceivableAmount} onChange={(event) => setField("accountReceivableAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
             </div>
             <div className="space-y-1">
-              <Label>Self-payer billed</Label>
-              <Input value={form.selfPayerBillAmount} onChange={(event) => setField("selfPayerBillAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
+              <Label htmlFor={`${fieldIdPrefix}-self-payer-billed`}>Self-payer billed</Label>
+              <Input id={`${fieldIdPrefix}-self-payer-billed`} value={form.selfPayerBillAmount} onChange={(event) => setField("selfPayerBillAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
             </div>
             <div className="space-y-1">
-              <Label>Subsidy billed</Label>
-              <Input value={form.subsidyBillAmount} onChange={(event) => setField("subsidyBillAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
+              <Label htmlFor={`${fieldIdPrefix}-subsidy-billed`}>Subsidy billed</Label>
+              <Input id={`${fieldIdPrefix}-subsidy-billed`} value={form.subsidyBillAmount} onChange={(event) => setField("subsidyBillAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
             </div>
             <div className="space-y-1">
-              <Label>Total billed</Label>
+              <Label htmlFor={`${fieldIdPrefix}-total-billed`}>Total billed</Label>
               <Input
+                id={`${fieldIdPrefix}-total-billed`}
                 value={form.totalBilledAmount}
                 onChange={(event) => setField("totalBilledAmount", event.target.value)}
                 inputMode="decimal"
@@ -579,12 +583,13 @@ export function FteReportForm({
               />
             </div>
             <div className="space-y-1">
-              <Label>License capacity</Label>
-              <Input value={form.licenseCapacity} onChange={(event) => setField("licenseCapacity", event.target.value)} inputMode="numeric" placeholder="Capacity" />
+              <Label htmlFor={`${fieldIdPrefix}-license-capacity`}>License capacity</Label>
+              <Input id={`${fieldIdPrefix}-license-capacity`} value={form.licenseCapacity} onChange={(event) => setField("licenseCapacity", event.target.value)} inputMode="numeric" placeholder="Capacity" />
             </div>
             <div className="space-y-1">
-              <Label>Occupancy %</Label>
+              <Label htmlFor={`${fieldIdPrefix}-occupancy-percent`}>Occupancy %</Label>
               <Input
+                id={`${fieldIdPrefix}-occupancy-percent`}
                 value={form.occupancyPercent}
                 onChange={(event) => setField("occupancyPercent", event.target.value)}
                 inputMode="decimal"
@@ -592,20 +597,20 @@ export function FteReportForm({
               />
             </div>
             <div className="space-y-1">
-              <Label>Payroll amount</Label>
-              <Input value={form.payrollAmount} onChange={(event) => setField("payrollAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
+              <Label htmlFor={`${fieldIdPrefix}-payroll-amount`}>Payroll amount</Label>
+              <Input id={`${fieldIdPrefix}-payroll-amount`} value={form.payrollAmount} onChange={(event) => setField("payrollAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
             </div>
             <div className="space-y-1">
-              <Label>New starts</Label>
-              <Input value={form.newStarts} onChange={(event) => setField("newStarts", event.target.value)} inputMode="numeric" />
+              <Label htmlFor={`${fieldIdPrefix}-new-starts`}>New starts</Label>
+              <Input id={`${fieldIdPrefix}-new-starts`} value={form.newStarts} onChange={(event) => setField("newStarts", event.target.value)} inputMode="numeric" />
             </div>
             <div className="space-y-1">
-              <Label>Withdrawals</Label>
-              <Input value={form.withdrawals} onChange={(event) => setField("withdrawals", event.target.value)} inputMode="numeric" />
+              <Label htmlFor={`${fieldIdPrefix}-withdrawals`}>Withdrawals</Label>
+              <Input id={`${fieldIdPrefix}-withdrawals`} value={form.withdrawals} onChange={(event) => setField("withdrawals", event.target.value)} inputMode="numeric" />
             </div>
             <div className="space-y-1">
-              <Label>Children preregistered</Label>
-              <Input value={form.preregisteredChildren} onChange={(event) => setField("preregisteredChildren", event.target.value)} inputMode="numeric" />
+              <Label htmlFor={`${fieldIdPrefix}-preregistered`}>Children preregistered</Label>
+              <Input id={`${fieldIdPrefix}-preregistered`} value={form.preregisteredChildren} onChange={(event) => setField("preregisteredChildren", event.target.value)} inputMode="numeric" />
             </div>
           </div>
         </div>
@@ -620,8 +625,9 @@ export function FteReportForm({
             ["schoolAge", "School age"],
           ].map(([field, label]) => (
             <div key={field} className="space-y-1">
-              <Label>{label}</Label>
+              <Label htmlFor={`${fieldIdPrefix}-${field}`}>{label}</Label>
               <Input
+                id={`${fieldIdPrefix}-${field}`}
                 value={form[field as keyof FormState]}
                 onChange={(event) => setField(field as keyof FormState, event.target.value)}
                 inputMode="numeric"
@@ -633,9 +639,9 @@ export function FteReportForm({
         <div className={mode === "executive" ? "grid gap-3 md:grid-cols-[14rem_1fr]" : "grid gap-3"}>
           {mode === "executive" ? (
             <div className="space-y-1">
-              <Label>Status</Label>
+              <Label htmlFor={`${fieldIdPrefix}-status`}>Status</Label>
               <Select value={form.status} onValueChange={(value) => value && setField("status", value)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id={`${fieldIdPrefix}-status`} className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="submitted">Submitted</SelectItem>
                   <SelectItem value="draft">Draft</SelectItem>
@@ -646,15 +652,15 @@ export function FteReportForm({
             </div>
           ) : null}
           <div className="space-y-1">
-            <Label>Notes</Label>
-            <Textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} placeholder="Optional context or correction notes" />
+            <Label htmlFor={`${fieldIdPrefix}-notes`}>Notes</Label>
+            <Textarea id={`${fieldIdPrefix}-notes`} value={form.notes} onChange={(event) => setField("notes", event.target.value)} placeholder="Optional context or correction notes" />
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={isPending || !form.centerId || !form.weekStart} onClick={submit}>
+          <Button aria-busy={isPending} disabled={isPending || !form.centerId || !form.weekStart} onClick={submit}>
             <Save data-icon="inline-start" />
-            {form.id ? "Save FTE Correction" : "Submit FTE Report"}
+            {isPending ? "Saving FTE report..." : form.id ? "Save FTE Correction" : "Submit FTE Report"}
           </Button>
           {form.id ? (
             <Button
@@ -710,7 +716,15 @@ export function FteReportForm({
                   <TableCell>{report.submittedBy ?? "Not set"}</TableCell>
                   <TableCell>{dateInput(report.updatedAt)}</TableCell>
                   <TableCell>
-                    <Button variant="outline" size="sm" onClick={() => editReport(report)}>Edit</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="min-h-10"
+                      aria-label={`Edit FTE report for ${report.centerName}, week of ${dateInput(report.weekStart)}`}
+                      onClick={() => editReport(report)}
+                    >
+                      Edit
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}

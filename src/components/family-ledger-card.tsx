@@ -80,7 +80,7 @@ export function FamilyLedgerCard({
     <Card id="family-ledger" className="glass-panel scroll-mt-24">
       <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <CardTitle>Family Ledger</CardTitle>
+        <CardTitle as="h2">Family Ledger</CardTitle>
           <CardDescription>
             Select one family to see only that family&apos;s tuition, credits, payments, and adjustments.
           </CardDescription>

@@ -38,3 +38,27 @@ test("device preview is development-only and uses fake identifiers", () => {
   assert.match(appShellSource, /\{!previewMode \? \([\s\S]*aria-label="Sign out"/);
 });
 
+test("preview shell navigation and data hooks remain inside the inert preview", () => {
+  assert.match(appShellSource, /function previewSafeShellHref\(/);
+  assert.match(appShellSource, /if \(!previewMode\) return targetHref;/);
+  assert.ok((appShellSource.match(/previewSafeShellHref\(/g) ?? []).length >= 8);
+  assert.doesNotMatch(appShellSource, /href=\{context\.href\}/);
+  assert.doesNotMatch(appShellSource, /const href = shellModuleHref\(currentUser, slug\)/);
+  assert.match(appShellSource, /const showWorkspaceTools = !previewMode && !parentFacing;/);
+  assert.match(appShellSource, /if \(previewMode \|\| !canViewDataReadiness\) return;/);
+  assert.match(appShellSource, /\[canViewDataReadiness, previewMode, readinessContext, readinessRequestKey\]/);
+  assert.match(appShellSource, /if \(previewMode \|\| !searchUserEmail \|\| query\.length < 2\)/);
+  assert.match(appShellSource, /\[previewMode, searchQuery, searchUserEmail\]/);
+  assert.match(appShellSource, /<ScopeContextLink currentUser=\{currentUser\} mobile previewMode=\{previewMode\} previewHrefBase=\{previewHrefBase\}/);
+});
+
+test("shell navigation uses the earlier full sidebar breakpoint and equal mobile tabs", () => {
+  assert.match(appShellSource, /lg:block xl:hidden/);
+  assert.match(appShellSource, /bg-sidebar\/90 backdrop-blur-xl xl:block/);
+  assert.match(appShellSource, /lg:pl-20 xl:pl-72/);
+  assert.match(appShellSource, /mx-auto grid max-w-md items-stretch gap-1/);
+  assert.doesNotMatch(appShellSource, /featured\s*&&/);
+  assert.doesNotMatch(appShellSource, /-mt-5 min-h-16/);
+  assert.ok((appShellSource.match(/focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/g) ?? []).length >= 10);
+});
+

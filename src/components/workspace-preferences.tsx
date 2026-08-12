@@ -126,7 +126,7 @@ export function CollapsibleCard({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             {eyebrow ? <div className="mb-2 flex flex-wrap items-center gap-2">{eyebrow}</div> : null}
-            <CardTitle className={titleClassName}>{title}</CardTitle>
+            <CardTitle as="h2" className={titleClassName}>{title}</CardTitle>
             {description ? <CardDescription className="mt-2 max-w-3xl">{description}</CardDescription> : null}
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">

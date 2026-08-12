@@ -171,7 +171,7 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Card className="glass-panel min-w-0 overflow-hidden">
         <CardHeader>
-          <CardTitle><h1>Automation workflow builder</h1></CardTitle>
+          <CardTitle as="h1">Automation workflow builder</CardTitle>
           <CardDescription>Choose when an automation runs, which rules it follows, when staff review it, and what it does.</CardDescription>
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
@@ -246,7 +246,7 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
                 <Label htmlFor="automation-requires-review">Require Staff Review</Label>
                 <div id="automation-requires-review-help" className="text-xs text-muted-foreground">Require approval before billing, enrollment, compliance, or drafted-message actions continue.</div>
               </div>
-              <Switch id="automation-requires-review" aria-describedby="automation-requires-review-help" checked={requiresReview} onCheckedChange={setRequiresReview} />
+              <Switch id="automation-requires-review" aria-label="Require staff review" aria-describedby="automation-requires-review-help" checked={requiresReview} onCheckedChange={setRequiresReview} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="automation-action-type">Action Type</Label>
@@ -308,7 +308,7 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
       <div className="space-y-4">
         <Card className="glass-panel min-w-0 overflow-hidden">
           <CardHeader>
-            <CardTitle>Workflow Map</CardTitle>
+            <CardTitle as="h2">Workflow Map</CardTitle>
             <CardDescription>Current automation logic before activation.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
@@ -334,7 +334,7 @@ export function AutomationWorkflowBuilder({ data, readOnly = false }: { data: Au
         </Card>
         <Card className="glass-panel min-w-0 overflow-hidden">
           <CardHeader>
-            <CardTitle>Recent Runs</CardTitle>
+            <CardTitle as="h2">Recent Runs</CardTitle>
             <CardDescription>Execution snapshots for saved workflows.</CardDescription>
           </CardHeader>
           <CardContent>

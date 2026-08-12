@@ -1423,7 +1423,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Family billing</CardTitle>
+            <CardTitle as="h2">Family billing</CardTitle>
             <CardDescription>Create charges, record payments, and manage account adjustments.</CardDescription>
           </div>
           <Badge variant="outline">
@@ -1482,9 +1482,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <div className="space-y-1">
-            <Label>School</Label>
+            <Label htmlFor="billing-workbench-school">School</Label>
             <Select value={centerId} onValueChange={handleCenterChange}>
-              <SelectTrigger><SelectValue placeholder="Choose school" /></SelectTrigger>
+              <SelectTrigger id="billing-workbench-school"><SelectValue placeholder="Choose school" /></SelectTrigger>
               <SelectContent>
                 {centers.map((center) => (
                   <SelectItem key={center.id} value={center.id}>{centerLabel(center)}</SelectItem>
@@ -1493,9 +1493,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Family</Label>
+            <Label htmlFor="billing-workbench-family">Family</Label>
             <Select value={effectiveFamilyId} onValueChange={handleFamilyChange}>
-              <SelectTrigger><SelectValue placeholder="Choose family" /></SelectTrigger>
+              <SelectTrigger id="billing-workbench-family"><SelectValue placeholder="Choose family" /></SelectTrigger>
               <SelectContent>
                 {filteredFamilies.map((family) => (
                   <SelectItem key={family.id} value={family.id}>
@@ -1589,9 +1589,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
             <div className="grid gap-3 md:grid-cols-6">
               <div className="space-y-1 md:col-span-2">
-                <Label>Apply payment to</Label>
+                <Label htmlFor="billing-payment-target">Apply payment to</Label>
                 <Select value={effectivePaymentTarget} onValueChange={(value) => value && setPaymentTarget(value)}>
-                  <SelectTrigger><SelectValue placeholder="Choose balance or invoice" /></SelectTrigger>
+                  <SelectTrigger id="billing-payment-target"><SelectValue placeholder="Choose balance or invoice" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="balance">Total balance · {money(familyBalanceCents)}</SelectItem>
                     {openInvoices.map((invoice) => (
@@ -1604,8 +1604,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Custom amount</Label>
+                <Label htmlFor="billing-payment-custom-amount">Custom amount</Label>
                 <Input
+                  id="billing-payment-custom-amount"
                   disabled={effectivePaymentTarget !== "custom"}
                   inputMode="decimal"
                   value={paymentAmountDollars}
@@ -1614,8 +1615,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 />
               </div>
               <div className="space-y-1 md:col-span-2">
-                <Label>Description</Label>
-                <Input value={paymentDescription} onChange={(event) => setPaymentDescription(event.target.value)} placeholder="Tuition payment" />
+                <Label htmlFor="billing-payment-description">Description</Label>
+                <Input id="billing-payment-description" value={paymentDescription} onChange={(event) => setPaymentDescription(event.target.value)} placeholder="Tuition payment" />
               </div>
               <div className="rounded-lg border bg-background/50 p-3">
                 <div className="text-xs text-muted-foreground">Charging</div>
@@ -1712,9 +1713,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {selectedPaymentRequestEmailOptions.map((option) => {
-                const id = `payment-request-${option.email.replace(/[^a-z0-9]+/gi, "-")}`;
+                const id = `payment-request-${encodeURIComponent(option.email)}`;
                 return (
-                  <label key={option.email} className="flex min-h-12 items-start gap-2 rounded-lg border bg-background/50 p-2 text-sm">
+                  <label key={option.email} htmlFor={id} className="flex min-h-12 items-start gap-2 rounded-lg border bg-background/50 p-2 text-sm">
                     <input
                       id={id}
                       type="checkbox"
@@ -1754,9 +1755,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </div>
           <div className="grid gap-3 md:grid-cols-6">
             <div className="space-y-1 md:col-span-2">
-              <Label>Rate record</Label>
+              <Label htmlFor="billing-rate-record">Rate record</Label>
               <Select value={planEditorId} onValueChange={handlePlanEditorChange}>
-                <SelectTrigger><SelectValue placeholder="New or existing rate" /></SelectTrigger>
+                <SelectTrigger id="billing-rate-record"><SelectValue placeholder="New or existing rate" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="new">New tuition rate</SelectItem>
                   {locationTuitionPlans.map((plan) => (
@@ -1768,13 +1769,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </Select>
             </div>
             <div className="space-y-1 md:col-span-2">
-              <Label>Rate name</Label>
-              <Input value={planName} onChange={(event) => setPlanName(event.target.value)} placeholder="Infant weekly tuition" />
+              <Label htmlFor="billing-rate-name">Rate name</Label>
+              <Input id="billing-rate-name" value={planName} onChange={(event) => setPlanName(event.target.value)} placeholder="Infant weekly tuition" />
             </div>
             <div className="space-y-1">
-              <Label>Age group</Label>
+              <Label htmlFor="billing-rate-age-group">Age group</Label>
               <Select value={planAgeGroup} onValueChange={(value) => value && setPlanAgeGroup(value)}>
-                <SelectTrigger><SelectValue placeholder="Choose age group" /></SelectTrigger>
+                <SelectTrigger id="billing-rate-age-group"><SelectValue placeholder="Choose age group" /></SelectTrigger>
                 <SelectContent>
                   {ageGroups.map((group) => (
                     <SelectItem key={group} value={group}>{group}</SelectItem>
@@ -1783,9 +1784,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Funding</Label>
+              <Label htmlFor="billing-rate-funding">Funding</Label>
               <Select value={planFundingType} onValueChange={handlePlanFundingTypeChange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="billing-rate-funding"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="family">Family-paid</SelectItem>
                   <SelectItem value="voucher">No family charge / CCDF / voucher-funded ($0.00)</SelectItem>
@@ -1793,8 +1794,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Family {planCadence} amount</Label>
+              <Label htmlFor="billing-rate-family-amount">Family {planCadence} amount</Label>
               <Input
+                id="billing-rate-family-amount"
                 inputMode="decimal"
                 value={planAmountDollars}
                 disabled={planFundingType === "voucher"}
@@ -1804,11 +1806,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               {planFundingType === "voucher" ? <p className="text-xs text-muted-foreground">Directors can use this for any intentional $0.00 rate. It will not create family invoices or autopay attempts.</p> : null}
             </div>
             <div className="space-y-1">
-              <Label>Rate cadence</Label>
+              <Label htmlFor="billing-rate-cadence">Rate cadence</Label>
               <Select value={planCadence} onValueChange={(value) => {
                 if (value === "weekly" || value === "monthly") setPlanCadence(value);
               }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="billing-rate-cadence"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="weekly">Weekly</SelectItem>
                   <SelectItem value="monthly">Monthly</SelectItem>
@@ -1851,6 +1853,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
           <TabsContent value="single" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <ChargeFields
+              idPrefix="billing-single-charge"
               chargeSource={effectiveChargeSource}
               setChargeSource={setChargeSource}
               tuitionPlanId={tuitionPlanId}
@@ -1868,9 +1871,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             />
             <div className="grid gap-3 md:grid-cols-4">
               <div className="space-y-1">
-                <Label>Child</Label>
+                <Label htmlFor="billing-single-child">Child</Label>
                 <Select value={childId} onValueChange={(value) => value && setChildId(value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="billing-single-child"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Whole family (one-time charge only)</SelectItem>
                     {selectedChildren.map((child) => (
@@ -1879,9 +1882,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   </SelectContent>
                 </Select>
               </div>
-              <DateFields dueDate={dueDate} setDueDate={setDueDate} billingPeriod={billingPeriod} setBillingPeriod={setBillingPeriod} />
+              <DateFields idPrefix="billing-single" dueDate={dueDate} setDueDate={setDueDate} billingPeriod={billingPeriod} setBillingPeriod={setBillingPeriod} />
             </div>
-            <DescriptionField value={description} setValue={setDescription} />
+            <DescriptionField id="billing-single-description" value={description} setValue={setDescription} />
             <Button disabled={isPending || !selectedFamily} onClick={submitSingle}>
               <ReceiptText data-icon="inline-start" />
               Create Invoice
@@ -1893,7 +1896,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <>
                 <div className="grid gap-3 md:grid-cols-4">
                   <div className="space-y-1 md:col-span-2">
-                    <Label>Open invoice</Label>
+                    <Label htmlFor="billing-invoice-editor">Open invoice</Label>
                     <Select
                       value={effectiveInvoiceEditorId}
                       onValueChange={(value) => {
@@ -1903,7 +1906,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                         setInvoiceVoidReason("");
                       }}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger id="billing-invoice-editor"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {openInvoices.map((invoice) => (
                           <SelectItem key={invoice.id} value={invoice.id}>
@@ -1914,17 +1917,17 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Invoice amount</Label>
-                    <Input inputMode="decimal" value={invoiceEditAmountDollars} onChange={(event) => updateInvoiceEditDraft({ amountDollars: event.target.value })} placeholder="25.00" />
+                    <Label htmlFor="billing-invoice-amount">Invoice amount</Label>
+                    <Input id="billing-invoice-amount" inputMode="decimal" value={invoiceEditAmountDollars} onChange={(event) => updateInvoiceEditDraft({ amountDollars: event.target.value })} placeholder="25.00" />
                   </div>
                   <div className="space-y-1">
-                    <Label>Due date</Label>
-                    <Input type="date" value={invoiceEditDueDate} onChange={(event) => updateInvoiceEditDraft({ dueDate: event.target.value })} />
+                    <Label htmlFor="billing-invoice-due-date">Due date</Label>
+                    <Input id="billing-invoice-due-date" type="date" value={invoiceEditDueDate} onChange={(event) => updateInvoiceEditDraft({ dueDate: event.target.value })} />
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label>Invoice details</Label>
-                  <Textarea value={invoiceEditDescription} onChange={(event) => updateInvoiceEditDraft({ description: event.target.value })} placeholder="Tuition, fee, or correction note" />
+                  <Label htmlFor="billing-invoice-details">Invoice details</Label>
+                  <Textarea value={invoiceEditDescription} id="billing-invoice-details" onChange={(event) => updateInvoiceEditDraft({ description: event.target.value })} placeholder="Tuition, fee, or correction note" />
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
                   <SummaryMetric label="Current total" value={money(selectedEditableInvoice.totalCents)} detail={selectedEditableInvoice.number} />
@@ -1963,6 +1966,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
           <TabsContent value="batch" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <ChargeFields
+              idPrefix="billing-batch-charge"
               chargeSource={effectiveChargeSource}
               setChargeSource={setChargeSource}
               tuitionPlanId={tuitionPlanId}
@@ -1980,9 +1984,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             />
             <div className="grid gap-3 md:grid-cols-5">
               <div className="space-y-1">
-                <Label>Batch target</Label>
+                <Label htmlFor="billing-batch-target">Batch target</Label>
                 <Select value={batchTarget} onValueChange={(value) => value && setBatchTarget(value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="billing-batch-target"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="child">Per matching child</SelectItem>
                     <SelectItem value="family">Per matching family</SelectItem>
@@ -1990,9 +1994,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Age group</Label>
+                <Label htmlFor="billing-batch-age-group">Age group</Label>
                 <Select value={ageGroup} onValueChange={(value) => value && setAgeGroup(value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="billing-batch-age-group"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All age groups</SelectItem>
                     {ageGroups.map((group) => (
@@ -2002,9 +2006,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Status</Label>
+                <Label htmlFor="billing-batch-status">Status</Label>
                 <Select value={enrollmentStatus} onValueChange={(value) => value && setEnrollmentStatus(value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="billing-batch-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="enrolled">Enrolled</SelectItem>
                     <SelectItem value="waitlisted">Waitlisted</SelectItem>
@@ -2013,9 +2017,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   </SelectContent>
                 </Select>
               </div>
-              <DateFields dueDate={dueDate} setDueDate={setDueDate} billingPeriod={billingPeriod} setBillingPeriod={setBillingPeriod} />
+              <DateFields idPrefix="billing-batch" dueDate={dueDate} setDueDate={setDueDate} billingPeriod={billingPeriod} setBillingPeriod={setBillingPeriod} />
             </div>
-            <DescriptionField value={description} setValue={setDescription} />
+            <DescriptionField id="billing-batch-description" value={description} setValue={setDescription} />
             <Button disabled={isPending || !centerId} onClick={submitBatch}>
               <Rows3 data-icon="inline-start" />
               Create Batch Invoices
@@ -2041,6 +2045,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     key={child.id}
                     type="button"
                     aria-pressed={selected}
+                    aria-label={`Select ${child.fullName} for recurring tuition setup`}
                     onClick={() => handleAssignmentChildChange(child.id)}
                     className={`rounded-lg border p-3 text-left transition-colors ${selected ? "border-primary bg-primary/10" : "bg-background/60 hover:border-primary/50"}`}
                   >
@@ -2068,18 +2073,18 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-1">
-                  <Label>Program / age group</Label>
+                  <Label htmlFor="billing-child-program">Program / age group</Label>
                   <Select value={assignmentChildProgram} onValueChange={(value) => value && setAssignmentChildProgram(value)}>
-                    <SelectTrigger><SelectValue placeholder="Choose program" /></SelectTrigger>
+                    <SelectTrigger id="billing-child-program"><SelectValue placeholder="Choose program" /></SelectTrigger>
                     <SelectContent>
                       {ageGroups.map((group) => <SelectItem key={group} value={group}>{group}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Classroom</Label>
+                  <Label htmlFor="billing-child-classroom">Classroom</Label>
                   <Select value={assignmentChildClassroomId} onValueChange={(value) => value && setAssignmentChildClassroomId(value)}>
-                    <SelectTrigger><SelectValue placeholder="Choose classroom" /></SelectTrigger>
+                    <SelectTrigger id="billing-child-classroom"><SelectValue placeholder="Choose classroom" /></SelectTrigger>
                     <SelectContent>
                       {selectedCenterClassrooms.map((classroom) => (
                         <SelectItem key={classroom.id} value={classroom.id}>{classroom.name} · {classroom.ageGroup}</SelectItem>
@@ -2088,11 +2093,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Care schedule</Label>
+                  <Label htmlFor="billing-child-care-schedule">Care schedule</Label>
                   <Select value={assignmentChildCareScheduleType} onValueChange={(value) => {
                     if (value === "full_time" || value === "part_time" || value === "unknown") setAssignmentChildCareScheduleType(value);
                   }}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="billing-child-care-schedule"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="unknown">Not set</SelectItem>
                       <SelectItem value="full_time">Full-time</SelectItem>
@@ -2101,8 +2106,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Start date</Label>
-                  <Input type="date" value={assignmentChildStartDate} onChange={(event) => setAssignmentChildStartDate(event.target.value)} />
+                  <Label htmlFor="billing-child-start-date">Start date</Label>
+                  <Input id="billing-child-start-date" type="date" value={assignmentChildStartDate} onChange={(event) => setAssignmentChildStartDate(event.target.value)} />
                 </div>
               </div>
               <Button type="button" variant="outline" disabled={isPending || !selectedAssignmentChild || !assignmentChildProgram || !assignmentChildClassroomId} onClick={saveAssignmentChildContext}>
@@ -2112,9 +2117,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
             <div className="grid gap-3 md:grid-cols-5">
               <div className="space-y-1">
-                <Label>Child</Label>
+                <Label htmlFor="billing-assignment-child">Child</Label>
                 <Select value={effectiveAssignmentChildId} onValueChange={handleAssignmentChildChange}>
-                  <SelectTrigger><SelectValue placeholder="Choose child" /></SelectTrigger>
+                  <SelectTrigger id="billing-assignment-child"><SelectValue placeholder="Choose child" /></SelectTrigger>
                   <SelectContent>
                     {selectedChildren.map((child) => (
                       <SelectItem key={child.id} value={child.id}>
@@ -2127,9 +2132,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Status</Label>
+                <Label htmlFor="billing-assignment-status">Status</Label>
                 <Select value={assignmentEnabled} onValueChange={(value) => value && setAssignmentEnabled(value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="billing-assignment-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="true">Enabled</SelectItem>
                     <SelectItem value="false">Disabled</SelectItem>
@@ -2137,9 +2142,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </Select>
               </div>
               <div className="space-y-1 md:col-span-2">
-                <Label>Tuition plan</Label>
+                <Label htmlFor="billing-assignment-plan">Tuition plan</Label>
                 <Select value={effectiveAssignmentPlanId} onValueChange={handleAssignmentPlanChange}>
-                  <SelectTrigger><SelectValue placeholder="Choose plan" /></SelectTrigger>
+                  <SelectTrigger id="billing-assignment-plan"><SelectValue placeholder="Choose plan" /></SelectTrigger>
                   <SelectContent>
                     {locationTuitionPlans.map((plan) => (
                       <SelectItem key={plan.id} value={plan.id}>
@@ -2150,13 +2155,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Billing cycle</Label>
+                <Label htmlFor="billing-assignment-cycle">Billing cycle</Label>
                 <Select value={effectiveAssignmentCadence} onValueChange={(value) => {
                   if (!value) return;
                   setAssignmentCadence(value);
                   setAssignmentStartPeriod(currentPeriodForCadence(value));
                 }} disabled={assignmentIsVoucherFunded}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="billing-assignment-cycle"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {tuitionRateCadence(effectiveAssignmentPlan?.cadence) === "monthly" ? (
                       <SelectItem value="monthly">Monthly · 1 month at a time</SelectItem>
@@ -2171,8 +2176,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </div>
               {effectiveAssignmentCadence === "monthly" ? (
                 <div className="space-y-1">
-                  <Label>Monthly invoice day</Label>
+                  <Label htmlFor="billing-assignment-invoice-day">Monthly invoice day</Label>
                   <Input
+                    id="billing-assignment-invoice-day"
                     type="number"
                     min="1"
                     max="28"
@@ -2189,8 +2195,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 />
               )}
               <div className="space-y-1">
-                <Label>{effectiveAssignmentCadence === "monthly" ? "Start month" : "Start week"}</Label>
+                <Label htmlFor="billing-assignment-start-period">{effectiveAssignmentCadence === "monthly" ? "Start month" : "Start week"}</Label>
                 <Input
+                  id="billing-assignment-start-period"
                   value={effectiveAssignmentStartPeriod}
                   onChange={(event) => setAssignmentStartPeriod(event.target.value)}
                   placeholder={effectiveAssignmentCadence === "monthly" ? "2026-08" : "2026-W23"}
@@ -2211,7 +2218,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
             <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
               <div>
-                <Label>{effectiveRateCadence === "monthly" ? "Monthly" : "Weekly"} invoice credits</Label>
+                <div className="text-sm font-medium">{effectiveRateCadence === "monthly" ? "Monthly" : "Weekly"} invoice credits</div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Enter approved {effectiveRateCadence} amounts. Each credit appears as its own negative invoice line and categorized ledger entry.
                 </p>
@@ -2219,9 +2226,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 {TUITION_CREDIT_CATEGORIES.map((category) => (
                   <div key={category.id} className="space-y-1">
-                    <Label htmlFor={`tuition-credit-${category.id}`}>{category.label}</Label>
+                    <Label htmlFor={`billing-tuition-credit-${category.id}`}>{category.label}</Label>
                     <Input
-                      id={`tuition-credit-${category.id}`}
+                      id={`billing-tuition-credit-${category.id}`}
                       inputMode="decimal"
                       value={assignmentCredits[category.id]}
                       onChange={(event) => setAssignmentCredits((current) => ({ ...current, [category.id]: event.target.value }))}
@@ -2244,8 +2251,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Child tuition label</Label>
+              <Label htmlFor="billing-assignment-description">Child tuition label</Label>
               <Input
+                id="billing-assignment-description"
                 value={assignmentDescription}
                 onChange={(event) => setAssignmentDescription(event.target.value)}
                 placeholder={effectiveAssignmentPlan?.name || `${selectedAssignmentChild?.fullName ?? "Child"} ${effectiveRateCadence} tuition`}
@@ -2275,29 +2283,29 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           <TabsContent value="agency" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
-                <Label>Agency payer</Label>
-                <Input value={agencyName} onChange={(event) => setAgencyName(event.target.value)} placeholder="ELC, DHS, scholarship fund" />
+                <Label htmlFor="billing-agency-payer">Agency payer</Label>
+                <Input id="billing-agency-payer" value={agencyName} onChange={(event) => setAgencyName(event.target.value)} placeholder="ELC, DHS, scholarship fund" />
               </div>
               <div className="space-y-1">
-                <Label>Authorization #</Label>
-                <Input value={agencyAuthorizationNumber} onChange={(event) => setAgencyAuthorizationNumber(event.target.value)} placeholder="Optional authorization" />
+                <Label htmlFor="billing-agency-authorization">Authorization #</Label>
+                <Input id="billing-agency-authorization" value={agencyAuthorizationNumber} onChange={(event) => setAgencyAuthorizationNumber(event.target.value)} placeholder="Optional authorization" />
               </div>
               <div className="space-y-1">
-                <Label>Payment reference</Label>
-                <Input value={agencyReference} onChange={(event) => setAgencyReference(event.target.value)} placeholder="EFT/check/reference" />
+                <Label htmlFor="billing-agency-reference">Payment reference</Label>
+                <Input id="billing-agency-reference" value={agencyReference} onChange={(event) => setAgencyReference(event.target.value)} placeholder="EFT/check/reference" />
               </div>
               <div className="space-y-1">
-                <Label>Amount</Label>
-                <Input inputMode="decimal" value={agencyAmountDollars} onChange={(event) => setAgencyAmountDollars(event.target.value)} placeholder="250.00" />
+                <Label htmlFor="billing-agency-amount">Amount</Label>
+                <Input id="billing-agency-amount" inputMode="decimal" value={agencyAmountDollars} onChange={(event) => setAgencyAmountDollars(event.target.value)} placeholder="250.00" />
               </div>
               <div className="space-y-1">
-                <Label>Paid date</Label>
-                <Input type="date" value={agencyPaidAt} onChange={(event) => setAgencyPaidAt(event.target.value)} />
+                <Label htmlFor="billing-agency-paid-date">Paid date</Label>
+                <Input id="billing-agency-paid-date" type="date" value={agencyPaidAt} onChange={(event) => setAgencyPaidAt(event.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label>Child</Label>
+                <Label htmlFor="billing-agency-child">Child</Label>
                 <Select value={agencyChildId} onValueChange={(value) => value && setAgencyChildId(value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="billing-agency-child"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Whole family</SelectItem>
                     {selectedChildren.map((child) => (
@@ -2307,18 +2315,18 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Coverage start</Label>
-                <Input type="date" value={agencyCoverageStart} onChange={(event) => setAgencyCoverageStart(event.target.value)} />
+                <Label htmlFor="billing-agency-coverage-start">Coverage start</Label>
+                <Input id="billing-agency-coverage-start" type="date" value={agencyCoverageStart} onChange={(event) => setAgencyCoverageStart(event.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label>Coverage end</Label>
-                <Input type="date" value={agencyCoverageEnd} onChange={(event) => setAgencyCoverageEnd(event.target.value)} />
+                <Label htmlFor="billing-agency-coverage-end">Coverage end</Label>
+                <Input id="billing-agency-coverage-end" type="date" value={agencyCoverageEnd} onChange={(event) => setAgencyCoverageEnd(event.target.value)} />
               </div>
             </div>
-            <DescriptionField value={description} setValue={setDescription} />
+            <DescriptionField id="billing-agency-description" value={description} setValue={setDescription} />
             <div className="space-y-1">
-              <Label>Agency notes</Label>
-              <Textarea value={agencyNotes} onChange={(event) => setAgencyNotes(event.target.value)} placeholder="Eligibility period, copay notes, authorization limits, or office follow-up" />
+              <Label htmlFor="billing-agency-notes">Agency notes</Label>
+              <Textarea id="billing-agency-notes" value={agencyNotes} onChange={(event) => setAgencyNotes(event.target.value)} placeholder="Eligibility period, copay notes, authorization limits, or office follow-up" />
             </div>
             <Button disabled={isPending || !selectedFamily || !agencyName || !agencyAmountDollars} onClick={submitAgencyPayment}>
               <BadgeDollarSign data-icon="inline-start" />
@@ -2333,21 +2341,21 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
-                <Label>Amount</Label>
-                <Input inputMode="decimal" value={checkAmountDollars} onChange={(event) => setCheckAmountDollars(event.target.value)} placeholder="250.00" />
+                <Label htmlFor="billing-check-amount">Amount</Label>
+                <Input id="billing-check-amount" inputMode="decimal" value={checkAmountDollars} onChange={(event) => setCheckAmountDollars(event.target.value)} placeholder="250.00" />
               </div>
               <div className="space-y-1">
-                <Label>Check number / reference</Label>
-                <Input value={checkNumber} onChange={(event) => setCheckNumber(event.target.value)} placeholder="1042" />
+                <Label htmlFor="billing-check-reference">Check number / reference</Label>
+                <Input id="billing-check-reference" value={checkNumber} onChange={(event) => setCheckNumber(event.target.value)} placeholder="1042" />
               </div>
               <div className="space-y-1">
-                <Label>Received date</Label>
-                <Input type="date" value={checkPaidAt} onChange={(event) => setCheckPaidAt(event.target.value)} />
+                <Label htmlFor="billing-check-received-date">Received date</Label>
+                <Input id="billing-check-received-date" type="date" value={checkPaidAt} onChange={(event) => setCheckPaidAt(event.target.value)} />
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Notes</Label>
-              <Textarea value={checkNotes} onChange={(event) => setCheckNotes(event.target.value)} placeholder="Optional deposit, payer, or office notes" />
+              <Label htmlFor="billing-check-notes">Notes</Label>
+              <Textarea id="billing-check-notes" value={checkNotes} onChange={(event) => setCheckNotes(event.target.value)} placeholder="Optional deposit, payer, or office notes" />
             </div>
             <Button disabled={isPending || !selectedFamily || !checkAmountDollars || !checkNumber.trim()} onClick={submitManualCheckPayment}>
               <Banknote data-icon="inline-start" />
@@ -2362,21 +2370,21 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
-                <Label>Amount</Label>
-                <Input inputMode="decimal" value={cashAmountDollars} onChange={(event) => setCashAmountDollars(event.target.value)} placeholder="250.00" />
+                <Label htmlFor="billing-cash-amount">Amount</Label>
+                <Input id="billing-cash-amount" inputMode="decimal" value={cashAmountDollars} onChange={(event) => setCashAmountDollars(event.target.value)} placeholder="250.00" />
               </div>
               <div className="space-y-1">
-                <Label>Receipt / reference <span className="font-normal text-muted-foreground">(optional)</span></Label>
-                <Input value={cashReference} onChange={(event) => setCashReference(event.target.value)} placeholder="Front desk receipt 1042" />
+                <Label htmlFor="billing-cash-reference">Receipt / reference <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                <Input id="billing-cash-reference" value={cashReference} onChange={(event) => setCashReference(event.target.value)} placeholder="Front desk receipt 1042" />
               </div>
               <div className="space-y-1">
-                <Label>Received date</Label>
-                <Input type="date" value={cashPaidAt} onChange={(event) => setCashPaidAt(event.target.value)} />
+                <Label htmlFor="billing-cash-received-date">Received date</Label>
+                <Input id="billing-cash-received-date" type="date" value={cashPaidAt} onChange={(event) => setCashPaidAt(event.target.value)} />
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Notes</Label>
-              <Textarea value={cashNotes} onChange={(event) => setCashNotes(event.target.value)} placeholder="Optional payer, receipt, drawer, or deposit notes" />
+              <Label htmlFor="billing-cash-notes">Notes</Label>
+              <Textarea id="billing-cash-notes" value={cashNotes} onChange={(event) => setCashNotes(event.target.value)} placeholder="Optional payer, receipt, drawer, or deposit notes" />
             </div>
             <Button disabled={isPending || !selectedFamily || dollarsToCents(cashAmountDollars) <= 0} onClick={submitManualCashPayment}>
               <Banknote data-icon="inline-start" />
@@ -2397,28 +2405,33 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <>
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1">
-                    <Label>Total refund amount</Label>
-                    <Input inputMode="decimal" value={refundAmountDollars} onChange={(event) => setRefundAmountDollars(event.target.value)} placeholder="0.00" />
+                    <Label htmlFor="billing-refund-amount">Total refund amount</Label>
+                    <Input id="billing-refund-amount" inputMode="decimal" value={refundAmountDollars} onChange={(event) => setRefundAmountDollars(event.target.value)} placeholder="0.00" />
                   </div>
                   <div className="space-y-1 md:col-span-2">
-                    <Label>Payment references <span className="font-normal text-muted-foreground">(optional)</span></Label>
-                    <div className="max-h-36 space-y-1 overflow-auto rounded-lg border bg-card/40 p-2">
-                      {refundablePayments.map((payment) => (
-                        <label key={payment.id} className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50">
-                          <input
-                            type="checkbox"
-                            checked={selectedRefundPaymentIds.includes(payment.id)}
-                            onChange={(event) => setRefundPaymentIds((current) => event.target.checked ? [...current, payment.id] : current.filter((id) => id !== payment.id))}
-                          />
-                          <span>{formatShortDate(payment.paidAt)} · {money(payment.amountCents)} paid · {money(payment.refundableCents)} available{payment.paymentMethodLabel ? ` · ${payment.paymentMethodLabel}` : ""}</span>
-                        </label>
-                      ))}
+                    <div id="billing-refund-payment-references-label" className="text-sm font-medium">Payment references <span className="font-normal text-muted-foreground">(optional)</span></div>
+                    <div role="group" aria-labelledby="billing-refund-payment-references-label" className="max-h-36 space-y-1 overflow-auto rounded-lg border bg-card/40 p-2">
+                      {refundablePayments.map((payment) => {
+                        const paymentInputId = `billing-refund-payment-${payment.id}`;
+                        return (
+                          <label key={payment.id} htmlFor={paymentInputId} className="flex min-h-10 cursor-pointer items-start gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted/50">
+                            <input
+                              id={paymentInputId}
+                              type="checkbox"
+                              className="mt-0.5 size-5 shrink-0"
+                              checked={selectedRefundPaymentIds.includes(payment.id)}
+                              onChange={(event) => setRefundPaymentIds((current) => event.target.checked ? [...current, payment.id] : current.filter((id) => id !== payment.id))}
+                            />
+                            <span>{formatShortDate(payment.paidAt)} · {money(payment.amountCents)} paid · {money(payment.refundableCents)} available{payment.paymentMethodLabel ? ` · ${payment.paymentMethodLabel}` : ""}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label>Refund reason</Label>
-                  <Textarea value={refundReason} onChange={(event) => setRefundReason(event.target.value)} placeholder="Duplicate payment, incorrect amount, enrollment change, or other approved reason" />
+                  <Label htmlFor="billing-refund-reason">Refund reason</Label>
+                  <Textarea id="billing-refund-reason" value={refundReason} onChange={(event) => setRefundReason(event.target.value)} placeholder="Duplicate payment, incorrect amount, enrollment change, or other approved reason" />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button disabled={isPending || dollarsToCents(refundAmountDollars) <= 0 || !refundReason.trim()} onClick={submitRefundPayment} variant="destructive">
@@ -2440,9 +2453,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           <TabsContent value="adjustment" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
-                <Label>Adjustment</Label>
+                <Label htmlFor="billing-adjustment-type">Adjustment</Label>
                 <Select value={adjustmentType} onValueChange={(value) => value && setAdjustmentType(value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="billing-adjustment-type"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="credit">Add family credit</SelectItem>
                     <SelectItem value="debit">Add balance debit</SelectItem>
@@ -2450,11 +2463,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Amount</Label>
-                <Input inputMode="decimal" value={amountDollars} onChange={(event) => setAmountDollars(event.target.value)} placeholder="125.00" />
+                <Label htmlFor="billing-adjustment-amount">Amount</Label>
+                <Input id="billing-adjustment-amount" inputMode="decimal" value={amountDollars} onChange={(event) => setAmountDollars(event.target.value)} placeholder="125.00" />
               </div>
             </div>
-            <DescriptionField value={description} setValue={setDescription} />
+            <DescriptionField id="billing-adjustment-description" value={description} setValue={setDescription} />
             <Button disabled={isPending || !selectedFamily || !amountDollars} onClick={submitAdjustment}>
               <MinusCircle data-icon="inline-start" />
               Post Adjustment
@@ -2468,6 +2481,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 }
 
 function ChargeFields({
+  idPrefix,
   chargeSource,
   setChargeSource,
   tuitionPlanId,
@@ -2483,6 +2497,7 @@ function ChargeFields({
   selectedPlan,
   selectedProduct,
 }: {
+  idPrefix: string;
   chargeSource: string;
   setChargeSource: (value: string) => void;
   tuitionPlanId: string;
@@ -2506,9 +2521,9 @@ function ChargeFields({
   return (
     <div className="grid gap-3 md:grid-cols-3">
       <div className="space-y-1">
-        <Label>Charge type</Label>
+        <Label htmlFor={`${idPrefix}-type`}>Charge type</Label>
         <Select value={chargeSource} onValueChange={(value) => value && setChargeSource(value)}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger id={`${idPrefix}-type`}><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="tuitionPlan">Tuition plan</SelectItem>
             {products.length ? <SelectItem value="product">Uniform shirt / product</SelectItem> : null}
@@ -2518,9 +2533,9 @@ function ChargeFields({
       </div>
       {chargeSource === "tuitionPlan" ? (
         <div className="space-y-1">
-          <Label>Tuition plan</Label>
+          <Label htmlFor={`${idPrefix}-tuition-plan`}>Tuition plan</Label>
           <Select value={tuitionPlanId} onValueChange={(value) => value && setTuitionPlanId(value)}>
-            <SelectTrigger><SelectValue placeholder="Choose plan" /></SelectTrigger>
+            <SelectTrigger id={`${idPrefix}-tuition-plan`}><SelectValue placeholder="Choose plan" /></SelectTrigger>
             <SelectContent>
               {tuitionPlans.map((plan) => (
                 <SelectItem key={plan.id} value={plan.id}>
@@ -2534,9 +2549,9 @@ function ChargeFields({
       ) : null}
       {chargeSource === "product" ? (
         <div className="space-y-1">
-          <Label>Product / fee</Label>
+          <Label htmlFor={`${idPrefix}-product`}>Product / fee</Label>
           <Select value={productId} onValueChange={(value) => value && setProductId(value)}>
-            <SelectTrigger><SelectValue placeholder="Choose product" /></SelectTrigger>
+            <SelectTrigger id={`${idPrefix}-product`}><SelectValue placeholder="Choose product" /></SelectTrigger>
             <SelectContent>
               {products.map((product) => (
                 <SelectItem key={product.id} value={product.id}>
@@ -2550,8 +2565,8 @@ function ChargeFields({
       ) : null}
       {chargeSource === "product" ? (
         <div className="space-y-1">
-          <Label>Quantity</Label>
-          <Input inputMode="numeric" min={1} value={productQuantity} onChange={(event) => setProductQuantity(event.target.value)} placeholder="1" />
+          <Label htmlFor={`${idPrefix}-quantity`}>Quantity</Label>
+          <Input id={`${idPrefix}-quantity`} inputMode="numeric" min={1} value={productQuantity} onChange={(event) => setProductQuantity(event.target.value)} placeholder="1" />
           {uniformProduct ? (
             <div className="text-xs text-muted-foreground">
               Director quick invoice: {uniformQuantity} shirt{uniformQuantity === 1 ? "" : "s"} = {money(uniformTotalCents)} ({uniformBundles ? `${uniformBundles} five-pack${uniformBundles === 1 ? "" : "s"} at ${money(STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS)}` : "no five-pack"}{uniformSingles ? ` + ${uniformSingles} single${uniformSingles === 1 ? "" : "s"}` : ""}). Parents still choose size/color in the portal store.
@@ -2561,8 +2576,8 @@ function ChargeFields({
       ) : null}
       {chargeSource === "custom" ? (
         <div className="space-y-1">
-          <Label>Custom amount</Label>
-          <Input inputMode="decimal" value={amountDollars} onChange={(event) => setAmountDollars(event.target.value)} placeholder="250.00" />
+          <Label htmlFor={`${idPrefix}-custom-amount`}>Custom amount</Label>
+          <Input id={`${idPrefix}-custom-amount`} inputMode="decimal" value={amountDollars} onChange={(event) => setAmountDollars(event.target.value)} placeholder="250.00" />
         </div>
       ) : null}
     </div>
@@ -2570,11 +2585,13 @@ function ChargeFields({
 }
 
 function DateFields({
+  idPrefix,
   dueDate,
   setDueDate,
   billingPeriod,
   setBillingPeriod,
 }: {
+  idPrefix: string;
   dueDate: string;
   setDueDate: (value: string) => void;
   billingPeriod: string;
@@ -2583,22 +2600,22 @@ function DateFields({
   return (
     <>
       <div className="space-y-1">
-        <Label>Due date</Label>
-        <Input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+        <Label htmlFor={`${idPrefix}-due-date`}>Due date</Label>
+        <Input id={`${idPrefix}-due-date`} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
       </div>
       <div className="space-y-1">
-        <Label>Billing period</Label>
-        <Input value={billingPeriod} onChange={(event) => setBillingPeriod(event.target.value)} placeholder="2026-06" />
+        <Label htmlFor={`${idPrefix}-billing-period`}>Billing period</Label>
+        <Input id={`${idPrefix}-billing-period`} value={billingPeriod} onChange={(event) => setBillingPeriod(event.target.value)} placeholder="2026-06" />
       </div>
     </>
   );
 }
 
-function DescriptionField({ value, setValue }: { value: string; setValue: (value: string) => void }) {
+function DescriptionField({ id, value, setValue }: { id: string; value: string; setValue: (value: string) => void }) {
   return (
     <div className="space-y-1">
-      <Label>Description override</Label>
-      <Textarea value={value} onChange={(event) => setValue(event.target.value)} placeholder="Optional statement memo shown in the ledger and invoice line item" />
+      <Label htmlFor={id}>Description override</Label>
+      <Textarea id={id} value={value} onChange={(event) => setValue(event.target.value)} placeholder="Optional statement memo shown in the ledger and invoice line item" />
     </div>
   );
 }

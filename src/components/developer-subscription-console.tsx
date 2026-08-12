@@ -106,7 +106,7 @@ export function DeveloperSubscriptionConsole({
   return (
     <Card className="glass-panel border-primary/35">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle as="h2" className="flex items-center gap-2">
           <CreditCard className="size-5 text-primary" />
           School software subscriptions
         </CardTitle>

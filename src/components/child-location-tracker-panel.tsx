@@ -98,7 +98,7 @@ export function ChildLocationTrackerPanel({
   trackedChildren,
   canMove = false,
   compact = false,
-  title = "Live Child Location Tracker",
+  title = "Live child location tracker",
   description = "Move children between current classrooms or school areas without changing their enrolled classroom.",
 }: Props) {
   const timeZone = useSchoolTimeZone();
@@ -224,7 +224,7 @@ export function ChildLocationTrackerPanel({
         key={child.id}
         type="button"
         draggable={canMove}
-        className={`w-full rounded-lg border p-2 text-left text-sm transition hover:bg-background/80 ${effectiveSelectedChildId === child.id ? "border-foreground/60" : ""} ${childCardTone(child)}`}
+        className={`min-h-11 w-full rounded-lg border p-2 text-left text-sm hover:bg-background/80 ${effectiveSelectedChildId === child.id ? "border-foreground/60" : ""} ${childCardTone(child)}`}
         onClick={() => setSelectedChildId(child.id)}
         onDragStart={(event) => {
           setDraggedChildId(child.id);
@@ -249,11 +249,11 @@ export function ChildLocationTrackerPanel({
   }
 
   return (
-    <Card id="child-location-tracker" className="glass-panel scroll-mt-28">
+    <Card id="child-location-tracker" className="scroll-mt-28" aria-busy={isPending}>
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle as="h2" className="flex items-center gap-2">
               <MapPin className="text-primary" />
               {title}
             </CardTitle>
@@ -283,9 +283,9 @@ export function ChildLocationTrackerPanel({
         {canMove ? (
           <div className="grid gap-3 rounded-xl border bg-background/40 p-3 lg:grid-cols-[minmax(220px,0.7fr)_minmax(220px,0.7fr)_1fr]">
             <div className="space-y-1">
-              <Label>Selected child</Label>
+              <Label htmlFor="location-selected-child">Selected child</Label>
               <Select value={selectedChild?.id ?? ""} onValueChange={(value) => value && setSelectedChildId(value)}>
-                <SelectTrigger><SelectValue placeholder="Choose child" /></SelectTrigger>
+                <SelectTrigger id="location-selected-child"><SelectValue placeholder="Choose child" /></SelectTrigger>
                 <SelectContent>
                   {rows.map((child) => (
                     <SelectItem key={child.id} value={child.id}>{child.fullName} · {currentLocationLabel(child)}</SelectItem>
@@ -295,14 +295,20 @@ export function ChildLocationTrackerPanel({
             </div>
             <div className="space-y-1">
               <Label htmlFor="location-reason">Reason</Label>
-              <Input id="location-reason" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Combination, playground, coverage" />
+              <Input id="location-reason" name="locationReason" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Combination, playground, coverage" />
             </div>
             <div className="space-y-1">
               <Label htmlFor="custom-area">Custom school area</Label>
-              <div className="flex gap-2">
-                <Input id="custom-area" value={customAreaName} onChange={(event) => setCustomAreaName(event.target.value)} placeholder="Library, hallway, bus loop" />
-                <Button type="button" variant="outline" disabled={isPending || !selectedChild || !customAreaName.trim()} onClick={() => selectedChild && moveChild(selectedChild.id, { type: "area", areaName: customAreaName.trim() })}>
-                  Move
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input id="custom-area" name="customArea" value={customAreaName} onChange={(event) => setCustomAreaName(event.target.value)} placeholder="Library, hallway, bus loop" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-label={selectedChild && customAreaName.trim() ? `Move ${selectedChild.fullName} to ${customAreaName.trim()}` : "Move selected child to custom school area"}
+                  disabled={isPending || !selectedChild || !customAreaName.trim()}
+                  onClick={() => selectedChild && moveChild(selectedChild.id, { type: "area", areaName: customAreaName.trim() })}
+                >
+                  {isPending ? "Moving…" : "Move"}
                 </Button>
               </div>
             </div>
@@ -356,9 +362,16 @@ export function ChildLocationTrackerPanel({
                 <p className="mb-3 rounded-lg border bg-card/40 px-3 py-2 text-xs text-muted-foreground">{warning.detail}</p>
               ) : null}
               {canMove && selectedChild ? (
-                <Button className="mb-3 w-full" size="sm" variant="outline" disabled={isPending} onClick={() => moveChild(selectedChild.id, { type: "classroom", classroomId: classroom.id })}>
+                <Button
+                  className="mb-3 w-full"
+                  size="sm"
+                  variant="outline"
+                  aria-label={`Move ${selectedChild.fullName} to ${classroom.name}`}
+                  disabled={isPending}
+                  onClick={() => moveChild(selectedChild.id, { type: "classroom", classroomId: classroom.id })}
+                >
                   <Move data-icon="inline-start" />
-                  Move selected here
+                  {isPending ? "Moving…" : "Move selected here"}
                 </Button>
               ) : null}
               <div className={`grid gap-2 ${compact ? "" : "sm:grid-cols-2"}`}>
@@ -400,9 +413,16 @@ export function ChildLocationTrackerPanel({
                   <Badge variant="outline">{areaChildren.length}</Badge>
                 </div>
                 {canMove && selectedChild ? (
-                  <Button className="mb-3 w-full" size="sm" variant="outline" disabled={isPending} onClick={() => moveChild(selectedChild.id, { type: "area", areaName })}>
+                  <Button
+                    className="mb-3 w-full"
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Move ${selectedChild.fullName} to ${areaName}`}
+                    disabled={isPending}
+                    onClick={() => moveChild(selectedChild.id, { type: "area", areaName })}
+                  >
                     <Move data-icon="inline-start" />
-                    Move selected here
+                    {isPending ? "Moving…" : "Move selected here"}
                   </Button>
                 ) : null}
                 <div className="grid gap-2">

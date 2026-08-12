@@ -166,7 +166,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
       <div className="mx-auto max-w-3xl">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle>Parent Portal Setup</CardTitle>
+            <CardTitle as="h2">Parent Portal Setup</CardTitle>
             <CardDescription>No parent or guardian profile is connected to this account. Contact your school office and ask them to review your Parent Portal access.</CardDescription>
           </CardHeader>
         </Card>
@@ -296,7 +296,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
 
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle as="h2" className="flex items-center gap-2">
               <UserRound className="text-primary" />
               Confirm Your Information
             </CardTitle>

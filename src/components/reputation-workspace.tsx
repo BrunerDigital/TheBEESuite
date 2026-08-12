@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardCheck, MessageSquarePlus, Save, Send, Sparkles, Star } from "lucide-react";
+import { ClipboardCheck, MessageSquarePlus, Save, Send, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -121,11 +121,18 @@ function ReviewDraftButton({ review }: { review: ReviewRow }) {
 
   return (
     <div className="flex flex-col items-start gap-1">
-      <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={generate}>
-        <Sparkles data-icon="inline-start" />
-        Generate
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        aria-busy={isPending}
+        aria-label={`Create a response draft for the ${review.rating}-star ${reputationDisplayLabel(review.source, "review")} review`}
+        disabled={isPending}
+        onClick={generate}
+      >
+        Create draft
       </Button>
-      {message ? <div className="text-xs text-muted-foreground">{message}</div> : null}
+      {message ? <div role="status" aria-live="polite" className="text-xs text-muted-foreground">{message}</div> : null}
     </div>
   );
 }
@@ -268,7 +275,11 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
   return (
     <div className="space-y-6">
       {(message || error) ? (
-        <div className={error ? "rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" : "rounded-lg border bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300"}>
+        <div
+          role={error ? "alert" : "status"}
+          aria-live={error ? "assertive" : "polite"}
+          className={error ? "rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" : "rounded-lg border bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300"}
+        >
           {error || message}
         </div>
       ) : null}
@@ -279,9 +290,9 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
           <TabsTrigger value="surveys">Surveys/NPS</TabsTrigger>
         </TabsList>
         <TabsContent value="reviews">
-          <Card className="glass-panel">
+          <Card>
             <CardHeader>
-              <CardTitle>Review queue</CardTitle>
+              <CardTitle as="h2">Review queue</CardTitle>
               <CardDescription>AI-assisted drafts require staff approval before posting or sending.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -323,20 +334,20 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
           </Card>
         </TabsContent>
         <TabsContent value="requests" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <Card className="glass-panel">
+          <Card>
             <CardHeader>
-              <CardTitle>Request reviews</CardTitle>
+              <CardTitle as="h2">Request reviews</CardTitle>
               <CardDescription>Send now or schedule a family review request for the selected schools.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1">
-                  <Label>Center</Label>
+                  <Label htmlFor="reputation-review-center">Center</Label>
                   <Select value={reviewCenterId} onValueChange={(value) => {
                     if (!value) return;
                     updateReviewCenter(value);
                   }}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="reputation-review-center" className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All available schools</SelectItem>
                       {data.centers.map((center) => (
@@ -346,41 +357,41 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Limit</Label>
-                  <Input inputMode="numeric" value={reviewLimit} onChange={(event) => setReviewLimit(event.target.value)} />
+                  <Label htmlFor="reputation-review-limit">Limit</Label>
+                  <Input id="reputation-review-limit" inputMode="numeric" value={reviewLimit} onChange={(event) => setReviewLimit(event.target.value)} />
                 </div>
                 <div className="space-y-1 md:col-span-2">
-                  <Label>Google Review URL</Label>
-                  <Input value={reviewUrl} onChange={(event) => {
+                  <Label htmlFor="reputation-review-url">Google Review URL</Label>
+                  <Input id="reputation-review-url" type="url" value={reviewUrl} onChange={(event) => {
                     setReviewUrl(event.target.value);
                     const name = reviewCenterId === "all" ? "our school" : centerName(reviewCenterId);
                     setReviewBody(buildReviewRequestCopy({ centerName: name, reviewUrl: event.target.value }));
                   }} placeholder="https://g.page/r/..." />
                 </div>
                 <div className="space-y-1 md:col-span-2">
-                  <Label>Subject</Label>
-                  <Input value={reviewSubject} onChange={(event) => setReviewSubject(event.target.value)} />
+                  <Label htmlFor="reputation-review-subject">Subject</Label>
+                  <Input id="reputation-review-subject" value={reviewSubject} onChange={(event) => setReviewSubject(event.target.value)} />
                 </div>
                 <div className="space-y-1 md:col-span-2">
-                  <Label>Message</Label>
-                  <Textarea className="min-h-48" value={reviewBody} onChange={(event) => setReviewBody(event.target.value)} />
+                  <Label htmlFor="reputation-review-message">Message</Label>
+                  <Textarea id="reputation-review-message" className="min-h-48" value={reviewBody} onChange={(event) => setReviewBody(event.target.value)} />
                 </div>
                 <div className="space-y-1 md:col-span-2">
-                  <Label>Schedule</Label>
-                  <Input type="datetime-local" value={reviewSendAt} onChange={(event) => setReviewSendAt(event.target.value)} />
+                  <Label htmlFor="reputation-review-schedule">Schedule</Label>
+                  <Input id="reputation-review-schedule" type="datetime-local" value={reviewSendAt} onChange={(event) => setReviewSendAt(event.target.value)} />
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button disabled={isPending || !reviewBody} onClick={submitReviewRequest}>
+                <Button type="button" aria-busy={isPending} disabled={isPending || !reviewBody} onClick={submitReviewRequest}>
                   <Send data-icon="inline-start" />
                   {reviewSendAt ? "Schedule review request" : "Send review request"}
                 </Button>
               </div>
             </CardContent>
           </Card>
-          <Card className="glass-panel">
+          <Card>
             <CardHeader>
-              <CardTitle>Review request guidance</CardTitle>
+              <CardTitle as="h2">Review request guidance</CardTitle>
               <CardDescription>Check each request before sending it to families.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
@@ -400,15 +411,15 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
         </TabsContent>
         <TabsContent value="surveys" className="space-y-4">
           <div className="grid gap-4 xl:grid-cols-2">
-            <Card className="glass-panel">
+            <Card>
               <CardHeader>
-                <CardTitle>Survey builder</CardTitle>
+                <CardTitle as="h2">Survey builder</CardTitle>
                 <CardDescription>Create an NPS or satisfaction survey for one or more schools.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
-                    <Label>Saved survey</Label>
+                    <Label htmlFor="reputation-saved-survey">Saved survey</Label>
                     <Select value={surveyId || "new"} onValueChange={(value) => {
                       if (!value) return;
                       if (value === "new") {
@@ -421,7 +432,7 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                       }
                       loadSurvey(value);
                     }}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectTrigger id="reputation-saved-survey" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="new">New survey</SelectItem>
                         {data.surveys.map((survey) => (
@@ -431,9 +442,9 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Center</Label>
+                    <Label htmlFor="reputation-survey-center">Center</Label>
                     <Select value={surveyCenterId} onValueChange={(value) => value && setSurveyCenterId(value)}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectTrigger id="reputation-survey-center" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All locations</SelectItem>
                         {data.centers.map((center) => (
@@ -443,13 +454,13 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Name</Label>
-                    <Input value={surveyName} onChange={(event) => setSurveyName(event.target.value)} />
+                    <Label htmlFor="reputation-survey-name">Name</Label>
+                    <Input id="reputation-survey-name" value={surveyName} onChange={(event) => setSurveyName(event.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label>Type</Label>
+                    <Label htmlFor="reputation-survey-type">Type</Label>
                     <Select value={surveyType} onValueChange={(value) => value && setSurveyType(value)}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectTrigger id="reputation-survey-type" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="nps">NPS</SelectItem>
                         <SelectItem value="family_satisfaction">Family satisfaction</SelectItem>
@@ -459,9 +470,9 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Status</Label>
+                    <Label htmlFor="reputation-survey-status">Status</Label>
                     <Select value={surveyStatus} onValueChange={(value) => value && setSurveyStatus(value)}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectTrigger id="reputation-survey-status" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="active">Active</SelectItem>
                         <SelectItem value="draft">Draft</SelectItem>
@@ -471,30 +482,30 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                     </Select>
                   </div>
                   <div className="space-y-1 md:col-span-2">
-                    <Label>Prompt</Label>
-                    <Textarea value={surveyDescription} onChange={(event) => setSurveyDescription(event.target.value)} />
+                    <Label htmlFor="reputation-survey-prompt">Prompt</Label>
+                    <Textarea id="reputation-survey-prompt" value={surveyDescription} onChange={(event) => setSurveyDescription(event.target.value)} />
                   </div>
                 </div>
-                <Button disabled={isPending || !surveyName} onClick={saveSurvey}>
+                <Button type="button" aria-busy={isPending} disabled={isPending || !surveyName} onClick={saveSurvey}>
                   <Save data-icon="inline-start" />
                   Save survey
                 </Button>
               </CardContent>
             </Card>
-            <Card className="glass-panel">
+            <Card>
               <CardHeader>
-                <CardTitle>Record NPS response</CardTitle>
+                <CardTitle as="h2">Record NPS response</CardTitle>
                 <CardDescription>Manual entry for phone, paper, or director-entered family feedback.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1 md:col-span-2">
-                    <Label>Survey</Label>
+                    <Label htmlFor="reputation-response-survey">Survey</Label>
                     <Select value={responseSurveyId || "none"} onValueChange={(value) => {
                       if (!value) return;
                       setResponseSurveyId(value === "none" ? "" : value);
                     }}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectTrigger id="reputation-response-survey" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Choose survey</SelectItem>
                         {data.surveys.map((survey) => (
@@ -504,9 +515,9 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Score</Label>
+                    <Label htmlFor="reputation-response-score">Score</Label>
                     <Select value={responseScore} onValueChange={(value) => value && setResponseScore(value)}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectTrigger id="reputation-response-score" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {Array.from({ length: 11 }, (_, score) => (
                           <SelectItem key={score} value={String(score)}>{score}</SelectItem>
@@ -515,28 +526,28 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Respondent</Label>
-                    <Input value={respondentName} onChange={(event) => setRespondentName(event.target.value)} placeholder="Optional name" />
+                    <Label htmlFor="reputation-respondent-name">Respondent</Label>
+                    <Input id="reputation-respondent-name" value={respondentName} onChange={(event) => setRespondentName(event.target.value)} placeholder="Optional name" />
                   </div>
                   <div className="space-y-1 md:col-span-2">
-                    <Label>Email</Label>
-                    <Input value={respondentEmail} onChange={(event) => setRespondentEmail(event.target.value)} placeholder="Optional email" />
+                    <Label htmlFor="reputation-respondent-email">Email</Label>
+                    <Input id="reputation-respondent-email" type="email" value={respondentEmail} onChange={(event) => setRespondentEmail(event.target.value)} placeholder="Optional email" />
                   </div>
                   <div className="space-y-1 md:col-span-2">
-                    <Label>Comment</Label>
-                    <Textarea value={responseComment} onChange={(event) => setResponseComment(event.target.value)} />
+                    <Label htmlFor="reputation-response-comment">Comment</Label>
+                    <Textarea id="reputation-response-comment" value={responseComment} onChange={(event) => setResponseComment(event.target.value)} />
                   </div>
                 </div>
-                <Button disabled={isPending || !responseSurveyId} onClick={recordResponse}>
+                <Button type="button" aria-busy={isPending} disabled={isPending || !responseSurveyId} onClick={recordResponse}>
                   <MessageSquarePlus data-icon="inline-start" />
                   Record response
                 </Button>
               </CardContent>
             </Card>
           </div>
-          <Card className="glass-panel">
+          <Card>
             <CardHeader>
-              <CardTitle>Survey reporting</CardTitle>
+              <CardTitle as="h2">Survey reporting</CardTitle>
               <CardDescription>NPS score, response counts, and latest comments.</CardDescription>
             </CardHeader>
             <CardContent>

@@ -371,7 +371,7 @@ export function StripeConnectPanel({
               <BadgeDollarSign data-icon="inline-start" />
               Payout setup
             </Badge>
-            <CardTitle>School payout accounts</CardTitle>
+            <CardTitle as="h2">School payout accounts</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
               The BEE Suite platform account can collect parent payments and route funds to each school&apos;s connected payout account.
             </CardDescription>

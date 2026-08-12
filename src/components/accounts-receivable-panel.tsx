@@ -89,7 +89,7 @@ export function AccountsReceivablePanel({
       </div>
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap gap-1 rounded-lg border bg-muted/30 p-1" aria-label="Filter family balances">
+        <div className="flex flex-wrap gap-1 rounded-lg border bg-muted/30 p-1" role="group" aria-label="Filter family balances">
           {accountFilters.map((item) => (
             <Button
               key={item.id}
@@ -162,6 +162,7 @@ export function AccountsReceivablePanel({
                 <Button
                   variant="ghost"
                   size="icon-sm"
+                  className="min-h-11 min-w-11"
                   aria-label={`Open ${account.familyName} ledger`}
                   nativeButton={false}
                   render={(
@@ -233,7 +234,7 @@ export function ExecutiveAccountsReceivablePanel({
       </div>
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex gap-1 rounded-lg border bg-muted/30 p-1" aria-label="Filter school balances">
+        <div className="flex flex-wrap gap-1 rounded-lg border bg-muted/30 p-1" role="group" aria-label="Filter school balances">
           <Button
             type="button"
             size="sm"
@@ -305,6 +306,7 @@ export function ExecutiveAccountsReceivablePanel({
                 <Button
                   variant="ghost"
                   size="icon-sm"
+                  className="min-h-11 min-w-11"
                   aria-label={`Open ${school.centerName} billing`}
                   nativeButton={false}
                   render={<Link href={`/billing-invoices?centerId=${encodeURIComponent(school.centerId)}`} />}

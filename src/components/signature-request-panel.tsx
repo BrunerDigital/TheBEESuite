@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PenLine, Send } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -24,6 +24,14 @@ function firstFamilyEmail(family: SignatureRequestFamilyOption | undefined) {
 
 export function SignatureRequestPanel({ families }: { families: SignatureRequestFamilyOption[] }) {
   const router = useRouter();
+  const controlPrefix = useId();
+  const controlIds = {
+    family: `${controlPrefix}-family`,
+    child: `${controlPrefix}-child`,
+    document: `${controlPrefix}-document`,
+    type: `${controlPrefix}-type`,
+    email: `${controlPrefix}-email`,
+  };
   const [familyId, setFamilyId] = useState(families[0]?.id ?? "");
   const selectedFamily = useMemo(() => families.find((family) => family.id === familyId), [families, familyId]);
   const [childId, setChildId] = useState("");
@@ -70,13 +78,13 @@ export function SignatureRequestPanel({ families }: { families: SignatureRequest
   return (
     <Card className="glass-panel">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle as="h2" className="flex items-center gap-2">
           <PenLine className="text-primary" />
           Request Parent Signature
         </CardTitle>
         <CardDescription>Create a parent portal signature request and notify the family.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4" aria-busy={isPending}>
         {message ? (
           <Alert>
             <AlertTitle>Sent</AlertTitle>
@@ -91,9 +99,9 @@ export function SignatureRequestPanel({ families }: { families: SignatureRequest
         ) : null}
         <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-1">
-            <Label>Family</Label>
+            <Label htmlFor={controlIds.family}>Family</Label>
             <Select value={familyId} onValueChange={selectFamily}>
-              <SelectTrigger><SelectValue placeholder="Choose family" /></SelectTrigger>
+              <SelectTrigger id={controlIds.family}><SelectValue placeholder="Choose family" /></SelectTrigger>
               <SelectContent>
                 {families.map((family) => (
                   <SelectItem key={family.id} value={family.id}>{family.name}</SelectItem>
@@ -102,9 +110,9 @@ export function SignatureRequestPanel({ families }: { families: SignatureRequest
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Child</Label>
+            <Label htmlFor={controlIds.child}>Child</Label>
             <Select value={childId || "family"} onValueChange={(value) => setChildId(!value || value === "family" ? "" : value)}>
-              <SelectTrigger><SelectValue placeholder="Family-level document" /></SelectTrigger>
+              <SelectTrigger id={controlIds.child}><SelectValue placeholder="Family-level document" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="family">Family-level document</SelectItem>
                 {selectedFamily?.children.map((child) => (
@@ -114,21 +122,21 @@ export function SignatureRequestPanel({ families }: { families: SignatureRequest
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Document</Label>
-            <Input value={name} onChange={(event) => setName(event.target.value)} />
+            <Label htmlFor={controlIds.document}>Document</Label>
+            <Input id={controlIds.document} value={name} onChange={(event) => setName(event.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>Type</Label>
-            <Input value={type} onChange={(event) => setType(event.target.value)} />
+            <Label htmlFor={controlIds.type}>Type</Label>
+            <Input id={controlIds.type} value={type} onChange={(event) => setType(event.target.value)} />
           </div>
           <div className="space-y-1 md:col-span-2">
-            <Label>Recipient email</Label>
-            <Input value={email} onChange={(event) => setEmail(event.target.value)} inputMode="email" />
+            <Label htmlFor={controlIds.email}>Recipient email</Label>
+            <Input id={controlIds.email} value={email} onChange={(event) => setEmail(event.target.value)} type="email" inputMode="email" />
           </div>
         </div>
-        <Button disabled={isPending || !familyId || !name.trim()} onClick={submit}>
+        <Button disabled={isPending || !familyId || !name.trim()} onClick={submit} aria-busy={isPending}>
           <Send data-icon="inline-start" />
-          Send Signature Request
+          {isPending ? "Sending request..." : "Send Signature Request"}
         </Button>
       </CardContent>
     </Card>

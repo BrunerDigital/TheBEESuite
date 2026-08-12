@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -176,12 +177,12 @@ export function RequiredDocumentChecklistPanel({
   }
 
   return (
-    <Card className="glass-panel">
+    <Card aria-busy={isPending}>
       <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <CardTitle>
+          <CardTitle as="h2">
             <ClipboardCheck data-icon="inline-start" />
-            Required Checklist
+            Required checklist
           </CardTitle>
           <CardDescription>
             Required family, child, and staff documentation by visible school scope. Family and child requests email the saved parent addresses with the branded parent form.
@@ -194,7 +195,7 @@ export function RequiredDocumentChecklistPanel({
           onClick={createVisibleRequests}
         >
           <ListChecks data-icon="inline-start" />
-          Request visible action items
+          {isPending && pendingKey === "visible" ? "Requesting…" : "Request visible action items"}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -235,17 +236,24 @@ export function RequiredDocumentChecklistPanel({
             </div>
             <span className="text-muted-foreground">{completePercent}%</span>
           </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${completePercent}%` }} />
+          <div
+            className="mt-2 h-2 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-label="Overall checklist completion"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={completePercent}
+          >
+            <div className="h-full rounded-full bg-primary" style={{ width: `${completePercent}%` }} />
           </div>
         </div>
 
         <div className="flex flex-col gap-3 rounded-lg border bg-background/40 p-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <div className="text-xs font-medium text-muted-foreground">Scope</div>
+              <Label className="text-xs text-muted-foreground" htmlFor="checklist-scope-filter">Scope</Label>
               <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as ScopeFilter)}>
-                <SelectTrigger className="h-9 sm:w-[180px]">
+                <SelectTrigger id="checklist-scope-filter" className="w-full sm:w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -257,9 +265,9 @@ export function RequiredDocumentChecklistPanel({
               </Select>
             </div>
             <div className="space-y-1">
-              <div className="text-xs font-medium text-muted-foreground">Status</div>
+              <Label className="text-xs text-muted-foreground" htmlFor="checklist-status-filter">Status</Label>
               <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-                <SelectTrigger className="h-9 sm:w-[190px]">
+                <SelectTrigger id="checklist-status-filter" className="w-full sm:w-[190px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -301,7 +309,7 @@ export function RequiredDocumentChecklistPanel({
                   onClick={retryFailedRequests}
                 >
                   <RotateCw data-icon="inline-start" />
-                  Retry failed
+                  {isPending && pendingKey === "retry" ? "Retrying…" : "Retry failed"}
                 </Button>
               ) : null}
             </AlertDescription>
@@ -340,8 +348,15 @@ export function RequiredDocumentChecklistPanel({
                           <span>{group.summary.complete}/{group.summary.total}</span>
                           <span className="text-muted-foreground">{group.completePercent}%</span>
                         </div>
-                        <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
-                          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${group.completePercent}%` }} />
+                        <div
+                          className="mt-1 h-2 overflow-hidden rounded-full bg-muted"
+                          role="progressbar"
+                          aria-label={`${group.subjectName} checklist completion`}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={group.completePercent}
+                        >
+                          <div className="h-full rounded-full bg-primary" style={{ width: `${group.completePercent}%` }} />
                         </div>
                       </div>
                     </TableCell>
@@ -412,13 +427,15 @@ export function RequiredDocumentChecklistPanel({
                     <TableCell>
                       {requiresChecklistAction(item.status) ? (
                         <Button
+                          type="button"
                           size="sm"
                           variant="outline"
-                          disabled={isPending && (pendingKey === item.key || pendingKey === "visible" || pendingKey === "retry")}
+                          aria-label={`${item.scope === "staff" ? "Request" : "Request parent information for"} ${item.requirementLabel} for ${item.subjectName}`}
+                          disabled={isPending}
                           onClick={() => createRequest(item)}
                         >
                           <FilePlus2 data-icon="inline-start" />
-                          {item.scope === "staff" ? "Request" : "Request parent info"}
+                          {isPending && pendingKey === item.key ? "Requesting…" : item.scope === "staff" ? "Request" : "Request parent info"}
                         </Button>
                       ) : (
                         <span className="text-xs text-muted-foreground">No action</span>

@@ -42,7 +42,7 @@ export function SchoolReceiptDetailsCard({
   return (
     <Card className="glass-panel">
       <CardHeader>
-        <CardTitle>Receipt Details</CardTitle>
+        <CardTitle as="h2">Receipt Details</CardTitle>
         <CardDescription>School EIN printed on customer payment receipts and ledger reports.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

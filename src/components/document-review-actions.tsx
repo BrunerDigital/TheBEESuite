@@ -36,22 +36,22 @@ export function DocumentReviewActions({ documentId, status }: { documentId: stri
     <div className="min-w-52 space-y-2">
       {canReview ? (
         <>
-          <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Review note" />
+          <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Review note" aria-label="Document review note" />
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" disabled={isPending} onClick={() => review("APPROVED")}>
+            <Button type="button" size="sm" disabled={isPending} aria-busy={isPending} onClick={() => review("APPROVED")}>
               <CheckCircle2 data-icon="inline-start" />
-              Approve
+              {isPending ? "Saving…" : "Approve"}
             </Button>
-            <Button size="sm" variant="outline" disabled={isPending} onClick={() => review("REJECTED")}>
+            <Button type="button" size="sm" variant="outline" disabled={isPending} aria-busy={isPending} onClick={() => review("REJECTED")}>
               <XCircle data-icon="inline-start" />
-              Reject
+              {isPending ? "Saving…" : "Reject"}
             </Button>
           </div>
         </>
       ) : (
         <span className="text-xs text-muted-foreground">No review action</span>
       )}
-      {message ? <div className="text-xs text-muted-foreground">{message}</div> : null}
+      {message ? <div className="text-xs text-muted-foreground" role="status" aria-live="polite">{message}</div> : null}
     </div>
   );
 }

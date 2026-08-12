@@ -117,6 +117,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
   const [scheduledAt, setScheduledAt] = useState(firstCampaign?.scheduledAt ? zonedDateTimeLocalValue(firstCampaign.scheduledAt, timeZone) : "");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [pendingAction, setPendingAction] = useState<"save" | "schedule" | "send" | `sync:${string}` | null>(null);
   const [isPending, startTransition] = useTransition();
   const [adConnections, setAdConnections] = useState(data.marketingConnections);
   const connectedPlatforms = adConnections.filter((connection) => connection.configured);
@@ -193,6 +194,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
   }
 
   function save(nextStatus = status) {
+    setPendingAction("save");
     startTransition(async () => {
       setMessage("");
       setError("");
@@ -203,11 +205,14 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Campaign could not be saved.");
+      } finally {
+        setPendingAction(null);
       }
     });
   }
 
   function sendOrSchedule(mode: "send" | "schedule") {
+    setPendingAction(mode);
     startTransition(async () => {
       setMessage("");
       setError("");
@@ -230,62 +235,69 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Campaign could not be queued.");
+      } finally {
+        setPendingAction(null);
       }
     });
   }
 
   function syncAdAnalytics(provider: string) {
+    setPendingAction(`sync:${provider}`);
     startTransition(async () => {
-      setMessage("");
-      setError("");
-      const response = await fetch("/api/marketing/ad-analytics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider }),
-      });
-      const json = await response.json().catch(() => null) as {
-        error?: string;
-        analytics?: {
-          spend: number;
-          impressions: number;
-          clicks: number;
-          leads: number;
-          campaigns?: unknown[];
-          syncedAt?: string;
-        };
-      } | null;
-      if (!response.ok || !json?.analytics) {
-        setError(json?.error || "Advertising analytics could not be synced.");
-        return;
+      try {
+        setMessage("");
+        setError("");
+        const response = await fetch("/api/marketing/ad-analytics", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider }),
+        });
+        const json = await response.json().catch(() => null) as {
+          error?: string;
+          analytics?: {
+            spend: number;
+            impressions: number;
+            clicks: number;
+            leads: number;
+            campaigns?: unknown[];
+            syncedAt?: string;
+          };
+        } | null;
+        if (!response.ok || !json?.analytics) {
+          setError(json?.error || "Advertising analytics could not be synced.");
+          return;
+        }
+        const analytics = json.analytics;
+        setAdConnections((current) => current.map((connection) => connection.provider === provider
+          ? {
+              ...connection,
+              analytics: {
+                spend: analytics.spend,
+                impressions: analytics.impressions,
+                clicks: analytics.clicks,
+                leads: analytics.leads,
+                campaignCount: analytics.campaigns?.length ?? 0,
+              },
+              lastSyncAt: analytics.syncedAt ?? new Date().toISOString(),
+            }
+          : connection));
+        setMessage("Advertising analytics refreshed.");
+      } finally {
+        setPendingAction(null);
       }
-      const analytics = json.analytics;
-      setAdConnections((current) => current.map((connection) => connection.provider === provider
-        ? {
-            ...connection,
-            analytics: {
-              spend: analytics.spend,
-              impressions: analytics.impressions,
-              clicks: analytics.clicks,
-              leads: analytics.leads,
-              campaignCount: analytics.campaigns?.length ?? 0,
-            },
-            lastSyncAt: analytics.syncedAt ?? new Date().toISOString(),
-          }
-        : connection));
-      setMessage("Advertising analytics refreshed.");
     });
   }
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-2xl border bg-card/80 shadow-xl shadow-black/10">
-        <div className="flex flex-col gap-4 border-b bg-gradient-to-r from-primary/10 via-card to-card p-5 lg:flex-row lg:items-center lg:justify-between">
+      <section className="overflow-hidden rounded-2xl border bg-card">
+        <div className="flex flex-col gap-4 border-b p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-lg font-semibold"><BarChart3 className="size-5 text-primary" /> Cross-platform campaign analytics</div>
+            <h2 className="flex items-center gap-2 text-lg font-semibold"><BarChart3 aria-hidden="true" className="size-5 text-primary" /> Cross-platform campaign analytics</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Monitor connected advertising channels, compare results, and keep enrollment attribution in one director workspace.</p>
           </div>
           <Button variant="outline" render={<Link href="/billing-settings?view=integrations&provider=meta_ads" />}>
-            <Link2 data-icon="inline-start" /> Manage ad accounts
+            <Link2 aria-hidden="true" data-icon="inline-start" /> Manage ad accounts
           </Button>
         </div>
         <div className="grid gap-px bg-border md:grid-cols-4">
@@ -296,7 +308,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
             ["Leads", compactNumber(campaignTotals.leads)],
           ].map(([label, value]) => (
             <div key={label} className="bg-card px-5 py-4">
-              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
+              <div className="text-sm font-medium text-muted-foreground">{label}</div>
               <div className="mt-2 text-2xl font-semibold">{value}</div>
             </div>
           ))}
@@ -304,7 +316,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
       </section>
 
       {!connectedPlatforms.length ? (
-        <section className="rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card p-6">
+        <section className="rounded-2xl border bg-card p-6">
           <div className="max-w-3xl">
             <h2 className="text-xl font-semibold">Connect your advertising channels</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">No ad account is connected yet. Choose a platform to open its exact configuration in Settings & Setup. Campaign editing and Bee Suite email reporting remain available while you connect external channels.</p>
@@ -313,7 +325,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
             {adConnections.map((connection) => (
               <Button key={connection.provider} variant="outline" className="h-auto justify-between py-3" render={<Link href={`/billing-settings?view=integrations&provider=${connection.provider}`} />}>
                 <span className="text-left"><span className="block font-medium">{connection.name}</span><span className="block text-xs text-muted-foreground">Configure account</span></span>
-                <ArrowRight className="size-4" />
+                <ArrowRight aria-hidden="true" className="size-4" />
               </Button>
             ))}
           </div>
@@ -325,7 +337,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
           <div key={connection.provider} className="rounded-xl border bg-card/70 p-4">
             <div className="flex items-start justify-between gap-2">
               <div className="font-medium">{connection.name}</div>
-              {connection.configured ? <CheckCircle2 className="size-4 text-emerald-500" /> : <Link2 className="size-4 text-muted-foreground" />}
+              {connection.configured ? <CheckCircle2 aria-hidden="true" className="size-4 text-emerald-500" /> : <Link2 aria-hidden="true" className="size-4 text-muted-foreground" />}
             </div>
             <div className="mt-1 min-h-9 text-xs leading-4 text-muted-foreground">{connection.accountLabel || connection.purpose}</div>
             {connection.configured ? (
@@ -340,11 +352,27 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
               <Badge variant={connection.configured ? "default" : "outline"}>{connection.configured ? "Connected" : "Setup needed"}</Badge>
               <div className="flex items-center gap-2">
                 {connection.configured ? (
-                  <button type="button" disabled={isPending} onClick={() => syncAdAnalytics(connection.provider)} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-50">
-                    <RefreshCw className="size-3" /> Sync
-                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={isPending}
+                    aria-busy={pendingAction === `sync:${connection.provider}`}
+                    aria-label={`${pendingAction === `sync:${connection.provider}` ? "Syncing" : "Sync"} ${connection.name} advertising analytics`}
+                    onClick={() => syncAdAnalytics(connection.provider)}
+                    className="px-3"
+                  >
+                    <RefreshCw aria-hidden="true" data-icon="inline-start" className={pendingAction === `sync:${connection.provider}` ? "animate-spin motion-reduce:animate-none" : ""} />
+                    {pendingAction === `sync:${connection.provider}` ? "Syncing…" : "Sync"}
+                  </Button>
                 ) : null}
-                <Link className="text-xs font-medium text-primary hover:underline" href={`/billing-settings?view=integrations&provider=${connection.provider}`}>{connection.configured ? "Manage" : "Connect"}</Link>
+                <Button
+                  variant="ghost"
+                  aria-label={`${connection.configured ? "Manage" : "Connect"} ${connection.name} advertising account`}
+                  className="px-3"
+                  render={<Link href={`/billing-settings?view=integrations&provider=${connection.provider}`} />}
+                >
+                  {connection.configured ? "Manage" : "Connect"}
+                </Button>
               </div>
             </div>
           </div>
@@ -352,7 +380,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
       </div>
 
       <Tabs defaultValue="editor" className="gap-4">
-        <TabsList>
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:inline-flex sm:h-10 sm:w-fit">
           <TabsTrigger value="editor">Editor</TabsTrigger>
           <TabsTrigger value="social">Social Publisher</TabsTrigger>
           <TabsTrigger value="engagement">Inbox & Reviews</TabsTrigger>
@@ -366,17 +394,17 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
           <SocialEngagementHub centers={data.engagementCenters} initialCenterId={data.initialEngagementCenterId} />
         </TabsContent>
         <TabsContent value="editor" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <Card className="glass-panel">
+          <Card>
             <CardHeader>
-              <CardTitle>Campaign Editor</CardTitle>
+              <CardTitle as="h2">Campaign editor</CardTitle>
               <CardDescription>Draft, schedule, and send enrollment marketing campaigns with saved templates.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {message ? <div className="rounded-lg border bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{message}</div> : null}
-              {error ? <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
+              {message ? <div role="status" className="rounded-lg border bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{message}</div> : null}
+              {error ? <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1">
-                  <Label>Saved Campaign</Label>
+                  <Label htmlFor="campaign-saved-campaign">Saved campaign</Label>
                   <Select value={selectedId || "new"} onValueChange={(value) => {
                     if (value === "new") {
                       setSelectedId("");
@@ -387,7 +415,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                     const campaign = data.campaigns.find((item) => item.id === value);
                     if (campaign) loadCampaign(campaign);
                   }}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="campaign-saved-campaign" className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="new">New campaign</SelectItem>
                       {data.campaigns.map((campaign) => (
@@ -397,7 +425,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Template</Label>
+                  <Label htmlFor="campaign-template">Template</Label>
                   <Select value={templateKey || "custom"} onValueChange={(value) => {
                     if (!value) return;
                     if (value === "custom") {
@@ -406,7 +434,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                     }
                     loadTemplate(value);
                   }}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="campaign-template" className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="custom">Custom campaign</SelectItem>
                       {campaignTemplates.map((template) => (
@@ -416,13 +444,13 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Name</Label>
-                  <Input value={name} onChange={(event) => setName(event.target.value)} />
+                  <Label htmlFor="campaign-name">Name</Label>
+                  <Input id="campaign-name" value={name} onChange={(event) => setName(event.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Type</Label>
+                  <Label htmlFor="campaign-type">Type</Label>
                   <Select value={type} onValueChange={(value) => value && setType(value)}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="campaign-type" className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="email">Email</SelectItem>
                       <SelectItem value="newsletter">Newsletter</SelectItem>
@@ -433,21 +461,21 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                   </Select>
                 </div>
                 <div className="space-y-1 md:col-span-2">
-                  <Label>Audience</Label>
-                  <Input value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Open inquiries, enrolled families, waitlist, classroom, tag" />
+                  <Label htmlFor="campaign-audience">Audience</Label>
+                  <Input id="campaign-audience" value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Open inquiries, enrolled families, waitlist, classroom, tag" />
                 </div>
                 <div className="space-y-1 md:col-span-2">
-                  <Label>Subject</Label>
-                  <Input value={subject} onChange={(event) => setSubject(event.target.value)} />
+                  <Label htmlFor="campaign-subject">Subject</Label>
+                  <Input id="campaign-subject" value={subject} onChange={(event) => setSubject(event.target.value)} />
                 </div>
                 <div className="space-y-1 md:col-span-2">
-                  <Label>Body</Label>
-                  <Textarea className="min-h-56" value={body} onChange={(event) => setBody(event.target.value)} />
+                  <Label htmlFor="campaign-body">Body</Label>
+                  <Textarea id="campaign-body" className="min-h-56" value={body} onChange={(event) => setBody(event.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Status</Label>
+                  <Label htmlFor="campaign-status">Status</Label>
                   <Select value={status} onValueChange={(value) => value && setStatus(value)}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="campaign-status" className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="draft">Draft</SelectItem>
                       <SelectItem value="active">Active</SelectItem>
@@ -458,29 +486,29 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Schedule</Label>
-                  <Input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} />
+                  <Label htmlFor="campaign-schedule">Schedule</Label>
+                  <Input id="campaign-schedule" type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} />
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button disabled={isPending || !name} onClick={() => save()}>
-                  <Save data-icon="inline-start" />
-                  Save Draft
+                <Button disabled={isPending || !name} aria-busy={pendingAction === "save"} onClick={() => save()}>
+                  <Save aria-hidden="true" data-icon="inline-start" />
+                  {pendingAction === "save" ? "Saving draft…" : "Save draft"}
                 </Button>
-                <Button variant="outline" disabled={isPending || !body || !scheduledAt} onClick={() => sendOrSchedule("schedule")}>
-                  <CalendarClock data-icon="inline-start" />
-                  Schedule Send
+                <Button variant="outline" disabled={isPending || !body || !scheduledAt} aria-busy={pendingAction === "schedule"} onClick={() => sendOrSchedule("schedule")}>
+                  <CalendarClock aria-hidden="true" data-icon="inline-start" />
+                  {pendingAction === "schedule" ? "Scheduling…" : "Schedule send"}
                 </Button>
-                <Button variant="outline" disabled={isPending || !body} onClick={() => sendOrSchedule("send")}>
-                  <Send data-icon="inline-start" />
-                  Send Now
+                <Button variant="outline" disabled={isPending || !body} aria-busy={pendingAction === "send"} onClick={() => sendOrSchedule("send")}>
+                  <Send aria-hidden="true" data-icon="inline-start" />
+                  {pendingAction === "send" ? "Sending…" : "Send now"}
                 </Button>
               </div>
             </CardContent>
           </Card>
-          <Card className="glass-panel">
+          <Card>
             <CardHeader>
-              <CardTitle>Send Readiness</CardTitle>
+              <CardTitle as="h2">Send readiness</CardTitle>
               <CardDescription>Saved content, schedule, and delivery state for the selected campaign.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
@@ -500,8 +528,8 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
               </div>
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="mb-2 flex items-center gap-2 font-medium">
-                  <LineChart className="size-4" />
-                  Last Delivery
+                  <LineChart aria-hidden="true" className="size-4" />
+                  Last delivery
                 </div>
                 <div className="space-y-1 text-muted-foreground">
                   <div>Sent: {formatDate(selectedCampaign?.sentAt ?? null, timeZone)}</div>
@@ -515,13 +543,13 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
         <TabsContent value="templates">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {campaignTemplates.map((template) => (
-              <Card key={template.key} className="glass-panel">
+              <Card key={template.key}>
                 <CardHeader>
                   <Badge className="w-fit" variant="outline">
                     <Library data-icon="inline-start" />
                     {template.type}
                   </Badge>
-                  <CardTitle>{template.name}</CardTitle>
+                    <CardTitle as="h2">{template.name}</CardTitle>
                   <CardDescription>{template.audienceLabel}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -529,9 +557,9 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                     <div className="font-medium">{template.subject}</div>
                     <div className="mt-2 line-clamp-5 whitespace-pre-line text-muted-foreground">{template.body}</div>
                   </div>
-                  <Button variant="outline" onClick={() => loadTemplate(template.key)}>
-                    <CopyCheck data-icon="inline-start" />
-                    Use Template
+                  <Button variant="outline" aria-label={`Use ${template.name} template`} onClick={() => loadTemplate(template.key)}>
+                    <CopyCheck aria-hidden="true" data-icon="inline-start" />
+                    Use template
                   </Button>
                 </CardContent>
               </Card>
@@ -539,9 +567,9 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
           </div>
         </TabsContent>
         <TabsContent value="reports">
-          <Card className="glass-panel">
+          <Card>
             <CardHeader>
-              <CardTitle>Campaign Send Reporting</CardTitle>
+              <CardTitle as="h2">Campaign send reporting</CardTitle>
               <CardDescription>Schedule status, delivery attempts, and last-send metrics.</CardDescription>
             </CardHeader>
             <CardContent>

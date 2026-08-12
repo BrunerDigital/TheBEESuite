@@ -1,0 +1,494 @@
+/*
+ * Product UI quality layer
+ *
+ * This file is intentionally imported after globals.css. It provides one
+ * restrained, application-first presentation across the legacy screen set
+ * while the older theme rules are migrated out in smaller, testable batches.
+ */
+
+:root {
+  --bee-surface-muted: color-mix(in oklch, var(--background) 72%, var(--foreground) 2%);
+  --bee-surface-raised: var(--card);
+  --bee-border-strong: color-mix(in oklch, var(--border) 78%, var(--foreground) 22%);
+  --bee-shadow-sm: 0 1px 2px color-mix(in oklch, var(--foreground) 8%, transparent);
+  --bee-shadow-md: 0 8px 24px color-mix(in oklch, var(--foreground) 8%, transparent);
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    background: var(--background);
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--background);
+    background-image: none;
+    background-attachment: scroll;
+  }
+
+  :where(a, button, input, select, textarea, [role="button"]) {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: color-mix(in oklch, var(--primary) 14%, transparent);
+  }
+
+  :where(h1, h2, h3, h4, h5, h6) {
+    scroll-margin-top: 6rem;
+    text-wrap: balance;
+  }
+
+  :where(p, li, dd, [data-slot="card-description"]) {
+    text-wrap: pretty;
+  }
+}
+
+@layer utilities {
+  /* Application frame */
+  .bee-app-frame,
+  .bee-app-frame[data-honeyglass="true"],
+  .bee-app-frame[data-honeyglass="false"] {
+    background: var(--background);
+    background-image: none;
+  }
+
+  .bee-app-frame .dashboard-workspace,
+  .dashboard-workspace {
+    background-color: var(--background);
+    background-image: none;
+  }
+
+  .app-sidebar {
+    border-color: var(--border);
+    background: var(--sidebar);
+    background-image: none;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .app-sidebar::after,
+  .app-header::after,
+  .dashboard-workspace > div > section:first-child::after {
+    display: none;
+  }
+
+  .app-header {
+    border-color: var(--border);
+    background: color-mix(in oklch, var(--background) 94%, var(--card) 6%);
+    background-image: none;
+    box-shadow: 0 1px 0 var(--border);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .app-global-search {
+    border-color: var(--input);
+    background: var(--background);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .app-global-search:focus-visible {
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 18%, transparent);
+  }
+
+  /* Shared surfaces */
+  .glass-panel,
+  .honeyglass-hero,
+  .kiosk-halo-header,
+  .kiosk-halo-panel,
+  .auth-halo-card {
+    border: 1px solid var(--border);
+    background: var(--bee-surface-raised);
+    background-image: none;
+    box-shadow: var(--bee-shadow-sm);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .glass-panel:hover {
+    border-color: var(--bee-border-strong);
+    background: var(--bee-surface-raised);
+    background-image: none;
+    box-shadow: var(--bee-shadow-sm);
+    transform: none;
+  }
+
+  .bee-app-frame [data-slot="card"] {
+    border-color: var(--border);
+    box-shadow: none;
+  }
+
+  .bee-app-frame .dashboard-workspace .shadow-2xl,
+  .bee-app-frame .dashboard-workspace .shadow-3xl {
+    box-shadow: var(--bee-shadow-sm);
+  }
+
+  .bee-app-frame :is(table, [data-slot="table"]) {
+    background: var(--card);
+  }
+
+  .bee-app-frame table thead,
+  .dashboard-workspace table thead {
+    background: var(--bee-surface-muted);
+  }
+
+  .dashboard-workspace table tbody tr:hover {
+    background-color: color-mix(in oklch, var(--primary) 5%, var(--background));
+  }
+
+  .bee-app-frame :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
+    border-color: var(--input);
+    background: var(--background);
+    box-shadow: none;
+  }
+
+  .bee-app-frame [data-slot="button"][data-variant="outline"] {
+    border-color: var(--border);
+    background: var(--background);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .bee-app-frame [data-slot="button"][data-variant="outline"]:hover {
+    border-color: var(--bee-border-strong);
+    background: var(--muted);
+  }
+
+  :is(
+    [data-slot="dialog-content"],
+    [data-slot="sheet-content"],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="select-content"],
+    [data-slot="popover-content"]
+  ) {
+    border-color: var(--border);
+    background: var(--popover);
+    background-image: none;
+    box-shadow: var(--bee-shadow-md);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .bee-app-frame .dashboard-workspace > div > section:first-child,
+  .dashboard-workspace > div > section:first-child {
+    border-color: var(--border);
+    background: var(--card);
+    background-image: none !important;
+    box-shadow: var(--bee-shadow-sm);
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .dashboard-workspace [data-slot="card-header"].border-b {
+    background: transparent;
+    background-image: none;
+  }
+
+  .bee-app-frame nav:is(
+    [aria-label="Primary navigation"],
+    [aria-label="Family portal navigation"],
+    [aria-label="Role quick navigation"]
+  ) {
+    border-color: var(--border);
+    background: var(--background);
+    box-shadow: 0 -1px 0 var(--border);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* Former Honeyglass elements now use conventional analytics geometry. */
+  .hive-texture {
+    display: none;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeyglass-hero,
+  .honeyglass-hero {
+    border-color: var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--card);
+    background-image: none;
+    box-shadow: var(--bee-shadow-sm);
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-cluster,
+  .honeycomb-kpi-cluster {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    gap: 0.875rem;
+    padding: 0;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item,
+  .honeycomb-kpi-item {
+    position: relative;
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    transform: none;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card,
+  .honeycomb-kpi-card {
+    min-height: 9.5rem;
+    justify-content: flex-start;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    color: var(--foreground);
+    background: var(--card);
+    background-image: none;
+    box-shadow: none;
+    clip-path: none;
+    filter: none;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-header"],
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-content"] {
+    align-items: flex-start;
+    padding-inline: 1rem;
+    text-align: left;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-header"] {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-description"],
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card [data-slot="card-content"] > p {
+    max-width: none;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-controls,
+  .honeycomb-kpi-controls {
+    position: static;
+    margin: 0 0 0.5rem;
+    padding: 0;
+    transform: none;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    opacity: 1;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-honeycomb,
+  .readiness-honeycomb {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    padding: 0;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex,
+  .readiness-hex {
+    display: flex;
+    width: auto;
+    min-width: 0;
+    aspect-ratio: auto;
+    align-items: center;
+    padding: 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    color: var(--foreground);
+    background: var(--background);
+    box-shadow: none;
+    clip-path: none;
+    filter: none;
+    transform: none;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex:nth-child(even) {
+    transform: none;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex__inner,
+  .readiness-hex__inner {
+    display: grid;
+    max-width: none;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0.15rem 0.5rem;
+    text-align: left;
+  }
+
+  .readiness-hex__inner > svg {
+    grid-row: 1 / span 2;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex__inner strong {
+    font-size: 1.125rem;
+    line-height: 1.2;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .readiness-hex__inner span {
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeyline,
+  .honeyline {
+    height: 0.375rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--muted);
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeyline > span,
+  .honeyline > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--primary);
+    box-shadow: none;
+    transition: width 200ms ease;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .nectar-tabs [data-slot="tabs-trigger"][data-active] {
+    border-color: var(--border);
+    color: var(--foreground);
+    background: var(--background);
+    background-image: none;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .dashboard-ai-brief,
+  .dashboard-ai-brief {
+    border-color: var(--border);
+    background: var(--bee-surface-muted);
+    background-image: none;
+    box-shadow: none;
+  }
+
+  /* Authentication and kiosk surfaces */
+  .auth-halo-shell,
+  .kiosk-halo-shell {
+    color: var(--foreground);
+    background: var(--background);
+    background-image: none;
+    background-attachment: scroll;
+  }
+
+  .auth-halo-story {
+    border-color: color-mix(in oklch, white 12%, transparent);
+    color: white;
+    background: oklch(0.18 0.018 250);
+    background-image: none;
+    box-shadow: none;
+  }
+
+  .auth-halo-card :is(.text-slate-950, [data-slot="card-title"]) {
+    color: var(--foreground);
+  }
+
+  .auth-halo-card :is(.text-slate-600, [data-slot="card-description"]) {
+    color: var(--muted-foreground);
+  }
+
+  .auth-halo-card .bg-slate-50 {
+    border-color: var(--border);
+    color: var(--muted-foreground);
+    background: var(--bee-surface-muted);
+  }
+
+  /* Loading is calm and keeps the user's place. */
+  .bee-route-loader {
+    min-height: 100svh;
+    color: var(--foreground);
+    background: var(--background);
+    background-image: none;
+  }
+
+  .bee-route-loader::before,
+  .bee-route-loader__glow,
+  .bee-route-loader__trail,
+  .bee-route-loader__flight::before,
+  .bee-route-loader__flight::after {
+    display: none;
+  }
+
+  .bee-route-loader__content {
+    gap: 1rem;
+    padding: 1.5rem;
+  }
+
+  .bee-route-loader__flight,
+  .bee-route-loader__orbit {
+    width: auto;
+    aspect-ratio: auto;
+  }
+
+  .bee-route-loader__bee {
+    animation: none;
+    will-change: auto;
+  }
+
+  .bee-route-loader__progress {
+    width: min(10rem, 56vw);
+    height: 0.25rem;
+    background: var(--muted);
+  }
+
+  .bee-route-loader__progress > span {
+    width: 40%;
+    background: var(--primary);
+    background-image: none;
+    animation: bee-product-progress 1.2s ease-in-out infinite;
+  }
+
+  @keyframes bee-product-progress {
+    from {
+      transform: translateX(-120%);
+    }
+    to {
+      transform: translateX(350%);
+    }
+  }
+
+  @media (max-width: 47.99rem) {
+    .readiness-honeycomb,
+    .bee-app-frame[data-honeyglass="true"] .readiness-honeycomb {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .honeycomb-kpi-card,
+    .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card {
+      min-height: auto;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .glass-panel,
+    .honeyline > span,
+    .bee-route-loader__progress > span {
+      transition: none;
+      animation: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .glass-panel,
+    .honeyglass-hero,
+    .readiness-hex,
+    .honeycomb-kpi-card,
+    .app-sidebar,
+    .app-header {
+      border: 1px solid CanvasText;
+      color: CanvasText;
+      background: Canvas;
+      box-shadow: none;
+    }
+  }
+}

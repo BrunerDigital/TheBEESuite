@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Globe2, Image as ImageIcon, KeyRound, Save, ShieldAlert, SlidersHorizontal, Sparkles } from "lucide-react";
+import { AlertCircle, CheckCircle2, Globe2, Image as ImageIcon, KeyRound, Save, ShieldAlert, SlidersHorizontal } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -164,6 +164,8 @@ function emptyCustomization(): TenantCustomizationControl {
 
 export function TenantControlsPanel({ canManage, customizations, assets, brands, ownerGroups, centers, supportRequests }: Props) {
   const router = useRouter();
+  const controlIdPrefix = useId();
+  const controlId = (name: string) => `${controlIdPrefix}-${name}`;
   const [tab, setTab] = useState<"branding" | "features" | "domain" | "assets" | "support">("branding");
   const [selectedCustomizationId, setSelectedCustomizationId] = useState(customizations[0]?.id ?? "new");
   const selectedCustomization = useMemo(
@@ -238,7 +240,7 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
   }
 
   const tabs = [
-    ["branding", Sparkles, "Branding"],
+    ["branding", ImageIcon, "Branding"],
     ["features", SlidersHorizontal, "Features"],
     ["domain", Globe2, "Domain"],
     ["assets", ImageIcon, "Assets"],
@@ -250,7 +252,7 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
       <CardHeader>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <CardTitle>Tenant Controls</CardTitle>
+            <CardTitle as="h2">Tenant Controls</CardTitle>
             <CardDescription>Configure feature availability, branding layers, domain verification, asset references, and audited support-access requests.</CardDescription>
           </div>
           <Badge variant={canManage ? "default" : "outline"}>
@@ -262,7 +264,7 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
       <CardContent className="space-y-5">
         <div className="flex flex-wrap gap-2">
           {tabs.map(([value, Icon, label]) => (
-            <Button key={value} type="button" variant={tab === value ? "default" : "outline"} size="sm" onClick={() => setTab(value)}>
+            <Button key={value} type="button" variant={tab === value ? "default" : "outline"} size="sm" aria-pressed={tab === value} onClick={() => setTab(value)}>
               <Icon data-icon="inline-start" />
               {label}
             </Button>
@@ -284,9 +286,9 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
         ) : null}
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="space-y-1">
-            <Label>Customization layer</Label>
+            <Label htmlFor={controlId("customization-layer")}>Customization layer</Label>
             <Select value={selectedCustomizationId} onValueChange={chooseCustomization}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id={controlId("customization-layer")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="new">New customization layer</SelectItem>
                 {customizations.map((customization) => (
@@ -296,7 +298,7 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Selected scope</Label>
+            <div className="text-sm font-medium">Selected scope</div>
             <div className="flex h-8 items-center gap-2 rounded-lg border bg-background px-2 text-sm">
               <Badge variant="outline">{branding.scopeType}</Badge>
               <span className="truncate">{branding.containerLabel}</span>
@@ -308,9 +310,9 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-4">
               <div className="space-y-1">
-                <Label>Scope</Label>
+                <Label htmlFor={controlId("branding-scope")}>Scope</Label>
                 <Select value={branding.scopeType} onValueChange={(value) => value && setBranding((current) => ({ ...current, scopeType: value }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={controlId("branding-scope")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="TENANT">Tenant</SelectItem>
                     <SelectItem value="BRAND">Brand</SelectItem>
@@ -320,9 +322,9 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Brand</Label>
+                <Label htmlFor={controlId("branding-brand")}>Brand</Label>
                 <Select value={branding.brandId ?? brands[0]?.id ?? ""} onValueChange={(value) => setBranding((current) => ({ ...current, brandId: value ?? null }))}>
-                  <SelectTrigger><SelectValue placeholder="Choose brand" /></SelectTrigger>
+                  <SelectTrigger id={controlId("branding-brand")}><SelectValue placeholder="Choose brand" /></SelectTrigger>
                   <SelectContent>
                     {brands.map((brand) => <SelectItem key={brand.id} value={brand.id}>{brand.label}</SelectItem>)}
                   </SelectContent>
@@ -330,9 +332,9 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
               </div>
               {branding.scopeType === "OWNER_GROUP" ? (
                 <div className="space-y-1">
-                  <Label>Owner group</Label>
+                  <Label htmlFor={controlId("branding-owner-group")}>Owner group</Label>
                   <Select value={branding.ownerGroupId ?? ""} onValueChange={(value) => setBranding((current) => ({ ...current, ownerGroupId: value ?? null }))}>
-                    <SelectTrigger><SelectValue placeholder="Choose owner" /></SelectTrigger>
+                    <SelectTrigger id={controlId("branding-owner-group")}><SelectValue placeholder="Choose owner" /></SelectTrigger>
                     <SelectContent>
                       {ownerGroups.map((group) => <SelectItem key={group.id} value={group.id}>{group.label}</SelectItem>)}
                     </SelectContent>
@@ -341,9 +343,9 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
               ) : null}
               {branding.scopeType === "CENTER" ? (
                 <div className="space-y-1">
-                  <Label>School</Label>
+                  <Label htmlFor={controlId("branding-school")}>School</Label>
                   <Select value={branding.centerId ?? ""} onValueChange={(value) => setBranding((current) => ({ ...current, centerId: value ?? null }))}>
-                    <SelectTrigger><SelectValue placeholder="Choose school" /></SelectTrigger>
+                    <SelectTrigger id={controlId("branding-school")}><SelectValue placeholder="Choose school" /></SelectTrigger>
                     <SelectContent>
                       {centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.label}</SelectItem>)}
                     </SelectContent>
@@ -351,9 +353,9 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
                 </div>
               ) : null}
               <div className="space-y-1">
-                <Label>Theme</Label>
+                <Label htmlFor={controlId("branding-theme")}>Theme</Label>
                 <Select value={branding.themeMode} onValueChange={(value) => value && setBranding((current) => ({ ...current, themeMode: value }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={controlId("branding-theme")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="dark">Dark</SelectItem>
                     <SelectItem value="light">Light</SelectItem>
@@ -362,40 +364,40 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
                 </Select>
               </div>
               <div className="space-y-1 md:col-span-2">
-                <Label>Brand name</Label>
-                <Input value={branding.brandName} onChange={(event) => setBranding((current) => ({ ...current, brandName: event.target.value }))} />
+                <Label htmlFor={controlId("branding-name")}>Brand name</Label>
+                <Input id={controlId("branding-name")} value={branding.brandName} onChange={(event) => setBranding((current) => ({ ...current, brandName: event.target.value }))} />
               </div>
               <div className="space-y-1">
-                <Label>Primary color</Label>
-                <Input value={branding.primaryColor} onChange={(event) => setBranding((current) => ({ ...current, primaryColor: event.target.value }))} />
+                <Label htmlFor={controlId("branding-primary-color")}>Primary color</Label>
+                <Input id={controlId("branding-primary-color")} value={branding.primaryColor} onChange={(event) => setBranding((current) => ({ ...current, primaryColor: event.target.value }))} />
               </div>
               <div className="space-y-1">
-                <Label>Accent color</Label>
-                <Input value={branding.accentColor} onChange={(event) => setBranding((current) => ({ ...current, accentColor: event.target.value }))} />
+                <Label htmlFor={controlId("branding-accent-color")}>Accent color</Label>
+                <Input id={controlId("branding-accent-color")} value={branding.accentColor} onChange={(event) => setBranding((current) => ({ ...current, accentColor: event.target.value }))} />
               </div>
               <div className="space-y-1">
-                <Label>Parent portal name</Label>
-                <Input value={branding.parentPortalName ?? ""} onChange={(event) => setBranding((current) => ({ ...current, parentPortalName: event.target.value }))} />
+                <Label htmlFor={controlId("branding-parent-portal-name")}>Parent portal name</Label>
+                <Input id={controlId("branding-parent-portal-name")} value={branding.parentPortalName ?? ""} onChange={(event) => setBranding((current) => ({ ...current, parentPortalName: event.target.value }))} />
               </div>
               <div className="space-y-1">
-                <Label>Login title</Label>
-                <Input value={branding.loginScreenTitle ?? ""} onChange={(event) => setBranding((current) => ({ ...current, loginScreenTitle: event.target.value }))} />
+                <Label htmlFor={controlId("branding-login-title")}>Login title</Label>
+                <Input id={controlId("branding-login-title")} value={branding.loginScreenTitle ?? ""} onChange={(event) => setBranding((current) => ({ ...current, loginScreenTitle: event.target.value }))} />
               </div>
               <div className="space-y-1 md:col-span-2">
-                <Label>Email sender</Label>
-                <Input value={branding.emailSenderPlaceholder ?? ""} onChange={(event) => setBranding((current) => ({ ...current, emailSenderPlaceholder: event.target.value }))} placeholder="The BEE Suite <hello@example.com>" />
+                <Label htmlFor={controlId("branding-email-sender")}>Email sender</Label>
+                <Input id={controlId("branding-email-sender")} value={branding.emailSenderPlaceholder ?? ""} onChange={(event) => setBranding((current) => ({ ...current, emailSenderPlaceholder: event.target.value }))} placeholder="The BEE Suite <hello@example.com>" />
               </div>
               <div className="space-y-1 md:col-span-2">
-                <Label>Terms URL</Label>
-                <Input value={branding.termsUrl ?? ""} onChange={(event) => setBranding((current) => ({ ...current, termsUrl: event.target.value }))} />
+                <Label htmlFor={controlId("branding-terms-url")}>Terms URL</Label>
+                <Input id={controlId("branding-terms-url")} value={branding.termsUrl ?? ""} onChange={(event) => setBranding((current) => ({ ...current, termsUrl: event.target.value }))} />
               </div>
               <div className="space-y-1 md:col-span-2">
-                <Label>Privacy URL</Label>
-                <Input value={branding.privacyUrl ?? ""} onChange={(event) => setBranding((current) => ({ ...current, privacyUrl: event.target.value }))} />
+                <Label htmlFor={controlId("branding-privacy-url")}>Privacy URL</Label>
+                <Input id={controlId("branding-privacy-url")} value={branding.privacyUrl ?? ""} onChange={(event) => setBranding((current) => ({ ...current, privacyUrl: event.target.value }))} />
               </div>
               <div className="space-y-1 md:col-span-4">
-                <Label>Legal footer</Label>
-                <Textarea value={branding.legalFooterText ?? ""} onChange={(event) => setBranding((current) => ({ ...current, legalFooterText: event.target.value }))} />
+                <Label htmlFor={controlId("branding-legal-footer")}>Legal footer</Label>
+                <Textarea id={controlId("branding-legal-footer")} value={branding.legalFooterText ?? ""} onChange={(event) => setBranding((current) => ({ ...current, legalFooterText: event.target.value }))} />
               </div>
             </div>
             <Button disabled={!canManage || isPending} onClick={() => post({ action: "saveCustomization", ...branding, id: branding.id || undefined }, "Brand customization saved.")}>
@@ -414,14 +416,14 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
                   <div key={key} className="rounded-lg border bg-background/40 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="font-medium">{label}</div>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+                        <div id={controlId(`feature-${key}-name`)} className="font-medium">{label}</div>
+                        <p id={controlId(`feature-${key}-detail`)} className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
                       </div>
-                      <Switch checked={row.enabled} onCheckedChange={(checked) => setFeatureFlags((current) => ({ ...current, [key]: { ...row, enabled: checked, rollout: checked ? row.rollout === "disabled" ? "pilot" : row.rollout : "disabled" } }))} />
+                      <Switch aria-label={`${label}: enabled`} aria-describedby={controlId(`feature-${key}-detail`)} checked={row.enabled} onCheckedChange={(checked) => setFeatureFlags((current) => ({ ...current, [key]: { ...row, enabled: checked, rollout: checked ? row.rollout === "disabled" ? "pilot" : row.rollout : "disabled" } }))} />
                     </div>
                     <div className="mt-3 grid gap-2">
                       <Select value={row.rollout} onValueChange={(value) => value && setFeatureFlags((current) => ({ ...current, [key]: { ...row, rollout: value } }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger id={controlId(`feature-${key}-rollout`)} aria-label={`${label} rollout`}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="disabled">Disabled</SelectItem>
                           <SelectItem value="pilot">Limited rollout</SelectItem>
@@ -429,7 +431,7 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
                           <SelectItem value="all">All schools</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Input value={row.note} onChange={(event) => setFeatureFlags((current) => ({ ...current, [key]: { ...row, note: event.target.value } }))} placeholder="Launch note or blocker" />
+                      <Input id={controlId(`feature-${key}-note`)} aria-label={`${label} launch note or blocker`} value={row.note} onChange={(event) => setFeatureFlags((current) => ({ ...current, [key]: { ...row, note: event.target.value } }))} placeholder="Launch note or blocker" />
                     </div>
                   </div>
                 );
@@ -446,8 +448,8 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
           <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <div className="space-y-3 rounded-lg border bg-background/40 p-4">
               <div className="space-y-1">
-                <Label>Custom domain</Label>
-                <Input value={domain} onChange={(event) => setDomain(event.target.value)} placeholder="portal.schoolbrand.com" />
+                <Label htmlFor={controlId("custom-domain")}>Custom domain</Label>
+                <Input id={controlId("custom-domain")} value={domain} onChange={(event) => setDomain(event.target.value)} placeholder="portal.schoolbrand.com" />
               </div>
               <Button disabled={!canManage || isPending || selectedCustomizationId === "new"} onClick={() => post({ action: "requestDomainVerification", customizationId: selectedCustomizationId, domain }, "Domain verification requested.")}>
                 <Globe2 data-icon="inline-start" />
@@ -477,13 +479,13 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-4">
               <div className="space-y-1">
-                <Label>Asset type</Label>
-                <Input value={assetDraft.assetType} onChange={(event) => setAssetDraft((current) => ({ ...current, assetType: event.target.value }))} placeholder="logo_primary" />
+                <Label htmlFor={controlId("asset-type")}>Asset type</Label>
+                <Input id={controlId("asset-type")} value={assetDraft.assetType} onChange={(event) => setAssetDraft((current) => ({ ...current, assetType: event.target.value }))} placeholder="logo_primary" />
               </div>
               <div className="space-y-1">
-                <Label>Scope</Label>
+                <Label htmlFor={controlId("asset-scope")}>Scope</Label>
                 <Select value={assetDraft.scopeType} onValueChange={(value) => value && setAssetDraft((current) => ({ ...current, scopeType: value }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={controlId("asset-scope")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="TENANT">Tenant</SelectItem>
                     <SelectItem value="BRAND">Brand</SelectItem>
@@ -494,33 +496,33 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
               </div>
               {assetDraft.scopeType === "OWNER_GROUP" ? (
                 <div className="space-y-1">
-                  <Label>Owner group</Label>
+                  <Label htmlFor={controlId("asset-owner-group")}>Owner group</Label>
                   <Select value={assetDraft.ownerGroupId} onValueChange={(value) => setAssetDraft((current) => ({ ...current, ownerGroupId: value ?? "" }))}>
-                    <SelectTrigger><SelectValue placeholder="Choose owner" /></SelectTrigger>
+                    <SelectTrigger id={controlId("asset-owner-group")}><SelectValue placeholder="Choose owner" /></SelectTrigger>
                     <SelectContent>{ownerGroups.map((group) => <SelectItem key={group.id} value={group.id}>{group.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               ) : null}
               {assetDraft.scopeType === "CENTER" ? (
                 <div className="space-y-1">
-                  <Label>School</Label>
+                  <Label htmlFor={controlId("asset-school")}>School</Label>
                   <Select value={assetDraft.centerId} onValueChange={(value) => setAssetDraft((current) => ({ ...current, centerId: value ?? "" }))}>
-                    <SelectTrigger><SelectValue placeholder="Choose school" /></SelectTrigger>
+                    <SelectTrigger id={controlId("asset-school")}><SelectValue placeholder="Choose school" /></SelectTrigger>
                     <SelectContent>{centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               ) : null}
               <div className="space-y-1 md:col-span-2">
-                <Label>Public URL</Label>
-                <Input value={assetDraft.url} onChange={(event) => setAssetDraft((current) => ({ ...current, url: event.target.value }))} placeholder="/brand/example/logo.png" />
+                <Label htmlFor={controlId("asset-public-url")}>Public URL</Label>
+                <Input id={controlId("asset-public-url")} value={assetDraft.url} onChange={(event) => setAssetDraft((current) => ({ ...current, url: event.target.value }))} placeholder="/brand/example/logo.png" />
               </div>
               <div className="space-y-1">
-                <Label>Storage key</Label>
-                <Input value={assetDraft.storageKey} onChange={(event) => setAssetDraft((current) => ({ ...current, storageKey: event.target.value }))} />
+                <Label htmlFor={controlId("asset-storage-key")}>Storage key</Label>
+                <Input id={controlId("asset-storage-key")} value={assetDraft.storageKey} onChange={(event) => setAssetDraft((current) => ({ ...current, storageKey: event.target.value }))} />
               </div>
               <div className="space-y-1">
-                <Label>Alt text</Label>
-                <Input value={assetDraft.altText} onChange={(event) => setAssetDraft((current) => ({ ...current, altText: event.target.value }))} />
+                <Label htmlFor={controlId("asset-alt-text")}>Alt text</Label>
+                <Input id={controlId("asset-alt-text")} value={assetDraft.altText} onChange={(event) => setAssetDraft((current) => ({ ...current, altText: event.target.value }))} />
               </div>
             </div>
             <Button disabled={!canManage || isPending} onClick={() => post({ action: "saveAsset", ...assetDraft }, "Brand asset saved.")}>
@@ -557,9 +559,9 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
             </Alert>
             <div className="grid gap-3 md:grid-cols-4">
               <div className="space-y-1">
-                <Label>Target scope</Label>
+                <Label htmlFor={controlId("support-target-scope")}>Target scope</Label>
                 <Select value={supportDraft.targetScope} onValueChange={(value) => value && setSupportDraft((current) => ({ ...current, targetScope: value, targetId: "" }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={controlId("support-target-scope")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="tenant">Tenant</SelectItem>
                     <SelectItem value="ownerGroup">Owner group</SelectItem>
@@ -569,33 +571,33 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
               </div>
               {supportDraft.targetScope === "ownerGroup" ? (
                 <div className="space-y-1">
-                  <Label>Owner group</Label>
+                  <Label htmlFor={controlId("support-owner-group")}>Owner group</Label>
                   <Select value={supportDraft.targetId} onValueChange={(value) => setSupportDraft((current) => ({ ...current, targetId: value ?? "" }))}>
-                    <SelectTrigger><SelectValue placeholder="Choose owner" /></SelectTrigger>
+                    <SelectTrigger id={controlId("support-owner-group")}><SelectValue placeholder="Choose owner" /></SelectTrigger>
                     <SelectContent>{ownerGroups.map((group) => <SelectItem key={group.id} value={group.id}>{group.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               ) : null}
               {supportDraft.targetScope === "center" ? (
                 <div className="space-y-1">
-                  <Label>School</Label>
+                  <Label htmlFor={controlId("support-school")}>School</Label>
                   <Select value={supportDraft.targetId} onValueChange={(value) => setSupportDraft((current) => ({ ...current, targetId: value ?? "" }))}>
-                    <SelectTrigger><SelectValue placeholder="Choose school" /></SelectTrigger>
+                    <SelectTrigger id={controlId("support-school")}><SelectValue placeholder="Choose school" /></SelectTrigger>
                     <SelectContent>{centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               ) : null}
               <div className="space-y-1">
-                <Label>Duration hours</Label>
-                <Input value={supportDraft.durationHours} onChange={(event) => setSupportDraft((current) => ({ ...current, durationHours: event.target.value }))} inputMode="numeric" />
+                <Label htmlFor={controlId("support-duration-hours")}>Duration hours</Label>
+                <Input id={controlId("support-duration-hours")} value={supportDraft.durationHours} onChange={(event) => setSupportDraft((current) => ({ ...current, durationHours: event.target.value }))} inputMode="numeric" />
               </div>
-              <label className="flex items-center gap-2 pt-6 text-sm">
-                <input type="checkbox" checked={supportDraft.emergency} onChange={(event) => setSupportDraft((current) => ({ ...current, emergency: event.target.checked }))} />
+              <label htmlFor={controlId("support-emergency")} className="flex items-center gap-2 pt-6 text-sm">
+                <input id={controlId("support-emergency")} type="checkbox" checked={supportDraft.emergency} onChange={(event) => setSupportDraft((current) => ({ ...current, emergency: event.target.checked }))} />
                 Emergency support
               </label>
               <div className="space-y-1 md:col-span-4">
-                <Label>Reason</Label>
-                <Textarea value={supportDraft.reason} onChange={(event) => setSupportDraft((current) => ({ ...current, reason: event.target.value }))} placeholder="Describe the support issue, affected school, and exact data/workflow needed." />
+                <Label htmlFor={controlId("support-reason")}>Reason</Label>
+                <Textarea id={controlId("support-reason")} value={supportDraft.reason} onChange={(event) => setSupportDraft((current) => ({ ...current, reason: event.target.value }))} placeholder="Describe the support issue, affected school, and exact data/workflow needed." />
               </div>
             </div>
             <Button disabled={!canManage || isPending} onClick={() => post({ action: "requestSupportAccess", ...supportDraft }, "Support access request recorded in audit logs.")}>

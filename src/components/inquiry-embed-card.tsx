@@ -24,7 +24,7 @@ export function InquiryEmbedCard({ title, description, embedCode }: InquiryEmbed
   return (
     <Card className="glass-panel border-primary/25">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle as="h2" className="flex items-center gap-2">
           <Clipboard className="text-primary" />
           {title}
         </CardTitle>

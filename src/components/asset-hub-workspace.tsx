@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -19,7 +19,6 @@ import {
   Printer,
   Presentation,
   Search,
-  Sparkles,
   Trash2,
   Upload,
   X,
@@ -87,6 +86,7 @@ export function AssetHubWorkspace({
   canManage: boolean;
 }) {
   const router = useRouter();
+  const uploadFieldId = useId();
   const [assets, setAssets] = useState(initialAssets);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
@@ -204,17 +204,14 @@ export function AssetHubWorkspace({
 
   return (
     <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-2xl border border-amber-400/25 bg-[radial-gradient(circle_at_top_right,rgba(245,180,0,.15),transparent_35%),linear-gradient(135deg,rgba(20,20,18,.98),rgba(4,5,7,.98))] p-6 shadow-2xl">
-        <div className="absolute right-8 top-5 text-amber-400/10">
-          <Sparkles className="size-28" />
-        </div>
-        <div className="relative flex flex-wrap items-start justify-between gap-4">
+      <section className="rounded-2xl border bg-card p-5 text-card-foreground md:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[.2em] text-amber-400">
+            <div className="mb-2 text-sm font-medium text-muted-foreground">
               Corporate content library
             </div>
-            <h1 className="text-3xl font-semibold text-white">Asset Hub</h1>
-            <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">Asset Hub</h1>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
               Find, download, and print approved forms, templates, graphics,
               flyers, and training resources uploaded by the executive team.
             </p>
@@ -223,28 +220,29 @@ export function AssetHubWorkspace({
             <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
               <DialogTrigger
                 render={
-                  <Button className="bg-amber-400 text-black hover:bg-amber-300" />
+                  <Button type="button" />
                 }
               >
                 <Upload /> Upload assets
               </DialogTrigger>
-              <DialogContent className="max-w-xl border-amber-400/20 bg-zinc-950 text-white">
+              <DialogContent className="max-w-xl bg-popover text-popover-foreground">
                 <DialogHeader>
                   <DialogTitle>Upload corporate assets</DialogTitle>
                   <DialogDescription>
                     Add one or more files to every director’s secure library.
                   </DialogDescription>
                 </DialogHeader>
-                <label className="grid min-h-32 cursor-pointer place-items-center rounded-xl border border-dashed border-amber-400/40 bg-amber-400/5 p-5 text-center">
+                <label htmlFor={`${uploadFieldId}-files`} className="grid min-h-32 cursor-pointer place-items-center rounded-xl border border-dashed bg-muted/30 p-5 text-center hover:bg-muted/50 focus-within:outline-none focus-within:ring-2 focus-within:ring-ring">
                   <div>
-                    <Upload className="mx-auto mb-2 text-amber-400" />
+                    <Upload aria-hidden="true" className="mx-auto mb-2 text-amber-600 dark:text-amber-400" />
                     <div className="font-medium">Choose files</div>
-                    <div className="text-xs text-zinc-500">
+                    <div className="text-xs text-muted-foreground">
                       Images, video, audio, PDFs, Office files, archives, and
                       more
                     </div>
                   </div>
                   <input
+                    id={`${uploadFieldId}-files`}
                     className="sr-only"
                     type="file"
                     multiple
@@ -254,27 +252,28 @@ export function AssetHubWorkspace({
                   />
                 </label>
                 {files.length > 0 && (
-                  <div className="max-h-28 space-y-1 overflow-auto text-xs text-zinc-300">
+                  <div className="max-h-28 space-y-1 overflow-auto text-xs text-foreground">
                     {files.map((file) => (
                       <div
                         key={`${file.name}-${file.size}`}
-                        className="flex justify-between rounded bg-zinc-900 px-2 py-1"
+                        className="flex justify-between gap-3 rounded-md border bg-muted/40 px-2 py-1.5"
                       >
                         <span className="truncate">{file.name}</span>
-                        <span>{formatBytes(file.size)}</span>
+                        <span className="shrink-0 text-muted-foreground">{formatBytes(file.size)}</span>
                       </div>
                     ))}
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="text-xs text-zinc-400">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label htmlFor={`${uploadFieldId}-category`} className="text-xs text-muted-foreground">
                     Category
                     <select
+                      id={`${uploadFieldId}-category`}
                       value={uploadCategory}
                       onChange={(e) =>
                         setUploadCategory(e.target.value as AssetHubCategory)
                       }
-                      className="mt-1 h-9 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2 text-white"
+                      className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-2 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {ASSET_HUB_CATEGORIES.map((item) => (
                         <option key={item} value={item}>
@@ -283,9 +282,10 @@ export function AssetHubWorkspace({
                       ))}
                     </select>
                   </label>
-                  <label className="text-xs text-zinc-400">
+                  <label htmlFor={`${uploadFieldId}-tags`} className="text-xs text-muted-foreground">
                     Tags
                     <Input
+                      id={`${uploadFieldId}-tags`}
                       value={tags}
                       onChange={(e) => setTags(e.target.value)}
                       placeholder="summer, enrollment"
@@ -293,20 +293,22 @@ export function AssetHubWorkspace({
                     />
                   </label>
                 </div>
-                <label className="text-xs text-zinc-400">
+                <label htmlFor={`${uploadFieldId}-description`} className="text-xs text-muted-foreground">
                   Description
                   <Input
+                    id={`${uploadFieldId}-description`}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="How directors should use these files"
                     className="mt-1"
                   />
                 </label>
-                {status && <p className="text-xs text-amber-300">{status}</p>}
+                {status && <p className="text-sm text-foreground" role="status" aria-live="polite">{status}</p>}
                 <Button
+                  type="button"
                   disabled={busy || !files.length}
+                  aria-busy={busy}
                   onClick={uploadFiles}
-                  className="bg-amber-400 text-black hover:bg-amber-300"
                 >
                   {busy
                     ? "Uploading…"
@@ -316,34 +318,37 @@ export function AssetHubWorkspace({
             </Dialog>
           )}
         </div>
-        <div className="relative mt-6 flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-4">
-          <Search className="text-amber-400" />
+        <div className="mt-6 flex items-center gap-2 rounded-xl border bg-background px-3">
+          <Search aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
           <Input
+            aria-label="Search asset library"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search files, descriptions, or tags…"
-            className="h-12 border-0 bg-transparent text-base shadow-none focus-visible:ring-0"
+            className="h-12 border-0 bg-transparent px-1 text-base text-foreground shadow-none focus-visible:ring-0"
           />
           {query && (
-            <button onClick={() => setQuery("")}>
-              <X className="size-4 text-zinc-500" />
+            <button type="button" onClick={() => setQuery("")} aria-label="Clear asset search" className="grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <X aria-hidden="true" className="size-4" />
             </button>
           )}
         </div>
       </section>
       <div className="grid gap-4 xl:grid-cols-[190px_minmax(0,1fr)_280px]">
-        <aside className="rounded-2xl border border-border/70 bg-card/70 p-3">
-          <div className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <aside className="rounded-2xl border border-border/70 bg-card/70 p-3" aria-label="Asset collections">
+          <div className="px-2 pb-2 text-sm font-medium text-muted-foreground">
             Collections
           </div>
           {["all", ...ASSET_HUB_CATEGORIES].map((item) => (
             <button
               key={item}
+              type="button"
+              aria-pressed={category === item}
               onClick={() => setCategory(item)}
               className={cn(
-                "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm",
+                "flex min-h-11 w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 category === item
-                  ? "bg-amber-400/12 text-amber-400"
+                  ? "bg-amber-500/10 text-amber-800 dark:text-amber-300"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
@@ -365,11 +370,12 @@ export function AssetHubWorkspace({
                 {filtered.length === 1 ? "" : "s"}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <select
+                aria-label="Filter assets by file type"
                 value={kind}
                 onChange={(e) => setKind(e.target.value)}
-                className="h-8 rounded-lg border border-border bg-card px-2 text-xs"
+                className="h-11 rounded-lg border border-border bg-card px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="all">All file types</option>
                 {Object.keys(kindIcons).map((item) => (
@@ -377,26 +383,33 @@ export function AssetHubWorkspace({
                 ))}
               </select>
               <select
+                aria-label="Sort assets"
                 value={sort}
                 onChange={(e) => setSort(e.target.value)}
-                className="h-8 rounded-lg border border-border bg-card px-2 text-xs"
+                className="h-11 rounded-lg border border-border bg-card px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="newest">Newest</option>
                 <option value="name">Name</option>
                 <option value="size">Largest</option>
               </select>
-              <div className="flex rounded-lg border border-border p-0.5">
+              <div className="flex rounded-lg border border-border p-0.5" role="group" aria-label="Asset layout">
                 <button
-                  className={cn("rounded p-1", view === "grid" && "bg-muted")}
+                  type="button"
+                  aria-label="Grid view"
+                  aria-pressed={view === "grid"}
+                  className={cn("grid size-11 place-items-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", view === "grid" && "bg-muted")}
                   onClick={() => setView("grid")}
                 >
-                  <Grid2X2 className="size-4" />
+                  <Grid2X2 aria-hidden="true" className="size-4" />
                 </button>
                 <button
-                  className={cn("rounded p-1", view === "list" && "bg-muted")}
+                  type="button"
+                  aria-label="List view"
+                  aria-pressed={view === "list"}
+                  className={cn("grid size-11 place-items-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", view === "list" && "bg-muted")}
                   onClick={() => setView("list")}
                 >
-                  <List className="size-4" />
+                  <List aria-hidden="true" className="size-4" />
                 </button>
               </div>
             </div>
@@ -404,7 +417,7 @@ export function AssetHubWorkspace({
           {filtered.length === 0 ? (
             <div className="grid min-h-80 place-items-center rounded-2xl border border-dashed border-border text-center">
               <div>
-                <Search className="mx-auto mb-2 text-muted-foreground" />
+                <Search aria-hidden="true" className="mx-auto mb-2 text-muted-foreground" />
                 <div className="font-medium">No matching assets</div>
                 <p className="text-sm text-muted-foreground">
                   Try another search or collection.
@@ -430,9 +443,12 @@ export function AssetHubWorkspace({
                 return (
                   <button
                     key={asset.id}
+                    type="button"
+                    aria-label={`Show details for ${asset.name}`}
+                    aria-pressed={selected?.id === asset.id}
                     onClick={() => setSelected(asset)}
                     className={cn(
-                      "group overflow-hidden rounded-xl border text-left transition hover:-translate-y-0.5 hover:border-amber-400/50 hover:shadow-lg",
+                      "group overflow-hidden rounded-xl border text-left transition-colors hover:border-amber-400/50 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       selected?.id === asset.id
                         ? "border-amber-400/60 bg-amber-400/5"
                         : "border-border bg-card",
@@ -440,7 +456,7 @@ export function AssetHubWorkspace({
                     )}
                   >
                     {view === "grid" && (
-                      <div className="relative grid aspect-[16/9] place-items-center overflow-hidden bg-gradient-to-br from-zinc-900 to-zinc-800">
+                      <div className="relative grid aspect-[16/9] place-items-center overflow-hidden bg-muted">
                         {asset.previewUrl &&
                         assetKind(asset.contentType, asset.name) === "image" ? (
                           <Image
@@ -452,7 +468,7 @@ export function AssetHubWorkspace({
                             className="object-cover"
                           />
                         ) : (
-                          <Icon className="size-12 text-amber-400/75" />
+                          <Icon aria-hidden="true" className="size-12 text-amber-600/75 dark:text-amber-400/75" />
                         )}
                       </div>
                     )}
@@ -488,7 +504,7 @@ export function AssetHubWorkspace({
         <aside className="h-fit rounded-2xl border border-amber-400/20 bg-card/80 p-4 xl:sticky xl:top-4">
           {selected ? (
             <>
-              <div className="relative grid aspect-video place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800">
+              <div className="relative grid aspect-video place-items-center overflow-hidden rounded-xl bg-muted">
                 {selected.previewUrl &&
                 assetKind(selected.contentType, selected.name) === "image" ? (
                   <Image
@@ -508,7 +524,7 @@ export function AssetHubWorkspace({
                           selected.name,
                         ) as keyof typeof kindIcons
                       ] || File;
-                    return <Icon className="size-14 text-amber-400" />;
+                    return <Icon aria-hidden="true" className="size-14 text-amber-600 dark:text-amber-400" />;
                   })()
                 )}
               </div>
@@ -538,9 +554,9 @@ export function AssetHubWorkspace({
               </dl>
               <Button
                 render={<a href={`/api/asset-hub/download/${selected.id}`} />}
-                className="mt-4 w-full bg-amber-400 text-black hover:bg-amber-300"
+                className="mt-4 w-full"
               >
-                <Download /> Download
+                <Download aria-hidden="true" /> Download
               </Button>
               <Button
                 render={
@@ -553,7 +569,7 @@ export function AssetHubWorkspace({
                 variant="outline"
                 className="mt-2 w-full"
               >
-                <Printer /> Print
+                <Printer aria-hidden="true" /> Print
               </Button>
               <p className="mt-2 text-xs text-muted-foreground">
                 {selected.contentType === "application/pdf" ||
@@ -563,11 +579,12 @@ export function AssetHubWorkspace({
               </p>
               {canManage && (
                 <Button
+                  type="button"
                   variant="destructive"
                   onClick={() => removeAsset(selected)}
                   className="mt-2 w-full"
                 >
-                  <Trash2 /> Remove asset
+                  <Trash2 aria-hidden="true" /> Remove asset
                 </Button>
               )}
             </>

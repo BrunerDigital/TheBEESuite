@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { UserRole } from "@prisma/client";
 
 export const CORPORATE_ASSET_TYPE = "corporate_asset";
@@ -22,7 +21,7 @@ export function safeAssetFileName(value: string) {
 
 export function buildAssetStorageKey(tenantId: string, originalName: string, now = new Date()) {
   const tenant = tenantId.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").slice(0, 80) || "tenant";
-  return `${tenant}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${randomUUID()}-${safeAssetFileName(originalName)}`;
+  return `${tenant}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${globalThis.crypto.randomUUID()}-${safeAssetFileName(originalName)}`;
 }
 
 export function assetKind(contentType: string, name = "") {

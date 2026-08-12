@@ -66,15 +66,16 @@ export function MediaReviewActions({ mediaId, childName }: Props) {
         value={note}
         onChange={(event) => setNote(event.target.value)}
         placeholder="Optional review note for the audit trail"
+        aria-label={`Review note for ${childName}`}
       />
       <div className="grid gap-2 sm:grid-cols-2">
-        <Button disabled={isPending} onClick={() => review("approve")}>
+        <Button type="button" disabled={isPending} aria-busy={isPending} onClick={() => review("approve")}>
           <ShieldCheck data-icon="inline-start" />
-          Approve + Share
+          {isPending ? "Saving review…" : "Approve and share"}
         </Button>
-        <Button variant="destructive" disabled={isPending} onClick={() => review("reject")}>
+        <Button type="button" variant="destructive" disabled={isPending} aria-busy={isPending} onClick={() => review("reject")}>
           <XCircle data-icon="inline-start" />
-          Reject Sharing
+          {isPending ? "Saving review…" : "Reject sharing"}
         </Button>
       </div>
     </div>

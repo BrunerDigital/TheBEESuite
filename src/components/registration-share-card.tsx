@@ -81,7 +81,7 @@ export function RegistrationShareCard({
         <Badge variant="secondary" className="w-fit">
           School-specific registration
         </Badge>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle as="h2" className="flex items-center gap-2">
           <Mail className="text-emerald-400" />
           Share registration for {schoolLabel}
         </CardTitle>

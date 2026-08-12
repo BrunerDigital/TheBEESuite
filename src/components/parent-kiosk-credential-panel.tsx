@@ -72,7 +72,7 @@ export function ParentKioskCredentialPanel({ initialCredentials, previewMode = f
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle as="h2" className="flex items-center gap-2">
               <QrCode className="text-primary" aria-hidden="true" />
               School Check-In
             </CardTitle>

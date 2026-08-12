@@ -83,7 +83,7 @@ export function TerminalStore({ items, centers, defaultCenterId }: Props) {
                       {itemIcon(item.category)}
                     </div>
                     <div className="min-w-0">
-                      <CardTitle className="text-base">{item.name}</CardTitle>
+                      <CardTitle as="h2" className="text-base">{item.name}</CardTitle>
                       <CardDescription className="mt-1 line-clamp-2">{item.description}</CardDescription>
                     </div>
                   </div>
@@ -127,7 +127,7 @@ export function TerminalStore({ items, centers, defaultCenterId }: Props) {
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <CardTitle>Order Summary</CardTitle>
+                <CardTitle as="h2">Order Summary</CardTitle>
                 <CardDescription>{itemCount} item{itemCount === 1 ? "" : "s"} selected</CardDescription>
               </div>
               <ShoppingCart className="size-5 text-primary" />

@@ -580,7 +580,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
         <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-[18rem_minmax(0,1fr)] lg:grid-cols-[20rem_minmax(0,1fr)] lg:gap-2 2xl:grid-cols-[24rem_minmax(0,1fr)] 2xl:gap-3">
           <Card className="kiosk-halo-panel glass-panel min-w-0 overflow-hidden">
             <CardHeader className="p-4 pb-2 lg:p-3 lg:pb-1 2xl:p-4 2xl:pb-2">
-              <CardTitle>
+              <CardTitle as="h2">
                 {activeKioskMode === "family"
                   ? credentialMode === "pin"
                     ? familyOnly ? "Enter your 4-digit Family PIN" : "Enter a 4-digit Family PIN"
@@ -753,7 +753,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
 
           <Card className="kiosk-halo-panel glass-panel min-w-0 overflow-hidden">
             <CardHeader className="p-4 pb-2 lg:p-3 lg:pb-1 2xl:p-4 2xl:pb-2">
-              <CardTitle>
+              <CardTitle as="div">
                 {activeKioskMode === "staff"
                   ? staffLookup
                     ? staffLookup.staff.name

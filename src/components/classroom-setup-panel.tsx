@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
+import { FormEvent, useEffect, useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Pencil, Plus, Save } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -32,6 +32,13 @@ function classroomTeacherNames(staff: ClassroomAssignmentStaff[], classroomId: s
 
 export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: configuredAgeGroups, canManage = false, demoMode = false }: Props) {
   const router = useRouter();
+  const controlId = useId();
+  const classroomSelectId = `${controlId}-classroom`;
+  const schoolSelectId = `${controlId}-school`;
+  const classroomNameId = `${controlId}-name`;
+  const ageGroupSelectId = `${controlId}-age-group`;
+  const capacityId = `${controlId}-capacity`;
+  const ratioRuleId = `${controlId}-ratio-rule`;
   const [classroomOverrides, setClassroomOverrides] = useState<Record<string, ClassroomAssignmentClassroom>>({});
   const classroomRows = useMemo(() => {
     const overrideRows = Object.values(classroomOverrides);
@@ -174,9 +181,9 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
   }
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <CardHeader>
-        <CardTitle>Classrooms</CardTitle>
+          <CardTitle as="h2">Classrooms</CardTitle>
         <CardDescription>
           {canManage
             ? "Set up each room with the school, age group, licensed seats, and staff-to-child ratio directors use for daily coverage."
@@ -218,7 +225,13 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
                     {classroom.ratioRule ? (
                       classroom.ratioRule
                     ) : canManage ? (
-                      <Button type="button" variant="link" className="h-auto p-0" onClick={() => loadClassroom(classroom)}>
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="min-h-10 px-2 py-1"
+                        onClick={() => loadClassroom(classroom)}
+                        aria-label={`Add a staff-to-child ratio for ${classroom.name}`}
+                      >
                         Add ratio
                       </Button>
                     ) : (
@@ -230,6 +243,7 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
                       {canManage && warning.status !== "healthy" ? (
                         <Badge
                           variant={warning.tone}
+                          className="min-h-10 px-3"
                           render={(
                             <button
                               type="button"
@@ -249,7 +263,12 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
                   <TableCell>{classroom._count.incidents}</TableCell>
                   {canManage ? (
                   <TableCell>
-                    <Button type="button" size="sm" variant="outline" onClick={() => loadClassroom(classroom)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => loadClassroom(classroom)}
+                      aria-label={`Edit ${classroom.name}`}
+                    >
                       <Pencil data-icon="inline-start" />
                       Edit
                     </Button>
@@ -269,27 +288,32 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
         </div>
 
         {canManage ? (
-        <form id="classroom-editor" className="scroll-mt-24 rounded-xl border bg-background/40 p-4" onSubmit={saveClassroom}>
+        <form
+          id="classroom-editor"
+          className="scroll-mt-24 rounded-xl border bg-background p-4"
+          onSubmit={saveClassroom}
+          aria-busy={isPending}
+        >
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-medium">{selectedClassroom ? "Edit classroom" : "Add classroom"}</div>
               <p className="text-xs text-muted-foreground">Saved changes update the same live classroom record used by kiosk, teacher, parent, and admin views.</p>
             </div>
-            <Button type="button" variant="outline" onClick={() => loadClassroom(null)}>
+            <Button type="button" variant="outline" onClick={() => loadClassroom(null)} disabled={isPending}>
               <Plus data-icon="inline-start" />
               New classroom
             </Button>
           </div>
 
           {statusMessage ? (
-            <Alert className="mb-4">
+            <Alert className="mb-4" role="status" aria-live="polite">
               <CheckCircle2 className="size-4" />
               <AlertTitle>Saved</AlertTitle>
               <AlertDescription>{statusMessage}</AlertDescription>
             </Alert>
           ) : null}
           {errorMessage ? (
-            <Alert className="mb-4" variant="destructive">
+            <Alert className="mb-4" variant="destructive" role="alert">
               <AlertCircle className="size-4" />
               <AlertTitle>Needs attention</AlertTitle>
               <AlertDescription>{errorMessage}</AlertDescription>
@@ -298,12 +322,12 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <div className="space-y-1 xl:col-span-2">
-              <Label>Classroom to edit</Label>
+              <Label htmlFor={classroomSelectId}>Classroom to edit</Label>
               <Select value={selectedClassroomId} onValueChange={(value) => {
                 if (value === "new") loadClassroom(null);
                 else loadClassroom(classroomRows.find((classroom) => classroom.id === value) ?? null);
               }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id={classroomSelectId}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="new">New classroom</SelectItem>
                   {classroomRows.map((classroom) => (
@@ -313,9 +337,9 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
               </Select>
             </div>
             <div className="space-y-1 xl:col-span-2">
-              <Label>School</Label>
+              <Label htmlFor={schoolSelectId}>School</Label>
               <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
-                <SelectTrigger><SelectValue placeholder="Choose school" /></SelectTrigger>
+                <SelectTrigger id={schoolSelectId}><SelectValue placeholder="Choose school" /></SelectTrigger>
                 <SelectContent>
                   {centerOptions.map((center) => (
                     <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>
@@ -324,13 +348,13 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
               </Select>
             </div>
             <div className="space-y-1 xl:col-span-2">
-              <Label>Classroom name</Label>
-              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Infants, Toddlers, Pre-K A" required />
+              <Label htmlFor={classroomNameId}>Classroom name</Label>
+              <Input id={classroomNameId} value={name} onChange={(event) => setName(event.target.value)} placeholder="Infants, Toddlers, Pre-K A" required />
             </div>
             <div className="space-y-1">
-              <Label>Age group served</Label>
+              <Label htmlFor={ageGroupSelectId}>Age group served</Label>
               <Select value={ageGroup} onValueChange={(value) => value && setAgeGroup(value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id={ageGroupSelectId}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {availableAgeGroups.map((group) => (
                     <SelectItem key={group} value={group}>{group}</SelectItem>
@@ -339,19 +363,19 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Licensed seats in room</Label>
-              <Input value={capacity} onChange={(event) => setCapacity(event.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" placeholder="12" required />
+              <Label htmlFor={capacityId}>Licensed seats in room</Label>
+              <Input id={capacityId} value={capacity} onChange={(event) => setCapacity(event.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" placeholder="12" required />
             </div>
             <div className="space-y-1">
-              <Label>Staff-to-child ratio</Label>
-              <Input value={ratioRule} onChange={(event) => setRatioRule(event.target.value)} placeholder="1:4, 1:7, 2:12" />
+              <Label htmlFor={ratioRuleId}>Staff-to-child ratio</Label>
+              <Input id={ratioRuleId} value={ratioRule} onChange={(event) => setRatioRule(event.target.value)} placeholder="1:4, 1:7, 2:12" />
             </div>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
             <Button type="submit" disabled={demoMode || isPending || !centerId || !name.trim()}>
               <Save data-icon="inline-start" />
-              Save classroom
+              {isPending ? "Saving classroom…" : "Save classroom"}
             </Button>
           </div>
         </form>

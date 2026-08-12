@@ -864,7 +864,10 @@ export function TeacherMobileWorkspace({
     .filter((child): child is ChildOption => Boolean(child));
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+    <div
+      className="mx-auto flex w-full max-w-5xl flex-col gap-5 [&_button]:min-h-10"
+      aria-busy={isPending}
+    >
       <SetupChecklistPanel
         checklistKey="teacher_profile"
         title="Teacher profile setup checklist"
@@ -875,7 +878,7 @@ export function TeacherMobileWorkspace({
         compact
       />
 
-      <section className="rounded-2xl border bg-card/80 p-5 shadow-2xl shadow-black/15">
+      <section className="rounded-xl border bg-card p-5">
         <Badge className="mb-3">
           <ClipboardCheck data-icon="inline-start" />
           Classroom tools
@@ -887,28 +890,28 @@ export function TeacherMobileWorkspace({
       </section>
 
       {status ? (
-        <Alert>
+        <Alert role="status" aria-live="polite">
           <CheckCircle2 className="size-4" />
           <AlertTitle>Update saved</AlertTitle>
           <AlertDescription>{status}</AlertDescription>
         </Alert>
       ) : null}
       {error ? (
-        <Alert variant="destructive">
+        <Alert variant="destructive" role="alert">
           <AlertCircle className="size-4" />
           <AlertTitle>We couldn&apos;t complete this action</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
 
-      <Card id="teacher-profile-setup" className="glass-panel scroll-mt-28">
+      <Card id="teacher-profile-setup" className="scroll-mt-28 shadow-none">
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 items-start gap-3">
               <UserAvatar name={profileName || teacherName} src={teacherProfile?.profilePhotoUrl} size="lg" />
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle>My profile</CardTitle>
+                  <CardTitle as="h2">My profile</CardTitle>
                   <Badge variant={profileReady ? "default" : "outline"}>
                     {profileReady ? "Ready" : "Needs setup"}
                   </Badge>
@@ -1056,7 +1059,7 @@ export function TeacherMobileWorkspace({
         </AlertDescription>
       </Alert>
 
-      <nav className="sticky top-[4.75rem] z-10 -mx-1 overflow-x-auto rounded-xl border bg-background/95 p-2 shadow-sm backdrop-blur lg:top-20">
+      <nav className="sticky top-[4.75rem] z-10 -mx-1 overflow-x-auto rounded-xl border bg-background p-2 lg:top-20">
         <div className="flex min-w-max gap-2">
           {[
             ["Profile", "#teacher-profile-setup"],
@@ -1066,7 +1069,7 @@ export function TeacherMobileWorkspace({
             ["Photo", "#teacher-photo"],
             ["Incident", "#teacher-incident"],
           ].map(([label, href]) => (
-            <Button key={href} size="sm" variant="outline" nativeButton={false} render={<a href={href} />}>
+            <Button key={href} size="sm" variant="outline" className="min-h-10" nativeButton={false} render={<a href={href} />}>
               {label}
             </Button>
           ))}
@@ -1074,11 +1077,11 @@ export function TeacherMobileWorkspace({
       </nav>
 
       {kioskAccess ? (
-        <Card className="glass-panel">
+        <Card className="shadow-none">
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <QrCode className="text-primary" />
                   Lobby Kiosk
                 </CardTitle>
@@ -1130,9 +1133,9 @@ export function TeacherMobileWorkspace({
         </Card>
       ) : null}
 
-      <Card id="teacher-roster" className="glass-panel scroll-mt-28">
+      <Card id="teacher-roster" className="scroll-mt-28 shadow-none">
         <CardHeader>
-          <CardTitle>Roster</CardTitle>
+          <CardTitle as="h2">Roster</CardTitle>
           <CardDescription>{roster.length} {roster.length === 1 ? "child" : "children"} in your assigned classrooms</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
@@ -1225,7 +1228,7 @@ export function TeacherMobileWorkspace({
                       key={child.id}
                       className={`rounded-lg border p-2 text-sm transition ${selectedChild?.id === child.id ? "border-primary bg-primary/10" : "bg-card/40"}`}
                     >
-                      <button type="button" className="flex w-full items-start justify-between gap-2 text-left" onClick={() => chooseChild(child.id)}>
+                      <button type="button" className="flex min-h-10 w-full items-start justify-between gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => chooseChild(child.id)}>
                         <span className="min-w-0">
                           <span className="font-medium">{child.fullName}</span>
                           <span className="ml-2 text-xs text-muted-foreground">{child.ageGroup}</span>
@@ -1252,9 +1255,10 @@ export function TeacherMobileWorkspace({
                           </span>
                         </span>
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <label className="flex h-6 items-center gap-1 rounded-md border bg-background px-2 text-xs">
+                          <label className="flex min-h-10 items-center gap-2 rounded-md border bg-background px-2 text-xs">
                             <input
                               type="checkbox"
+                              className="size-5 shrink-0 accent-primary"
                               checked={isReportTarget}
                               onChange={() => toggleDailyReportTarget(child.id)}
                               aria-label={`Include ${child.fullName} in daily report batch`}
@@ -1315,16 +1319,16 @@ export function TeacherMobileWorkspace({
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-        <Card id="teacher-attendance" className="glass-panel scroll-mt-28">
+        <Card id="teacher-attendance" className="scroll-mt-28 shadow-none">
           <CardHeader>
-            <CardTitle>Attendance</CardTitle>
+            <CardTitle as="h2">Attendance</CardTitle>
             <CardDescription>{selectedChild?.fullName ?? "Choose a child"}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1">
-              <Label>Status</Label>
+              <Label htmlFor="teacher-attendance-status">Status</Label>
               <Select value={attendanceStatus} onValueChange={(value) => value && setAttendanceStatus(value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="teacher-attendance-status"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="present">Present</SelectItem>
                   <SelectItem value="absent">Absent</SelectItem>
@@ -1334,9 +1338,9 @@ export function TeacherMobileWorkspace({
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Log type</Label>
+              <Label htmlFor="teacher-attendance-log-type">Log type</Label>
               <Select value={logType} onValueChange={(value) => setLogType(value ?? "")}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="teacher-attendance-log-type"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="check_in">Check in</SelectItem>
                   <SelectItem value="check_out">Check out</SelectItem>
@@ -1351,16 +1355,16 @@ export function TeacherMobileWorkspace({
           </CardContent>
         </Card>
 
-        <Card id="teacher-location" className="glass-panel scroll-mt-28">
+        <Card id="teacher-location" className="scroll-mt-28 shadow-none">
           <CardHeader>
-            <CardTitle>Child location</CardTitle>
+            <CardTitle as="h2">Child location</CardTitle>
             <CardDescription>{selectedChild ? `${selectedChild.fullName} · currently ${locationFor(selectedChild)}` : "Choose a child"}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1">
-              <Label>Move to</Label>
+              <Label htmlFor="teacher-location-target">Move to</Label>
               <Select value={locationTarget} onValueChange={(value) => value && setLocationTarget(value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="teacher-location-target"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
                     <SelectLabel>School areas</SelectLabel>
@@ -1373,7 +1377,10 @@ export function TeacherMobileWorkspace({
                 </SelectContent>
               </Select>
             </div>
-            <Input value={locationReason} onChange={(event) => setLocationReason(event.target.value)} placeholder="Reason (optional)" maxLength={180} />
+            <div className="space-y-1">
+              <Label htmlFor="teacher-location-reason">Reason (optional)</Label>
+              <Input id="teacher-location-reason" value={locationReason} onChange={(event) => setLocationReason(event.target.value)} placeholder="For example, outdoor play" maxLength={180} />
+            </div>
             <Button disabled={isPending || !selectedChild} className="w-full" onClick={submitLocation}>
               <MapPin data-icon="inline-start" />
               Update Location
@@ -1381,9 +1388,9 @@ export function TeacherMobileWorkspace({
           </CardContent>
         </Card>
 
-        <Card id="teacher-photo" className="glass-panel scroll-mt-28">
+        <Card id="teacher-photo" className="scroll-mt-28 shadow-none">
           <CardHeader>
-            <CardTitle>Photo</CardTitle>
+            <CardTitle as="h2">Photo</CardTitle>
             <CardDescription>{selectedChild?.fullName ?? "Choose a child"}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -1432,9 +1439,9 @@ export function TeacherMobileWorkspace({
           </CardContent>
         </Card>
 
-        <Card id="teacher-daily-report" className="glass-panel scroll-mt-28 lg:col-span-2">
+        <Card id="teacher-daily-report" className="scroll-mt-28 shadow-none lg:col-span-2">
           <CardHeader>
-            <CardTitle>Daily Report</CardTitle>
+            <CardTitle as="h2">Daily Report</CardTitle>
             <CardDescription>
               {activeDailyReportChildren.length === 1
                 ? activeDailyReportChildren[0].fullName
@@ -1457,7 +1464,7 @@ export function TeacherMobileWorkspace({
                   <button
                     key={child.id}
                     type="button"
-                    className="rounded-md border bg-card px-2 py-1 text-xs font-medium transition hover:bg-muted"
+                    className="min-h-10 rounded-md border bg-card px-3 py-2 text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     onClick={() => chooseChild(child.id)}
                   >
                     {child.fullName}
@@ -1537,8 +1544,8 @@ export function TeacherMobileWorkspace({
               </div>
             </div>
 
-            <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
-              <input type="checkbox" checked={sendToParent} onChange={(event) => setSendToParent(event.target.checked)} />
+            <label className="flex min-h-11 items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+              <input className="size-5 shrink-0 accent-primary" type="checkbox" checked={sendToParent} onChange={(event) => setSendToParent(event.target.checked)} />
               <span>Send to parent portal</span>
             </label>
 
@@ -1578,6 +1585,7 @@ export function TeacherMobileWorkspace({
                         <Input aria-label={`Meal ${index + 1} amount`} value={row.amount} onChange={(event) => updateMeal(row.id, { amount: event.target.value })} placeholder="Amount eaten" />
                       </div>
                       <Textarea
+                        id={`meal-${index + 1}-food-notes`}
                         value={row.food}
                         onChange={(event) => updateMeal(row.id, { food: event.target.value })}
                         aria-label={`Meal ${index + 1} food and notes`}
@@ -1717,7 +1725,7 @@ export function TeacherMobileWorkspace({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Input aria-label="Supplies needed" value={suppliesNeeded} onChange={(event) => setSuppliesNeeded(event.target.value)} placeholder="Supplies needed" />
-              <Textarea aria-label="Teacher note for parents" value={teacherNote} onChange={(event) => setTeacherNote(event.target.value)} placeholder="Note for parents" />
+              <Textarea id="teacher-note-for-parents" aria-label="Teacher note for parents" value={teacherNote} onChange={(event) => setTeacherNote(event.target.value)} placeholder="Note for parents" />
             </div>
             <Button disabled={isPending || !activeDailyReportChildIds.length} className="w-full" onClick={submitDailyReport}>
               <BookOpen data-icon="inline-start" />
@@ -1726,15 +1734,15 @@ export function TeacherMobileWorkspace({
           </CardContent>
         </Card>
 
-        <Card id="teacher-incident" className="glass-panel scroll-mt-28">
+        <Card id="teacher-incident" className="scroll-mt-28 shadow-none">
           <CardHeader>
-            <CardTitle>Incident report</CardTitle>
+            <CardTitle as="h2">Incident report</CardTitle>
             <CardDescription>Send an objective record to the director for review.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <Input aria-label="Incident type" value={incidentType} onChange={(event) => setIncidentType(event.target.value)} placeholder="Incident type" />
-            <Textarea aria-label="Objective incident description" value={incidentDescription} onChange={(event) => setIncidentDescription(event.target.value)} placeholder="Describe what happened using observable facts" />
-            <Textarea aria-label="Action taken after incident" value={actionTaken} onChange={(event) => setActionTaken(event.target.value)} placeholder="Action taken" />
+            <Textarea id="teacher-incident-description" aria-label="Objective incident description" value={incidentDescription} onChange={(event) => setIncidentDescription(event.target.value)} placeholder="Describe what happened using observable facts" />
+            <Textarea id="teacher-incident-action" aria-label="Action taken after incident" value={actionTaken} onChange={(event) => setActionTaken(event.target.value)} placeholder="Action taken" />
             <Button disabled={isPending || !selectedChild} className="w-full" onClick={submitIncident}>
               <ShieldAlert data-icon="inline-start" />
               Send incident report

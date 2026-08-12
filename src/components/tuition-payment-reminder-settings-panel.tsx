@@ -117,7 +117,7 @@ export function TuitionPaymentReminderSettingsPanel({ centers }: TuitionPaymentR
               <BellRing data-icon="inline-start" />
               Tuition reminders
             </Badge>
-            <CardTitle>Parent tuition payment reminders</CardTitle>
+            <CardTitle as="h2">Parent tuition payment reminders</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
               Send one reminder per family when the family has a current balance they can pay online.
             </CardDescription>
@@ -154,7 +154,7 @@ export function TuitionPaymentReminderSettingsPanel({ centers }: TuitionPaymentR
               <div className="text-sm font-medium">Send tuition balance reminders</div>
               <div className="mt-1 text-xs leading-5 text-muted-foreground">Families without current enrollment, accounts with no amount due or a credit, pending payments, active autopay, and balances awaiting subsidy review are excluded.</div>
             </div>
-            <Switch checked={settings.enabled} onCheckedChange={(checked) => updateSettings({ enabled: Boolean(checked) })} />
+            <Switch aria-label="Send tuition balance reminders" checked={settings.enabled} onCheckedChange={(checked) => updateSettings({ enabled: Boolean(checked) })} />
           </div>
         </div>
 

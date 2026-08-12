@@ -255,6 +255,11 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
   const bulkRows = useMemo(() => parseExecutiveBulkImportCsv(bulkCsv), [bulkCsv]);
   const bulkSummary = useMemo(() => summarizeExecutiveBulkImport(bulkRows), [bulkRows]);
   const userFormIsTeacher = userForm.role === "TEACHER";
+  const savingCenter = isPending && (activeAction === "Saving school changes..." || activeAction === "Creating school...");
+  const savingUser = isPending && (activeAction === "Updating user access..." || activeAction === "Creating user...");
+  const resettingPassword = isPending && (activeAction === "Setting password..." || activeAction === "Sending password reset...");
+  const savingOwnerGroup = isPending && (activeAction === "Saving owner group..." || activeAction === "Creating owner group...");
+  const importingBulkRows = isPending && activeAction === "Importing executive CSV rows...";
 
   function clearInlineFeedback() {
     if (validationErrors.length) setValidationErrors([]);
@@ -690,28 +695,28 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
         </DialogContent>
       </Dialog>
 
-      <Card className="glass-panel border-primary/30">
+      <Card>
       <CardHeader>
         <Badge className="w-fit">
           <ShieldCheck data-icon="inline-start" />
           Administration
         </Badge>
-        <CardTitle>Corporate administration</CardTitle>
+        <CardTitle as="h2">Corporate administration</CardTitle>
         <CardDescription>
           Manage locations, owner groups, and authorized user access. Archived locations retain billing, staffing, enrollment, and audit history.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {message ? (
-          <Alert>
-            <CheckCircle2 className="size-4" />
+          <Alert role="status" aria-live="polite">
+            <CheckCircle2 className="size-4" aria-hidden="true" />
             <AlertTitle>Change completed</AlertTitle>
             <AlertDescription>{message}</AlertDescription>
           </Alert>
         ) : null}
         {isPending && activeAction ? (
-          <Alert className="border-primary/30 bg-primary/10">
-            <Save className="size-4" />
+          <Alert role="status" aria-live="polite" className="border-primary/30 bg-primary/10">
+            <Save className="size-4" aria-hidden="true" />
             <AlertTitle>Action in progress</AlertTitle>
             <AlertDescription>{activeAction}</AlertDescription>
           </Alert>
@@ -724,8 +729,8 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
               <div className="space-y-3">
                 <p>{error}</p>
                 {lastFailedAction ? (
-                  <Button type="button" size="sm" variant="outline" onClick={() => runAction(lastFailedAction)} disabled={isPending}>
-                    <RefreshCw data-icon="inline-start" />
+                  <Button type="button" size="sm" className="min-h-10" variant="outline" onClick={() => runAction(lastFailedAction)} disabled={isPending}>
+                    <RefreshCw data-icon="inline-start" aria-hidden="true" />
                     {retryActionLabel(lastFailedAction.action)}
                   </Button>
                 ) : null}
@@ -750,7 +755,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
         <div className="grid gap-4 xl:grid-cols-2">
           <Card className="xl:col-span-2">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
+              <CardTitle as="h3" className="flex items-center gap-2 text-lg">
                 <Building2 className="size-5 text-primary" />
                 Schools
               </CardTitle>
@@ -795,14 +800,16 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => loadCenter(center.id)}>Edit school</Button>
+                          <Button variant="outline" size="sm" className="min-h-10" onClick={() => loadCenter(center.id)} aria-label={`Edit ${shortCenterLabel(center)}`}>Edit school</Button>
                           <Button
                             variant="outline"
                             size="sm"
+                            className="min-h-10"
                             onClick={() => setCenterStatusById(center.id, center.status === "closed" ? "active" : "closed")}
                             disabled={isPending}
+                            aria-label={`${center.status === "closed" ? "Reactivate" : "Archive"} ${shortCenterLabel(center)}`}
                           >
-                            <Archive data-icon="inline-start" />
+                            <Archive data-icon="inline-start" aria-hidden="true" />
                             {center.status === "closed" ? "Reactivate" : "Archive"}
                           </Button>
                         </div>
@@ -823,9 +830,9 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
 
           <Card className="xl:col-span-2">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
+              <CardTitle as="h3" className="flex items-center gap-2 text-lg">
                 <FileUp className="size-5 text-primary" />
-                Bulk User and Location Import
+                Bulk user and location import
               </CardTitle>
               <CardDescription>
                 Paste or upload CSV rows for locations and users. Location rows are imported first, then single-location users are matched by Location ID.
@@ -866,9 +873,9 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                       <div className="text-muted-foreground">Errors</div>
                     </div>
                   </div>
-                  <Button onClick={importBulkRows} disabled={isPending}>
-                    <FileUp data-icon="inline-start" />
-                    Import rows
+                  <Button onClick={importBulkRows} disabled={isPending} aria-busy={importingBulkRows}>
+                    <FileUp data-icon="inline-start" aria-hidden="true" />
+                    {importingBulkRows ? "Importing rows…" : "Import rows"}
                   </Button>
                 </div>
               </div>
@@ -922,7 +929,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
+              <CardTitle as="h3" className="flex items-center gap-2 text-lg">
                 <MapPin className="size-5 text-primary" />
                 Add or Edit School
               </CardTitle>
@@ -930,7 +937,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1">
-                <Label>Existing location</Label>
+                <Label htmlFor="executive-school-selection">Existing location</Label>
                 <Select value={centerForm.centerId || "new"} onValueChange={(value) => {
                   if ((value ?? "new") === "new") {
                     clearInlineFeedback();
@@ -939,7 +946,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                     loadCenter(value ?? "");
                   }
                 }}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="executive-school-selection"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="new">Create new location</SelectItem>
                     {sortedCenters.map((center) => (
@@ -950,49 +957,56 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1">
-                  <Label>School name</Label>
-                  <Input value={centerForm.name} onChange={(event) => setCenterField("name", event.target.value)} placeholder={`${brandName} - New Location`} />
+                  <Label htmlFor="executive-school-name">School name</Label>
+                  <Input id="executive-school-name" value={centerForm.name} onChange={(event) => setCenterField("name", event.target.value)} placeholder={`${brandName} - New Location`} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Location ID</Label>
-                  <Input value={centerForm.crmLocationId} onChange={(event) => setCenterField("crmLocationId", event.target.value)} placeholder={CRM_LOCATION_ID_EXAMPLE} />
+                  <Label htmlFor="executive-school-location-id">Location ID</Label>
+                  <Input
+                    id="executive-school-location-id"
+                    value={centerForm.crmLocationId}
+                    onChange={(event) => setCenterField("crmLocationId", event.target.value)}
+                    placeholder={CRM_LOCATION_ID_EXAMPLE}
+                    aria-invalid={centerForm.crmLocationId && centerValidationErrors.some((item) => item.startsWith("Location ID must")) ? true : undefined}
+                    aria-describedby={centerForm.crmLocationId && centerValidationErrors.some((item) => item.startsWith("Location ID must")) ? "executive-school-location-id-error" : undefined}
+                  />
                   {centerForm.crmLocationId && centerValidationErrors.some((item) => item.startsWith("Location ID must")) ? (
-                    <p className="text-xs text-destructive">Use ST | City format.</p>
+                    <p id="executive-school-location-id-error" className="text-xs text-destructive">Use ST | City format.</p>
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <Label>Routing email</Label>
-                  <Input value={centerForm.email} onChange={(event) => setCenterField("email", event.target.value)} placeholder="school@example.com" type="email" />
+                  <Label htmlFor="executive-school-routing-email">Routing email</Label>
+                  <Input id="executive-school-routing-email" value={centerForm.email} onChange={(event) => setCenterField("email", event.target.value)} placeholder="school@example.com" type="email" />
                 </div>
                 <div className="space-y-1">
-                  <Label>Phone</Label>
-                  <Input value={centerForm.phone} onChange={(event) => setCenterField("phone", event.target.value)} placeholder="555-555-1212" />
+                  <Label htmlFor="executive-school-phone">Phone</Label>
+                  <Input id="executive-school-phone" value={centerForm.phone} onChange={(event) => setCenterField("phone", event.target.value)} placeholder="555-555-1212" />
                 </div>
                 <div className="space-y-1">
-                  <Label>City</Label>
-                  <Input value={centerForm.city} onChange={(event) => setCenterField("city", event.target.value)} />
+                  <Label htmlFor="executive-school-city">City</Label>
+                  <Input id="executive-school-city" value={centerForm.city} onChange={(event) => setCenterField("city", event.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label>State</Label>
-                  <Input value={centerForm.state} onChange={(event) => setCenterField("state", event.target.value)} placeholder="FL" />
+                  <Label htmlFor="executive-school-state">State</Label>
+                  <Input id="executive-school-state" value={centerForm.state} onChange={(event) => setCenterField("state", event.target.value)} placeholder="FL" />
                 </div>
                 <div className="space-y-1">
-                  <Label>Licensed capacity</Label>
-                  <Input value={centerForm.licensedCapacity} onChange={(event) => setCenterField("licensedCapacity", event.target.value)} inputMode="numeric" />
+                  <Label htmlFor="executive-school-capacity">Licensed capacity</Label>
+                  <Input id="executive-school-capacity" value={centerForm.licensedCapacity} onChange={(event) => setCenterField("licensedCapacity", event.target.value)} inputMode="numeric" />
                 </div>
                 <div className="space-y-1">
-                  <Label>Status</Label>
+                  <Label htmlFor="executive-school-status">Status</Label>
                   <Select value={centerForm.status} onValueChange={(value) => setCenterField("status", value ?? "active")}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="executive-school-status"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {centerStatuses.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1 md:col-span-2">
-                  <Label>Owner group</Label>
+                  <Label htmlFor="executive-school-owner-group">Owner group</Label>
                   <Select value={centerForm.ownerGroupId || "default"} onValueChange={(value) => setCenterField("ownerGroupId", (value ?? "default") === "default" ? "" : value ?? "")}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="executive-school-owner-group"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="default">Use default corporate/network group</SelectItem>
                       {sortedOwnerGroups.map((group) => <SelectItem key={group.id} value={group.id}>{group.name} ({statusLabel(group.status)})</SelectItem>)}
@@ -1000,23 +1014,23 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                   </Select>
                 </div>
                 <div className="space-y-1 md:col-span-2">
-                  <Label>Address</Label>
-                  <Input value={centerForm.address} onChange={(event) => setCenterField("address", event.target.value)} />
+                  <Label htmlFor="executive-school-address">Address</Label>
+                  <Input id="executive-school-address" value={centerForm.address} onChange={(event) => setCenterField("address", event.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Postal code</Label>
-                  <Input value={centerForm.postalCode} onChange={(event) => setCenterField("postalCode", event.target.value)} />
+                  <Label htmlFor="executive-school-postal-code">Postal code</Label>
+                  <Input id="executive-school-postal-code" value={centerForm.postalCode} onChange={(event) => setCenterField("postalCode", event.target.value)} />
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={saveCenter} disabled={isPending}>
-                  <Save data-icon="inline-start" />
-                  Save School
+                <Button onClick={saveCenter} disabled={isPending} aria-busy={savingCenter}>
+                  <Save data-icon="inline-start" aria-hidden="true" />
+                  {savingCenter ? (centerForm.centerId ? "Saving Changes…" : "Creating School…") : "Save School"}
                 </Button>
-                <Button variant="outline" onClick={() => setCenterStatus("closed")} disabled={isPending || !centerForm.centerId}>
+                <Button variant="outline" onClick={() => setCenterStatus("closed")} disabled={isPending || !centerForm.centerId} aria-label={`Archive ${centerForm.crmLocationId || centerForm.name || "selected school"}`}>
                   Archive School
                 </Button>
-                <Button variant="outline" onClick={() => setCenterStatus("active")} disabled={isPending || !centerForm.centerId}>
+                <Button variant="outline" onClick={() => setCenterStatus("active")} disabled={isPending || !centerForm.centerId} aria-label={`Reactivate ${centerForm.crmLocationId || centerForm.name || "selected school"}`}>
                   Reactivate
                 </Button>
               </div>
@@ -1025,7 +1039,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
+              <CardTitle as="h3" className="flex items-center gap-2 text-lg">
                 <UserPlus className="size-5 text-primary" />
                 User access and sign-in
               </CardTitle>
@@ -1033,23 +1047,23 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
             </CardHeader>
             <CardContent className="space-y-4">
               {generatedLogin ? (
-                <Alert>
-                  <KeyRound className="size-4" />
+                  <Alert role="status" aria-live="polite">
+                    <KeyRound className="size-4" aria-hidden="true" />
                   <AlertTitle>Teacher login</AlertTitle>
                   <AlertDescription>
                     <div className="mt-2 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                       <div className="grid gap-2 text-sm sm:grid-cols-2">
                         <div>
-                          <div className="text-xs font-medium uppercase text-muted-foreground">Username</div>
+                          <div className="text-xs font-medium text-muted-foreground">Username</div>
                           <div className="break-all font-mono">{generatedLogin.email}</div>
                         </div>
                         <div>
-                          <div className="text-xs font-medium uppercase text-muted-foreground">Password</div>
+                          <div className="text-xs font-medium text-muted-foreground">Password</div>
                           <div className="font-mono">{generatedLogin.temporary_password}</div>
                         </div>
                       </div>
-                      <Button type="button" size="sm" variant="outline" onClick={copyGeneratedLogin}>
-                        <Copy data-icon="inline-start" />
+                      <Button type="button" size="sm" className="min-h-10" variant="outline" onClick={copyGeneratedLogin} aria-label={`Copy login details for ${generatedLogin.email}`}>
+                        <Copy data-icon="inline-start" aria-hidden="true" />
                         Copy login details
                       </Button>
                     </div>
@@ -1058,30 +1072,30 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
               ) : null}
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1">
-                  <Label>Name</Label>
-                  <Input value={userForm.name} onChange={(event) => setUserField("name", event.target.value)} />
+                  <Label htmlFor="executive-user-name">Name</Label>
+                  <Input id="executive-user-name" value={userForm.name} onChange={(event) => setUserField("name", event.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label>{userFormIsTeacher ? "Contact email" : "Email"}</Label>
-                  <Input value={userForm.email} onChange={(event) => setUserField("email", event.target.value)} type="email" />
+                  <Label htmlFor="executive-user-email">{userFormIsTeacher ? "Contact email" : "Email"}</Label>
+                  <Input id="executive-user-email" value={userForm.email} onChange={(event) => setUserField("email", event.target.value)} type="email" />
                 </div>
                 <div className="space-y-1">
-                  <Label>Role</Label>
+                  <Label htmlFor="executive-user-role">Role</Label>
                   <Select value={userForm.role} onValueChange={(value) => setUserField("role", value ?? userForm.role)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="executive-user-role"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {roles.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Title</Label>
-                  <Input value={userForm.title} onChange={(event) => setUserField("title", event.target.value)} />
+                  <Label htmlFor="executive-user-title">Title</Label>
+                  <Input id="executive-user-title" value={userForm.title} onChange={(event) => setUserField("title", event.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Location access</Label>
+                  <Label htmlFor="executive-user-access-scope">Location access</Label>
                   <Select value={userForm.accessScopeType} onValueChange={(value) => setUserField("accessScopeType", value ?? userForm.accessScopeType)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="executive-user-access-scope"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="TENANT">All {brandName} locations</SelectItem>
                       <SelectItem value="OWNER_GROUP">Owner group</SelectItem>
@@ -1090,9 +1104,9 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Location</Label>
+                  <Label htmlFor="executive-user-location">Location</Label>
                   <Select value={userForm.centerId || "none"} onValueChange={(value) => setUserField("centerId", (value ?? "none") === "none" ? "" : value ?? "")}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="executive-user-location"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">No single-location assignment</SelectItem>
                       {sortedCenters.map((center) => <SelectItem key={center.id} value={center.id}>{shortCenterLabel(center)}</SelectItem>)}
@@ -1100,9 +1114,9 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Owner group</Label>
+                  <Label htmlFor="executive-user-owner-group">Owner group</Label>
                   <Select value={userForm.ownerGroupId || "none"} onValueChange={(value) => setUserField("ownerGroupId", (value ?? "none") === "none" ? "" : value ?? "")}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="executive-user-owner-group"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">No owner group assignment</SelectItem>
                       {sortedOwnerGroups.map((group) => <SelectItem key={group.id} value={group.id}>{group.name} ({statusLabel(group.status)})</SelectItem>)}
@@ -1112,13 +1126,13 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                 {!userFormIsTeacher ? (
                   <>
                     <div className="space-y-1">
-                      <Label>Password</Label>
-                      <Input value={userForm.password} onChange={(event) => setUserField("password", event.target.value)} type="password" placeholder="Optional" />
+                      <Label htmlFor="executive-user-password">Password</Label>
+                      <Input id="executive-user-password" value={userForm.password} onChange={(event) => setUserField("password", event.target.value)} type="password" placeholder="Optional" />
                     </div>
                     <div className="space-y-1">
-                      <Label>Password reset email</Label>
+                      <Label htmlFor="executive-user-password-reset-email">Password reset email</Label>
                       <Select value={userForm.sendPasswordReset} onValueChange={(value) => setUserField("sendPasswordReset", value ?? userForm.sendPasswordReset)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger id="executive-user-password-reset-email"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="no">Do not send</SelectItem>
                           <SelectItem value="yes">Send setup/reset email</SelectItem>
@@ -1128,9 +1142,9 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                   </>
                 ) : null}
               </div>
-              <Button onClick={saveUser} disabled={isPending}>
-                <UserPlus data-icon="inline-start" />
-                Save User
+              <Button onClick={saveUser} disabled={isPending} aria-busy={savingUser}>
+                <UserPlus data-icon="inline-start" aria-hidden="true" />
+                {savingUser ? (users.some((item) => item.email.toLowerCase() === userForm.email.trim().toLowerCase()) ? "Updating User…" : "Creating User…") : "Save User"}
               </Button>
             </CardContent>
           </Card>
@@ -1138,7 +1152,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
 
         <Card id="existing-user-accounts" className="scroll-mt-24">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
+            <CardTitle as="h3" className="flex items-center gap-2 text-lg">
               <ShieldCheck className="size-5 text-primary" />
               Existing user accounts
             </CardTitle>
@@ -1176,24 +1190,28 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => loadUserForEdit(user)}>Edit user</Button>
-                          <Button variant="outline" size="sm" onClick={() => {
+                          <Button variant="outline" size="sm" className="min-h-10" onClick={() => loadUserForEdit(user)} aria-label={`Edit access for ${user.email}`}>Edit user</Button>
+                          <Button variant="outline" size="sm" className="min-h-10" aria-label={`Open password controls for ${user.email}`} onClick={() => {
                             clearInlineFeedback();
                             setResetForm((current) => ({ ...current, email: user.email }));
                           }}>Reset password</Button>
                           <Button
                             variant="outline"
                             size="sm"
+                            className="min-h-10"
                             onClick={() => setUserStatusForEmail(user.email, user.isActive ? "inactive" : "active")}
                             disabled={isPending}
+                            aria-label={`${user.isActive ? "Deactivate" : "Reactivate"} ${user.email}`}
                           >
                             {user.isActive ? "Deactivate" : "Reactivate"}
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
+                            className="min-h-10"
                             onClick={() => revokeSessionsForEmail(user.email)}
                             disabled={isPending}
+                            aria-label={`Sign out all devices for ${user.email}`}
                           >
                             Sign out devices
                           </Button>
@@ -1217,15 +1235,15 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
         <div className="grid gap-4 xl:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
+              <CardTitle as="h3" className="flex items-center gap-2 text-lg">
                 <Building2 className="size-5 text-primary" />
-                Owner Group
+                Owner group
               </CardTitle>
               <CardDescription>Create, edit, archive, or reactivate franchisee and multi-location owner containers before assigning schools/users.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1 md:col-span-2">
-                <Label>Existing owner group</Label>
+                <Label htmlFor="executive-owner-group-selection">Existing owner group</Label>
                 <Select value={ownerGroupForm.ownerGroupId || "new"} onValueChange={(value) => {
                   if ((value ?? "new") === "new") {
                     clearInlineFeedback();
@@ -1234,7 +1252,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                     loadOwnerGroup(value ?? "");
                   }
                 }}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="executive-owner-group-selection"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="new">Create new owner group</SelectItem>
                     {sortedOwnerGroups.map((group) => (
@@ -1244,13 +1262,13 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Name</Label>
-                <Input value={ownerGroupForm.name} onChange={(event) => setOwnerGroupField("name", event.target.value)} placeholder="Smith Family Ownership Group" />
+                <Label htmlFor="executive-owner-group-name">Name</Label>
+                <Input id="executive-owner-group-name" value={ownerGroupForm.name} onChange={(event) => setOwnerGroupField("name", event.target.value)} placeholder="Smith Family Ownership Group" />
               </div>
               <div className="space-y-1">
-                <Label>Type</Label>
+                <Label htmlFor="executive-owner-group-type">Type</Label>
                 <Select value={ownerGroupForm.ownerType} onValueChange={(value) => setOwnerGroupField("ownerType", value ?? ownerGroupForm.ownerType)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="executive-owner-group-type"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="franchisee">Franchisee</SelectItem>
                     <SelectItem value="multi_location_operator">Multi-location operator</SelectItem>
@@ -1260,17 +1278,17 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Billing email</Label>
-                <Input value={ownerGroupForm.billingEmail} onChange={(event) => setOwnerGroupField("billingEmail", event.target.value)} type="email" />
+                <Label htmlFor="executive-owner-group-billing-email">Billing email</Label>
+                <Input id="executive-owner-group-billing-email" value={ownerGroupForm.billingEmail} onChange={(event) => setOwnerGroupField("billingEmail", event.target.value)} type="email" />
               </div>
               <div className="space-y-1">
-                <Label>Contact name</Label>
-                <Input value={ownerGroupForm.contactName} onChange={(event) => setOwnerGroupField("contactName", event.target.value)} />
+                <Label htmlFor="executive-owner-group-contact-name">Contact name</Label>
+                <Input id="executive-owner-group-contact-name" value={ownerGroupForm.contactName} onChange={(event) => setOwnerGroupField("contactName", event.target.value)} />
               </div>
               <div className="space-y-1 md:col-span-2">
-                <Label>Status</Label>
+                <Label htmlFor="executive-owner-group-status">Status</Label>
                 <Select value={ownerGroupForm.status} onValueChange={(value) => setOwnerGroupField("status", value ?? "active")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="executive-owner-group-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="paused">Paused</SelectItem>
@@ -1280,14 +1298,14 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
               </div>
               <div className="md:col-span-2">
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={saveOwnerGroup} disabled={isPending}>
-                    <Building2 data-icon="inline-start" />
-                    {ownerGroupForm.ownerGroupId ? "Save Owner Group" : "Create Owner Group"}
+                  <Button onClick={saveOwnerGroup} disabled={isPending} aria-busy={savingOwnerGroup}>
+                    <Building2 data-icon="inline-start" aria-hidden="true" />
+                    {savingOwnerGroup ? (ownerGroupForm.ownerGroupId ? "Saving owner group…" : "Creating owner group…") : ownerGroupForm.ownerGroupId ? "Save owner group" : "Create owner group"}
                   </Button>
-                  <Button variant="outline" onClick={() => setOwnerGroupStatusById(ownerGroupForm.ownerGroupId, "closed")} disabled={isPending || !ownerGroupForm.ownerGroupId}>
-                    Archive Owner Group
+                  <Button variant="outline" onClick={() => setOwnerGroupStatusById(ownerGroupForm.ownerGroupId, "closed")} disabled={isPending || !ownerGroupForm.ownerGroupId} aria-label={`Archive ${ownerGroupForm.name || "selected owner group"}`}>
+                    Archive owner group
                   </Button>
-                  <Button variant="outline" onClick={() => setOwnerGroupStatusById(ownerGroupForm.ownerGroupId, "active")} disabled={isPending || !ownerGroupForm.ownerGroupId}>
+                  <Button variant="outline" onClick={() => setOwnerGroupStatusById(ownerGroupForm.ownerGroupId, "active")} disabled={isPending || !ownerGroupForm.ownerGroupId} aria-label={`Reactivate ${ownerGroupForm.name || "selected owner group"}`}>
                     Reactivate
                   </Button>
                 </div>
@@ -1317,12 +1335,14 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <Button variant="outline" size="sm" onClick={() => loadOwnerGroup(group.id)}>Edit owner group</Button>
+                              <Button variant="outline" size="sm" className="min-h-10" onClick={() => loadOwnerGroup(group.id)} aria-label={`Edit ${group.name}`}>Edit owner group</Button>
                               <Button
                                 variant="outline"
                                 size="sm"
+                                className="min-h-10"
                                 onClick={() => setOwnerGroupStatusById(group.id, group.status === "closed" ? "active" : "closed")}
                                 disabled={isPending}
+                                aria-label={`${group.status === "closed" ? "Reactivate" : "Archive"} ${group.name}`}
                               >
                                 {group.status === "closed" ? "Reactivate owner group" : "Archive owner group"}
                               </Button>
@@ -1339,7 +1359,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
+              <CardTitle as="h3" className="flex items-center gap-2 text-lg">
                 <KeyRound className="size-5 text-primary" />
                 Password and session controls
               </CardTitle>
@@ -1347,27 +1367,27 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
-                <Label>User email</Label>
-                <Input value={resetForm.email} onChange={(event) => setResetField("email", event.target.value)} type="email" />
+                <Label htmlFor="executive-password-user-email">User email</Label>
+                <Input id="executive-password-user-email" value={resetForm.email} onChange={(event) => setResetField("email", event.target.value)} type="email" />
               </div>
               <div className="space-y-1">
-                <Label>Password</Label>
-                <Input value={resetForm.password} onChange={(event) => setResetField("password", event.target.value)} type="password" placeholder="Blank sends reset email" />
+                <Label htmlFor="executive-password-new-password">Password</Label>
+                <Input id="executive-password-new-password" value={resetForm.password} onChange={(event) => setResetField("password", event.target.value)} type="password" placeholder="Blank sends reset email" />
               </div>
               <div className="md:col-span-2">
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={resetPassword} disabled={isPending || !resetForm.email}>
-                    <KeyRound data-icon="inline-start" />
-                    Reset Password
+                  <Button onClick={resetPassword} disabled={isPending || !resetForm.email} aria-busy={resettingPassword}>
+                    <KeyRound data-icon="inline-start" aria-hidden="true" />
+                    {resettingPassword ? (resetForm.password ? "Setting Password…" : "Sending Reset…") : "Reset Password"}
                   </Button>
-                  <Button variant="outline" onClick={() => setUserStatus("inactive")} disabled={isPending || !resetForm.email}>
+                  <Button variant="outline" onClick={() => setUserStatus("inactive")} disabled={isPending || !resetForm.email} aria-label={`Deactivate ${resetForm.email || "selected user"}`}>
                     Deactivate User
                   </Button>
-                  <Button variant="outline" onClick={() => setUserStatus("active")} disabled={isPending || !resetForm.email}>
+                  <Button variant="outline" onClick={() => setUserStatus("active")} disabled={isPending || !resetForm.email} aria-label={`Reactivate ${resetForm.email || "selected user"}`}>
                     Reactivate User
                   </Button>
-                  <Button variant="outline" onClick={revokeSessions} disabled={isPending || !resetForm.email}>
-                    <LogOut data-icon="inline-start" />
+                  <Button variant="outline" onClick={revokeSessions} disabled={isPending || !resetForm.email} aria-label={`Log out all devices for ${resetForm.email || "selected user"}`}>
+                    <LogOut data-icon="inline-start" aria-hidden="true" />
                     Log Out All Devices
                   </Button>
                 </div>

@@ -73,7 +73,7 @@ export function FteBulkImportPanel() {
   return (
     <Card className="glass-panel">
       <CardHeader>
-        <CardTitle>Executive Bulk FTE Import</CardTitle>
+        <CardTitle as="h2">Executive Bulk FTE Import</CardTitle>
         <CardDescription>
           Upload or paste a CSV to create or correct weekly FTE reports across visible schools, including legacy billing, payroll, capacity, starts, withdrawals, and preregistration columns. Existing school/week rows are updated.
         </CardDescription>

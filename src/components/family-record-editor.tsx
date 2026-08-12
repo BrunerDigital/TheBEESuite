@@ -1098,7 +1098,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     return (
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Family Record Editor</CardTitle>
+          <CardTitle as="h2">Family Record Editor</CardTitle>
           <CardDescription>No family records are visible for this school scope yet.</CardDescription>
         </CardHeader>
       </Card>
@@ -1110,7 +1110,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>
+            <CardTitle as="h2">
               <UserPen data-icon="inline-start" />
               Family Record Editor
             </CardTitle>
@@ -1179,9 +1179,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
         </EntityHeader>
 
         <div className="space-y-1">
-          <Label>Family</Label>
+          <Label htmlFor="family-editor-family">Family</Label>
           <Select value={selectedFamily?.id ?? ""} onValueChange={(value) => value && loadFamily(value)}>
-            <SelectTrigger><SelectValue placeholder="Choose family" /></SelectTrigger>
+            <SelectTrigger id="family-editor-family"><SelectValue placeholder="Choose family" /></SelectTrigger>
             <SelectContent>
               {families.map((family) => (
                 <SelectItem key={family.id} value={family.id}>{family.name}</SelectItem>
@@ -1233,9 +1233,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           ) : null}
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
-              <Label>School / center</Label>
+              <Label htmlFor="family-editor-center">School / center</Label>
               <Select value={familyCenterId} onValueChange={(value) => value && setFamilyCenterId(value)}>
-                <SelectTrigger><SelectValue placeholder="Choose center" /></SelectTrigger>
+                <SelectTrigger id="family-editor-center"><SelectValue placeholder="Choose center" /></SelectTrigger>
                 <SelectContent>
                   {centers.map((center) => (
                     <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>
@@ -1244,32 +1244,32 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Family name</Label>
-              <Input value={familyName} onChange={(event) => setFamilyName(event.target.value)} />
+              <Label htmlFor="family-editor-name">Family name</Label>
+              <Input id="family-editor-name" value={familyName} onChange={(event) => setFamilyName(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Billing email</Label>
-              <Input value={billingEmail} onChange={(event) => setBillingEmail(event.target.value)} type="email" />
+              <Label htmlFor="family-editor-billing-email">Billing email</Label>
+              <Input id="family-editor-billing-email" value={billingEmail} onChange={(event) => setBillingEmail(event.target.value)} type="email" />
             </div>
             <div className="space-y-1 md:col-span-2">
-              <Label>Address</Label>
-              <Input value={address} onChange={(event) => setAddress(event.target.value)} />
+              <Label htmlFor="family-editor-address">Address</Label>
+              <Input id="family-editor-address" value={address} onChange={(event) => setAddress(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Restricted custody note (staff only)</Label>
-              <Input value={custodyNotes} onChange={(event) => setCustodyNotes(event.target.value)} />
+              <Label htmlFor="family-editor-custody-note">Restricted custody note (staff only)</Label>
+              <Input id="family-editor-custody-note" value={custodyNotes} onChange={(event) => setCustodyNotes(event.target.value)} />
             </div>
             <div id="family-notes" className="scroll-mt-36 space-y-1 md:col-span-3">
-              <Label>Internal family notes</Label>
-              <Textarea value={familyNotes} onChange={(event) => setFamilyNotes(event.target.value)} />
+              <Label htmlFor="family-editor-internal-notes">Internal family notes</Label>
+              <Textarea id="family-editor-internal-notes" value={familyNotes} onChange={(event) => setFamilyNotes(event.target.value)} />
             </div>
           </div>
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label>
-                <Mail data-icon="inline-start" />
+              <div className="inline-flex items-center gap-2 text-sm font-medium">
+                <Mail className="size-4" aria-hidden="true" />
                 Daily report email recipients
-              </Label>
+              </div>
               <Badge variant="outline">
                 {dailyReportEmailRecipients.length} email{dailyReportEmailRecipients.length === 1 ? "" : "s"} on file
               </Badge>
@@ -1399,9 +1399,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           {duplicateCandidates.length ? (
             <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
               <div className="space-y-1">
-                <Label>Duplicate to merge into selected family</Label>
+                <Label htmlFor="family-editor-duplicate-family">Duplicate to merge into selected family</Label>
                 <Select value={selectedDuplicateId} onValueChange={(value) => value && setDuplicateFamilyId(value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="family-editor-duplicate-family"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {duplicateCandidates.map((candidate) => {
                       const family = families.find((item) => item.id === candidate.candidateId);
@@ -1457,29 +1457,36 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                     ))}
                   </SelectContent>
                 </Select>
-                <Button type="button" variant="outline" onClick={() => loadGuardian(null)}>Add</Button>
+                <Button type="button" variant="outline" className="min-h-11" aria-label="Add parent or guardian" onClick={() => loadGuardian(null)}>Add</Button>
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Name</Label>
-              <Input value={guardianName} onChange={(event) => setGuardianName(event.target.value)} />
+              <Label htmlFor="family-editor-guardian-name">Name</Label>
+              <Input id="family-editor-guardian-name" value={guardianName} onChange={(event) => setGuardianName(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Email{isBillingContact ? " (required for payer portal)" : ""}</Label>
-              <Input value={guardianEmail} onChange={(event) => setGuardianEmail(event.target.value)} type="email" />
+              <Label htmlFor="family-editor-guardian-email">Email{isBillingContact ? " (required for payer portal)" : ""}</Label>
+              <Input
+                id="family-editor-guardian-email"
+                value={guardianEmail}
+                onChange={(event) => setGuardianEmail(event.target.value)}
+                type="email"
+                aria-invalid={isBillingContact && !isValidGuardianEmail(guardianEmail)}
+                aria-describedby={isBillingContact && !isValidGuardianEmail(guardianEmail) ? "family-editor-guardian-email-error" : undefined}
+              />
             </div>
             <div className="space-y-1">
-              <Label>Phone</Label>
-              <Input value={guardianPhone} onChange={(event) => setGuardianPhone(event.target.value)} type="tel" />
+              <Label htmlFor="family-editor-guardian-phone">Phone</Label>
+              <Input id="family-editor-guardian-phone" value={guardianPhone} onChange={(event) => setGuardianPhone(event.target.value)} type="tel" />
             </div>
             <div className="space-y-1">
-              <Label>Relation</Label>
-              <Input value={guardianRelation} onChange={(event) => setGuardianRelation(event.target.value)} />
+              <Label htmlFor="family-editor-guardian-relation">Relation</Label>
+              <Input id="family-editor-guardian-relation" value={guardianRelation} onChange={(event) => setGuardianRelation(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Preferred contact</Label>
+              <Label htmlFor="family-editor-guardian-preferred-contact">Preferred contact</Label>
               <Select value={preferredCommunication} onValueChange={(value) => value && setPreferredCommunication(value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="family-editor-guardian-preferred-contact"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {communicationMethods.map((method) => (
                     <SelectItem key={method} value={method}>{method}</SelectItem>
@@ -1488,15 +1495,15 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               </Select>
             </div>
             <div className="space-y-1 md:col-span-2">
-              <Label>Employer</Label>
-              <Input value={guardianEmployer} onChange={(event) => setGuardianEmployer(event.target.value)} />
+              <Label htmlFor="family-editor-guardian-employer">Employer</Label>
+              <Input id="family-editor-guardian-employer" value={guardianEmployer} onChange={(event) => setGuardianEmployer(event.target.value)} />
             </div>
-            <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
-              <input type="checkbox" checked={isBillingContact} onChange={(event) => setIsBillingContact(event.target.checked)} />
+            <label htmlFor="family-editor-guardian-billing-contact" className="flex min-h-11 cursor-pointer touch-manipulation items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+              <input id="family-editor-guardian-billing-contact" className="size-5 shrink-0" type="checkbox" checked={isBillingContact} onChange={(event) => setIsBillingContact(event.target.checked)} />
               Billing contact
             </label>
-            <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
-              <input type="checkbox" checked={parentPortalLoginEnabled} onChange={(event) => setParentPortalLoginEnabled(event.target.checked)} />
+            <label htmlFor="family-editor-guardian-portal-login" className="flex min-h-11 cursor-pointer touch-manipulation items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+              <input id="family-editor-guardian-portal-login" className="size-5 shrink-0" type="checkbox" checked={parentPortalLoginEnabled} onChange={(event) => setParentPortalLoginEnabled(event.target.checked)} />
               Parent portal login
             </label>
             {selectedGuardian?.userId && parentPortalLoginEnabled ? (
@@ -1504,7 +1511,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             ) : null}
           </div>
           {isBillingContact && !isValidGuardianEmail(guardianEmail) ? (
-            <Alert variant="destructive">
+            <Alert id="family-editor-guardian-email-error" variant="destructive">
               <AlertCircle className="size-4" />
               <AlertTitle>Billing contact email required</AlertTitle>
               <AlertDescription>
@@ -1552,9 +1559,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             {selectedGuardian && guardianDuplicateCandidates.length ? (
               <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="space-y-1">
-                  <Label>Duplicate guardian to merge into selected guardian</Label>
+                  <Label htmlFor="family-editor-duplicate-guardian">Duplicate guardian to merge into selected guardian</Label>
                   <Select value={selectedDuplicateGuardianId} onValueChange={(value) => value && setDuplicateGuardianId(value)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="family-editor-duplicate-guardian"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {guardianDuplicateCandidates.map((candidate) => {
                         const guardian = guardianDuplicateRecords.find((item) => item.id === candidate.candidateId);
@@ -1595,7 +1602,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                   <Badge variant="outline">
                     {selectedFamily?.pickups.length ?? 0} pickup{selectedFamily?.pickups.length === 1 ? "" : "s"}
                   </Badge>
-                  <Button type="button" size="sm" variant="outline" onClick={() => loadPickup(null)}>Add</Button>
+                  <Button type="button" size="sm" variant="outline" className="min-h-11" aria-label="Add authorized pickup" onClick={() => loadPickup(null)}>Add</Button>
                 </div>
               </div>
               <div className="grid gap-3">
@@ -1612,20 +1619,20 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
-                    <Label>Name</Label>
-                    <Input value={pickupName} onChange={(event) => setPickupName(event.target.value)} />
+                    <Label htmlFor="family-editor-pickup-name">Name</Label>
+                    <Input id="family-editor-pickup-name" value={pickupName} onChange={(event) => setPickupName(event.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label>Phone</Label>
-                    <Input value={pickupPhone} onChange={(event) => setPickupPhone(event.target.value)} type="tel" />
+                    <Label htmlFor="family-editor-pickup-phone">Phone</Label>
+                    <Input id="family-editor-pickup-phone" value={pickupPhone} onChange={(event) => setPickupPhone(event.target.value)} type="tel" />
                   </div>
                   <div className="space-y-1 md:col-span-2">
-                    <Label>Relation</Label>
-                    <Input value={pickupRelation} onChange={(event) => setPickupRelation(event.target.value)} />
+                    <Label htmlFor="family-editor-pickup-relation">Relation</Label>
+                    <Input id="family-editor-pickup-relation" value={pickupRelation} onChange={(event) => setPickupRelation(event.target.value)} />
                   </div>
                   <div className="space-y-1 md:col-span-2">
-                    <Label>Verification notes</Label>
-                    <Textarea value={pickupVerificationNotes} onChange={(event) => setPickupVerificationNotes(event.target.value)} />
+                    <Label htmlFor="family-editor-pickup-verification-notes">Verification notes</Label>
+                    <Textarea id="family-editor-pickup-verification-notes" value={pickupVerificationNotes} onChange={(event) => setPickupVerificationNotes(event.target.value)} />
                   </div>
                 </div>
                 <Button
@@ -1667,7 +1674,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                   <Badge variant="outline">
                     {selectedFamily?.emergencyContacts.length ?? 0} contact{selectedFamily?.emergencyContacts.length === 1 ? "" : "s"}
                   </Badge>
-                  <Button type="button" size="sm" variant="outline" onClick={() => loadEmergencyContact(null)}>Add</Button>
+                  <Button type="button" size="sm" variant="outline" className="min-h-11" aria-label="Add emergency contact" onClick={() => loadEmergencyContact(null)}>Add</Button>
                 </div>
               </div>
               <div className="grid gap-3">
@@ -1684,16 +1691,16 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
-                    <Label>Name</Label>
-                    <Input value={emergencyContactName} onChange={(event) => setEmergencyContactName(event.target.value)} />
+                    <Label htmlFor="family-editor-emergency-contact-name">Name</Label>
+                    <Input id="family-editor-emergency-contact-name" value={emergencyContactName} onChange={(event) => setEmergencyContactName(event.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label>Phone</Label>
-                    <Input value={emergencyContactPhone} onChange={(event) => setEmergencyContactPhone(event.target.value)} type="tel" />
+                    <Label htmlFor="family-editor-emergency-contact-phone">Phone</Label>
+                    <Input id="family-editor-emergency-contact-phone" value={emergencyContactPhone} onChange={(event) => setEmergencyContactPhone(event.target.value)} type="tel" />
                   </div>
                   <div className="space-y-1 md:col-span-2">
-                    <Label>Relation</Label>
-                    <Input value={emergencyContactRelation} onChange={(event) => setEmergencyContactRelation(event.target.value)} />
+                    <Label htmlFor="family-editor-emergency-contact-relation">Relation</Label>
+                    <Input id="family-editor-emergency-contact-relation" value={emergencyContactRelation} onChange={(event) => setEmergencyContactRelation(event.target.value)} />
                   </div>
                 </div>
                 <Button
@@ -1752,25 +1759,25 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                     ))}
                   </SelectContent>
                 </Select>
-                <Button type="button" variant="outline" onClick={() => loadChild(null)}>Add</Button>
+                <Button type="button" variant="outline" className="min-h-11" aria-label="Add child" onClick={() => loadChild(null)}>Add</Button>
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Full name</Label>
-              <Input value={childName} onChange={(event) => setChildName(event.target.value)} />
+              <Label htmlFor="family-editor-child-name">Full name</Label>
+              <Input id="family-editor-child-name" value={childName} onChange={(event) => setChildName(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Preferred name</Label>
-              <Input value={preferredName} onChange={(event) => setPreferredName(event.target.value)} />
+              <Label htmlFor="family-editor-child-preferred-name">Preferred name</Label>
+              <Input id="family-editor-child-preferred-name" value={preferredName} onChange={(event) => setPreferredName(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Date of birth</Label>
-              <Input value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} type="date" />
+              <Label htmlFor="family-editor-child-date-of-birth">Date of birth</Label>
+              <Input id="family-editor-child-date-of-birth" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} type="date" />
             </div>
             <div className="space-y-1">
-              <Label>Age group</Label>
+              <Label htmlFor="family-editor-child-age-group">Age group</Label>
               <Select value={ageGroup} onValueChange={(value) => value && setAgeGroup(value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="family-editor-child-age-group"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {availableAgeGroups.map((group) => (
                     <SelectItem key={group} value={group}>{group}</SelectItem>
@@ -1779,9 +1786,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Status</Label>
+              <Label htmlFor="family-editor-child-enrollment-status">Status</Label>
               <Select value={enrollmentStatus} onValueChange={(value) => value && setEnrollmentStatus(value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="family-editor-child-enrollment-status"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {enrollmentStatuses.map((status) => (
                     <SelectItem key={status} value={status}>{status.replaceAll("_", " ")}</SelectItem>
@@ -1790,13 +1797,19 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Start date</Label>
-              <Input value={startDate} onChange={(event) => setStartDate(event.target.value)} type="date" />
+              <Label htmlFor="family-editor-child-start-date">Start date</Label>
+              <Input id="family-editor-child-start-date" value={startDate} onChange={(event) => setStartDate(event.target.value)} type="date" />
             </div>
             <div className="space-y-1 md:col-span-2">
-              <Label>Classroom</Label>
+              <Label htmlFor="family-editor-child-classroom">Classroom</Label>
               <Select value={classroomId} onValueChange={(value) => value && setClassroomId(value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger
+                  id="family-editor-child-classroom"
+                  aria-invalid={Boolean(childEnrollmentClassroomError)}
+                  aria-describedby="family-editor-child-classroom-help"
+                >
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Unassigned</SelectItem>
                   {classroomOptions.map((classroom) => (
@@ -1804,41 +1817,49 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                   ))}
                 </SelectContent>
               </Select>
-              {childEnrollmentClassroomError ? (
-                <p className="text-xs text-destructive">{childEnrollmentClassroomError}</p>
-              ) : isCurrentlyEnrolledStatus(enrollmentStatus) ? (
-                <p className="text-xs text-muted-foreground">Current enrollment is visible in Billing and active rosters after this classroom assignment is saved.</p>
-              ) : null}
+              <p
+                id="family-editor-child-classroom-help"
+                className={childEnrollmentClassroomError
+                  ? "text-xs text-destructive"
+                  : isCurrentlyEnrolledStatus(enrollmentStatus)
+                    ? "text-xs text-muted-foreground"
+                    : "sr-only"}
+              >
+                {childEnrollmentClassroomError
+                  || (isCurrentlyEnrolledStatus(enrollmentStatus)
+                    ? "Current enrollment is visible in Billing and active rosters after this classroom assignment is saved."
+                    : "Choose a classroom or leave this child unassigned.")}
+              </p>
             </div>
-            <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
-              <input type="checkbox" checked={photoVideoPermission} onChange={(event) => setPhotoVideoPermission(event.target.checked)} />
+            <label htmlFor="family-editor-child-photo-permission" className="flex min-h-11 cursor-pointer touch-manipulation items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+              <input id="family-editor-child-photo-permission" className="size-5 shrink-0" type="checkbox" checked={photoVideoPermission} onChange={(event) => setPhotoVideoPermission(event.target.checked)} />
               Photo/video permission
             </label>
-            <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
-              <input type="checkbox" checked={fieldTripPermission} onChange={(event) => setFieldTripPermission(event.target.checked)} />
+            <label htmlFor="family-editor-child-field-trip-permission" className="flex min-h-11 cursor-pointer touch-manipulation items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+              <input id="family-editor-child-field-trip-permission" className="size-5 shrink-0" type="checkbox" checked={fieldTripPermission} onChange={(event) => setFieldTripPermission(event.target.checked)} />
               Field trip permission
             </label>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1">
-              <Label>Schedule notes</Label>
-              <Textarea value={childScheduleNotes} onChange={(event) => setChildScheduleNotes(event.target.value)} />
+              <Label htmlFor="family-editor-child-schedule-notes">Schedule notes</Label>
+              <Textarea id="family-editor-child-schedule-notes" value={childScheduleNotes} onChange={(event) => setChildScheduleNotes(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Developmental notes</Label>
-              <Textarea value={developmentalNotes} onChange={(event) => setDevelopmentalNotes(event.target.value)} />
+              <Label htmlFor="family-editor-child-developmental-notes">Developmental notes</Label>
+              <Textarea id="family-editor-child-developmental-notes" value={developmentalNotes} onChange={(event) => setDevelopmentalNotes(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Nap notes</Label>
-              <Textarea value={napNotes} onChange={(event) => setNapNotes(event.target.value)} />
+              <Label htmlFor="family-editor-child-nap-notes">Nap notes</Label>
+              <Textarea id="family-editor-child-nap-notes" value={napNotes} onChange={(event) => setNapNotes(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Feeding / dietary notes</Label>
-              <Textarea value={feedingNotes} onChange={(event) => setFeedingNotes(event.target.value)} />
+              <Label htmlFor="family-editor-child-feeding-notes">Feeding / dietary notes</Label>
+              <Textarea id="family-editor-child-feeding-notes" value={feedingNotes} onChange={(event) => setFeedingNotes(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Potty notes</Label>
-              <Textarea value={pottyNotes} onChange={(event) => setPottyNotes(event.target.value)} />
+              <Label htmlFor="family-editor-child-potty-notes">Potty notes</Label>
+              <Textarea id="family-editor-child-potty-notes" value={pottyNotes} onChange={(event) => setPottyNotes(event.target.value)} />
             </div>
           </div>
           <Button
@@ -1881,9 +1902,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             {selectedChild && childDuplicateCandidates.length ? (
               <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="space-y-1">
-                  <Label>Duplicate child to merge into selected child</Label>
+                  <Label htmlFor="family-editor-duplicate-child">Duplicate child to merge into selected child</Label>
                   <Select value={selectedDuplicateChildId} onValueChange={(value) => value && setDuplicateChildId(value)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="family-editor-duplicate-child"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {childDuplicateCandidates.map((candidate) => {
                         const child = childDuplicateRecords.find((item) => item.id === candidate.candidateId);
@@ -1919,14 +1940,14 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                   <Badge variant="outline">
                     {selectedChild?.allergies.length ?? 0} allerg{selectedChild?.allergies.length === 1 ? "y" : "ies"}
                   </Badge>
-                  <Button type="button" size="sm" variant="outline" disabled={!selectedChild} onClick={() => loadAllergy(null)}>Add</Button>
+                  <Button type="button" size="sm" variant="outline" className="min-h-11" aria-label="Add allergy action plan" disabled={!selectedChild} onClick={() => loadAllergy(null)}>Add</Button>
                 </div>
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
-                  <Label>Allergy record</Label>
+                  <Label htmlFor="family-editor-allergy-record">Allergy record</Label>
                   <Select value={selectedAllergy?.id ?? ""} onValueChange={(value) => value && loadAllergyById(value)}>
-                    <SelectTrigger><SelectValue placeholder="Choose allergy" /></SelectTrigger>
+                    <SelectTrigger id="family-editor-allergy-record"><SelectValue placeholder="Choose allergy" /></SelectTrigger>
                     <SelectContent>
                       {selectedChild?.allergies.map((allergy) => (
                         <SelectItem key={allergy.id} value={allergy.id}>{allergy.allergen}</SelectItem>
@@ -1936,16 +1957,16 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
-                    <Label>Allergen</Label>
-                    <Input value={allergen} onChange={(event) => setAllergen(event.target.value)} />
+                    <Label htmlFor="family-editor-allergen">Allergen</Label>
+                    <Input id="family-editor-allergen" value={allergen} onChange={(event) => setAllergen(event.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label>Severity</Label>
-                    <Input value={allergySeverity} onChange={(event) => setAllergySeverity(event.target.value)} />
+                    <Label htmlFor="family-editor-allergy-severity">Severity</Label>
+                    <Input id="family-editor-allergy-severity" value={allergySeverity} onChange={(event) => setAllergySeverity(event.target.value)} />
                   </div>
                   <div className="space-y-1 md:col-span-2">
-                    <Label>Action plan</Label>
-                    <Textarea value={allergyActionPlan} onChange={(event) => setAllergyActionPlan(event.target.value)} />
+                    <Label htmlFor="family-editor-allergy-action-plan">Action plan</Label>
+                    <Textarea id="family-editor-allergy-action-plan" value={allergyActionPlan} onChange={(event) => setAllergyActionPlan(event.target.value)} />
                   </div>
                 </div>
                 <Button
@@ -1984,14 +2005,14 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                   <Badge variant="outline">
                     {selectedChild?.medicalNotes.length ?? 0} note{selectedChild?.medicalNotes.length === 1 ? "" : "s"}
                   </Badge>
-                  <Button type="button" size="sm" variant="outline" disabled={!selectedChild} onClick={() => loadMedicalNote(null)}>Add</Button>
+                  <Button type="button" size="sm" variant="outline" className="min-h-11" aria-label="Add medical note" disabled={!selectedChild} onClick={() => loadMedicalNote(null)}>Add</Button>
                 </div>
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
-                  <Label>Medical note record</Label>
+                  <Label htmlFor="family-editor-medical-note-record">Medical note record</Label>
                   <Select value={selectedMedicalNote?.id ?? ""} onValueChange={(value) => value && loadMedicalNoteById(value)}>
-                    <SelectTrigger><SelectValue placeholder="Choose note" /></SelectTrigger>
+                    <SelectTrigger id="family-editor-medical-note-record"><SelectValue placeholder="Choose note" /></SelectTrigger>
                     <SelectContent>
                       {selectedChild?.medicalNotes.map((note) => (
                         <SelectItem key={note.id} value={note.id}>{note.category}</SelectItem>
@@ -2000,15 +2021,15 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Category</Label>
-                  <Input value={medicalCategory} onChange={(event) => setMedicalCategory(event.target.value)} />
+                  <Label htmlFor="family-editor-medical-note-category">Category</Label>
+                  <Input id="family-editor-medical-note-category" value={medicalCategory} onChange={(event) => setMedicalCategory(event.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Note</Label>
-                  <Textarea value={medicalNote} onChange={(event) => setMedicalNote(event.target.value)} />
+                  <Label htmlFor="family-editor-medical-note-body">Note</Label>
+                  <Textarea id="family-editor-medical-note-body" value={medicalNote} onChange={(event) => setMedicalNote(event.target.value)} />
                 </div>
-                <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
-                  <input type="checkbox" checked={medicalRestricted} onChange={(event) => setMedicalRestricted(event.target.checked)} />
+                <label htmlFor="family-editor-medical-note-restricted" className="flex min-h-11 cursor-pointer touch-manipulation items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+                  <input id="family-editor-medical-note-restricted" className="size-5 shrink-0" type="checkbox" checked={medicalRestricted} onChange={(event) => setMedicalRestricted(event.target.checked)} />
                   Restricted to staff with child safety access
                 </label>
                 <Button
@@ -2050,14 +2071,14 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 <Badge variant="outline">
                   {documentRecordCount} document{documentRecordCount === 1 ? "" : "s"}
                 </Badge>
-                <Button type="button" size="sm" variant="outline" disabled={!selectedFamily} onClick={() => loadDocument(null)}>Add</Button>
+                <Button type="button" size="sm" variant="outline" className="min-h-11" aria-label="Add document request" disabled={!selectedFamily} onClick={() => loadDocument(null)}>Add</Button>
               </div>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
-                <Label>Document record</Label>
+                <Label htmlFor="family-editor-document-record">Document record</Label>
                 <Select value={selectedDocument?.id ?? ""} onValueChange={(value) => value && loadDocumentById(value)}>
-                  <SelectTrigger><SelectValue placeholder="Choose document" /></SelectTrigger>
+                  <SelectTrigger id="family-editor-document-record"><SelectValue placeholder="Choose document" /></SelectTrigger>
                   <SelectContent>
                     {selectedFamily?.documents.map((document) => (
                       <SelectItem key={document.id} value={document.id}>{document.name} · family</SelectItem>
@@ -2071,9 +2092,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Owner</Label>
+                <Label htmlFor="family-editor-document-owner">Owner</Label>
                 <Select value={documentChildId} onValueChange={(value) => value && setDocumentChildId(value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="family-editor-document-owner"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="family">Family account</SelectItem>
                     {selectedFamily?.children.map((child) => (
@@ -2083,17 +2104,17 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Document name</Label>
-                <Input value={documentName} onChange={(event) => setDocumentName(event.target.value)} />
+                <Label htmlFor="family-editor-document-name">Document name</Label>
+                <Input id="family-editor-document-name" value={documentName} onChange={(event) => setDocumentName(event.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label>Type</Label>
-                <Input value={documentType} onChange={(event) => setDocumentType(event.target.value)} placeholder="immunization, policy, custody" />
+                <Label htmlFor="family-editor-document-type">Type</Label>
+                <Input id="family-editor-document-type" value={documentType} onChange={(event) => setDocumentType(event.target.value)} placeholder="immunization, policy, custody" />
               </div>
               <div className="space-y-1">
-                <Label>Status</Label>
+                <Label htmlFor="family-editor-document-status">Status</Label>
                 <Select value={documentStatus} onValueChange={(value) => value && setDocumentStatus(value)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="family-editor-document-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {documentStatuses.map((status) => (
                       <SelectItem key={status} value={status}>{status.toLowerCase()}</SelectItem>
@@ -2102,11 +2123,11 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Expiration</Label>
-                <Input type="date" value={documentExpiresAt} onChange={(event) => setDocumentExpiresAt(event.target.value)} />
+                <Label htmlFor="family-editor-document-expiration">Expiration</Label>
+                <Input id="family-editor-document-expiration" type="date" value={documentExpiresAt} onChange={(event) => setDocumentExpiresAt(event.target.value)} />
               </div>
-              <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm md:col-span-3">
-                <input type="checkbox" checked={documentRestricted} onChange={(event) => setDocumentRestricted(event.target.checked)} />
+              <label htmlFor="family-editor-document-restricted" className="flex min-h-11 cursor-pointer touch-manipulation items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm md:col-span-3">
+                <input id="family-editor-document-restricted" className="size-5 shrink-0" type="checkbox" checked={documentRestricted} onChange={(event) => setDocumentRestricted(event.target.checked)} />
                 Restricted document visibility
               </label>
             </div>

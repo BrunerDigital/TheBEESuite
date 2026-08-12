@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, Save } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ type Props = {
 const centerScopedEntities = new Set(["family", "classroom", "staff", "announcement"]);
 
 export function OperationsActionHub({ title = "Create / Edit Record", defaultEntity = "announcement", compact = false, centers = [] }: Props) {
+  const formId = useId();
   const [entity, setEntity] = useState(defaultEntity);
   const [id, setId] = useState("");
   const [centerId, setCenterId] = useState(centers[0]?.id ?? "");
@@ -123,9 +124,9 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
   }
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle as="h2">{title}</CardTitle>
         <CardDescription>
           Enter an existing record reference to update it, or leave the reference blank to create a new record.
         </CardDescription>
@@ -147,9 +148,9 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
         ) : null}
         <div className={`grid gap-3 ${compact ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
           <div className="space-y-1">
-            <Label>Module</Label>
+            <Label htmlFor={`${formId}-module`}>Module</Label>
             <Select value={entity} onValueChange={(value) => value && setEntity(value)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id={`${formId}-module`} className="h-11"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {entityOptions.map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -159,9 +160,9 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
           </div>
           {centers.length > 0 && centerScopedEntities.has(entity) ? (
             <div className="space-y-1">
-              <Label>School</Label>
+              <Label htmlFor={`${formId}-school`}>School</Label>
               <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
-                <SelectTrigger><SelectValue placeholder="Choose school" /></SelectTrigger>
+                <SelectTrigger id={`${formId}-school`} className="h-11"><SelectValue placeholder="Choose school" /></SelectTrigger>
                 <SelectContent>
                   {centers.map((center) => (
                     <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>
@@ -171,41 +172,41 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
             </div>
           ) : null}
           <div className="space-y-1">
-            <Label>Existing record reference</Label>
-            <Input value={id} onChange={(event) => setId(event.target.value)} placeholder="Optional" />
+            <Label htmlFor={`${formId}-record-reference`}>Existing record reference</Label>
+            <Input id={`${formId}-record-reference`} className="h-11" value={id} onChange={(event) => setId(event.target.value)} placeholder="Optional" />
           </div>
           <div className="space-y-1">
-            <Label>Name or title</Label>
-            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Record name" />
+            <Label htmlFor={`${formId}-name`}>Name or title</Label>
+            <Input id={`${formId}-name`} className="h-11" value={name} onChange={(event) => setName(event.target.value)} placeholder="Record name" />
           </div>
           <div className="space-y-1">
-            <Label>Related record reference</Label>
-            <Input value={relatedId} onChange={(event) => setRelatedId(event.target.value)} placeholder="Optional" />
+            <Label htmlFor={`${formId}-related-reference`}>Related record reference</Label>
+            <Input id={`${formId}-related-reference`} className="h-11" value={relatedId} onChange={(event) => setRelatedId(event.target.value)} placeholder="Optional" />
           </div>
           <div className="space-y-1">
-            <Label>Type or trigger</Label>
-            <Input value={type} onChange={(event) => setType(event.target.value)} placeholder="email, policy, CPR, etc." />
+            <Label htmlFor={`${formId}-type`}>Type or trigger</Label>
+            <Input id={`${formId}-type`} className="h-11" value={type} onChange={(event) => setType(event.target.value)} placeholder="email, policy, CPR, etc." />
           </div>
           <div className="space-y-1">
-            <Label>Status</Label>
-            <Input value={status} onChange={(event) => setStatus(event.target.value)} placeholder="active, draft, requested" />
+            <Label htmlFor={`${formId}-status`}>Status</Label>
+            <Input id={`${formId}-status`} className="h-11" value={status} onChange={(event) => setStatus(event.target.value)} placeholder="active, draft, requested" />
           </div>
           <div className="space-y-1">
-            <Label>Amount or rating</Label>
-            <Input value={amountDollars} onChange={(event) => setAmountDollars(event.target.value)} placeholder="199 or 5" inputMode="decimal" />
+            <Label htmlFor={`${formId}-amount`}>Amount or rating</Label>
+            <Input id={`${formId}-amount`} className="h-11" value={amountDollars} onChange={(event) => setAmountDollars(event.target.value)} placeholder="199 or 5" inputMode="decimal" />
           </div>
           <div className="space-y-1">
-            <Label>Expiration or send date</Label>
-            <Input value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} type="date" />
+            <Label htmlFor={`${formId}-date`}>Expiration or send date</Label>
+            <Input id={`${formId}-date`} className="h-11" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} type="date" />
           </div>
         </div>
         <div className="space-y-1">
-          <Label>Notes or details</Label>
-          <Textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Record body, notes, form fields, automation action, or response draft" />
+          <Label htmlFor={`${formId}-details`}>Notes or details</Label>
+          <Textarea id={`${formId}-details`} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Record body, notes, form fields, automation action, or response draft" />
         </div>
-        <Button disabled={isPending || !entity} onClick={submit}>
+        <Button size="lg" disabled={isPending || !entity} aria-busy={isPending} onClick={submit}>
           <Save data-icon="inline-start" />
-          Save record
+          {isPending ? "Saving record" : "Save record"}
         </Button>
       </CardContent>
     </Card>

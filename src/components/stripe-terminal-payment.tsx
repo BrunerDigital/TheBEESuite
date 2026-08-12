@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { CreditCard, LoaderCircle, RadioTower } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -56,6 +56,11 @@ export function StripeTerminalPayment({
   disabled,
 }: Props) {
   const router = useRouter();
+  const controlId = useId();
+  const readerSelectId = `${controlId}-reader`;
+  const registrationCodeId = `${controlId}-registration-code`;
+  const readerLabelId = `${controlId}-reader-label`;
+  const parentPresentId = `${controlId}-parent-present`;
   const [open, setOpen] = useState(false);
   const [readers, setReaders] = useState<TerminalReader[]>([]);
   const [readerId, setReaderId] = useState("");
@@ -217,12 +222,12 @@ export function StripeTerminalPayment({
 
   return (
     <>
-      <Button disabled={disabled || !centerId || !billingAccountId || !familyId || amountCents <= 0} onClick={openTerminal}>
+      <Button type="button" disabled={disabled || !centerId || !billingAccountId || !familyId || amountCents <= 0} onClick={openTerminal}>
         <RadioTower data-icon="inline-start" />
-        In-Person Card Reader
+        In-person card reader
       </Button>
       <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && status !== "processing" && setOpen(false)}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-xl" aria-busy={status === "loading" || status === "processing"}>
           <DialogHeader>
             <DialogTitle>The BEE Suite in-person card payment</DialogTitle>
             <DialogDescription>
@@ -248,9 +253,9 @@ export function StripeTerminalPayment({
 
             {readers.length ? (
               <div className="space-y-2">
-                <Label>School card reader</Label>
+                <Label htmlFor={readerSelectId}>School card reader</Label>
                 <Select value={readerId} onValueChange={(value) => value && setReaderId(value)}>
-                  <SelectTrigger><SelectValue placeholder="Choose a reader" /></SelectTrigger>
+                  <SelectTrigger id={readerSelectId}><SelectValue placeholder="Choose a reader" /></SelectTrigger>
                   <SelectContent>
                     {readers.map((reader) => (
                       <SelectItem key={reader.id} value={reader.id}>
@@ -275,9 +280,10 @@ export function StripeTerminalPayment({
               </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <Label htmlFor="terminal-registration-code">Registration code</Label>
+                  <Label htmlFor={registrationCodeId}>Registration code</Label>
                   <Input
-                    id="terminal-registration-code"
+                    id={registrationCodeId}
+                    name="terminalRegistrationCode"
                     autoComplete="off"
                     value={registrationCode}
                     onChange={(event) => setRegistrationCode(event.target.value)}
@@ -285,9 +291,10 @@ export function StripeTerminalPayment({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="terminal-reader-label">Reader label</Label>
+                  <Label htmlFor={readerLabelId}>Reader label</Label>
                   <Input
-                    id="terminal-reader-label"
+                    id={readerLabelId}
+                    name="terminalReaderLabel"
                     value={readerLabel}
                     onChange={(event) => setReaderLabel(event.target.value)}
                     placeholder="Front desk"
@@ -295,14 +302,16 @@ export function StripeTerminalPayment({
                 </div>
               </div>
               <Button type="button" variant="outline" disabled={status === "loading" || status === "processing"} onClick={registerReader}>
-                Register Reader
+                {status === "loading" ? "Working…" : "Register reader"}
               </Button>
             </div>
 
-            <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+            <label htmlFor={parentPresentId} className="flex min-h-11 items-start gap-3 rounded-lg border p-3 text-sm">
               <input
+                id={parentPresentId}
+                name="terminalParentPresent"
                 type="checkbox"
-                className="mt-1 size-4"
+                className="mt-0.5 size-5 shrink-0"
                 checked={parentPresent}
                 disabled={status === "processing" || status === "succeeded"}
                 onChange={(event) => setParentPresent(event.target.checked)}
@@ -333,7 +342,7 @@ export function StripeTerminalPayment({
             </Button>
             <Button type="button" disabled={!canProcess} onClick={startPayment}>
               {status === "loading" || status === "processing" ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <CreditCard data-icon="inline-start" />}
-              {status === "processing" ? "Waiting for card" : `Charge ${money(amounts?.checkoutTotalCents ?? amountCents)}`}
+              {status === "processing" ? "Waiting for card" : status === "loading" ? "Starting…" : `Charge ${money(amounts?.checkoutTotalCents ?? amountCents)}`}
             </Button>
           </DialogFooter>
         </DialogContent>

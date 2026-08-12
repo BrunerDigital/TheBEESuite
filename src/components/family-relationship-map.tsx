@@ -48,30 +48,29 @@ function RelationshipNode({ title, detail, status, tone = "default", icon, onCli
       variant="ghost"
       onClick={onClick}
       className={cn(
-        "group h-auto min-h-16 w-full justify-start gap-3 rounded-2xl border px-3 py-3 text-left shadow-sm",
-        "bg-background/75 hover:-translate-y-0.5 hover:bg-background hover:shadow-md motion-reduce:hover:translate-y-0",
-        tone === "warning" && "border-amber-500/45 bg-amber-500/8",
-        tone === "positive" && "border-emerald-500/35 bg-emerald-500/8",
+        "h-auto min-h-16 w-full justify-start gap-3 rounded-lg border bg-background px-3 py-3 text-left shadow-none hover:border-primary/30 hover:bg-muted/40",
+        tone === "warning" && "border-amber-500/45 bg-amber-500/5",
+        tone === "positive" && "border-emerald-500/35 bg-emerald-500/5",
       )}
     >
-      <span className="grid size-10 shrink-0 place-items-center rounded-xl border bg-card text-primary shadow-sm" aria-hidden="true">
+      <span className="grid size-10 shrink-0 place-items-center rounded-md border bg-muted/30 text-primary" aria-hidden="true">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-semibold text-foreground">{title}</span>
         <span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground">{detail}</span>
         {status ? (
-          <span className="mt-1.5 block whitespace-normal break-words text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">{status}</span>
+          <span className="mt-1.5 block whitespace-normal break-words text-xs font-medium text-primary">{status}</span>
         ) : null}
       </span>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true" />
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </Button>
   );
 }
 
 function EmptyRelationship({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed bg-muted/20 px-4 py-5 text-center text-sm text-muted-foreground">
+    <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5 text-center text-sm text-muted-foreground">
       {children}
     </div>
   );
@@ -149,8 +148,8 @@ export function FamilyRelationshipMap({
   ].filter((signal): signal is string => Boolean(signal));
 
   return (
-    <Card id="family-relationships" className="glass-panel scroll-mt-36 overflow-hidden border-primary/20">
-      <CardHeader className="border-b bg-gradient-to-br from-primary/12 via-card/80 to-amber-500/10">
+    <Card id="family-relationships" className="scroll-mt-36 overflow-hidden border-border bg-card shadow-none">
+      <CardHeader className="border-b bg-muted/20">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <Badge variant="secondary" className="mb-3">
@@ -192,15 +191,13 @@ export function FamilyRelationshipMap({
             }) : <EmptyRelationship>No guardian is connected yet.</EmptyRelationship>}
           </section>
 
-          <section aria-labelledby="relationship-family-title" className="relative overflow-hidden rounded-[2rem] border border-primary/30 bg-gradient-to-br from-primary/16 via-card to-amber-500/14 p-4 shadow-xl shadow-primary/5 sm:p-5">
-            <div className="pointer-events-none absolute -right-8 -top-8 size-32 rotate-12 bg-primary/8 [clip-path:polygon(25%_6.7%,75%_6.7%,100%_50%,75%_93.3%,25%_93.3%,0%_50%)]" aria-hidden="true" />
-            <div className="pointer-events-none absolute -bottom-10 -left-8 size-28 -rotate-12 bg-amber-500/10 [clip-path:polygon(25%_6.7%,75%_6.7%,100%_50%,75%_93.3%,25%_93.3%,0%_50%)]" aria-hidden="true" />
-            <div className="relative">
-              <div className="mx-auto grid size-20 place-items-center bg-primary text-primary-foreground shadow-lg [clip-path:polygon(25%_6.7%,75%_6.7%,100%_50%,75%_93.3%,25%_93.3%,0%_50%)]" aria-hidden="true">
+          <section aria-labelledby="relationship-family-title" className="rounded-lg border border-primary/30 bg-primary/[0.04] p-4 sm:p-5">
+            <div>
+              <div className="mx-auto grid size-16 place-items-center rounded-lg border border-primary/30 bg-background text-primary" aria-hidden="true">
                 <UsersRound className="size-8" />
               </div>
               <div className="mt-3 text-center">
-                <h3 id="relationship-family-title" className="text-balance text-lg font-bold">{family.name}</h3>
+                <h3 id="relationship-family-title" className="text-balance text-lg font-semibold">{family.name}</h3>
                 <div className="mt-1 flex flex-wrap justify-center gap-2">
                   <Badge variant="outline" className="h-auto min-h-5 max-w-full shrink whitespace-normal break-words py-1 text-center"><Building2 data-icon="inline-start" />{family.centerName || "School not set"}</Badge>
                   {family.billingAccount ? <Badge variant="outline"><BadgeDollarSign data-icon="inline-start" />Billing linked</Badge> : null}
@@ -208,9 +205,9 @@ export function FamilyRelationshipMap({
                 </div>
               </div>
 
-              <div className="my-4 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+              <div className="my-4 h-px bg-border" />
               <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Children</span>
+                <span className="text-sm font-semibold text-muted-foreground">Children</span>
                 <Badge variant="outline" className="tabular-nums">{family.children.length}</Badge>
               </div>
               <div className="space-y-2">
@@ -271,11 +268,11 @@ export function FamilyRelationshipMap({
         </div>
 
         <section aria-labelledby="relationship-review-title" className={cn(
-          "rounded-2xl border p-4",
+          "rounded-lg border p-4",
           reviewSignals.length ? "border-amber-500/35 bg-amber-500/8" : "border-border bg-muted/20",
         )}>
           <div className="flex items-start gap-3">
-            <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", reviewSignals.length ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-muted text-muted-foreground")} aria-hidden="true">
+            <span className={cn("grid size-10 shrink-0 place-items-center rounded-md", reviewSignals.length ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-muted text-muted-foreground")} aria-hidden="true">
               {reviewSignals.length ? <AlertTriangle className="size-5" /> : <HeartHandshake className="size-5" />}
             </span>
             <div className="min-w-0 flex-1">
@@ -291,7 +288,7 @@ export function FamilyRelationshipMap({
           </div>
         </section>
 
-        <div className="flex flex-col gap-2 rounded-2xl border bg-muted/20 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-medium">Parent Portal account links</div>
             <div className="text-muted-foreground">

@@ -85,7 +85,7 @@ export function RegistrationReviewActions({ submissionId, status, reviewStatus, 
             setOpen(nextOpen);
             if (!nextOpen) setConfirmed(false);
           }}>
-            <DialogTrigger render={<Button size="sm" />}>
+            <DialogTrigger render={<Button type="button" size="sm" />}>
               <Eye data-icon="inline-start" />
               Review & confirm
             </DialogTrigger>
@@ -135,10 +135,10 @@ export function RegistrationReviewActions({ submissionId, status, reviewStatus, 
               </div>
 
               <div className="space-y-3 rounded-lg border p-3">
-                <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Director note (optional)" />
-                <label className="flex items-start gap-2 text-sm">
+                <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Director note (optional)" aria-label="Registration review note" />
+                <label className="flex min-h-11 cursor-pointer items-start gap-2 py-2 text-sm">
                   <input
-                    className="mt-0.5 size-4"
+                    className="mt-0.5 size-5 accent-primary"
                     checked={inviteParent}
                     onChange={(event) => setInviteParent(event.target.checked)}
                     type="checkbox"
@@ -148,9 +148,9 @@ export function RegistrationReviewActions({ submissionId, status, reviewStatus, 
                     <span className="block text-xs text-muted-foreground">Use only after this school’s parent launch is approved.</span>
                   </span>
                 </label>
-                <label className="flex items-start gap-2 rounded-md bg-primary/5 p-3 text-sm font-medium">
+                <label className="flex min-h-11 cursor-pointer items-start gap-2 rounded-md border bg-muted/30 p-3 text-sm font-medium">
                   <input
-                    className="mt-0.5 size-4"
+                    className="mt-0.5 size-5 accent-primary"
                     checked={confirmed}
                     onChange={(event) => setConfirmed(event.target.checked)}
                     type="checkbox"
@@ -170,19 +170,19 @@ export function RegistrationReviewActions({ submissionId, status, reviewStatus, 
               ) : null}
 
               <DialogFooter>
-                <Button variant="outline" disabled={isPending} onClick={() => setOpen(false)}>
+                <Button type="button" variant="outline" disabled={isPending} onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
-                <Button disabled={isPending || !confirmed} onClick={() => review("APPROVED")}>
+                <Button type="button" disabled={isPending || !confirmed} aria-busy={isPending} onClick={() => review("APPROVED")}>
                   <ShieldCheck data-icon="inline-start" />
                   {isPending ? "Confirming…" : "Confirm registration"}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Button size="sm" variant="outline" disabled={isPending} onClick={() => review("REJECTED")}>
+          <Button type="button" size="sm" variant="outline" disabled={isPending} aria-busy={isPending} onClick={() => review("REJECTED")}>
             <XCircle data-icon="inline-start" />
-            Reject
+            {isPending ? "Saving…" : "Reject"}
           </Button>
         </>
       ) : (

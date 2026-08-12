@@ -192,9 +192,9 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
   }
 
   return (
-    <Card id="past-enrollment-records" className="glass-panel scroll-mt-24">
+    <Card id="past-enrollment-records" className="scroll-mt-24">
       <CardHeader>
-        <CardTitle>Past & Other Student Records</CardTitle>
+        <CardTitle as="h2">Past & Other Student Records</CardTitle>
         <CardDescription>
           Review withdrawn and other non-current children without mixing them into active dashboards. Select one row or many, then change status. Moving a child to enrolled requires a classroom so every dashboard updates correctly.
         </CardDescription>
@@ -221,9 +221,9 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
               {BULK_ENROLLMENT_STATUSES.map((status) => <SelectItem key={status} value={status}>Change to {formatRecordLabel(status)}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button type="button" disabled={!canSubmit} onClick={applyStatusChange}>
+          <Button type="button" disabled={!canSubmit} aria-busy={busy || isRefreshing} onClick={applyStatusChange}>
             {busy || isRefreshing ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <CheckCircle2 data-icon="inline-start" />}
-            Update {selectedIds.size || "selected"}
+            {busy || isRefreshing ? "Updating…" : `Update ${selectedIds.size || "selected"}`}
           </Button>
         </div>
         {movingToEnrolled ? (
@@ -242,7 +242,7 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
           </div>
         ) : null}
         {message ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300" role="status" aria-live="polite">
             <span>{message}</span>
             {postSaveBillingHref ? (
               <Link href={postSaveBillingHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
@@ -251,7 +251,7 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
             ) : null}
           </div>
         ) : null}
-        {error ? <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
+        {error ? <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive" role="alert">{error}</div> : null}
         <div className="text-xs text-muted-foreground">
           Showing {filteredRows.length.toLocaleString()} records · {selectedIds.size.toLocaleString()} selected
         </div>
@@ -260,13 +260,15 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
             <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
                 <TableHead className="w-12">
-                  <input
-                    type="checkbox"
-                    checked={allFilteredSelected}
-                    onChange={(event) => toggleFiltered(event.target.checked)}
-                    aria-label="Select all filtered past students"
-                    className="size-4 accent-primary"
-                  />
+                  <label className="inline-flex size-11 cursor-pointer items-center justify-center">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={(event) => toggleFiltered(event.target.checked)}
+                      aria-label="Select all filtered past students"
+                      className="size-5 accent-primary"
+                    />
+                  </label>
                 </TableHead>
                 <TableHead>Child</TableHead>
                 <TableHead>Family</TableHead>
@@ -279,13 +281,15 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
               {filteredRows.map((row) => (
                 <TableRow key={row.id} data-state={selectedIds.has(row.id) ? "selected" : undefined}>
                   <TableCell>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(row.id)}
-                      onChange={(event) => toggleChild(row.id, event.target.checked)}
-                      aria-label={`Select ${row.fullName}`}
-                      className="size-4 accent-primary"
-                    />
+                    <label className="inline-flex size-11 cursor-pointer items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(row.id)}
+                        onChange={(event) => toggleChild(row.id, event.target.checked)}
+                        aria-label={`Select ${row.fullName}`}
+                        className="size-5 accent-primary"
+                      />
+                    </label>
                   </TableCell>
                   <TableCell><div className="font-medium">{row.fullName}</div><div className="text-xs text-muted-foreground">{row.ageGroup}</div></TableCell>
                   <TableCell>{row.familyName}</TableCell>
@@ -340,7 +344,7 @@ function EnrollmentVisibilityToggle({
   ].join(" · ");
 
   return (
-    <Card className="glass-panel">
+    <Card>
       <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-sm font-medium">Past students and other enrollment statuses</div>
@@ -463,7 +467,7 @@ export function FamilyProfilesEnrollmentPanel({
           searchQuery={requestedSearchQuery}
         />
       ) : !effectiveShowOtherStatuses ? (
-        <Card className="glass-panel">
+        <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">
             No currently enrolled families are visible for this scope.
           </CardContent>
@@ -471,16 +475,16 @@ export function FamilyProfilesEnrollmentPanel({
       ) : null}
 
       {visibleFamilies.length < visibleFamilyCount ? (
-        <Card className="glass-panel">
+        <Card>
           <CardContent className="p-4 text-sm text-muted-foreground">
             Showing the first {visibleFamilies.length.toLocaleString()} of {visibleFamilyCount.toLocaleString()} families in this view.
           </CardContent>
         </Card>
       ) : null}
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
-          <CardTitle>Family Directory</CardTitle>
+          <CardTitle as="h2">Family Directory</CardTitle>
           <CardDescription>Currently enrolled family profile snapshot</CardDescription>
         </CardHeader>
         <CardContent>
@@ -560,11 +564,11 @@ export function FamilyProfilesEnrollmentPanel({
         </CardContent>
       </Card>
 
-      <Card id="guardian-directory" className="glass-panel scroll-mt-36">
+      <Card id="guardian-directory" className="scroll-mt-36">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>Parent / Guardian Directory</CardTitle>
+              <CardTitle as="h2">Parent / Guardian Directory</CardTitle>
               <CardDescription>
                 All imported and manually entered contacts for the currently visible school families. Billing contacts need their own email and phone before an invitation can be reviewed; the invitation action also checks source completeness and duplicate identity.
               </CardDescription>
@@ -673,9 +677,9 @@ export function FamilyProfilesEnrollmentPanel({
         </CardContent>
       </Card>
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
-          <CardTitle>Lobby kiosk credentials</CardTitle>
+          <CardTitle as="h2">Lobby kiosk credentials</CardTitle>
           <CardDescription>Directors set the 4-digit guardian PIN and QR code used at the check-in and checkout tablet.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-2">
@@ -700,9 +704,9 @@ export function FamilyProfilesEnrollmentPanel({
         </CardContent>
       </Card>
 
-      <Card className="glass-panel">
+      <Card>
         <CardHeader>
-          <CardTitle>Parent Portal access</CardTitle>
+          <CardTitle as="h2">Parent Portal access</CardTitle>
           <CardDescription>
             Create Parent Portal access for the guardian email, send the welcome and installation steps, or send the parent feature
             guide after the account is linked. The invitation includes the password.
@@ -773,16 +777,16 @@ export function ChildProfilesEnrollmentPanel({
       {showOtherStatuses ? <PastEnrollmentRecordsTable rows={pastEnrollmentRows} centers={centers} /> : null}
 
       {!showOtherStatuses && visibleChildren.length < visibleChildCount ? (
-        <Card className="glass-panel">
+        <Card>
           <CardContent className="p-4 text-sm text-muted-foreground">
             Showing the first {visibleChildren.length.toLocaleString()} of {visibleChildCount.toLocaleString()} children in this view.
           </CardContent>
         </Card>
       ) : null}
 
-      {!showOtherStatuses ? <Card className="glass-panel">
+      {!showOtherStatuses ? <Card>
         <CardHeader>
-          <CardTitle>Children</CardTitle>
+          <CardTitle as="h2">Children</CardTitle>
           <CardDescription>
             {showOtherStatuses ? "Students across all enrollment statuses" : "Currently enrolled student records"}
           </CardDescription>

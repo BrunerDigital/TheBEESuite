@@ -116,7 +116,7 @@ export function PaymentMethodRequestForm({
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Tuition payment options</CardTitle>
+            <CardTitle as="h2">Tuition payment options</CardTitle>
             <CardDescription className="text-zinc-300">
               {centerLabel} sent this secure payment link for {familyName}.
             </CardDescription>

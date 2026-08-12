@@ -149,7 +149,7 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
     return (
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Social inbox and reviews</CardTitle>
+          <CardTitle as="h2">Social inbox and reviews</CardTitle>
           <CardDescription>No schools are available for social messages and reviews.</CardDescription>
         </CardHeader>
       </Card>
@@ -162,7 +162,7 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
         <CardHeader>
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
-              <CardTitle>Social inbox and reviews</CardTitle>
+              <CardTitle as="h2">Social inbox and reviews</CardTitle>
               <CardDescription className="mt-2 max-w-3xl">
                 Review social messages, Google reviews, and campaign reporting for the selected school.
               </CardDescription>
@@ -207,7 +207,7 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
             <CardHeader>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <CardTitle>Facebook and Instagram inbox</CardTitle>
+                  <CardTitle as="h2">Facebook and Instagram inbox</CardTitle>
                   <CardDescription className="mt-2">Recent Messenger and Instagram conversations from the school’s connected Meta account.</CardDescription>
                 </div>
                 <Button type="button" onClick={refreshInbox} disabled={isPending || !centerId}>
@@ -244,7 +244,7 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
 
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Facebook and Instagram connection</CardTitle>
+              <CardTitle as="h2">Facebook and Instagram connection</CardTitle>
               <CardDescription>Use the school’s existing Meta connection for messages, publishing, and reporting.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -261,7 +261,7 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
             <CardHeader>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <CardTitle>Google Business reviews</CardTitle>
+                  <CardTitle as="h2">Google Business reviews</CardTitle>
                   <CardDescription className="mt-2">Read current location reviews and publish a confirmed public response from the selected school.</CardDescription>
                 </div>
                 <Button type="button" onClick={refreshReviews} disabled={isPending || !centerId}><RefreshCw data-icon="inline-start" aria-hidden="true" />Refresh reviews</Button>
@@ -297,7 +297,7 @@ export function SocialEngagementHub({ centers, initialCenterId }: Props) {
 
         <TabsContent value="coverage">
           <Card className="glass-panel">
-            <CardHeader><CardTitle>Connected channels</CardTitle><CardDescription>See where publishing, reporting, messages, and reviews are available after each channel is connected.</CardDescription></CardHeader>
+            <CardHeader><CardTitle as="h2">Connected channels</CardTitle><CardDescription>See where publishing, reporting, messages, and reviews are available after each channel is connected.</CardDescription></CardHeader>
             <CardContent>
               <div className="overflow-x-auto rounded-xl border">
                 <Table>

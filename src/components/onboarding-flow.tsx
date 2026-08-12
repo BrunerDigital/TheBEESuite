@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import {
   ArrowRight,
   BadgeDollarSign,
@@ -134,6 +134,7 @@ function hasValue(value: string) {
 }
 
 export function OnboardingFlow() {
+  const controlPrefix = useId();
   const [activeStep, setActiveStep] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -153,6 +154,7 @@ export function OnboardingFlow() {
   const completedSteps = steps.map((step) =>
     step.fields.length > 0 && step.fields.every((field) => hasValue(form[field as keyof FormState])),
   );
+  const controlId = (field: keyof FormState) => `${controlPrefix}-${field}`;
   const draftEmbedCode = useMemo(() => {
     const appBaseUrl = typeof window !== "undefined" ? window.location.origin : "https://thebeesuite.io";
     const brandName = form.brandName || "Your Childcare Brand";
@@ -211,7 +213,7 @@ export function OnboardingFlow() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-slate-950 text-white" aria-busy={isPending}>
       <header className="border-b border-white/10 bg-slate-950/90">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <BrandLogo href="/" size="sm" compact priority />
@@ -235,15 +237,18 @@ export function OnboardingFlow() {
               <span className="font-medium">Onboarding progress</span>
               <span className="text-primary">{progress}%</span>
             </div>
-            <Progress value={progress} className="mt-3" />
+            <Progress value={progress} className="mt-3" aria-label="Onboarding completion" />
             <div className="mt-5 grid gap-2">
               {steps.map((step, index) => (
                 <button
                   key={step.title}
                   type="button"
                   onClick={() => setActiveStep(index)}
+                  disabled={isPending}
+                  aria-current={activeStep === index ? "step" : undefined}
+                  aria-label={`${step.title}, step ${index + 1} of ${steps.length}${completedSteps[index] || submitted ? ", complete" : ""}`}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg border px-3 py-2 text-left text-sm transition",
+                    "flex min-h-11 items-center gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-[color,background-color,border-color] motion-reduce:transition-none",
                     activeStep === index
                       ? "border-primary bg-primary/15 text-white"
                       : "border-white/10 bg-slate-900/60 text-slate-300 hover:bg-white/10",
@@ -265,7 +270,7 @@ export function OnboardingFlow() {
                 <div className="grid size-12 place-items-center rounded-xl bg-emerald-300 text-slate-950">
                   <CheckCircle2 />
                 </div>
-                <CardTitle className="text-3xl">
+                <CardTitle as="h2" className="text-3xl">
                   {workspace?.existingWorkspace ? "Workspace access is ready" : "Your workspace is ready"}
                 </CardTitle>
               </CardHeader>
@@ -323,7 +328,7 @@ export function OnboardingFlow() {
               </CardContent>
             </Card>
           ) : (
-            <Card className="rounded-2xl border-white/10 bg-white text-slate-950 shadow-2xl shadow-black/30">
+            <Card className="rounded-2xl border-white/10 bg-white text-slate-950">
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <span className="grid size-11 place-items-center rounded-xl bg-slate-950 text-primary">
@@ -331,7 +336,7 @@ export function OnboardingFlow() {
                   </span>
                   <div>
                     <div className="text-sm text-slate-500">Step {activeStep + 1} of {steps.length}</div>
-                    <CardTitle className="text-2xl">{currentStep.title}</CardTitle>
+                    <CardTitle as="h2" className="text-2xl">{currentStep.title}</CardTitle>
                   </div>
                 </div>
               </CardHeader>
@@ -339,12 +344,12 @@ export function OnboardingFlow() {
                 {activeStep === 0 ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="brandName">Brand name</Label>
-                      <Input id="brandName" value={form.brandName} onChange={(event) => update("brandName", event.target.value)} placeholder="Your childcare brand" required />
+                      <Label htmlFor={controlId("brandName")}>Brand name</Label>
+                      <Input id={controlId("brandName")} value={form.brandName} onChange={(event) => update("brandName", event.target.value)} placeholder="Your childcare brand" required />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="workEmail">Work email</Label>
-                      <Input id="workEmail" value={form.workEmail} onChange={(event) => update("workEmail", event.target.value)} placeholder="owner@example.com" type="email" required />
+                      <Label htmlFor={controlId("workEmail")}>Work email</Label>
+                      <Input id={controlId("workEmail")} value={form.workEmail} onChange={(event) => update("workEmail", event.target.value)} placeholder="owner@example.com" type="email" required />
                     </div>
                   </div>
                 ) : null}
@@ -352,12 +357,12 @@ export function OnboardingFlow() {
                 {activeStep === 1 ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="centerCount">Number of centers</Label>
-                      <Input id="centerCount" value={form.centerCount} onChange={(event) => update("centerCount", event.target.value)} placeholder="12" inputMode="numeric" required />
+                      <Label htmlFor={controlId("centerCount")}>Number of centers</Label>
+                      <Input id={controlId("centerCount")} value={form.centerCount} onChange={(event) => update("centerCount", event.target.value)} placeholder="12" inputMode="numeric" required />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="state">Primary state or region</Label>
-                      <Input id="state" value={form.state} onChange={(event) => update("state", event.target.value)} placeholder="Florida" required />
+                      <Label htmlFor={controlId("state")}>Primary state or region</Label>
+                      <Input id={controlId("state")} value={form.state} onChange={(event) => update("state", event.target.value)} placeholder="Florida" required />
                     </div>
                   </div>
                 ) : null}
@@ -366,9 +371,9 @@ export function OnboardingFlow() {
                   <div className="grid gap-4">
                     {schoolOnboardingSetupSections.map((section) => (
                       <div key={section.field} className="space-y-2">
-                        <Label htmlFor={section.field}>{section.label}</Label>
+                        <Label htmlFor={controlId(section.field)}>{section.label}</Label>
                         <Textarea
-                          id={section.field}
+                          id={controlId(section.field)}
                           value={form[section.field]}
                           onChange={(event) => update(section.field as SchoolOnboardingSetupField, event.target.value)}
                           placeholder={section.placeholder}
@@ -382,9 +387,9 @@ export function OnboardingFlow() {
                 {activeStep === 3 ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Software plan</Label>
+                      <Label htmlFor={controlId("softwarePlan")}>Software plan</Label>
                       <Select value={form.softwarePlan} onValueChange={(value) => update("softwarePlan", value ?? "")}>
-                        <SelectTrigger>
+                        <SelectTrigger id={controlId("softwarePlan")}>
                           <SelectValue placeholder="Choose plan model" />
                         </SelectTrigger>
                         <SelectContent>
@@ -396,9 +401,9 @@ export function OnboardingFlow() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Add-on bundle</Label>
+                      <Label htmlFor={controlId("addOnBundle")}>Add-on bundle</Label>
                       <Select value={form.addOnBundle} onValueChange={(value) => update("addOnBundle", value ?? "")}>
-                        <SelectTrigger>
+                        <SelectTrigger id={controlId("addOnBundle")}>
                           <SelectValue placeholder="Choose starting bundle" />
                         </SelectTrigger>
                         <SelectContent>
@@ -410,9 +415,9 @@ export function OnboardingFlow() {
                       </Select>
                     </div>
                     <div className="space-y-2 sm:col-span-2">
-                      <Label>Merchant fee strategy</Label>
+                      <Label htmlFor={controlId("merchantFeeStrategy")}>Merchant fee strategy</Label>
                       <Select value={form.merchantFeeStrategy} onValueChange={(value) => update("merchantFeeStrategy", value ?? "")}>
-                        <SelectTrigger>
+                        <SelectTrigger id={controlId("merchantFeeStrategy")}>
                           <SelectValue placeholder="Choose fee handling" />
                         </SelectTrigger>
                         <SelectContent>
@@ -423,17 +428,17 @@ export function OnboardingFlow() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="payoutAdminName">Payout setup owner</Label>
-                      <Input id="payoutAdminName" value={form.payoutAdminName} onChange={(event) => update("payoutAdminName", event.target.value)} placeholder="Finance owner or franchise admin" required />
+                      <Label htmlFor={controlId("payoutAdminName")}>Payout setup owner</Label>
+                      <Input id={controlId("payoutAdminName")} value={form.payoutAdminName} onChange={(event) => update("payoutAdminName", event.target.value)} placeholder="Finance owner or franchise admin" required />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="payoutAdminEmail">Payout setup email</Label>
-                      <Input id="payoutAdminEmail" value={form.payoutAdminEmail} onChange={(event) => update("payoutAdminEmail", event.target.value)} placeholder="finance@example.com" type="email" required />
+                      <Label htmlFor={controlId("payoutAdminEmail")}>Payout setup email</Label>
+                      <Input id={controlId("payoutAdminEmail")} value={form.payoutAdminEmail} onChange={(event) => update("payoutAdminEmail", event.target.value)} placeholder="finance@example.com" type="email" required />
                     </div>
                     <div className="space-y-2 sm:col-span-2">
-                      <Label>Payout account readiness</Label>
+                      <Label htmlFor={controlId("payoutReadiness")}>Payout account readiness</Label>
                       <Select value={form.payoutReadiness} onValueChange={(value) => update("payoutReadiness", value ?? "")}>
-                        <SelectTrigger>
+                        <SelectTrigger id={controlId("payoutReadiness")}>
                           <SelectValue placeholder="Choose payout setup status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -452,9 +457,9 @@ export function OnboardingFlow() {
                 {activeStep === 4 ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Launch timeline</Label>
+                      <Label htmlFor={controlId("timeline")}>Launch timeline</Label>
                       <Select value={form.timeline} onValueChange={(value) => update("timeline", value ?? "")}>
-                        <SelectTrigger>
+                        <SelectTrigger id={controlId("timeline")}>
                           <SelectValue placeholder="Choose timeline" />
                         </SelectTrigger>
                         <SelectContent>
@@ -466,9 +471,9 @@ export function OnboardingFlow() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>First priority</Label>
+                      <Label htmlFor={controlId("priority")}>First priority</Label>
                       <Select value={form.priority} onValueChange={(value) => update("priority", value ?? "")}>
-                        <SelectTrigger>
+                        <SelectTrigger id={controlId("priority")}>
                           <SelectValue placeholder="Choose priority" />
                         </SelectTrigger>
                         <SelectContent>
@@ -480,8 +485,8 @@ export function OnboardingFlow() {
                       </Select>
                     </div>
                     <div className="space-y-2 sm:col-span-2">
-                      <Label htmlFor="notes">Launch notes</Label>
-                      <Textarea id="notes" value={form.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Tell us about current systems, imports, or launch constraints." />
+                      <Label htmlFor={controlId("notes")}>Launch notes</Label>
+                      <Textarea id={controlId("notes")} value={form.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Tell us about current systems, imports, or launch constraints." />
                     </div>
                   </div>
                 ) : null}
@@ -522,18 +527,18 @@ export function OnboardingFlow() {
                 ) : null}
 
                 {submitError ? (
-                  <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+                  <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
                     {submitError}
                   </div>
                 ) : null}
 
                 <div className="flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center">
-                  <Button type="button" disabled={!canContinue || isPending} onClick={nextStep}>
+                  <Button type="button" disabled={!canContinue || isPending} onClick={nextStep} aria-busy={isPending}>
                     {isPending ? "Submitting..." : activeStep === steps.length - 1 ? "Finish intake" : "Continue"}
                     <ArrowRight data-icon="inline-end" />
                   </Button>
                   {activeStep > 0 ? (
-                    <Button type="button" variant="outline" onClick={() => setActiveStep((step) => step - 1)}>
+                    <Button type="button" variant="outline" disabled={isPending} onClick={() => setActiveStep((step) => step - 1)}>
                       Back
                     </Button>
                   ) : null}

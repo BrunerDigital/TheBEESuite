@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { CalendarDays, ClipboardList, Clock, Download, FileText, MessageSquare, Printer, ReceiptText, Search, TrendingUp, UsersRound } from "lucide-react";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Badge } from "@/components/ui/badge";
@@ -28,8 +28,8 @@ const reportOptions: Array<{ value: ReportKind; label: string }> = [
   { value: "lead_funnel", label: "Lead funnel" },
   { value: "attendance", label: "Attendance" },
   { value: "billing", label: "Billing/AR" },
-  { value: "weekly_billing", label: "Weekly Billing" },
-  { value: "weekly_payments", label: "Weekly Payments" },
+  { value: "weekly_billing", label: "Weekly billing" },
+  { value: "weekly_payments", label: "Weekly payments" },
   { value: "messages", label: "Messages" },
   { value: "staff_hours", label: "Staff hours" },
 ];
@@ -50,7 +50,7 @@ function formatDate(value: string, timeZone = "UTC") {
 }
 
 function barWidth(value: number) {
-  return `${Math.max(4, Math.min(100, value))}%`;
+  return `${Math.max(0, Math.min(100, value))}%`;
 }
 
 function exportParams(input: AnalyticsReportBuilderFilters & { report: ReportKind; format: "csv" | "pdf" }) {
@@ -84,6 +84,15 @@ export function AnalyticsReportBuilder({
   filters: AnalyticsReportBuilderFilters;
 }) {
   const timeZone = useSchoolTimeZone();
+  const controlPrefix = useId();
+  const controlIds = {
+    report: `${controlPrefix}-report`,
+    search: `${controlPrefix}-search`,
+    range: `${controlPrefix}-range`,
+    start: `${controlPrefix}-start`,
+    end: `${controlPrefix}-end`,
+    center: `${controlPrefix}-center`,
+  };
   const [range, setRange] = useState(filters.range || "365");
   const [start, setStart] = useState(filters.start);
   const [end, setEnd] = useState(filters.end);
@@ -473,21 +482,21 @@ export function AnalyticsReportBuilder({
         <CardHeader>
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div>
-              <CardTitle>Report Builder</CardTitle>
+          <CardTitle as="h2">Report Builder</CardTitle>
               <CardDescription>
                 Filter by center and date range, then export the selected operational report.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => download("csv")}>
+              <Button type="button" variant="outline" onClick={() => download("csv")}>
                 <Download data-icon="inline-start" />
                 Export CSV
               </Button>
-              <Button variant="outline" onClick={() => download("pdf")}>
+              <Button type="button" variant="outline" onClick={() => download("pdf")}>
                 <FileText data-icon="inline-start" />
                 Export PDF
               </Button>
-              <Button variant="outline" onClick={printReport}>
+              <Button type="button" variant="outline" onClick={printReport}>
                 <Printer data-icon="inline-start" />
                 Print report
               </Button>
@@ -500,9 +509,9 @@ export function AnalyticsReportBuilder({
             <input type="hidden" name="range" value={range} />
             <input type="hidden" name="centerId" value={centerId} />
             <div className="space-y-1">
-              <Label>Report</Label>
+              <Label htmlFor={controlIds.report}>Report</Label>
               <Select value={report} onValueChange={(value) => value && setReport(value as ReportKind)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id={controlIds.report} className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {reportOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
@@ -511,16 +520,16 @@ export function AnalyticsReportBuilder({
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Search Visible Rows</Label>
+              <Label htmlFor={controlIds.search}>Search visible rows</Label>
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Child, classroom, center, teacher..." />
+                <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input id={controlIds.search} className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Child, classroom, center, teacher..." />
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Date Range</Label>
+              <Label htmlFor={controlIds.range}>Date range</Label>
               <Select value={range} onValueChange={(value) => value && setRange(value)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id={controlIds.range} className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="7">Last 7 days</SelectItem>
                   <SelectItem value="30">Last 30 days</SelectItem>
@@ -531,23 +540,23 @@ export function AnalyticsReportBuilder({
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Start</Label>
-              <Input name="start" type="date" value={start} onChange={(event) => {
+              <Label htmlFor={controlIds.start}>Start</Label>
+              <Input id={controlIds.start} name="start" type="date" value={start} onChange={(event) => {
                 setStart(event.target.value);
                 setRange("all");
               }} />
             </div>
             <div className="space-y-1">
-              <Label>End</Label>
-              <Input name="end" type="date" value={end} onChange={(event) => {
+              <Label htmlFor={controlIds.end}>End</Label>
+              <Input id={controlIds.end} name="end" type="date" value={end} onChange={(event) => {
                 setEnd(event.target.value);
                 setRange("all");
               }} />
             </div>
             <div className="space-y-1">
-              <Label>Center</Label>
+              <Label htmlFor={controlIds.center}>Center</Label>
               <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id={controlIds.center} className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All accessible centers</SelectItem>
                   {data.centers.map((center) => (
@@ -614,7 +623,7 @@ export function AnalyticsReportBuilder({
         <TabsContent value="enrollment_status" className="space-y-4">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Enrollment Status Summary</CardTitle>
+              <CardTitle as="h2">Enrollment Status Summary</CardTitle>
               <CardDescription>
                 Current enrolled roster as of {formatDate(enrollmentAsOf, timeZone)}, grouped by classroom or age group for viewing, export, and print.
               </CardDescription>
@@ -663,7 +672,7 @@ export function AnalyticsReportBuilder({
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
             <Card className="glass-panel">
               <CardHeader>
-                <CardTitle>Lead Source Conversion</CardTitle>
+              <CardTitle as="h2">Lead Source Conversion</CardTitle>
                 <CardDescription>Lead source, tour, application, and enrollment outcomes.</CardDescription>
               </CardHeader>
               <CardContent>
@@ -690,8 +699,15 @@ export function AnalyticsReportBuilder({
                         <TableCell>{row.enrolled}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
-                              <div className="h-full rounded-full bg-primary" style={{ width: barWidth(row.conversionRate) }} />
+                            <div
+                              className="h-2 w-24 overflow-hidden rounded-full bg-muted"
+                              role="progressbar"
+                              aria-label={`${row.source} conversion`}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-valuenow={row.conversionRate}
+                            >
+                              <div aria-hidden="true" className="h-full rounded-full bg-primary" style={{ width: barWidth(row.conversionRate) }} />
                             </div>
                             <span>{row.conversionRate}%</span>
                           </div>
@@ -707,7 +723,7 @@ export function AnalyticsReportBuilder({
             </Card>
             <Card className="glass-panel">
               <CardHeader>
-                <CardTitle>Funnel Stages</CardTitle>
+              <CardTitle as="h2">Funnel Stages</CardTitle>
                 <CardDescription>Current distribution inside the selected reporting range.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -717,8 +733,15 @@ export function AnalyticsReportBuilder({
                       <div className="font-medium">{stage.stage.replaceAll("_", " ")}</div>
                       <Badge variant="outline">{stage.count}</Badge>
                     </div>
-                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-primary" style={{ width: barWidth(stage.share) }} />
+                    <div
+                      className="mt-3 h-2 overflow-hidden rounded-full bg-muted"
+                      role="progressbar"
+                      aria-label={`${stage.stage.replaceAll("_", " ")} share`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={stage.share}
+                    >
+                      <div aria-hidden="true" className="h-full rounded-full bg-primary" style={{ width: barWidth(stage.share) }} />
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">{stage.share}% of visible leads</div>
                   </div>
@@ -730,7 +753,7 @@ export function AnalyticsReportBuilder({
         <TabsContent value="attendance">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Attendance And Absence Trends</CardTitle>
+              <CardTitle as="h2">Attendance And Absence Trends</CardTitle>
               <CardDescription>Present, absent, check-in, and check-out trends by center and period.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -769,7 +792,7 @@ export function AnalyticsReportBuilder({
         <TabsContent value="billing">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Billing, Revenue, And AR</CardTitle>
+              <CardTitle as="h2">Billing, Revenue, And AR</CardTitle>
               <CardDescription>Invoice and payment history for the period; open and overdue AR include currently enrolled families only.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -808,7 +831,7 @@ export function AnalyticsReportBuilder({
         <TabsContent value="weekly_billing">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Weekly Billing</CardTitle>
+              <CardTitle as="h2">Weekly Billing</CardTitle>
               <CardDescription>Invoices billed for the period; open and overdue AR include currently enrolled families only.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -829,7 +852,7 @@ export function AnalyticsReportBuilder({
         <TabsContent value="weekly_payments">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Weekly Payments</CardTitle>
+              <CardTitle as="h2">Weekly Payments</CardTitle>
               <CardDescription>Successful payment count and collected amount by center for each Monday-Sunday week.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -850,7 +873,7 @@ export function AnalyticsReportBuilder({
         <TabsContent value="messages">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Parent Response Time And Message Analytics</CardTitle>
+              <CardTitle as="h2">Parent Response Time And Message Analytics</CardTitle>
               <CardDescription>Parent-origin messages, staff replies, unread counts, and response speed.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -887,7 +910,7 @@ export function AnalyticsReportBuilder({
         <TabsContent value="staff_hours">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Staff Hours And Time Clock</CardTitle>
+              <CardTitle as="h2">Staff Hours And Time Clock</CardTitle>
               <CardDescription>Teacher clock status, closed shifts, open shift time, and range totals for the selected centers.</CardDescription>
             </CardHeader>
             <CardContent>

@@ -13,8 +13,8 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(billing, /Care schedule: \{careScheduleLabel\(child\.careScheduleType\)\}/);
   assert.match(billing, /Rate name: \{child\.tuitionAssignment\?\.description/);
   assert.match(billing, /Tuition: \{child\.tuitionAssignment\?\.enabled/);
-  assert.match(billing, /<Label>Rate name<\/Label>/);
-  assert.match(billing, /<Label>Child tuition label<\/Label>/);
+  assert.match(billing, /<Label htmlFor="billing-rate-name">Rate name<\/Label>[\s\S]*?<Input id="billing-rate-name"/);
+  assert.match(billing, /<Label htmlFor="billing-assignment-description">Child tuition label<\/Label>[\s\S]*?id="billing-assignment-description"/);
   assert.match(billing, /projectedFamilyWeeklyTuitionCents/);
   assert.match(billing, /Auto-calculated from \$\{projectedActiveRateCount\} child rate/);
   assert.match(billing, /save tuition to update the family ledger/);

@@ -139,9 +139,9 @@ export function LicensingConfigurationPanel({
   }
 
   return (
-    <Card className="glass-panel">
+    <Card aria-busy={isPending}>
       <CardHeader>
-        <CardTitle>State Licensing Configuration</CardTitle>
+        <CardTitle as="h2">State licensing configuration</CardTitle>
         <CardDescription>School-level licensing agency, license, capacity, ratio, inspection, drill, document, and medication rules.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -203,9 +203,9 @@ export function LicensingConfigurationPanel({
           <div className="grid gap-4 rounded-lg border bg-background/40 p-4">
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2 md:col-span-3">
-                <Label>School</Label>
+                <Label htmlFor="licensing-school">School</Label>
                 <Select value={selectedCenter.id} onValueChange={(value) => selectCenter(value ?? "")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="licensing-school"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {rows.map((center) => (
                       <SelectItem key={center.id} value={center.id}>{centerLabel(center)}</SelectItem>
@@ -271,16 +271,16 @@ export function LicensingConfigurationPanel({
             </div>
 
             {error ? (
-              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              <div role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
                 <AlertTriangle className="size-4" />
                 {error}
               </div>
             ) : null}
-            {message ? <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700">{message}</div> : null}
+            {message ? <div role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700">{message}</div> : null}
 
-            <Button onClick={save} disabled={!canManage || isPending}>
+            <Button type="button" onClick={save} disabled={!canManage || isPending}>
               <Save data-icon="inline-start" />
-              {isPending ? "Saving..." : "Save Licensing Configuration"}
+              {isPending ? "Saving…" : "Save licensing configuration"}
             </Button>
           </div>
         ) : null}

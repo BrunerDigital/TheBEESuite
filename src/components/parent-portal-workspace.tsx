@@ -1682,7 +1682,7 @@ function ParentPortalWorkspaceView({
     return (
       <Card className="shadow-none">
         <CardHeader>
-          <CardTitle>Parent Portal</CardTitle>
+          <CardTitle as="h2">Parent Portal</CardTitle>
           <CardDescription>
             No family profile is connected to this account yet.
           </CardDescription>
@@ -1692,7 +1692,7 @@ function ParentPortalWorkspaceView({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[88rem] flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-[88rem] flex-col gap-6 [&_button]:min-h-10" aria-busy={isPending}>
       <header
         id="family-summary"
         className="scroll-mt-28 border-b border-border/80 pb-5"
@@ -1749,14 +1749,14 @@ function ParentPortalWorkspaceView({
       ) : null}
 
       {status ? (
-        <Alert>
+        <Alert role="status" aria-live="polite">
           <CheckCircle2 className="size-4" />
           <AlertTitle>Done</AlertTitle>
           <AlertDescription>{status}</AlertDescription>
         </Alert>
       ) : null}
       {error ? (
-        <Alert variant="destructive">
+        <Alert variant="destructive" role="alert">
           <AlertCircle className="size-4" />
           <AlertTitle>Needs attention</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -1766,9 +1766,9 @@ function ParentPortalWorkspaceView({
       {activeView === "family" ? (
         <nav
           aria-label="Family sections"
-          className="-mt-2 overflow-x-auto border-b border-border/80"
+          className="-mt-2 border-b border-border/80"
         >
-          <div className="flex min-w-max gap-6">
+          <div className="grid grid-cols-2 gap-1 pb-2 sm:flex sm:min-w-max sm:gap-6 sm:pb-0">
             {(
               [
                 ["children", "Children"],
@@ -1788,7 +1788,7 @@ function ParentPortalWorkspaceView({
                 aria-current={
                   activeFamilySection === section ? "page" : undefined
                 }
-                className={`relative flex min-h-11 items-center border-b-2 px-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${activeFamilySection === section ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"}`}
+                className={`relative flex min-h-11 items-center rounded-lg border px-3 py-2 text-sm font-medium leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-1 ${activeFamilySection === section ? "border-border bg-muted text-foreground sm:border-primary sm:bg-transparent" : "border-transparent text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground sm:hover:bg-transparent"}`}
               >
                 {label}
               </Link>
@@ -1851,7 +1851,7 @@ function ParentPortalWorkspaceView({
                   </div>
                   <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                     <div className="min-w-0 rounded-xl border bg-card/70 p-3">
-                      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <dt className="text-xs font-medium text-muted-foreground">
                         Today’s Schedule
                       </dt>
                       <dd className="mt-1 line-clamp-2 break-words font-medium">
@@ -1859,7 +1859,7 @@ function ParentPortalWorkspaceView({
                       </dd>
                     </div>
                     <div className="min-w-0 rounded-xl border bg-card/70 p-3">
-                      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <dt className="text-xs font-medium text-muted-foreground">
                         Classroom
                       </dt>
                       <dd className="mt-1 truncate font-medium">
@@ -1870,7 +1870,7 @@ function ParentPortalWorkspaceView({
                       </dd>
                     </div>
                     <div className="min-w-0 rounded-xl border bg-card/70 p-3">
-                      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <dt className="text-xs font-medium text-muted-foreground">
                         Last Check-In Update
                       </dt>
                       <dd className="mt-1 font-medium">
@@ -1880,7 +1880,7 @@ function ParentPortalWorkspaceView({
                       </dd>
                     </div>
                     <div className="min-w-0 rounded-xl border bg-card/70 p-3">
-                      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <dt className="text-xs font-medium text-muted-foreground">
                         Today’s Update
                       </dt>
                       <dd className="mt-1 font-medium">
@@ -2241,7 +2241,7 @@ function ParentPortalWorkspaceView({
         <div className="grid gap-4">
           <Card id="children" className="scroll-mt-28 shadow-none">
             <CardHeader>
-              <CardTitle>Children</CardTitle>
+              <CardTitle as="h2">Children</CardTitle>
               <CardDescription>
                 View each child’s classroom, schedule, and permissions.
               </CardDescription>
@@ -2302,7 +2302,7 @@ function ParentPortalWorkspaceView({
 
           <Card id="incidents" className="scroll-mt-28 shadow-none">
             <CardHeader>
-              <CardTitle>Incident Reports</CardTitle>
+              <CardTitle as="h2">Incident Reports</CardTitle>
               <CardDescription>
                 Review reports your school has shared for your children.
               </CardDescription>
@@ -2351,7 +2351,7 @@ function ParentPortalWorkspaceView({
       {activeView === "payments" ? (
         <Card id="billing" className="scroll-mt-28 shadow-none">
           <CardHeader>
-            <CardTitle>Family Balance and Account</CardTitle>
+            <CardTitle as="h2">Family Balance and Account</CardTitle>
             <CardDescription>
               Review charges, payments, invoices, and payment methods. No
               processing fee is added to your payment.
@@ -2473,7 +2473,7 @@ function ParentPortalWorkspaceView({
                             </div>
                           </div>
                           <div className="space-y-1">
-                            <Label>Billing cycle</Label>
+                            <Label htmlFor={`parent-billing-cycle-${child.id}`}>Billing cycle</Label>
                             <Select
                               value={cadence}
                               onValueChange={(value) =>
@@ -2484,7 +2484,7 @@ function ParentPortalWorkspaceView({
                                 }))
                               }
                             >
-                              <SelectTrigger>
+                              <SelectTrigger id={`parent-billing-cycle-${child.id}`} aria-label={`Billing cycle for ${child.fullName}`}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -2866,8 +2866,8 @@ function ParentPortalWorkspaceView({
                 </div>
                 <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.2fr_1fr_1fr]">
                   <div className="space-y-2">
-                    <Label>Color</Label>
-                    <div className="flex flex-wrap gap-2">
+                    <div id="uniform-color-label" className="text-sm font-medium">Color</div>
+                    <div className="flex flex-wrap gap-2" role="group" aria-labelledby="uniform-color-label">
                       {uniformColors.map((color) => (
                         <Button
                           key={color}
@@ -2875,6 +2875,7 @@ function ParentPortalWorkspaceView({
                           onClick={() => selectUniformColor(color)}
                           size="sm"
                           type="button"
+                          aria-pressed={uniformColor === color}
                           variant={
                             uniformColor === color ? "default" : "outline"
                           }
@@ -2888,8 +2889,8 @@ function ParentPortalWorkspaceView({
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Size</Label>
-                    <div className="flex flex-wrap gap-2">
+                    <div id="uniform-size-label" className="text-sm font-medium">Size</div>
+                    <div className="flex flex-wrap gap-2" role="group" aria-labelledby="uniform-size-label">
                       {uniformSizes.map((size) => (
                         <Button
                           key={size}
@@ -2897,6 +2898,7 @@ function ParentPortalWorkspaceView({
                           onClick={() => setUniformSize(size)}
                           size="sm"
                           type="button"
+                          aria-pressed={uniformSize === size}
                           variant={uniformSize === size ? "default" : "outline"}
                         >
                           {size}
@@ -2905,8 +2907,8 @@ function ParentPortalWorkspaceView({
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Option</Label>
-                    <div className="flex flex-wrap gap-2">
+                    <div id="uniform-option-label" className="text-sm font-medium">Option</div>
+                    <div className="flex flex-wrap gap-2" role="group" aria-labelledby="uniform-option-label">
                       {uniformPurchaseOptions.map((product) => (
                         <Button
                           key={product.purchaseOption}
@@ -2916,6 +2918,7 @@ function ParentPortalWorkspaceView({
                           }
                           size="sm"
                           type="button"
+                          aria-pressed={uniformPurchaseOption === product.purchaseOption}
                           variant={
                             uniformPurchaseOption === product.purchaseOption
                               ? "default"
@@ -2939,14 +2942,14 @@ function ParentPortalWorkspaceView({
                             clampUniformQuantity(current - 1),
                           )
                         }
-                        size="icon-sm"
+                        size="icon"
                         type="button"
                         variant="outline"
                       >
                         <Minus className="size-3.5" />
                       </Button>
                       <Input
-                        className="h-7 w-20 text-center text-sm"
+                        className="h-10 w-20 text-center text-sm"
                         disabled={isPending}
                         id="uniformQuantity"
                         inputMode="numeric"
@@ -2973,7 +2976,7 @@ function ParentPortalWorkspaceView({
                             clampUniformQuantity(current + 1),
                           )
                         }
-                        size="icon-sm"
+                        size="icon"
                         type="button"
                         variant="outline"
                       >
@@ -3108,7 +3111,7 @@ function ParentPortalWorkspaceView({
                     .toUpperCase()}
                 </span>
                 <div className="min-w-0">
-                  <CardTitle className="truncate">
+                  <CardTitle as="h2" className="truncate">
                     {centerName ?? "Your school"}
                   </CardTitle>
                   <CardDescription className="truncate">
@@ -3272,7 +3275,7 @@ function ParentPortalWorkspaceView({
                   <Label htmlFor="portal-message">Message</Label>
                   <Textarea
                     id="portal-message"
-                    className="min-h-24 resize-y rounded-2xl bg-background/75"
+                    className="min-h-24 resize-y rounded-xl bg-background/75"
                     placeholder={`Message ${centerName ?? "your school"}`}
                     value={message}
                     onChange={(event) => setMessage(event.target.value)}
@@ -3303,7 +3306,7 @@ function ParentPortalWorkspaceView({
                       {messageAttachments.map((file, index) => (
                         <span
                           key={`${file.name}-${file.size}-${index}`}
-                          className="inline-flex max-w-full items-center gap-2 rounded-full border bg-card px-2.5 py-1 text-xs"
+                            className="inline-flex min-h-10 max-w-full items-center gap-2 rounded-lg border bg-card px-2.5 py-1 text-xs"
                         >
                           <span className="truncate">
                             {file.name || "attachment"}
@@ -3314,7 +3317,7 @@ function ParentPortalWorkspaceView({
                           <Button
                             type="button"
                             variant="ghost"
-                            size="icon-xs"
+                            size="icon"
                             onClick={() => removeMessageAttachment(index)}
                             aria-label={`Remove ${file.name || "attachment"}`}
                           >
@@ -3326,14 +3329,14 @@ function ParentPortalWorkspaceView({
                   ) : null}
                 </div>
                 <Button
-                  className="w-full rounded-full px-5 sm:w-auto"
+                  className="w-full px-5 sm:w-auto"
                   disabled={
                     isPending || (!message.trim() && !messageAttachments.length)
                   }
                   onClick={sendMessage}
                 >
                   <MessageSquare data-icon="inline-start" />
-                  {isPending ? "Sending" : "Send message"}
+                  {isPending ? "Sending…" : "Send message"}
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -3349,7 +3352,7 @@ function ParentPortalWorkspaceView({
           {parentPortalDocumentsEnabled ? (
             <Card id="documents" className="scroll-mt-28 shadow-none">
               <CardHeader>
-                <CardTitle>Documents and requests</CardTitle>
+                <CardTitle as="h2">Documents and requests</CardTitle>
                 <CardDescription>
                   Review requested documents or send contact and pickup changes
                   to your school.
@@ -3439,9 +3442,10 @@ function ParentPortalWorkspaceView({
                             }
                           />
                         </div>
-                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <label className="flex min-h-10 items-start gap-2 text-xs leading-5 text-muted-foreground">
                           <input
                             type="checkbox"
+                            className="mt-0.5 size-5 shrink-0 accent-primary"
                             checked={Boolean(
                               signatureAcknowledgements[document.id],
                             )}
@@ -3632,7 +3636,7 @@ function ParentPortalWorkspaceView({
       {activeView === "family" && activeFamilySection === "profile" ? (
         <Card id="profile" className="scroll-mt-28 shadow-none">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle as="h2" className="flex items-center gap-2">
               <KeyRound className="text-primary" />
               Profile and Security
             </CardTitle>
@@ -3816,7 +3820,7 @@ function ParentPortalWorkspaceView({
                 </p>
               </div>
               <Link
-                href="/support"
+                href={previewHrefBase ?? "/support"}
                 className={buttonVariants({
                   variant: "outline",
                   className: "w-full shrink-0 sm:w-auto",
@@ -3874,9 +3878,10 @@ function ParentPortalWorkspaceView({
                       placeholder="Share anything support or your school should know"
                     />
                   </div>
-                  <label className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+                  <label className="flex min-h-10 items-start gap-2 text-xs leading-5 text-muted-foreground">
                     <input
                       type="checkbox"
+                      className="mt-0.5 size-5 shrink-0 accent-primary"
                       checked={retentionNoticeAccepted}
                       onChange={(event) =>
                         setRetentionNoticeAccepted(event.target.checked)
@@ -3911,7 +3916,7 @@ function ParentPortalWorkspaceView({
       {activeView === "family" && activeFamilySection === "notifications" ? (
         <Card className="shadow-none">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle as="h2" className="flex items-center gap-2">
               <BellRing className="text-primary" />
               Notification Preferences
             </CardTitle>
@@ -3934,11 +3939,12 @@ function ParentPortalWorkspaceView({
             ).map(([key, label]) => (
               <label
                 key={key}
-                className="flex items-center justify-between gap-3 rounded-xl border bg-background/40 p-3 text-sm"
+                className="flex min-h-12 items-center justify-between gap-3 rounded-xl border bg-background/40 p-3 text-sm transition-colors hover:bg-muted/40 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
               >
                 <span>{label}</span>
                 <input
                   type="checkbox"
+                  className="size-5 shrink-0 accent-primary"
                   checked={preferences[key]}
                   onChange={(event) =>
                     updatePreference(key, event.target.checked)

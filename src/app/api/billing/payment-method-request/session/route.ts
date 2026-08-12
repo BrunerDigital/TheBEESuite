@@ -24,6 +24,7 @@ import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/ra
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
+import { readStripeConnectMigration, stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -153,6 +154,18 @@ async function POSTHandler(request: NextRequest) {
   });
   const currentFields = jsonObject(billingAccount.customFields);
   const connectedAccountId = readStripeConnectedAccountId(center.customFields);
+  if (payload.intent === "payment_method_reauthorization") {
+    const migration = readStripeConnectMigration(center.customFields);
+    const savedMethodAccountId = clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId);
+    const retainedSourceAccountId = stripeConnectSavedMethodAccount({
+      activeAccountId: connectedAccountId,
+      savedMethodAccountId,
+      centerCustomFields: center.customFields,
+    });
+    if (!migration.cutoverAt || retainedSourceAccountId !== migration.sourceAccountId || connectedAccountId !== migration.targetAccountId) {
+      return NextResponse.json({ ok: false, error: "This payment update is no longer needed or the school payment account changed. Please ask the school for a new link." }, { status: 409 });
+    }
+  }
   let customerId = stripeCustomerIdForAccount(currentFields, connectedAccountId);
   if (!customerId) {
     const customer = await createStripeCustomer({
@@ -227,7 +240,7 @@ async function POSTHandler(request: NextRequest) {
     checkoutBranding: buildPaymentMethodRequestCheckoutBranding({
       centerLabel,
       familyName: family.name,
-      intent: bankAccountVerificationMethod === "instant" ? "instant_bank_verification" : "payment_steps",
+      intent: payload.intent ?? (bankAccountVerificationMethod === "instant" ? "instant_bank_verification" : "payment_steps"),
       logoUrl,
       iconUrl,
     }),

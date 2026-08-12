@@ -180,7 +180,8 @@ export default async function PaymentMethodFormPage({
           paymentMethodStatus={paymentMethodStatus}
           paymentStatus={paymentStatus}
           focus={focus}
-          openInvoices={(family.billingAccount?.invoices ?? []).map((invoice) => ({
+          reauthorization={payload.intent === "payment_method_reauthorization"}
+          openInvoices={(payload.intent === "payment_method_reauthorization" ? [] : family.billingAccount?.invoices ?? []).map((invoice) => ({
             id: invoice.id,
             number: invoice.number,
             status: invoice.status,

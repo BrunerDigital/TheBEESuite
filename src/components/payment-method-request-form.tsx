@@ -19,6 +19,7 @@ type Props = {
   paymentMethodStatus?: string | null;
   paymentStatus?: string | null;
   focus?: "instant-bank" | null;
+  reauthorization?: boolean;
   openInvoices?: Array<{
     id: string;
     number: string;
@@ -38,6 +39,7 @@ export function PaymentMethodRequestForm({
   paymentMethodStatus,
   paymentStatus,
   focus,
+  reauthorization = false,
   openInvoices = [],
 }: Props) {
   const [errorMessage, setErrorMessage] = useState("");
@@ -116,7 +118,7 @@ export function PaymentMethodRequestForm({
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle as="h2">Tuition payment options</CardTitle>
+            <CardTitle as="h2">{reauthorization ? "Update tuition payment method" : "Tuition payment options"}</CardTitle>
             <CardDescription className="text-zinc-300">
               {centerLabel} sent this secure payment link for {familyName}.
             </CardDescription>
@@ -127,6 +129,15 @@ export function PaymentMethodRequestForm({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {reauthorization ? (
+          <Alert className="border-sky-300/40 bg-sky-300/10 text-sky-50">
+            <ShieldCheck className="size-4" />
+            <AlertTitle>No payment will be charged</AlertTitle>
+            <AlertDescription className="text-sky-100">
+              Your school updated its secure Stripe account. Save a replacement method below. Your current method and autopay choice remain in place until Stripe confirms the replacement.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {paymentMethodStatus === "success" ? (
           <Alert className="border-emerald-400/40 bg-emerald-400/10 text-emerald-50">
             <CheckCircle2 className="size-4" />

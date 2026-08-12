@@ -66,7 +66,7 @@ import {
 import { canAccessModule } from "../src/lib/rbac";
 import { canManageChildInClassroom, canManageStaffCompensation, canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
 import { appModeFromPath, buildDeviceSessionLabel, inferDeviceType, normalizeDeviceAppMode } from "../src/lib/device-sessions";
-import { loginHrefForNextPath, resolvePortalPostLoginPath, resolvePostLoginPath, safeLoginNextPath } from "../src/lib/login-routing";
+import { loginHrefForNextPath, pathWithSearchParams, resolvePortalPostLoginPath, resolvePostLoginPath, safeLoginNextPath } from "../src/lib/login-routing";
 import { buildStoreAppManifest, storeApps } from "../src/lib/app-store-apps";
 import { buildVisibleMessageWhere } from "../src/lib/message-visibility";
 
@@ -84,12 +84,33 @@ test("web app login routes parent accounts into the parent portal", () => {
   assert.equal(safeLoginNextPath("/parents/setup", "/parent-portal"), "/parent-portal");
   assert.equal(loginHrefForNextPath("/parent-portal#billing"), "/parents?next=%2Fparent-portal%23billing");
   assert.equal(loginHrefForNextPath("/parent-portal/setup"), "/parents?next=%2Fparent-portal%2Fsetup");
+  assert.equal(
+    loginHrefForNextPath("/parent-portal?view=messages&replyToMessageId=message-1"),
+    "/parents?next=%2Fparent-portal%3Fview%3Dmessages%26replyToMessageId%3Dmessage-1",
+  );
   assert.equal(resolvePostLoginPath({ role: UserRole.PARENT_GUARDIAN, requestedNext: "/dashboard" }), "/parent-portal");
   assert.equal(resolvePostLoginPath({ role: UserRole.PARENT_GUARDIAN, requestedNext: "/parent-portal#billing" }), "/parent-portal#billing");
+  assert.equal(
+    resolvePostLoginPath({ role: UserRole.PARENT_GUARDIAN, requestedNext: "/parent-portal?view=messages&familyId=family-1" }),
+    "/parent-portal?view=messages&familyId=family-1",
+  );
   assert.equal(resolvePostLoginPath({ role: UserRole.AUTHORIZED_PICKUP, requestedNext: "/billing-invoices" }), "/parent-portal");
   assert.equal(resolvePostLoginPath({ role: UserRole.CENTER_DIRECTOR, requestedNext: "/dashboard" }), "/dashboard");
   assert.equal(resolvePortalPostLoginPath({ portal: "parents", role: UserRole.PARENT_GUARDIAN, requestedNext: "/parent-portal" }), "/parent-portal");
   assert.equal(resolvePortalPostLoginPath({ portal: "parents", role: UserRole.CENTER_DIRECTOR, requestedNext: "/parent-portal" }), "/dashboard");
+});
+
+test("authenticated module login returns preserve deep-link query context", () => {
+  assert.equal(
+    pathWithSearchParams("/messages", {
+      replyToMessageId: "message-1",
+      subject: "Pickup update",
+      familyId: ["family-1", "family-2"],
+      empty: undefined,
+    }),
+    "/messages?replyToMessageId=message-1&subject=Pickup+update&familyId=family-1&familyId=family-2",
+  );
+  assert.equal(pathWithSearchParams("/dashboard", {}), "/dashboard");
 });
 
 test("parent app store metadata starts at the parent-only login entry", () => {

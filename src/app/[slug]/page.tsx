@@ -165,7 +165,7 @@ import { defaultProfilePhotoUrlForRole, readProfilePhotoStorageKey, readProfileP
 import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
 import { isReportKind } from "@/lib/reporting-analytics-shared";
-import { homePathForRole, loginHrefForNextPath } from "@/lib/login-routing";
+import { homePathForRole, loginHrefForNextPath, pathWithSearchParams } from "@/lib/login-routing";
 import { canAccessModule, canAccessResolvedModuleRoute } from "@/lib/rbac";
 import { assetKind, canManageAssetHub, CORPORATE_ASSET_TYPE, readAssetMetadata } from "@/lib/asset-hub";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
@@ -6230,7 +6230,7 @@ export async function renderAuthenticatedModulePage(
 
   const authenticationNextPath = terminalStoreReturn
     ? `/terminal-store?purchase=${encodeURIComponent(terminalStoreReturn)}`
-    : `/${slug}`;
+    : pathWithSearchParams(`/${slug}`, resolvedSearchParams);
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) {
     redirect(loginHrefForNextPath(authenticationNextPath));

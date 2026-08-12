@@ -1658,8 +1658,6 @@ function stripeReconciliationTimestamp(value: unknown) {
 export async function ensureStripeSoftwareRecurringPrice({ tenantId, unitAmountCents }: { tenantId?: string | null; unitAmountCents: number }) {
   const apiKey = await getStripeSecretKey({ tenantId });
   if (!apiKey) return { ok: false as const, configured: false, error: "Payment processor is not configured." };
-  const configuredPriceId = clean(process.env.STRIPE_SCHOOL_SOFTWARE_PRICE_ID);
-  if (configuredPriceId.startsWith("price_")) return { ok: true as const, configured: true, priceId: configuredPriceId };
   const lookupKey = `bee_suite_school_monthly_${unitAmountCents}`;
   const lookupResponse = await fetch(`https://api.stripe.com/v1/prices?active=true&lookup_keys[]=${encodeURIComponent(lookupKey)}&limit=1`, {
     headers: stripeHeaders(apiKey, "form"), signal: AbortSignal.timeout(10_000),
@@ -1777,7 +1775,7 @@ export async function createStripeBalanceSoftwareSubscription({
   });
   const response = await fetch("https://api.stripe.com/v1/subscriptions", {
     method: "POST",
-    headers: { ...stripeHeaders(apiKey, "form"), "Idempotency-Key": `school-software-balance-subscription:${centerId}` },
+    headers: { ...stripeHeaders(apiKey, "form"), "Idempotency-Key": `school-software-balance-subscription:${centerId}:${priceId}` },
     body,
     signal: AbortSignal.timeout(10_000),
   });
@@ -1790,17 +1788,21 @@ export async function createStripeSoftwareSubscription({ customerId, priceId, qu
   const apiKey = await getStripeSecretKey({ tenantId });
   if (!apiKey) return { ok: false as const, configured: false, error: "Payment processor is not configured." };
   const body = new URLSearchParams({ customer: customerId, "items[0][price]": priceId, "items[0][quantity]": String(Math.max(1, quantity)), payment_behavior: "default_incomplete", "payment_settings[save_default_payment_method]": "on_subscription", "metadata[tenantId]": tenantId || "", "metadata[centerId]": centerId, "metadata[paymentScope]": "school_software_fee", expand: "latest_invoice" });
-  const response = await fetch("https://api.stripe.com/v1/subscriptions", { method: "POST", headers: { ...stripeHeaders(apiKey, "form"), "Idempotency-Key": `school-software:${centerId}` }, body, signal: AbortSignal.timeout(10_000) });
+  const response = await fetch("https://api.stripe.com/v1/subscriptions", { method: "POST", headers: { ...stripeHeaders(apiKey, "form"), "Idempotency-Key": `school-software:${centerId}:${priceId}` }, body, signal: AbortSignal.timeout(10_000) });
   const json = await response.json().catch(() => null) as Record<string, unknown> | null;
   if (!response.ok || !json?.id) return { ok: false as const, configured: true, error: clean(asRecord(json?.error).message) || `Payment processor returned ${response.status}.` };
   return { ok: true as const, configured: true, subscription: softwareSubscriptionSnapshot(json) };
 }
 
-export async function updateStripeSoftwareSubscription({ subscriptionId, itemId, quantity, cancelAtPeriodEnd, tenantId }: { subscriptionId: string; itemId?: string | null; quantity?: number; cancelAtPeriodEnd?: boolean; tenantId?: string | null }) {
+export async function updateStripeSoftwareSubscription({ subscriptionId, itemId, priceId, quantity, cancelAtPeriodEnd, tenantId }: { subscriptionId: string; itemId?: string | null; priceId?: string | null; quantity?: number; cancelAtPeriodEnd?: boolean; tenantId?: string | null }) {
   const apiKey = await getStripeSecretKey({ tenantId });
   if (!apiKey) return { ok: false as const, configured: false, error: "Payment processor is not configured." };
   const body = new URLSearchParams({ proration_behavior: "create_prorations", expand: "latest_invoice" });
-  if (itemId && quantity !== undefined) { body.set("items[0][id]", itemId); body.set("items[0][quantity]", String(Math.max(1, quantity))); }
+  if (itemId && (quantity !== undefined || priceId)) {
+    body.set("items[0][id]", itemId);
+    if (priceId) body.set("items[0][price]", priceId);
+    if (quantity !== undefined) body.set("items[0][quantity]", String(Math.max(1, quantity)));
+  }
   if (cancelAtPeriodEnd !== undefined) body.set("cancel_at_period_end", String(cancelAtPeriodEnd));
   const response = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, { method: "POST", headers: stripeHeaders(apiKey, "form"), body, signal: AbortSignal.timeout(10_000) });
   const json = await response.json().catch(() => null) as Record<string, unknown> | null;

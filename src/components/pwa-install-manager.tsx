@@ -200,8 +200,30 @@ export function PwaInstallManager() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
     if (window.location.protocol !== "https:" && window.location.hostname !== "localhost") return;
+    const reloadKey = "bee-suite-pwa-controllerchange-reload";
 
-    navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).catch(() => undefined);
+    navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" })
+      .then((registration) => {
+        registration.update().catch(() => undefined);
+      })
+      .catch(() => undefined);
+
+    const handleControllerChange = () => {
+      try {
+        const alreadyReloaded = sessionStorage.getItem(reloadKey);
+        if (alreadyReloaded === "1") return;
+        sessionStorage.setItem(reloadKey, "1");
+        window.location.reload();
+      } catch {
+        window.location.reload();
+      }
+    };
+
+    navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
+
+    return () => {
+      navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
+    };
   }, []);
 
   useEffect(() => {

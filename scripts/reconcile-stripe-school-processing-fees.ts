@@ -310,6 +310,7 @@ async function main() {
   );
   const priorCorrectionsByAccount = new Map<string, number>();
   const priorCorrectionIdsByAccount = new Map<string, string[]>();
+  const priorCorrectionById = new Map<string, JsonRecord>();
   for (const charge of priorCorrectionCharges) {
     const metadata = record(charge.metadata);
     if (clean(metadata.purpose) !== PURPOSE
@@ -320,7 +321,9 @@ async function main() {
     if (!accountId.startsWith("acct_")) continue;
     const netAmount = Math.max(0, cents(charge.amount) - cents(charge.amount_refunded));
     priorCorrectionsByAccount.set(accountId, (priorCorrectionsByAccount.get(accountId) || 0) + netAmount);
-    priorCorrectionIdsByAccount.set(accountId, [...(priorCorrectionIdsByAccount.get(accountId) || []), clean(charge.id)]);
+    const chargeId = clean(charge.id);
+    priorCorrectionIdsByAccount.set(accountId, [...(priorCorrectionIdsByAccount.get(accountId) || []), chargeId]);
+    priorCorrectionById.set(chargeId, charge);
   }
 
   const centers = await prisma.center.findMany({
@@ -408,6 +411,37 @@ async function main() {
 
   const results = [];
   for (const plan of plans) {
+    if (apply) {
+      for (const priorCorrectionId of plan.priorCorrectionIds) {
+        const existingAudit = await prisma.auditLog.findFirst({
+          where: { tenantId: plan.tenantId, centerId: plan.centerId, resourceId: priorCorrectionId, action: PURPOSE },
+          select: { id: true },
+        });
+        if (!existingAudit) {
+          const priorCorrection = priorCorrectionById.get(priorCorrectionId) || {};
+          const priorMetadata = record(priorCorrection.metadata);
+          await prisma.auditLog.create({
+            data: {
+              tenantId: plan.tenantId,
+              centerId: plan.centerId,
+              action: PURPOSE,
+              resource: "stripe_charge",
+              resourceId: priorCorrectionId,
+              metadata: {
+                reconciliationStartDate: clean(priorMetadata.reconciliationStartDate),
+                reconciliationEndDateExclusive: clean(priorMetadata.reconciliationEndDateExclusive),
+                reconciliationFingerprint: clean(priorMetadata.reconciliationFingerprint),
+                actualStripeFeeCents: Number.parseInt(clean(priorMetadata.actualStripeFeeCents) || "0", 10),
+                retainedProcessingFeeCents: Number.parseInt(clean(priorMetadata.retainedProcessingFeeCents) || "0", 10),
+                priorCorrectionCents: Number.parseInt(clean(priorMetadata.priorCorrectionCents) || "0", 10),
+                correctionCents: Math.max(0, cents(priorCorrection.amount) - cents(priorCorrection.amount_refunded)),
+                recoveredFromStripe: true,
+              },
+            },
+          });
+        }
+      }
+    }
     if (plan.correctionCents === 0) {
       results.push({ school: plan.centerName, status: "already_reconciled", correctionCents: 0 });
       continue;
@@ -440,7 +474,13 @@ async function main() {
       }),
     });
     const debitId = clean(debit.id);
-    if (clean(debit.status) !== "succeeded" || !debitId.startsWith("ch_")) {
+    const debitBalanceTransactionId = clean(debit.balance_transaction);
+    if (
+      clean(debit.status) !== "succeeded"
+      || debit.paid !== true
+      || !debitId
+      || !debitBalanceTransactionId.startsWith("txn_")
+    ) {
       throw new Error(`${plan.centerName}: Stripe correction debit did not succeed.`);
     }
     const existingAudit = await prisma.auditLog.findFirst({

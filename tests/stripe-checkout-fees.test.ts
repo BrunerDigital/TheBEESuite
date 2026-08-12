@@ -74,10 +74,10 @@ test("card checkout charges only principal while the school pays Stripe costs an
 
   assert.equal(amounts.invoiceAmountCents, 100_000);
   assert.equal(amounts.beeSuitePaymentOperationsFeeAmountCents, 1_000);
-  assert.equal(amounts.schoolProcessingFeeAmountCents, 2_130);
+  assert.equal(amounts.schoolProcessingFeeAmountCents, 2_930);
   assert.equal(amounts.parentProcessingRecoveryAmountCents, 0);
   assert.equal(amounts.checkoutTotalCents, 100_000);
-  assert.equal(amounts.applicationFeeAmountCents, 3_130);
+  assert.equal(amounts.applicationFeeAmountCents, 3_930);
 });
 
 test("Kokomo-style accounts pay Stripe directly and transfer only the BEE Suite fee", () => {
@@ -139,9 +139,9 @@ test("the reported 45.60 scenario cannot add any parent processing fee", () => {
   const amounts = getStripeCheckoutAmounts(154_224, { paymentMethodCategory: "card" });
 
   assert.equal(amounts.parentProcessingRecoveryAmountCents, 0);
-  assert.equal(amounts.schoolProcessingFeeAmountCents, 3_269);
+  assert.equal(amounts.schoolProcessingFeeAmountCents, 4_502);
   assert.equal(amounts.checkoutTotalCents, 154_224);
-  assert.equal(amounts.applicationFeeAmountCents, 4_811);
+  assert.equal(amounts.applicationFeeAmountCents, 6_044);
 });
 
 test("no tenant location brand or caller can waive the platform-wide fee policy", () => {
@@ -161,10 +161,10 @@ test("no tenant location brand or caller can waive the platform-wide fee policy"
       waiveBeeSuitePaymentOperationsFee: true,
     });
     assert.equal(card.parentProcessingRecoveryAmountCents, 0);
-    assert.equal(card.schoolProcessingFeeAmountCents, 2_130);
+    assert.equal(card.schoolProcessingFeeAmountCents, 2_930);
     assert.equal(card.beeSuitePaymentOperationsFeeAmountCents, 1_000);
     assert.equal(card.checkoutTotalCents, 100_000);
-    assert.equal(card.applicationFeeAmountCents, 3_130);
+    assert.equal(card.applicationFeeAmountCents, 3_930);
   }
 });
 
@@ -175,9 +175,9 @@ test("legacy application fee settings cannot stack on top of the one percent BEE
 
   const amounts = getStripeCheckoutAmounts(100_000, { paymentMethodCategory: "card" });
   assert.equal(amounts.parentProcessingRecoveryAmountCents, 0);
-  assert.equal(amounts.schoolProcessingFeeAmountCents, 2_130);
+  assert.equal(amounts.schoolProcessingFeeAmountCents, 2_930);
   assert.equal(amounts.beeSuitePaymentOperationsFeeAmountCents, 1_000);
-  assert.equal(amounts.applicationFeeAmountCents, 3_130);
+  assert.equal(amounts.applicationFeeAmountCents, 3_930);
 });
 
 test("school processing allocation follows configurable processor pricing without changing parent principal", () => {

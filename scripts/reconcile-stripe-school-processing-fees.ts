@@ -1,11 +1,18 @@
 import { createHash } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
+import { prisma } from "../src/lib/prisma";
 import {
-  calculateStripeSchoolProcessingFeeAmount,
-  type StripeSchoolProcessingFeeCategory,
-} from "../src/lib/stripe-school-processing-fees";
+  allocateExactStripeFees,
+  retainedProcessingFeeCents,
+  schoolFeeCorrectionCents,
+  type StripeFeeReportAllocationRow,
+} from "../src/lib/stripe-school-fee-reconciliation";
 
 type JsonRecord = Record<string, unknown>;
+type CsvRow = Record<string, string>;
+
+const REPORT_TYPE = "all_fees.balance_transaction_created.itemized.1";
+const PURPOSE = "school_processing_fee_correction";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -19,8 +26,12 @@ function array(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
+function cents(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : 0;
+}
+
 function argValue(name: string) {
-  const inline = process.argv.find((arg) => arg.startsWith(`${name}=`));
+  const inline = process.argv.find((argument) => argument.startsWith(`${name}=`));
   if (inline) return inline.slice(name.length + 1).trim();
   const index = process.argv.indexOf(name);
   return index >= 0 ? clean(process.argv[index + 1]) : "";
@@ -30,8 +41,19 @@ function hasArg(name: string) {
   return process.argv.includes(name);
 }
 
-function cents(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : 0;
+function utcDate(value: string, name: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${name} must use YYYY-MM-DD.`);
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(date.getTime())) throw new Error(`${name} is invalid.`);
+  return date;
+}
+
+function unixSeconds(date: Date) {
+  return Math.floor(date.getTime() / 1000);
+}
+
+function maskAccountId(accountId: string) {
+  return `${accountId.slice(0, 8)}...${accountId.slice(-4)}`;
 }
 
 function parseCsv(text: string) {
@@ -62,39 +84,25 @@ function parseCsv(text: string) {
   row.push(field);
   if (row.some(Boolean)) rows.push(row);
   const [headers = [], ...data] = rows;
-  return data.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
-}
-
-function paymentCategory(charge: JsonRecord): StripeSchoolProcessingFeeCategory {
-  const details = record(charge.payment_method_details);
-  const type = clean(details.type);
-  if (type === "us_bank_account") return "ach";
-  if (type === "link") return "link_bank";
-  if (type === "card_present") return "card_present";
-  return "card";
-}
-
-function dateWindow(date: string, utcOffset: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("--date must use YYYY-MM-DD.");
-  if (!/^[+-]\d{2}:\d{2}$/.test(utcOffset)) throw new Error("--utc-offset must use +HH:MM or -HH:MM.");
-  const start = new Date(`${date}T00:00:00${utcOffset}`);
-  if (!Number.isFinite(start.getTime())) throw new Error("The requested date window is invalid.");
-  return {
-    start,
-    end: new Date(start.getTime() + 24 * 60 * 60 * 1000),
-  };
+  return data.map((values): CsvRow =>
+    Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
 }
 
 async function stripeRequest(
   apiKey: string,
   path: string,
-  input: { accountId?: string; method?: "GET" | "POST"; body?: URLSearchParams; idempotencyKey?: string } = {},
+  input: {
+    accountId?: string;
+    method?: "GET" | "POST";
+    body?: URLSearchParams;
+    idempotencyKey?: string;
+  } = {},
 ) {
   const response = await fetch(`https://api.stripe.com${path}`, {
     method: input.method || "GET",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "Stripe-Version": process.env.STRIPE_API_VERSION || "2026-06-24.dahlia",
+      "Stripe-Version": process.env.STRIPE_API_VERSION || "2026-07-29.dahlia",
       ...(input.body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
       ...(input.accountId ? { "Stripe-Account": input.accountId } : {}),
       ...(input.idempotencyKey ? { "Idempotency-Key": input.idempotencyKey } : {}),
@@ -116,10 +124,13 @@ async function listAll(
 ) {
   const rows: JsonRecord[] = [];
   let startingAfter = "";
-  for (let page = 0; page < 20; page += 1) {
+  for (let page = 0; page < 50; page += 1) {
     const separator = path.includes("?") ? "&" : "?";
-    const pagePath = `${path}${startingAfter ? `${separator}starting_after=${encodeURIComponent(startingAfter)}` : ""}`;
-    const response = await stripeRequest(apiKey, pagePath, input);
+    const response = await stripeRequest(
+      apiKey,
+      `${path}${startingAfter ? `${separator}starting_after=${encodeURIComponent(startingAfter)}` : ""}`,
+      input,
+    );
     const data = array(response.data).map(record);
     rows.push(...data);
     if (response.has_more !== true || data.length === 0) return rows;
@@ -128,222 +139,369 @@ async function listAll(
   throw new Error(`Stripe pagination exceeded the safety limit for ${path}.`);
 }
 
-async function exactProcessingFeeAllocation(
+async function downloadFeeReport(
   apiKey: string,
   startSeconds: number,
   endSeconds: number,
 ) {
-  const reportTypeId = "connected_account_stripe_fees.incurred_at.itemized.1";
-  const reportType = await stripeRequest(apiKey, `/v1/reporting/report_types/${reportTypeId}`);
-  if (cents(reportType.data_available_end) < endSeconds) return null;
-
+  const reportType = await stripeRequest(apiKey, `/v1/reporting/report_types/${REPORT_TYPE}`);
+  if (cents(reportType.data_available_end) < endSeconds) {
+    return {
+      ready: false as const,
+      dataAvailableEnd: new Date(cents(reportType.data_available_end) * 1000).toISOString(),
+      rows: [] as CsvRow[],
+    };
+  }
   let reportRun = await stripeRequest(apiKey, "/v1/reporting/report_runs", {
     method: "POST",
     body: new URLSearchParams({
-      report_type: reportTypeId,
+      report_type: REPORT_TYPE,
       "parameters[interval_start]": String(startSeconds),
       "parameters[interval_end]": String(endSeconds),
       "parameters[timezone]": "UTC",
     }),
   });
-  for (let attempt = 0; attempt < 30 && !["succeeded", "failed"].includes(clean(reportRun.status)); attempt += 1) {
+  for (let attempt = 0; attempt < 45 && !["succeeded", "failed"].includes(clean(reportRun.status)); attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     reportRun = await stripeRequest(apiKey, `/v1/reporting/report_runs/${encodeURIComponent(clean(reportRun.id))}`);
   }
-  if (clean(reportRun.status) !== "succeeded") return null;
+  if (clean(reportRun.status) !== "succeeded") throw new Error("Stripe's All Fees report did not complete successfully.");
   const resultUrl = clean(record(reportRun.result).url);
-  if (!resultUrl.startsWith("https://")) return null;
+  if (!resultUrl.startsWith("https://")) throw new Error("Stripe's All Fees report did not provide a download URL.");
   const response = await fetch(resultUrl, {
     headers: { Authorization: `Bearer ${apiKey}` },
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new Error(`Stripe report download returned ${response.status}.`);
-  const rows = parseCsv(await response.text());
-  const allocation = new Map<string, number>();
-  for (const row of rows) {
-    if (row.fee_category !== "payment_processing_fees" || row.incurred_by_type !== "charge") continue;
-    const accountId = clean(row.account);
-    const amountCents = Math.round(Number.parseFloat(row.amount || "0") * 100);
-    if (!accountId.startsWith("acct_") || !Number.isFinite(amountCents)) continue;
-    allocation.set(accountId, (allocation.get(accountId) || 0) + amountCents);
-  }
-  return allocation;
+  return {
+    ready: true as const,
+    dataAvailableEnd: new Date(cents(reportType.data_available_end) * 1000).toISOString(),
+    rows: parseCsv(await response.text()),
+  };
+}
+
+function accountReferences(value: unknown, output = new Set<string>()) {
+  if (typeof value === "string" && value.startsWith("acct_")) output.add(value);
+  else if (Array.isArray(value)) value.forEach((item) => accountReferences(item, output));
+  else if (value && typeof value === "object") Object.values(value).forEach((item) => accountReferences(item, output));
+  return output;
 }
 
 async function main() {
-  const envDir = argValue("--env-dir") || process.cwd();
-  loadEnvConfig(envDir);
+  loadEnvConfig(argValue("--env-dir") || process.cwd());
   const apiKey = clean(process.env.STRIPE_SECRET_KEY);
   if (!/^(sk|rk)_live_/.test(apiKey)) throw new Error("A live Stripe secret or restricted key is required.");
 
-  const date = argValue("--date");
-  const utcOffset = argValue("--utc-offset") || "-04:00";
-  const { start, end } = dateWindow(date, utcOffset);
-  const startSeconds = Math.floor(start.getTime() / 1000);
-  const endSeconds = Math.floor(end.getTime() / 1000);
+  const startDate = argValue("--start-date");
+  const endDateExclusive = argValue("--end-date-exclusive");
+  const apply = hasArg("--apply");
+  const start = utcDate(startDate, "--start-date");
+  const end = utcDate(endDateExclusive, "--end-date-exclusive");
+  if (end <= start) throw new Error("--end-date-exclusive must be later than --start-date.");
+  if (end.getTime() - start.getTime() > 31 * 86_400_000) throw new Error("The reconciliation window cannot exceed 31 days.");
+  const startSeconds = unixSeconds(start);
+  const endSeconds = unixSeconds(end);
+  const report = await downloadFeeReport(apiKey, startSeconds, endSeconds);
+  if (!report.ready) {
+    console.log(JSON.stringify({
+      mode: "waiting_for_stripe_itemization",
+      startDate,
+      endDateExclusive,
+      reportType: REPORT_TYPE,
+      dataAvailableEnd: report.dataAvailableEnd,
+    }, null, 2));
+    return;
+  }
 
+  const providerTransactions = (await listAll(
+    apiKey,
+    `/v1/balance_transactions?limit=100&type=stripe_fee&created[gte]=${startSeconds}&created[lt]=${endSeconds}`,
+  )).filter((transaction) => /^(Card|Link|ACH Debit)\b/.test(clean(transaction.description)));
+  const providerById = new Map(providerTransactions.map((transaction) => [clean(transaction.id), Math.abs(cents(transaction.amount))]));
+  const providerFeeCents = [...providerById.values()].reduce((sum, amount) => sum + amount, 0);
+
+  const feeRows = report.rows.filter((row) =>
+    row.fee_category === "payment_processing_fees"
+      && Number.parseFloat(row.amount || "0") > 0
+      && clean(row.balance_transaction_id).startsWith("txn_"));
+  const reportBalanceTransactionIds = new Set(feeRows.map((row) => clean(row.balance_transaction_id)));
+  const missingReportTransactions = [...providerById.keys()].filter((id) => !reportBalanceTransactionIds.has(id));
+  const unexpectedReportTransactions = [...reportBalanceTransactionIds].filter((id) => !providerById.has(id));
+  if (unexpectedReportTransactions.length) {
+    throw new Error(`Stripe's itemized report contains ${unexpectedReportTransactions.length} unexpected processing-fee transactions.`);
+  }
+  if (missingReportTransactions.length) {
+    if (apply) throw new Error(`Stripe has not itemized ${missingReportTransactions.length} provider processing-fee transactions yet.`);
+    console.log(JSON.stringify({
+      mode: "waiting_for_complete_stripe_itemization",
+      startDate,
+      endDateExclusive,
+      reportType: REPORT_TYPE,
+      dataAvailableEnd: report.dataAvailableEnd,
+      providerTransactions: providerById.size,
+      itemizedProviderTransactions: reportBalanceTransactionIds.size,
+      pendingProviderTransactions: missingReportTransactions.length,
+      providerFeeCents,
+    }, null, 2));
+    return;
+  }
+
+  const lookupStartSeconds = startSeconds - 7 * 86_400;
   const applicationFees = await listAll(
     apiKey,
-    `/v1/application_fees?limit=100&created[gte]=${startSeconds}&created[lt]=${endSeconds}`,
+    `/v1/application_fees?limit=100&created[gte]=${lookupStartSeconds}&created[lt]=${endSeconds}`,
   );
-  const accountIds = [...new Set(applicationFees.map((fee) => clean(fee.account)).filter((id) => id.startsWith("acct_")))];
-  const accounts = new Map<string, JsonRecord>();
-  for (const accountId of accountIds) {
-    accounts.set(accountId, await stripeRequest(apiKey, `/v1/accounts/${encodeURIComponent(accountId)}`));
-  }
-
-  const recoverable: Array<{
-    accountId: string;
-    accountName: string;
-    chargeId: string;
-    category: StripeSchoolProcessingFeeCategory;
-    amountCents: number;
-    processingFeeCents: number;
-  }> = [];
+  const accountCache = new Map<string, JsonRecord>();
+  const chargeByReference = new Map<string, { accountId: string; charge: JsonRecord; fee: JsonRecord; account: JsonRecord }>();
   for (const fee of applicationFees) {
     const accountId = clean(fee.account);
-    const account = accounts.get(accountId);
-    const feePayer = clean(record(record(account?.controller).fees).payer);
-    if (feePayer === "account") continue;
-    const chargeId = clean(fee.charge || fee.originating_transaction);
-    if (!chargeId) continue;
-    const charge = await stripeRequest(
-      apiKey,
-      `/v1/charges/${encodeURIComponent(chargeId)}`,
-      { accountId },
-    );
-    const category = paymentCategory(charge);
-    const amountCents = cents(charge.amount);
-    const dashboardSettings = record(record(account?.settings).dashboard);
-    recoverable.push({
-      accountId,
-      accountName: clean(dashboardSettings.display_name) || clean(record(account?.business_profile).name) || accountId,
-      chargeId,
-      category,
-      amountCents,
-      processingFeeCents: calculateStripeSchoolProcessingFeeAmount(amountCents, category),
-    });
+    const reference = clean(fee.charge || fee.originating_transaction);
+    if (!accountId.startsWith("acct_") || !reference) continue;
+    let account = accountCache.get(accountId);
+    if (!account) {
+      account = await stripeRequest(apiKey, `/v1/accounts/${encodeURIComponent(accountId)}`);
+      accountCache.set(accountId, account);
+    }
+    const charge = await stripeRequest(apiKey, `/v1/charges/${encodeURIComponent(reference)}`, { accountId });
+    const item = { accountId, charge, fee, account };
+    chargeByReference.set(reference, item);
+    chargeByReference.set(clean(charge.id), item);
   }
 
-  const feeTransactions = await listAll(
+  const allocationRows: StripeFeeReportAllocationRow[] = [];
+  const matchedCharges = new Map<string, { accountId: string; charge: JsonRecord; fee: JsonRecord; account: JsonRecord }>();
+  const unmappedRows: CsvRow[] = [];
+  for (const row of feeRows) {
+    const item = chargeByReference.get(clean(row.incurred_by));
+    if (!item || clean(record(record(item.account.controller).fees).payer) !== "application") {
+      unmappedRows.push(row);
+      continue;
+    }
+    const amountMinorUnits = Number.parseFloat(row.amount || "0") * 100;
+    allocationRows.push({
+      accountId: item.accountId,
+      balanceTransactionId: clean(row.balance_transaction_id),
+      amountMinorUnits,
+    });
+    matchedCharges.set(clean(item.charge.id), item);
+  }
+  if (unmappedRows.length) throw new Error(`${unmappedRows.length} Stripe fee report rows could not be mapped to one fee-paying school account.`);
+
+  const actualByAccount = allocateExactStripeFees(allocationRows, providerById);
+  const allocatedFeeCents = [...actualByAccount.values()].reduce((sum, amount) => sum + amount, 0);
+  if (allocatedFeeCents !== providerFeeCents) {
+    throw new Error(`Allocated school fees (${allocatedFeeCents}) do not equal Stripe's provider total (${providerFeeCents}).`);
+  }
+
+  const retainedByAccount = new Map<string, number>();
+  for (const item of matchedCharges.values()) {
+    const metadata = record(item.charge.metadata);
+    const retained = retainedProcessingFeeCents({
+      processingFeeCents: Number.parseInt(clean(metadata.schoolProcessingFeeAmountCents) || "0", 10),
+      applicationFeeCents: cents(item.fee.amount),
+      applicationFeeRefundedCents: cents(item.fee.amount_refunded),
+    });
+    retainedByAccount.set(item.accountId, (retainedByAccount.get(item.accountId) || 0) + retained);
+  }
+
+  const priorCorrectionCharges = await listAll(
     apiKey,
-    `/v1/balance_transactions?limit=100&type=stripe_fee&created[gte]=${startSeconds}&created[lt]=${Math.floor((end.getTime() + 24 * 60 * 60 * 1000) / 1000)}`,
+    `/v1/charges?limit=100&created[gte]=${startSeconds}&created[lt]=${unixSeconds(new Date(end.getTime() + 31 * 86_400_000))}`,
   );
-  const providerProcessingFees = feeTransactions.filter((transaction) => {
-    const description = clean(transaction.description);
-    return description.includes(`(${date})`) && /^(Card|Link|ACH Debit)\b/.test(description);
+  const priorCorrectionsByAccount = new Map<string, number>();
+  const priorCorrectionIdsByAccount = new Map<string, string[]>();
+  for (const charge of priorCorrectionCharges) {
+    const metadata = record(charge.metadata);
+    if (clean(metadata.purpose) !== PURPOSE
+      || clean(metadata.reconciliationStartDate) !== startDate
+      || clean(metadata.reconciliationEndDateExclusive) !== endDateExclusive
+      || clean(charge.status) !== "succeeded") continue;
+    const accountId = clean(metadata.connectedAccountId);
+    if (!accountId.startsWith("acct_")) continue;
+    const netAmount = Math.max(0, cents(charge.amount) - cents(charge.amount_refunded));
+    priorCorrectionsByAccount.set(accountId, (priorCorrectionsByAccount.get(accountId) || 0) + netAmount);
+    priorCorrectionIdsByAccount.set(accountId, [...(priorCorrectionIdsByAccount.get(accountId) || []), clean(charge.id)]);
+  }
+
+  const centers = await prisma.center.findMany({
+    select: {
+      id: true,
+      name: true,
+      locationId: true,
+      crmLocationId: true,
+      status: true,
+      customFields: true,
+      organization: { select: { tenantId: true } },
+    },
   });
-  const providerFeeCents = providerProcessingFees.reduce((sum, transaction) => sum + Math.abs(cents(transaction.amount)), 0);
-  const calculatedFeeCents = recoverable.reduce((sum, charge) => sum + charge.processingFeeCents, 0);
-  const exactAllocation = await exactProcessingFeeAllocation(apiKey, startSeconds, endSeconds);
-  const exactAllocationCents = exactAllocation
-    ? [...exactAllocation.values()].reduce((sum, amount) => sum + amount, 0)
-    : 0;
-  const exactAllocationReady = exactAllocation !== null && exactAllocationCents === providerFeeCents;
-
-  const grouped = new Map<string, typeof recoverable>();
-  for (const charge of recoverable) grouped.set(charge.accountId, [...(grouped.get(charge.accountId) || []), charge]);
-
   const plans = [];
-  for (const [accountId, charges] of grouped) {
+  for (const [accountId, actualStripeFeeCents] of actualByAccount) {
+    const matches = centers.filter((center) => accountReferences(center.customFields).has(accountId));
+    const uniqueMatches = [...new Map(matches.map((center) => [center.id, center])).values()];
+    if (uniqueMatches.length !== 1 || uniqueMatches[0].status !== "active") {
+      throw new Error(`${maskAccountId(accountId)} has ${uniqueMatches.length} active-school mapping candidates.`);
+    }
+    const center = uniqueMatches[0];
+    const account = accountCache.get(accountId) || await stripeRequest(apiKey, `/v1/accounts/${encodeURIComponent(accountId)}`);
+    const v2Account = await stripeRequest(
+      apiKey,
+      `/v2/core/accounts/${encodeURIComponent(accountId)}?include%5B0%5D=configuration.merchant&include%5B1%5D=defaults`,
+    );
+    const v2Merchant = record(record(v2Account.configuration).merchant);
+    const v2Capabilities = record(v2Merchant.capabilities);
+    const v2CardPayments = record(v2Capabilities.card_payments);
+    const v2Responsibilities = record(record(v2Account.defaults).responsibilities);
+    if (clean(v2CardPayments.status) !== "active") {
+      throw new Error(`${center.name}: Stripe v2 card-payments capability is not active.`);
+    }
+    if (clean(v2Responsibilities.fees_collector) !== "application") {
+      throw new Error(`${center.name}: Stripe v2 no longer identifies The BEE Suite as the fee collector.`);
+    }
     const balance = await stripeRequest(apiKey, "/v1/balance", { accountId });
     const availableUsd = array(balance.available).map(record).find((item) => clean(item.currency) === "usd");
-    const pendingUsd = array(balance.pending).map(record).find((item) => clean(item.currency) === "usd");
-    const balanceSettings = await stripeRequest(apiKey, "/v1/balance_settings", { accountId });
-    const payoutSchedule = record(record(record(balanceSettings.payments).payouts).schedule);
-    const estimatedRecoveryCents = charges.reduce((sum, charge) => sum + charge.processingFeeCents, 0);
-    const recoveryCents = exactAllocationReady ? exactAllocation?.get(accountId) || 0 : estimatedRecoveryCents;
+    const retainedFeeCents = retainedByAccount.get(accountId) || 0;
+    const priorCorrectionCents = priorCorrectionsByAccount.get(accountId) || 0;
+    const correctionCents = schoolFeeCorrectionCents({
+      actualStripeFeeCents,
+      retainedProcessingFeeCents: retainedFeeCents,
+      priorCorrectionCents,
+    });
+    const dashboard = record(record(account.settings).dashboard);
     plans.push({
       accountId,
-      accountName: charges[0].accountName,
-      chargeCount: charges.length,
-      chargeAmountCents: charges.reduce((sum, charge) => sum + charge.amountCents, 0),
-      recoveryCents,
-      estimatedRecoveryCents,
+      account: maskAccountId(accountId),
+      accountName: clean(dashboard.display_name) || clean(record(account.business_profile).name) || center.name,
+      centerId: center.id,
+      centerName: center.name,
+      locationId: center.locationId || center.crmLocationId,
+      tenantId: center.organization.tenantId,
+      actualStripeFeeCents,
+      retainedProcessingFeeCents: retainedFeeCents,
+      priorCorrectionCents,
+      correctionCents,
       availableCents: cents(availableUsd?.amount),
-      pendingCents: cents(pendingUsd?.amount),
-      payoutInterval: clean(payoutSchedule.interval),
-      categories: [...new Set(charges.map((charge) => charge.category))].sort(),
+      priorCorrectionIds: priorCorrectionIdsByAccount.get(accountId) || [],
     });
   }
-  plans.sort((left, right) => left.accountId.localeCompare(right.accountId));
+  plans.sort((left, right) => left.centerName.localeCompare(right.centerName));
 
   const canonical = JSON.stringify({
-    date,
-    providerTransactions: providerProcessingFees.map((transaction) => ({ id: transaction.id, amount: transaction.amount })).sort((left, right) => clean(left.id).localeCompare(clean(right.id))),
-    plans: plans.map((plan) => ({ accountId: plan.accountId, recoveryCents: plan.recoveryCents })),
+    startDate,
+    endDateExclusive,
+    providerTransactions: [...providerById.entries()].sort(),
+    plans: plans.map((plan) => ({
+      accountId: plan.accountId,
+      centerId: plan.centerId,
+      actualStripeFeeCents: plan.actualStripeFeeCents,
+      retainedProcessingFeeCents: plan.retainedProcessingFeeCents,
+      priorCorrectionCents: plan.priorCorrectionCents,
+      correctionCents: plan.correctionCents,
+    })),
   });
   const fingerprint = createHash("sha256").update(canonical).digest("hex");
-  const apply = hasArg("--apply");
-  const confirmFingerprint = argValue("--confirm-fingerprint");
-  const consentAcknowledged = hasArg("--acknowledge-connected-account-debit-consent");
-  const holdPayouts = hasArg("--hold-payouts");
-  const restoreDailyPayouts = hasArg("--restore-daily-payouts");
-  if (apply && confirmFingerprint !== fingerprint) throw new Error("The confirmation fingerprint does not match the live plan.");
-  const hasReadyDebit = plans.some((plan) => plan.availableCents >= plan.recoveryCents && plan.recoveryCents > 0);
-  if (apply && hasReadyDebit && !exactAllocationReady) {
-    throw new Error("Stripe's itemized connected-account fee report is not available yet; payout holds are allowed, account debits are not.");
+  if (apply && argValue("--confirm-fingerprint") !== fingerprint) {
+    throw new Error("The confirmation fingerprint does not match the current live plan.");
   }
-  if (apply && hasReadyDebit && !consentAcknowledged) throw new Error("Applying account debits requires --acknowledge-connected-account-debit-consent.");
+  if (apply && !hasArg("--acknowledge-connected-account-debit-consent")) {
+    throw new Error("Applying school debits requires --acknowledge-connected-account-debit-consent.");
+  }
 
   const results = [];
   for (const plan of plans) {
-    let payoutAction = "unchanged";
-    if (apply && holdPayouts && plan.availableCents < plan.recoveryCents && plan.payoutInterval !== "manual") {
-      await stripeRequest(apiKey, "/v1/balance_settings", {
-        accountId: plan.accountId,
-        method: "POST",
-        body: new URLSearchParams({ "payments[payouts][schedule][interval]": "manual" }),
-      });
-      payoutAction = "held_manual";
+    if (plan.correctionCents === 0) {
+      results.push({ school: plan.centerName, status: "already_reconciled", correctionCents: 0 });
+      continue;
+    }
+    if (plan.availableCents < plan.correctionCents) {
+      results.push({ school: plan.centerName, status: "awaiting_available_balance", correctionCents: plan.correctionCents });
+      continue;
     }
     if (!apply) {
-      results.push({ accountId: plan.accountId, status: plan.availableCents >= plan.recoveryCents ? "ready" : "awaiting_available_balance", payoutAction });
+      results.push({ school: plan.centerName, status: "ready", correctionCents: plan.correctionCents });
       continue;
     }
-    if (plan.availableCents < plan.recoveryCents) {
-      results.push({ accountId: plan.accountId, status: "awaiting_available_balance", payoutAction });
-      continue;
-    }
-    const body = new URLSearchParams({
-      amount: String(plan.recoveryCents),
-      currency: "usd",
-      source: plan.accountId,
-      description: `Stripe processing fee correction ${date}`,
-      "metadata[reconciliationDate]": date,
-      "metadata[reconciliationFingerprint]": fingerprint,
-      "metadata[purpose]": "school_processing_fee_correction",
-    });
     const debit = await stripeRequest(apiKey, "/v1/charges", {
       method: "POST",
-      body,
-      idempotencyKey: `school-processing-fee-correction:${date}:${plan.accountId}`,
+      idempotencyKey: `school-processing-fee-correction:${startDate}:${endDateExclusive}:${plan.accountId}`,
+      body: new URLSearchParams({
+        amount: String(plan.correctionCents),
+        currency: "usd",
+        source: plan.accountId,
+        description: `Stripe processing fee correction ${startDate} through ${endDateExclusive} (exclusive)`,
+        "metadata[purpose]": PURPOSE,
+        "metadata[connectedAccountId]": plan.accountId,
+        "metadata[centerId]": plan.centerId,
+        "metadata[reconciliationStartDate]": startDate,
+        "metadata[reconciliationEndDateExclusive]": endDateExclusive,
+        "metadata[reconciliationFingerprint]": fingerprint,
+        "metadata[actualStripeFeeCents]": String(plan.actualStripeFeeCents),
+        "metadata[retainedProcessingFeeCents]": String(plan.retainedProcessingFeeCents),
+        "metadata[priorCorrectionCents]": String(plan.priorCorrectionCents),
+      }),
     });
-    if (restoreDailyPayouts) {
-      await stripeRequest(apiKey, "/v1/balance_settings", {
-        accountId: plan.accountId,
-        method: "POST",
-        body: new URLSearchParams({ "payments[payouts][schedule][interval]": "daily" }),
-      });
-      payoutAction = "restored_daily";
+    const debitId = clean(debit.id);
+    if (clean(debit.status) !== "succeeded" || !debitId.startsWith("ch_")) {
+      throw new Error(`${plan.centerName}: Stripe correction debit did not succeed.`);
     }
-    results.push({ accountId: plan.accountId, status: clean(debit.status) || "submitted", debitId: clean(debit.id), payoutAction });
+    const existingAudit = await prisma.auditLog.findFirst({
+      where: { tenantId: plan.tenantId, centerId: plan.centerId, resourceId: debitId, action: PURPOSE },
+      select: { id: true },
+    });
+    if (!existingAudit) {
+      await prisma.auditLog.create({
+        data: {
+          tenantId: plan.tenantId,
+          centerId: plan.centerId,
+          action: PURPOSE,
+          resource: "stripe_charge",
+          resourceId: debitId,
+          metadata: {
+            reconciliationStartDate: startDate,
+            reconciliationEndDateExclusive: endDateExclusive,
+            reconciliationFingerprint: fingerprint,
+            actualStripeFeeCents: plan.actualStripeFeeCents,
+            retainedProcessingFeeCents: plan.retainedProcessingFeeCents,
+            priorCorrectionCents: plan.priorCorrectionCents,
+            correctionCents: plan.correctionCents,
+          },
+        },
+      });
+    }
+    results.push({ school: plan.centerName, status: "succeeded", correctionCents: plan.correctionCents, debitId });
   }
 
   console.log(JSON.stringify({
     mode: apply ? "apply" : "preview",
-    date,
+    startDate,
+    endDateExclusive,
+    reportType: REPORT_TYPE,
+    dataAvailableEnd: report.dataAvailableEnd,
     fingerprint,
     providerFeeCents,
-    calculatedFeeCents,
-    calculatedFeeDeltaCents: calculatedFeeCents - providerFeeCents,
-    allocationSource: exactAllocationReady ? "stripe_itemized_fee_report" : "estimated_awaiting_stripe_itemized_fee_report",
-    plans,
+    retainedProcessingFeeCents: plans.reduce((sum, plan) => sum + plan.retainedProcessingFeeCents, 0),
+    priorCorrectionCents: plans.reduce((sum, plan) => sum + plan.priorCorrectionCents, 0),
+    correctionCents: plans.reduce((sum, plan) => sum + plan.correctionCents, 0),
+    plans: plans.map((plan) => ({
+      account: plan.account,
+      accountName: plan.accountName,
+      centerName: plan.centerName,
+      locationId: plan.locationId,
+      actualStripeFeeCents: plan.actualStripeFeeCents,
+      retainedProcessingFeeCents: plan.retainedProcessingFeeCents,
+      priorCorrectionCents: plan.priorCorrectionCents,
+      correctionCents: plan.correctionCents,
+      availableCents: plan.availableCents,
+      priorCorrectionIds: plan.priorCorrectionIds,
+    })),
     results,
   }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+void main()
+  .catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

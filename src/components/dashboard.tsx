@@ -50,6 +50,7 @@ import { analytics, centers, classrooms, kpis, leads, messages, notifications, p
 import { directorLaunchChecklistTasks, teacherProfileChecklistTasks, type SetupChecklistKey, type SetupChecklistTask } from "@/lib/setup-checklists";
 import { formatStaffDecimalHours } from "@/lib/staff-kiosk";
 import { cn } from "@/lib/utils";
+import { STAFF_MESSAGING_HREF, staffMessagingHref } from "@/lib/messaging-navigation";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
 const kpiWidgetIds: readonly DashboardWidgetId[] = [
@@ -1133,7 +1134,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         : isPickupDashboard
           ? "Authorized pickup access, child status, approved pickup details, and family account updates."
           : "Review enrollment, classroom operations, billing, required records, and family communication across your schools.";
-  const aiBriefHref = isTeacherDashboard ? "/teacher-portal" : isBillingDashboard ? "/messages" : isParentDashboard || isPickupDashboard ? "/parent-portal" : "/ai-command";
+  const aiBriefHref = isTeacherDashboard ? "/teacher-portal" : isBillingDashboard ? STAFF_MESSAGING_HREF : isParentDashboard || isPickupDashboard ? "/parent-portal" : "/ai-command";
   const visibleSnapshotPipeline = showEnrollment ? dashboardPipeline : [];
   const visibleSnapshotLeads = isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? dashboardLeads : [];
   const visibleSnapshotCenters = !isTeacherDashboard && !isBillingDashboard && !isParentDashboard && !isPickupDashboard && isAnyWidgetVisible(["executiveRollup", "attendanceSnapshot", "classroomCapacity", "staffingRatios"])
@@ -1173,7 +1174,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
       detail: kpiTrend("Incidents to review", isTeacherDashboard ? "Classroom reports" : "Review queue"),
       href: isTeacherDashboard ? "/incident-reports" : "/compliance",
     },
-    familyCommunication: { value: `${parentMessages.length}`, detail: "Recent family messages", href: "/messages" },
+    familyCommunication: { value: `${parentMessages.length}`, detail: "Recent family messages", href: STAFF_MESSAGING_HREF },
     parentAccount: { value: "Portal", detail: "Family account view", href: "/parent-portal" },
   };
   const { active: printActive, generatedAt: printGeneratedAt, print: printDashboard } = usePrintableReport();
@@ -1889,7 +1890,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                         {parentMessages.map((message, index) => (
                           <Link
                             key={`${message.from}-${message.subject}-${index}`}
-                            href={withQueryParam("/messages", "q", message.from)}
+                            href={staffMessagingHref({ q: message.from })}
                             className="group flex gap-3 rounded-lg p-1 transition hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             aria-label={`Open message from ${message.from}`}
                           >

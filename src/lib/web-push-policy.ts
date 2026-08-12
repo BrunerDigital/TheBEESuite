@@ -1,3 +1,6 @@
+import { STAFF_MESSAGING_HREF } from "@/lib/messaging-navigation";
+import { PARENT_PORTAL_HREFS, parentPortalFamilySectionHref } from "@/lib/parent-portal-navigation";
+
 export const webPushPreferenceTypes = [
   "messages",
   "billing",
@@ -49,26 +52,27 @@ export function webPushBody(type: WebPushPreferenceType) {
 }
 
 export function webPushHref(type: WebPushPreferenceType, role: string) {
-  const parent = role === "PARENT_GUARDIAN" || role === "AUTHORIZED_PICKUP";
+  if (role === "AUTHORIZED_PICKUP") return PARENT_PORTAL_HREFS.home;
+  const parent = role === "PARENT_GUARDIAN";
   const teacher = role === "TEACHER";
 
   switch (type) {
     case "billing":
-      return parent ? "/parent-portal#billing" : "/billing-invoices";
+      return parent ? PARENT_PORTAL_HREFS.payments : "/billing-invoices";
     case "documents":
-      return parent ? "/parent-portal#documents" : "/documents";
+      return parent ? parentPortalFamilySectionHref("documents") : "/forms?view=documents";
     case "incidents":
-      return parent ? "/parent-portal" : "/incident-reports";
+      return parent ? PARENT_PORTAL_HREFS.updates : "/classroom-dashboard?view=incidents";
     case "photos":
-      return parent ? "/parent-portal#photos" : teacher ? "/classroom-dashboard" : "/parent-media-review";
+      return parent ? PARENT_PORTAL_HREFS.updates : teacher ? "/classroom-dashboard" : "/family-detail?view=media";
     case "classroom":
-      return parent ? "/parent-portal#activities" : "/classroom-dashboard";
+      return parent ? PARENT_PORTAL_HREFS.updates : "/classroom-dashboard";
     case "enrollment":
-      return parent ? "/parent-portal" : "/crm-leads";
+      return parent ? PARENT_PORTAL_HREFS.family : "/crm-leads";
     case "fte_reports":
-      return "/fte-reports";
+      return parent ? PARENT_PORTAL_HREFS.home : "/fte-reports";
     default:
-      return "/messages";
+      return parent ? PARENT_PORTAL_HREFS.messages : STAFF_MESSAGING_HREF;
   }
 }
 

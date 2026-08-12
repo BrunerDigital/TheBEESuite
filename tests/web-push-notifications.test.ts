@@ -45,7 +45,10 @@ test("stored notification types map to fail-closed app alert preferences", () =>
 
 test("push copy is generic and role links stay inside the application", () => {
   assert.equal(webPushBody("billing"), "A billing or tuition update is ready in The BEE Suite.");
-  assert.equal(webPushHref("billing", "PARENT_GUARDIAN"), "/parent-portal#billing");
+  assert.equal(webPushHref("billing", "PARENT_GUARDIAN"), "/parent-portal?view=payments");
+  assert.equal(webPushHref("messages", "PARENT_GUARDIAN"), "/parent-portal?view=messages");
+  assert.equal(webPushHref("messages", "CENTER_DIRECTOR"), "/family-detail?view=messages");
+  assert.equal(webPushHref("messages", "AUTHORIZED_PICKUP"), "/parent-portal?view=home");
   assert.equal(webPushHref("photos", "TEACHER"), "/classroom-dashboard");
   assert.equal(webPushHref("fte_reports", "CENTER_DIRECTOR"), "/fte-reports");
 

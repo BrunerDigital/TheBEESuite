@@ -33,12 +33,11 @@ test("kiosk tuition balance summary includes parent portal pay link", () => {
   const summary = buildKioskTuitionBalanceSummary({
     balanceCents: 37500,
     nextOpenInvoice: { number: "INV-100", totalCents: 25000, dueDate: "2026-06-22T12:00:00.000Z" },
-    paymentUrl: "/parent-portal#billing",
   });
 
   assert.equal(summary?.amountDueCents, 37500);
   assert.equal(summary?.nextInvoiceNumber, "INV-100");
-  assert.equal(summary?.paymentUrl, "/parent-portal#billing");
+  assert.equal(summary?.paymentUrl, "/parent-portal?view=payments");
   assert.equal(summary?.paymentLabel, "Review or pay in the Parent Portal");
   assert.match(summary?.message ?? "", /The BEE Suite Parent Portal/);
 });

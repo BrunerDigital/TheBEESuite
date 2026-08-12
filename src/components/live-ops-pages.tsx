@@ -2405,6 +2405,7 @@ export type MessagesPageData = {
   currentRole: string;
   replyDraft?: MessageReplyDraft | null;
   initialThreadKey?: string | null;
+  initialSearchQuery?: string | null;
   canManageRoleDefaults: boolean;
   demoMode?: boolean;
 };
@@ -2449,18 +2450,27 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
-          <MessageSquare data-icon="inline-start" />
-          Family communication
-        </Badge>
-        <div className="flex items-center gap-2">
-          <h1 className="text-3xl font-semibold tracking-tight">{isParentMessagingView ? "Family Messages" : "Parent Messaging Inbox"}</h1>
-          <InfoTip label="About messages" side="right">
-            {isParentMessagingView
-              ? "Messages shown here are connected to your family portal account and school communication history."
-              : "Messages are limited to the schools you can access. Review assisted drafts carefully before sending sensitive family communication."}
-          </InfoTip>
+      <section className="rounded-xl border bg-card px-5 py-4 shadow-none">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight">{isParentMessagingView ? "Family messages" : "Family messaging"}</h1>
+              <InfoTip label="About messages" side="right">
+                {isParentMessagingView
+                  ? "Messages shown here are connected to your family portal account and school communication history."
+                  : "Messages are limited to the schools you can access. Review assisted drafts carefully before sending sensitive family communication."}
+              </InfoTip>
+            </div>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              {isParentMessagingView
+                ? "Keep your conversation with the school together in one private thread."
+                : "Read, search, and reply to school-scoped family conversations from one connected workspace."}
+            </p>
+          </div>
+          <Badge variant="outline" className="shrink-0">
+            <MessageSquare data-icon="inline-start" />
+            Family communication
+          </Badge>
         </div>
       </section>
       {data.demoMode ? <DemoDataNotice section="parent messaging" /> : null}
@@ -2526,6 +2536,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
             threads={data.threads}
             initialThreadKey={data.initialThreadKey}
             initialReplyToMessageId={data.replyDraft?.replyToMessageId}
+            initialSearchQuery={data.initialSearchQuery}
             composer={{
               familyOptions: data.familyOptions,
               templates: data.templates,

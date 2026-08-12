@@ -60,7 +60,7 @@ export function buildKioskTuitionBalanceSummary(input: {
     nextInvoiceNumber: input.nextOpenInvoice?.number ?? null,
     nextInvoiceTotalCents: invoiceTotalCents,
     nextInvoiceDueDate: input.nextOpenInvoice?.dueDate ?? null,
-    paymentUrl: input.paymentUrl || "/parent-portal#billing",
+    paymentUrl: input.paymentUrl || "/parent-portal?view=payments",
     paymentLabel: "Review or pay in the Parent Portal",
     message: `A tuition balance of ${money(amountCents)}${invoiceNumber} is on the family account. You can complete check-in now. Review or pay the balance in The BEE Suite Parent Portal.`,
   };

@@ -35,6 +35,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { AI_COMMAND_GUARDRAIL_NOTE, aiSuggestionDisplayText, parseAiSuggestionEntries } from "@/lib/ai-command";
+import { STAFF_MESSAGING_HREF, staffMessagingHref } from "@/lib/messaging-navigation";
 
 type AiSummaryRow = {
   id: string;
@@ -500,7 +501,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
             { label: "Staffing", value: `${data.pulse.staffClockedIn}/${data.pulse.staffTotal}`, detail: "Team members clocked in", icon: Users, href: "/staff", tone: "text-amber-400", barClass: "bg-amber-400", bar: data.pulse.staffTotal ? (data.pulse.staffClockedIn / data.pulse.staffTotal) * 100 : 0 },
             { label: "Enrollment", value: `${data.pulse.activeChildren}/${data.pulse.licensedCapacity || data.pulse.activeChildren}`, detail: `${data.pulse.highIntentLeads} inquiries ready for follow-up`, icon: CalendarDays, href: "/enrollment-pipeline", tone: "text-sky-400", barClass: "bg-sky-400", bar: data.pulse.licensedCapacity ? (data.pulse.activeChildren / data.pulse.licensedCapacity) * 100 : 100 },
             { label: "Billing", value: formatMoney(data.pulse.overdueInvoiceCents), detail: `${data.pulse.overdueInvoices} accounts past due`, icon: CircleDollarSign, href: "/billing-invoices", tone: "text-emerald-400", barClass: "bg-emerald-400", bar: data.pulse.openInvoices ? ((data.pulse.openInvoices - data.pulse.overdueInvoices) / data.pulse.openInvoices) * 100 : 100 },
-            { label: "Family messages", value: data.pulse.unreadMessages.toLocaleString(), detail: data.pulse.unreadMessages ? "Unread · requires response" : "Inbox is clear", icon: MessageSquare, href: "/messages", tone: "text-violet-400", barClass: "bg-violet-400", bar: Math.max(10, 100 - data.pulse.unreadMessages * 10) },
+            { label: "Family messages", value: data.pulse.unreadMessages.toLocaleString(), detail: data.pulse.unreadMessages ? "Unread · requires response" : "Inbox is clear", icon: MessageSquare, href: STAFF_MESSAGING_HREF, tone: "text-violet-400", barClass: "bg-violet-400", bar: Math.max(10, 100 - data.pulse.unreadMessages * 10) },
             { label: "Compliance", value: data.pulse.openComplianceTasks.toLocaleString(), detail: data.pulse.openComplianceTasks ? "Items need attention" : "All items on track", icon: ShieldCheck, href: "/compliance", tone: "text-orange-400", barClass: "bg-orange-400", bar: data.pulse.openComplianceTasks ? Math.max(15, 100 - data.pulse.openComplianceTasks * 8) : 100 },
           ].map((item) => (
             <Link key={item.label} href={item.href} className="group rounded-xl border bg-card p-4 text-card-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -524,7 +525,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
             {[
               { level: data.pulse.pendingIncidents ? "High" : "Ready", title: data.pulse.pendingIncidents ? `${data.pulse.pendingIncidents} incident report${data.pulse.pendingIncidents === 1 ? "" : "s"} need review` : "Incident review queue is clear", detail: "Review details, documentation, and parent acknowledgement.", href: "/incident-reports", icon: AlertTriangle },
               { level: data.pulse.overdueInvoices ? "High" : "Ready", title: data.pulse.overdueInvoices ? `${data.pulse.overdueInvoices} overdue invoice${data.pulse.overdueInvoices === 1 ? "" : "s"}` : "No overdue billing exceptions", detail: "Open family ledgers and decide the next follow-up.", href: "/billing-invoices", icon: CircleDollarSign },
-              { level: data.pulse.unreadMessages ? "Medium" : "Ready", title: data.pulse.unreadMessages ? `${data.pulse.unreadMessages} unread family message${data.pulse.unreadMessages === 1 ? "" : "s"}` : "Family inbox is caught up", detail: "Respond while questions and requests are current.", href: "/messages", icon: MessageSquare },
+              { level: data.pulse.unreadMessages ? "Medium" : "Ready", title: data.pulse.unreadMessages ? `${data.pulse.unreadMessages} unread family message${data.pulse.unreadMessages === 1 ? "" : "s"}` : "Family inbox is caught up", detail: "Respond while questions and requests are current.", href: STAFF_MESSAGING_HREF, icon: MessageSquare },
               { level: "Enrollment", title: `${data.pulse.highIntentLeads} enrollment inquir${data.pulse.highIntentLeads === 1 ? "y" : "ies"} ready for follow-up`, detail: `${data.pulse.upcomingTours} upcoming tour${data.pulse.upcomingTours === 1 ? "" : "s"} at the selected schools.`, href: "/enrollment-pipeline", icon: CalendarDays },
             ].map((item) => (
               <div key={item.title} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
@@ -763,7 +764,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                               <Copy aria-hidden="true" />
                             </Button>
                             {lead ? <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/crm-leads?q=${encodeURIComponent(lead.familyName)}`} />}><ArrowRight aria-hidden="true" data-icon="inline-end" />Open inquiry</Button> : null}
-                            {family ? <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/messages?familyId=${encodeURIComponent(family.id)}`} />}><ArrowRight aria-hidden="true" data-icon="inline-end" />Messages</Button> : null}
+                            {family ? <Button variant="outline" size="sm" nativeButton={false} render={<Link href={staffMessagingHref({ familyId: family.id })} />}><ArrowRight aria-hidden="true" data-icon="inline-end" />Messages</Button> : null}
                             <Button variant="outline" size="icon-sm" onClick={() => updateSuggestionStatus(suggestion.id, "rejected")} disabled={isPending} aria-label={rejectingSuggestion ? "Rejecting suggestion…" : "Reject suggestion"} aria-busy={rejectingSuggestion}>
                               <XCircle aria-hidden="true" />
                             </Button>

@@ -31,7 +31,15 @@
 
 .threadButton {
   position: relative;
+  touch-action: manipulation;
   background: color-mix(in oklch, var(--background) 28%, transparent);
+}
+
+.threadList,
+.timeline,
+.parentTimeline {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .threadButton:hover {

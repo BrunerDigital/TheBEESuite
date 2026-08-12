@@ -144,6 +144,7 @@ import {
 import { defaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
 import { signMessageAttachmentsFromMetadata } from "@/lib/message-attachments";
 import { buildMessageReplyPath } from "@/lib/message-reply-routing";
+import { staffMessagingHref } from "@/lib/messaging-navigation";
 import { buildVisibleMessageWhere } from "@/lib/message-visibility";
 import { extractFamilyTags } from "@/lib/message-segmentation";
 import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections, type SchoolOnboardingSetupInput } from "@/lib/onboarding-setup";
@@ -2990,6 +2991,7 @@ async function renderLivePage(
               }
             : null,
           initialThreadKey: requestedReplyFamilyId ? `family:${requestedReplyFamilyId}` : null,
+          initialSearchQuery: firstSearchParam(searchParams.q) || "",
           segmentOptions: {
             centers: centers.map((center) => ({
               id: center.id,
@@ -6250,7 +6252,12 @@ export async function renderAuthenticatedModulePage(
   if (slug === "daily-reports") redirect("/classroom-dashboard?view=reports");
   if (slug === "incident-reports") redirect("/classroom-dashboard?view=incidents");
   if (slug === "child-profile") redirect("/family-detail?view=children");
-  if (slug === "messages") redirect("/family-detail?view=messages");
+  if (slug === "messages") {
+    redirect(staffMessagingHref(
+      resolvedSearchParams,
+      firstSearchParam(resolvedSearchParams.replyToMessageId) ? "message-composer" : null,
+    ));
+  }
   if (slug === "parent-media-review") redirect("/family-detail?view=media");
   if (slug === "payments") redirect("/billing-invoices?view=payments");
   if (slug === "documents") redirect("/forms?view=documents");

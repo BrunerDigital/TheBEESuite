@@ -1,3 +1,5 @@
+import { STAFF_MESSAGING_HREF } from "@/lib/messaging-navigation";
+
 export type SetupChecklistKey = "director_launch" | "teacher_profile";
 
 export type SetupChecklistTask = {
@@ -71,7 +73,7 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
     id: "messages-notifications",
     title: "Configure messages and notifications",
     description: "Review templates, broadcast segments, sender rules, email/SMS delivery, notification preferences, and AI draft review expectations.",
-    href: "/messages",
+    href: STAFF_MESSAGING_HREF,
   },
   {
     id: "calendar-fte",
@@ -190,7 +192,7 @@ export const teacherProfileChecklistTasks: SetupChecklistTask[] = [
     id: "message-access",
     title: "Confirm classroom message access",
     description: "Verify you only see families connected to your assigned classroom and know when to involve the director.",
-    href: "/messages",
+    href: STAFF_MESSAGING_HREF,
   },
   {
     id: "schedule-coverage",

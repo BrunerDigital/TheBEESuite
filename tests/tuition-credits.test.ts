@@ -5,6 +5,8 @@ import {
   normalizeTuitionCredits,
   totalTuitionCreditsCents,
   tuitionInvoiceItems,
+  normalizeTuitionAdditionalCharges,
+  totalTuitionAdditionalChargesCents,
 } from "../src/lib/tuition-credits";
 
 test("tuition credits keep only the five bookkeeping categories in display order", () => {
@@ -27,6 +29,10 @@ test("weekly invoice items preserve gross tuition and itemize categorized credit
   const items = tuitionInvoiceItems({
     description: "Weekly tuition - Avery Bee",
     grossAmountCents: 30_000,
+    additionalCharges: [
+      { description: "Parent fee - Avery Bee", amountCents: 2_500 },
+      { description: "Gap tuition - Avery Bee", amountCents: 12_000 },
+    ],
     credits: [
       { category: "employee_discount", amountCents: 5_000 },
       { category: "family_discount", amountCents: 2_500 },
@@ -35,6 +41,18 @@ test("weekly invoice items preserve gross tuition and itemize categorized credit
 
   assert.deepEqual(items, [
     { description: "Weekly tuition - Avery Bee", amountCents: 30_000, ledgerType: "tuition_charge" },
+    {
+      description: "Parent fee - Avery Bee",
+      amountCents: 2_500,
+      ledgerType: "tuition_charge",
+      tuitionChargeLine: true,
+    },
+    {
+      description: "Gap tuition - Avery Bee",
+      amountCents: 12_000,
+      ledgerType: "tuition_charge",
+      tuitionChargeLine: true,
+    },
     {
       description: "Employee discount - Weekly tuition - Avery Bee",
       amountCents: -5_000,
@@ -48,7 +66,22 @@ test("weekly invoice items preserve gross tuition and itemize categorized credit
       creditCategory: "family_discount",
     },
   ]);
-  assert.equal(items.reduce((total, item) => total + item.amountCents, 0), 22_500);
+  assert.equal(items.reduce((total, item) => total + item.amountCents, 0), 37_000);
+});
+
+test("additional tuition charges normalize as separate positive audit lines", () => {
+  const charges = normalizeTuitionAdditionalCharges([
+    { description: " Parent fee ", amountCents: 2500.4 },
+    { description: "Gap tuition", amountCents: 12000 },
+    { description: "", amountCents: 9999 },
+    { description: "Bad amount", amountCents: -1 },
+  ]);
+
+  assert.deepEqual(charges, [
+    { description: "Parent fee", amountCents: 2500 },
+    { description: "Gap tuition", amountCents: 12000 },
+  ]);
+  assert.equal(totalTuitionAdditionalChargesCents(charges), 14_500);
 });
 
 test("director assignment, recurring invoices, and ledger persist credit detail", () => {
@@ -63,8 +96,10 @@ test("director assignment, recurring invoices, and ledger persist credit detail"
   }
   assert.match(workbench, /TUITION_CREDIT_CATEGORIES\.map/);
   assert.match(workbench, /tuitionCredits: effectiveAssignmentCredits/);
-  assert.match(assignmentRoute, /tuitionCreditsTotalCents >= plan\.amountCents/);
-  assert.match(cronRoute, /tuitionInvoiceItems\(\{ description: lineDescription/);
+  assert.match(workbench, /tuitionAdditionalCharges: effectiveAssignmentAdditionalCharges/);
+  assert.match(assignmentRoute, /tuitionGrossAmountCents = plan\.amountCents \+ tuitionAdditionalChargesTotalCents/);
+  assert.match(assignmentRoute, /tuitionAdditionalChargesTotalCents/);
+  assert.match(cronRoute, /additionalCharges: tuitionAdditionalCharges/);
   assert.match(invoiceService, /type: item\.ledgerType \|\| "invoice"/);
   assert.match(invoiceService, /creditCategory: item\.creditCategory \?\? null/);
 });

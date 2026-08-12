@@ -67,3 +67,12 @@ test("parent check-in card hides raw credentials and uses plain-language actions
   assert.match(kioskSource, /familyOnly \? "Scan your Family QR code" : "Scan a Family QR code"/);
   assert.match(kioskSource, /pendingAction === "family_lookup" \? "Verifying…" : "Verify Family PIN"/);
 });
+
+test("kiosk keypad auto-submits after the fourth digit to tolerate rapid touchscreen entry", () => {
+  assert.match(kioskSource, /pinRef = useRef\(""\)/);
+  assert.match(kioskSource, /staffPinRef = useRef\(""\)/);
+  assert.match(kioskSource, /window\.setTimeout\(\(\) => lookupCredential\(undefined, next\), 0\)/);
+  assert.match(kioskSource, /window\.setTimeout\(\(\) => lookupStaffCredential\(next\), 0\)/);
+  assert.match(kioskSource, /pinOverride \?\? \(pinRef\.current \|\| pin\)/);
+  assert.match(kioskSource, /pinOverride \?\? \(staffPinRef\.current \|\| staffPin\)/);
+});

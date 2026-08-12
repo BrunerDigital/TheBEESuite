@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { createStripeCustomer, createStripeSoftwareSubscription, ensureStripeSoftwareRecurringPrice, updateStripeSoftwareSubscription } from "@/lib/integrations";
-import { getKidCitySoftwareFeeUnitAmountCents } from "@/lib/kidcity-software-billing";
+import { getSchoolSoftwareFeePolicyForCenter } from "@/lib/kidcity-software-billing";
 import { prisma } from "@/lib/prisma";
 import { record, saveSoftwareSubscriptionSnapshot, textField } from "@/lib/school-software-subscriptions";
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -18,12 +18,30 @@ async function POSTHandler(request: NextRequest) {
   const body = await request.json().catch(() => ({})) as { centerId?: unknown; action?: unknown };
   const centerId = clean(body.centerId);
   const action = clean(body.action);
-  const center = await prisma.center.findFirst({ where: { id: centerId, organization: { tenantId: user.tenantId } }, select: { id: true, name: true, email: true, customFields: true } });
+  const center = await prisma.center.findFirst({
+    where: { id: centerId, organization: { tenantId: user.tenantId } },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      customFields: true,
+      ownerGroup: {
+        select: {
+          name: true,
+          ownerType: true,
+          billingEmail: true,
+          contactName: true,
+          customFields: true,
+        },
+      },
+    },
+  });
   if (!center) return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
   const fields = record(center.customFields);
   const subscriptionId = textField(fields, "stripeSoftwareSubscriptionId");
   const itemId = textField(fields, "stripeSoftwareSubscriptionItemId");
   const quantity = 1;
+  const feePolicy = getSchoolSoftwareFeePolicyForCenter(center);
 
   let result;
   if (action === "start") {
@@ -36,7 +54,7 @@ async function POSTHandler(request: NextRequest) {
       await prisma.center.update({ where: { id: center.id }, data: { customFields: { ...fields, stripeSoftwareCustomerId: customerId } } });
     }
     if (!textField(fields, "stripeSoftwareDefaultPaymentMethodId")) return NextResponse.json({ ok: false, error: "The school must authorize a software payment method before recurring billing can start." }, { status: 400 });
-    const price = await ensureStripeSoftwareRecurringPrice({ tenantId: user.tenantId, unitAmountCents: getKidCitySoftwareFeeUnitAmountCents() });
+    const price = await ensureStripeSoftwareRecurringPrice({ tenantId: user.tenantId, unitAmountCents: feePolicy.unitAmountCents });
     if (!price.ok) return NextResponse.json({ ok: false, error: price.error }, { status: price.configured ? 502 : 503 });
     result = await createStripeSoftwareSubscription({ customerId, priceId: price.priceId, quantity, tenantId: user.tenantId, centerId: center.id });
   } else if (action === "sync") {
@@ -48,8 +66,12 @@ async function POSTHandler(request: NextRequest) {
   } else return NextResponse.json({ ok: false, error: "Unsupported subscription action." }, { status: 400 });
 
   if (!result.ok || !result.subscription) return NextResponse.json({ ok: false, error: result.error || "Subscription update failed." }, { status: result.configured ? 502 : 503 });
-  await saveSoftwareSubscriptionSnapshot(prisma, center.id, result.subscription, { stripeSoftwareMonthlyAmountCents: getKidCitySoftwareFeeUnitAmountCents(), stripeSoftwareBillingBasis: "per_school" });
-  await writeAuditLog(user, { centerId: center.id, action: `billing.software_subscription.${action}`, resource: "Center", resourceId: center.id, metadata: { subscriptionId: result.subscription.id, quantity, status: result.subscription.status } });
+  await saveSoftwareSubscriptionSnapshot(prisma, center.id, result.subscription, {
+    stripeSoftwareMonthlyAmountCents: feePolicy.unitAmountCents,
+    stripeSoftwareFeeTier: feePolicy.tier,
+    stripeSoftwareBillingBasis: feePolicy.billingBasis,
+  });
+  await writeAuditLog(user, { centerId: center.id, action: `billing.software_subscription.${action}`, resource: "Center", resourceId: center.id, metadata: { subscriptionId: result.subscription.id, quantity, status: result.subscription.status, monthlyAmountCents: feePolicy.unitAmountCents, feeTier: feePolicy.tier } });
   return NextResponse.json({ ok: true, subscription: result.subscription });
 }
 

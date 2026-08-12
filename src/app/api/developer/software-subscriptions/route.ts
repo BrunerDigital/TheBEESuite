@@ -60,7 +60,9 @@ async function POSTHandler(request: NextRequest) {
     result = await createStripeSoftwareSubscription({ customerId, priceId: price.priceId, quantity, tenantId: user.tenantId, centerId: center.id });
   } else if (action === "sync") {
     if (!subscriptionId || !itemId) return NextResponse.json({ ok: false, error: "No active subscription was found. Start billing first." }, { status: 400 });
-    result = await updateStripeSoftwareSubscription({ subscriptionId, itemId, quantity, tenantId: user.tenantId });
+    const price = await ensureStripeSoftwareRecurringPrice({ tenantId: user.tenantId, unitAmountCents: feePolicy.unitAmountCents });
+    if (!price.ok) return NextResponse.json({ ok: false, error: price.error }, { status: price.configured ? 502 : 503 });
+    result = await updateStripeSoftwareSubscription({ subscriptionId, itemId, priceId: price.priceId, quantity, tenantId: user.tenantId });
   } else if (action === "cancel" || action === "resume") {
     if (!subscriptionId) return NextResponse.json({ ok: false, error: "No subscription was found." }, { status: 400 });
     result = await updateStripeSoftwareSubscription({ subscriptionId, cancelAtPeriodEnd: action === "cancel", tenantId: user.tenantId });

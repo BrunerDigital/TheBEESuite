@@ -1,4 +1,4 @@
-const CACHE_NAME = "bee-suite-app-shell-v1";
+const CACHE_NAME = "bee-suite-app-shell-v2";
 const APP_SHELL_URLS = [
   "/app",
   "/brand/the-bee-suite/app-icon-yellow.png",
@@ -46,17 +46,19 @@ self.addEventListener("fetch", (event) => {
   if (!cacheableStaticAsset) return;
 
   event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await cache.match(request);
-      const fetched = fetch(request)
-        .then((response) => {
-          if (response.ok) cache.put(request, response.clone());
-          return response;
-        })
-        .catch(() => cached);
-
-      return cached || fetched;
-    }),
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        const response = await fetch(request);
+        if (response.ok) {
+          cache.put(request, response.clone());
+        }
+        return response;
+      } catch {
+        const cached = await cache.match(request);
+        return cached || Response.error();
+      }
+    })(),
   );
 });
 

@@ -48,7 +48,7 @@ export function stripeSchoolProcessingFeeRate(
     });
   }
   return rateFromEnvironment("STRIPE_SCHOOL_CARD_PROCESSING_FEE", {
-    basisPoints: 210,
+    basisPoints: 290,
     fixedCents: 30,
     maximumCents: 0,
   });

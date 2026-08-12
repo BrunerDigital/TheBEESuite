@@ -23,6 +23,7 @@ async function POSTHandler(request: NextRequest) {
     select: {
       id: true,
       name: true,
+      locationId: true,
       email: true,
       customFields: true,
       ownerGroup: {

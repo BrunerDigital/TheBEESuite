@@ -1794,11 +1794,15 @@ export async function createStripeSoftwareSubscription({ customerId, priceId, qu
   return { ok: true as const, configured: true, subscription: softwareSubscriptionSnapshot(json) };
 }
 
-export async function updateStripeSoftwareSubscription({ subscriptionId, itemId, quantity, cancelAtPeriodEnd, tenantId }: { subscriptionId: string; itemId?: string | null; quantity?: number; cancelAtPeriodEnd?: boolean; tenantId?: string | null }) {
+export async function updateStripeSoftwareSubscription({ subscriptionId, itemId, priceId, quantity, cancelAtPeriodEnd, tenantId }: { subscriptionId: string; itemId?: string | null; priceId?: string | null; quantity?: number; cancelAtPeriodEnd?: boolean; tenantId?: string | null }) {
   const apiKey = await getStripeSecretKey({ tenantId });
   if (!apiKey) return { ok: false as const, configured: false, error: "Payment processor is not configured." };
   const body = new URLSearchParams({ proration_behavior: "create_prorations", expand: "latest_invoice" });
-  if (itemId && quantity !== undefined) { body.set("items[0][id]", itemId); body.set("items[0][quantity]", String(Math.max(1, quantity))); }
+  if (itemId && (quantity !== undefined || priceId)) {
+    body.set("items[0][id]", itemId);
+    if (priceId) body.set("items[0][price]", priceId);
+    if (quantity !== undefined) body.set("items[0][quantity]", String(Math.max(1, quantity)));
+  }
   if (cancelAtPeriodEnd !== undefined) body.set("cancel_at_period_end", String(cancelAtPeriodEnd));
   const response = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, { method: "POST", headers: stripeHeaders(apiKey, "form"), body, signal: AbortSignal.timeout(10_000) });
   const json = await response.json().catch(() => null) as Record<string, unknown> | null;

@@ -48,6 +48,7 @@ async function POSTHandler(request: NextRequest) {
       id: true,
       name: true,
       crmLocationId: true,
+      locationId: true,
       email: true,
       customFields: true,
       ownerGroup: {

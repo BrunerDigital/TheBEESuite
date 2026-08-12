@@ -133,6 +133,8 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
   const [error, setError] = useState("");
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const idleSecondsRef = useRef(idleResetSeconds);
+  const pinRef = useRef("");
+  const staffPinRef = useRef("");
   const qrVideoRef = useRef<HTMLVideoElement | null>(null);
   const qrControlsRef = useRef<IScannerControls | null>(null);
   const qrScanHandledRef = useRef(false);
@@ -175,6 +177,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
     qrControlsRef.current = null;
     qrScanHandledRef.current = false;
     setPin("");
+    pinRef.current = "";
     setQrToken("");
     setCredentialMode("pin");
     setCameraState("idle");
@@ -184,6 +187,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
     setLookup(null);
     setStaffEmail("");
     setStaffPin("");
+    staffPinRef.current = "";
     setStaffLookup(null);
     setStaffNotes("");
     setSelectedIds([]);
@@ -213,6 +217,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
     if (method === credentialMode) return;
     setCredentialMode(method);
     setPin("");
+    pinRef.current = "";
     setQrToken("");
     qrControlsRef.current?.stop();
     qrControlsRef.current = null;
@@ -261,7 +266,14 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
     markActivity();
     setError("");
     setStatus("");
-    setPin((current) => (current.length >= 4 ? current : `${current}${digit}`));
+    setPin((current) => {
+      const next = current.length >= 4 ? current : `${current}${digit}`;
+      pinRef.current = next;
+      if (next.length === 4 && current.length < 4) {
+        window.setTimeout(() => lookupCredential(undefined, next), 0);
+      }
+      return next;
+    });
   }
 
   function appendStaffDigit(digit: string) {
@@ -269,19 +281,27 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
     setError("");
     setStatus("");
     setStaffLookup(null);
-    setStaffPin((current) => (current.length >= 4 ? current : `${current}${digit}`));
+    setStaffPin((current) => {
+      const next = current.length >= 4 ? current : `${current}${digit}`;
+      staffPinRef.current = next;
+      if (next.length === 4 && current.length < 4) {
+        window.setTimeout(() => lookupStaffCredential(next), 0);
+      }
+      return next;
+    });
   }
 
-  function lookupCredential(scannedQrToken?: string) {
+  function lookupCredential(scannedQrToken?: string, pinOverride?: string) {
     markActivity();
     if (previewMode) {
       setStatus("Preview only — credential lookup is disabled.");
       return;
     }
     const normalizedQrToken = typeof scannedQrToken === "string" ? scannedQrToken.trim() : qrToken.trim();
+    const effectivePin = pinOverride ?? (pinRef.current || pin);
     const credential: VerifiedCredential = credentialMode === "qr"
       ? { method: "qr", qrToken: normalizedQrToken }
-      : { method: "pin", pin };
+      : { method: "pin", pin: effectivePin };
     if ((credential.method === "pin" && credential.pin.length !== 4) || (credential.method === "qr" && !credential.qrToken)) {
       setError("Enter a 4-digit Family PIN or scan a Family QR Code.");
       return;
@@ -438,14 +458,15 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
     });
   }
 
-  function lookupStaffCredential() {
+  function lookupStaffCredential(pinOverride?: string) {
     if (familyOnly) return;
     markActivity();
     if (previewMode) {
       setStatus("Preview only — staff lookup is disabled.");
       return;
     }
-    if (!staffCredentialReady) {
+    const effectivePin = pinOverride ?? (staffPinRef.current || staffPin);
+    if (effectivePin.length !== 4) {
       setError("Enter your 4-digit staff code.");
       return;
     }
@@ -460,7 +481,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
           {
           centerId: center.id,
           email: staffEmail,
-          pin: staffPin,
+          pin: effectivePin,
           action: "lookup",
           },
         );
@@ -652,12 +673,17 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                         ))}
                         <Button type="button" variant="outline" className="h-14 text-lg sm:h-16 lg:h-12 2xl:h-16" disabled={!pin.length} onClick={() => {
                           markActivity();
+                          pinRef.current = "";
                           setPin("");
                         }}>Clear</Button>
                         <Button type="button" variant="outline" className="h-14 text-2xl sm:h-16 lg:h-12 2xl:h-16" onClick={() => appendDigit("0")}>0</Button>
                         <Button type="button" variant="outline" className="h-14 text-lg sm:h-16 lg:h-12 2xl:h-16" disabled={!pin.length} onClick={() => {
                           markActivity();
-                          setPin((current) => current.slice(0, -1));
+                          setPin((current) => {
+                            const next = current.slice(0, -1);
+                            pinRef.current = next;
+                            return next;
+                          });
                         }}>Delete</Button>
                       </div>
                       <Button className="h-14 w-full text-lg sm:h-16 lg:h-12 2xl:h-16" disabled={isPending || pin.length !== 4} onClick={() => lookupCredential()}>
@@ -734,16 +760,21 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                     <Button type="button" variant="outline" className="h-14 text-lg sm:h-16 lg:h-12 2xl:h-16" disabled={!staffPin.length} onClick={() => {
                       markActivity();
                       setStaffLookup(null);
+                      staffPinRef.current = "";
                       setStaffPin("");
                     }}>Clear</Button>
                     <Button type="button" variant="outline" className="h-14 text-2xl sm:h-16 lg:h-12 2xl:h-16" onClick={() => appendStaffDigit("0")}>0</Button>
                     <Button type="button" variant="outline" className="h-14 text-lg sm:h-16 lg:h-12 2xl:h-16" disabled={!staffPin.length} onClick={() => {
                       markActivity();
                       setStaffLookup(null);
-                      setStaffPin((current) => current.slice(0, -1));
+                      setStaffPin((current) => {
+                        const next = current.slice(0, -1);
+                        staffPinRef.current = next;
+                        return next;
+                      });
                     }}>Delete</Button>
                   </div>
-                  <Button className="h-14 w-full text-lg sm:h-16 lg:h-12 2xl:h-16" disabled={isPending || !staffCredentialReady} onClick={lookupStaffCredential}>
+                  <Button className="h-14 w-full text-lg sm:h-16 lg:h-12 2xl:h-16" disabled={isPending || !staffCredentialReady} onClick={() => lookupStaffCredential()}>
                     {pendingAction === "staff_lookup" ? "Checking…" : "Continue to Staff Clock"}
                   </Button>
                 </>

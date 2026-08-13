@@ -84,10 +84,15 @@ test("social post and analytics APIs resolve school scope before provider access
     new URL("../src/app/api/marketing/social-analytics/route.ts", import.meta.url),
     "utf8",
   );
+  const centerAccess = readFileSync(
+    new URL("../src/lib/marketing-center-access.ts", import.meta.url),
+    "utf8",
+  );
   assert.match(postsRoute, /resolveMarketingCenter\(user, body\?\.centerId\)/);
   assert.match(postsRoute, /centerId: center\.id/);
   assert.match(postsRoute, /audience: \{ label: `\$\{center\.name\}/);
   assert.match(analyticsRoute, /resolveMarketingCenter\(user, body\?\.centerId\)/);
   assert.match(analyticsRoute, /centerId: center\.id/);
   assert.match(analyticsRoute, /metadata: \{ centerId: center\.id, provider/);
+  assert.match(centerAccess, /organization: \{ tenantId: user\.tenantId \}/);
 });

@@ -3120,7 +3120,7 @@ async function renderLivePage(
         select: { provider: true, key: true, lastFour: true },
       }),
       prisma.center.findMany({
-        where: { ...getDashboardCenterScopeWhere(user), status: "active" },
+        where: { ...getDashboardCenterScopeWhere(user), status: "active", organization: { tenantId: user.tenantId } },
         orderBy: [{ crmLocationId: "asc" }, { name: "asc" }],
         select: { id: true, name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
       }),

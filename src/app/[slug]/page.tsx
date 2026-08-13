@@ -3125,6 +3125,27 @@ async function renderLivePage(
         select: { id: true, name: true, crmLocationId: true },
       }),
     ]);
+    const engagementCenterIds = engagementCenters.map((center) => center.id);
+    const [socialIntegrationRecords, socialIntegrationCredentials] = engagementCenterIds.length
+      ? await Promise.all([
+          prisma.integration.findMany({
+            where: {
+              tenantId: user.tenantId,
+              provider: { in: SOCIAL_INTEGRATION_PROVIDERS },
+              centerId: { in: engagementCenterIds },
+            },
+            select: { id: true, centerId: true, provider: true, status: true, configPlaceholder: true, lastSyncAt: true },
+          }),
+          prisma.integrationCredential.findMany({
+            where: {
+              tenantId: user.tenantId,
+              provider: { in: SOCIAL_INTEGRATION_PROVIDERS },
+              centerId: { in: engagementCenterIds },
+            },
+            select: { centerId: true, provider: true, key: true, lastFour: true },
+          }),
+        ])
+      : [[], []] as const;
 
     const setupViews = buildIntegrationSetupViews(integrationRecords, process.env, integrationCredentials);
     const marketingConnections = setupViews
@@ -3150,33 +3171,38 @@ async function renderLivePage(
           lastSyncAt: integration.lastSyncAt,
         };
       });
-    const socialConnections = setupViews
-      .filter((integration) => SOCIAL_INTEGRATION_PROVIDERS.includes(integration.provider))
-      .map((integration) => {
-        const stored = integrationRecords.find((record) => record.provider === integration.provider);
-        const analyticsRecord = recordFromJson(recordFromJson(stored?.configPlaceholder).analytics);
-        const analytics = Object.fromEntries(Object.entries(analyticsRecord).filter((entry): entry is [string, number] => typeof entry[1] === "number"));
-        const stringConfig = (key: string) => typeof integration.config[key] === "string" && String(integration.config[key]).trim().length > 0;
-        const availableChannels = integration.provider === "meta_social"
-          ? [stringConfig("facebookPageId") ? "facebook" : null, stringConfig("instagramAccountId") ? "instagram" : null].filter((channel): channel is string => Boolean(channel))
-          : integration.provider === "linkedin_social" && stringConfig("organizationId") ? ["linkedin_social"]
-            : integration.provider === "google_business" && stringConfig("accountId") && stringConfig("locationId") ? ["google_business"]
-              : integration.provider === "tiktok_social" && stringConfig("openId") ? ["tiktok_social"]
-                : integration.provider === "pinterest_social" && stringConfig("boardId") ? ["pinterest_social"]
-                  : integration.provider === "x_social" && stringConfig("userId") ? ["x_social"] : [];
-        return {
-          provider: integration.provider,
-          name: integration.name,
-          purpose: integration.purpose,
-          configured: integration.env.configured && hasRequiredMarketingAccountConfig(integration.provider, integration.config),
-          availableChannels,
-          accountLabel: typeof integration.config.accountLabel === "string" ? integration.config.accountLabel : "",
-          profileHandle: typeof integration.config.profileHandle === "string" ? integration.config.profileHandle : "",
-          auditStatus: typeof integration.config.auditStatus === "string" ? integration.config.auditStatus : "",
-          analytics,
-          lastSyncAt: integration.lastSyncAt,
-        };
-      });
+    const socialConnections = engagementCenters.flatMap((center) => {
+      const centerRecords = socialIntegrationRecords.filter((record) => record.centerId === center.id);
+      const centerCredentials = socialIntegrationCredentials.filter((credential) => credential.centerId === center.id);
+      return buildIntegrationSetupViews(centerRecords, process.env, centerCredentials)
+        .filter((integration) => SOCIAL_INTEGRATION_PROVIDERS.includes(integration.provider))
+        .map((integration) => {
+          const stored = centerRecords.find((record) => record.provider === integration.provider);
+          const analyticsRecord = recordFromJson(recordFromJson(stored?.configPlaceholder).analytics);
+          const analytics = Object.fromEntries(Object.entries(analyticsRecord).filter((entry): entry is [string, number] => typeof entry[1] === "number"));
+          const stringConfig = (key: string) => typeof integration.config[key] === "string" && String(integration.config[key]).trim().length > 0;
+          const availableChannels = integration.provider === "meta_social"
+            ? [stringConfig("facebookPageId") ? "facebook" : null, stringConfig("instagramAccountId") ? "instagram" : null].filter((channel): channel is string => Boolean(channel))
+            : integration.provider === "linkedin_social" && stringConfig("organizationId") ? ["linkedin_social"]
+              : integration.provider === "google_business" && stringConfig("accountId") && stringConfig("locationId") ? ["google_business"]
+                : integration.provider === "tiktok_social" && stringConfig("openId") ? ["tiktok_social"]
+                  : integration.provider === "pinterest_social" && stringConfig("boardId") ? ["pinterest_social"]
+                    : integration.provider === "x_social" && stringConfig("userId") ? ["x_social"] : [];
+          return {
+            centerId: center.id,
+            provider: integration.provider,
+            name: integration.name,
+            purpose: integration.purpose,
+            configured: integration.env.configured && hasRequiredMarketingAccountConfig(integration.provider, integration.config),
+            availableChannels,
+            accountLabel: typeof integration.config.accountLabel === "string" ? integration.config.accountLabel : "",
+            profileHandle: typeof integration.config.profileHandle === "string" ? integration.config.profileHandle : "",
+            auditStatus: typeof integration.config.auditStatus === "string" ? integration.config.auditStatus : "",
+            analytics,
+            lastSyncAt: integration.lastSyncAt,
+          };
+        });
+    });
 
     return <CampaignsPage data={{
       campaigns,

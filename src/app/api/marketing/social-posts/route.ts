@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth";
-import { integrationScopeForUser } from "@/lib/integration-scope";
+import { resolveMarketingCenter } from "@/lib/marketing-center-access";
 import { getMarketingConnection } from "@/lib/marketing-connection";
 import { prisma } from "@/lib/prisma";
 import { providerForSocialChannel, publishSocialPost, SOCIAL_CHANNELS, type SocialChannel } from "@/lib/social-publishing";
@@ -45,13 +45,18 @@ function selectedChannels(value: unknown) {
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
-  if (!allowedRoles.has(user.role)) return NextResponse.json({ ok: false, error: "Director access required." }, { status: 403 });
-  const socialScope = integrationScopeForUser(user, "meta_social");
-  if (!socialScope.centerId && (user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR)) {
-    return NextResponse.json({ ok: false, error: "A school assignment is required before publishing." }, { status: 403 });
-  }
+  if (!allowedRoles.has(user.role)) return NextResponse.json({ ok: false, error: "Marketing access required." }, { status: 403 });
 
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  let center: Awaited<ReturnType<typeof resolveMarketingCenter>>;
+  try {
+    center = await resolveMarketingCenter(user, body?.centerId);
+  } catch (error) {
+    return NextResponse.json({
+      ok: false,
+      error: error instanceof Error ? error.message : "Choose a school before publishing.",
+    }, { status: 403 });
+  }
   const text = clean(body?.text);
   const title = clean(body?.title, 200);
   const mediaUrl = validUrl(body?.mediaUrl);
@@ -78,7 +83,7 @@ async function POSTHandler(request: NextRequest) {
       name: title || `Social post · ${formatZonedDateTime(new Date(), user.timeZone || "America/New_York", { month: "numeric", day: "numeric", year: "numeric" })}`,
       type: "social_post",
       body: text,
-      audience: { label: channels.join(", "), channels, centerId: user.primaryCenterId ?? null, mediaUrl: mediaUrl || null, linkUrl: linkUrl || null } as Prisma.InputJsonObject,
+      audience: { label: `${center.name}: ${channels.join(", ")}`, channels, centerId: center.id, mediaUrl: mediaUrl || null, linkUrl: linkUrl || null } as Prisma.InputJsonObject,
       status: mode === "draft" ? "draft" : mode === "schedule" ? "scheduled" : "publishing",
       scheduledAt: mode === "schedule" ? scheduledAt : null,
       metrics: { platform: "social", channels, createdFrom: "social_publisher", publishResults: [] },
@@ -86,7 +91,7 @@ async function POSTHandler(request: NextRequest) {
   });
 
   if (mode !== "publish") {
-    await writeAuditLog(user, { action: `social.post.${mode === "draft" ? "drafted" : "scheduled"}`, resource: "Campaign", resourceId: campaign.id, metadata: { channels, scheduledAt: scheduledAt?.toISOString() ?? null } });
+    await writeAuditLog(user, { action: `social.post.${mode === "draft" ? "drafted" : "scheduled"}`, resource: "Campaign", resourceId: campaign.id, metadata: { centerId: center.id, channels, scheduledAt: scheduledAt?.toISOString() ?? null } });
     return NextResponse.json({ ok: true, campaignId: campaign.id, status: campaign.status, results: [] });
   }
 
@@ -96,7 +101,7 @@ async function POSTHandler(request: NextRequest) {
     if (!provider) continue;
     const connection = await getMarketingConnection({
       tenantId: user.tenantId,
-      centerId: socialScope.centerId,
+      centerId: center.id,
       provider,
       updatedById: user.id,
     });
@@ -121,7 +126,7 @@ async function POSTHandler(request: NextRequest) {
       metrics: { platform: "social", channels, createdFrom: "social_publisher", publishResults: results as unknown as Prisma.InputJsonArray },
     },
   });
-  await writeAuditLog(user, { action: allPublished ? "social.post.published" : "social.post.publish_failed", resource: "Campaign", resourceId: campaign.id, metadata: { channels, published: results.filter((result) => result.ok).map((result) => result.channel), failed: results.filter((result) => !result.ok).map((result) => result.channel) } });
+  await writeAuditLog(user, { action: allPublished ? "social.post.published" : "social.post.publish_failed", resource: "Campaign", resourceId: campaign.id, metadata: { centerId: center.id, channels, published: results.filter((result) => result.ok).map((result) => result.channel), failed: results.filter((result) => !result.ok).map((result) => result.channel) } });
 
   return NextResponse.json({ ok: allPublished, campaignId: campaign.id, status: allPublished ? "sent" : anyPublished ? "partial" : "failed", results }, { status: allPublished ? 200 : anyPublished ? 207 : 422 });
 }

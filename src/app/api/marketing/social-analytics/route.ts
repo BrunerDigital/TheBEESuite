@@ -3,7 +3,7 @@ import { Prisma, UserRole } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth";
 import { normalizeIntegrationProvider, readIntegrationConfig, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
-import { integrationScopeForUser } from "@/lib/integration-scope";
+import { resolveMarketingCenter } from "@/lib/marketing-center-access";
 import { getMarketingConnection } from "@/lib/marketing-connection";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -45,14 +45,19 @@ async function POSTHandler(request: NextRequest) {
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const provider = normalizeIntegrationProvider(body?.provider);
   if (!provider || !SOCIAL_INTEGRATION_PROVIDERS.includes(provider)) return NextResponse.json({ ok: false, error: "Choose a supported social profile." }, { status: 400 });
-  const scope = integrationScopeForUser(user, provider);
-  if (!scope.centerId && (user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR)) {
-    return NextResponse.json({ ok: false, error: "A school assignment is required before syncing analytics." }, { status: 403 });
+  let center: Awaited<ReturnType<typeof resolveMarketingCenter>>;
+  try {
+    center = await resolveMarketingCenter(user, body?.centerId);
+  } catch (error) {
+    return NextResponse.json({
+      ok: false,
+      error: error instanceof Error ? error.message : "Choose a school before syncing analytics.",
+    }, { status: 403 });
   }
 
   const connection = await getMarketingConnection({
     tenantId: user.tenantId,
-    centerId: scope.centerId,
+    centerId: center.id,
     provider,
     updatedById: user.id,
   });
@@ -112,7 +117,7 @@ async function POSTHandler(request: NextRequest) {
 
   const current = record(integration.configPlaceholder);
   await prisma.integration.update({ where: { id: integration.id }, data: { lastSyncAt: new Date(), configPlaceholder: { ...current, analytics, analyticsUpdatedAt: new Date().toISOString() } as Prisma.InputJsonObject } });
-  await writeAuditLog(user, { action: "social.analytics.synced", resource: "Integration", resourceId: integration.id, metadata: { provider, metricKeys: Object.keys(analytics) } });
+  await writeAuditLog(user, { action: "social.analytics.synced", resource: "Integration", resourceId: integration.id, metadata: { centerId: center.id, provider, metricKeys: Object.keys(analytics) } });
   return NextResponse.json({ ok: true, provider, analytics, syncedAt: new Date().toISOString() });
 }
 

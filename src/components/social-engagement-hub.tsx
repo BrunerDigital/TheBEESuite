@@ -17,6 +17,7 @@ export type MarketingCenterOption = {
   id: string;
   name: string;
   crmLocationId: string | null;
+  timeZone?: string;
 };
 
 type Props = {

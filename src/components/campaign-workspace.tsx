@@ -388,7 +388,11 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
           <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
         <TabsContent value="social">
-          <SocialPublishingStudio connections={data.socialConnections} />
+          <SocialPublishingStudio
+            connections={data.socialConnections}
+            centers={data.engagementCenters}
+            initialCenterId={data.initialEngagementCenterId}
+          />
         </TabsContent>
         <TabsContent value="engagement">
           <SocialEngagementHub centers={data.engagementCenters} initialCenterId={data.initialEngagementCenterId} />

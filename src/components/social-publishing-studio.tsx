@@ -14,6 +14,7 @@ import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 
 export type SocialConnection = {
+  centerId: string | null;
   provider: string;
   name: string;
   purpose: string;
@@ -26,25 +27,54 @@ export type SocialConnection = {
   lastSyncAt: Date | string | null;
 };
 
+export type SocialPublishingCenter = {
+  id: string;
+  name: string;
+  crmLocationId: string | null;
+  timeZone?: string;
+};
+
 function localFutureValue(timeZone: string) {
   const date = new Date(Date.now() + 60 * 60 * 1000);
   return zonedDateTimeLocalValue(date, timeZone);
 }
 
-export function SocialPublishingStudio({ connections }: { connections: SocialConnection[] }) {
+export function SocialPublishingStudio({
+  connections,
+  centers,
+  initialCenterId,
+}: {
+  connections: SocialConnection[];
+  centers: SocialPublishingCenter[];
+  initialCenterId: string | null;
+}) {
   const timeZone = useSchoolTimeZone();
   const [profiles, setProfiles] = useState(connections);
-  const configuredChannels = new Set(profiles.flatMap((item) => item.configured ? item.availableChannels : []));
+  const initialSelectedCenter = centers.find((center) => center.id === initialCenterId) ?? centers[0] ?? null;
+  const [centerId, setCenterId] = useState(initialSelectedCenter?.id || "");
+  const selectedCenter = centers.find((center) => center.id === centerId) ?? null;
+  const selectedTimeZone = selectedCenter?.timeZone || timeZone;
+  const selectedProfiles = profiles.filter((item) => item.centerId === centerId);
+  const configuredChannels = new Set(selectedProfiles.flatMap((item) => item.configured ? item.availableChannels : []));
   const [channels, setChannels] = useState<SocialChannel[]>([]);
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
-  const [scheduledAt, setScheduledAt] = useState(() => localFutureValue(timeZone));
+  const [scheduledAt, setScheduledAt] = useState(() => localFutureValue(initialSelectedCenter?.timeZone || timeZone));
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [pendingAction, setPendingAction] = useState<"draft" | "schedule" | "publish" | `sync:${string}` | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function selectCenter(nextCenterId: string) {
+    const nextCenter = centers.find((center) => center.id === nextCenterId) ?? null;
+    setCenterId(nextCenterId);
+    setChannels([]);
+    setScheduledAt(localFutureValue(nextCenter?.timeZone || timeZone));
+    setMessage("");
+    setError("");
+  }
 
   function toggle(channel: SocialChannel) {
     setChannels((current) => current.includes(channel) ? current.filter((item) => item !== channel) : [...current, channel]);
@@ -59,7 +89,16 @@ export function SocialPublishingStudio({ connections }: { connections: SocialCon
         const response = await fetch("/api/marketing/social-posts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode, channels, title, text, mediaUrl, linkUrl, scheduledAt: mode === "schedule" ? zonedDateTimeLocalToUtc(scheduledAt, timeZone)?.toISOString() : undefined }),
+          body: JSON.stringify({
+            mode,
+            centerId,
+            channels,
+            title,
+            text,
+            mediaUrl,
+            linkUrl,
+            scheduledAt: mode === "schedule" ? zonedDateTimeLocalToUtc(scheduledAt, selectedTimeZone)?.toISOString() : undefined,
+          }),
         });
         const json = await response.json().catch(() => null) as { error?: string; status?: string; results?: Array<{ ok: boolean; channel: string; error?: string }> } | null;
         if (!response.ok && response.status !== 207) {
@@ -84,13 +123,17 @@ export function SocialPublishingStudio({ connections }: { connections: SocialCon
       setMessage("");
       setError("");
       try {
-        const response = await fetch("/api/marketing/social-analytics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider }) });
+        const response = await fetch("/api/marketing/social-analytics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, centerId }) });
         const json = await response.json().catch(() => null) as { error?: string; analytics?: Record<string, number>; syncedAt?: string } | null;
         if (!response.ok || !json?.analytics) {
           setError(json?.error || "Profile analytics could not be synced.");
           return;
         }
-        setProfiles((current) => current.map((profile) => profile.provider === provider ? { ...profile, analytics: json.analytics!, lastSyncAt: json.syncedAt ?? new Date().toISOString() } : profile));
+        setProfiles((current) => current.map((profile) =>
+          profile.provider === provider && profile.centerId === centerId
+            ? { ...profile, analytics: json.analytics!, lastSyncAt: json.syncedAt ?? new Date().toISOString() }
+            : profile
+        ));
         setMessage("Profile analytics refreshed.");
       } finally {
         setPendingAction(null);
@@ -106,6 +149,28 @@ export function SocialPublishingStudio({ connections }: { connections: SocialCon
           <CardDescription>Create once, select approved business profiles, then save, schedule, or publish through each platform&apos;s official API.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5" aria-busy={isPending}>
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <div className="space-y-1">
+              <Label htmlFor="social-post-school">School</Label>
+              <select
+                id="social-post-school"
+                name="social-post-school"
+                autoComplete="off"
+                className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                value={centerId}
+                onChange={(event) => selectCenter(event.target.value)}
+              >
+                {centers.map((center) => (
+                  <option key={center.id} value={center.id}>
+                    {center.crmLocationId ? `${center.crmLocationId} - ${center.name}` : center.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Badge className="w-fit" variant={configuredChannels.size ? "default" : "outline"}>
+              {configuredChannels.size ? `${configuredChannels.size} channel${configuredChannels.size === 1 ? "" : "s"} ready` : "No social profiles ready"}
+            </Badge>
+          </div>
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Publish to</legend>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -123,7 +188,7 @@ export function SocialPublishingStudio({ connections }: { connections: SocialCon
                     className={`min-h-16 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10" : "bg-background hover:border-primary/40"} disabled:cursor-not-allowed disabled:opacity-55`}
                   >
                     <span className="flex items-center justify-between gap-2"><span className="font-medium">{channel.name}</span>{connected ? <CheckCircle2 className="size-4 text-emerald-500" aria-hidden="true" /> : <ShieldAlert className="size-4" aria-hidden="true" />}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">{connected ? channel.publishing === "review_required" ? "Connected · provider review applies" : "Connected" : "Connect in Settings"}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">{connected ? channel.publishing === "review_required" ? "Connected · provider review applies" : "Connected" : selectedCenter ? `Connect for ${selectedCenter.name}` : "Choose a school"}</span>
                   </button>
                 );
               })}
@@ -153,17 +218,22 @@ export function SocialPublishingStudio({ connections }: { connections: SocialCon
         <Card>
           <CardHeader><CardTitle as="h2">Profile readiness</CardTitle><CardDescription>Owned business profiles and API review status.</CardDescription></CardHeader>
           <CardContent className="space-y-3">
-            {profiles.map((connection) => (
+            {selectedProfiles.map((connection) => (
               <div key={connection.provider} className="rounded-lg border bg-background p-3">
                 <div className="flex items-start justify-between gap-2"><div><div className="font-medium">{connection.name}</div><div className="text-xs text-muted-foreground">{connection.profileHandle || connection.accountLabel || connection.purpose}</div></div><Badge variant={connection.configured ? "default" : "outline"}>{connection.configured ? "Ready" : "Setup"}</Badge></div>
                 {connection.provider === "tiktok_social" && connection.auditStatus !== "approved" ? <p className="mt-2 text-xs text-amber-600">Public Direct Post remains limited until TikTok approves the app audit.</p> : null}
                 {Object.keys(connection.analytics).length ? <div className="mt-3 grid grid-cols-2 gap-2">{Object.entries(connection.analytics).slice(0, 4).map(([label, value]) => <div key={label} className="rounded-md bg-muted/50 p-2"><div className="text-xs text-muted-foreground">{label.replaceAll("_", " ")}</div><div className="font-semibold">{value.toLocaleString()}</div></div>)}</div> : null}
                 <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <Link href={`/billing-settings?view=integrations&provider=${connection.provider}`} className="inline-flex min-h-10 items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${connection.configured ? "Manage connection" : "Connect profile"} for ${connection.name}`}>{connection.configured ? "Manage connection" : "Connect profile"}<ExternalLink className="size-3" aria-hidden="true" /></Link>
+                  <Link href={`/integrations?provider=${connection.provider}`} className="inline-flex min-h-10 items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${connection.configured ? "Manage connection" : "Connect profile"} for ${connection.name}`}>{connection.configured ? "Manage connection" : "Connect profile"}<ExternalLink className="size-3" aria-hidden="true" /></Link>
                   {connection.configured ? <button type="button" disabled={isPending} onClick={() => syncAnalytics(connection.provider)} aria-busy={pendingAction === `sync:${connection.provider}`} className="inline-flex min-h-10 items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"><RefreshCw className="size-3" aria-hidden="true" />{pendingAction === `sync:${connection.provider}` ? `Syncing ${connection.name}…` : `Sync ${connection.name} analytics`}</button> : null}
                 </div>
               </div>
             ))}
+            {!selectedProfiles.length ? (
+              <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                Choose a school with connected social profiles, or connect profiles from Integrations.
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </div>

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { providerForSocialChannel, publishSocialPost, SOCIAL_CHANNELS } from "@/lib/social-publishing";
 
@@ -58,4 +59,40 @@ test("TikTok unaudited publishing stays private-only", async () => {
     assert.match(body, /SELF_ONLY/);
     assert.doesNotMatch(body, /PUBLIC_TO_EVERYONE/);
   } finally { globalThis.fetch = originalFetch; }
+});
+
+test("social publisher carries the selected school into posting and analytics", () => {
+  const component = readFileSync(
+    new URL("../src/components/social-publishing-studio.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(component, /centerId/);
+  assert.match(component, /selectedTimeZone = selectedCenter\?\.timeZone \|\| timeZone/);
+  assert.match(component, /zonedDateTimeLocalToUtc\(scheduledAt, selectedTimeZone\)/);
+  assert.match(component, /body: JSON\.stringify\(\{\s+mode,\s+centerId,/);
+  assert.match(component, /body: JSON\.stringify\(\{ provider, centerId \}\)/);
+  assert.match(component, /selectedProfiles = profiles\.filter\(\(item\) => item\.centerId === centerId\)/);
+  assert.match(component, /href=\{`\/integrations\?provider=\$\{connection\.provider\}`\}/);
+});
+
+test("social post and analytics APIs resolve school scope before provider access", () => {
+  const postsRoute = readFileSync(
+    new URL("../src/app/api/marketing/social-posts/route.ts", import.meta.url),
+    "utf8",
+  );
+  const analyticsRoute = readFileSync(
+    new URL("../src/app/api/marketing/social-analytics/route.ts", import.meta.url),
+    "utf8",
+  );
+  const centerAccess = readFileSync(
+    new URL("../src/lib/marketing-center-access.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(postsRoute, /resolveMarketingCenter\(user, body\?\.centerId\)/);
+  assert.match(postsRoute, /centerId: center\.id/);
+  assert.match(postsRoute, /audience: \{ label: `\$\{center\.name\}/);
+  assert.match(analyticsRoute, /resolveMarketingCenter\(user, body\?\.centerId\)/);
+  assert.match(analyticsRoute, /centerId: center\.id/);
+  assert.match(analyticsRoute, /metadata: \{ centerId: center\.id, provider/);
+  assert.match(centerAccess, /organization: \{ tenantId: user\.tenantId \}/);
 });

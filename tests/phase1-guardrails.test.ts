@@ -10,7 +10,11 @@ import {
   isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
 } from "../src/lib/billing-guardrails";
-import { stripeCheckoutDraftClearReason, stripeCheckoutDraftReplacementReason } from "../src/lib/stripe-checkout-drafts";
+import {
+  stripeCheckoutDraftClearReason,
+  stripeCheckoutDraftConnectedAccountId,
+  stripeCheckoutDraftReplacementReason,
+} from "../src/lib/stripe-checkout-drafts";
 import { demoAccountEmails, resolveLoginIdentifier } from "../src/lib/demo-accounts";
 import { hashGuardianPin, verifyGuardianPin } from "../src/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "../src/lib/operations-guardrails";
@@ -210,6 +214,27 @@ test("active Stripe checkout detection only blocks draft checkout sessions", () 
     provider: "stripe_mock",
     customFields: { status: "checkout_created" },
   }), false);
+});
+
+test("checkout draft resolution stays on the account where the session was created", () => {
+  assert.equal(
+    stripeCheckoutDraftConnectedAccountId(
+      { customFields: { stripeConnectedAccountId: "acct_source" } },
+      "acct_current",
+    ),
+    "acct_source",
+  );
+  assert.equal(
+    stripeCheckoutDraftConnectedAccountId({ customFields: {} }, "acct_current"),
+    "acct_current",
+  );
+  assert.equal(
+    stripeCheckoutDraftConnectedAccountId(
+      { customFields: { stripeConnectedAccountId: "  " } },
+      null,
+    ),
+    null,
+  );
 });
 
 test("active Stripe checkout summary identifies ACH processing state", () => {

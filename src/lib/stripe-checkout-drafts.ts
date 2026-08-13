@@ -41,6 +41,17 @@ function normalizeCheckoutCategory(value: unknown): StripePaymentMethodCategory 
   return null;
 }
 
+export function stripeCheckoutDraftConnectedAccountId(
+  payment: { customFields?: unknown },
+  fallbackConnectedAccountId?: string | null,
+) {
+  const fields = jsonRecord(payment.customFields);
+  const storedConnectedAccountId = typeof fields.stripeConnectedAccountId === "string"
+    ? fields.stripeConnectedAccountId.trim()
+    : "";
+  return storedConnectedAccountId || fallbackConnectedAccountId || null;
+}
+
 function isOpenUnpaidDraftSession(session: StripeCheckoutSessionSnapshot) {
   return session.status === "open" && session.paymentStatus === "unpaid" && !session.paymentIntentId;
 }
@@ -152,6 +163,9 @@ export async function resolveStripeCheckoutDraftBlocker({
 }) {
   const pendingPayment = activeStripeCheckoutPaymentSummary(payment);
   const sessionId = pendingPayment.stripeCheckoutSessionId;
+  // A draft can outlive a Connect cutover. Stripe sessions must be managed on
+  // the account where they were created, not the school's current account.
+  const draftConnectedAccountId = stripeCheckoutDraftConnectedAccountId(payment, connectedAccountId);
   if (!sessionId) {
     return {
       blocked: true as const,
@@ -160,7 +174,11 @@ export async function resolveStripeCheckoutDraftBlocker({
     };
   }
 
-  const retrieved = await retrieveStripeCheckoutSession({ sessionId, connectedAccountId, tenantId });
+  const retrieved = await retrieveStripeCheckoutSession({
+    sessionId,
+    connectedAccountId: draftConnectedAccountId,
+    tenantId,
+  });
   if (!retrieved.ok || !retrieved.session) {
     return {
       blocked: true as const,
@@ -181,7 +199,11 @@ export async function resolveStripeCheckoutDraftBlocker({
     expectedFeeDisclosureVersion,
   });
   if (clearReason === "stale_open" || replacementReason) {
-    const expired = await expireStripeCheckoutSession({ sessionId, connectedAccountId, tenantId });
+    const expired = await expireStripeCheckoutSession({
+      sessionId,
+      connectedAccountId: draftConnectedAccountId,
+      tenantId,
+    });
     if (!expired.ok || !expired.session) {
       return {
         blocked: true as const,

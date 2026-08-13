@@ -30,7 +30,7 @@ function money(cents: number) {
   }).format(cents / 100);
 }
 
-function shortDate(value: string, options: { dateOnly?: boolean } = {}) {
+function shortDate(value: string, options: { dateOnly?: boolean; timeZone?: string } = {}) {
   const date = options.dateOnly && /^\d{4}-\d{2}-\d{2}/.test(value)
     ? new Date(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10)))
     : new Date(value);
@@ -38,6 +38,7 @@ function shortDate(value: string, options: { dateOnly?: boolean } = {}) {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: options.timeZone,
   }).format(date);
 }
 
@@ -129,7 +130,7 @@ export function AccountsReceivablePanel({
             disabled={!reportAccounts.length}
             meta={[
               reportSchoolLabel,
-              `As of ${shortDate(snapshot.asOf)}`,
+              `As of ${shortDate(snapshot.asOf, { timeZone: "UTC" })}`,
               "Current family accounts, with balances owed listed first",
             ]}
           >

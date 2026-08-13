@@ -283,6 +283,8 @@ test("director and executive dashboard billing widgets use current-family balanc
   assert.match(panel, /Family balances/);
   assert.match(panel, /Status/);
   assert.match(panel, /Balance/);
+  assert.match(panel, /reportSchoolIds = new Set/);
+  assert.match(panel, /dateOnly: true/);
   assert.match(panel, /account\.familyName/);
   assert.match(panel, /money\(account\.balanceCents\)/);
   assert.match(panel, /This report includes currently enrolled families only/);

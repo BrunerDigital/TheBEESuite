@@ -30,12 +30,15 @@ function money(cents: number) {
   }).format(cents / 100);
 }
 
-function shortDate(value: string) {
+function shortDate(value: string, options: { dateOnly?: boolean } = {}) {
+  const date = options.dateOnly && /^\d{4}-\d{2}-\d{2}/.test(value)
+    ? new Date(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10)))
+    : new Date(value);
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function statusLabel(status: SchoolAccountBalanceStatus) {
@@ -64,7 +67,9 @@ export function AccountsReceivablePanel({
     [filter, normalizedQuery, snapshot.accounts],
   );
   const reportAccounts = snapshot.accounts;
-  const reportSchoolNames = [...new Set(reportAccounts.map((account) => account.centerName))];
+  const reportSchoolIds = new Set(reportAccounts.map((account) => account.centerId ?? `missing:${account.centerName}`));
+  const reportSchoolLabel = reportSchoolIds.size === 1 ? reportAccounts[0]?.centerName ?? "School" : `${reportSchoolIds.size} schools`;
+  const printCenterNames = reportSchoolIds.size > 1;
 
   return (
     <div className={cn("grid min-h-0 gap-4", className)}>
@@ -123,7 +128,7 @@ export function AccountsReceivablePanel({
             label="Printable accounts receivable report"
             disabled={!reportAccounts.length}
             meta={[
-              reportSchoolNames.length === 1 ? reportSchoolNames[0] : `${reportSchoolNames.length} schools`,
+              reportSchoolLabel,
               `As of ${shortDate(snapshot.asOf)}`,
               "Current family accounts, with balances owed listed first",
             ]}
@@ -156,7 +161,7 @@ export function AccountsReceivablePanel({
               <table>
                 <thead>
                   <tr>
-                    {reportSchoolNames.length > 1 ? <th scope="col">School</th> : null}
+                    {printCenterNames ? <th scope="col">School</th> : null}
                     <th scope="col">Family</th>
                     <th scope="col">Status</th>
                     <th scope="col">Balance</th>
@@ -168,24 +173,24 @@ export function AccountsReceivablePanel({
                 <tbody>
                   {reportAccounts.map((account) => (
                     <tr key={`print-${account.id}`}>
-                      {reportSchoolNames.length > 1 ? <td>{account.centerName}</td> : null}
+                      {printCenterNames ? <td>{account.centerName}</td> : null}
                       <td>{account.familyName}</td>
                       <td>{statusLabel(account.status)}</td>
                       <td>{money(account.balanceCents)}</td>
                       <td>{account.openInvoiceCount.toLocaleString()}</td>
                       <td>{account.overdueInvoiceCount.toLocaleString()}</td>
-                      <td>{account.oldestOpenDueDate ? shortDate(account.oldestOpenDueDate) : "No due date"}</td>
+                      <td>{account.oldestOpenDueDate ? shortDate(account.oldestOpenDueDate, { dateOnly: true }) : "No due date"}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr>
-                    <th scope="row" colSpan={reportSchoolNames.length > 1 ? 3 : 2}>Net balance</th>
+                    <th scope="row" colSpan={printCenterNames ? 3 : 2}>Net balance</th>
                     <th>{money(snapshot.netBalanceCents)}</th>
                     <td colSpan={3}>{snapshot.totalAccountCount.toLocaleString()} current-family accounts</td>
                   </tr>
                   <tr>
-                    <th scope="row" colSpan={reportSchoolNames.length > 1 ? 3 : 2}>Total owed</th>
+                    <th scope="row" colSpan={printCenterNames ? 3 : 2}>Total owed</th>
                     <th>{money(snapshot.totalOwedCents)}</th>
                     <td colSpan={3}>{snapshot.owingAccountCount.toLocaleString()} families owing</td>
                   </tr>

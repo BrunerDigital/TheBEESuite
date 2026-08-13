@@ -11,6 +11,7 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ReportPrintAction } from "@/components/printable-report";
 import { cn } from "@/lib/utils";
 
 type AccountFilter = "all" | SchoolAccountBalanceStatus;
@@ -62,6 +63,8 @@ export function AccountsReceivablePanel({
     }),
     [filter, normalizedQuery, snapshot.accounts],
   );
+  const reportAccounts = snapshot.accounts;
+  const reportSchoolNames = [...new Set(reportAccounts.map((account) => account.centerName))];
 
   return (
     <div className={cn("grid min-h-0 gap-4", className)}>
@@ -103,16 +106,95 @@ export function AccountsReceivablePanel({
             </Button>
           ))}
         </div>
-        <label className="relative block w-full lg:max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <span className="sr-only">Search family accounts</span>
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search family accounts"
-            className="pl-9"
-          />
-        </label>
+        <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+          <label className="relative block w-full lg:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <span className="sr-only">Search family accounts</span>
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search family accounts"
+              className="pl-9"
+            />
+          </label>
+          <ReportPrintAction
+            buttonLabel="Print balances"
+            reportTitle="School Account Balances Report"
+            label="Printable accounts receivable report"
+            disabled={!reportAccounts.length}
+            meta={[
+              reportSchoolNames.length === 1 ? reportSchoolNames[0] : `${reportSchoolNames.length} schools`,
+              `As of ${shortDate(snapshot.asOf)}`,
+              "Current family accounts, with balances owed listed first",
+            ]}
+          >
+            <section aria-label="Accounts receivable totals">
+              <h2>Summary</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Families owing</th>
+                    <th scope="col">Total amount due</th>
+                    <th scope="col">Family credits</th>
+                    <th scope="col">Current accounts</th>
+                    <th scope="col">Families overdue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>{snapshot.owingAccountCount.toLocaleString()}</td>
+                    <td>{money(snapshot.totalOwedCents)}</td>
+                    <td>{money(Math.abs(snapshot.totalCreditCents))}</td>
+                    <td>{snapshot.currentAccountCount.toLocaleString()}</td>
+                    <td>{snapshot.overdueAccountCount.toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+            <section aria-label="Current family account balances">
+              <h2>Family balances</h2>
+              <table>
+                <thead>
+                  <tr>
+                    {reportSchoolNames.length > 1 ? <th scope="col">School</th> : null}
+                    <th scope="col">Family</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Balance</th>
+                    <th scope="col">Open invoices</th>
+                    <th scope="col">Overdue</th>
+                    <th scope="col">Oldest open due date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reportAccounts.map((account) => (
+                    <tr key={`print-${account.id}`}>
+                      {reportSchoolNames.length > 1 ? <td>{account.centerName}</td> : null}
+                      <td>{account.familyName}</td>
+                      <td>{statusLabel(account.status)}</td>
+                      <td>{money(account.balanceCents)}</td>
+                      <td>{account.openInvoiceCount.toLocaleString()}</td>
+                      <td>{account.overdueInvoiceCount.toLocaleString()}</td>
+                      <td>{account.oldestOpenDueDate ? shortDate(account.oldestOpenDueDate) : "No due date"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th scope="row" colSpan={reportSchoolNames.length > 1 ? 3 : 2}>Net balance</th>
+                    <th>{money(snapshot.netBalanceCents)}</th>
+                    <td colSpan={3}>{snapshot.totalAccountCount.toLocaleString()} current-family accounts</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" colSpan={reportSchoolNames.length > 1 ? 3 : 2}>Total owed</th>
+                    <th>{money(snapshot.totalOwedCents)}</th>
+                    <td colSpan={3}>{snapshot.owingAccountCount.toLocaleString()} families owing</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </section>
+            <p>This report includes currently enrolled families only. Positive balances are owed, negative balances are family credits, and zero balances are current.</p>
+          </ReportPrintAction>
+        </div>
       </div>
 
       <div className="max-h-[32rem] overflow-y-auto rounded-xl border bg-background/40">

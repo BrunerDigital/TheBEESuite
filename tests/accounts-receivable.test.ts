@@ -276,6 +276,16 @@ test("director and executive dashboard billing widgets use current-family balanc
   assert.match(dashboard, /Current-family balances across every school visible to this executive login/);
   assert.match(sheet, /Current family accounts across your visible schools/);
   assert.match(sheet, /Current family accounts in your school/);
+  const panel = readFileSync("src/components/accounts-receivable-panel.tsx", "utf8");
+  assert.match(panel, /buttonLabel="Print balances"/);
+  assert.match(panel, /reportTitle="School Account Balances Report"/);
+  assert.match(panel, /Current family accounts, with balances owed listed first/);
+  assert.match(panel, /Family balances/);
+  assert.match(panel, /Status/);
+  assert.match(panel, /Balance/);
+  assert.match(panel, /account\.familyName/);
+  assert.match(panel, /money\(account\.balanceCents\)/);
+  assert.match(panel, /This report includes currently enrolled families only/);
 });
 
 test("billing, analytics, and payment readiness exclude past families from active balance uses", () => {

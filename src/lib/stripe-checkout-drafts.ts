@@ -46,10 +46,16 @@ export function stripeCheckoutDraftConnectedAccountId(
   fallbackConnectedAccountId?: string | null,
 ) {
   const fields = jsonRecord(payment.customFields);
+  if (Object.prototype.hasOwnProperty.call(fields, "stripeConnectedAccountId")) {
+    if (fields.stripeConnectedAccountId === null) return null;
+    if (typeof fields.stripeConnectedAccountId !== "string") return null;
+  }
   const storedConnectedAccountId = typeof fields.stripeConnectedAccountId === "string"
     ? fields.stripeConnectedAccountId.trim()
     : "";
-  return storedConnectedAccountId || fallbackConnectedAccountId || null;
+  return Object.prototype.hasOwnProperty.call(fields, "stripeConnectedAccountId")
+    ? storedConnectedAccountId || null
+    : fallbackConnectedAccountId || null;
 }
 
 function isOpenUnpaidDraftSession(session: StripeCheckoutSessionSnapshot) {

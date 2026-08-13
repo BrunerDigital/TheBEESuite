@@ -230,8 +230,15 @@ test("checkout draft resolution stays on the account where the session was creat
   );
   assert.equal(
     stripeCheckoutDraftConnectedAccountId(
+      { customFields: { stripeConnectedAccountId: null } },
+      "acct_current",
+    ),
+    null,
+  );
+  assert.equal(
+    stripeCheckoutDraftConnectedAccountId(
       { customFields: { stripeConnectedAccountId: "  " } },
-      null,
+      "acct_current",
     ),
     null,
   );

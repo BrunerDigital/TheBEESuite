@@ -3122,7 +3122,7 @@ async function renderLivePage(
       prisma.center.findMany({
         where: { ...getDashboardCenterScopeWhere(user), status: "active" },
         orderBy: [{ crmLocationId: "asc" }, { name: "asc" }],
-        select: { id: true, name: true, crmLocationId: true },
+        select: { id: true, name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
       }),
     ]);
     const engagementCenterIds = engagementCenters.map((center) => center.id);
@@ -3208,7 +3208,12 @@ async function renderLivePage(
       campaigns,
       marketingConnections,
       socialConnections,
-      engagementCenters,
+      engagementCenters: engagementCenters.map((center) => ({
+        id: center.id,
+        name: center.name,
+        crmLocationId: center.crmLocationId,
+        timeZone: readCenterLocationTimeZone(center),
+      })),
       initialEngagementCenterId: user.primaryCenterId ?? engagementCenters[0]?.id ?? null,
       stats: { total, active, draft, paused, scheduled, sent },
     }} />;

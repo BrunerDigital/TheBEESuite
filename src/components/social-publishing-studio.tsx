@@ -31,6 +31,7 @@ export type SocialPublishingCenter = {
   id: string;
   name: string;
   crmLocationId: string | null;
+  timeZone?: string;
 };
 
 function localFutureValue(timeZone: string) {
@@ -49,8 +50,10 @@ export function SocialPublishingStudio({
 }) {
   const timeZone = useSchoolTimeZone();
   const [profiles, setProfiles] = useState(connections);
-  const [centerId, setCenterId] = useState(initialCenterId || centers[0]?.id || "");
+  const initialSelectedCenter = centers.find((center) => center.id === initialCenterId) ?? centers[0] ?? null;
+  const [centerId, setCenterId] = useState(initialSelectedCenter?.id || "");
   const selectedCenter = centers.find((center) => center.id === centerId) ?? null;
+  const selectedTimeZone = selectedCenter?.timeZone || timeZone;
   const selectedProfiles = profiles.filter((item) => item.centerId === centerId);
   const configuredChannels = new Set(selectedProfiles.flatMap((item) => item.configured ? item.availableChannels : []));
   const [channels, setChannels] = useState<SocialChannel[]>([]);
@@ -58,15 +61,17 @@ export function SocialPublishingStudio({
   const [text, setText] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
-  const [scheduledAt, setScheduledAt] = useState(() => localFutureValue(timeZone));
+  const [scheduledAt, setScheduledAt] = useState(() => localFutureValue(initialSelectedCenter?.timeZone || timeZone));
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [pendingAction, setPendingAction] = useState<"draft" | "schedule" | "publish" | `sync:${string}` | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function selectCenter(nextCenterId: string) {
+    const nextCenter = centers.find((center) => center.id === nextCenterId) ?? null;
     setCenterId(nextCenterId);
     setChannels([]);
+    setScheduledAt(localFutureValue(nextCenter?.timeZone || timeZone));
     setMessage("");
     setError("");
   }
@@ -92,7 +97,7 @@ export function SocialPublishingStudio({
             text,
             mediaUrl,
             linkUrl,
-            scheduledAt: mode === "schedule" ? zonedDateTimeLocalToUtc(scheduledAt, timeZone)?.toISOString() : undefined,
+            scheduledAt: mode === "schedule" ? zonedDateTimeLocalToUtc(scheduledAt, selectedTimeZone)?.toISOString() : undefined,
           }),
         });
         const json = await response.json().catch(() => null) as { error?: string; status?: string; results?: Array<{ ok: boolean; channel: string; error?: string }> } | null;
@@ -219,7 +224,7 @@ export function SocialPublishingStudio({
                 {connection.provider === "tiktok_social" && connection.auditStatus !== "approved" ? <p className="mt-2 text-xs text-amber-600">Public Direct Post remains limited until TikTok approves the app audit.</p> : null}
                 {Object.keys(connection.analytics).length ? <div className="mt-3 grid grid-cols-2 gap-2">{Object.entries(connection.analytics).slice(0, 4).map(([label, value]) => <div key={label} className="rounded-md bg-muted/50 p-2"><div className="text-xs text-muted-foreground">{label.replaceAll("_", " ")}</div><div className="font-semibold">{value.toLocaleString()}</div></div>)}</div> : null}
                 <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <Link href={`/billing-settings?view=integrations&provider=${connection.provider}`} className="inline-flex min-h-10 items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${connection.configured ? "Manage connection" : "Connect profile"} for ${connection.name}`}>{connection.configured ? "Manage connection" : "Connect profile"}<ExternalLink className="size-3" aria-hidden="true" /></Link>
+                  <Link href={`/integrations?provider=${connection.provider}`} className="inline-flex min-h-10 items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${connection.configured ? "Manage connection" : "Connect profile"} for ${connection.name}`}>{connection.configured ? "Manage connection" : "Connect profile"}<ExternalLink className="size-3" aria-hidden="true" /></Link>
                   {connection.configured ? <button type="button" disabled={isPending} onClick={() => syncAnalytics(connection.provider)} aria-busy={pendingAction === `sync:${connection.provider}`} className="inline-flex min-h-10 items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"><RefreshCw className="size-3" aria-hidden="true" />{pendingAction === `sync:${connection.provider}` ? `Syncing ${connection.name}…` : `Sync ${connection.name} analytics`}</button> : null}
                 </div>
               </div>

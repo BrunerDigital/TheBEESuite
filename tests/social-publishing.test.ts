@@ -67,9 +67,12 @@ test("social publisher carries the selected school into posting and analytics", 
     "utf8",
   );
   assert.match(component, /centerId/);
+  assert.match(component, /selectedTimeZone = selectedCenter\?\.timeZone \|\| timeZone/);
+  assert.match(component, /zonedDateTimeLocalToUtc\(scheduledAt, selectedTimeZone\)/);
   assert.match(component, /body: JSON\.stringify\(\{\s+mode,\s+centerId,/);
   assert.match(component, /body: JSON\.stringify\(\{ provider, centerId \}\)/);
   assert.match(component, /selectedProfiles = profiles\.filter\(\(item\) => item\.centerId === centerId\)/);
+  assert.match(component, /href=\{`\/integrations\?provider=\$\{connection\.provider\}`\}/);
 });
 
 test("social post and analytics APIs resolve school scope before provider access", () => {

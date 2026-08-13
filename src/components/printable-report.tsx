@@ -28,6 +28,19 @@ export function ReportPrintStyles() {
           display: none !important;
         }
 
+        body.bee-report-printing,
+        body.bee-report-printing *:has(.bee-print-report-active) {
+          position: static !important;
+          width: auto !important;
+          max-width: none !important;
+          height: auto !important;
+          min-height: 0 !important;
+          max-height: none !important;
+          overflow: visible !important;
+          transform: none !important;
+          contain: none !important;
+        }
+
         body.bee-report-printing .bee-print-report-active,
         body.bee-report-printing .bee-print-report-active * {
           visibility: visible !important;

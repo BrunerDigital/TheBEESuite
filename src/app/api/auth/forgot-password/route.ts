@@ -64,7 +64,7 @@ async function POSTHandler(request: NextRequest) {
     if (!recovery.ok) {
       const providerStatus = recovery.status ?? null;
       logOperationalError("auth.forgot_password.recovery_link_unavailable", null, { provider: "supabase_auth", reason: recovery.error, providerStatus });
-      if (providerStatus === 429 || (providerStatus !== null && providerStatus >= 500)) {
+      if (providerStatus === 0 || providerStatus === 429 || (providerStatus !== null && providerStatus >= 500)) {
         return NextResponse.json(
           { ok: false, error: "Password reset email is temporarily unavailable. Please wait a minute and try again." },
           { status: 503, headers: { "Retry-After": "60" } },

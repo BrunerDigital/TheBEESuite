@@ -207,7 +207,18 @@ export async function generateSupabasePasswordRecoveryLink({
   email: string;
   redirectTo?: string | null;
 }) {
-  const supabase = getSupabaseAdminClient();
+  const { url, key } = getSupabaseAuthConfig("service");
+  const timedFetch: typeof fetch = (input, init) => {
+    const timeoutSignal = AbortSignal.timeout(10_000);
+    const signal = init?.signal
+      ? AbortSignal.any([init.signal, timeoutSignal])
+      : timeoutSignal;
+    return fetch(input, { ...init, signal });
+  };
+  const supabase = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: timedFetch },
+  });
   const { data, error } = await supabase.auth.admin.generateLink({
     type: "recovery",
     email,

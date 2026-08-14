@@ -5,6 +5,8 @@ import { test } from "node:test";
 test("director bulk autopay requires an exact reviewed balance snapshot", () => {
   const route = readFileSync("src/app/api/billing/autopay/route.ts", "utf8");
   const actions = readFileSync("src/components/payment-autopay-actions.tsx", "utf8");
+  const livePages = readFileSync("src/components/live-ops-pages.tsx", "utf8");
+  const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const processing = readFileSync("src/lib/autopay-processing.ts", "utf8");
 
   assert.match(route, /Review eligible family balances before processing autopay/);
@@ -14,6 +16,10 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.doesNotMatch(route, /for \(const item of expected\)/);
   assert.match(actions, /reviewedInvoices/);
   assert.match(actions, /Process all reviewed balances/);
+  assert.match(actions, /Process family autopay/);
+  assert.match(actions, /Payment configuration is checked automatically/);
+  assert.match(livePages, /data\.canProcessAutopay \? <PaymentAutopayActions \/>/);
+  assert.match(page, /canProcessAutopay: canManageBilling\(user\)/);
   assert.match(actions, /disabled=\{isPending \|\| !readyToProcess\}/);
   assert.match(processing, /take: limit \+ 1/);
   assert.match(processing, /input\.invoiceIds\?\.length/);

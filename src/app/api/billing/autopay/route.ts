@@ -40,27 +40,6 @@ function reviewedInvoices(value: unknown) {
   });
 }
 
-function summarize(results: Awaited<ReturnType<typeof processAutopayInvoices>>["results"], asOf: string) {
-  const count = (status: (typeof results)[number]["status"]) => results.filter((result) => result.status === status).length;
-  return {
-    ok: true as const,
-    dryRun: false,
-    asOf,
-    scanned: results.length,
-    eligible: count("paid") + count("processing") + count("failed"),
-    wouldCharge: 0,
-    paid: count("paid"),
-    processing: count("processing"),
-    failed: count("failed"),
-    skipped: count("skipped"),
-    totalCents: results
-      .filter((result) => result.status === "paid" || result.status === "processing")
-      .reduce((sum, result) => sum + result.amountCents, 0),
-    hasMore: false,
-    results,
-  };
-}
-
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -142,12 +121,14 @@ async function POSTHandler(request: NextRequest) {
       }, { status: 409 });
     }
 
-    const results = [];
-    for (const item of expected) {
-      const run = await processAutopayInvoices({ ...processInput, dryRun: false, limit: 1, invoiceId: item.invoiceId });
-      results.push(...run.results);
-    }
-    return NextResponse.json(summarize(results, new Date().toISOString()));
+    const run = await processAutopayInvoices({
+      ...processInput,
+      dryRun: false,
+      limit: expected.length,
+      invoiceId: null,
+      invoiceIds: expected.map((item) => item.invoiceId),
+    });
+    return NextResponse.json(run);
   }
 
   const result = await processAutopayInvoices(processInput);

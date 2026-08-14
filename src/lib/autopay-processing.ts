@@ -84,6 +84,7 @@ type ProcessAutopayInput = {
   limit?: number;
   centerIds?: string[];
   invoiceId?: string | null;
+  invoiceIds?: string[];
   retryFailed?: boolean;
   requireDueDate?: boolean;
   collectionMode?: "autopay" | "stored_method";
@@ -164,6 +165,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
   };
   if (requireDueDate) invoiceWhere.dueDate = { lte: asOf };
   if (input.invoiceId) invoiceWhere.id = input.invoiceId;
+  else if (input.invoiceIds?.length) invoiceWhere.id = { in: unique(input.invoiceIds) };
   if (centerIds.length) {
     invoiceWhere.billingAccount = { family: { is: { centerId: { in: centerIds } } } };
   }

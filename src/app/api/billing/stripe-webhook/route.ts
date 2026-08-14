@@ -954,7 +954,8 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       const setupMode = clean(session.metadata?.autopaySetupMode);
       const enableAutopayFromSetup = setupMode === "enable";
       const disableAutopayFromSetup = setupMode === "disabled";
-      const autopayPatch = enableAutopayFromSetup || disableAutopayFromSetup
+      const replacementDisablesAutopay = replacedPaymentMethod && !enableAutopayFromSetup;
+      const autopayPatch = enableAutopayFromSetup || disableAutopayFromSetup || replacementDisablesAutopay
         ? {
             autopayEnabled: enableAutopayFromSetup,
             autopayStatus: enableAutopayFromSetup ? "enabled" : "disabled",
@@ -971,6 +972,11 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
             ...(autopayPatch ? {
               autopayEnabled: autopayPatch.autopayEnabled,
               autopayStatus: autopayPatch.autopayStatus,
+              autopayPaymentMethodId: enableAutopayFromSetup ? paymentMethodId : null,
+              ...(replacementDisablesAutopay ? {
+                autopayDisabledAt: new Date().toISOString(),
+                autopayDisabledReason: "saved_payment_method_replaced",
+              } : {}),
             } : {}),
             stripeDefaultPaymentMethodId: paymentMethodId || null,
             stripeDefaultPaymentMethodConnectedAccountId: connectedAccountId || null,

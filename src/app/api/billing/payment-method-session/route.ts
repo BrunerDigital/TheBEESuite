@@ -211,6 +211,7 @@ async function POSTHandler(request: NextRequest) {
           autopayStatus: "disabled",
           autopayDisabledAt: new Date().toISOString(),
           autopayDisabledByUserId: user.id,
+          autopayPaymentMethodId: null,
         },
       },
     });
@@ -316,6 +317,7 @@ async function POSTHandler(request: NextRequest) {
           autopayStatus: "enabled",
           autopayEnabledAt: enabledAt,
           autopayEnabledByUserId: user.id,
+          autopayPaymentMethodId: paymentMethod.stripeDefaultPaymentMethodId,
           autopayDisabledAt: null,
           autopayDisabledByUserId: null,
         },

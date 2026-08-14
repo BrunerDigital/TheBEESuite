@@ -387,10 +387,14 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     }
     if (collectionMode === "autopay") {
       const consentUserId = clean(jsonRecord(invoice.billingAccount.customFields).autopayEnabledByUserId);
+      const consentedPaymentMethodId = clean(jsonRecord(invoice.billingAccount.customFields).autopayPaymentMethodId);
       const consentIsFromLinkedGuardian = Boolean(
         consentUserId && family.guardians.some((guardian) => guardian.userId === consentUserId),
       );
-      if (!consentIsFromLinkedGuardian) {
+      const consentMatchesSavedMethod = Boolean(
+        consentedPaymentMethodId && consentedPaymentMethodId === paymentMethod.stripeDefaultPaymentMethodId,
+      );
+      if (!consentIsFromLinkedGuardian || !consentMatchesSavedMethod) {
         results.push({
           ...baseResult,
           status: "skipped",

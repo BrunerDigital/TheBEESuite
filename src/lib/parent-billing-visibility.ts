@@ -36,7 +36,11 @@ export function hasSubsidyResponsibilityEvidence(...values: unknown[]) {
   return values.some(visit);
 }
 
-export function hasConfirmedFamilyResponsibility(accountBalanceCents: number, ...values: unknown[]) {
+export function hasConfirmedFamilyResponsibility(
+  accountBalanceCents: number,
+  latestLedgerEntryId: string | null,
+  ...values: unknown[]
+) {
   const visit = (value: unknown): boolean => {
     if (Array.isArray(value)) return value.some(visit);
     if (!value || typeof value !== "object") return false;
@@ -47,6 +51,8 @@ export function hasConfirmedFamilyResponsibility(accountBalanceCents: number, ..
       && fields.familyResponsibilityBalanceCents === accountBalanceCents
       && fields.familyResponsibilityConfirmationSourceSha256 === GARLAND_ACCOUNT_REFLECTION_SOURCE_SHA256
       && fields.familyResponsibilityAuthorization === GARLAND_PARENT_VISIBILITY_AUTHORIZATION
+      && typeof fields.familyResponsibilityConfirmationLedgerEntryId === "string"
+      && fields.familyResponsibilityConfirmationLedgerEntryId === latestLedgerEntryId
       && fields.autopayActivated === false
     ) {
       return true;

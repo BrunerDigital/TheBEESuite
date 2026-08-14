@@ -2431,6 +2431,7 @@ async function renderLivePage(
     const parentBalanceVisibilityConfirmed = billingAccount
       ? hasConfirmedFamilyResponsibility(
           billingAccount.balanceCents,
+          latestLedgerEntry?.id ?? null,
           billingAccount.customFields,
           family?.customFields,
           ...(family?.children.map((child) => child.customFields) ?? []),

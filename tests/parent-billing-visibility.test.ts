@@ -34,10 +34,11 @@ test("an exact reviewed family-responsibility balance is parent visible", () => 
       familyResponsibilityBalanceCents: 5_200,
       familyResponsibilityConfirmationSourceSha256: "6c95575a1aa967606605904e24e29135ef533f0dd47a10f0aa811d22e2afe418",
       familyResponsibilityAuthorization: "user_requested_live_for_director_and_family",
+      familyResponsibilityConfirmationLedgerEntryId: "ledger-reviewed-balance",
       autopayActivated: false,
     },
   };
-  assert.equal(hasConfirmedFamilyResponsibility(5_200, reviewedEvidence), true);
+  assert.equal(hasConfirmedFamilyResponsibility(5_200, "ledger-reviewed-balance", reviewedEvidence), true);
   assert.equal(parentBalanceNeedsResponsibilityReview({
     accountBalanceCents: 5_200,
     agencyLedgerEntries: [],
@@ -48,14 +49,15 @@ test("an exact reviewed family-responsibility balance is parent visible", () => 
     agencyLedgerEntries: [],
     responsibilityEvidence: [{ tuitionPlanName: "CCMS COPAY" }, reviewedEvidence],
   }), true);
-  assert.equal(hasConfirmedFamilyResponsibility(5_300, reviewedEvidence), false);
-  assert.equal(hasConfirmedFamilyResponsibility(5_200, {
+  assert.equal(hasConfirmedFamilyResponsibility(5_300, "ledger-reviewed-balance", reviewedEvidence), false);
+  assert.equal(hasConfirmedFamilyResponsibility(5_200, "ledger-new-balance", reviewedEvidence), false);
+  assert.equal(hasConfirmedFamilyResponsibility(5_200, "ledger-reviewed-balance", {
     balanceReconciliation: {
       ...reviewedEvidence.balanceReconciliation,
       familyResponsibilityConfirmationSourceSha256: "unreviewed-source",
     },
   }), false);
-  assert.equal(hasConfirmedFamilyResponsibility(5_200, {
+  assert.equal(hasConfirmedFamilyResponsibility(5_200, "ledger-reviewed-balance", {
     balanceReconciliation: {
       ...reviewedEvidence.balanceReconciliation,
       familyResponsibilityAuthorization: "manual_edit",

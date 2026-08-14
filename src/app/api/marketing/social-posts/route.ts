@@ -65,7 +65,7 @@ async function POSTHandler(request: NextRequest) {
   const scheduledAtRaw = clean(body?.scheduledAt, 100);
   const scheduledAt = scheduledAtRaw ? new Date(scheduledAtRaw) : null;
   const scheduleValid = Boolean(scheduledAt && !Number.isNaN(scheduledAt.getTime()) && scheduledAt.getTime() > Date.now());
-  const mode = body?.mode === "schedule" ? "schedule" : body?.mode === "draft" ? "draft" : "publish";
+  const mode = body?.mode === "schedule" ? "schedule" : body?.mode === "draft" ? "draft" : body?.mode === "approval" ? "approval" : "publish";
 
   if (!text) return NextResponse.json({ ok: false, error: "Post text is required." }, { status: 400 });
   if (!channels.length) return NextResponse.json({ ok: false, error: "Choose at least one connected social profile." }, { status: 400 });
@@ -84,14 +84,26 @@ async function POSTHandler(request: NextRequest) {
       type: "social_post",
       body: text,
       audience: { label: `${center.name}: ${channels.join(", ")}`, channels, centerId: center.id, mediaUrl: mediaUrl || null, linkUrl: linkUrl || null } as Prisma.InputJsonObject,
-      status: mode === "draft" ? "draft" : mode === "schedule" ? "scheduled" : "publishing",
+      status: mode === "draft" ? "draft" : mode === "schedule" ? "scheduled" : mode === "approval" ? "needs_approval" : "publishing",
       scheduledAt: mode === "schedule" ? scheduledAt : null,
-      metrics: { platform: "social", channels, createdFrom: "social_publisher", publishResults: [] },
+      metrics: {
+        platform: "social",
+        channels,
+        createdFrom: "social_publisher",
+        publishResults: [],
+        ...(mode === "approval" ? { approval: { status: "pending", requestedById: user.id, requestedAt: new Date().toISOString() } } : {}),
+      },
     },
   });
 
   if (mode !== "publish") {
-    await writeAuditLog(user, { action: `social.post.${mode === "draft" ? "drafted" : "scheduled"}`, resource: "Campaign", resourceId: campaign.id, metadata: { centerId: center.id, channels, scheduledAt: scheduledAt?.toISOString() ?? null } });
+    await writeAuditLog(user, {
+      action: `social.post.${mode === "draft" ? "drafted" : mode === "approval" ? "approval_requested" : "scheduled"}`,
+      resource: "Campaign",
+      resourceId: campaign.id,
+      centerId: center.id,
+      metadata: { centerId: center.id, channels, scheduledAt: scheduledAt?.toISOString() ?? null },
+    });
     return NextResponse.json({ ok: true, campaignId: campaign.id, status: campaign.status, results: [] });
   }
 

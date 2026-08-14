@@ -3084,11 +3084,23 @@ async function renderLivePage(
           ],
         };
     const marketingScope = integrationScopeForUser(user, "meta_ads");
-    const [campaigns, total, active, draft, paused, scheduled, sent, integrationRecords, integrationCredentials, engagementCenters] = await Promise.all([
+    const [campaigns, pendingSocialApprovals, total, active, draft, paused, scheduled, sent, integrationRecords, integrationCredentials, engagementCenters] = await Promise.all([
       prisma.campaign.findMany({
         where: campaignWhere,
         orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
         take: 100,
+        include: {
+          brand: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      }),
+      prisma.campaign.findMany({
+        where: { ...campaignWhere, type: "social_post", status: "needs_approval" },
+        orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+        take: 250,
         include: {
           brand: {
             select: {
@@ -3146,6 +3158,11 @@ async function renderLivePage(
           }),
         ])
       : [[], []] as const;
+    const campaignIds = new Set(campaigns.map((campaign) => campaign.id));
+    const campaignRows = [
+      ...campaigns,
+      ...pendingSocialApprovals.filter((campaign) => !campaignIds.has(campaign.id)),
+    ];
 
     const setupViews = buildIntegrationSetupViews(integrationRecords, process.env, integrationCredentials);
     const marketingConnections = setupViews
@@ -3205,7 +3222,7 @@ async function renderLivePage(
     });
 
     return <CampaignsPage data={{
-      campaigns,
+      campaigns: campaignRows,
       marketingConnections,
       socialConnections,
       engagementCenters: engagementCenters.map((center) => ({
@@ -3215,6 +3232,7 @@ async function renderLivePage(
         timeZone: readCenterLocationTimeZone(center),
       })),
       initialEngagementCenterId: user.primaryCenterId ?? engagementCenters[0]?.id ?? null,
+      canApproveSocialPosts: canManageExecutiveMarketingPortfolio(user.role),
       stats: { total, active, draft, paused, scheduled, sent },
     }} />;
   }

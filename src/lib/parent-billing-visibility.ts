@@ -34,6 +34,23 @@ export function hasSubsidyResponsibilityEvidence(...values: unknown[]) {
   return values.some(visit);
 }
 
+export function hasConfirmedFamilyResponsibility(accountBalanceCents: number, ...values: unknown[]) {
+  const visit = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.some(visit);
+    if (!value || typeof value !== "object") return false;
+    const fields = value as Record<string, unknown>;
+    if (
+      fields.familyResponsibilityConfirmed === true
+      && Number.isInteger(fields.familyResponsibilityBalanceCents)
+      && fields.familyResponsibilityBalanceCents === accountBalanceCents
+    ) {
+      return true;
+    }
+    return Object.values(fields).some(visit);
+  };
+  return values.some(visit);
+}
+
 export function parentBalanceNeedsResponsibilityReview(input: {
   accountBalanceCents: number;
   agencyLedgerEntries: AgencyLedgerEntry[];
@@ -41,6 +58,7 @@ export function parentBalanceNeedsResponsibilityReview(input: {
 }) {
   return input.accountBalanceCents > 0
     && hasSubsidyResponsibilityEvidence(...input.responsibilityEvidence)
+    && !hasConfirmedFamilyResponsibility(input.accountBalanceCents, ...input.responsibilityEvidence)
     && !input.agencyLedgerEntries.some(isAgencyOnlyLedgerEntry);
 }
 

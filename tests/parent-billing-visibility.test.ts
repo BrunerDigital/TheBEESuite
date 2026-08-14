@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  hasConfirmedFamilyResponsibility,
   hasSubsidyResponsibilityEvidence,
   isAgencyOnlyLedgerEntry,
   isParentVisiblePayment,
@@ -24,6 +25,27 @@ test("subsidy evidence without a separated agency ledger fails closed", () => {
     agencyLedgerEntries: [{ type: "agency_receivable", sourceSystem: "bee_suite", amountCents: 120_000 }],
     responsibilityEvidence: [{ tags: ["subsidy"] }],
   }), false);
+});
+
+test("an exact reviewed family-responsibility balance is parent visible", () => {
+  const reviewedEvidence = {
+    balanceReconciliation: {
+      familyResponsibilityConfirmed: true,
+      familyResponsibilityBalanceCents: 5_200,
+      sourceSha256: "reviewed-source",
+    },
+  };
+  assert.equal(hasConfirmedFamilyResponsibility(5_200, reviewedEvidence), true);
+  assert.equal(parentBalanceNeedsResponsibilityReview({
+    accountBalanceCents: 5_200,
+    agencyLedgerEntries: [],
+    responsibilityEvidence: [{ tuitionPlanName: "CCMS COPAY" }, reviewedEvidence],
+  }), false);
+  assert.equal(parentBalanceNeedsResponsibilityReview({
+    accountBalanceCents: 5_300,
+    agencyLedgerEntries: [],
+    responsibilityEvidence: [{ tuitionPlanName: "CCMS COPAY" }, reviewedEvidence],
+  }), true);
 });
 
 test("parent billing balance excludes the agency receivable while it remains unpaid", () => {

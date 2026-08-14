@@ -30,7 +30,7 @@ test("billing action labels name the real action and hide internal identifiers",
 
   assert.match(invoiceActions, /Process authorized autopay/);
   assert.match(invoiceActions, /Pay with Link/);
-  assert.match(autopayActions, /Process eligible invoices/);
+  assert.match(autopayActions, /Process all reviewed balances/);
   assert.match(autopayActions, /Account credit is applied first/);
   assert.match(autopayActions, /result\.reason \?\? "—"/);
   assert.match(printActions, /<th>Payment reference<\/th>/);

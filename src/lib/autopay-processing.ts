@@ -74,6 +74,7 @@ export type AutopayRunSummary = {
   failed: number;
   skipped: number;
   totalCents: number;
+  hasMore: boolean;
   results: AutopayRunInvoiceResult[];
 };
 
@@ -167,10 +168,10 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     invoiceWhere.billingAccount = { family: { is: { centerId: { in: centerIds } } } };
   }
 
-  const invoices = await prisma.invoice.findMany({
+  const invoiceCandidates = await prisma.invoice.findMany({
     where: invoiceWhere,
     orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
-    take: limit,
+    take: limit + 1,
     include: {
       billingAccount: {
         select: {
@@ -203,6 +204,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       },
     },
   });
+  const hasMore = invoiceCandidates.length > limit;
+  const invoices = invoiceCandidates.slice(0, limit);
 
   const billingAccountIds = unique(invoices.map((invoice) => invoice.billingAccountId));
   const familyCenterIds = unique(invoices.map((invoice) => invoice.billingAccount.family.centerId));
@@ -850,6 +853,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     failed,
     skipped,
     totalCents,
+    hasMore,
     results,
   };
 }

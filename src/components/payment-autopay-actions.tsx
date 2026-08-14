@@ -32,6 +32,7 @@ type AutopaySummary = {
   failed?: number;
   skipped?: number;
   totalCents?: number;
+  hasMore?: boolean;
   results?: AutopayResult[];
 };
 
@@ -61,7 +62,12 @@ export function PaymentAutopayActions() {
 
   function runAutopay(dryRun: boolean) {
     if (!dryRun) {
-      const confirmed = window.confirm("Process up to 50 eligible due invoices now? Account credit is applied first; any remaining balance is charged to each family's authorized autopay payment method.");
+      const eligible = summary?.results?.filter((result) => result.status === "would_charge") ?? [];
+      if (!summary?.dryRun || !eligible.length) {
+        setError("Review eligible family balances before processing autopay.");
+        return;
+      }
+      const confirmed = window.confirm(`Process autopay for ${eligible.length} enabled ${eligible.length === 1 ? "family balance" : "family balances"} totaling ${money(summary.totalCents)}? Account credit is applied first; only the remaining reviewed amounts are submitted to the authorized payment methods.`);
       if (!confirmed) return;
     }
 
@@ -70,7 +76,16 @@ export function PaymentAutopayActions() {
       const response = await fetch("/api/billing/autopay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dryRun, limit: 50 }),
+        body: JSON.stringify({
+          dryRun,
+          limit: 100,
+          reviewedInvoices: dryRun
+            ? undefined
+            : summary?.results?.filter((result) => result.status === "would_charge").map((result) => ({
+                invoiceId: result.invoiceId,
+                amountCents: result.amountCents,
+              })),
+        }),
       });
       const json = await response.json().catch(() => null) as AutopaySummary | null;
       if (!response.ok || !json?.ok) {
@@ -81,7 +96,8 @@ export function PaymentAutopayActions() {
     });
   }
 
-  const visibleResults = summary?.results?.slice(0, 12) ?? [];
+  const visibleResults = summary?.results ?? [];
+  const readyToProcess = Boolean(summary?.dryRun && summary.wouldCharge);
 
   return (
     <Card className="glass-panel">
@@ -98,9 +114,9 @@ export function PaymentAutopayActions() {
               <Search data-icon="inline-start" />
               Review due invoices
             </Button>
-            <Button disabled={isPending} onClick={() => runAutopay(false)}>
+            <Button disabled={isPending || !readyToProcess} onClick={() => runAutopay(false)}>
               <Play data-icon="inline-start" />
-              Process eligible invoices
+              Process all reviewed balances
             </Button>
           </div>
         </div>
@@ -120,6 +136,13 @@ export function PaymentAutopayActions() {
             <AlertDescription>
               Reviewed {summary.scanned ?? 0} invoices. {summary.dryRun ? summary.wouldCharge ?? 0 : (summary.paid ?? 0) + (summary.processing ?? 0)} {summary.dryRun ? "eligible" : "processed"} for {money(summary.totalCents)}. {summary.paid ?? 0} paid; {summary.processing ?? 0} processing; {summary.skipped ?? 0} skipped; {summary.failed ?? 0} failed.
             </AlertDescription>
+          </Alert>
+        ) : null}
+        {summary?.hasMore ? (
+          <Alert variant="destructive">
+            <AlertCircle className="size-4" />
+            <AlertTitle>Review is larger than one safe batch</AlertTitle>
+            <AlertDescription>More than 100 due invoices were found. Process the reviewed batch, then review again for the remaining balances.</AlertDescription>
           </Alert>
         ) : null}
         {visibleResults.length ? (

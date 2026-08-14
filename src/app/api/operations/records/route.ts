@@ -565,7 +565,22 @@ async function POSTHandler(request: NextRequest) {
       const guard = scopedUpdateGuard({ entity: "Family", expectedScopeId: centerId, actualScopeId: existing?.centerId, scopeLabel: "center" });
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
-    result = id ? await prisma.family.update({ where: { id }, data }) : await prisma.family.create({ data });
+    result = await prisma.$transaction(async (tx) => {
+      const family = id
+        ? await tx.family.update({ where: { id }, data })
+        : await tx.family.create({ data });
+
+      // Every family created in the director workspace must be immediately usable
+      // in Billing. Older manually entered families can be repaired by saving their
+      // profile again without changing balances, invoices, or payment state.
+      await tx.billingAccount.upsert({
+        where: { familyId: family.id },
+        update: {},
+        create: { familyId: family.id, balanceCents: 0 },
+      });
+
+      return family;
+    });
   } else if (entity === "familyMerge") {
     const primaryFamilyId = clean(body.primaryFamilyId) || clean(body.familyId);
     const duplicateFamilyId = clean(body.duplicateFamilyId) || clean(body.relatedId);

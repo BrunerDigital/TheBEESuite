@@ -159,9 +159,12 @@ Listen for these Stripe events:
 checkout.session.completed
 checkout.session.async_payment_succeeded
 checkout.session.async_payment_failed
+payout.created
 account.updated
 v2.core.account[requirements].updated
 ```
+
+Subscribe the live Connect destination to `payout.created`; platform-only webhook delivery is insufficient for connected-school payouts. Before removing the Stripe-managed payout text, confirm that production Twilio credentials are configured, the saved school payout contact is correct, and a controlled delivery/status-callback check succeeds.
 
 New customer payout workflow:
 

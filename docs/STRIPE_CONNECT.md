@@ -67,6 +67,7 @@ customer.subscription.updated
 customer.subscription.deleted
 charge.refunded
 charge.dispute.created
+payout.created
 account.updated
 v2.core.account.updated
 v2.core.account[requirements].updated
@@ -86,8 +87,11 @@ checkout.session.expired
 payment_intent.payment_failed
 charge.refunded
 charge.dispute.created
+payout.created
 account.updated
 ```
+
+`payout.created` must be enabled on the live Connect destination that sends events from connected accounts. The BEE Suite uses it to send the saved payout contact a branded Twilio SMS with an authenticated `https://thebeesuite.io/payouts` link. Confirm Twilio production credentials and delivery callbacks before disabling Stripe-managed payout texts; otherwise payout alerts can be duplicated or skipped.
 
 ## Fee Configuration
 

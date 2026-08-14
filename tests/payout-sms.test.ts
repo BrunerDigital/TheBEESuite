@@ -6,6 +6,7 @@ import {
   beeSuitePayoutSmsBody,
   formatPayoutAmount,
   payoutSmsRecipient,
+  sendPayoutSmsSafely,
 } from "../src/lib/payout-sms";
 
 test("payout SMS uses BEE Suite branding and a canonical BEE Suite link", () => {
@@ -40,6 +41,19 @@ test("payout SMS goes only to the explicitly saved payout contact", () => {
   assert.equal(payoutSmsRecipient(null), null);
 });
 
+test("payout SMS network exceptions become retryable failed results", async () => {
+  const result = await sendPayoutSmsSafely(async () => {
+    throw new Error("network timeout");
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    configured: true,
+    provider: "twilio",
+    error: "Twilio request failed before receiving a response.",
+  });
+});
+
 test("BEE Suite payout link authenticates, authorizes the school, and creates the Stripe link only after access checks", async () => {
   const route = await readFile("src/app/payouts/route.ts", "utf8");
   const handler = route.slice(route.indexOf("async function GETHandler"));
@@ -64,5 +78,6 @@ test("payout webhook sends only live, exactly mapped events and records delivery
   assert.match(handler, /matchedTenantId !== tenantId/);
   assert.match(handler, /payoutSmsRecipient\(center\.customFields\)/);
   assert.match(handler, /purpose: "payout_notification_sms"/);
+  assert.match(handler, /sendPayoutSmsSafely\(\(\) => sendSms/);
   assert.match(handler, /stripe-payout-created:\$\{event\.id\}:\$\{center\.id\}/);
 });

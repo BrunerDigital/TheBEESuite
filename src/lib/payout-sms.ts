@@ -1,4 +1,5 @@
 import { securePublicAppUrlForPath } from "@/lib/public-app-url";
+import type { IntegrationSendResult } from "@/lib/integrations";
 
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -47,4 +48,17 @@ export function beeSuitePayoutSmsBody({
   if (!amount || !normalizedCenterId) return null;
 
   return `Hello! Your ${amount} payout from The BEE Suite is on its way. View payout details: ${beeSuitePayoutDetailsUrl(normalizedCenterId)}`;
+}
+
+export async function sendPayoutSmsSafely(send: () => Promise<IntegrationSendResult>): Promise<IntegrationSendResult> {
+  try {
+    return await send();
+  } catch {
+    return {
+      ok: false,
+      configured: true,
+      provider: "twilio",
+      error: "Twilio request failed before receiving a response.",
+    };
+  }
 }

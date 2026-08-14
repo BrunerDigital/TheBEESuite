@@ -92,10 +92,13 @@ customer.subscription.updated
 customer.subscription.deleted
 charge.refunded
 charge.dispute.created
+payout.created
 account.updated
 v2.core.account.updated
 v2.core.account[requirements].updated
 ```
+
+Enable `payout.created` on the live Connect destination for connected-account events. This event drives the branded BEE Suite payout SMS; it is not supplied by the platform-only `Your account` destination. Verify the Twilio sender and status callback first, then disable the overlapping Stripe-managed payout text in the connected account notification settings so recipients receive one alert.
 
 Do not assume those events share one destination or signing secret. Each Stripe destination has a unique secret, including destinations with the same URL. Put the live `Your account` destination secret in `STRIPE_PLATFORM_WEBHOOK_SECRET`. `STRIPE_WEBHOOK_SECRET` remains a legacy compatibility candidate. A tenant integration credential is valid only when it represents an explicitly inventoried tenant/Connect destination; it is not a connected account's API key and it is not interchangeable with a CLI listener secret. After any Vercel Production environment change, create a new production deployment because existing deployments retain their previous environment values.
 

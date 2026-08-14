@@ -11,7 +11,7 @@ import {
 } from "@/lib/integrations";
 import { recordCommunicationSmsDeliveryAttempt } from "@/lib/integration-deliveries";
 import { paymentMethodSetupExpirationPatch } from "@/lib/payment-method-management";
-import { beeSuitePayoutSmsBody, payoutSmsRecipient } from "@/lib/payout-sms";
+import { beeSuitePayoutSmsBody, payoutSmsRecipient, sendPayoutSmsSafely } from "@/lib/payout-sms";
 import { prisma } from "@/lib/prisma";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
@@ -892,7 +892,7 @@ async function handlePayoutCreated(
     await recordStripeWebhookEvent(tx, event);
   });
 
-  const result = await sendSms({ to, body, statusCallbackUrl, tenantId });
+  const result = await sendPayoutSmsSafely(() => sendSms({ to, body, statusCallbackUrl, tenantId }));
   await recordCommunicationSmsDeliveryAttempt({
     tenantId,
     centerId: center.id,

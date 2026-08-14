@@ -69,7 +69,9 @@ test("BEE Suite payout link authenticates, authorizes the school, and creates th
   assert.ok(retrieve < binding && binding < link);
   assert.match(route, /requiresPasswordResetGate\(user\)/);
   assert.match(route, /canManageBilling\(user\)[\s\S]*canManageOperations\(user\)/);
-  assert.match(route, /retrieved\.account\.dashboard !== "full"/);
+  assert.match(route, /dashboardMode === "full"/);
+  assert.match(route, /dashboardMode === "express"/);
+  assert.match(route, /dashboardMode \|\| "unknown"/);
   assert.match(route, /destination = "https:\/\/dashboard\.stripe\.com\/"/);
   assert.match(route, /Cache-Control[\s\S]*no-store/);
 });

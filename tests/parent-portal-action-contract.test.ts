@@ -51,7 +51,7 @@ test("parent billing and setup actions resolve one linked family before mutation
   ]) {
     const route = readFileSync(routePath, "utf8");
     assert.match(route, /getCurrentUser\(\)/, routePath);
-    assert.match(route, /getParentPortalFamilyScope\(user\.id\)/, routePath);
+    assert.match(route, /getParentPortalFamilyScope\(user\.id,/, routePath);
   }
 });
 

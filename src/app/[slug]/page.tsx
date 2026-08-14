@@ -1981,12 +1981,6 @@ async function renderLivePage(
 
     const parentPortalView = normalizeParentPortalView(firstSearchParam(searchParams.view));
     const parentFamilySection = firstSearchParam(searchParams.section) || "children";
-    const parentFamilyScope = user.role === UserRole.PARENT_GUARDIAN
-      ? await getParentPortalFamilyScope(user.id)
-      : null;
-    if (parentFamilyScope && !parentFamilyScope.ok && parentFamilyScope.reason === "multiple_linked_families") {
-      return <ParentPortalAccessBlocked />;
-    }
     const requestedParentFamilyId = firstSearchParam(searchParams.familyId) || null;
     const requestedLedgerPage = boundedPage(searchParams.ledgerPage);
     const linkedParentFamilies = user.role === UserRole.PARENT_GUARDIAN
@@ -2007,6 +2001,12 @@ async function renderLivePage(
     const selectedParentFamilyId = requestedParentFamilyId && linkedParentFamilies.some((item) => item.id === requestedParentFamilyId)
       ? requestedParentFamilyId
       : linkedParentFamilies[0]?.id ?? null;
+    const parentFamilyScope = user.role === UserRole.PARENT_GUARDIAN
+      ? await getParentPortalFamilyScope(user.id, selectedParentFamilyId)
+      : null;
+    if (parentFamilyScope && !parentFamilyScope.ok) {
+      return <ParentPortalAccessBlocked />;
+    }
     const family = await prisma.family.findFirst({
       where: user.role === "PARENT_GUARDIAN"
         ? { ...parentPortalFamilyScopeWhere({ userId: user.id, requestedFamilyId: selectedParentFamilyId }), children: { some: currentlyEnrolledChildWhere() } }

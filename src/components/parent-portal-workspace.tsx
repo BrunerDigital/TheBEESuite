@@ -837,6 +837,10 @@ function ParentPortalWorkspaceView({
 
   function saveTuitionCadence(child: Child) {
     if (previewOnly()) return;
+    if (!family) {
+      setError("Choose a linked family before changing the billing cycle.");
+      return;
+    }
     if (child.tuitionAssignment?.cadence === "monthly") {
       setError("Monthly tuition timing is managed by the school.");
       return;
@@ -852,7 +856,7 @@ function ParentPortalWorkspaceView({
       const response = await parentPortalRequest("/api/parent/tuition-cadence", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ childId: child.id, billingCadence }),
+        body: JSON.stringify({ childId: child.id, familyId: family.id, billingCadence }),
       });
       const result = (await response.json().catch(() => null)) as {
         error?: string;
@@ -1407,6 +1411,9 @@ function ParentPortalWorkspaceView({
 
   function buyUniform(paymentMethodCategory: "ach" | "card" | "link_bank") {
     if (previewOnly()) return;
+    if (!family) {
+      return showError("Choose a linked family before purchasing a uniform.");
+    }
     if (checkoutBlocked) {
       return showError(
         checkoutBlockedMessage,
@@ -1420,6 +1427,7 @@ function ParentPortalWorkspaceView({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          familyId: family.id,
           productId: selectedUniformProduct.productId,
           purchaseOption: selectedUniformProduct.purchaseOption,
           quantity: uniformQuantity,

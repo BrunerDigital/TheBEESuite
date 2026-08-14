@@ -12,7 +12,7 @@ test("director and parent four-week choices remain scoped and do not create open
   assert.match(assignment, /billingCadence/);
   assert.match(workbench, /Every 4 weeks · 4 weeks ahead/);
   assert.match(portal, /api\/parent\/tuition-cadence/);
-  assert.match(parentRoute, /getParentPortalFamilyScope\(user\.id\)/);
+  assert.match(parentRoute, /getParentPortalFamilyScope\(user\.id, familyId \|\| null\)/);
   assert.match(parentRoute, /familyId: scope\.familyId/);
   assert.match(parentRoute, /tuitionBillingEnabled !== true/);
   assert.match(parentRoute, /firstUncoveredTuitionBillingPeriod/);

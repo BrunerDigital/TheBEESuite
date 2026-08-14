@@ -32,13 +32,8 @@ async function GETHandler() {
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parents and guardians can manage kiosk credentials here." }, { status: 403 });
   }
-  const familyScope = await getParentPortalFamilyScope(user.id);
-  if (!familyScope.ok) {
-    return NextResponse.json({ ok: false, error: "Your family link needs review before kiosk credentials can be managed." }, { status: 409 });
-  }
-
   const guardians = await prisma.guardian.findMany({
-    where: { userId: user.id, familyId: familyScope.familyId },
+    where: { userId: user.id },
     orderBy: { fullName: "asc" },
     include: {
       family: { select: { id: true, name: true, centerId: true } },
@@ -71,16 +66,16 @@ async function POSTHandler(request: NextRequest) {
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parents and guardians can manage kiosk credentials here." }, { status: 403 });
   }
-  const familyScope = await getParentPortalFamilyScope(user.id);
-  if (!familyScope.ok) {
-    return NextResponse.json({ ok: false, error: "Your family link needs review before kiosk credentials can be managed." }, { status: 409 });
-  }
-
   const body = await request.json().catch(() => ({}));
   const guardianId = clean(body.guardianId);
+  const familyId = clean(body.familyId);
   const pin = normalizePin(body.pin);
   if (!guardianId || !pin) {
     return NextResponse.json({ ok: false, error: "Guardian ID and a 4 digit PIN are required." }, { status: 400 });
+  }
+  const familyScope = await getParentPortalFamilyScope(user.id, familyId || null);
+  if (!familyScope.ok) {
+    return NextResponse.json({ ok: false, error: "Your family link needs review before kiosk credentials can be managed." }, { status: 409 });
   }
   const limited = checkRateLimit({
     key: `parent-kiosk-credential:${user.id}:${requestIp(request.headers)}`,

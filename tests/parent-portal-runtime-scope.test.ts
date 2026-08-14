@@ -48,6 +48,38 @@ test("parent portal runtime scope still fails closed across two current families
   });
 });
 
+test("parent portal runtime scope permits an explicitly selected current linked family", () => {
+  assert.deepEqual(resolveParentPortalFamilyScope([
+    { id: "guardian_1", familyId: "family_1", currentChildCount: 1 },
+    { id: "guardian_2", familyId: "family_2", currentChildCount: 2 },
+  ], "family_2"), {
+    ok: true,
+    familyId: "family_2",
+    guardianIds: ["guardian_2"],
+  });
+});
+
+test("parent portal runtime scope rejects an explicitly selected unlinked family", () => {
+  assert.deepEqual(resolveParentPortalFamilyScope([
+    { id: "guardian_1", familyId: "family_1", currentChildCount: 1 },
+    { id: "guardian_2", familyId: "family_2", currentChildCount: 2 },
+  ], "family_other"), {
+    ok: false,
+    reason: "requested_family_not_linked",
+    familyIds: ["family_1", "family_2"],
+  });
+});
+
+test("parent portal runtime scope never substitutes the only linked family for an unlinked request", () => {
+  assert.deepEqual(resolveParentPortalFamilyScope([
+    { id: "guardian_1", familyId: "family_1", currentChildCount: 1 },
+  ], "family_other"), {
+    ok: false,
+    reason: "requested_family_not_linked",
+    familyIds: ["family_1"],
+  });
+});
+
 test("every parent setup and billing mutation enforces unambiguous family scope", () => {
   for (const path of [
     "src/app/api/parent/setup/route.ts",
@@ -57,13 +89,13 @@ test("every parent setup and billing mutation enforces unambiguous family scope"
     "src/app/api/billing/family-payment/route.ts",
     "src/app/api/billing/payment-method-session/route.ts",
   ]) {
-    assert.match(readFileSync(path, "utf8"), /getParentPortalFamilyScope\(user\.id\)/, path);
+    assert.match(readFileSync(path, "utf8"), /getParentPortalFamilyScope\(user\.id,/, path);
   }
 });
 
-test("parent setup page uses current-family scope and excludes historical family rows", () => {
+test("parent setup page includes each current linked family and excludes historical family rows", () => {
   const page = readFileSync("src/app/parent-portal/setup/page.tsx", "utf8");
-  assert.match(page, /getParentPortalFamilyScope\(user\.id\)/);
-  assert.match(page, /guardians\.filter\(\(guardian\) => guardian\.familyId === familyScope\.familyId\)/);
+  assert.match(page, /currentGuardians = guardians\.filter/);
+  assert.match(page, /currentGuardians\.length \? currentGuardians : guardians/);
   assert.doesNotMatch(page, /resolveParentPortalFamilyScope\(guardians\)/);
 });

@@ -104,7 +104,25 @@ test("social post and analytics APIs resolve school scope before provider access
   assert.match(analyticsRoute, /centerId: center\.id/);
   assert.match(analyticsRoute, /metadata: \{ centerId: center\.id, provider/);
   assert.match(approvalRoute, /canManageExecutiveMarketingPortfolio\(user\.role\)/);
+  assert.match(approvalRoute, /body\?\.action !== "approve" && body\?\.action !== "request_changes"/);
+  assert.match(approvalRoute, /campaign\.status !== "needs_approval"/);
+  assert.match(approvalRoute, /updateMany\(\{\s+where: \{ id: campaign\.id, tenantId: user\.tenantId, type: "social_post", status: "needs_approval" \}/);
   assert.match(approvalRoute, /resolveMarketingCenter\(user, centerId\)/);
   assert.match(approvalRoute, /social\.post\.approved_scheduled/);
   assert.match(centerAccess, /organization: \{ tenantId: user\.tenantId \}/);
+});
+
+test("social workflow keeps approvals visible and refreshed", () => {
+  const page = readFileSync(
+    new URL("../src/app/[slug]/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const component = readFileSync(
+    new URL("../src/components/social-publishing-studio.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(page, /pendingSocialApprovals/);
+  assert.match(page, /status: "needs_approval"/);
+  assert.match(page, /campaigns: campaignRows/);
+  assert.match(component, /initialCampaigns\.map\(\(campaign\) => \(\{ \.\.\.campaign, \.\.\.reviewedCampaigns\[campaign\.id\] \}\)\)/);
 });

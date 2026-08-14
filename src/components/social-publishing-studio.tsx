@@ -118,7 +118,7 @@ export function SocialPublishingStudio({
   const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const [profiles, setProfiles] = useState(connections);
-  const [campaigns, setCampaigns] = useState(initialCampaigns);
+  const [reviewedCampaigns, setReviewedCampaigns] = useState<Record<string, Partial<SocialCampaignRow>>>({});
   const initialSelectedCenter = centers.find((center) => center.id === initialCenterId) ?? centers[0] ?? null;
   const [centerId, setCenterId] = useState(initialSelectedCenter?.id || "");
   const selectedCenter = centers.find((center) => center.id === centerId) ?? null;
@@ -136,6 +136,10 @@ export function SocialPublishingStudio({
   const [error, setError] = useState("");
   const [pendingAction, setPendingAction] = useState<"draft" | "schedule" | "publish" | "approval" | `approve:${string}` | `changes:${string}` | `sync:${string}` | null>(null);
   const [isPending, startTransition] = useTransition();
+  const campaigns = useMemo(
+    () => initialCampaigns.map((campaign) => ({ ...campaign, ...reviewedCampaigns[campaign.id] })),
+    [initialCampaigns, reviewedCampaigns],
+  );
   const selectedCampaigns = useMemo(
     () => campaigns.filter((campaign) => campaign.type === "social_post" && campaignCenterId(campaign) === centerId),
     [campaigns, centerId],
@@ -250,9 +254,10 @@ export function SocialPublishingStudio({
           setError(json?.error || "The social post could not be reviewed.");
           return;
         }
-        setCampaigns((current) => current.map((item) => item.id === campaign.id
-          ? { ...item, status: json?.status ?? item.status, scheduledAt: json?.scheduledAt ?? item.scheduledAt }
-          : item));
+        setReviewedCampaigns((current) => ({
+          ...current,
+          [campaign.id]: { status: json?.status ?? campaign.status, scheduledAt: json?.scheduledAt ?? campaign.scheduledAt },
+        }));
         setMessage(action === "approve" ? "Post approved and scheduled." : "Changes requested.");
         router.refresh();
       } finally {

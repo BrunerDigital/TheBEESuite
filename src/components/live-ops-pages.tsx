@@ -57,6 +57,7 @@ import {
   type BillingWorkbenchProduct,
   type BillingWorkbenchTuitionPlan,
 } from "@/components/billing-workbench";
+import { AgencySubsidyWorkspace } from "@/components/agency-subsidy-workspace";
 import {
   PaymentReceiptPrintButton,
   type BillingReceiptSchool,
@@ -5149,6 +5150,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         <StatCard label="Paid invoices" value={data.stats.paid} />
         <StatCard label="Current-family outstanding" value={money(data.stats.outstandingCents)} />
       </div>
+      <AgencySubsidyWorkspace centers={data.workbench.centers.map((center) => ({ id: center.id, name: center.name, state: center.state }))} />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle as="h2">Recurring tuition</CardTitle>

@@ -3662,6 +3662,7 @@ async function renderLivePage(
               id: center.id,
               name: center.name,
               crmLocationId: center.crmLocationId,
+              state: center.state,
               classrooms: billingClassroomsByCenter.get(center.id) ?? [],
               isMissHoneysLearningCenter: isMissHoneysBrandText(center.name),
               dashboardOptions: dashboardOptionsFromCustomFields(center.customFields),

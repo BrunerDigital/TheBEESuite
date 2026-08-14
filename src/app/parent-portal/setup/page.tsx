@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ParentPortalSetupForm } from "@/components/parent-portal-setup-form";
-import { ParentPortalAccessBlocked } from "@/components/parent-portal-access-blocked";
 import { getCurrentUser, isParentGuardian, requiresPasswordResetGate } from "@/lib/auth";
-import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
+import { getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere, selectParentPortalCurrentGuardians } from "@/lib/parent-portal-family-scope";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -20,13 +20,9 @@ export default async function ParentPortalSetupPage() {
     redirect("/dashboard");
   }
 
-  const familyScope = await getParentPortalFamilyScope(user.id);
-  if (!familyScope.ok && familyScope.reason === "multiple_linked_families") {
-    return <AppShell currentUser={user}><ParentPortalAccessBlocked /></AppShell>;
-  }
-
+  const tenantCenterIds = await getParentPortalTenantCenterIds(user.tenantId);
   const guardians = await prisma.guardian.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, family: parentPortalTenantFamilyWhere(tenantCenterIds) },
     orderBy: { fullName: "asc" },
     include: {
       family: {
@@ -38,13 +34,14 @@ export default async function ParentPortalSetupPage() {
             select: { id: true, fullName: true },
             orderBy: { fullName: "asc" },
           },
+          _count: {
+            select: { children: { where: currentlyEnrolledChildWhere() } },
+          },
         },
       },
     },
   });
-  const scopedGuardians = familyScope.ok
-    ? guardians.filter((guardian) => guardian.familyId === familyScope.familyId)
-    : guardians;
+  const scopedGuardians = selectParentPortalCurrentGuardians(guardians);
   const centerIds = Array.from(new Set(scopedGuardians.map((guardian) => guardian.family.centerId).filter((value): value is string => Boolean(value))));
   const centers = centerIds.length
     ? await prisma.center.findMany({
@@ -56,6 +53,7 @@ export default async function ParentPortalSetupPage() {
 
   const setupGuardians = scopedGuardians.map((guardian) => ({
     id: guardian.id,
+    familyId: guardian.familyId,
     fullName: guardian.fullName,
     email: guardian.email,
     phone: guardian.phone,

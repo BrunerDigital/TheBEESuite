@@ -39,11 +39,6 @@ async function POSTHandler(request: NextRequest) {
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parent accounts can finish parent portal setup." }, { status: 403 });
   }
-  const familyScope = await getParentPortalFamilyScope(user.id);
-  if (!familyScope.ok) {
-    return NextResponse.json({ ok: false, error: "Your family link needs review before setup can continue." }, { status: 409 });
-  }
-
   const limited = await checkPersistentRateLimit({
     key: `parent-portal-setup:${user.id}:${requestIp(request.headers)}`,
     limit: 10,
@@ -58,6 +53,7 @@ async function POSTHandler(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const guardianId = clean(body.guardianId);
+  const familyId = clean(body.familyId);
   const fullName = clean(body.fullName);
   const phone = clean(body.phone);
   const relation = clean(body.relation) || "Parent/Guardian";
@@ -67,6 +63,10 @@ async function POSTHandler(request: NextRequest) {
 
   if (!guardianId) {
     return NextResponse.json({ ok: false, error: "Guardian profile is required." }, { status: 400 });
+  }
+  const familyScope = await getParentPortalFamilyScope(user.id, user.tenantId, familyId || null);
+  if (!familyScope.ok) {
+    return NextResponse.json({ ok: false, error: "Your family link needs review before setup can continue." }, { status: 409 });
   }
   if (!fullName) {
     return NextResponse.json({ ok: false, error: "Your full name is required." }, { status: 400 });

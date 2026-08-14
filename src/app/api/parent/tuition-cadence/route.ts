@@ -25,6 +25,7 @@ async function POSTHandler(request: NextRequest) {
 
   const body = objectValue(await request.json().catch(() => ({})));
   const childId = typeof body.childId === "string" ? body.childId.trim() : "";
+  const familyId = typeof body.familyId === "string" ? body.familyId.trim() : "";
   const requestedCadence = normalizeBillingCadence(body.billingCadence);
   const cadence = requestedCadence === FOUR_WEEK_TUITION_AUTOBILL_CADENCE
     ? FOUR_WEEK_TUITION_AUTOBILL_CADENCE
@@ -33,7 +34,7 @@ async function POSTHandler(request: NextRequest) {
       : null;
   if (!childId || !cadence) return NextResponse.json({ ok: false, error: "Child and billing cycle are required." }, { status: 400 });
 
-  const scope = await getParentPortalFamilyScope(user.id);
+  const scope = await getParentPortalFamilyScope(user.id, user.tenantId, familyId || null);
   if (!scope.ok) return NextResponse.json({ ok: false, error: "A single linked family is required." }, { status: 403 });
   const child = await prisma.child.findFirst({
     where: { id: childId, familyId: scope.familyId },

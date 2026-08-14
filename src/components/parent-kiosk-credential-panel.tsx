@@ -30,7 +30,7 @@ export function ParentKioskCredentialPanel({ initialCredentials, previewMode = f
     setPins((current) => ({ ...current, [guardianId]: value.replace(/\D/g, "").slice(0, 4) }));
   }
 
-  function savePin(guardianId: string) {
+  function savePin(guardianId: string, familyId: string) {
     if (previewMode) return;
     const pin = pins[guardianId] ?? "";
     if (pin.length !== 4) {
@@ -44,7 +44,7 @@ export function ParentKioskCredentialPanel({ initialCredentials, previewMode = f
         const response = await fetch("/api/parent/kiosk-credential", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ guardianId, pin }),
+          body: JSON.stringify({ guardianId, familyId, pin }),
         });
         const json = await response.json().catch(() => null) as {
           error?: string;
@@ -112,7 +112,7 @@ export function ParentKioskCredentialPanel({ initialCredentials, previewMode = f
                   className="rounded-lg border bg-background/40 p-3"
                   onSubmit={(event) => {
                     event.preventDefault();
-                    savePin(credential.guardianId);
+                    savePin(credential.guardianId, credential.familyId);
                   }}
                 >
                   <Label htmlFor={`parent-kiosk-pin-${credential.guardianId}`}>

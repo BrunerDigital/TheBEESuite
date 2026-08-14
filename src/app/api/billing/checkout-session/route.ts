@@ -140,13 +140,6 @@ async function POSTHandler(request: NextRequest) {
   if (!userCanManageBilling && !userIsParentGuardian) {
     return NextResponse.json({ ok: false, error: "Billing access is not allowed for this role." }, { status: 403 });
   }
-  const parentFamilyScope = userIsParentGuardian && !userCanManageBilling
-    ? await getParentPortalFamilyScope(user.id)
-    : null;
-  if (parentFamilyScope && !parentFamilyScope.ok) {
-    return NextResponse.json({ ok: false, error: "Your family link needs review before payment can continue." }, { status: 409 });
-  }
-
   const body = await request.json();
   const invoiceId = clean(body.invoiceId);
   const requestedPaymentMethodCategory = paymentMethodCategory(body.paymentMethodCategory || body.paymentMethod);
@@ -171,6 +164,12 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const { invoice, centerId } = access;
+  const parentFamilyScope = userIsParentGuardian && !userCanManageBilling
+    ? await getParentPortalFamilyScope(user.id, user.tenantId, invoice.billingAccount.family.id)
+    : null;
+  if (parentFamilyScope && !parentFamilyScope.ok) {
+    return NextResponse.json({ ok: false, error: "Your family link needs review before payment can continue." }, { status: 409 });
+  }
   if (parentFamilyScope?.ok && invoice.billingAccount.family.id !== parentFamilyScope.familyId) {
     return NextResponse.json({ ok: false, error: "You do not have access to this invoice." }, { status: 403 });
   }

@@ -88,7 +88,7 @@ import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
-import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import { getParentPortalFamilyScope, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
 import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
 import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
@@ -1982,18 +1982,22 @@ async function renderLivePage(
 
     const parentPortalView = normalizeParentPortalView(firstSearchParam(searchParams.view));
     const parentFamilySection = firstSearchParam(searchParams.section) || "children";
-    const parentFamilyScope = user.role === UserRole.PARENT_GUARDIAN
-      ? await getParentPortalFamilyScope(user.id)
-      : null;
-    if (parentFamilyScope && !parentFamilyScope.ok && parentFamilyScope.reason === "multiple_linked_families") {
-      return <ParentPortalAccessBlocked />;
-    }
     const requestedParentFamilyId = firstSearchParam(searchParams.familyId) || null;
     const requestedLedgerPage = boundedPage(searchParams.ledgerPage);
+    const requestedParentFamilyScope = user.role === UserRole.PARENT_GUARDIAN && requestedParentFamilyId
+      ? await getParentPortalFamilyScope(user.id, user.tenantId, requestedParentFamilyId)
+      : null;
+    if (requestedParentFamilyScope && !requestedParentFamilyScope.ok) {
+      return <ParentPortalAccessBlocked />;
+    }
+    const parentPortalTenantCenterIds = user.role === UserRole.PARENT_GUARDIAN
+      ? await getParentPortalTenantCenterIds(user.tenantId)
+      : [];
     const linkedParentFamilies = user.role === UserRole.PARENT_GUARDIAN
       ? await prisma.family.findMany({
           where: {
             ...parentPortalFamilyScopeWhere({ userId: user.id }),
+            ...parentPortalTenantFamilyWhere(parentPortalTenantCenterIds),
             children: { some: currentlyEnrolledChildWhere() },
           },
           orderBy: [{ name: "asc" }, { createdAt: "asc" }],
@@ -2008,6 +2012,12 @@ async function renderLivePage(
     const selectedParentFamilyId = requestedParentFamilyId && linkedParentFamilies.some((item) => item.id === requestedParentFamilyId)
       ? requestedParentFamilyId
       : linkedParentFamilies[0]?.id ?? null;
+    const parentFamilyScope = user.role === UserRole.PARENT_GUARDIAN
+      ? requestedParentFamilyScope ?? await getParentPortalFamilyScope(user.id, user.tenantId, selectedParentFamilyId)
+      : null;
+    if (parentFamilyScope && !parentFamilyScope.ok) {
+      return <ParentPortalAccessBlocked />;
+    }
     const family = await prisma.family.findFirst({
       where: user.role === "PARENT_GUARDIAN"
         ? { ...parentPortalFamilyScopeWhere({ userId: user.id, requestedFamilyId: selectedParentFamilyId }), children: { some: currentlyEnrolledChildWhere() } }

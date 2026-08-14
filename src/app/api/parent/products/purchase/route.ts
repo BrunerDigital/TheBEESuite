@@ -31,16 +31,16 @@ async function POSTHandler(request: NextRequest) {
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parent accounts can purchase parent portal products." }, { status: 403 });
   }
-  const familyScope = await getParentPortalFamilyScope(user.id);
-  if (!familyScope.ok) {
-    return NextResponse.json({ ok: false, error: "Your family link needs review before purchases can continue." }, { status: 409 });
-  }
-
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const familyId = clean(body.familyId);
   const productId = clean(body.productId);
   const requestedQuantity = normalizeProductPurchaseQuantity(body.quantity);
   if (!productId) {
     return NextResponse.json({ ok: false, error: "Product is required." }, { status: 400 });
+  }
+  const familyScope = await getParentPortalFamilyScope(user.id, user.tenantId, familyId || null);
+  if (!familyScope.ok) {
+    return NextResponse.json({ ok: false, error: "Your family link needs review before purchases can continue." }, { status: 409 });
   }
 
   const [family, product] = await Promise.all([

@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 
 type SetupGuardian = {
   id: string;
+  familyId: string;
   fullName: string;
   email: string | null;
   phone: string | null;
@@ -136,6 +137,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             guardianId: selectedGuardian.id,
+            familyId: selectedGuardian.familyId,
             fullName,
             phone,
             relation,

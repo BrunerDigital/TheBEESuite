@@ -60,12 +60,14 @@ test("BEE Suite payout link authenticates, authorizes the school, and creates th
   const auth = handler.indexOf("await getCurrentUser()");
   const access = handler.indexOf("canAccessCenter(user, centerId)");
   const account = handler.indexOf("readStripeConnectedAccountId(center.customFields)");
+  const tenant = handler.indexOf("center.organization.tenantId !== user.tenantId");
   const retrieve = handler.indexOf("retrieveStripeConnectedAccount(accountId");
   const binding = handler.indexOf("verifyStripeConnectAccountBinding(accountId");
   const link = handler.indexOf("createStripeExpressDashboardLoginLink");
 
   assert.ok(auth >= 0 && auth < access);
-  assert.ok(access < account && account < retrieve);
+  assert.ok(access < tenant && tenant < account && account < retrieve);
+  assert.match(route, /organization: \{ select: \{ tenantId: true \} \}/);
   assert.ok(retrieve < binding && binding < link);
   assert.match(route, /requiresPasswordResetGate\(user\)/);
   assert.match(route, /canManageBilling\(user\)[\s\S]*canManageOperations\(user\)/);

@@ -128,6 +128,8 @@ Required for Stripe Checkout and Connect:
 
 ```text
 STRIPE_SECRET_KEY
+STRIPE_PLATFORM_WEBHOOK_SECRET
+STRIPE_CONNECT_WEBHOOK_SECRET
 STRIPE_WEBHOOK_SECRET
 NEXT_PUBLIC_APP_URL
 STRIPE_ACCOUNTS_V2_API_VERSION
@@ -164,7 +166,7 @@ account.updated
 v2.core.account[requirements].updated
 ```
 
-Subscribe the live Connect destination to `payout.created`; platform-only webhook delivery is insufficient for connected-school payouts. Before removing the Stripe-managed payout text, confirm that production Twilio credentials are configured, the saved school payout contact is correct, and a controlled delivery/status-callback check succeeds.
+Subscribe the live Connect destination to `payout.created`; platform-only webhook delivery is insufficient for connected-school payouts. Store that destination's distinct live signing secret in Vercel Production as `STRIPE_CONNECT_WEBHOOK_SECRET`, then redeploy and verify signature acceptance. Before removing the Stripe-managed payout text, confirm that production Twilio credentials are configured, the saved school payout contact is correct, and a controlled delivery/status-callback check succeeds.
 
 New customer payout workflow:
 

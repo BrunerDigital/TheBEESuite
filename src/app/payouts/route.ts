@@ -42,10 +42,18 @@ async function GETHandler(request: NextRequest) {
 
   const center = await prisma.center.findUnique({
     where: { id: centerId },
-    select: { id: true, crmLocationId: true, customFields: true },
+    select: {
+      id: true,
+      crmLocationId: true,
+      customFields: true,
+      organization: { select: { tenantId: true } },
+    },
   });
   if (!center) {
     return NextResponse.redirect(fallbackUrl(baseUrl, centerId, "not_found"));
+  }
+  if (center.organization.tenantId !== user.tenantId) {
+    return NextResponse.redirect(fallbackUrl(baseUrl, undefined, "forbidden"));
   }
 
   const accountId = readStripeConnectedAccountId(center.customFields);

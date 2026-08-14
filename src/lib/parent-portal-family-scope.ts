@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 
@@ -45,10 +46,26 @@ export async function getParentPortalTenantCenterIds(tenantId: string) {
   })).map((center) => center.id);
 }
 
+export function parentPortalTenantFamilyWhere(tenantCenterIds: string[]): Prisma.FamilyWhereInput {
+  return {
+    OR: [
+      { centerId: { in: tenantCenterIds } },
+      {
+        children: {
+          some: {
+            ...currentlyEnrolledChildWhere(),
+            classroom: { centerId: { in: tenantCenterIds } },
+          },
+        },
+      },
+    ],
+  };
+}
+
 export async function getParentPortalFamilyScope(userId: string, tenantId: string, requestedFamilyId?: string | null) {
   const tenantCenterIds = await getParentPortalTenantCenterIds(tenantId);
   const guardians = await prisma.guardian.findMany({
-    where: { userId, family: { centerId: { in: tenantCenterIds } } },
+    where: { userId, family: parentPortalTenantFamilyWhere(tenantCenterIds) },
     select: {
       id: true,
       familyId: true,

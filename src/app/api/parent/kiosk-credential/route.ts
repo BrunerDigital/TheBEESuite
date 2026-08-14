@@ -6,7 +6,7 @@ import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
 import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
-import { getParentPortalFamilyScope, getParentPortalTenantCenterIds } from "@/lib/parent-portal-family-scope";
+import { getParentPortalFamilyScope, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -34,7 +34,7 @@ async function GETHandler() {
   }
   const tenantCenterIds = await getParentPortalTenantCenterIds(user.tenantId);
   const guardians = await prisma.guardian.findMany({
-    where: { userId: user.id, family: { centerId: { in: tenantCenterIds } } },
+    where: { userId: user.id, family: parentPortalTenantFamilyWhere(tenantCenterIds) },
     orderBy: { fullName: "asc" },
     include: {
       family: { select: { id: true, name: true, centerId: true } },

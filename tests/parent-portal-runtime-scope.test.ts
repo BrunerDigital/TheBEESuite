@@ -96,7 +96,7 @@ test("every parent setup and billing mutation enforces unambiguous family scope"
 test("runtime family lookup restricts guardian links to the signed-in tenant", () => {
   const source = readFileSync("src/lib/parent-portal-family-scope.ts", "utf8");
   assert.match(source, /prisma\.center\.findMany\(\{[\s\S]*organization: \{ tenantId \}/);
-  assert.match(source, /family: \{ centerId: \{ in: tenantCenterIds \} \}/);
+  assert.match(source, /family: parentPortalTenantFamilyWhere\(tenantCenterIds\)/);
 });
 
 test("parent setup and kiosk credential lists stay inside the signed-in tenant", () => {
@@ -106,8 +106,14 @@ test("parent setup and kiosk credential lists stay inside the signed-in tenant",
   ]) {
     const source = readFileSync(path, "utf8");
     assert.match(source, /getParentPortalTenantCenterIds\(user\.tenantId\)/, path);
-    assert.match(source, /family: \{ centerId: \{ in: tenantCenterIds \} \}/, path);
+    assert.match(source, /family: parentPortalTenantFamilyWhere\(tenantCenterIds\)/, path);
   }
+});
+
+test("tenant family scope accepts a current child classroom fallback when family center is absent", () => {
+  const source = readFileSync("src/lib/parent-portal-family-scope.ts", "utf8");
+  assert.match(source, /parentPortalTenantFamilyWhere[\s\S]*centerId: \{ in: tenantCenterIds \}/);
+  assert.match(source, /children:[\s\S]*currentlyEnrolledChildWhere\(\)[\s\S]*classroom: \{ centerId: \{ in: tenantCenterIds \} \}/);
 });
 
 test("parent portal rejects a requested unlinked family before choosing a default", () => {
@@ -115,7 +121,7 @@ test("parent portal rejects a requested unlinked family before choosing a defaul
   assert.match(page, /getParentPortalFamilyScope\(user\.id, user\.tenantId, requestedParentFamilyId\)/);
   assert.match(page, /requestedParentFamilyScope && !requestedParentFamilyScope\.ok/);
   assert.match(page, /getParentPortalTenantCenterIds\(user\.tenantId\)/);
-  assert.match(page, /centerId: \{ in: parentPortalTenantCenterIds \}/);
+  assert.match(page, /parentPortalTenantFamilyWhere\(parentPortalTenantCenterIds\)/);
 });
 
 test("parent setup page includes each current linked family and excludes historical family rows", () => {

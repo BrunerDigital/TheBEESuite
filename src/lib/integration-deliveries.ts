@@ -30,7 +30,8 @@ export type IntegrationDeliveryPurpose =
   | "notification_email"
   | "communication_sms"
   | "fte_reminder_sms"
-  | "notification_sms";
+  | "notification_sms"
+  | "payout_notification_sms";
 
 type IntegrationAttemptResult = InquiryIntegrationResult | (IntegrationSendResult & { skipped?: boolean });
 
@@ -61,7 +62,7 @@ type RecordCommunicationSmsDeliveryInput = {
   body: string;
   statusCallbackUrl?: string | null;
   result: IntegrationSendResult;
-  purpose?: Extract<IntegrationDeliveryPurpose, "communication_sms" | "fte_reminder_sms" | "notification_sms">;
+  purpose?: Extract<IntegrationDeliveryPurpose, "communication_sms" | "fte_reminder_sms" | "notification_sms" | "payout_notification_sms">;
   maxAttempts?: number;
   metadata?: Record<string, unknown>;
 };
@@ -392,7 +393,7 @@ async function sendDelivery(provider: string, purpose: string, payload: Record<s
     });
   }
 
-  if (provider === "twilio" && (purpose === "communication_sms" || purpose === "fte_reminder_sms" || purpose === "notification_sms")) {
+  if (provider === "twilio" && (purpose === "communication_sms" || purpose === "fte_reminder_sms" || purpose === "notification_sms" || purpose === "payout_notification_sms")) {
     return sendSms({
       to: stringValue(payload.to),
       body: stringValue(payload.body),

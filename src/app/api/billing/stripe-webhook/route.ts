@@ -6,9 +6,12 @@ import {
   retrieveStripeConnectedAccount,
   retrieveStripePaymentMethod,
   retrieveStripeSetupIntent,
+  sendSms,
   setStripeCustomerDefaultPaymentMethod,
 } from "@/lib/integrations";
+import { recordCommunicationSmsDeliveryAttempt } from "@/lib/integration-deliveries";
 import { paymentMethodSetupExpirationPatch } from "@/lib/payment-method-management";
+import { beeSuitePayoutSmsBody, payoutSmsRecipient } from "@/lib/payout-sms";
 import { prisma } from "@/lib/prisma";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
@@ -16,6 +19,7 @@ import { stripeCustomerCustomFieldPatch } from "@/lib/stripe-customer-scope";
 import {
   isStripeWebhookAccountEvent,
   isStripeWebhookPaymentEvent,
+  isStripeWebhookPayoutEvent,
   isStripeWebhookSoftwareBillingEvent,
   stripeWebhookObjectForRouting,
 } from "@/lib/stripe-webhook-event-types";
@@ -25,6 +29,7 @@ import {
   stripeWebhookDedupeKey,
 } from "@/lib/stripe-webhook-receipts";
 import { matchStripeWebhookSecret } from "@/lib/stripe-webhook-readiness";
+import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -161,6 +166,14 @@ type StripeDisputeObject = {
   metadata?: StripeMetadata;
 };
 
+type StripePayoutObject = {
+  id: string;
+  object: "payout";
+  amount?: number;
+  currency?: string;
+  status?: string;
+};
+
 type StripeWebhookEvent = {
   id: string;
   type: string;
@@ -168,7 +181,7 @@ type StripeWebhookEvent = {
   livemode?: boolean;
   account?: string;
   data: {
-    object: StripeCheckoutSessionCompleted | StripePaymentIntentObject | StripeChargeObject | StripeDisputeObject | { id?: string; object?: string };
+    object: StripeCheckoutSessionCompleted | StripePaymentIntentObject | StripeChargeObject | StripeDisputeObject | StripePayoutObject | { id?: string; object?: string };
   };
 };
 
@@ -827,6 +840,101 @@ async function handleConnectedAccountEvent(event: StripeWebhookEvent, matchedTen
   }
 
   return NextResponse.json({ ok: true, updatedCenters: matchedCenters.length });
+}
+
+async function handlePayoutCreated(
+  event: StripeWebhookEvent,
+  payout: StripePayoutObject,
+  matchedTenantId: string | null,
+  statusCallbackUrl: string | null,
+) {
+  if (event.livemode !== true) {
+    return NextResponse.json({ ok: true, ignored: true, reason: "test_mode_payout" });
+  }
+
+  const accountId = clean(event.account);
+  const amountCents = numeric(payout.amount);
+  const currency = clean(payout.currency);
+  if (!accountId.startsWith("acct_") || !payout.id.startsWith("po_") || !Number.isSafeInteger(amountCents) || amountCents <= 0 || !currency) {
+    return NextResponse.json({ ok: true, ignored: true, reason: "invalid_payout_event" });
+  }
+
+  const centers = await prisma.center.findMany({
+    select: {
+      id: true,
+      crmLocationId: true,
+      customFields: true,
+      organization: { select: { tenantId: true } },
+    },
+  });
+  const matchedCenters = centers.filter((center) => readStripeConnectedAccountId(center.customFields) === accountId);
+  if (matchedCenters.length !== 1) {
+    return NextResponse.json({
+      ok: true,
+      ignored: true,
+      reason: matchedCenters.length ? "ambiguous_connected_account_mapping" : "payout_center_not_found",
+    });
+  }
+
+  const center = matchedCenters[0];
+  const tenantId = center.organization.tenantId;
+  if (matchedTenantId && matchedTenantId !== tenantId) {
+    return NextResponse.json({ ok: true, ignored: true, reason: "payout_tenant_mismatch" });
+  }
+
+  const to = payoutSmsRecipient(center.customFields);
+  const body = beeSuitePayoutSmsBody({ amountCents, currency, centerId: center.id });
+  if (!to || !body) {
+    return NextResponse.json({ ok: true, ignored: true, reason: "payout_sms_contact_missing" });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await recordStripeWebhookEvent(tx, event);
+  });
+
+  const result = await sendSms({ to, body, statusCallbackUrl, tenantId });
+  await recordCommunicationSmsDeliveryAttempt({
+    tenantId,
+    centerId: center.id,
+    dedupeKey: `stripe-payout-created:${event.id}:${center.id}`,
+    to,
+    body,
+    statusCallbackUrl,
+    result,
+    purpose: "payout_notification_sms",
+    metadata: {
+      stripeEventId: event.id,
+      stripePayoutId: payout.id,
+      stripeConnectedAccountId: accountId,
+      amountCents,
+      currency: currency.toLowerCase(),
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId,
+      centerId: center.id,
+      action: result.ok ? "billing.payout.notification_sms_sent" : "billing.payout.notification_sms_not_sent",
+      resource: "Center",
+      resourceId: center.id,
+      metadata: {
+        stripeEventId: event.id,
+        stripePayoutId: payout.id,
+        stripeConnectedAccountId: accountId,
+        crmLocationId: center.crmLocationId || null,
+        amountCents,
+        currency: currency.toLowerCase(),
+        recipientLast4: to.slice(-4),
+        provider: result.provider,
+        configured: result.configured,
+        providerMessageId: result.id ?? null,
+        error: result.error ?? null,
+      },
+    },
+  });
+
+  return NextResponse.json({ ok: true, sent: result.ok, configured: result.configured });
 }
 
 async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted) {
@@ -1708,9 +1816,17 @@ async function writeBillingAccountSystemAudit(billingAccountId: string, stripeEv
   });
 }
 
-async function dispatchAuthenticatedEvent(event: StripeWebhookEvent, matchedTenantId: string | null) {
+async function dispatchAuthenticatedEvent(
+  event: StripeWebhookEvent,
+  matchedTenantId: string | null,
+  statusCallbackUrl: string | null,
+) {
   if (accountEventType(event.type)) {
     return handleConnectedAccountEvent(event, matchedTenantId);
+  }
+
+  if (isStripeWebhookPayoutEvent(event.type)) {
+    return handlePayoutCreated(event, event.data.object as StripePayoutObject, matchedTenantId, statusCallbackUrl);
   }
 
   if (isStripeWebhookSoftwareBillingEvent(event.type)) {
@@ -2067,7 +2183,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   try {
-    const response = await dispatchAuthenticatedEvent(event, signatureMatch.tenantId);
+    const response = await dispatchAuthenticatedEvent(event, signatureMatch.tenantId, twilioStatusCallbackUrl(request));
     const result = await response.clone().json().catch(() => ({})) as Record<string, unknown>;
     if (response.status < 200 || response.status >= 300) {
       const reason = safeReceiptReason(result.error || result.reason, `authenticated_handler_http_${response.status}`);

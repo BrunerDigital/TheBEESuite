@@ -39,6 +39,13 @@ export function resolveParentPortalFamilyScope(
   };
 }
 
+export function selectParentPortalCurrentGuardians<
+  T extends { family: { _count: { children: number } } },
+>(guardians: T[]) {
+  const currentGuardians = guardians.filter((guardian) => guardian.family._count.children > 0);
+  return currentGuardians.length ? currentGuardians : guardians;
+}
+
 export async function getParentPortalTenantCenterIds(tenantId: string) {
   return (await prisma.center.findMany({
     where: { organization: { tenantId } },
@@ -56,6 +63,10 @@ export function parentPortalTenantFamilyWhere(tenantCenterIds: string[]): Prisma
           some: {
             ...currentlyEnrolledChildWhere(),
             classroom: { centerId: { in: tenantCenterIds } },
+          },
+          none: {
+            ...currentlyEnrolledChildWhere(),
+            classroom: { centerId: { notIn: tenantCenterIds } },
           },
         },
       },

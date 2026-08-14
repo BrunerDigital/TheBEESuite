@@ -6,7 +6,8 @@ import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
 import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
-import { getParentPortalFamilyScope, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
+import { getParentPortalFamilyScope, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere, selectParentPortalCurrentGuardians } from "@/lib/parent-portal-family-scope";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -37,14 +38,22 @@ async function GETHandler() {
     where: { userId: user.id, family: parentPortalTenantFamilyWhere(tenantCenterIds) },
     orderBy: { fullName: "asc" },
     include: {
-      family: { select: { id: true, name: true, centerId: true } },
+      family: {
+        select: {
+          id: true,
+          name: true,
+          centerId: true,
+          _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
+        },
+      },
     },
   });
-  const centerNameById = await centerNamesFor(guardians.map((guardian) => guardian.family.centerId ?? "").filter(Boolean));
+  const scopedGuardians = selectParentPortalCurrentGuardians(guardians);
+  const centerNameById = await centerNamesFor(scopedGuardians.map((guardian) => guardian.family.centerId ?? "").filter(Boolean));
 
   return NextResponse.json({
     ok: true,
-    credentials: guardians.map((guardian) => buildGuardianKioskCredential({
+    credentials: scopedGuardians.map((guardian) => buildGuardianKioskCredential({
       id: guardian.id,
       fullName: guardian.fullName,
       checkInPinSetAt: guardian.checkInPinSetAt,

@@ -3,7 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { ParentPortalSetupForm } from "@/components/parent-portal-setup-form";
 import { getCurrentUser, isParentGuardian, requiresPasswordResetGate } from "@/lib/auth";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
-import { getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
+import { getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere, selectParentPortalCurrentGuardians } from "@/lib/parent-portal-family-scope";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -41,8 +41,7 @@ export default async function ParentPortalSetupPage() {
       },
     },
   });
-  const currentGuardians = guardians.filter((guardian) => guardian.family._count.children > 0);
-  const scopedGuardians = currentGuardians.length ? currentGuardians : guardians;
+  const scopedGuardians = selectParentPortalCurrentGuardians(guardians);
   const centerIds = Array.from(new Set(scopedGuardians.map((guardian) => guardian.family.centerId).filter((value): value is string => Boolean(value))));
   const centers = centerIds.length
     ? await prisma.center.findMany({

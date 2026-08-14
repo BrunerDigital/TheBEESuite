@@ -110,10 +110,11 @@ test("parent setup and kiosk credential lists stay inside the signed-in tenant",
   }
 });
 
-test("tenant family scope accepts a current child classroom fallback when family center is absent", () => {
+test("tenant family scope accepts only unmixed current-child classroom fallbacks when family center is absent", () => {
   const source = readFileSync("src/lib/parent-portal-family-scope.ts", "utf8");
   assert.match(source, /parentPortalTenantFamilyWhere[\s\S]*centerId: \{ in: tenantCenterIds \}/);
   assert.match(source, /centerId: null,[\s\S]*children:[\s\S]*currentlyEnrolledChildWhere\(\)[\s\S]*classroom: \{ centerId: \{ in: tenantCenterIds \} \}/);
+  assert.match(source, /none:[\s\S]*currentlyEnrolledChildWhere\(\)[\s\S]*classroom: \{ centerId: \{ notIn: tenantCenterIds \} \}/);
 });
 
 test("parent portal rejects a requested unlinked family before choosing a default", () => {
@@ -126,7 +127,13 @@ test("parent portal rejects a requested unlinked family before choosing a defaul
 
 test("parent setup page includes each current linked family and excludes historical family rows", () => {
   const page = readFileSync("src/app/parent-portal/setup/page.tsx", "utf8");
-  assert.match(page, /currentGuardians = guardians\.filter/);
-  assert.match(page, /currentGuardians\.length \? currentGuardians : guardians/);
+  assert.match(page, /selectParentPortalCurrentGuardians\(guardians\)/);
   assert.doesNotMatch(page, /resolveParentPortalFamilyScope\(guardians\)/);
+});
+
+test("kiosk credentials use the same current-family fallback as parent mutations", () => {
+  const route = readFileSync("src/app/api/parent/kiosk-credential/route.ts", "utf8");
+  assert.match(route, /_count: \{ select: \{ children: \{ where: currentlyEnrolledChildWhere\(\) \} \} \}/);
+  assert.match(route, /scopedGuardians = selectParentPortalCurrentGuardians\(guardians\)/);
+  assert.match(route, /credentials: scopedGuardians\.map/);
 });

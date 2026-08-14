@@ -195,8 +195,12 @@ test("role SOPs cover the August 11 UI and workflow baseline", () => {
 
   const kiosk = readFileSync("docs/sops/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md", "utf8");
   const sopIndex = readFileSync("docs/sops/README.md", "utf8");
-  assert.match(kiosk, /records PIN or QR credential confirmation separately from any typed or written signature requirement/);
+  assert.match(kiosk, /tap `Verify Family PIN`/);
+  assert.match(kiosk, /scanning verifies automatically/);
+  assert.match(kiosk, /records credential confirmation separately from any typed or written signature requirement/);
+  assert.match(kiosk, /Staff should verify a separate pickup adult/);
   assert.doesNotMatch(kiosk, /Type your full name as the guardian signature/);
+  assert.doesNotMatch(kiosk, /verified adult confirms/);
   assert.match(sopIndex, /credential or signature evidence/);
 
   const completeGuide = readFileSync("docs/BEE_SUITE_COMPLETE_GUIDE.md", "utf8");

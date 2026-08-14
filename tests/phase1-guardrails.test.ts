@@ -488,7 +488,16 @@ test("password reset links stay HTTPS on every public host", () => {
       appBaseUrl: "http://pilot.example.com",
       tokenHash: "hash_123",
     }),
-    "https://pilot.example.com/reset-password?token_hash=hash_123&type=recovery",
+    "https://pilot.example.com/reset-password#token_hash=hash_123&type=recovery",
+  );
+
+  assert.equal(
+    buildPasswordResetTokenUrl({
+      redirectUrl: "http://auth.example.com/custom-reset?source=email",
+      tokenHash: "hash_123",
+      nextPath: PARENT_PORTAL_PATH,
+    }),
+    "https://auth.example.com/custom-reset?source=email&next=%2Fparent-portal#token_hash=hash_123&type=recovery",
   );
 
   const mutableEnv = process.env as Record<string, string | undefined>;
@@ -554,7 +563,7 @@ test("public parent links never expose Vercel deployment hosts", () => {
       tokenHash: "hash_123",
       nextPath: PARENT_PORTAL_PATH,
     }),
-    "https://thebeesuite.io/reset-password?token_hash=hash_123&type=recovery&next=%2Fparent-portal",
+    "https://thebeesuite.io/reset-password?next=%2Fparent-portal#token_hash=hash_123&type=recovery",
   );
 });
 

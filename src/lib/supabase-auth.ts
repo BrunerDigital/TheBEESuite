@@ -168,21 +168,23 @@ export function getParentPortalPasswordResetRedirectUrl(requestUrl?: string) {
 
 export function buildPasswordResetTokenUrl({
   tokenHash,
+  redirectUrl,
   appBaseUrl,
   requestUrl,
   nextPath,
 }: {
   tokenHash: string;
+  redirectUrl?: string | null;
   appBaseUrl?: string | null;
   requestUrl?: string;
   nextPath?: string | null;
 }) {
   const baseUrl = canonicalizePublicUrl(appBaseUrl) || getAppBaseUrl(requestUrl);
-  const url = new URL(securePasswordResetUrl(`${baseUrl.replace(/\/+$/, "")}/reset-password`));
-  url.searchParams.set("token_hash", tokenHash);
-  url.searchParams.set("type", "recovery");
+  const configuredResetUrl = canonicalizePublicUrl(redirectUrl);
+  const url = new URL(securePasswordResetUrl(configuredResetUrl || `${baseUrl.replace(/\/+$/, "")}/reset-password`));
   const safeNext = safePasswordResetNextPath(nextPath);
   if (safeNext) url.searchParams.set("next", safeNext);
+  url.hash = new URLSearchParams({ token_hash: tokenHash, type: "recovery" }).toString();
   return url.toString();
 }
 
@@ -207,14 +209,29 @@ export async function generateSupabasePasswordRecoveryLink({
   email: string;
   redirectTo?: string | null;
 }) {
-  const supabase = getSupabaseAdminClient();
+  const { url, key } = getSupabaseAuthConfig("service");
+  const timedFetch: typeof fetch = (input, init) => {
+    const timeoutSignal = AbortSignal.timeout(10_000);
+    const signal = init?.signal
+      ? AbortSignal.any([init.signal, timeoutSignal])
+      : timeoutSignal;
+    return fetch(input, { ...init, signal });
+  };
+  const supabase = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: timedFetch },
+  });
   const { data, error } = await supabase.auth.admin.generateLink({
     type: "recovery",
     email,
     options: redirectTo ? { redirectTo } : undefined,
   });
   if (error) {
-    return { ok: false as const, error: error.message || "Password setup link could not be created." };
+    return {
+      ok: false as const,
+      error: error.message || "Password setup link could not be created.",
+      status: typeof error.status === "number" ? error.status : null,
+    };
   }
   const tokenHash = data.properties?.hashed_token;
   if (!tokenHash) {

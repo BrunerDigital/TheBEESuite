@@ -32,8 +32,10 @@ test("privacy and family actions expose no idle no-op controls", () => {
   assert.match(kioskSource, /window\.removeEventListener\("pageshow", clearRestoredPrivateState\)/);
   assert.match(kioskSource, /name="selectedChildren"/);
   assert.match(kioskSource, /const selected = event\.currentTarget\.checked/);
-  assert.match(kioskSource, /disabled=\{isPending \|\| !canCheckInSelected \|\| !signatureName\.trim\(\)\}/);
-  assert.match(kioskSource, /disabled=\{isPending \|\| !canCheckOutSelected \|\| !signatureName\.trim\(\)\}/);
+  assert.match(kioskSource, /disabled=\{isPending \|\| !canCheckInSelected\}/);
+  assert.match(kioskSource, /disabled=\{isPending \|\| !canCheckOutSelected\}/);
+  assert.match(kioskSource, /\{lookup\.guardian\.fullName\} confirms the selected children/);
+  assert.doesNotMatch(kioskSource, /signatureName|guardianSignature|Type your full name/);
   assert.match(kioskSource, /postKioskJson[\s\S]*["']\/api\/kiosk\/lookup["']/);
   assert.match(kioskSource, /postKioskJson[\s\S]*["']\/api\/kiosk\/check["']/);
 });

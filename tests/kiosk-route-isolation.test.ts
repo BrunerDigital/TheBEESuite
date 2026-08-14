@@ -397,7 +397,6 @@ test("family kiosk check allows an enrolled same-center child", async (t) => {
       pin,
       type: "check_in",
       childIds: ["child-a"],
-      signatureName: "Parent A",
     }) as never);
     const body = await response.json() as {
       ok: boolean;

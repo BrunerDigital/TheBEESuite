@@ -86,7 +86,6 @@ async function POSTHandler(request: NextRequest) {
   const pin = normalizePin(body.pin);
   const qrToken = normalizeGuardianQrToken(body.qrToken);
   const type = normalizeCheckAction(clean(body.type));
-  const signatureName = clean(body.signatureName);
   const rawChildIds: unknown[] = Array.isArray(body.childIds) ? body.childIds : [];
   const childIds = Array.from(new Set(rawChildIds.map((item) => clean(item)).filter(Boolean)));
   const ip = requestIp(request.headers);
@@ -101,10 +100,6 @@ async function POSTHandler(request: NextRequest) {
   if (!centerId || (!pin && !qrToken) || !type || !childIds.length) {
     return NextResponse.json({ ok: false, error: "Center, PIN or QR code, action, and at least one child are required." }, { status: 400 });
   }
-  if (!signatureName) {
-    return NextResponse.json({ ok: false, error: "Typed guardian signature is required." }, { status: 400 });
-  }
-
   const center = await prisma.center.findFirst({
     where: { id: centerId, status: { not: "closed" } },
     select: { id: true, name: true, email: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true, organization: { select: { tenantId: true } } },
@@ -114,6 +109,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const verificationMethod = qrToken ? "qr" : "pin";
+  const signatureMethod = verificationMethod === "qr" ? "qr_verified" : "pin_verified";
   const guardian = qrToken
     ? await findGuardianByQrToken(centerId, qrToken, childIds)
     : await findGuardianByPin(centerId, pin, childIds);
@@ -221,8 +217,8 @@ async function POSTHandler(request: NextRequest) {
             verificationMethod,
             qrVerified: verificationMethod === "qr",
             pinVerified: verificationMethod === "pin",
-            signatureMethod: "typed",
-            signatureName,
+            signatureMethod,
+            signatureName: guardian.fullName,
             signatureCapturedAt: occurredAt.toISOString(),
             latePickup,
             latePickupCutoff,
@@ -283,7 +279,7 @@ async function POSTHandler(request: NextRequest) {
       childIds: allowedChildren.map((child) => child.id),
       count: logs.length,
       signatureAccepted: true,
-      signatureMethod: "typed",
+      signatureMethod,
       verificationMethod,
       latePickup,
       latePickupCutoff,

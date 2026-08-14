@@ -278,7 +278,6 @@ async function POSTHandler(request: NextRequest) {
       familyId: guardian.family.id,
       childIds: allowedChildren.map((child) => child.id),
       count: logs.length,
-      signatureAccepted: true,
       credentialConfirmationMethod,
       verificationMethod,
       latePickup,

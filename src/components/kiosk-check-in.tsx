@@ -436,7 +436,6 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
           ...(verifiedCredential.method === "qr" ? { qrToken: verifiedCredential.qrToken } : { pin: verifiedCredential.pin }),
           childIds: selectedIds,
           type,
-          signatureAccepted: true,
         });
         if (networkError || !response) {
           setError("School Check-In lost its connection and could not confirm the result. Ask the front desk to verify before trying again.");

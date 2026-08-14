@@ -48,7 +48,8 @@ test("PIN and QR kiosk confirmation is reported separately from signature captur
   assert.match(kioskCheckRouteSource, /signaturePlaceholder: false/);
   assert.match(kioskCheckRouteSource, /credentialConfirmationMethod/);
   assert.match(kioskCheckRouteSource, /credentialConfirmedBy: guardian\.fullName/);
-  assert.doesNotMatch(kioskCheckRouteSource, /signatureName: guardian\.fullName|signatureMethod: "typed"/);
+  assert.doesNotMatch(kioskSource, /signatureAccepted/);
+  assert.doesNotMatch(kioskCheckRouteSource, /signatureAccepted|signatureName: guardian\.fullName|signatureMethod: "typed"/);
 
   assert.match(attendancePageSource, /credentialConfirmed = Boolean/);
   assert.match(attendancePageSource, /credentialConfirmations: reconciliationLogs\.filter/);

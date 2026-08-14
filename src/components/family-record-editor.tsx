@@ -968,18 +968,14 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     });
   }
 
-  function manageFamilyPaymentMethod(action: "setup" | "portal" | "enable_autopay" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
+  function manageFamilyPaymentMethod(action: "setup" | "portal", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
     if (!selectedBillingAccount) {
       setStatusMessage("");
       setErrorMessage("Create a billing account before saving a family payment method.");
       return;
     }
     if (action !== "portal") {
-      const message = action === "enable_autopay"
-        ? `Enable autopay for ${selectedFamily?.name ?? "this family"}? The one selected saved method will pay open invoices on or after their due date; weekly invoices are created separately and amounts may vary.`
-        : action === "disable_autopay"
-          ? `Disable autopay for ${selectedFamily?.name ?? "this family"}? Saved payment information will remain available for deliberate one-time payments.`
-          : `Save or replace the family payment method for ${selectedFamily?.name ?? "this family"} at ${selectedCenterLabel}? This does not enable autopay. The school absorbs Stripe processing costs.`;
+      const message = `Save or replace the family payment method for ${selectedFamily?.name ?? "this family"} at ${selectedCenterLabel}? This does not enable autopay. The school absorbs Stripe processing costs.`;
       const confirmed = window.confirm(message);
       if (!confirmed) return;
     }
@@ -1005,7 +1001,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
         window.location.href = json.url;
         return;
       }
-      setStatusMessage(action === "enable_autopay" ? "Autopay enabled." : action === "disable_autopay" ? "Autopay disabled." : "Payment method settings updated. Autopay was not changed.");
+      setStatusMessage("Payment method settings updated. Autopay was not changed.");
       router.refresh();
     });
   }
@@ -1350,21 +1346,10 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               >
                 Manage saved method
               </Button>
-              <Button
-                disabled={isPending || selectedAutopayStatus === "enabled" || !selectedPaymentMethod?.hasSavedPaymentMethod}
-                onClick={() => manageFamilyPaymentMethod("enable_autopay")}
-                variant="outline"
-              >
-                Enable autopay
-              </Button>
-              <Button
-                disabled={isPending || selectedAutopayStatus === "disabled" || !selectedBillingAccount}
-                onClick={() => manageFamilyPaymentMethod("disable_autopay")}
-                variant="outline"
-              >
-                Disable autopay
-              </Button>
             </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Parents enable or disable autopay from their Parent Portal. Directors can run the saved method only after the parent enables autopay.
+            </p>
           </div>
           <Button
             disabled={isPending || !selectedFamily || !familyName.trim() || !familyCenterId}

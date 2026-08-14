@@ -49,6 +49,7 @@ function disabledReason(invoice: InvoiceStoredPaymentActionData) {
   const method = invoice.billingAccount.paymentMethodManagement;
   if (invoice.status !== "OPEN") return "Invoice is not open.";
   if (invoice.totalCents <= 0) return "Invoice total must be greater than zero.";
+  if (method.autopayStatus !== "enabled") return "The parent has not enabled autopay.";
   if (!method.hasStripeCustomer || !method.hasSavedPaymentMethod) return "No saved payment method.";
   return null;
 }
@@ -61,9 +62,9 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   const method = invoice.billingAccount.paymentMethodManagement;
   const reason = disabledReason(invoice);
 
-  function processStoredMethod() {
+  function processAuthorizedAutopay() {
     const confirmed = window.confirm(
-      `Process ${invoice.number} for ${invoice.billingAccount.family.name}? Account credit is applied first; any remaining balance, up to ${money(invoice.totalCents)}, is charged to the selected saved payment method.`,
+      `Process parent-authorized autopay for ${invoice.number} and ${invoice.billingAccount.family.name}? Account credit is applied first; any remaining balance, up to ${money(invoice.totalCents)}, is charged to the saved autopay method.`,
     );
     if (!confirmed) return;
 
@@ -77,7 +78,6 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
           invoiceId: invoice.id,
           dryRun: false,
           mode: "charge",
-          processStoredMethod: true,
           retryFailed: true,
           limit: 1,
         }),
@@ -85,11 +85,11 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
       const json = await response.json().catch(() => null) as AutopaySummary | null;
       const result = json?.results?.find((item) => item.invoiceId === invoice.id);
       if (!response.ok || !json?.ok || !result) {
-        setError(json?.error || "The invoice could not be processed with the saved payment method. Review the family payment settings and try again.");
+        setError(json?.error || "The invoice could not be processed with parent-authorized autopay. Review the family payment settings and try again.");
         return;
       }
       if (result.status !== "processing" && result.status !== "paid") {
-        setError(result.reason || "This invoice cannot be processed with the saved payment method.");
+        setError(result.reason || "This invoice cannot be processed with parent-authorized autopay.");
         return;
       }
       setMessage(
@@ -169,11 +169,11 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         <Button
           size="sm"
           disabled={isPending || Boolean(reason)}
-          onClick={processStoredMethod}
+          onClick={processAuthorizedAutopay}
           variant={reason ? "outline" : "default"}
         >
           <CreditCard data-icon="inline-start" />
-          {isPending ? "Submitting…" : "Process with saved method"}
+          {isPending ? "Submitting…" : "Process authorized autopay"}
         </Button>
         <Button
           size="sm"

@@ -153,7 +153,7 @@ type Props = {
   searchQuery?: string;
 };
 
-type DirectorPaymentMethod = "autopay" | "saved_method" | "card_checkout" | "instant_bank_checkout" | "ach_checkout";
+type DirectorPaymentMethod = "autopay" | "card_checkout" | "instant_bank_checkout" | "ach_checkout";
 type TuitionFundingType = "family" | "voucher";
 
 type BillingWorkbenchOpenInvoice = NonNullable<NonNullable<BillingWorkbenchFamily["billingAccount"]>["openInvoices"]>[number];
@@ -581,15 +581,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function paymentMethodLabel(method: DirectorPaymentMethod) {
     if (method === "autopay") return "Process invoice with autopay";
-    if (method === "saved_method") return "Process with saved payment method";
     if (method === "card_checkout") return "Open debit or credit card payment";
     if (method === "instant_bank_checkout") return "Open Link payment";
     return "Open bank account payment";
   }
 
   function paymentRouteSummary(method: DirectorPaymentMethod) {
-    if (method === "autopay") return "Applies available account credit first, then charges any remaining invoice balance to the family's authorized autopay payment method.";
-    if (method === "saved_method") return "Applies available account credit first, then charges any remaining invoice balance to the family's saved payment method.";
+    if (method === "autopay") return "Account credit is applied first, then any remaining invoice balance is charged to the family's parent-authorized autopay payment method.";
     if (method === "card_checkout") return "Opens a secure card payment form.";
     if (method === "instant_bank_checkout") return "Opens a secure Link payment form.";
     return "Opens a secure bank account payment form.";
@@ -613,12 +611,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setPaymentReviewMethod(method);
   }
 
-  function manageFamilyPaymentMethod(action: "setup" | "portal" | "enable_autopay" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
+  function manageFamilyPaymentMethod(action: "setup" | "portal", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
     if (!selectedFamily) return setErrorMessage("Choose a family before managing payment information.");
-    if (action === "enable_autopay" && !window.confirm(
-      "Enable autopay for this family? Open invoices are processed on or after their due date. Account credit is applied first, and the selected saved method pays any remaining balance. Weekly tuition invoices are created separately.",
-    )) return;
-    if (action === "disable_autopay" && !confirmBillingAction("disable autopay")) return;
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -642,13 +636,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         window.location.href = json.url;
         return;
       }
-      setStatusMessage(
-        action === "enable_autopay"
-          ? "Autopay enabled on the selected family payment method."
-          : action === "disable_autopay"
-            ? "Autopay disabled for the selected family."
-            : "Payment method settings updated. Autopay was not changed.",
-      );
+      setStatusMessage("Payment method settings updated. Autopay was not changed.");
       router.refresh();
     });
   }
@@ -674,7 +662,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       setStatusMessage("");
       setErrorMessage("");
 
-      if (invoiceId && (method === "autopay" || method === "saved_method")) {
+      if (invoiceId && method === "autopay") {
         const response = await fetch("/api/billing/autopay", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -684,7 +672,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             mode: "charge",
             retryFailed: true,
             limit: 1,
-            processStoredMethod: method === "saved_method",
           }),
         });
         const json = await response.json().catch(() => null) as {
@@ -697,7 +684,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           results?: Array<{ status: string; reason?: string | null; stripePaymentIntentId?: string | null }>;
         } | null;
         const first = json?.results?.[0];
-        if (!response.ok || !json?.ok || first?.status === "failed" || first?.status === "skipped") {
+        if (!response.ok || !json?.ok || !first || first.status === "failed" || first.status === "skipped") {
           setErrorMessage(json?.error || first?.reason || "The invoice could not be processed with the saved payment method.");
           return;
         }
@@ -706,7 +693,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             ? selectedPaymentInvoice?.number
               ? `Invoice ${selectedPaymentInvoice.number} was paid with account credit.`
               : "The selected invoice was paid with account credit."
-            : `${method === "autopay" ? "Autopay payment" : "Saved payment method payment"} ${first?.status === "paid" ? "recorded" : "is processing"} for ${selectedPaymentInvoice?.number ?? "the selected invoice"}.`,
+            : `Autopay payment ${first?.status === "paid" ? "recorded" : "is processing"} for ${selectedPaymentInvoice?.number ?? "the selected invoice"}.`,
         );
         router.refresh();
         return;
@@ -1630,7 +1617,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <div className="flex items-center gap-2 text-sm font-medium">
                 Family payment methods
                 <InfoTip label="About family payment profiles">
-                  Saving a method and enabling autopay are separate actions. One selected family method is used for saved-method charges or autopay.
+                  Saving a method and enabling autopay are separate actions. Parents enable or disable autopay from their Parent Portal.
                 </InfoTip>
               </div>
             </div>
@@ -1662,12 +1649,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <Button className="w-full sm:w-auto" disabled={isPending || !selectedPaymentMethod?.hasStripeCustomer} onClick={() => manageFamilyPaymentMethod("portal")} variant="outline">
                 Manage payment method
               </Button>
-              <Button className="w-full sm:w-auto" disabled={isPending || selectedAutopayStatus === "enabled" || !selectedPaymentMethod?.hasSavedPaymentMethod} onClick={() => manageFamilyPaymentMethod("enable_autopay")} variant="outline">
-                Enable autopay
-              </Button>
-              <Button className="w-full sm:w-auto" disabled={isPending || selectedAutopayStatus === "disabled" || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("disable_autopay")} variant="outline">
-                Disable autopay
-              </Button>
             </div>
           </div>
           <div className="mt-4 rounded-lg border bg-background/40 p-3">
@@ -1676,7 +1657,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <div className="flex items-center gap-2 text-sm font-medium">
                   Collect a family payment
                   <InfoTip label="About director payment actions">
-                    Choose the family balance, an open invoice, or a custom amount. Then use a saved method, the in-person card reader, or a secure payment form.
+                    Directors can run an open invoice with the saved method only after the parent enables autopay. In-person and secure checkout options remain available separately.
                   </InfoTip>
                 </div>
               </div>
@@ -1719,13 +1700,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                disabled={isPending || !selectedPaymentMethod?.hasSavedPaymentMethod || !selectedBillingAccount || directorPaymentAmountCents <= 0}
-                onClick={() => openPaymentReview("saved_method")}
-              >
-                <CreditCard data-icon="inline-start" />
-                Process with saved method
-              </Button>
               {effectivePaymentTarget.startsWith("invoice:") ? (
                 <Button
                   disabled={isPending || selectedAutopayStatus !== "enabled" || !selectedBillingAccount || directorPaymentAmountCents <= 0}

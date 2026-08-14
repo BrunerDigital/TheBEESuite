@@ -295,7 +295,7 @@ If the school will use BEE Suite check-in:
 3. Test a valid PIN.
 4. Test an invalid PIN.
 5. Test check-in, duplicate check-in, check-out, and checkout-before-checkin.
-6. Test signature capture and authorized-pickup warnings.
+6. Test PIN or QR credential evidence, selected-child actions, and authorized-pickup warnings.
 7. Confirm attendance appears under the correct child, classroom, and school.
 
 Do not use the kiosk for live attendance until these tests pass.

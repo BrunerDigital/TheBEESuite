@@ -793,7 +793,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                     ? `${staffLookup.staff.title} verified for ${center.name}.`
                     : "Staff can clock in or clock out after code verification."
                   : lookup
-                    ? `${lookup.guardian.fullName} verified by ${verificationLabel}. Choose who is arriving or leaving.`
+                    ? `Guardian credential for ${lookup.guardian.fullName} verified by ${verificationLabel}. Choose who is arriving or leaving.`
                     : "Enter your Family PIN or scan your QR code to see your children."}
               </CardDescription>
             </CardHeader>
@@ -982,7 +982,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                         </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        By tapping Check In or Check Out, {lookup.guardian.fullName} confirms the selected children are arriving or leaving with the verified adult.
+                        By tapping Check In or Check Out, the kiosk records credential evidence for the selected children. Staff should verify a separate pickup adult when school policy requires it.
                       </p>
                     </>
                   ) : null}

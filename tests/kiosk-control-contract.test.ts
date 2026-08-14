@@ -38,7 +38,8 @@ test("privacy and family actions expose no idle no-op controls", () => {
   assert.match(kioskSource, /const selected = event\.currentTarget\.checked/);
   assert.match(kioskSource, /disabled=\{isPending \|\| !canCheckInSelected\}/);
   assert.match(kioskSource, /disabled=\{isPending \|\| !canCheckOutSelected\}/);
-  assert.match(kioskSource, /\{lookup\.guardian\.fullName\} confirms the selected children/);
+  assert.match(kioskSource, /Guardian credential for \$\{lookup\.guardian\.fullName\} verified by/);
+  assert.match(kioskSource, /records credential evidence for the selected children/);
   assert.doesNotMatch(kioskSource, /signatureName|guardianSignature|Type your full name/);
   assert.match(kioskSource, /postKioskJson[\s\S]*["']\/api\/kiosk\/lookup["']/);
   assert.match(kioskSource, /postKioskJson[\s\S]*["']\/api\/kiosk\/check["']/);
@@ -46,10 +47,11 @@ test("privacy and family actions expose no idle no-op controls", () => {
 
 test("PIN and QR kiosk confirmation is reported separately from signature capture", () => {
   assert.match(kioskCheckRouteSource, /signaturePlaceholder: false/);
+  assert.match(kioskCheckRouteSource, /pickupName: null/);
   assert.match(kioskCheckRouteSource, /credentialConfirmationMethod/);
-  assert.match(kioskCheckRouteSource, /credentialConfirmedBy: guardian\.fullName/);
+  assert.match(kioskCheckRouteSource, /credentialHolderName: guardian\.fullName/);
   assert.doesNotMatch(kioskSource, /signatureAccepted/);
-  assert.doesNotMatch(kioskCheckRouteSource, /signatureAccepted|signatureName: guardian\.fullName|signatureMethod: "typed"/);
+  assert.doesNotMatch(kioskCheckRouteSource, /signatureAccepted|signatureName: guardian\.fullName|signatureMethod: "typed"|credentialConfirmedBy: guardian\.fullName|pickupName: guardian\.fullName/);
 
   assert.match(attendancePageSource, /credentialConfirmed = Boolean/);
   assert.match(attendancePageSource, /credentialConfirmations: reconciliationLogs\.filter/);

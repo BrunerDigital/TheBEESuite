@@ -109,9 +109,13 @@ test("acceptance-unknown payout attempts fail for manual review instead of auto-
   assert.match(deliveries, /status: "attempting"/);
   assert.match(deliveries, /result\.acceptanceUnknown[\s\S]*status: "failed" as const/);
   assert.match(deliveries, /where: \{ id, status: "attempting", attempts: 1 \}/);
-  assert.match(deliveries, /status: "attempting",[\s\S]*purpose: "payout_notification_sms",[\s\S]*updatedAt: \{ lte: stalePayoutAttemptBefore \}/);
-  assert.match(deliveries, /payoutAttemptsRequiringManualReview: stalePayoutAttempts\.count/);
+  assert.match(deliveries, /stalePayoutAttemptWhere:[\s\S]*status: "attempting",[\s\S]*purpose: "payout_notification_sms"/);
+  assert.match(deliveries, /dryRun[\s\S]*integrationDelivery\.count\(\{ where: stalePayoutAttemptWhere \}\)[\s\S]*integrationDelivery\.updateMany/);
+  assert.match(deliveries, /payoutAttemptsRequiringManualReview,/);
   assert.match(deliveries, /Manual reconciliation is required; this alert was not retried to prevent a duplicate text\./);
+  assert.match(deliveries, /claimPayoutDeliveryForRetry/);
+  assert.match(deliveries, /isPayoutSms[\s\S]*acceptanceUnknown: true/);
+  assert.match(deliveries, /status: isPayoutSms \? "attempting" : "pending"/);
 });
 
 test("legacy Stripe account snapshots preserve their dashboard type", async () => {

@@ -262,6 +262,30 @@ export async function recordCommunicationSmsDeliveryAttempt({
   });
 }
 
+export async function claimPayoutDeliveryForRetry({
+  id,
+  attempts,
+}: {
+  id: string;
+  attempts: number;
+}) {
+  const nextAttempts = attempts + 1;
+  const claimed = await prisma.integrationDelivery.updateMany({
+    where: {
+      id,
+      status: "pending",
+      attempts,
+      providerMessageId: null,
+    },
+    data: {
+      status: "attempting",
+      attempts: nextAttempts,
+      nextAttemptAt: null,
+    },
+  });
+  return { claimed: claimed.count === 1, attempts: nextAttempts };
+}
+
 export async function finalizeCommunicationSmsDeliveryAttempt({
   id,
   result,
@@ -471,19 +495,22 @@ export async function retryPendingIntegrationDeliveries({
 }) {
   const now = new Date();
   const stalePayoutAttemptBefore = new Date(now.getTime() - 15 * 60_000);
-  const stalePayoutAttempts = await prisma.integrationDelivery.updateMany({
-    where: {
-      status: "attempting",
-      purpose: "payout_notification_sms",
-      updatedAt: { lte: stalePayoutAttemptBefore },
-    },
-    data: {
-      status: "failed",
-      lastError: "Twilio acceptance is unknown after the payout SMS attempt stopped before finalization. Manual reconciliation is required; this alert was not retried to prevent a duplicate text.",
-      nextAttemptAt: null,
-      deliveredAt: null,
-    },
-  });
+  const stalePayoutAttemptWhere: Prisma.IntegrationDeliveryWhereInput = {
+    status: "attempting",
+    purpose: "payout_notification_sms",
+    updatedAt: { lte: stalePayoutAttemptBefore },
+  };
+  const payoutAttemptsRequiringManualReview = dryRun
+    ? await prisma.integrationDelivery.count({ where: stalePayoutAttemptWhere })
+    : (await prisma.integrationDelivery.updateMany({
+        where: stalePayoutAttemptWhere,
+        data: {
+          status: "failed",
+          lastError: "Twilio acceptance is unknown after the payout SMS attempt stopped before finalization. Manual reconciliation is required; this alert was not retried to prevent a duplicate text.",
+          nextAttemptAt: null,
+          deliveredAt: null,
+        },
+      })).count;
   const deliveries = await prisma.integrationDelivery.findMany({
     where: {
       status: "pending",
@@ -519,11 +546,14 @@ export async function retryPendingIntegrationDeliveries({
       continue;
     }
 
-    const claim = await claimIntegrationDeliveryForRetry({
-      id: delivery.id,
-      attempts: delivery.attempts,
-      now,
-    });
+    const isPayoutSms = delivery.provider === "twilio" && delivery.purpose === "payout_notification_sms";
+    const claim = isPayoutSms
+      ? await claimPayoutDeliveryForRetry({ id: delivery.id, attempts: delivery.attempts })
+      : await claimIntegrationDeliveryForRetry({
+          id: delivery.id,
+          attempts: delivery.attempts,
+          now,
+        });
     if (!claim.claimed) {
       results.push({
         id: delivery.id,
@@ -570,20 +600,23 @@ export async function retryPendingIntegrationDeliveries({
       result = {
         ok: false,
         error: error instanceof Error ? error.message : "Integration retry failed before returning a provider result.",
+        ...(isPayoutSms ? { acceptanceUnknown: true } : {}),
       };
     }
-    const state = computeIntegrationDeliveryState({
-      result,
-      attempts: nextAttempts,
-      maxAttempts: delivery.maxAttempts,
-    });
+    const state = isPayoutSms && "acceptanceUnknown" in result && result.acceptanceUnknown
+      ? { status: "failed" as DeliveryState["status"], nextAttemptAt: null, deliveredAt: null }
+      : computeIntegrationDeliveryState({
+          result,
+          attempts: nextAttempts,
+          maxAttempts: delivery.maxAttempts,
+        });
     if (delivery.provider === "sendgrid" && result.ok) {
       state.status = "accepted";
       state.deliveredAt = null;
     }
 
     const updated = await prisma.integrationDelivery.updateMany({
-      where: { id: delivery.id, status: "pending", attempts: nextAttempts },
+      where: { id: delivery.id, status: isPayoutSms ? "attempting" : "pending", attempts: nextAttempts },
       data: {
         ...("id" in result && result.id ? { providerMessageId: result.id } : {}),
         status: state.status,
@@ -609,7 +642,7 @@ export async function retryPendingIntegrationDeliveries({
 
   return {
     processed: results.length,
-    payoutAttemptsRequiringManualReview: stalePayoutAttempts.count,
+    payoutAttemptsRequiringManualReview,
     results,
   };
 }

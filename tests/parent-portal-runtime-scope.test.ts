@@ -113,7 +113,7 @@ test("parent setup and kiosk credential lists stay inside the signed-in tenant",
 test("tenant family scope accepts a current child classroom fallback when family center is absent", () => {
   const source = readFileSync("src/lib/parent-portal-family-scope.ts", "utf8");
   assert.match(source, /parentPortalTenantFamilyWhere[\s\S]*centerId: \{ in: tenantCenterIds \}/);
-  assert.match(source, /children:[\s\S]*currentlyEnrolledChildWhere\(\)[\s\S]*classroom: \{ centerId: \{ in: tenantCenterIds \} \}/);
+  assert.match(source, /centerId: null,[\s\S]*children:[\s\S]*currentlyEnrolledChildWhere\(\)[\s\S]*classroom: \{ centerId: \{ in: tenantCenterIds \} \}/);
 });
 
 test("parent portal rejects a requested unlinked family before choosing a default", () => {

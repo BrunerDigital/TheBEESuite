@@ -51,6 +51,7 @@ export function parentPortalTenantFamilyWhere(tenantCenterIds: string[]): Prisma
     OR: [
       { centerId: { in: tenantCenterIds } },
       {
+        centerId: null,
         children: {
           some: {
             ...currentlyEnrolledChildWhere(),

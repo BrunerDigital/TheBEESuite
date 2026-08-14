@@ -157,6 +157,7 @@ import { paymentMethodManagementSummary } from "@/lib/payment-method-management"
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
+  hasConfirmedFamilyResponsibility,
   parentBalanceNeedsResponsibilityReview,
   parentVisibleBillingBalanceCents,
 } from "@/lib/parent-billing-visibility";
@@ -2427,6 +2428,14 @@ async function renderLivePage(
           ],
         })
       : false;
+    const parentBalanceVisibilityConfirmed = billingAccount
+      ? hasConfirmedFamilyResponsibility(
+          billingAccount.balanceCents,
+          billingAccount.customFields,
+          family?.customFields,
+          ...(family?.children.map((child) => child.customFields) ?? []),
+        )
+      : false;
     return (
       <ParentPortalWorkspace
         key={parentReplyToMessageId || "parent-portal"}
@@ -2435,7 +2444,7 @@ async function renderLivePage(
         family={parentPortalFamily}
         billingAccount={billingAccount ? {
           id: billingAccount.id,
-          balanceCents: parentBalanceReviewRequired ? 0 : parentBalanceCents,
+          balanceCents: parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed ? 0 : parentBalanceCents,
           autopayPlaceholder: billingAccount.autopayPlaceholder,
           paymentMethodManagement: paymentMethodManagementSummary({
             autopayPlaceholder: billingAccount.autopayPlaceholder,
@@ -2446,6 +2455,7 @@ async function renderLivePage(
         checkoutReadiness={parentCheckoutReadiness}
         paymentTransitionActive={paymentTransitionActive}
         parentBalanceReviewRequired={parentBalanceReviewRequired}
+        parentBalanceVisibilityConfirmed={parentBalanceVisibilityConfirmed}
         payments={billingAccount?.payments ?? []}
         latestLedgerEntry={latestLedgerEntry}
         ledgerEntries={billingAccount?.ledgerEntries.slice(0, PARENT_LEDGER_PAGE_SIZE) ?? []}

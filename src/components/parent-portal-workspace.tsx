@@ -315,6 +315,7 @@ type Props = {
   checkoutReadiness?: StripeCheckoutReadiness;
   paymentTransitionActive?: boolean;
   parentBalanceReviewRequired?: boolean;
+  parentBalanceVisibilityConfirmed?: boolean;
   invoices: Invoice[];
   payments?: Payment[];
   ledgerEntries?: LedgerEntry[];
@@ -682,6 +683,7 @@ function ParentPortalWorkspaceView({
   checkoutReadiness = fallbackCheckoutReadiness,
   paymentTransitionActive = false,
   parentBalanceReviewRequired = false,
+  parentBalanceVisibilityConfirmed = false,
   invoices,
   payments = [],
   ledgerEntries = [],
@@ -2194,7 +2196,7 @@ function ParentPortalWorkspaceView({
                   <CreditCard className="size-5" aria-hidden="true" />
                 </span>
               </div>
-              {parentBalanceReviewRequired ? (
+              {parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed ? (
                 <div className="mt-5 rounded-2xl border border-amber-400/35 bg-amber-400/10 p-4">
                   <p className="font-semibold">Balance review in progress</p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -2697,17 +2699,19 @@ function ParentPortalWorkspaceView({
               <div className="rounded-xl border bg-background/40 p-3 sm:p-4">
                 <div className="text-xs text-muted-foreground">Balance due</div>
                 <div className="mt-1 text-2xl font-semibold">
-                  {parentBalanceReviewRequired
+                  {parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed
                     ? "Being confirmed"
                     : money(balanceCents)}
                 </div>
-                {parentBalanceReviewRequired ? (
+                {parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed ? (
                   <div className="mt-1 text-xs text-muted-foreground">
                     Your school is confirming the amount. You can still choose an amount to pay.
                   </div>
                 ) : (
                   <p className="sr-only">
-                    This is the amount currently due from your family.
+                    {parentBalanceVisibilityConfirmed
+                      ? "This reviewed family balance is visible while automatic collection remains blocked."
+                      : "This is the amount currently due from your family."}
                   </p>
                 )}
               </div>

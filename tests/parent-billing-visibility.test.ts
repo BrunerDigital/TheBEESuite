@@ -32,7 +32,9 @@ test("an exact reviewed family-responsibility balance is parent visible", () => 
     balanceReconciliation: {
       familyResponsibilityConfirmed: true,
       familyResponsibilityBalanceCents: 5_200,
-      sourceSha256: "reviewed-source",
+      familyResponsibilityConfirmationSourceSha256: "6c95575a1aa967606605904e24e29135ef533f0dd47a10f0aa811d22e2afe418",
+      familyResponsibilityAuthorization: "user_requested_live_for_director_and_family",
+      autopayActivated: false,
     },
   };
   assert.equal(hasConfirmedFamilyResponsibility(5_200, reviewedEvidence), true);
@@ -40,12 +42,25 @@ test("an exact reviewed family-responsibility balance is parent visible", () => 
     accountBalanceCents: 5_200,
     agencyLedgerEntries: [],
     responsibilityEvidence: [{ tuitionPlanName: "CCMS COPAY" }, reviewedEvidence],
-  }), false);
+  }), true);
   assert.equal(parentBalanceNeedsResponsibilityReview({
     accountBalanceCents: 5_300,
     agencyLedgerEntries: [],
     responsibilityEvidence: [{ tuitionPlanName: "CCMS COPAY" }, reviewedEvidence],
   }), true);
+  assert.equal(hasConfirmedFamilyResponsibility(5_300, reviewedEvidence), false);
+  assert.equal(hasConfirmedFamilyResponsibility(5_200, {
+    balanceReconciliation: {
+      ...reviewedEvidence.balanceReconciliation,
+      familyResponsibilityConfirmationSourceSha256: "unreviewed-source",
+    },
+  }), false);
+  assert.equal(hasConfirmedFamilyResponsibility(5_200, {
+    balanceReconciliation: {
+      ...reviewedEvidence.balanceReconciliation,
+      familyResponsibilityAuthorization: "manual_edit",
+    },
+  }), false);
 });
 
 test("parent billing balance excludes the agency receivable while it remains unpaid", () => {

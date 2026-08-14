@@ -17,6 +17,8 @@ type AgencyLedgerEntry = {
 
 const SUBSIDY_MARKER = /subsid|voucher|ccdf|copay|co-pay|familyresponsibility|agencyresponsibility|fundingtype|\belc\b/i;
 const SUBSIDY_KEY_MARKER = /subsid|voucher|ccdf|copay|co-pay|agencyresponsibility|agencyportion|\belc\b/i;
+const GARLAND_ACCOUNT_REFLECTION_SOURCE_SHA256 = "6c95575a1aa967606605904e24e29135ef533f0dd47a10f0aa811d22e2afe418";
+const GARLAND_PARENT_VISIBILITY_AUTHORIZATION = "user_requested_live_for_director_and_family";
 
 export function hasSubsidyResponsibilityEvidence(...values: unknown[]) {
   const visit = (value: unknown): boolean => {
@@ -43,6 +45,9 @@ export function hasConfirmedFamilyResponsibility(accountBalanceCents: number, ..
       fields.familyResponsibilityConfirmed === true
       && Number.isInteger(fields.familyResponsibilityBalanceCents)
       && fields.familyResponsibilityBalanceCents === accountBalanceCents
+      && fields.familyResponsibilityConfirmationSourceSha256 === GARLAND_ACCOUNT_REFLECTION_SOURCE_SHA256
+      && fields.familyResponsibilityAuthorization === GARLAND_PARENT_VISIBILITY_AUTHORIZATION
+      && fields.autopayActivated === false
     ) {
       return true;
     }
@@ -58,7 +63,6 @@ export function parentBalanceNeedsResponsibilityReview(input: {
 }) {
   return input.accountBalanceCents > 0
     && hasSubsidyResponsibilityEvidence(...input.responsibilityEvidence)
-    && !hasConfirmedFamilyResponsibility(input.accountBalanceCents, ...input.responsibilityEvidence)
     && !input.agencyLedgerEntries.some(isAgencyOnlyLedgerEntry);
 }
 

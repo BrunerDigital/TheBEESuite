@@ -30,7 +30,8 @@ export type IntegrationDeliveryPurpose =
   | "notification_email"
   | "communication_sms"
   | "fte_reminder_sms"
-  | "notification_sms";
+  | "notification_sms"
+  | "payout_notification_sms";
 
 type IntegrationAttemptResult = InquiryIntegrationResult | (IntegrationSendResult & { skipped?: boolean });
 
@@ -61,9 +62,15 @@ type RecordCommunicationSmsDeliveryInput = {
   body: string;
   statusCallbackUrl?: string | null;
   result: IntegrationSendResult;
-  purpose?: Extract<IntegrationDeliveryPurpose, "communication_sms" | "fte_reminder_sms" | "notification_sms">;
+  purpose?: Extract<IntegrationDeliveryPurpose, "communication_sms" | "fte_reminder_sms" | "notification_sms" | "payout_notification_sms">;
   maxAttempts?: number;
   metadata?: Record<string, unknown>;
+};
+
+type FinalizeCommunicationSmsDeliveryInput = {
+  id: string;
+  result: IntegrationSendResult;
+  maxAttempts?: number;
 };
 
 type RecordEmailDeliveryInput = {
@@ -255,6 +262,78 @@ export async function recordCommunicationSmsDeliveryAttempt({
   });
 }
 
+export async function claimPayoutDeliveryForRetry({
+  id,
+  attempts,
+}: {
+  id: string;
+  attempts: number;
+}) {
+  const nextAttempts = attempts + 1;
+  const claimed = await prisma.integrationDelivery.updateMany({
+    where: {
+      id,
+      status: "pending",
+      attempts,
+      providerMessageId: null,
+    },
+    data: {
+      status: "attempting",
+      attempts: nextAttempts,
+      nextAttemptAt: null,
+    },
+  });
+  return { claimed: claimed.count === 1, attempts: nextAttempts };
+}
+
+export async function finalizeCommunicationSmsDeliveryAttempt({
+  id,
+  result,
+  maxAttempts = 5,
+}: FinalizeCommunicationSmsDeliveryInput) {
+  const deliveryResult: IntegrationAttemptResult = result.configured
+    ? result
+    : { ...result, skipped: true };
+  const attempts = deliveryResult.skipped ? 0 : 1;
+  const state = result.acceptanceUnknown
+    ? { status: "failed" as const, nextAttemptAt: null, deliveredAt: null }
+    : computeIntegrationDeliveryState({
+        result: deliveryResult,
+        attempts,
+        maxAttempts,
+      });
+  const updated = await prisma.integrationDelivery.updateMany({
+    where: { id, status: "attempting", attempts: 1 },
+    data: {
+      providerMessageId: result.id ?? null,
+      status: state.status,
+      attempts,
+      lastResult: deliveryResult as Prisma.InputJsonObject,
+      lastError: deliveryResult.error ?? null,
+      nextAttemptAt: state.nextAttemptAt,
+      deliveredAt: state.deliveredAt,
+    },
+  });
+  if (updated.count !== 1) {
+    throw new Error(`Integration delivery ${id} changed before its initial attempt was finalized.`);
+  }
+  return state;
+}
+
+export async function beginCommunicationSmsDeliveryAttempt(id: string) {
+  const claimed = await prisma.integrationDelivery.updateMany({
+    where: { id, status: "pending", attempts: 0, providerMessageId: null },
+    data: {
+      status: "attempting",
+      attempts: 1,
+      nextAttemptAt: null,
+    },
+  });
+  if (claimed.count !== 1) {
+    throw new Error(`Integration delivery ${id} could not begin its initial provider attempt.`);
+  }
+}
+
 export async function recordEmailDeliveryAttempt({
   tenantId,
   centerId,
@@ -392,7 +471,7 @@ async function sendDelivery(provider: string, purpose: string, payload: Record<s
     });
   }
 
-  if (provider === "twilio" && (purpose === "communication_sms" || purpose === "fte_reminder_sms" || purpose === "notification_sms")) {
+  if (provider === "twilio" && (purpose === "communication_sms" || purpose === "fte_reminder_sms" || purpose === "notification_sms" || purpose === "payout_notification_sms")) {
     return sendSms({
       to: stringValue(payload.to),
       body: stringValue(payload.body),
@@ -415,6 +494,23 @@ export async function retryPendingIntegrationDeliveries({
   dryRun?: boolean;
 }) {
   const now = new Date();
+  const stalePayoutAttemptBefore = new Date(now.getTime() - 15 * 60_000);
+  const stalePayoutAttemptWhere: Prisma.IntegrationDeliveryWhereInput = {
+    status: "attempting",
+    purpose: "payout_notification_sms",
+    updatedAt: { lte: stalePayoutAttemptBefore },
+  };
+  const payoutAttemptsRequiringManualReview = dryRun
+    ? await prisma.integrationDelivery.count({ where: stalePayoutAttemptWhere })
+    : (await prisma.integrationDelivery.updateMany({
+        where: stalePayoutAttemptWhere,
+        data: {
+          status: "failed",
+          lastError: "Twilio acceptance is unknown after the payout SMS attempt stopped before finalization. Manual reconciliation is required; this alert was not retried to prevent a duplicate text.",
+          nextAttemptAt: null,
+          deliveredAt: null,
+        },
+      })).count;
   const deliveries = await prisma.integrationDelivery.findMany({
     where: {
       status: "pending",
@@ -450,11 +546,14 @@ export async function retryPendingIntegrationDeliveries({
       continue;
     }
 
-    const claim = await claimIntegrationDeliveryForRetry({
-      id: delivery.id,
-      attempts: delivery.attempts,
-      now,
-    });
+    const isPayoutSms = delivery.provider === "twilio" && delivery.purpose === "payout_notification_sms";
+    const claim = isPayoutSms
+      ? await claimPayoutDeliveryForRetry({ id: delivery.id, attempts: delivery.attempts })
+      : await claimIntegrationDeliveryForRetry({
+          id: delivery.id,
+          attempts: delivery.attempts,
+          now,
+        });
     if (!claim.claimed) {
       results.push({
         id: delivery.id,
@@ -501,20 +600,23 @@ export async function retryPendingIntegrationDeliveries({
       result = {
         ok: false,
         error: error instanceof Error ? error.message : "Integration retry failed before returning a provider result.",
+        ...(isPayoutSms ? { acceptanceUnknown: true } : {}),
       };
     }
-    const state = computeIntegrationDeliveryState({
-      result,
-      attempts: nextAttempts,
-      maxAttempts: delivery.maxAttempts,
-    });
+    const state = isPayoutSms && "acceptanceUnknown" in result && result.acceptanceUnknown
+      ? { status: "failed" as DeliveryState["status"], nextAttemptAt: null, deliveredAt: null }
+      : computeIntegrationDeliveryState({
+          result,
+          attempts: nextAttempts,
+          maxAttempts: delivery.maxAttempts,
+        });
     if (delivery.provider === "sendgrid" && result.ok) {
       state.status = "accepted";
       state.deliveredAt = null;
     }
 
     const updated = await prisma.integrationDelivery.updateMany({
-      where: { id: delivery.id, status: "pending", attempts: nextAttempts },
+      where: { id: delivery.id, status: isPayoutSms ? "attempting" : "pending", attempts: nextAttempts },
       data: {
         ...("id" in result && result.id ? { providerMessageId: result.id } : {}),
         status: state.status,
@@ -540,6 +642,7 @@ export async function retryPendingIntegrationDeliveries({
 
   return {
     processed: results.length,
+    payoutAttemptsRequiringManualReview,
     results,
   };
 }

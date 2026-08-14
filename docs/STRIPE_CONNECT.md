@@ -21,6 +21,7 @@ Create these environment variables in Vercel for Production and Preview:
 STRIPE_SECRET_KEY=sk_live_or_test_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_or_test_...
 STRIPE_PLATFORM_WEBHOOK_SECRET=whsec_exact_your_account_destination_secret
+STRIPE_CONNECT_WEBHOOK_SECRET=whsec_exact_connect_destination_secret
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_APPLICATION_FEE_BPS=0
 STRIPE_APPLICATION_FEE_FIXED_CENTS=0
@@ -67,12 +68,13 @@ customer.subscription.updated
 customer.subscription.deleted
 charge.refunded
 charge.dispute.created
+payout.created
 account.updated
 v2.core.account.updated
 v2.core.account[requirements].updated
 ```
 
-Each event destination has a unique signing secret even when destinations share the same URL. `STRIPE_PLATFORM_WEBHOOK_SECRET` owns the live `Your account` destination. `STRIPE_WEBHOOK_SECRET` is retained as a legacy candidate during migration. Tenant-scoped secrets are accepted only for explicitly managed tenant/Connect destinations. Never substitute a Stripe CLI listener secret, test-mode secret, connected account API key, or a secret from another destination. Environment changes must target Vercel Production and require a new deployment.
+Each event destination has a unique signing secret even when destinations share the same URL. `STRIPE_PLATFORM_WEBHOOK_SECRET` owns the live `Your account` destination. Store the distinct live Connect destination secret in `STRIPE_CONNECT_WEBHOOK_SECRET`; this is required for `payout.created` signature verification. `STRIPE_WEBHOOK_SECRET` is retained as a legacy candidate during migration. Tenant-scoped secrets are accepted only for explicitly managed tenant/Connect destinations. Never substitute a Stripe CLI listener secret, test-mode secret, connected account API key, or a secret from another destination. Environment changes must target Vercel Production and require a new deployment.
 
 If Stripe does not show the v2 account requirements event in the dashboard, keep `account.updated` enabled and use the status sync button in `/billing-settings`.
 
@@ -86,8 +88,11 @@ checkout.session.expired
 payment_intent.payment_failed
 charge.refunded
 charge.dispute.created
+payout.created
 account.updated
 ```
+
+`payout.created` must be enabled on the live Connect destination that sends events from connected accounts. The BEE Suite uses it to send the saved payout contact a branded Twilio SMS with an authenticated `https://thebeesuite.io/payouts` link. Confirm Twilio production credentials and delivery callbacks before disabling Stripe-managed payout texts; otherwise payout alerts can be duplicated or skipped.
 
 ## Fee Configuration
 

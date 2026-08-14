@@ -93,6 +93,7 @@ test("supported reconciliation matrix includes payment, invoice, subscription, d
     "invoice.payment_failed",
     "payment_intent.payment_failed",
     "payment_intent.succeeded",
+    "payout.created",
     "v2.core.account.updated",
     "v2.core.account[requirements].updated",
   ].sort());

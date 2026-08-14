@@ -28,15 +28,21 @@ export const STRIPE_WEBHOOK_PAYMENT_EVENT_TYPES = [
   "charge.dispute.funds_reinstated",
 ] as const;
 
+export const STRIPE_WEBHOOK_PAYOUT_EVENT_TYPES = [
+  "payout.created",
+] as const;
+
 export const STRIPE_WEBHOOK_SUPPORTED_EVENT_TYPES = [
   ...STRIPE_WEBHOOK_ACCOUNT_EVENT_TYPES,
   ...STRIPE_WEBHOOK_SOFTWARE_BILLING_EVENT_TYPES,
   ...STRIPE_WEBHOOK_PAYMENT_EVENT_TYPES,
+  ...STRIPE_WEBHOOK_PAYOUT_EVENT_TYPES,
 ] as const;
 
 const ACCOUNT_EVENTS = new Set<string>(STRIPE_WEBHOOK_ACCOUNT_EVENT_TYPES);
 const SOFTWARE_BILLING_EVENTS = new Set<string>(STRIPE_WEBHOOK_SOFTWARE_BILLING_EVENT_TYPES);
 const PAYMENT_EVENTS = new Set<string>(STRIPE_WEBHOOK_PAYMENT_EVENT_TYPES);
+const PAYOUT_EVENTS = new Set<string>(STRIPE_WEBHOOK_PAYOUT_EVENT_TYPES);
 
 export function isStripeWebhookAccountEvent(type: string) {
   return ACCOUNT_EVENTS.has(type);
@@ -48,6 +54,10 @@ export function isStripeWebhookSoftwareBillingEvent(type: string) {
 
 export function isStripeWebhookPaymentEvent(type: string) {
   return PAYMENT_EVENTS.has(type);
+}
+
+export function isStripeWebhookPayoutEvent(type: string) {
+  return PAYOUT_EVENTS.has(type);
 }
 
 function objectValue(value: unknown): Record<string, unknown> {

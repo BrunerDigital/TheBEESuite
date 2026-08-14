@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Save, Send } from "lucide-react";
+import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Save, Search, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { formatZonedDateTime } from "@/lib/zoned-date-time";
@@ -410,6 +410,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [billingAction, setBillingAction] = useState("recurring");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [weeklyRecoveryPeriod, setWeeklyRecoveryPeriod] = useState(currentWeeklyPeriod());
+  const [weeklyRecoveryPreview, setWeeklyRecoveryPreview] = useState<{ dueChildren: number; wouldCreate: number; assignedChildren: number; billingPeriod: string } | null>(null);
   const [manualPaymentEmailCopies, setManualPaymentEmailCopies] = useState<Array<{ clipboardText: string }>>([]);
   const [paymentRequestEmailSelections, setPaymentRequestEmailSelections] = useState<Record<string, string[]>>({});
   const [paymentReviewMethod, setPaymentReviewMethod] = useState<DirectorPaymentMethod | null>(null);
@@ -1021,6 +1023,66 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       ageGroup,
       enrollmentStatus,
       ...chargePayload(),
+    });
+  }
+
+  function runWeeklyRecovery(dryRun: boolean) {
+    if (!centerId) return setErrorMessage("Choose a school before running weekly billing recovery.");
+    if (!dryRun && !weeklyRecoveryPreview) {
+      return setErrorMessage("Preview the weekly billing recovery before creating invoices.");
+    }
+    if (!dryRun) {
+      const confirmed = window.confirm(
+        `Create weekly tuition invoices for ${selectedCenter ? centerLabel(selectedCenter) : "the selected school"} and billing period ${weeklyRecoveryPreview?.billingPeriod ?? weeklyRecoveryPeriod}? This creates invoices only and suppresses automatic collection on these recovery invoices.`,
+      );
+      if (!confirmed) return;
+    }
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/billing/tuition-recovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          centerId,
+          billingPeriod: weeklyRecoveryPeriod,
+          dryRun,
+          previewDueChildren: dryRun ? undefined : weeklyRecoveryPreview?.dueChildren,
+        }),
+      });
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        dueChildren?: number;
+        wouldCreate?: number;
+        assignedChildren?: number;
+        billingPeriod?: string;
+        created?: number;
+        skipped?: number;
+        failed?: number;
+        totalCents?: number;
+      } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Weekly billing recovery could not be completed.");
+        if (typeof json?.dueChildren === "number") setWeeklyRecoveryPreview(null);
+        return;
+      }
+      if (dryRun) {
+        setWeeklyRecoveryPreview({
+          dueChildren: json?.dueChildren ?? 0,
+          wouldCreate: json?.wouldCreate ?? 0,
+          assignedChildren: json?.assignedChildren ?? 0,
+          billingPeriod: json?.billingPeriod ?? weeklyRecoveryPeriod,
+        });
+        setStatusMessage(`${json?.wouldCreate ?? 0} weekly tuition invoice${json?.wouldCreate === 1 ? "" : "s"} ready for ${json?.billingPeriod ?? weeklyRecoveryPeriod}. No invoices were created.`);
+        return;
+      }
+      const created = json?.created ?? 0;
+      const skipped = json?.skipped ?? 0;
+      const failed = json?.failed ?? 0;
+      const total = typeof json?.totalCents === "number" ? ` Total posted: ${money(json.totalCents)}.` : "";
+      setWeeklyRecoveryPreview(null);
+      setStatusMessage(`${created} weekly tuition invoice${created === 1 ? "" : "s"} created. ${skipped} duplicate${skipped === 1 ? "" : "s"} skipped. ${failed} failed.${total}`);
+      router.refresh();
     });
   }
 
@@ -1865,6 +1927,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <TabsTrigger value="single"><ReceiptText data-icon="inline-start" />Family charge</TabsTrigger>
             <TabsTrigger value="edit"><FilePenLine data-icon="inline-start" />Edit invoice</TabsTrigger>
             <TabsTrigger value="batch"><Rows3 data-icon="inline-start" />Batch tuition</TabsTrigger>
+            <TabsTrigger value="weekly-recovery"><Search data-icon="inline-start" />Weekly recovery</TabsTrigger>
             <TabsTrigger value="check"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
             <TabsTrigger value="cash"><Banknote data-icon="inline-start" />Cash payment</TabsTrigger>
             <TabsTrigger value="refund"><RotateCcw data-icon="inline-start" />Refund</TabsTrigger>
@@ -2047,6 +2110,52 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </Button>
             <p className="text-xs text-muted-foreground">
               Batch creates invoices only. Never batch the same tuition period already handled by weekly recurring assignments. A due invoice can be collected later if that family separately has autopay enabled.
+            </p>
+          </TabsContent>
+
+          <TabsContent value="weekly-recovery" className="space-y-4 rounded-lg border bg-background/35 p-4">
+            <div>
+              <div className="text-sm font-medium">Weekly billing recovery</div>
+              <p className="text-xs text-muted-foreground">
+                Finds enabled weekly tuition assignments for this school, skips invoices that already exist for the child and period, and creates invoices only. Recovery invoices do not submit autopay.
+              </p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1">
+                <Label htmlFor="billing-weekly-recovery-period">Billing week</Label>
+                <Input
+                  id="billing-weekly-recovery-period"
+                  value={weeklyRecoveryPeriod}
+                  onChange={(event) => {
+                    setWeeklyRecoveryPeriod(event.target.value);
+                    setWeeklyRecoveryPreview(null);
+                  }}
+                  placeholder="2026-W34"
+                />
+              </div>
+              <SummaryMetric
+                label="Preview"
+                value={weeklyRecoveryPreview ? String(weeklyRecoveryPreview.wouldCreate) : "Not run"}
+                detail={weeklyRecoveryPreview ? `${weeklyRecoveryPreview.assignedChildren} enabled assignment${weeklyRecoveryPreview.assignedChildren === 1 ? "" : "s"}` : "Run preview first"}
+              />
+              <SummaryMetric
+                label="Collection"
+                value="Suppressed"
+                detail="Invoices only; no payment submitted"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={isPending || !centerId || !weeklyRecoveryPeriod.trim()} onClick={() => runWeeklyRecovery(true)} variant="outline">
+                <Search data-icon="inline-start" />
+                Preview Weekly Run
+              </Button>
+              <Button disabled={isPending || !weeklyRecoveryPreview || weeklyRecoveryPreview.wouldCreate <= 0} onClick={() => runWeeklyRecovery(false)}>
+                <Play data-icon="inline-start" />
+                Create Weekly Invoices
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Use this when the automatic weekly run was not set or did not run. If the preview changes before creation, Bee Suite stops and asks for a new preview.
             </p>
           </TabsContent>
 

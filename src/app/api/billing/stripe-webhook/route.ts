@@ -443,6 +443,7 @@ async function applyBalancePaymentToOpenInvoices(
     paymentId: string;
     amountCents: number;
     paidAt: Date;
+    accountBalanceAfterCents?: number | null;
     stripeEventId: string;
     stripePaymentIntentId?: string | null;
     stripeCheckoutSessionId?: string | null;
@@ -473,6 +474,12 @@ async function applyBalancePaymentToOpenInvoices(
         ...invoices.filter((invoice) => invoice.id !== preferredInvoiceId),
       ]
     : invoices;
+  const openInvoiceTotalCents = orderedInvoices.reduce((total, invoice) => total + invoice.totalCents, 0);
+  const invoiceSettlementBudgetCents = Math.max(
+    remainingCents,
+    openInvoiceTotalCents - Math.max(0, input.accountBalanceAfterCents ?? openInvoiceTotalCents),
+  );
+  remainingCents = Math.min(openInvoiceTotalCents, invoiceSettlementBudgetCents);
   const paidAt = input.paidAt.toISOString();
   const appliedInvoiceIds: string[] = [];
 
@@ -624,6 +631,7 @@ async function handleFamilyBalancePaymentSucceeded(
         paymentId: payment.id,
         amountCents: payment.amountCents,
         paidAt,
+        accountBalanceAfterCents: updatedAccount.balanceCents,
         stripeEventId: event.id,
         stripePaymentIntentId,
         stripeCheckoutSessionId: event.type.startsWith("checkout.session.") ? input.externalId : null,

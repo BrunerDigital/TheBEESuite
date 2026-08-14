@@ -23,6 +23,7 @@ import {
   type ProcareFieldMapping,
 } from "@/lib/procare-import-fields";
 import { prisma } from "@/lib/prisma";
+import { withoutConfirmedFamilyResponsibility } from "@/lib/parent-billing-visibility";
 import { buildCenterAliasMap, resolveImportCenter, type CenterAliasMap } from "@/lib/import-center-mapping";
 import {
   buildProcareDuplicateMatch,
@@ -3037,15 +3038,18 @@ async function POSTHandler(request: NextRequest) {
         const importedBillingFields = metadataFromRow(rawData, { mappedCenterId: targetCenter.id });
         const existingBillingAccount = await prisma.billingAccount.findUnique({
           where: { familyId: family.id },
-          select: { customFields: true },
+          select: { balanceCents: true, customFields: true },
         });
+        const existingBillingFields = existingBillingAccount?.balanceCents === balanceCents
+          ? existingBillingAccount.customFields
+          : withoutConfirmedFamilyResponsibility(existingBillingAccount?.customFields) as Prisma.JsonValue;
         const account = await prisma.billingAccount.upsert({
           where: { familyId: family.id },
           update: {
             balanceCents,
             sourceSystem: "procare",
             externalId: accountExternalId || undefined,
-            customFields: mergeCustomFields(existingBillingAccount?.customFields, importedBillingFields),
+            customFields: mergeCustomFields(existingBillingFields, importedBillingFields),
           },
           create: {
             familyId: family.id,

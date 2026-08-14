@@ -193,6 +193,24 @@ test("role SOPs cover the August 11 UI and workflow baseline", () => {
   assert.match(manual, /Current Application Navigation/);
   assert.match(inviteUi, /Import\s+history is diagnostic when present but is not required/);
 
+  const kiosk = readFileSync("docs/sops/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md", "utf8");
+  const sopIndex = readFileSync("docs/sops/README.md", "utf8");
+  assert.match(kiosk, /tap `Verify Family PIN`/);
+  assert.match(kiosk, /scanning verifies automatically/);
+  assert.match(kiosk, /records credential confirmation separately from any typed or written signature requirement/);
+  assert.match(kiosk, /Staff should verify a separate pickup adult/);
+  assert.doesNotMatch(kiosk, /Type your full name as the guardian signature/);
+  assert.doesNotMatch(kiosk, /verified adult confirms/);
+  assert.match(sopIndex, /credential or signature evidence/);
+
+  const completeGuide = readFileSync("docs/BEE_SUITE_COMPLETE_GUIDE.md", "utf8");
+  const launchGuide = readFileSync("docs/BEE_SUITE_SCHOOL_DATA_IMPORT_AND_PARENT_LAUNCH_EMAILS.md", "utf8");
+  assert.match(completeGuide, /shows the linked children for selection/);
+  assert.match(completeGuide, /guardian PIN and QR credentials identify the linked guardian credential/i);
+  assert.match(launchGuide, /Test PIN or QR credential evidence/);
+  assert.doesNotMatch(completeGuide, /records the attendance event and signature/);
+  assert.doesNotMatch(launchGuide, /Test signature capture and authorized-pickup warnings/);
+
   const parentFacing = [billing, parent, readFileSync("docs/sops/PARENT_ACH_PAYMENT_GUIDE.md", "utf8")].join("\n");
   assert.doesNotMatch(parentFacing, /card processing recovery|card recovery/i);
 });

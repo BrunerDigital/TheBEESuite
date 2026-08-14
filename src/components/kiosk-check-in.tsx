@@ -128,7 +128,6 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
   const [staffLookup, setStaffLookup] = useState<StaffLookupResult | null>(null);
   const [staffNotes, setStaffNotes] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [signatureName, setSignatureName] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -191,7 +190,6 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
     setStaffLookup(null);
     setStaffNotes("");
     setSelectedIds([]);
-    setSignatureName("");
     setError("");
     setStatus(nextStatus);
     setPendingAction(null);
@@ -227,7 +225,6 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
     setVerifiedCredential(null);
     setLookup(null);
     setSelectedIds([]);
-    setSignatureName("");
     setError("");
     setStatus("");
   }
@@ -330,7 +327,6 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
         setLookup(json);
         setVerifiedCredential(credential);
         setSelectedIds(json.children.map((child) => child.id));
-        setSignatureName("");
       } finally {
         setPendingAction(null);
       }
@@ -440,8 +436,6 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
           ...(verifiedCredential.method === "qr" ? { qrToken: verifiedCredential.qrToken } : { pin: verifiedCredential.pin }),
           childIds: selectedIds,
           type,
-          signatureAccepted: Boolean(signatureName.trim()),
-          signatureName,
         });
         if (networkError || !response) {
           setError("School Check-In lost its connection and could not confirm the result. Ask the front desk to verify before trying again.");
@@ -799,7 +793,7 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                     ? `${staffLookup.staff.title} verified for ${center.name}.`
                     : "Staff can clock in or clock out after code verification."
                   : lookup
-                    ? `${lookup.guardian.fullName} verified by ${verificationLabel}. Choose who is arriving or leaving.`
+                    ? `Guardian credential for ${lookup.guardian.fullName} verified by ${verificationLabel}. Choose who is arriving or leaving.`
                     : "Enter your Family PIN or scan your QR code to see your children."}
               </CardDescription>
             </CardHeader>
@@ -975,40 +969,20 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
                   {lookup.children.length ? (
                     <>
                       <div className="mt-auto grid gap-3 sm:grid-cols-2">
-                        <div className="grid gap-2 sm:col-span-2">
-                          <Label htmlFor="signature-name" className="text-base">Type your full name</Label>
-                          <Input
-                            id="signature-name"
-                            name="guardianSignature"
-                            className="h-14 text-lg"
-                            value={signatureName}
-                            onChange={(event) => {
-                              markActivity();
-                              setSignatureName(event.target.value);
-                            }}
-                            placeholder="Type your full name…"
-                            autoComplete="off"
-                            spellCheck={false}
-                            required
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Your name confirms the selected children and the action you choose below.
-                          </p>
-                        </div>
                         <p className="text-sm text-muted-foreground sm:col-span-2" aria-live="polite">
                           {selectedActionMessage}
                         </p>
-                        <Button className="h-20 text-xl" disabled={isPending || !canCheckInSelected || !signatureName.trim()} onClick={() => submit("check_in")}>
+                        <Button className="h-20 text-xl" disabled={isPending || !canCheckInSelected} onClick={() => submit("check_in")}>
                           <LogIn data-icon="inline-start" aria-hidden="true" />
                           {pendingAction === "family_check_in" ? "Saving…" : "Check In"}
                         </Button>
-                        <Button className="h-20 text-xl" variant="secondary" disabled={isPending || !canCheckOutSelected || !signatureName.trim()} onClick={() => submit("check_out")}>
+                        <Button className="h-20 text-xl" variant="secondary" disabled={isPending || !canCheckOutSelected} onClick={() => submit("check_out")}>
                           <LogOut data-icon="inline-start" aria-hidden="true" />
                           {pendingAction === "family_check_out" ? "Saving…" : "Check Out"}
                         </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        By tapping Check In or Check Out, you confirm the selected children are arriving or leaving with the verified adult.
+                        By tapping Check In or Check Out, the kiosk records credential evidence for the selected children. Staff should verify a separate pickup adult when school policy requires it.
                       </p>
                     </>
                   ) : null}

@@ -39,26 +39,26 @@ Do not activate the kiosk merely because setup or training passed. The named sch
 1. On the lobby kiosk, choose `Family`.
 2. Choose `PIN` or `QR`.
 3. If using PIN, enter the 4 digit code from the school.
-4. If using QR, scan the QR credential from the school.
-5. Tap `Find Family`.
+4. If using PIN, tap `Verify Family PIN`.
+5. If using QR, scan the QR credential from the school; scanning verifies automatically.
 6. Confirm the correct family appears.
 7. Select the child or children arriving.
-8. Type your full name as the guardian signature.
-9. Tap `Check In`.
-10. Wait for the confirmation message.
+8. Tap `Check In`.
+9. Wait for the confirmation message.
 
 ## Parent Or Authorized Pickup Check-Out
 
 1. On the lobby kiosk, choose `Family`.
-2. Enter the PIN or scan the QR credential.
-3. Tap `Find Family`.
-4. Confirm the correct family appears.
-5. Select the child or children leaving.
-6. Type your full name as the guardian signature.
-7. Tap `Check Out`.
-8. Wait for the confirmation message.
+2. Choose `PIN` or `QR`.
+3. If using PIN, enter the 4 digit code from the school.
+4. If using PIN, tap `Verify Family PIN`.
+5. If using QR, scan the QR credential from the school; scanning verifies automatically.
+6. Confirm the correct family appears.
+7. Select the child or children leaving.
+8. Tap `Check Out`.
+9. Wait for the confirmation message.
 
-By tapping check in or check out, the adult confirms the selected children are arriving or leaving with the verified adult.
+By tapping check in or check out, the kiosk records PIN or QR credential evidence for the selected children. Staff should verify a separate pickup adult when school policy requires it. The system records credential confirmation separately from any typed or written signature requirement.
 
 ## Kiosk Warnings
 

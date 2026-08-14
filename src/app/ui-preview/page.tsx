@@ -78,14 +78,15 @@ const closingData = {
   stillCheckedIn: 3,
   latePickups: 1,
   authorizationWarnings: 1,
-  signaturesCaptured: 137,
+  signaturesCaptured: 0,
+  credentialConfirmations: 134,
   pinVerified: 92,
   qrVerified: 42,
   staffVerified: 5,
   logs: [
-    { id: "preview-log-1", type: "check_out", occurredAt: "2026-08-09T21:31:00.000Z", pickupName: "Maria Santos", verificationStatus: "qr_verified", pinVerified: false, signatureCaptured: true, latePickup: true, pickupAuthorizationWarning: false, child: { fullName: "Ava Rivera", ageGroup: "Pre-K" }, guardian: null, classroom: { name: "Butterflies" }, center: { name: "Sunshine Academy", crmLocationId: "Carmel" } },
-    { id: "preview-log-2", type: "check_out", occurredAt: "2026-08-09T21:12:00.000Z", pickupName: "Unlisted pickup", verificationStatus: null, pinVerified: false, signatureCaptured: false, latePickup: false, pickupAuthorizationWarning: true, child: { fullName: "Mason Brooks", ageGroup: "Pre-K" }, guardian: null, classroom: { name: "Butterflies" }, center: { name: "Sunshine Academy", crmLocationId: "Carmel" } },
-    { id: "preview-log-3", type: "check_out", occurredAt: "2026-08-09T20:48:00.000Z", pickupName: "Jessica Rivera", verificationStatus: "pin_verified", pinVerified: true, signatureCaptured: true, latePickup: false, pickupAuthorizationWarning: false, child: { fullName: "Liam Rivera", ageGroup: "Toddlers" }, guardian: { fullName: "Jessica Rivera", email: "jessica.rivera@example.com" }, classroom: { name: "Busy Bees" }, center: { name: "Sunshine Academy", crmLocationId: "Carmel" } },
+    { id: "preview-log-1", type: "check_out", occurredAt: "2026-08-09T21:31:00.000Z", pickupName: "Maria Santos", verificationStatus: "qr_verified", pinVerified: false, signatureCaptured: false, credentialConfirmed: true, latePickup: true, pickupAuthorizationWarning: false, child: { fullName: "Ava Rivera", ageGroup: "Pre-K" }, guardian: null, classroom: { name: "Butterflies" }, center: { name: "Sunshine Academy", crmLocationId: "Carmel" } },
+    { id: "preview-log-2", type: "check_out", occurredAt: "2026-08-09T21:12:00.000Z", pickupName: "Unlisted pickup", verificationStatus: null, pinVerified: false, signatureCaptured: false, credentialConfirmed: false, latePickup: false, pickupAuthorizationWarning: true, child: { fullName: "Mason Brooks", ageGroup: "Pre-K" }, guardian: null, classroom: { name: "Butterflies" }, center: { name: "Sunshine Academy", crmLocationId: "Carmel" } },
+    { id: "preview-log-3", type: "check_out", occurredAt: "2026-08-09T20:48:00.000Z", pickupName: "Jessica Rivera", verificationStatus: "pin_verified", pinVerified: true, signatureCaptured: false, credentialConfirmed: true, latePickup: false, pickupAuthorizationWarning: false, child: { fullName: "Liam Rivera", ageGroup: "Toddlers" }, guardian: { fullName: "Jessica Rivera", email: "jessica.rivera@example.com" }, classroom: { name: "Busy Bees" }, center: { name: "Sunshine Academy", crmLocationId: "Carmel" } },
   ],
 };
 

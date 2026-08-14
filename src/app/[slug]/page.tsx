@@ -5447,6 +5447,12 @@ async function renderLivePage(
       value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
     const reconciliationLogs = checkLogs.map((log) => {
       const metadata = metadataFor(log.metadata);
+      const credentialConfirmed = Boolean(
+        log.pinVerified
+        || log.verificationStatus === "qr_verified"
+        || log.verificationStatus === "staff_verified"
+        || metadata.credentialConfirmationMethod,
+      );
       return {
         id: log.id,
         type: log.type,
@@ -5455,6 +5461,7 @@ async function renderLivePage(
         verificationStatus: log.verificationStatus,
         pinVerified: log.pinVerified,
         signatureCaptured: Boolean(log.signaturePlaceholder || metadata.signatureName),
+        credentialConfirmed,
         latePickup: metadata.latePickup === true,
         pickupAuthorizationWarning: metadata.pickupAuthorizationWarning === true,
         child: log.child,
@@ -5512,6 +5519,7 @@ async function renderLivePage(
             latePickups: reconciliationLogs.filter((log) => log.latePickup).length,
             authorizationWarnings: reconciliationLogs.filter((log) => log.pickupAuthorizationWarning).length,
             signaturesCaptured: reconciliationLogs.filter((log) => log.signatureCaptured).length,
+            credentialConfirmations: reconciliationLogs.filter((log) => log.credentialConfirmed).length,
             pinVerified: reconciliationLogs.filter((log) => log.pinVerified).length,
             qrVerified: reconciliationLogs.filter((log) => log.verificationStatus === "qr_verified").length,
             staffVerified: reconciliationLogs.filter((log) => log.verificationStatus === "staff_verified").length,

@@ -591,23 +591,35 @@ async function GETHandler(request: NextRequest) {
       title: "Check-in/out logs",
       description: "Kiosk check-in and check-out verification records.",
       filename: "17-check-in-out.csv",
-      headers: ["center", "child", "family", "classroom", "guardian", "type", "occurredAt", "pickupName", "signatureCaptured", "verificationStatus", "pinVerified", "notes", "sourceSystem", "externalId"],
-      rows: checkLogs.map((log) => [
-        centerLabelById.get(log.centerId ?? log.child.family.centerId ?? log.classroom?.centerId ?? "") ?? "Unassigned",
-        log.child.fullName,
-        log.child.family.name,
-        log.classroom?.name ?? "",
-        log.guardian?.fullName ?? "",
-        log.type,
-        iso(log.occurredAt),
-        log.pickupName ?? "",
-        yesNo(log.signaturePlaceholder),
-        log.verificationStatus ?? "",
-        yesNo(log.pinVerified),
-        log.notes ?? "",
-        log.sourceSystem ?? "",
-        log.externalId ?? "",
-      ]),
+      headers: ["center", "child", "family", "classroom", "guardian", "type", "occurredAt", "pickupName", "signatureCaptured", "credentialConfirmed", "verificationStatus", "pinVerified", "notes", "sourceSystem", "externalId"],
+      rows: checkLogs.map((log) => {
+        const metadata = log.metadata && typeof log.metadata === "object" && !Array.isArray(log.metadata)
+          ? log.metadata as Record<string, unknown>
+          : {};
+        const credentialConfirmed = Boolean(
+          log.pinVerified
+          || log.verificationStatus === "qr_verified"
+          || log.verificationStatus === "staff_verified"
+          || metadata.credentialConfirmationMethod,
+        );
+        return [
+          centerLabelById.get(log.centerId ?? log.child.family.centerId ?? log.classroom?.centerId ?? "") ?? "Unassigned",
+          log.child.fullName,
+          log.child.family.name,
+          log.classroom?.name ?? "",
+          log.guardian?.fullName ?? "",
+          log.type,
+          iso(log.occurredAt),
+          log.pickupName ?? "",
+          yesNo(log.signaturePlaceholder),
+          yesNo(credentialConfirmed),
+          log.verificationStatus ?? "",
+          yesNo(log.pinVerified),
+          log.notes ?? "",
+          log.sourceSystem ?? "",
+          log.externalId ?? "",
+        ];
+      }),
     },
     {
       id: "form-submissions",

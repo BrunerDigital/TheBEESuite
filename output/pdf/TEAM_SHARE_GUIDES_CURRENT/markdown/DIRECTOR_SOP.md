@@ -10,7 +10,7 @@ Audience: center directors, assistant directors, and school operators responsibl
 
 ## Visual Overview
 
-![Director desktop operations guide](../assets/director-desktop-operations-guide-17aee1579d.png)
+![Director desktop operations guide](../assets/director-desktop-operations-guide-300871cf93.png)
 
 ## Desktop Screenshots
 
@@ -18,7 +18,7 @@ Use the desktop view for family, billing, staffing, and exception-review work.
 
 ![Director daily reports workspace on desktop](../assets/director-desktop-reports-light-f478e8bf5d.png)
 
-![Director billing and invoice workspace on desktop](../assets/director-desktop-billing-light-cf8de65dd4.png)
+![Director billing and invoice workspace on desktop](../assets/director-desktop-billing-light-6a0e457f8f.png)
 
 Use `SCHOOL_SYSTEM_OPERATING_MANUAL.md` for the full launch map and `BILLING_ADMIN_SOP.md` for deeper billing/payment procedures.
 

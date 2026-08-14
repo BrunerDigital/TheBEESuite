@@ -14,6 +14,7 @@ export type EndOfDayReconciliationData = {
   latePickups: number;
   authorizationWarnings: number;
   signaturesCaptured: number;
+  credentialConfirmations: number;
   pinVerified: number;
   qrVerified: number;
   staffVerified: number;
@@ -25,6 +26,7 @@ export type EndOfDayReconciliationData = {
     verificationStatus: string | null;
     pinVerified: boolean;
     signatureCaptured: boolean;
+    credentialConfirmed: boolean;
     latePickup: boolean;
     pickupAuthorizationWarning: boolean;
     child: { fullName: string; ageGroup: string } | null;
@@ -75,15 +77,15 @@ function ClosingStep({ number, title, detail, issueCount, icon, href }: StepProp
 }
 
 export function EndOfDayClosingBoard({ data }: { data: EndOfDayReconciliationData }) {
-  const missingSignatures = data.logs.filter((log) => log.type === "check_out" && !log.signatureCaptured).length;
-  const missingCredentials = data.logs.filter((log) => !log.pinVerified && log.verificationStatus !== "qr_verified" && log.verificationStatus !== "staff_verified").length;
+  const missingPickupEvidence = data.logs.filter((log) => log.type === "check_out" && !log.signatureCaptured && !log.credentialConfirmed).length;
+  const missingCredentials = data.logs.filter((log) => !log.credentialConfirmed).length;
   const exceptionLogs = data.logs.filter((log) => (
     log.latePickup ||
     log.pickupAuthorizationWarning ||
-    (log.type === "check_out" && !log.signatureCaptured) ||
-    (!log.pinVerified && log.verificationStatus !== "qr_verified" && log.verificationStatus !== "staff_verified")
+    (log.type === "check_out" && !log.signatureCaptured && !log.credentialConfirmed) ||
+    !log.credentialConfirmed
   ));
-  const blockingIssues = data.stillCheckedIn + data.authorizationWarnings + missingSignatures + missingCredentials;
+  const blockingIssues = data.stillCheckedIn + data.authorizationWarnings + missingPickupEvidence + missingCredentials;
   const ready = blockingIssues === 0;
 
   return (
@@ -110,7 +112,7 @@ export function EndOfDayClosingBoard({ data }: { data: EndOfDayReconciliationDat
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <ClosingStep number={1} title="Account for Every Child" detail={data.stillCheckedIn ? `${data.stillCheckedIn} child${data.stillCheckedIn === 1 ? " is" : "ren are"} still checked in.` : "Every checked-in child has a check-out."} issueCount={data.stillCheckedIn} icon={<Clock3 className="size-5" />} href="/check-in" />
           <ClosingStep number={2} title="Review Pickup Safety" detail={data.authorizationWarnings ? "Front desk authorization warnings need human review." : "No pickup authorization warnings remain."} issueCount={data.authorizationWarnings} icon={<ShieldAlert className="size-5" />} href="#attendance-reconciliation-ledger" />
-          <ClosingStep number={3} title="Confirm Signatures" detail={missingSignatures ? "Check-out records are missing guardian signatures." : "Required check-out signatures are captured."} issueCount={missingSignatures} icon={<PenLine className="size-5" />} href="#attendance-reconciliation-ledger" />
+          <ClosingStep number={3} title="Confirm Pickup Evidence" detail={missingPickupEvidence ? "Check-out records are missing signature or credential evidence." : "Check-out records have signature or credential evidence."} issueCount={missingPickupEvidence} icon={<PenLine className="size-5" />} href="#attendance-reconciliation-ledger" />
           <ClosingStep number={4} title="Verify Credentials" detail={missingCredentials ? "Some activity lacks PIN, QR, or staff verification." : "Attendance activity has a verification method."} issueCount={missingCredentials} icon={<KeyRound className="size-5" />} href="#attendance-reconciliation-ledger" />
         </div>
 
@@ -134,8 +136,8 @@ export function EndOfDayClosingBoard({ data }: { data: EndOfDayReconciliationDat
                   <span className="flex flex-wrap gap-1.5">
                     {log.pickupAuthorizationWarning ? <Badge variant="destructive">Authorization</Badge> : null}
                     {log.latePickup ? <Badge variant="secondary">Late Pickup</Badge> : null}
-                    {log.type === "check_out" && !log.signatureCaptured ? <Badge variant="outline">No Signature</Badge> : null}
-                    {!log.pinVerified && log.verificationStatus !== "qr_verified" && log.verificationStatus !== "staff_verified" ? <Badge variant="outline">No Credential</Badge> : null}
+                    {log.type === "check_out" && !log.signatureCaptured && !log.credentialConfirmed ? <Badge variant="outline">No pickup evidence</Badge> : null}
+                    {!log.credentialConfirmed ? <Badge variant="outline">No Credential</Badge> : null}
                   </span>
                 </div>
               ))}
@@ -153,6 +155,7 @@ export function EndOfDayClosingBoard({ data }: { data: EndOfDayReconciliationDat
                 ["Check-Ins", data.checkIns],
                 ["Check-Outs", data.checkOuts],
                 ["Signatures", data.signaturesCaptured],
+                ["Credentials", data.credentialConfirmations],
                 ["Late Pickups", data.latePickups],
                 ["PIN", data.pinVerified],
                 ["QR", data.qrVerified],

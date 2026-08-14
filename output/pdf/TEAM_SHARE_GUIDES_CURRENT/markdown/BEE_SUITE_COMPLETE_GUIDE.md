@@ -106,7 +106,7 @@ The parent or guardian uses the family portal. This role can see linked children
 
 ### 4.9 Authorized pickup
 
-The authorized pickup role is deliberately narrow. It exists for approved pickup and drop-off actions, generally through the kiosk, and only for authorized children. It is not a substitute for a parent portal, teacher account, or staff account.
+The authorized pickup role is deliberately narrow. It exists for approved pickup and drop-off context and only for authorized children. It is not a substitute for a parent portal, teacher account, or staff account. Guardian PIN and QR credentials identify the linked guardian credential; they do not by themselves capture a separate authorized pickup adult's identity.
 
 ### 4.10 Read-only auditor
 
@@ -114,7 +114,7 @@ The read-only auditor reviews evidence without changing operational data. Typica
 
 ### 4.11 The public kiosk is a surface, not a broad user role
 
-The check-in kiosk is a controlled public-facing interface for guardian PIN or QR lookup, signatures, child check-in and check-out, pickup warnings, and staff clock activity. Identity and authorization are verified during the workflow; the kiosk does not expose the full application.
+The check-in kiosk is a controlled public-facing interface for guardian PIN or QR lookup, child check-in and check-out, pickup warnings, and staff clock activity. Credential and authorization evidence is verified during the workflow; the kiosk does not expose the full application.
 
 ---
 
@@ -199,7 +199,7 @@ The **Classroom Dashboard** is a touch-friendly home for rosters, attendance, ra
 
 The **Teacher Portal** is the mobile-first version of that workflow. It includes large quick-action controls, assigned children, partial-save support, poor-connectivity guidance, an offline queue foundation for classroom actions, profile and photo setup, and classroom-safe messaging.
 
-The **Attendance** module handles child and staff check-in and check-out, absence state, PIN and QR credentials, signatures, pickup verification, late-pickup warnings, classroom state, and ratio snapshots. Attendance is stateful: a child cannot be meaningfully checked out without a prior checked-in state, and duplicate or contradictory events must be guarded.
+The **Attendance** module handles child and staff check-in and check-out, absence state, PIN and QR credentials, credential or signature evidence, pickup verification, late-pickup warnings, classroom state, and ratio snapshots. Attendance is stateful: a child cannot be meaningfully checked out without a prior checked-in state, and duplicate or contradictory events must be guarded.
 
 The **Daily Reports** module records meals, bottles, naps, diapers, potty activity, mood, activities, supplies, notes, photos, and staff observations. Teachers can save progress and publish an appropriate summary to the parent portal.
 
@@ -221,7 +221,7 @@ The portal supports responsive web and progressive-web-app use. Install guides c
 
 ### 6.7 Kiosk and authorized pickup
 
-The kiosk looks up a family or approved pickup using controlled credentials, confirms the authorized child, records the attendance event and signature, and displays relevant warnings. Guardian PINs can be managed or rotated. QR tokens are designed to be scoped and time-aware. Staff kiosk functions support staff clock-in and clock-out.
+The kiosk looks up a family using guardian PIN or QR credentials, shows the linked children for selection, records the attendance event with credential evidence, and displays relevant warnings. Guardian PINs can be managed or rotated. QR tokens are designed to be scoped and time-aware. If a separate authorized pickup adult needs to be identified, staff must verify that identity outside the guardian credential and follow the school's pickup policy. Staff kiosk functions support staff clock-in and clock-out.
 
 The kiosk must not reveal broad family, medical, billing, or custody data. A warning should prompt staff verification rather than disclose a restricted note to an unauthorized person.
 
@@ -342,7 +342,7 @@ AI output is labeled as a suggestion and should be reviewed before use. It must 
 4. Ratio and staffing views use current attendance and assignment data to flag conditions for human attention.
 5. If an incident occurs, the teacher documents it and the director reviews it.
 6. The teacher completes the daily report, and approved content becomes visible to the linked family.
-7. The guardian checks the child out, provides any required signature, and receives the day's information through the portal and configured channels.
+7. The guardian checks the child out with PIN or QR credential evidence, provides any separately required signature if school policy requires it, and receives the day's information through the portal and configured channels.
 
 ### 7.3 Tuition and payment
 

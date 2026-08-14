@@ -3,6 +3,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const kioskSource = readFileSync("src/components/kiosk-check-in.tsx", "utf8");
+const kioskCheckRouteSource = readFileSync("src/app/api/kiosk/check/route.ts", "utf8");
+const attendancePageSource = readFileSync("src/app/[slug]/page.tsx", "utf8");
+const closingBoardSource = readFileSync("src/components/end-of-day-closing-board.tsx", "utf8");
+const exportPackageSource = readFileSync("src/app/api/documents/export-package/route.ts", "utf8");
+const liveOpsSource = readFileSync("src/components/live-ops-pages.tsx", "utf8");
 const credentialCardSource = readFileSync("src/components/guardian-kiosk-credential-card.tsx", "utf8");
 const credentialPanelSource = readFileSync("src/components/parent-kiosk-credential-panel.tsx", "utf8");
 const pinManagerSource = readFileSync("src/components/guardian-pin-manager.tsx", "utf8");
@@ -32,10 +37,30 @@ test("privacy and family actions expose no idle no-op controls", () => {
   assert.match(kioskSource, /window\.removeEventListener\("pageshow", clearRestoredPrivateState\)/);
   assert.match(kioskSource, /name="selectedChildren"/);
   assert.match(kioskSource, /const selected = event\.currentTarget\.checked/);
-  assert.match(kioskSource, /disabled=\{isPending \|\| !canCheckInSelected \|\| !signatureName\.trim\(\)\}/);
-  assert.match(kioskSource, /disabled=\{isPending \|\| !canCheckOutSelected \|\| !signatureName\.trim\(\)\}/);
+  assert.match(kioskSource, /disabled=\{isPending \|\| !canCheckInSelected\}/);
+  assert.match(kioskSource, /disabled=\{isPending \|\| !canCheckOutSelected\}/);
+  assert.match(kioskSource, /Guardian credential for \$\{lookup\.guardian\.fullName\} verified by/);
+  assert.match(kioskSource, /records credential evidence for the selected children/);
+  assert.doesNotMatch(kioskSource, /signatureName|guardianSignature|Type your full name/);
   assert.match(kioskSource, /postKioskJson[\s\S]*["']\/api\/kiosk\/lookup["']/);
   assert.match(kioskSource, /postKioskJson[\s\S]*["']\/api\/kiosk\/check["']/);
+});
+
+test("PIN and QR kiosk confirmation is reported separately from signature capture", () => {
+  assert.match(kioskCheckRouteSource, /signaturePlaceholder: false/);
+  assert.match(kioskCheckRouteSource, /pickupName: null/);
+  assert.match(kioskCheckRouteSource, /credentialConfirmationMethod/);
+  assert.match(kioskCheckRouteSource, /credentialHolderName: guardian\.fullName/);
+  assert.doesNotMatch(kioskSource, /signatureAccepted/);
+  assert.doesNotMatch(kioskCheckRouteSource, /signatureAccepted|signatureName: guardian\.fullName|signatureMethod: "typed"|credentialConfirmedBy: guardian\.fullName|pickupName: guardian\.fullName/);
+
+  assert.match(attendancePageSource, /credentialConfirmed = Boolean/);
+  assert.match(attendancePageSource, /credentialConfirmations: reconciliationLogs\.filter/);
+  assert.match(closingBoardSource, /Confirm Pickup Evidence/);
+  assert.match(closingBoardSource, /credentialConfirmed/);
+  assert.match(liveOpsSource, /log\.verificationStatus === "staff_verified"[\s\S]*\? "Staff"/);
+  assert.match(liveOpsSource, /log\.verificationStatus === "qr_verified" \|\| log\.verificationStatus === "staff_verified" \|\| log\.pinVerified/);
+  assert.match(exportPackageSource, /"signatureCaptured", "credentialConfirmed"/);
 });
 
 test("guardian credential controls are semantic and fail with actionable messages", () => {

@@ -124,7 +124,7 @@ flowchart TD
 | Billing admin | Billing access, ledgers, school-scoped tuition plans, payment readiness, approved policy | Create invoices, manage payment methods, send secure setup links, run school-scoped Terminal payments, reconcile payments, handle failed payments | `BILLING_ADMIN_SOP.md` |
 | Teacher | Teacher login, classroom assignment, roster, shift code if used | Attendance, daily reports, photos, incidents, messages, offline sync | `TEACHER_SOP.md` |
 | Parent or guardian | Guardian email linked to family, password from the school invitation, secure parent portal link | Install portal, view updates, message school, review documents, choose card/bank payment, acknowledge incidents | `PARENT_PORTAL_INSTALL_GUIDE.md`, `PARENT_ACH_PAYMENT_GUIDE.md`, `PARENT_PORTAL_SOP.md` |
-| Authorized pickup | Active PIN or QR credential, pickup authorization, correct school kiosk | Check child in/out, sign the kiosk, contact director for warnings | `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` |
+| Authorized pickup | Active PIN or QR credential, pickup authorization, correct school kiosk | Check child in/out, confirm pickup by credential or signature, contact director for warnings | `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` |
 
 ## Launch Week Command Rhythm
 

@@ -16,11 +16,11 @@ The BEE Suite supports school operations, but it does not replace professional j
 
 ## Visual Launch Map
 
-![Independent school launch gates](../assets/school-launch-gates-ec156afee4.png)
+![Independent school launch gates](../assets/school-launch-gates-e227cbf6c4.png)
 
 ![Director daily operating flow](../assets/director-daily-flow-830e761842.png)
 
-![Role and device screenshot standard](../assets/role-device-standards-guide-c202e29952.png)
+![Role and device screenshot standard](../assets/role-device-standards-guide-4df2bc1599.png)
 
 ## Current Application Navigation
 
@@ -128,7 +128,7 @@ flowchart TD
 | Billing admin | Billing access, ledgers, school-scoped tuition plans, payment readiness, approved policy | Create invoices, manage payment methods, send secure setup links, run school-scoped Terminal payments, reconcile payments, handle failed payments | `BILLING_ADMIN_SOP.md` |
 | Teacher | Teacher login, classroom assignment, roster, shift code if used | Attendance, daily reports, photos, incidents, messages, offline sync | `TEACHER_SOP.md` |
 | Parent or guardian | Guardian email linked to family, password from the school invitation, secure parent portal link | Install portal, view updates, message school, review documents, choose card/bank payment, acknowledge incidents | `PARENT_PORTAL_INSTALL_GUIDE.md`, `PARENT_ACH_PAYMENT_GUIDE.md`, `PARENT_PORTAL_SOP.md` |
-| Authorized pickup | Active PIN or QR credential, pickup authorization, correct school kiosk | Check child in/out, sign the kiosk, contact director for warnings | `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` |
+| Authorized pickup | Active PIN or QR credential, pickup authorization, correct school kiosk | Check child in/out, confirm pickup by credential or signature, contact director for warnings | `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` |
 
 ## Launch Week Command Rhythm
 

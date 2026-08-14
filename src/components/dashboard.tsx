@@ -1557,6 +1557,18 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
 
       {isDirectorDashboard && live?.reviewInbox ? <DirectorReviewInbox items={live.reviewInbox} /> : null}
 
+      {isDirectorDashboard ? (
+        <Card className="border-sky-500/30 bg-sky-500/5">
+          <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+            <div>
+              <div className="flex items-center gap-2 font-semibold"><BadgeDollarSign className="size-5 text-sky-700 dark:text-sky-300" aria-hidden="true" /> Agency subsidy billing</div>
+              <CardDescription className="mt-2 max-w-3xl">Manage payer setup, child authorizations, attendance and document requirements, agency claims, approvals, denials, and remittance reconciliation without adding agency debt to parent balances.</CardDescription>
+            </div>
+            <Button nativeButton={false} render={<Link href="/billing-invoices#agency-subsidy-billing" />}>Open agency workspace <ArrowUpRight data-icon="inline-end" /></Button>
+          </CardHeader>
+        </Card>
+      ) : null}
+
       {configuredWidgets.length ? (
         <DashboardWidgetConfigurator
           key={configuredWidgets.map((widget) => `${widget.id}:${widget.visible}`).join("|")}

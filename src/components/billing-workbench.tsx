@@ -115,6 +115,7 @@ export type BillingWorkbenchCenter = {
   id: string;
   name: string;
   crmLocationId: string | null;
+  state?: string | null;
   classrooms: Array<{ id: string; name: string; ageGroup: string }>;
   dashboardOptions?: DashboardOptions;
   isMissHoneysLearningCenter?: boolean;

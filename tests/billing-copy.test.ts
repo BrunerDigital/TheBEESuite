@@ -28,7 +28,7 @@ test("billing action labels name the real action and hide internal identifiers",
   const autopayActions = source("src/components/payment-autopay-actions.tsx");
   const printActions = source("src/components/billing-print-actions.tsx");
 
-  assert.match(invoiceActions, /Process with saved method/);
+  assert.match(invoiceActions, /Process authorized autopay/);
   assert.match(invoiceActions, /Pay with Link/);
   assert.match(autopayActions, /Process eligible invoices/);
   assert.match(autopayActions, /Account credit is applied first/);

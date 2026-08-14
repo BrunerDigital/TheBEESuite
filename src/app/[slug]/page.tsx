@@ -60,7 +60,7 @@ import { modules } from "@/lib/demo-data";
 import { buildNetReceivableAging, buildOutstandingNonInvoiceChargesByAccount } from "@/lib/accounts-receivable";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
-import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import {
   canManageExecutiveMarketingPortfolio,
   marketingAccountIdFromConfig,
@@ -3678,6 +3678,7 @@ async function renderLivePage(
               (plan): plan is typeof plan & { centerId: string } => Boolean(plan.centerId),
             ),
           },
+          canProcessAutopay: canManageBilling(user),
           needsEnrollmentSetup: needsEnrollmentSetupFamilies.map((family) => ({
             familyId: family.id,
             familyName: family.name,

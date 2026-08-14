@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, Play, Search } from "lucide-react";
+import { AlertCircle, CheckCircle2, Play, Search, Settings2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -112,9 +113,9 @@ export function PaymentAutopayActions() {
       <CardHeader>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <CardTitle as="h2">Autopay invoices</CardTitle>
+            <CardTitle as="h2">Process family autopay</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
-              Review eligible due invoices before processing them. Account credit is applied first; any remaining balance is charged to each family&apos;s authorized autopay payment method.
+              Review every eligible due family balance before processing it. Account credit is applied first; only the remaining reviewed amount is submitted to the parent-authorized payment method.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -130,6 +131,13 @@ export function PaymentAutopayActions() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        <Alert>
+          <Settings2 className="size-4" />
+          <AlertTitle>Payment configuration is checked automatically</AlertTitle>
+          <AlertDescription>
+            The review includes only school-scoped, due open invoices with billing approval, active Stripe payment readiness, parent-enabled autopay, and a saved payment method. Families with pending payments, unresolved subsidy responsibility, suppressed recovery invoices, or another safety hold remain excluded. <Link className="font-medium underline underline-offset-4" href="/billing-settings?view=integrations">Open payment settings</Link>.
+          </AlertDescription>
+        </Alert>
         {error ? (
           <Alert variant="destructive">
             <AlertCircle className="size-4" />

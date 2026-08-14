@@ -4983,6 +4983,7 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
 }
 
 export type BillingInvoicesPageData = {
+  canProcessAutopay: boolean;
   initialSelection?: {
     familyId?: string;
     centerId?: string;
@@ -5150,6 +5151,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         <StatCard label="Paid invoices" value={data.stats.paid} />
         <StatCard label="Current-family outstanding" value={money(data.stats.outstandingCents)} />
       </div>
+      {data.canProcessAutopay ? <PaymentAutopayActions /> : null}
       <AgencySubsidyWorkspace centers={data.workbench.centers.map((center) => ({ id: center.id, name: center.name, state: center.state }))} />
       <Card className="glass-panel">
         <CardHeader>

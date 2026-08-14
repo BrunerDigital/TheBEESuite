@@ -3215,6 +3215,7 @@ async function renderLivePage(
         timeZone: readCenterLocationTimeZone(center),
       })),
       initialEngagementCenterId: user.primaryCenterId ?? engagementCenters[0]?.id ?? null,
+      canApproveSocialPosts: canManageExecutiveMarketingPortfolio(user.role),
       stats: { total, active, draft, paused, scheduled, sent },
     }} />;
   }

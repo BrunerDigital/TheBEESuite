@@ -72,6 +72,9 @@ test("social publisher carries the selected school into posting and analytics", 
   assert.match(component, /body: JSON\.stringify\(\{\s+mode,\s+centerId,/);
   assert.match(component, /body: JSON\.stringify\(\{ provider, centerId \}\)/);
   assert.match(component, /selectedProfiles = profiles\.filter\(\(item\) => item\.centerId === centerId\)/);
+  assert.match(component, /Submit for approval/);
+  assert.match(component, /Approval queue/);
+  assert.match(component, /Social history/);
   assert.match(component, /href=\{`\/integrations\?provider=\$\{connection\.provider\}`\}/);
 });
 
@@ -84,6 +87,10 @@ test("social post and analytics APIs resolve school scope before provider access
     new URL("../src/app/api/marketing/social-analytics/route.ts", import.meta.url),
     "utf8",
   );
+  const approvalRoute = readFileSync(
+    new URL("../src/app/api/marketing/social-posts/[id]/approval/route.ts", import.meta.url),
+    "utf8",
+  );
   const centerAccess = readFileSync(
     new URL("../src/lib/marketing-center-access.ts", import.meta.url),
     "utf8",
@@ -91,8 +98,13 @@ test("social post and analytics APIs resolve school scope before provider access
   assert.match(postsRoute, /resolveMarketingCenter\(user, body\?\.centerId\)/);
   assert.match(postsRoute, /centerId: center\.id/);
   assert.match(postsRoute, /audience: \{ label: `\$\{center\.name\}/);
+  assert.match(postsRoute, /body\?\.mode === "approval"/);
+  assert.match(postsRoute, /status: "pending", requestedById: user\.id/);
   assert.match(analyticsRoute, /resolveMarketingCenter\(user, body\?\.centerId\)/);
   assert.match(analyticsRoute, /centerId: center\.id/);
   assert.match(analyticsRoute, /metadata: \{ centerId: center\.id, provider/);
+  assert.match(approvalRoute, /canManageExecutiveMarketingPortfolio\(user\.role\)/);
+  assert.match(approvalRoute, /resolveMarketingCenter\(user, centerId\)/);
+  assert.match(approvalRoute, /social\.post\.approved_scheduled/);
   assert.match(centerAccess, /organization: \{ tenantId: user\.tenantId \}/);
 });

@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { campaignTemplates } from "@/lib/marketing-workflows";
-import { SocialPublishingStudio, type SocialConnection } from "@/components/social-publishing-studio";
+import { SocialPublishingStudio, type SocialCampaignRow, type SocialConnection } from "@/components/social-publishing-studio";
 import { SocialEngagementHub, type MarketingCenterOption } from "@/components/social-engagement-hub";
 
 type CampaignRow = {
@@ -56,6 +56,7 @@ export type CampaignWorkspaceData = {
   socialConnections: SocialConnection[];
   engagementCenters: MarketingCenterOption[];
   initialEngagementCenterId: string | null;
+  canApproveSocialPosts: boolean;
   stats: {
     total: number;
     active: number;
@@ -392,6 +393,8 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
             connections={data.socialConnections}
             centers={data.engagementCenters}
             initialCenterId={data.initialEngagementCenterId}
+            campaigns={data.campaigns.filter((campaign): campaign is CampaignRow & SocialCampaignRow => campaign.type === "social_post")}
+            canApproveSocialPosts={data.canApproveSocialPosts}
           />
         </TabsContent>
         <TabsContent value="engagement">

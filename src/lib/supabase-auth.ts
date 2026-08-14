@@ -168,17 +168,20 @@ export function getParentPortalPasswordResetRedirectUrl(requestUrl?: string) {
 
 export function buildPasswordResetTokenUrl({
   tokenHash,
+  redirectUrl,
   appBaseUrl,
   requestUrl,
   nextPath,
 }: {
   tokenHash: string;
+  redirectUrl?: string | null;
   appBaseUrl?: string | null;
   requestUrl?: string;
   nextPath?: string | null;
 }) {
   const baseUrl = canonicalizePublicUrl(appBaseUrl) || getAppBaseUrl(requestUrl);
-  const url = new URL(securePasswordResetUrl(`${baseUrl.replace(/\/+$/, "")}/reset-password`));
+  const configuredResetUrl = canonicalizePublicUrl(redirectUrl);
+  const url = new URL(securePasswordResetUrl(configuredResetUrl || `${baseUrl.replace(/\/+$/, "")}/reset-password`));
   const safeNext = safePasswordResetNextPath(nextPath);
   if (safeNext) url.searchParams.set("next", safeNext);
   url.hash = new URLSearchParams({ token_hash: tokenHash, type: "recovery" }).toString();

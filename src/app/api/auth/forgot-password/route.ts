@@ -71,17 +71,26 @@ async function POSTHandler(request: NextRequest) {
         );
       }
     } else {
-      const user = await prisma.user.findUnique({
-        where: { email },
-        select: { tenantId: true, isActive: true },
-      });
+      let user: { tenantId: string; isActive: boolean } | null = null;
+      try {
+        user = await prisma.user.findUnique({
+          where: { email },
+          select: { tenantId: true, isActive: true },
+        });
+      } catch (error) {
+        logOperationalError("auth.forgot_password.user_lookup_unavailable", error);
+        return NextResponse.json({
+          ok: true,
+          message: "If that email is active, a password reset link will be sent shortly. Use only the newest email because another request replaces older links.",
+        });
+      }
       if (!user?.isActive) {
         return NextResponse.json({
           ok: true,
           message: "If that email is active, a password reset link will be sent shortly. Use only the newest email because another request replaces older links.",
         });
       }
-      const resetUrl = buildPasswordResetTokenUrl({ tokenHash: recovery.tokenHash, requestUrl: request.url, nextPath });
+      const resetUrl = buildPasswordResetTokenUrl({ tokenHash: recovery.tokenHash, redirectUrl: recovery.redirectTo || redirectTo, requestUrl: request.url, nextPath });
       const safeResetUrl = escapeHtml(resetUrl);
       const delivery = await sendEmail({
         to: [email],

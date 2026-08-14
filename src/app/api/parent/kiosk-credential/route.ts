@@ -6,7 +6,8 @@ import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
 import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
-import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import { getParentPortalFamilyScope, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere, selectParentPortalCurrentGuardians } from "@/lib/parent-portal-family-scope";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -32,23 +33,27 @@ async function GETHandler() {
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parents and guardians can manage kiosk credentials here." }, { status: 403 });
   }
-  const familyScope = await getParentPortalFamilyScope(user.id);
-  if (!familyScope.ok) {
-    return NextResponse.json({ ok: false, error: "Your family link needs review before kiosk credentials can be managed." }, { status: 409 });
-  }
-
+  const tenantCenterIds = await getParentPortalTenantCenterIds(user.tenantId);
   const guardians = await prisma.guardian.findMany({
-    where: { userId: user.id, familyId: familyScope.familyId },
+    where: { userId: user.id, family: parentPortalTenantFamilyWhere(tenantCenterIds) },
     orderBy: { fullName: "asc" },
     include: {
-      family: { select: { id: true, name: true, centerId: true } },
+      family: {
+        select: {
+          id: true,
+          name: true,
+          centerId: true,
+          _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
+        },
+      },
     },
   });
-  const centerNameById = await centerNamesFor(guardians.map((guardian) => guardian.family.centerId ?? "").filter(Boolean));
+  const scopedGuardians = selectParentPortalCurrentGuardians(guardians);
+  const centerNameById = await centerNamesFor(scopedGuardians.map((guardian) => guardian.family.centerId ?? "").filter(Boolean));
 
   return NextResponse.json({
     ok: true,
-    credentials: guardians.map((guardian) => buildGuardianKioskCredential({
+    credentials: scopedGuardians.map((guardian) => buildGuardianKioskCredential({
       id: guardian.id,
       fullName: guardian.fullName,
       checkInPinSetAt: guardian.checkInPinSetAt,
@@ -71,16 +76,16 @@ async function POSTHandler(request: NextRequest) {
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parents and guardians can manage kiosk credentials here." }, { status: 403 });
   }
-  const familyScope = await getParentPortalFamilyScope(user.id);
-  if (!familyScope.ok) {
-    return NextResponse.json({ ok: false, error: "Your family link needs review before kiosk credentials can be managed." }, { status: 409 });
-  }
-
   const body = await request.json().catch(() => ({}));
   const guardianId = clean(body.guardianId);
+  const familyId = clean(body.familyId);
   const pin = normalizePin(body.pin);
   if (!guardianId || !pin) {
     return NextResponse.json({ ok: false, error: "Guardian ID and a 4 digit PIN are required." }, { status: 400 });
+  }
+  const familyScope = await getParentPortalFamilyScope(user.id, user.tenantId, familyId || null);
+  if (!familyScope.ok) {
+    return NextResponse.json({ ok: false, error: "Your family link needs review before kiosk credentials can be managed." }, { status: 409 });
   }
   const limited = checkRateLimit({
     key: `parent-kiosk-credential:${user.id}:${requestIp(request.headers)}`,

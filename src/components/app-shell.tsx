@@ -449,6 +449,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
   const [unread, setUnread] = useState(0);
   const mountedRef = useRef(true);
+  const notificationAccessRef = useRef(true);
   const canViewEnrollment = canAccessShellModule(currentUser, "crm-leads");
   const canViewTasks = canViewEnrollment;
   const canViewFteReports = canAccessShellModule(currentUser, "fte-reports");
@@ -463,8 +464,19 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   }, []);
 
   const loadUnreadCount = useCallback(() => {
+    if (!notificationAccessRef.current) return;
     fetch("/api/notifications/summary?mode=count", { cache: "no-store" })
-      .then((response) => response.json())
+      .then((response) => {
+        if (response.status === 401 || response.status === 403) {
+          notificationAccessRef.current = false;
+          if (mountedRef.current) {
+            setUnread(0);
+            syncAppBadge(0);
+          }
+          return null;
+        }
+        return response.ok ? response.json() : null;
+      })
       .then((json) => {
         if (mountedRef.current && json?.ok && typeof json.unread === "number") {
           setUnread(json.unread);
@@ -475,8 +487,20 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   }, [syncAppBadge]);
 
   const loadSummary = useCallback(() => {
+    if (!notificationAccessRef.current) return;
     fetch("/api/notifications/summary", { cache: "no-store" })
-      .then((response) => response.json())
+      .then((response) => {
+        if (response.status === 401 || response.status === 403) {
+          notificationAccessRef.current = false;
+          if (mountedRef.current) {
+            setSummary(null);
+            setUnread(0);
+            syncAppBadge(0);
+          }
+          return null;
+        }
+        return response.ok ? response.json() : null;
+      })
       .then((json) => {
         if (mountedRef.current && json?.ok) {
           const nextSummary = json as NotificationSummary;

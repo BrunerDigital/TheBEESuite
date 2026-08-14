@@ -55,6 +55,7 @@ async function POSTHandler(request: NextRequest) {
   const processStoredMethod = body.processStoredMethod === true;
   const chargeMode = body.dryRun === false || clean(body.mode).toLowerCase() === "charge";
   const reviewed = reviewedInvoices(body.reviewedInvoices);
+  const cursorInvoiceId = clean(body.cursorInvoiceId);
   let centerIds: string[] | undefined;
 
   if (processStoredMethod) {
@@ -97,6 +98,7 @@ async function POSTHandler(request: NextRequest) {
     limit: parseLimit(body.limit),
     centerIds,
     invoiceId,
+    cursorInvoiceId,
     requireDueDate: true,
     collectionMode: "autopay" as const,
     retryFailed: body.retryFailed === true,
@@ -127,6 +129,8 @@ async function POSTHandler(request: NextRequest) {
       limit: expected.length,
       invoiceId: null,
       invoiceIds: expected.map((item) => item.invoiceId),
+      cursorInvoiceId: null,
+      expectedAmountCentsByInvoiceId: Object.fromEntries(expected.map((item) => [item.invoiceId, item.amountCents])),
     });
     return NextResponse.json(run);
   }

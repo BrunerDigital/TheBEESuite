@@ -33,6 +33,7 @@ type AutopaySummary = {
   skipped?: number;
   totalCents?: number;
   hasMore?: boolean;
+  nextCursor?: string | null;
   results?: AutopayResult[];
 };
 
@@ -59,8 +60,10 @@ export function PaymentAutopayActions() {
   const [isPending, startTransition] = useTransition();
   const [summary, setSummary] = useState<AutopaySummary | null>(null);
   const [error, setError] = useState("");
+  const [reviewCursor, setReviewCursor] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
-  function runAutopay(dryRun: boolean) {
+  function runAutopay(dryRun: boolean, cursorInvoiceId: string | null = null) {
     if (!dryRun) {
       const eligible = summary?.results?.filter((result) => result.status === "would_charge") ?? [];
       if (!summary?.dryRun || !eligible.length) {
@@ -79,6 +82,7 @@ export function PaymentAutopayActions() {
         body: JSON.stringify({
           dryRun,
           limit: 100,
+          cursorInvoiceId: dryRun ? cursorInvoiceId : reviewCursor,
           reviewedInvoices: dryRun
             ? undefined
             : summary?.results?.filter((result) => result.status === "would_charge").map((result) => ({
@@ -93,6 +97,10 @@ export function PaymentAutopayActions() {
         return;
       }
       setSummary(json);
+      if (dryRun) {
+        setReviewCursor(cursorInvoiceId);
+        setNextCursor(json.nextCursor ?? null);
+      }
     });
   }
 
@@ -110,7 +118,7 @@ export function PaymentAutopayActions() {
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button disabled={isPending} onClick={() => runAutopay(true)} variant="outline">
+            <Button disabled={isPending} onClick={() => runAutopay(true, null)} variant="outline">
               <Search data-icon="inline-start" />
               Review due invoices
             </Button>
@@ -142,7 +150,10 @@ export function PaymentAutopayActions() {
           <Alert variant="destructive">
             <AlertCircle className="size-4" />
             <AlertTitle>Review is larger than one safe batch</AlertTitle>
-            <AlertDescription>More than 100 due invoices were found. Process the reviewed batch, then review again for the remaining balances.</AlertDescription>
+            <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span>More than 100 due invoices were found. Process this reviewed batch, then continue to the next balances.</span>
+              <Button disabled={isPending || !nextCursor} onClick={() => runAutopay(true, nextCursor)} size="sm" variant="outline">Review next batch</Button>
+            </AlertDescription>
           </Alert>
         ) : null}
         {visibleResults.length ? (

@@ -10,11 +10,15 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(route, /Review eligible family balances before processing autopay/);
   assert.match(route, /JSON\.stringify\(actual\) !== JSON\.stringify\(expected\)/);
   assert.match(route, /invoiceIds: expected\.map/);
+  assert.match(route, /expectedAmountCentsByInvoiceId/);
   assert.doesNotMatch(route, /for \(const item of expected\)/);
   assert.match(actions, /reviewedInvoices/);
   assert.match(actions, /Process all reviewed balances/);
   assert.match(actions, /disabled=\{isPending \|\| !readyToProcess\}/);
   assert.match(processing, /take: limit \+ 1/);
   assert.match(processing, /input\.invoiceIds\?\.length/);
+  assert.match(processing, /expectedAmountCents !== creditAllocation\.stripeChargePrincipalCents/);
+  assert.match(processing, /cursor: \{ id: input\.cursorInvoiceId \}/);
+  assert.match(actions, /Review next batch/);
   assert.match(processing, /hasMore/);
 });

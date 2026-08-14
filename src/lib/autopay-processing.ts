@@ -75,6 +75,7 @@ export type AutopayRunSummary = {
   skipped: number;
   totalCents: number;
   hasMore: boolean;
+  nextCursor: string | null;
   results: AutopayRunInvoiceResult[];
 };
 
@@ -85,6 +86,8 @@ type ProcessAutopayInput = {
   centerIds?: string[];
   invoiceId?: string | null;
   invoiceIds?: string[];
+  cursorInvoiceId?: string | null;
+  expectedAmountCentsByInvoiceId?: Record<string, number>;
   retryFailed?: boolean;
   requireDueDate?: boolean;
   collectionMode?: "autopay" | "stored_method";
@@ -174,6 +177,9 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     where: invoiceWhere,
     orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
     take: limit + 1,
+    ...(input.cursorInvoiceId && !input.invoiceId && !input.invoiceIds?.length
+      ? { cursor: { id: input.cursorInvoiceId }, skip: 1 }
+      : {}),
     include: {
       billingAccount: {
         select: {
@@ -208,6 +214,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
   });
   const hasMore = invoiceCandidates.length > limit;
   const invoices = invoiceCandidates.slice(0, limit);
+  const nextCursor = hasMore && invoices.length ? invoices[invoices.length - 1].id : null;
 
   const billingAccountIds = unique(invoices.map((invoice) => invoice.billingAccountId));
   const familyCenterIds = unique(invoices.map((invoice) => invoice.billingAccount.family.centerId));
@@ -419,6 +426,16 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       accountCreditAppliedCents: creditAllocation.accountCreditAppliedCents,
       stripeChargePrincipalCents: creditAllocation.stripeChargePrincipalCents,
     };
+
+    const expectedAmountCents = input.expectedAmountCentsByInvoiceId?.[invoice.id];
+    if (expectedAmountCents !== undefined && expectedAmountCents !== creditAllocation.stripeChargePrincipalCents) {
+      results.push({
+        ...baseResult,
+        status: "skipped",
+        reason: "The family balance or available account credit changed after review. Review this balance again before processing.",
+      });
+      continue;
+    }
 
     if (creditAllocation.fullyCoveredByCredit) {
       if (dryRun) {
@@ -856,6 +873,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     skipped,
     totalCents,
     hasMore,
+    nextCursor,
     results,
   };
 }

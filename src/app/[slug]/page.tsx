@@ -88,7 +88,7 @@ import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
-import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import { getParentPortalFamilyScope, getParentPortalTenantCenterIds } from "@/lib/parent-portal-family-scope";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
 import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
 import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
@@ -1990,11 +1990,14 @@ async function renderLivePage(
     if (requestedParentFamilyScope && !requestedParentFamilyScope.ok) {
       return <ParentPortalAccessBlocked />;
     }
+    const parentPortalTenantCenterIds = user.role === UserRole.PARENT_GUARDIAN
+      ? await getParentPortalTenantCenterIds(user.tenantId)
+      : [];
     const linkedParentFamilies = user.role === UserRole.PARENT_GUARDIAN
       ? await prisma.family.findMany({
           where: {
             ...parentPortalFamilyScopeWhere({ userId: user.id }),
-            centerId: scopedCenterIds,
+            centerId: { in: parentPortalTenantCenterIds },
             children: { some: currentlyEnrolledChildWhere() },
           },
           orderBy: [{ name: "asc" }, { createdAt: "asc" }],

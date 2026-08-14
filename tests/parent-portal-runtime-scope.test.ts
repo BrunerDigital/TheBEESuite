@@ -99,11 +99,23 @@ test("runtime family lookup restricts guardian links to the signed-in tenant", (
   assert.match(source, /family: \{ centerId: \{ in: tenantCenterIds \} \}/);
 });
 
+test("parent setup and kiosk credential lists stay inside the signed-in tenant", () => {
+  for (const path of [
+    "src/app/parent-portal/setup/page.tsx",
+    "src/app/api/parent/kiosk-credential/route.ts",
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.match(source, /getParentPortalTenantCenterIds\(user\.tenantId\)/, path);
+    assert.match(source, /family: \{ centerId: \{ in: tenantCenterIds \} \}/, path);
+  }
+});
+
 test("parent portal rejects a requested unlinked family before choosing a default", () => {
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
   assert.match(page, /getParentPortalFamilyScope\(user\.id, user\.tenantId, requestedParentFamilyId\)/);
   assert.match(page, /requestedParentFamilyScope && !requestedParentFamilyScope\.ok/);
-  assert.match(page, /centerId: scopedCenterIds/);
+  assert.match(page, /getParentPortalTenantCenterIds\(user\.tenantId\)/);
+  assert.match(page, /centerId: \{ in: parentPortalTenantCenterIds \}/);
 });
 
 test("parent setup page includes each current linked family and excludes historical family rows", () => {

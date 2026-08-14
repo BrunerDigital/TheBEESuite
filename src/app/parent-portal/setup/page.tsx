@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { ParentPortalSetupForm } from "@/components/parent-portal-setup-form";
 import { getCurrentUser, isParentGuardian, requiresPasswordResetGate } from "@/lib/auth";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
+import { getParentPortalTenantCenterIds } from "@/lib/parent-portal-family-scope";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -19,8 +20,9 @@ export default async function ParentPortalSetupPage() {
     redirect("/dashboard");
   }
 
+  const tenantCenterIds = await getParentPortalTenantCenterIds(user.tenantId);
   const guardians = await prisma.guardian.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, family: { centerId: { in: tenantCenterIds } } },
     orderBy: { fullName: "asc" },
     include: {
       family: {

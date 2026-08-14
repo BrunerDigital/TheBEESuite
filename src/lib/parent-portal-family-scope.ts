@@ -38,11 +38,15 @@ export function resolveParentPortalFamilyScope(
   };
 }
 
-export async function getParentPortalFamilyScope(userId: string, tenantId: string, requestedFamilyId?: string | null) {
-  const tenantCenterIds = (await prisma.center.findMany({
+export async function getParentPortalTenantCenterIds(tenantId: string) {
+  return (await prisma.center.findMany({
     where: { organization: { tenantId } },
     select: { id: true },
   })).map((center) => center.id);
+}
+
+export async function getParentPortalFamilyScope(userId: string, tenantId: string, requestedFamilyId?: string | null) {
+  const tenantCenterIds = await getParentPortalTenantCenterIds(tenantId);
   const guardians = await prisma.guardian.findMany({
     where: { userId, family: { centerId: { in: tenantCenterIds } } },
     select: {

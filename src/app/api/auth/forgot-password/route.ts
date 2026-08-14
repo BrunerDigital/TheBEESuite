@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
+import { sendEmail } from "@/lib/integrations";
+import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
-import { getPasswordResetRedirectUrl, requestSupabasePasswordReset } from "@/lib/supabase-auth";
+import { buildPasswordResetTokenUrl, generateSupabasePasswordRecoveryLink, getPasswordResetRedirectUrl } from "@/lib/supabase-auth";
 import {
-  classifyPasswordResetProviderResponse,
   passwordResetEmailCooldownKey,
   passwordResetIpVolumeKey,
 } from "@/lib/password-reset-provider-response";
@@ -16,6 +18,10 @@ function clean(value: unknown) {
 
 function looksLikeEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] || character);
 }
 
 async function POSTHandler(request: NextRequest) {
@@ -54,36 +60,51 @@ async function POSTHandler(request: NextRequest) {
   const redirectTo = getPasswordResetRedirectUrl(request.url, nextPath);
 
   try {
-    const response = await requestSupabasePasswordReset(email, redirectTo);
-    const outcome = classifyPasswordResetProviderResponse(response);
-
-    if (outcome.kind === "temporary_failure") {
-      logOperationalError("auth.forgot_password.provider_temporary_failure", null, {
-        provider: "supabase_auth",
-        status: outcome.providerStatus,
-        providerStatus: outcome.providerStatus,
-        retryAfterSeconds: outcome.retryAfterSeconds,
+    const recovery = await generateSupabasePasswordRecoveryLink({ email, redirectTo });
+    if (!recovery.ok) {
+      logOperationalError("auth.forgot_password.recovery_link_unavailable", null, { provider: "supabase_auth", reason: recovery.error });
+    } else {
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: { tenantId: true, isActive: true },
       });
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Password reset email is temporarily unavailable. Please wait a minute and try again.",
-        },
-        {
-          status: 503,
-          headers: { "Retry-After": String(outcome.retryAfterSeconds) },
-        },
-      );
-    }
-
-    if (outcome.kind === "privacy_safe_non_success") {
-      logOperationalError("auth.forgot_password.provider_non_success", null, {
-        provider: "supabase_auth",
-        providerStatus: outcome.providerStatus,
+      if (!user?.isActive) {
+        return NextResponse.json({
+          ok: true,
+          message: "If that email is active, a password reset link will be sent shortly. Use only the newest email because another request replaces older links.",
+        });
+      }
+      const resetUrl = buildPasswordResetTokenUrl({ tokenHash: recovery.tokenHash, requestUrl: request.url, nextPath });
+      const safeResetUrl = escapeHtml(resetUrl);
+      const delivery = await sendEmail({
+        to: [email],
+        subject: "Reset your BEE Suite password",
+        text: `A password reset was requested for your BEE Suite account.\n\nReset your password: ${resetUrl}\n\nUse only the newest reset email. If you did not request this, you can ignore it.`,
+        html: `<p>A password reset was requested for your BEE Suite account.</p><p><a href="${safeResetUrl}">Reset your password securely</a></p><p>Use only the newest reset email. If you did not request this, you can ignore it.</p>`,
+        categories: ["password-reset", "transactional"],
+        customArgs: { purpose: "password_reset" },
+        disableClickTracking: true,
       });
+      await recordEmailDeliveryAttempt({
+        tenantId: user.tenantId,
+        purpose: "password_reset_email",
+        to: [email],
+        subject: "Reset your BEE Suite password",
+        text: "Sensitive password reset content omitted from the delivery audit.",
+        result: delivery,
+        maxAttempts: 1,
+        metadata: { sensitiveContentOmitted: true, clickTrackingDisabled: true },
+      });
+      if (!delivery.ok) {
+        logOperationalError("auth.forgot_password.delivery_unavailable", null, { provider: delivery.provider, configured: delivery.configured, error: delivery.error });
+        return NextResponse.json(
+          { ok: false, error: "Password reset email is temporarily unavailable. Please wait a minute and try again." },
+          { status: 503, headers: { "Retry-After": "60" } },
+        );
+      }
     }
   } catch (error) {
-    logOperationalError("auth.forgot_password.supabase_request_error", error);
+    logOperationalError("auth.forgot_password.request_error", error);
     return NextResponse.json(
       {
         ok: false,

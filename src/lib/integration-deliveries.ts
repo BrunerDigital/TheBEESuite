@@ -25,6 +25,7 @@ export type IntegrationDeliveryPurpose =
   | "signature_request_email"
   | "onboarding_email"
   | "account_setup_email"
+  | "password_reset_email"
   | "fte_reminder_email"
   | "notification_email"
   | "communication_sms"
@@ -86,6 +87,7 @@ type RecordEmailDeliveryInput = {
     | "signature_request_email"
     | "onboarding_email"
     | "account_setup_email"
+    | "password_reset_email"
     | "fte_reminder_email"
     | "notification_email"
   >;

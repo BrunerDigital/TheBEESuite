@@ -37,10 +37,13 @@ test("login and password recovery preserve controlled input when services are un
   assert.match(reset, /removeEventListener\("hashchange", resolveCurrentRecoveryState\)/);
   assert.match(reset, /passwordRecoveryUrlWithoutSecrets\(window\.location\.href\)/);
   assert.match(forgot, /Use only the newest email/i);
-  assert.match(forgotRoute, /classifyPasswordResetProviderResponse/);
-  assert.match(forgotRoute, /provider_temporary_failure/);
+  assert.match(forgotRoute, /generateSupabasePasswordRecoveryLink/);
+  assert.match(forgotRoute, /buildPasswordResetTokenUrl/);
+  assert.match(forgotRoute, /disableClickTracking:\s*true/);
+  assert.match(forgotRoute, /categories:\s*\["password-reset",\s*"transactional"\]/);
+  assert.doesNotMatch(forgotRoute, /requestSupabasePasswordReset\(/);
   assert.match(forgotRoute, /status:\s*503/);
-  assert.match(forgotRoute, /providerStatus/);
+  assert.match(forgotRoute, /delivery_unavailable/);
   assert.match(forgotRoute, /passwordResetEmailCooldownKey\(email\)/);
   assert.match(forgotRoute, /passwordResetIpVolumeKey\(ip\)/);
   assert.doesNotMatch(forgotRoute, /forgot-password:\$\{[^}]*email/);

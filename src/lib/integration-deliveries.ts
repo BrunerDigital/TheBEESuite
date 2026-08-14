@@ -67,6 +67,12 @@ type RecordCommunicationSmsDeliveryInput = {
   metadata?: Record<string, unknown>;
 };
 
+type FinalizeCommunicationSmsDeliveryInput = {
+  id: string;
+  result: IntegrationSendResult;
+  maxAttempts?: number;
+};
+
 type RecordEmailDeliveryInput = {
   tenantId: string;
   centerId?: string | null;
@@ -254,6 +260,38 @@ export async function recordCommunicationSmsDeliveryAttempt({
       deliveredAt: state.deliveredAt,
     },
   });
+}
+
+export async function finalizeCommunicationSmsDeliveryAttempt({
+  id,
+  result,
+  maxAttempts = 5,
+}: FinalizeCommunicationSmsDeliveryInput) {
+  const deliveryResult: IntegrationAttemptResult = result.configured
+    ? result
+    : { ...result, skipped: true };
+  const attempts = deliveryResult.skipped ? 0 : 1;
+  const state = computeIntegrationDeliveryState({
+    result: deliveryResult,
+    attempts,
+    maxAttempts,
+  });
+  const updated = await prisma.integrationDelivery.updateMany({
+    where: { id, status: "pending", attempts: 0 },
+    data: {
+      providerMessageId: result.id ?? null,
+      status: state.status,
+      attempts,
+      lastResult: deliveryResult as Prisma.InputJsonObject,
+      lastError: deliveryResult.error ?? null,
+      nextAttemptAt: state.nextAttemptAt,
+      deliveredAt: state.deliveredAt,
+    },
+  });
+  if (updated.count !== 1) {
+    throw new Error(`Integration delivery ${id} changed before its initial attempt was finalized.`);
+  }
+  return state;
 }
 
 export async function recordEmailDeliveryAttempt({

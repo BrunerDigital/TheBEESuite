@@ -456,6 +456,7 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
   const defaults = asRecord(account.defaults);
   const responsibilities = asRecord(defaults.responsibilities);
   const controller = asRecord(account.controller);
+  const legacyStripeDashboard = asRecord(controller.stripe_dashboard);
   const controllerFees = asRecord(controller.fees);
   const controllerLosses = asRecord(controller.losses);
   const configuration = asRecord(account.configuration);
@@ -526,7 +527,7 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
     id: clean(account.id),
     livemode: account.livemode === true,
     displayName: clean(account.display_name) || clean(account.displayName) || null,
-    dashboard: clean(account.dashboard) || null,
+    dashboard: clean(account.dashboard) || clean(legacyStripeDashboard.type) || null,
     configurations,
     chargesEnabled: account.charges_enabled === true || merchantCapabilityStatus === "active",
     payoutsEnabled: account.payouts_enabled === true || recipientTransferStatus === "active",

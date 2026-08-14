@@ -87,7 +87,19 @@ test("payout webhook sends only live, exactly mapped events and records delivery
   assert.match(handler, /matchedCenters\.length !== 1/);
   assert.match(handler, /matchedTenantId !== tenantId/);
   assert.match(handler, /payoutSmsRecipient\(center\.customFields\)/);
-  assert.match(handler, /purpose: "payout_notification_sms"/);
+  const intent = handler.indexOf('purpose: "payout_notification_sms"');
+  const receipt = handler.indexOf("recordStripeWebhookEvent(tx, event)");
+  const send = handler.indexOf("sendPayoutSmsSafely(() => sendSms");
+  const finalize = handler.indexOf("finalizeCommunicationSmsDeliveryAttempt");
+  assert.ok(intent >= 0 && intent < receipt && receipt < send && send < finalize);
+  assert.match(handler, /attempts: 0/);
+  assert.match(handler, /nextAttemptAt: nextIntegrationRetryAt\(1\)/);
   assert.match(handler, /sendPayoutSmsSafely\(\(\) => sendSms/);
   assert.match(handler, /stripe-payout-created:\$\{event\.id\}:\$\{center\.id\}/);
+});
+
+test("legacy Stripe account snapshots preserve their dashboard type", async () => {
+  const integrations = await readFile("src/lib/integrations.ts", "utf8");
+  assert.match(integrations, /legacyStripeDashboard = asRecord\(controller\.stripe_dashboard\)/);
+  assert.match(integrations, /clean\(account\.dashboard\) \|\| clean\(legacyStripeDashboard\.type\)/);
 });

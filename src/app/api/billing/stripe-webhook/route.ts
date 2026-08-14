@@ -9,7 +9,7 @@ import {
   sendSms,
   setStripeCustomerDefaultPaymentMethod,
 } from "@/lib/integrations";
-import { recordCommunicationSmsDeliveryAttempt } from "@/lib/integration-deliveries";
+import { finalizeCommunicationSmsDeliveryAttempt, nextIntegrationRetryAt } from "@/lib/integration-deliveries";
 import { paymentMethodSetupExpirationPatch } from "@/lib/payment-method-management";
 import { beeSuitePayoutSmsBody, payoutSmsRecipient, sendPayoutSmsSafely } from "@/lib/payout-sms";
 import { prisma } from "@/lib/prisma";
@@ -888,27 +888,43 @@ async function handlePayoutCreated(
     return NextResponse.json({ ok: true, ignored: true, reason: "payout_sms_contact_missing" });
   }
 
-  await prisma.$transaction(async (tx) => {
+  const dedupeKey = `stripe-payout-created:${event.id}:${center.id}`;
+  const delivery = await prisma.$transaction(async (tx) => {
+    const pendingDelivery = await tx.integrationDelivery.create({
+      data: {
+        tenantId,
+        centerId: center.id,
+        dedupeKey,
+        provider: "twilio",
+        purpose: "payout_notification_sms",
+        direction: "outbound",
+        recipient: to,
+        status: "pending",
+        attempts: 0,
+        maxAttempts: 5,
+        nextAttemptAt: nextIntegrationRetryAt(1),
+        payload: {
+          to,
+          body,
+          statusCallbackUrl,
+          tenantId,
+          dedupeKey,
+          stripeEventId: event.id,
+          stripePayoutId: payout.id,
+          stripeConnectedAccountId: accountId,
+          amountCents,
+          currency: currency.toLowerCase(),
+        } as Prisma.InputJsonObject,
+      },
+    });
     await recordStripeWebhookEvent(tx, event);
+    return pendingDelivery;
   });
 
   const result = await sendPayoutSmsSafely(() => sendSms({ to, body, statusCallbackUrl, tenantId }));
-  await recordCommunicationSmsDeliveryAttempt({
-    tenantId,
-    centerId: center.id,
-    dedupeKey: `stripe-payout-created:${event.id}:${center.id}`,
-    to,
-    body,
-    statusCallbackUrl,
+  await finalizeCommunicationSmsDeliveryAttempt({
+    id: delivery.id,
     result,
-    purpose: "payout_notification_sms",
-    metadata: {
-      stripeEventId: event.id,
-      stripePayoutId: payout.id,
-      stripeConnectedAccountId: accountId,
-      amountCents,
-      currency: currency.toLowerCase(),
-    },
   });
 
   await prisma.auditLog.create({

@@ -62,6 +62,26 @@ export function hasConfirmedFamilyResponsibility(
   return values.some(visit);
 }
 
+const FAMILY_RESPONSIBILITY_CONFIRMATION_FIELDS = new Set([
+  "familyResponsibilityConfirmed",
+  "familyResponsibilityBalanceCents",
+  "familyResponsibilityConfirmedAt",
+  "familyResponsibilityConfirmationSourceSha256",
+  "familyResponsibilityAuthorization",
+  "familyResponsibilityConfirmationLedgerEntryId",
+  "autopayActivated",
+]);
+
+export function withoutConfirmedFamilyResponsibility(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutConfirmedFamilyResponsibility);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => !FAMILY_RESPONSIBILITY_CONFIRMATION_FIELDS.has(key))
+      .map(([key, item]) => [key, withoutConfirmedFamilyResponsibility(item)]),
+  );
+}
+
 export function parentBalanceNeedsResponsibilityReview(input: {
   accountBalanceCents: number;
   agencyLedgerEntries: AgencyLedgerEntry[];

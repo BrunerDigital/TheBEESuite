@@ -80,6 +80,14 @@ test("automated payment processing blocks unresolved subsidy responsibility befo
   assert.match(source, /Automated payment is blocked until the school separates agency and family responsibility/);
 });
 
+test("a changed ProCare balance invalidates prior family-responsibility confirmation", () => {
+  const source = readFileSync("src/app/api/imports/procare/route.ts", "utf8");
+
+  assert.match(source, /select: \{ balanceCents: true, customFields: true \}/);
+  assert.match(source, /existingBillingAccount\?\.balanceCents === balanceCents[\s\S]*withoutConfirmedFamilyResponsibility/);
+  assert.match(source, /customFields: mergeCustomFields\(existingBillingFields, importedBillingFields\)/);
+});
+
 test("director billing keeps agency amounts and payment controls", () => {
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
   const operations = readFileSync("src/components/live-ops-pages.tsx", "utf8");

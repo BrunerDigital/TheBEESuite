@@ -8,6 +8,7 @@ import {
   parentBalanceNeedsResponsibilityReview,
   parentPaymentAmountCents,
   parentVisibleBillingBalanceCents,
+  withoutConfirmedFamilyResponsibility,
 } from "../src/lib/parent-billing-visibility";
 
 test("subsidy evidence without a separated agency ledger fails closed", () => {
@@ -63,6 +64,11 @@ test("an exact reviewed family-responsibility balance is parent visible", () => 
       familyResponsibilityAuthorization: "manual_edit",
     },
   }), false);
+  assert.equal(hasConfirmedFamilyResponsibility(
+    5_200,
+    "ledger-reviewed-balance",
+    withoutConfirmedFamilyResponsibility(reviewedEvidence),
+  ), false);
 });
 
 test("parent billing balance excludes the agency receivable while it remains unpaid", () => {

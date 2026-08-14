@@ -109,7 +109,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const verificationMethod = qrToken ? "qr" : "pin";
-  const signatureMethod = verificationMethod === "qr" ? "qr_verified" : "pin_verified";
+  const credentialConfirmationMethod = verificationMethod === "qr" ? "qr_verified" : "pin_verified";
   const guardian = qrToken
     ? await findGuardianByQrToken(centerId, qrToken, childIds)
     : await findGuardianByPin(centerId, pin, childIds);
@@ -207,7 +207,7 @@ async function POSTHandler(request: NextRequest) {
           type,
           occurredAt,
           pickupName: guardian.fullName,
-          signaturePlaceholder: true,
+          signaturePlaceholder: false,
           verificationStatus: verificationMethod === "qr" ? "qr_verified" : "pin_verified",
           pinVerified: verificationMethod === "pin",
           notes: clean(body.notes) || null,
@@ -217,9 +217,9 @@ async function POSTHandler(request: NextRequest) {
             verificationMethod,
             qrVerified: verificationMethod === "qr",
             pinVerified: verificationMethod === "pin",
-            signatureMethod,
-            signatureName: guardian.fullName,
-            signatureCapturedAt: occurredAt.toISOString(),
+            credentialConfirmationMethod,
+            credentialConfirmedBy: guardian.fullName,
+            credentialConfirmedAt: occurredAt.toISOString(),
             latePickup,
             latePickupCutoff,
             pickupAuthorizationWarning,
@@ -279,7 +279,7 @@ async function POSTHandler(request: NextRequest) {
       childIds: allowedChildren.map((child) => child.id),
       count: logs.length,
       signatureAccepted: true,
-      signatureMethod,
+      credentialConfirmationMethod,
       verificationMethod,
       latePickup,
       latePickupCutoff,

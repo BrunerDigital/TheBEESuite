@@ -55,7 +55,7 @@ When the UI, permissions, labels, routes, or workflow guardrails change, update 
 - `docs/sops/PARENT_PORTAL_INSTALL_GUIDE.md` - parent device install instructions for iPhone, iPad, Android, Fire tablet, and desktop.
 - `docs/sops/PARENT_PORTAL_SOP.md` - parent login, family dashboard, invoices, documents, messages, incident acknowledgements, and troubleshooting.
 - `docs/sops/PARENT_ACH_PAYMENT_GUIDE.md` - parent card-first payment choices, saved card and bank setup, individual bank payments, autopay status, and exact-total review.
-- `docs/sops/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` - lobby kiosk PIN/QR check-in/out, guardian signature, staff clock-in/out, and warning handling.
+- `docs/sops/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` - lobby kiosk PIN/QR check-in/out, credential or signature evidence, staff clock-in/out, and warning handling.
 
 ## Visual Assets
 

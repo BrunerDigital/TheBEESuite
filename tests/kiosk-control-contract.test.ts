@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const kioskSource = readFileSync("src/components/kiosk-check-in.tsx", "utf8");
+const kioskCheckRouteSource = readFileSync("src/app/api/kiosk/check/route.ts", "utf8");
+const attendancePageSource = readFileSync("src/app/[slug]/page.tsx", "utf8");
+const closingBoardSource = readFileSync("src/components/end-of-day-closing-board.tsx", "utf8");
+const exportPackageSource = readFileSync("src/app/api/documents/export-package/route.ts", "utf8");
 const credentialCardSource = readFileSync("src/components/guardian-kiosk-credential-card.tsx", "utf8");
 const credentialPanelSource = readFileSync("src/components/parent-kiosk-credential-panel.tsx", "utf8");
 const pinManagerSource = readFileSync("src/components/guardian-pin-manager.tsx", "utf8");
@@ -38,6 +42,19 @@ test("privacy and family actions expose no idle no-op controls", () => {
   assert.doesNotMatch(kioskSource, /signatureName|guardianSignature|Type your full name/);
   assert.match(kioskSource, /postKioskJson[\s\S]*["']\/api\/kiosk\/lookup["']/);
   assert.match(kioskSource, /postKioskJson[\s\S]*["']\/api\/kiosk\/check["']/);
+});
+
+test("PIN and QR kiosk confirmation is reported separately from signature capture", () => {
+  assert.match(kioskCheckRouteSource, /signaturePlaceholder: false/);
+  assert.match(kioskCheckRouteSource, /credentialConfirmationMethod/);
+  assert.match(kioskCheckRouteSource, /credentialConfirmedBy: guardian\.fullName/);
+  assert.doesNotMatch(kioskCheckRouteSource, /signatureName: guardian\.fullName|signatureMethod: "typed"/);
+
+  assert.match(attendancePageSource, /credentialConfirmed = Boolean/);
+  assert.match(attendancePageSource, /credentialConfirmations: reconciliationLogs\.filter/);
+  assert.match(closingBoardSource, /Confirm Pickup Evidence/);
+  assert.match(closingBoardSource, /credentialConfirmed/);
+  assert.match(exportPackageSource, /"signatureCaptured", "credentialConfirmed"/);
 });
 
 test("guardian credential controls are semantic and fail with actionable messages", () => {

@@ -14,7 +14,7 @@ Executive admins use The BEE Suite to launch schools, manage access, review mult
 
 ## Visual Overview
 
-![Independent school launch gates](../assets/school-launch-gates-ec156afee4.png)
+![Independent school launch gates](../assets/school-launch-gates-e227cbf6c4.png)
 
 ![Selected-period weekly FTE flow](../assets/fte-reporting-flow-e38d5e049f.png)
 

@@ -2819,7 +2819,7 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Attendance</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Child attendance records, PIN/QR kiosk check-ins, typed guardian signatures, late pickup flags, and end-of-day reconciliation.
+          Child attendance records, PIN/QR kiosk check-ins, pickup verification, late pickup flags, and end-of-day reconciliation.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -2917,8 +2917,8 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
                         <Badge variant={verificationVerified ? "default" : "outline"}>{verificationLabel}</Badge>
-                        <Badge variant={log.signatureCaptured ? "default" : "outline"}>
-                          {log.signatureCaptured ? "Signature" : "No signature"}
+                        <Badge variant={log.signatureCaptured || log.credentialConfirmed ? "default" : "outline"}>
+                          {log.signatureCaptured ? "Signature" : log.credentialConfirmed ? "Credential" : "No evidence"}
                         </Badge>
                       </div>
                     </TableCell>

@@ -193,6 +193,12 @@ test("role SOPs cover the August 11 UI and workflow baseline", () => {
   assert.match(manual, /Current Application Navigation/);
   assert.match(inviteUi, /Import\s+history is diagnostic when present but is not required/);
 
+  const kiosk = readFileSync("docs/sops/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md", "utf8");
+  const sopIndex = readFileSync("docs/sops/README.md", "utf8");
+  assert.match(kiosk, /records PIN or QR credential confirmation separately from any typed or written signature requirement/);
+  assert.doesNotMatch(kiosk, /Type your full name as the guardian signature/);
+  assert.match(sopIndex, /credential or signature evidence/);
+
   const parentFacing = [billing, parent, readFileSync("docs/sops/PARENT_ACH_PAYMENT_GUIDE.md", "utf8")].join("\n");
   assert.doesNotMatch(parentFacing, /card processing recovery|card recovery/i);
 });

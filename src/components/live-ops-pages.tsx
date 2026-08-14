@@ -2893,10 +2893,12 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
                 {data.reconciliation.logs.map((log) => {
                   const verificationLabel = log.verificationStatus === "qr_verified"
                     ? "QR"
+                    : log.verificationStatus === "staff_verified"
+                      ? "Staff"
                     : log.pinVerified
                       ? "PIN"
                       : "No credential";
-                  const verificationVerified = log.verificationStatus === "qr_verified" || log.pinVerified;
+                  const verificationVerified = log.verificationStatus === "qr_verified" || log.verificationStatus === "staff_verified" || log.pinVerified;
                   return (
                   <TableRow key={log.id}>
                     <TableCell>{formatDateTime(log.occurredAt, log)}</TableCell>

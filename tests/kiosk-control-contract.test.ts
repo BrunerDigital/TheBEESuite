@@ -7,6 +7,7 @@ const kioskCheckRouteSource = readFileSync("src/app/api/kiosk/check/route.ts", "
 const attendancePageSource = readFileSync("src/app/[slug]/page.tsx", "utf8");
 const closingBoardSource = readFileSync("src/components/end-of-day-closing-board.tsx", "utf8");
 const exportPackageSource = readFileSync("src/app/api/documents/export-package/route.ts", "utf8");
+const liveOpsSource = readFileSync("src/components/live-ops-pages.tsx", "utf8");
 const credentialCardSource = readFileSync("src/components/guardian-kiosk-credential-card.tsx", "utf8");
 const credentialPanelSource = readFileSync("src/components/parent-kiosk-credential-panel.tsx", "utf8");
 const pinManagerSource = readFileSync("src/components/guardian-pin-manager.tsx", "utf8");
@@ -57,6 +58,8 @@ test("PIN and QR kiosk confirmation is reported separately from signature captur
   assert.match(attendancePageSource, /credentialConfirmations: reconciliationLogs\.filter/);
   assert.match(closingBoardSource, /Confirm Pickup Evidence/);
   assert.match(closingBoardSource, /credentialConfirmed/);
+  assert.match(liveOpsSource, /log\.verificationStatus === "staff_verified"[\s\S]*\? "Staff"/);
+  assert.match(liveOpsSource, /log\.verificationStatus === "qr_verified" \|\| log\.verificationStatus === "staff_verified" \|\| log\.pinVerified/);
   assert.match(exportPackageSource, /"signatureCaptured", "credentialConfirmed"/);
 });
 

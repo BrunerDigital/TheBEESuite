@@ -214,7 +214,11 @@ export async function generateSupabasePasswordRecoveryLink({
     options: redirectTo ? { redirectTo } : undefined,
   });
   if (error) {
-    return { ok: false as const, error: error.message || "Password setup link could not be created." };
+    return {
+      ok: false as const,
+      error: error.message || "Password setup link could not be created.",
+      status: typeof error.status === "number" ? error.status : null,
+    };
   }
   const tokenHash = data.properties?.hashed_token;
   if (!tokenHash) {

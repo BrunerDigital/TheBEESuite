@@ -62,7 +62,14 @@ async function POSTHandler(request: NextRequest) {
   try {
     const recovery = await generateSupabasePasswordRecoveryLink({ email, redirectTo });
     if (!recovery.ok) {
-      logOperationalError("auth.forgot_password.recovery_link_unavailable", null, { provider: "supabase_auth", reason: recovery.error });
+      const providerStatus = recovery.status ?? null;
+      logOperationalError("auth.forgot_password.recovery_link_unavailable", null, { provider: "supabase_auth", reason: recovery.error, providerStatus });
+      if (providerStatus === 429 || (providerStatus !== null && providerStatus >= 500)) {
+        return NextResponse.json(
+          { ok: false, error: "Password reset email is temporarily unavailable. Please wait a minute and try again." },
+          { status: 503, headers: { "Retry-After": "60" } },
+        );
+      }
     } else {
       const user = await prisma.user.findUnique({
         where: { email },
@@ -97,10 +104,6 @@ async function POSTHandler(request: NextRequest) {
       });
       if (!delivery.ok) {
         logOperationalError("auth.forgot_password.delivery_unavailable", null, { provider: delivery.provider, configured: delivery.configured, error: delivery.error });
-        return NextResponse.json(
-          { ok: false, error: "Password reset email is temporarily unavailable. Please wait a minute and try again." },
-          { status: 503, headers: { "Retry-After": "60" } },
-        );
       }
     }
   } catch (error) {

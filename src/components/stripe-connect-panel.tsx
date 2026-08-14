@@ -320,6 +320,7 @@ export function StripeConnectPanel({
       forbidden: "You do not have access to refresh that payout onboarding link.",
       not_found: "That school payout profile could not be found.",
       not_started: "Start payout setup before refreshing an onboarding link.",
+      payout_link_failed: "Payout details could not be opened. Try again from the school payout account table.",
       refresh_failed: "The processor could not refresh the onboarding link. Try again from the payout account table.",
       stripe_missing: "Payment processor keys are missing, so payout onboarding links cannot be generated yet.",
     };

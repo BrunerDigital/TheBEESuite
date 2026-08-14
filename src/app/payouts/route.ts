@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser, requiresPasswordResetGate } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { createStripeExpressDashboardLoginLink, readStripeConnectedAccountId } from "@/lib/integrations";
+import { createStripeExpressDashboardLoginLink, readStripeConnectedAccountId, retrieveStripeConnectedAccount } from "@/lib/integrations";
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
+import { verifyStripeConnectAccountBinding } from "@/lib/stripe-connect-setup";
 
 export const runtime = "nodejs";
 
@@ -52,8 +53,9 @@ async function GETHandler(request: NextRequest) {
     return NextResponse.redirect(fallbackUrl(baseUrl, center.id, "not_started"));
   }
 
-  const link = await createStripeExpressDashboardLoginLink({ accountId, tenantId: user.tenantId });
-  if (!link.ok || !link.url) {
+  const retrieved = await retrieveStripeConnectedAccount(accountId, { tenantId: user.tenantId });
+  const binding = verifyStripeConnectAccountBinding(accountId, retrieved.account?.id);
+  if (!retrieved.ok || !retrieved.account || !binding.ok) {
     await writeAuditLog(user, {
       centerId: center.id,
       action: "billing.connect.payout_notification_link_failed",
@@ -62,10 +64,32 @@ async function GETHandler(request: NextRequest) {
       metadata: {
         stripeConnectedAccountId: accountId,
         crmLocationId: center.crmLocationId || null,
-        configured: link.configured,
+        configured: retrieved.configured,
       },
     });
-    return NextResponse.redirect(fallbackUrl(baseUrl, center.id, link.configured ? "payout_link_failed" : "stripe_missing"));
+    return NextResponse.redirect(fallbackUrl(baseUrl, center.id, retrieved.configured ? "payout_link_failed" : "stripe_missing"));
+  }
+
+  let destination = "https://dashboard.stripe.com/";
+  let dashboardMode = "full";
+  if (retrieved.account.dashboard !== "full") {
+    const link = await createStripeExpressDashboardLoginLink({ accountId, tenantId: user.tenantId });
+    if (!link.ok || !link.url) {
+      await writeAuditLog(user, {
+        centerId: center.id,
+        action: "billing.connect.payout_notification_link_failed",
+        resource: "Center",
+        resourceId: center.id,
+        metadata: {
+          stripeConnectedAccountId: accountId,
+          crmLocationId: center.crmLocationId || null,
+          configured: link.configured,
+        },
+      });
+      return NextResponse.redirect(fallbackUrl(baseUrl, center.id, link.configured ? "payout_link_failed" : "stripe_missing"));
+    }
+    destination = link.url;
+    dashboardMode = "express";
   }
 
   await writeAuditLog(user, {
@@ -76,10 +100,11 @@ async function GETHandler(request: NextRequest) {
     metadata: {
       stripeConnectedAccountId: accountId,
       crmLocationId: center.crmLocationId || null,
+      dashboardMode,
     },
   });
 
-  return NextResponse.redirect(link.url, {
+  return NextResponse.redirect(destination, {
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
       Expires: "0",

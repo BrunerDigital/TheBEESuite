@@ -60,13 +60,23 @@ test("BEE Suite payout link authenticates, authorizes the school, and creates th
   const auth = handler.indexOf("await getCurrentUser()");
   const access = handler.indexOf("canAccessCenter(user, centerId)");
   const account = handler.indexOf("readStripeConnectedAccountId(center.customFields)");
+  const retrieve = handler.indexOf("retrieveStripeConnectedAccount(accountId");
+  const binding = handler.indexOf("verifyStripeConnectAccountBinding(accountId");
   const link = handler.indexOf("createStripeExpressDashboardLoginLink");
 
   assert.ok(auth >= 0 && auth < access);
-  assert.ok(access < account && account < link);
+  assert.ok(access < account && account < retrieve);
+  assert.ok(retrieve < binding && binding < link);
   assert.match(route, /requiresPasswordResetGate\(user\)/);
   assert.match(route, /canManageBilling\(user\)[\s\S]*canManageOperations\(user\)/);
+  assert.match(route, /retrieved\.account\.dashboard !== "full"/);
+  assert.match(route, /destination = "https:\/\/dashboard\.stripe\.com\/"/);
   assert.match(route, /Cache-Control[\s\S]*no-store/);
+});
+
+test("payout-link failures have a visible recovery message", async () => {
+  const panel = await readFile("src/components/stripe-connect-panel.tsx", "utf8");
+  assert.match(panel, /payout_link_failed: "Payout details could not be opened\./);
 });
 
 test("payout webhook sends only live, exactly mapped events and records delivery", async () => {

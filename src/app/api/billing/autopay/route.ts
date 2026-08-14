@@ -44,8 +44,8 @@ async function POSTHandler(request: NextRequest) {
   const chargeMode = body.dryRun === false || clean(body.mode).toLowerCase() === "charge";
   let centerIds: string[] | undefined;
 
-  if (processStoredMethod && !invoiceId) {
-    return NextResponse.json({ ok: false, error: "Invoice ID is required to charge a stored payment method." }, { status: 400 });
+  if (processStoredMethod) {
+    return NextResponse.json({ ok: false, error: "A saved payment method can only be run after the parent enables autopay." }, { status: 403 });
   }
 
   if (centerId) {
@@ -84,9 +84,8 @@ async function POSTHandler(request: NextRequest) {
     limit: parseLimit(body.limit),
     centerIds,
     invoiceId,
-    requireDueDate: !processStoredMethod,
-    collectionMode: processStoredMethod ? "stored_method" : "autopay",
-    cardProcessingRecoveryAccepted: processStoredMethod && body.cardProcessingRecoveryAccepted === true,
+    requireDueDate: true,
+    collectionMode: "autopay",
     retryFailed: body.retryFailed === true,
     requestedByUserId: user.id,
   });

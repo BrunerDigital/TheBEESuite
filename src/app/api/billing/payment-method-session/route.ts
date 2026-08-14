@@ -101,6 +101,13 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Billing account or family ID is required." }, { status: 400 });
   }
 
+  if ((action === "enable_autopay" || action === "disable_autopay") && !parentFacing) {
+    return NextResponse.json(
+      { ok: false, error: "Autopay can only be enabled or disabled by a linked parent or guardian." },
+      { status: 403 },
+    );
+  }
+
   const billingAccountInclude = {
     family: {
       include: {

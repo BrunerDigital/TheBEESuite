@@ -22,6 +22,7 @@ export type IntegrationSendResult = {
   url?: string;
   error?: string;
   providerStatus?: number;
+  acceptanceUnknown?: boolean;
 };
 
 export type EmailAttachment = {

@@ -59,6 +59,7 @@ export async function sendPayoutSmsSafely(send: () => Promise<IntegrationSendRes
       configured: true,
       provider: "twilio",
       error: "Twilio request failed before receiving a response.",
+      acceptanceUnknown: true,
     };
   }
 }

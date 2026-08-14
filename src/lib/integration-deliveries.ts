@@ -271,13 +271,15 @@ export async function finalizeCommunicationSmsDeliveryAttempt({
     ? result
     : { ...result, skipped: true };
   const attempts = deliveryResult.skipped ? 0 : 1;
-  const state = computeIntegrationDeliveryState({
-    result: deliveryResult,
-    attempts,
-    maxAttempts,
-  });
+  const state = result.acceptanceUnknown
+    ? { status: "failed" as const, nextAttemptAt: null, deliveredAt: null }
+    : computeIntegrationDeliveryState({
+        result: deliveryResult,
+        attempts,
+        maxAttempts,
+      });
   const updated = await prisma.integrationDelivery.updateMany({
-    where: { id, status: "pending", attempts: 0 },
+    where: { id, status: "attempting", attempts: 1 },
     data: {
       providerMessageId: result.id ?? null,
       status: state.status,
@@ -292,6 +294,20 @@ export async function finalizeCommunicationSmsDeliveryAttempt({
     throw new Error(`Integration delivery ${id} changed before its initial attempt was finalized.`);
   }
   return state;
+}
+
+export async function beginCommunicationSmsDeliveryAttempt(id: string) {
+  const claimed = await prisma.integrationDelivery.updateMany({
+    where: { id, status: "pending", attempts: 0, providerMessageId: null },
+    data: {
+      status: "attempting",
+      attempts: 1,
+      nextAttemptAt: null,
+    },
+  });
+  if (claimed.count !== 1) {
+    throw new Error(`Integration delivery ${id} could not begin its initial provider attempt.`);
+  }
 }
 
 export async function recordEmailDeliveryAttempt({

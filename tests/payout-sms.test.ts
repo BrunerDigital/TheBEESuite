@@ -41,7 +41,7 @@ test("payout SMS goes only to the explicitly saved payout contact", () => {
   assert.equal(payoutSmsRecipient(null), null);
 });
 
-test("payout SMS network exceptions become retryable failed results", async () => {
+test("payout SMS network exceptions are marked acceptance-unknown to prevent duplicate retries", async () => {
   const result = await sendPayoutSmsSafely(async () => {
     throw new Error("network timeout");
   });
@@ -51,6 +51,7 @@ test("payout SMS network exceptions become retryable failed results", async () =
     configured: true,
     provider: "twilio",
     error: "Twilio request failed before receiving a response.",
+    acceptanceUnknown: true,
   });
 });
 
@@ -93,13 +94,21 @@ test("payout webhook sends only live, exactly mapped events and records delivery
   assert.match(handler, /payoutSmsRecipient\(center\.customFields\)/);
   const intent = handler.indexOf('purpose: "payout_notification_sms"');
   const receipt = handler.indexOf("recordStripeWebhookEvent(tx, event)");
+  const begin = handler.indexOf("beginCommunicationSmsDeliveryAttempt(delivery.id)");
   const send = handler.indexOf("sendPayoutSmsSafely(() => sendSms");
   const finalize = handler.indexOf("finalizeCommunicationSmsDeliveryAttempt");
-  assert.ok(intent >= 0 && intent < receipt && receipt < send && send < finalize);
+  assert.ok(intent >= 0 && intent < receipt && receipt < begin && begin < send && send < finalize);
   assert.match(handler, /attempts: 0/);
   assert.match(handler, /nextAttemptAt: nextIntegrationRetryAt\(1\)/);
   assert.match(handler, /sendPayoutSmsSafely\(\(\) => sendSms/);
   assert.match(handler, /stripe-payout-created:\$\{event\.id\}:\$\{center\.id\}/);
+});
+
+test("acceptance-unknown payout attempts fail for manual review instead of auto-retrying", async () => {
+  const deliveries = await readFile("src/lib/integration-deliveries.ts", "utf8");
+  assert.match(deliveries, /status: "attempting"/);
+  assert.match(deliveries, /result\.acceptanceUnknown[\s\S]*status: "failed" as const/);
+  assert.match(deliveries, /where: \{ id, status: "attempting", attempts: 1 \}/);
 });
 
 test("legacy Stripe account snapshots preserve their dashboard type", async () => {

@@ -9,7 +9,7 @@ import {
   sendSms,
   setStripeCustomerDefaultPaymentMethod,
 } from "@/lib/integrations";
-import { finalizeCommunicationSmsDeliveryAttempt, nextIntegrationRetryAt } from "@/lib/integration-deliveries";
+import { beginCommunicationSmsDeliveryAttempt, finalizeCommunicationSmsDeliveryAttempt, nextIntegrationRetryAt } from "@/lib/integration-deliveries";
 import { paymentMethodSetupExpirationPatch } from "@/lib/payment-method-management";
 import { beeSuitePayoutSmsBody, payoutSmsRecipient, sendPayoutSmsSafely } from "@/lib/payout-sms";
 import { prisma } from "@/lib/prisma";
@@ -921,6 +921,7 @@ async function handlePayoutCreated(
     return pendingDelivery;
   });
 
+  await beginCommunicationSmsDeliveryAttempt(delivery.id);
   const result = await sendPayoutSmsSafely(() => sendSms({ to, body, statusCallbackUrl, tenantId }));
   await finalizeCommunicationSmsDeliveryAttempt({
     id: delivery.id,

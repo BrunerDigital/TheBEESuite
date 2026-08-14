@@ -17,6 +17,8 @@ type AgencyLedgerEntry = {
 
 const SUBSIDY_MARKER = /subsid|voucher|ccdf|copay|co-pay|familyresponsibility|agencyresponsibility|fundingtype|\belc\b/i;
 const SUBSIDY_KEY_MARKER = /subsid|voucher|ccdf|copay|co-pay|agencyresponsibility|agencyportion|\belc\b/i;
+const GARLAND_ACCOUNT_REFLECTION_SOURCE_SHA256 = "6c95575a1aa967606605904e24e29135ef533f0dd47a10f0aa811d22e2afe418";
+const GARLAND_PARENT_VISIBILITY_AUTHORIZATION = "user_requested_live_for_director_and_family";
 
 export function hasSubsidyResponsibilityEvidence(...values: unknown[]) {
   const visit = (value: unknown): boolean => {
@@ -32,6 +34,52 @@ export function hasSubsidyResponsibilityEvidence(...values: unknown[]) {
     });
   };
   return values.some(visit);
+}
+
+export function hasConfirmedFamilyResponsibility(
+  accountBalanceCents: number,
+  latestLedgerEntryId: string | null,
+  ...values: unknown[]
+) {
+  const visit = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.some(visit);
+    if (!value || typeof value !== "object") return false;
+    const fields = value as Record<string, unknown>;
+    if (
+      fields.familyResponsibilityConfirmed === true
+      && Number.isInteger(fields.familyResponsibilityBalanceCents)
+      && fields.familyResponsibilityBalanceCents === accountBalanceCents
+      && fields.familyResponsibilityConfirmationSourceSha256 === GARLAND_ACCOUNT_REFLECTION_SOURCE_SHA256
+      && fields.familyResponsibilityAuthorization === GARLAND_PARENT_VISIBILITY_AUTHORIZATION
+      && typeof fields.familyResponsibilityConfirmationLedgerEntryId === "string"
+      && fields.familyResponsibilityConfirmationLedgerEntryId === latestLedgerEntryId
+      && fields.autopayActivated === false
+    ) {
+      return true;
+    }
+    return Object.values(fields).some(visit);
+  };
+  return values.some(visit);
+}
+
+const FAMILY_RESPONSIBILITY_CONFIRMATION_FIELDS = new Set([
+  "familyResponsibilityConfirmed",
+  "familyResponsibilityBalanceCents",
+  "familyResponsibilityConfirmedAt",
+  "familyResponsibilityConfirmationSourceSha256",
+  "familyResponsibilityAuthorization",
+  "familyResponsibilityConfirmationLedgerEntryId",
+  "autopayActivated",
+]);
+
+export function withoutConfirmedFamilyResponsibility(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutConfirmedFamilyResponsibility);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => !FAMILY_RESPONSIBILITY_CONFIRMATION_FIELDS.has(key))
+      .map(([key, item]) => [key, withoutConfirmedFamilyResponsibility(item)]),
+  );
 }
 
 export function parentBalanceNeedsResponsibilityReview(input: {

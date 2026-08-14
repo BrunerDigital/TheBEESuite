@@ -40,13 +40,20 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(route, /parent_account_payment_amount_required/);
   assert.match(route, /requestedAmountCents,\s*responsibilityReviewRequired/);
   assert.match(route, /source = parentCheckout \? "parent_portal"/);
-  assert.match(page, /balanceCents:\s*parentBalanceReviewRequired \? 0 : parentBalanceCents/);
+  assert.match(page, /balanceCents:\s*parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed \? 0 : parentBalanceCents/);
+  assert.match(page, /hasConfirmedFamilyResponsibility\(/);
+  const visibilityCall = page.slice(
+    page.indexOf("hasConfirmedFamilyResponsibility("),
+    page.indexOf("hasConfirmedFamilyResponsibility(") + 300,
+  );
+  assert.match(visibilityCall, /billingAccount\.customFields/);
+  assert.doesNotMatch(visibilityCall, /family\?\.customFields|family\?\.children/);
   assert.match(route, /activeInvoicePayment/);
   assert.match(route, /invoice checkout is already processing/);
   assert.match(invoiceCheckoutRoute, /userIsParentGuardian && !userCanManageBilling && !productCheckoutBranding/);
   assert.match(invoiceCheckoutRoute, /pay the family balance shown there/);
   assert.match(workspace, /payProductInvoice/);
-  assert.match(workspace, /parentBalanceReviewRequired[\s\S]{0,80}\? "Being confirmed"/);
+  assert.match(workspace, /parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed[\s\S]{0,80}\? "Being confirmed"/);
   assert.match(workspace, /Amount to pay/);
   assert.match(workspace, /amountCents: accountPaymentRequestCents/);
   assert.doesNotMatch(workspace, /Payment is blocked until the school separates agency and family responsibility/);
@@ -77,6 +84,14 @@ test("automated payment processing blocks unresolved subsidy responsibility befo
   assert.ok(creditIndex > holdIndex);
   assert.ok(stripeIndex > holdIndex);
   assert.match(source, /Automated payment is blocked until the school separates agency and family responsibility/);
+});
+
+test("a changed ProCare balance invalidates prior family-responsibility confirmation", () => {
+  const source = readFileSync("src/app/api/imports/procare/route.ts", "utf8");
+
+  assert.match(source, /select: \{ balanceCents: true, customFields: true \}/);
+  assert.match(source, /existingBillingAccount\?\.balanceCents === balanceCents[\s\S]*withoutConfirmedFamilyResponsibility/);
+  assert.match(source, /customFields: mergeCustomFields\(existingBillingFields, importedBillingFields\)/);
 });
 
 test("director billing keeps agency amounts and payment controls", () => {

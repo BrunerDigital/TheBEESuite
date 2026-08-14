@@ -195,6 +195,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
               billingEmail: true,
               centerId: true,
               customFields: true,
+              guardians: { select: { userId: true } },
               children: { select: { customFields: true } },
             },
           },
@@ -383,6 +384,20 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           : "Autopay is not enabled with a saved payment method.",
       });
       continue;
+    }
+    if (collectionMode === "autopay") {
+      const consentUserId = clean(jsonRecord(invoice.billingAccount.customFields).autopayEnabledByUserId);
+      const consentIsFromLinkedGuardian = Boolean(
+        consentUserId && family.guardians.some((guardian) => guardian.userId === consentUserId),
+      );
+      if (!consentIsFromLinkedGuardian) {
+        results.push({
+          ...baseResult,
+          status: "skipped",
+          reason: "A linked parent or guardian must re-enable autopay in the Parent Portal before this invoice can be charged.",
+        });
+        continue;
+      }
     }
     const availableCreditCents = availableCreditByAccountId.get(invoice.billingAccountId) ?? 0;
     const creditAllocation = allocateAccountCreditToInvoice({

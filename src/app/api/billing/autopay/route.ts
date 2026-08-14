@@ -90,6 +90,13 @@ async function POSTHandler(request: NextRequest) {
     requestedByUserId: user.id,
   });
 
+  if (invoiceId && result.results.length === 0) {
+    return NextResponse.json(
+      { ...result, ok: false, error: "This invoice is not due and eligible for parent-authorized autopay yet." },
+      { status: 409 },
+    );
+  }
+
   return NextResponse.json(result);
 }
 

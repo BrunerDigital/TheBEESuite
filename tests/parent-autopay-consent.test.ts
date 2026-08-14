@@ -8,6 +8,7 @@ test("parents control autopay consent and directors can only run enabled autopay
   const invoiceAction = readFileSync("src/components/invoice-stored-payment-button.tsx", "utf8");
   const paymentMethodRoute = readFileSync("src/app/api/billing/payment-method-session/route.ts", "utf8");
   const autopayRoute = readFileSync("src/app/api/billing/autopay/route.ts", "utf8");
+  const autopayProcessor = readFileSync("src/lib/autopay-processing.ts", "utf8");
 
   assert.match(workbench, /Parents enable or disable autopay from their Parent Portal/);
   assert.doesNotMatch(workbench, /manageFamilyPaymentMethod\("enable_autopay"\)/);
@@ -25,4 +26,10 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(paymentMethodRoute, /\(action === "enable_autopay" \|\| action === "disable_autopay"\) && !parentFacing/);
   assert.match(autopayRoute, /A saved payment method can only be run after the parent enables autopay/);
   assert.match(autopayRoute, /collectionMode: "autopay"/);
+  assert.match(autopayRoute, /invoiceId && result\.results\.length === 0/);
+  assert.match(workbench, /!first \|\| first\.status === "failed"/);
+  assert.match(autopayProcessor, /guardians: \{ select: \{ userId: true \} \}/);
+  assert.match(autopayProcessor, /autopayEnabledByUserId/);
+  assert.match(autopayProcessor, /consentIsFromLinkedGuardian/);
+  assert.match(autopayProcessor, /must re-enable autopay in the Parent Portal/);
 });

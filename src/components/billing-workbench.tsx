@@ -683,7 +683,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           results?: Array<{ status: string; reason?: string | null; stripePaymentIntentId?: string | null }>;
         } | null;
         const first = json?.results?.[0];
-        if (!response.ok || !json?.ok || first?.status === "failed" || first?.status === "skipped") {
+        if (!response.ok || !json?.ok || !first || first.status === "failed" || first.status === "skipped") {
           setErrorMessage(json?.error || first?.reason || "The invoice could not be processed with the saved payment method.");
           return;
         }

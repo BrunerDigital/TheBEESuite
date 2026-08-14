@@ -42,6 +42,12 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(route, /source = parentCheckout \? "parent_portal"/);
   assert.match(page, /balanceCents:\s*parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed \? 0 : parentBalanceCents/);
   assert.match(page, /hasConfirmedFamilyResponsibility\(/);
+  const visibilityCall = page.slice(
+    page.indexOf("hasConfirmedFamilyResponsibility("),
+    page.indexOf("hasConfirmedFamilyResponsibility(") + 300,
+  );
+  assert.match(visibilityCall, /billingAccount\.customFields/);
+  assert.doesNotMatch(visibilityCall, /family\?\.customFields|family\?\.children/);
   assert.match(route, /activeInvoicePayment/);
   assert.match(route, /invoice checkout is already processing/);
   assert.match(invoiceCheckoutRoute, /userIsParentGuardian && !userCanManageBilling && !productCheckoutBranding/);

@@ -2433,8 +2433,6 @@ async function renderLivePage(
           billingAccount.balanceCents,
           latestLedgerEntry?.id ?? null,
           billingAccount.customFields,
-          family?.customFields,
-          ...(family?.children.map((child) => child.customFields) ?? []),
         )
       : false;
     return (

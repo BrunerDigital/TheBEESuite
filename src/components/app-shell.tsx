@@ -329,7 +329,9 @@ function SidebarRail({ currentUser, onLogout, previewMode = false, previewHrefBa
       >
         <BrandIcon branding={currentUser?.branding} className="size-10" />
       </Link>
-      <ScopeContextLink currentUser={currentUser} compact previewMode={previewMode} previewHrefBase={previewHrefBase} />
+      {!parentFacing ? (
+        <ScopeContextLink currentUser={currentUser} compact previewMode={previewMode} previewHrefBase={previewHrefBase} />
+      ) : null}
       <ScrollArea className="min-h-0 w-full flex-1 px-2">
         <nav className="flex flex-col items-center gap-2 py-2" aria-label="Tablet navigation rail">
           {parentFacing ? parentNavigationItems.map(({ view, label, description, Icon }) => {
@@ -665,9 +667,11 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="shrink-0 p-5">
         <BrandMark branding={currentUser?.branding} href={brandHref} />
-        <div className="mt-4">
-          <ScopeContextLink currentUser={currentUser} previewMode={previewMode} previewHrefBase={previewHrefBase} />
-        </div>
+        {!parentFacing ? (
+          <div className="mt-4">
+            <ScopeContextLink currentUser={currentUser} previewMode={previewMode} previewHrefBase={previewHrefBase} />
+          </div>
+        ) : null}
       </div>
       <ScrollArea className="min-h-0 flex-1 px-3">
         <nav className="flex flex-col gap-5 pb-4" aria-label={parentFacing ? parentNavigationLabel : "Workspace navigation"}>
@@ -1216,7 +1220,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
         <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
       </aside>
       <div className="min-w-0 lg:pl-20 xl:pl-72">
-        <header className="app-header sticky top-0 z-10 min-w-0 border-b bg-background/75 backdrop-blur-xl">
+        <header className="app-header sticky top-0 z-10 min-w-0 border-b bg-background/75 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
           <div className="flex min-h-16 min-w-0 items-center gap-2 px-3 sm:px-4 lg:px-6">
             {parentFacing ? (
               <BrandLogo

@@ -1479,26 +1479,42 @@
   /* Parent surfaces favor a quiet, conventional application frame. The
      operational glass treatment remains available to staff workspaces. */
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) {
-    background: var(--background);
+    --portal-canvas: oklch(0.982 0.018 86);
+    --portal-surface: oklch(0.994 0.009 86);
+    --portal-border: oklch(0.885 0.035 82);
+    --portal-shadow: oklch(0.36 0.035 70 / 0.09);
+    background: var(--portal-canvas);
+  }
+
+  .dark .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) {
+    --portal-canvas: oklch(0.19 0.018 72);
+    --portal-surface: oklch(0.235 0.02 72);
+    --portal-border: oklch(0.36 0.028 72);
+    --portal-shadow: oklch(0.04 0.01 70 / 0.3);
   }
 
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .dashboard-workspace {
-    background-color: var(--background);
-    background-image: none;
+    background-color: var(--portal-canvas);
+    background-image:
+      radial-gradient(circle at 92% 2%, color-mix(in oklch, var(--primary) 13%, transparent), transparent 25rem),
+      radial-gradient(circle at 4% 32%, color-mix(in oklch, var(--primary) 7%, transparent), transparent 22rem);
   }
 
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) :is(.app-sidebar, .app-header) {
-    background-color: var(--background);
-    background-image: none;
-    box-shadow: none;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+    border-color: var(--portal-border);
+    background-color: color-mix(in oklch, var(--portal-surface) 92%, transparent);
+    background-image:
+      radial-gradient(circle at 14% 5%, color-mix(in oklch, var(--primary) 12%, transparent), transparent 13rem);
+    box-shadow: 0 14px 38px var(--portal-shadow);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
   }
 
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) :is([data-slot="card"], .glass-panel) {
-    background-color: var(--card);
+    border-color: var(--portal-border);
+    background-color: var(--portal-surface);
     background-image: none;
-    box-shadow: none;
+    box-shadow: 0 16px 42px var(--portal-shadow);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
@@ -1509,16 +1525,100 @@
   }
 
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) [data-slot="button"][data-variant="outline"] {
-    background: var(--background);
-    box-shadow: none;
+    border-color: var(--portal-border);
+    background: var(--portal-surface);
+    box-shadow: 0 5px 14px color-mix(in oklch, var(--portal-shadow) 65%, transparent);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
 
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) nav[aria-label="Family portal navigation"] {
-    background: var(--background);
-    box-shadow: 0 -1px 0 var(--border);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+    border-color: var(--portal-border);
+    background: color-mix(in oklch, var(--portal-surface) 94%, transparent);
+    box-shadow: 0 -10px 32px var(--portal-shadow);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-workspace {
+    color: var(--foreground);
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-heading {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-color: var(--portal-border);
+    background:
+      linear-gradient(115deg, color-mix(in oklch, var(--portal-surface) 94%, var(--primary) 6%), var(--portal-surface));
+    box-shadow: 0 20px 52px var(--portal-shadow);
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-heading::after {
+    position: absolute;
+    right: -2.5rem;
+    top: -4rem;
+    z-index: 0;
+    width: 15rem;
+    height: 15rem;
+    border: 1px solid color-mix(in oklch, var(--primary) 20%, transparent);
+    border-radius: 38% 62% 55% 45%;
+    background:
+      radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--primary) 13%, transparent), transparent 64%);
+    content: "";
+    transform: rotate(18deg);
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-feature,
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-workspace > section,
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-workspace > div > section {
+    border-color: var(--portal-border);
+    box-shadow: 0 16px 42px var(--portal-shadow);
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-workspace :is(input, textarea, select, [data-slot="select-trigger"]) {
+    border-color: var(--portal-border);
+    background-color: color-mix(in oklch, var(--portal-surface) 92%, var(--portal-canvas) 8%);
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) :is(a, button, summary, input, textarea, select, [role="button"]) {
+    touch-action: manipulation;
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) nav[aria-label="Family sections"] > div {
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) nav[aria-label="Family sections"] > div::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (max-width: 639px) {
+    .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .dashboard-workspace {
+      padding-inline: 0.75rem;
+      padding-top: 0.875rem;
+    }
+
+    .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-heading {
+      border-radius: 1.35rem;
+      padding: 1.15rem;
+    }
+
+    .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-workspace {
+      gap: 1rem;
+    }
+
+    .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-workspace :is(input, textarea, select, [data-slot="select-trigger"]) {
+      font-size: 1rem;
+    }
+
+    .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-workspace [data-slot="button"] {
+      min-height: 2.75rem;
+    }
+
+    .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) :is(.app-header [data-slot="button"], .app-header a, .parent-portal-workspace a.inline-flex) {
+      min-height: 2.75rem;
+    }
   }
 }

@@ -52,6 +52,14 @@ test("parent portal presents messaging as one responsive school conversation", (
   assert.match(parentPortal, /messages\s*\.slice\(0, 20\)\s*\.reverse\(\)/);
   assert.match(parentPortal, /Only your family and school can see this conversation\./);
   assert.match(parentPortal, /router\.refresh\(\)/);
+  assert.match(parentPortal, /ref=\{messageTimelineRef\}/);
+  assert.match(parentPortal, /className=\{styles\.parentComposerRow\}/);
+  assert.match(parentPortal, /aria-label=\{isPending \? "Sending message" : "Send message"\}/);
+  assert.match(parentPortal, /htmlFor="portal-message-attachments"/);
+  assert.match(conversationStyles, /height: max\(28rem, calc\(100dvh/);
+  assert.match(conversationStyles, /position: sticky/);
+  assert.match(conversationStyles, /min-height: 2\.75rem/);
+  assert.match(conversationStyles, /field-sizing: content/);
   assert.doesNotMatch(parentPortal, /id="recent-messages"/);
 });
 

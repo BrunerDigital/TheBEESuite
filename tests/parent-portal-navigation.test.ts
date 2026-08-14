@@ -52,12 +52,17 @@ test("parent account destinations open the exact family settings section", () =>
     "children",
     "check-in",
     "documents",
+    "billing",
     "profile",
     "notifications",
   ]);
   assert.equal(
     parentPortalFamilySectionHref("profile"),
     "/parent-portal?view=family&section=profile",
+  );
+  assert.equal(
+    parentPortalFamilySectionHref("billing"),
+    "/parent-portal?view=family&section=billing",
   );
   assert.equal(
     parentPortalFamilySectionHref("notifications"),

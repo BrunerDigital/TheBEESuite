@@ -112,15 +112,32 @@
 }
 
 .parentWorkspace {
+  display: flex;
+  height: min(46rem, calc(100dvh - 13rem));
+  min-height: 32rem;
+  flex-direction: column;
   overflow: hidden;
 }
 
+.parentWorkspacePreview {
+  height: min(40rem, calc(100dvh - 20rem));
+}
+
+.parentChatContent {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
 .parentTimeline {
-  max-height: 34rem;
-  min-height: 18rem;
+  min-height: 0;
+  flex: 1;
   overflow-y: auto;
   padding: 1rem;
   border-block: 1px solid color-mix(in oklch, var(--border) 86%, var(--primary) 14%);
+  scroll-padding-block: 1rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .parentMessageRow {
@@ -154,10 +171,89 @@
 }
 
 .parentComposer {
-  padding: 1rem;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem calc(0.65rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid color-mix(in oklch, var(--border) 86%, var(--primary) 14%);
   background:
     linear-gradient(135deg, color-mix(in oklch, var(--card) 86%, white 14%), color-mix(in oklch, var(--card) 92%, var(--foreground) 2%));
+  box-shadow: 0 -10px 24px color-mix(in oklch, black 5%, transparent);
   backdrop-filter: blur(20px) saturate(118%);
+}
+
+.parentComposerRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.parentAttachButton,
+.parentSendButton {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  flex: 0 0 2.75rem;
+  cursor: pointer;
+  place-items: center;
+  border-radius: 999px;
+  touch-action: manipulation;
+}
+
+.parentAttachButton {
+  border: 1px solid color-mix(in oklch, var(--border) 82%, var(--primary) 18%);
+  background: color-mix(in oklch, var(--background) 74%, transparent);
+  color: var(--muted-foreground);
+}
+
+.parentAttachButton:hover {
+  background: color-mix(in oklch, var(--primary) 10%, var(--card));
+  color: var(--foreground);
+}
+
+.parentSendButton {
+  border-radius: 999px;
+}
+
+.parentMessageInput {
+  field-sizing: content;
+  min-height: 2.75rem !important;
+  max-height: 7.5rem;
+  flex: 1;
+  resize: none;
+  overflow-y: auto;
+  border-radius: 1.4rem;
+  padding: 0.65rem 0.9rem;
+  line-height: 1.4;
+}
+
+.parentAttachmentTray {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.125rem;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.parentAttachmentTray::-webkit-scrollbar {
+  display: none;
+}
+
+.parentReplyContext {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.6rem;
+  border-left: 3px solid var(--primary);
+  border-radius: 0.75rem;
+  background: color-mix(in oklch, var(--background) 72%, transparent);
+  padding: 0.35rem 0.4rem 0.35rem 0.75rem;
 }
 
 @media (max-width: 63.99rem) {
@@ -171,13 +267,31 @@
 }
 
 @media (max-width: 40rem) {
+  .parentWorkspace {
+    height: max(28rem, calc(100dvh - 14rem - env(safe-area-inset-top, 0px)));
+    min-height: 0;
+    width: calc(100% + 1.5rem);
+    margin-inline: -0.75rem;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+    box-shadow: none !important;
+  }
+
+  .parentWorkspacePreview {
+    height: max(28rem, calc(100dvh - 18.125rem - env(safe-area-inset-top, 0px)));
+  }
+
   .parentTimeline {
-    min-height: 22rem;
     padding: 0.85rem;
   }
 
   .parentBubble {
     max-width: 88%;
+  }
+
+  .parentComposer {
+    padding-bottom: 0.65rem;
   }
 }
 

@@ -3,6 +3,7 @@ export const PARENT_PORTAL_FAMILY_SECTIONS = [
   "children",
   "check-in",
   "documents",
+  "billing",
   "profile",
   "notifications",
 ] as const;

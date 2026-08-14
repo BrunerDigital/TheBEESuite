@@ -28,6 +28,18 @@ function parseLimit(value: unknown) {
   return Math.min(Math.max(parsed, 1), 100);
 }
 
+function reviewedInvoices(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const fields = jsonObject(entry);
+    const invoiceId = clean(fields.invoiceId);
+    const amountCents = Number(fields.amountCents);
+    return invoiceId && Number.isInteger(amountCents) && amountCents >= 0
+      ? [{ invoiceId, amountCents }]
+      : [];
+  });
+}
+
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -42,6 +54,8 @@ async function POSTHandler(request: NextRequest) {
   const invoiceId = clean(body.invoiceId);
   const processStoredMethod = body.processStoredMethod === true;
   const chargeMode = body.dryRun === false || clean(body.mode).toLowerCase() === "charge";
+  const reviewed = reviewedInvoices(body.reviewedInvoices);
+  const cursorInvoiceId = clean(body.cursorInvoiceId);
   let centerIds: string[] | undefined;
 
   if (processStoredMethod) {
@@ -78,17 +92,50 @@ async function POSTHandler(request: NextRequest) {
     centerIds = [invoiceCenterId];
   }
 
-  const result = await processAutopayInvoices({
+  const processInput = {
     dryRun: !chargeMode,
     asOf: parseDate(body.asOf),
     limit: parseLimit(body.limit),
     centerIds,
     invoiceId,
+    cursorInvoiceId,
     requireDueDate: true,
-    collectionMode: "autopay",
+    collectionMode: "autopay" as const,
     retryFailed: body.retryFailed === true,
     requestedByUserId: user.id,
-  });
+  };
+
+  if (chargeMode && !invoiceId) {
+    if (!reviewed.length) {
+      return NextResponse.json({ ok: false, error: "Review eligible family balances before processing autopay." }, { status: 409 });
+    }
+    const preview = await processAutopayInvoices({ ...processInput, dryRun: true });
+    const current = preview.results
+      .filter((result) => result.status === "would_charge")
+      .map((result) => ({ invoiceId: result.invoiceId, amountCents: result.amountCents }));
+    const expected = [...reviewed].sort((a, b) => a.invoiceId.localeCompare(b.invoiceId));
+    const actual = [...current].sort((a, b) => a.invoiceId.localeCompare(b.invoiceId));
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      return NextResponse.json({
+        ok: false,
+        error: "Family balances or autopay eligibility changed after review. Review the current balances again before processing.",
+        preview,
+      }, { status: 409 });
+    }
+
+    const run = await processAutopayInvoices({
+      ...processInput,
+      dryRun: false,
+      limit: expected.length,
+      invoiceId: null,
+      invoiceIds: expected.map((item) => item.invoiceId),
+      cursorInvoiceId: null,
+      expectedAmountCentsByInvoiceId: Object.fromEntries(expected.map((item) => [item.invoiceId, item.amountCents])),
+    });
+    return NextResponse.json(run);
+  }
+
+  const result = await processAutopayInvoices(processInput);
 
   if (invoiceId && result.results.length === 0) {
     return NextResponse.json(

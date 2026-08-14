@@ -20,5 +20,7 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(processing, /expectedAmountCents !== creditAllocation\.stripeChargePrincipalCents/);
   assert.match(processing, /cursor: \{ id: input\.cursorInvoiceId \}/);
   assert.match(actions, /Review next batch/);
+  assert.match(actions, /summary\?\.dryRun && summary\.wouldCharge/);
+  assert.match(actions, /Process this batch first/);
   assert.match(processing, /hasMore/);
 });

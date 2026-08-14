@@ -146,13 +146,20 @@ export function PaymentAutopayActions() {
             </AlertDescription>
           </Alert>
         ) : null}
-        {summary?.hasMore ? (
+        {nextCursor ? (
           <Alert variant="destructive">
             <AlertCircle className="size-4" />
             <AlertTitle>Review is larger than one safe batch</AlertTitle>
             <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <span>More than 100 due invoices were found. Process this reviewed batch, then continue to the next balances.</span>
-              <Button disabled={isPending || !nextCursor} onClick={() => runAutopay(true, nextCursor)} size="sm" variant="outline">Review next batch</Button>
+              <Button
+                disabled={isPending || Boolean(summary?.dryRun && summary.wouldCharge)}
+                onClick={() => runAutopay(true, nextCursor)}
+                size="sm"
+                variant="outline"
+              >
+                {summary?.dryRun && summary.wouldCharge ? "Process this batch first" : "Review next batch"}
+              </Button>
             </AlertDescription>
           </Alert>
         ) : null}

@@ -179,10 +179,9 @@ export function buildPasswordResetTokenUrl({
 }) {
   const baseUrl = canonicalizePublicUrl(appBaseUrl) || getAppBaseUrl(requestUrl);
   const url = new URL(securePasswordResetUrl(`${baseUrl.replace(/\/+$/, "")}/reset-password`));
-  url.searchParams.set("token_hash", tokenHash);
-  url.searchParams.set("type", "recovery");
   const safeNext = safePasswordResetNextPath(nextPath);
   if (safeNext) url.searchParams.set("next", safeNext);
+  url.hash = new URLSearchParams({ token_hash: tokenHash, type: "recovery" }).toString();
   return url.toString();
 }
 

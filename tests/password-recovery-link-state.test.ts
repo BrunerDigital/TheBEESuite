@@ -22,6 +22,13 @@ test("password recovery accepts BEE-generated token hashes", () => {
   );
 });
 
+test("password recovery accepts BEE-generated token hashes from fragments", () => {
+  assert.deepEqual(
+    resolvePasswordRecoveryLink("?next=%2Fparent-portal%2Fsetup", "#token_hash=hash_123&type=recovery"),
+    { status: "ready", credential: { tokenHash: "hash_123" } },
+  );
+});
+
 test("password recovery accepts Supabase implicit-flow access tokens", () => {
   assert.deepEqual(
     resolvePasswordRecoveryLink("?next=%2Fdashboard", "#access_token=access_123&type=recovery&expires_in=3600"),

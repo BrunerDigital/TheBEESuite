@@ -64,7 +64,7 @@ async function POSTHandler(request: NextRequest) {
     if (!recovery.ok) {
       const providerStatus = recovery.status ?? null;
       logOperationalError("auth.forgot_password.recovery_link_unavailable", null, { provider: "supabase_auth", reason: recovery.error, providerStatus });
-      if (providerStatus === 0 || providerStatus === 429 || (providerStatus !== null && providerStatus >= 500)) {
+      if (providerStatus === 0 || providerStatus === 401 || providerStatus === 403 || providerStatus === 429 || (providerStatus !== null && providerStatus >= 500)) {
         return NextResponse.json(
           { ok: false, error: "Password reset email is temporarily unavailable. Please wait a minute and try again." },
           { status: 503, headers: { "Retry-After": "60" } },
@@ -92,16 +92,20 @@ async function POSTHandler(request: NextRequest) {
         customArgs: { purpose: "password_reset" },
         disableClickTracking: true,
       });
-      await recordEmailDeliveryAttempt({
-        tenantId: user.tenantId,
-        purpose: "password_reset_email",
-        to: [email],
-        subject: "Reset your BEE Suite password",
-        text: "Sensitive password reset content omitted from the delivery audit.",
-        result: delivery,
-        maxAttempts: 1,
-        metadata: { sensitiveContentOmitted: true, clickTrackingDisabled: true },
-      });
+      try {
+        await recordEmailDeliveryAttempt({
+          tenantId: user.tenantId,
+          purpose: "password_reset_email",
+          to: [email],
+          subject: "Reset your BEE Suite password",
+          text: "Sensitive password reset content omitted from the delivery audit.",
+          result: delivery,
+          maxAttempts: 1,
+          metadata: { sensitiveContentOmitted: true, clickTrackingDisabled: true },
+        });
+      } catch (error) {
+        logOperationalError("auth.forgot_password.delivery_audit_unavailable", error, { provider: delivery.provider });
+      }
       if (!delivery.ok) {
         logOperationalError("auth.forgot_password.delivery_unavailable", null, { provider: delivery.provider, configured: delivery.configured, error: delivery.error });
       }

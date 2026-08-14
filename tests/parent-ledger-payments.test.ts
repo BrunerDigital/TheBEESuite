@@ -133,8 +133,15 @@ test("parent account payments support custom partial amounts for split-payment w
 
 test("Stripe family-balance application atomically claims a draft payment", () => {
   const webhook = readFileSync("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  const application = readFileSync("src/lib/stripe-payment-application.ts", "utf8");
 
   assert.match(webhook, /payment\.updateMany\(\{[\s\S]*status: PaymentStatus\.DRAFT/);
   assert.match(webhook, /claimedPayment\.count !== 1/);
   assert.match(webhook, /ignoredReason = "payment_already_applied"/);
+  for (const source of [webhook, application]) {
+    assert.match(source, /accountBalanceAfterCents/);
+    assert.match(source, /accountBalanceAfterCents:\s*updatedAccount\.balanceCents/);
+    assert.match(source, /openInvoiceTotalCents - Math\.max\(0, input\.accountBalanceAfterCents/);
+    assert.match(source, /remainingCents = Math\.min\(openInvoiceTotalCents, invoiceSettlementBudgetCents\)/);
+  }
 });

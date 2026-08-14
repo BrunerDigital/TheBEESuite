@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -20,6 +20,7 @@ import {
   EyeOff,
   FileCheck2,
   FileText,
+  Home,
   KeyRound,
   LifeBuoy,
   MessageSquare,
@@ -28,6 +29,7 @@ import {
   Plus,
   ReceiptText,
   Reply,
+  SendHorizontal,
   ShoppingBag,
   ShieldCheck,
   Trash2,
@@ -281,7 +283,7 @@ const parentViewCopy: Record<
   payments: {
     title: "Payments",
     description:
-      "View your balance, payment methods, invoices, and account activity.",
+      "View your balance, make a payment, and review invoices and account activity.",
   },
   family: {
     title: "Family",
@@ -429,6 +431,10 @@ function money(cents: number) {
     style: "currency",
     currency: "USD",
   }).format(cents / 100);
+}
+
+function guardianFirstName(value: string | null | undefined) {
+  return value?.trim().split(/\s+/)[0] || "there";
 }
 
 function recordFromUnknown(value: unknown): Record<string, unknown> {
@@ -705,6 +711,14 @@ function ParentPortalWorkspaceView({
     formatTimeInTimeZone(value, timeZone);
   const router = useRouter();
   const activeFamilySection = normalizeParentFamilySection(familySection);
+
+  useEffect(() => {
+    if (activeView !== "family") return;
+    const activeSection = document.querySelector(
+      "#parent-family-section-nav [aria-current='page']",
+    );
+    activeSection?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [activeFamilySection, activeView]);
   const activeViewCopy = parentViewCopy[activeView];
   const previewHrefBase = previewMode
     ? "/device-preview?view=parent"
@@ -725,6 +739,7 @@ function ParentPortalWorkspaceView({
   );
   const [messageAttachments, setMessageAttachments] = useState<File[]>([]);
   const [messageAttachmentInputKey, setMessageAttachmentInputKey] = useState(0);
+  const messageTimelineRef = useRef<HTMLOListElement | null>(null);
   const [requestDetails, setRequestDetails] = useState("");
   const [requestEntity, setRequestEntity] = useState<
     "emergency_contact" | "authorized_pickup"
@@ -798,6 +813,12 @@ function ParentPortalWorkspaceView({
   } else if (confirmPassword && !passwordsMatch) {
     passwordGuidance = "The new passwords do not match.";
   }
+
+  useEffect(() => {
+    if (activeView !== "messages") return;
+    const timeline = messageTimelineRef.current;
+    if (timeline) timeline.scrollTop = timeline.scrollHeight;
+  }, [activeView, messages.length]);
 
   function workspaceHref(
     view: ParentPortalView,
@@ -943,6 +964,7 @@ function ParentPortalWorkspaceView({
       null
     );
   }, [family, currentGuardianId]);
+
   const uniformColors = useMemo(
     () => Array.from(new Set(uniformProducts.map((product) => product.color))),
     [uniformProducts],
@@ -1191,9 +1213,7 @@ function ParentPortalWorkspaceView({
     setReplyingToSubject(nextSubject);
     setSubject(replySubject(nextSubject));
     setMessage("");
-    document
-      .getElementById("messages")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById("portal-message")?.focus({ preventScroll: true });
   }
 
   function requestContactUpdate() {
@@ -1691,22 +1711,45 @@ function ParentPortalWorkspaceView({
     );
   }
 
+  const featuredChild = family.children[0] ?? null;
+  const featuredMedia = featuredChild
+    ? media.find((item) => item.child.fullName === featuredChild.fullName) ??
+      media[0] ??
+      null
+    : media[0] ?? null;
+  const featuredMediaSrc = renderableImageSrc(featuredMedia?.url);
+  const featuredChildPresent =
+    featuredChild?.today?.status === "checked_in" ||
+    featuredChild?.today?.status === "present";
+  const latestReport = dailyUpdateDays[0]?.reports[0] ?? null;
+  const guardianName =
+    currentGuardian?.fullName ?? family.guardians[0]?.fullName ?? null;
+  const homeGreeting = `Welcome back, ${guardianFirstName(guardianName)}`;
+
   return (
-    <div className="mx-auto flex w-full max-w-[88rem] flex-col gap-6 [&_button]:min-h-10" aria-busy={isPending}>
+    <div
+      className="parent-portal-workspace mx-auto flex w-full max-w-[88rem] flex-col gap-6 [&_button]:min-h-10"
+      data-parent-portal-view={activeView}
+      aria-busy={isPending}
+    >
       <header
         id="family-summary"
-        className="scroll-mt-28 border-b border-border/80 pb-5"
+        className={`parent-portal-heading scroll-mt-28 rounded-[1.75rem] border border-border/70 bg-card px-5 py-5 sm:px-7 sm:py-6 ${activeView === "messages" ? "max-sm:sr-only" : ""}`}
       >
-        <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-          {activeViewCopy.title}
-        </h1>
-        <p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-muted-foreground sm:text-base">
-          {activeViewCopy.description}
-        </p>
-        <p className="mt-2 text-sm font-medium text-foreground">
-          {family.name}
-          {centerName ? ` · ${centerName}` : ""}
-        </p>
+        <div className="relative z-[1] flex min-w-0 items-center justify-between gap-3">
+          <h1 className="text-balance font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
+            {activeView === "home" ? homeGreeting : activeViewCopy.title}
+          </h1>
+          {activeView !== "home" ? (
+            <Link
+              href={workspaceHref("home", { familyId: family.id })}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Home data-icon="inline-start" aria-hidden="true" />
+              Home
+            </Link>
+          ) : null}
+        </div>
         {availableFamilies.length > 1 ? (
           <div
             className="mt-5 flex flex-wrap gap-2"
@@ -1768,12 +1811,13 @@ function ParentPortalWorkspaceView({
           aria-label="Family sections"
           className="-mt-2 border-b border-border/80"
         >
-          <div className="grid grid-cols-2 gap-1 pb-2 sm:flex sm:min-w-max sm:gap-6 sm:pb-0">
+          <div id="parent-family-section-nav" className="flex snap-x gap-2 overflow-x-auto pb-2 sm:min-w-max sm:gap-6 sm:pb-0">
             {(
               [
                 ["children", "Children"],
                 ["check-in", "School Check-In"],
                 ["documents", "Documents"],
+                ["billing", "Billing Settings"],
                 ["profile", "Profile & Security"],
                 ["notifications", "Notifications & Privacy"],
               ] as Array<[ParentPortalFamilySection, string]>
@@ -1788,7 +1832,7 @@ function ParentPortalWorkspaceView({
                 aria-current={
                   activeFamilySection === section ? "page" : undefined
                 }
-                className={`relative flex min-h-11 items-center rounded-lg border px-3 py-2 text-sm font-medium leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-1 ${activeFamilySection === section ? "border-border bg-muted text-foreground sm:border-primary sm:bg-transparent" : "border-transparent text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground sm:hover:bg-transparent"}`}
+                className={`relative flex min-h-11 shrink-0 snap-start items-center rounded-full border px-4 py-2 text-sm font-medium leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-1 ${activeFamilySection === section ? "border-primary/40 bg-primary/10 text-foreground sm:border-primary sm:bg-transparent" : "border-border/70 bg-card/70 text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground sm:border-transparent sm:bg-transparent sm:hover:bg-transparent"}`}
               >
                 {label}
               </Link>
@@ -1801,7 +1845,7 @@ function ParentPortalWorkspaceView({
         <>
           <section
             id="today"
-            className="scroll-mt-28 overflow-hidden rounded-2xl border bg-card"
+            className="parent-portal-feature scroll-mt-28 overflow-hidden rounded-[1.75rem] border bg-card"
             aria-labelledby="parent-today-heading"
           >
             <div className="border-b border-border/70 p-4 sm:p-6">
@@ -1813,7 +1857,7 @@ function ParentPortalWorkspaceView({
                   >
                     Today
                   </h2>
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+                  <p className="sr-only">
                     See today’s check-in status, classroom, schedule, and latest
                     update from your school.
                   </p>
@@ -1830,11 +1874,61 @@ function ParentPortalWorkspaceView({
                 </div>
               </div>
             </div>
-            <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-2">
+            {featuredChild ? (
+              <div className="grid border-b border-border/60 bg-primary/[0.045] sm:grid-cols-[minmax(0,1fr)_15rem]">
+                <div className="flex min-w-0 items-center gap-4 p-4 sm:p-6">
+                  <span className={`grid size-12 shrink-0 place-items-center rounded-2xl ${featuredChildPresent ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-primary"}`}>
+                    {featuredChildPresent ? (
+                      <CheckCircle2 className="size-6" aria-hidden="true" />
+                    ) : (
+                      <CalendarDays className="size-6" aria-hidden="true" />
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold">
+                      {featuredChild.today?.label || "Today’s status is ready"}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {featuredChild.preferredName || featuredChild.fullName}
+                      {featuredChild.today?.latestEventAt
+                        ? ` · ${formatTime(featuredChild.today.latestEventAt)}`
+                        : ""}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      {featuredChild.classroom?.name || "Classroom not assigned"}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href={workspaceHref("updates", { familyId: family.id })}
+                  className="group relative hidden min-h-36 overflow-hidden border-l border-border/60 bg-muted sm:block"
+                  aria-label="Open photos and daily reports"
+                >
+                  {featuredMediaSrc ? (
+                    <Image
+                      src={featuredMediaSrc}
+                      alt={featuredMedia?.caption || `${featuredChild.fullName} school update`}
+                      fill
+                      sizes="240px"
+                      priority
+                      className="object-cover transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:transform-none"
+                    />
+                  ) : (
+                    <span className="grid h-full place-items-center text-primary/60">
+                      <Camera className="size-10" aria-hidden="true" />
+                    </span>
+                  )}
+                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-4 pb-3 pt-8 text-xs font-semibold text-white">
+                    Photos &amp; reports
+                  </span>
+                </Link>
+              </div>
+            ) : null}
+            <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto p-4 sm:grid sm:overflow-visible sm:p-6 lg:grid-cols-2">
               {family.children.map((child) => (
                 <article
                   key={child.id}
-                  className="min-w-0 rounded-2xl border bg-background/60 p-4 sm:p-5"
+                  className="w-[86%] min-w-0 shrink-0 snap-start rounded-2xl border bg-background/60 p-4 sm:w-auto sm:shrink sm:p-5"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -1849,7 +1943,53 @@ function ParentPortalWorkspaceView({
                       {child.today?.label || "Not marked today"}
                     </Badge>
                   </div>
-                  <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                  <details className="mt-4 rounded-xl border bg-card/70 p-3 text-sm sm:hidden">
+                    <summary className="cursor-pointer select-none font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      View day details
+                    </summary>
+                    <dl className="mt-3 divide-y border-t text-sm">
+                      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 py-2.5">
+                        <dt className="text-xs font-medium text-muted-foreground">
+                          Schedule
+                        </dt>
+                        <dd className="break-words font-medium">
+                          {scheduleSummary(child.schedule)}
+                        </dd>
+                      </div>
+                      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 py-2.5">
+                        <dt className="text-xs font-medium text-muted-foreground">
+                          Classroom
+                        </dt>
+                        <dd className="break-words font-medium">
+                          {child.today?.currentLocationName ||
+                            (child.today?.status === "checked_out"
+                              ? "Checked out"
+                              : "No live location shared")}
+                        </dd>
+                      </div>
+                      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 py-2.5">
+                        <dt className="text-xs font-medium text-muted-foreground">
+                          Last Check-In
+                        </dt>
+                        <dd className="font-medium">
+                          {child.today?.latestEventAt
+                            ? formatTime(child.today.latestEventAt)
+                            : "No event today"}
+                        </dd>
+                      </div>
+                      <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 pt-2.5">
+                        <dt className="text-xs font-medium text-muted-foreground">
+                          Daily Update
+                        </dt>
+                        <dd className="font-medium">
+                          {child.today?.dailyReportShared
+                            ? "Shared today"
+                            : "Not shared yet"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </details>
+                  <dl className="mt-4 hidden gap-3 text-sm sm:grid sm:grid-cols-2">
                     <div className="min-w-0 rounded-xl border bg-card/70 p-3">
                       <dt className="text-xs font-medium text-muted-foreground">
                         Today’s Schedule
@@ -1895,9 +2035,9 @@ function ParentPortalWorkspaceView({
             </div>
           </section>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
             <section
-              className="rounded-2xl border bg-card p-4 sm:p-6"
+              className="rounded-[1.5rem] border bg-card p-4 sm:p-6"
               aria-labelledby="parent-attention-heading"
             >
               <div className="flex items-center justify-between gap-3">
@@ -1907,11 +2047,6 @@ function ParentPortalWorkspaceView({
                 >
                   Needs Your Attention
                 </h2>
-                {homeAttentionCount ? (
-                  <span className="text-sm tabular-nums text-muted-foreground">
-                    {homeAttentionCount}
-                  </span>
-                ) : null}
               </div>
               <div className="mt-4 divide-y">
                 {documentsNeedingAction[0] ? (
@@ -1930,7 +2065,6 @@ function ParentPortalWorkspaceView({
                         Review {documentsNeedingAction[0].name}
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        Document status:{" "}
                         {displayTokenLabel(documentsNeedingAction[0].status)}
                       </span>
                     </span>
@@ -1999,7 +2133,7 @@ function ParentPortalWorkspaceView({
             </section>
 
             <section
-              className="rounded-2xl border bg-card p-4 sm:p-6"
+              className="rounded-[1.5rem] border bg-card p-4 sm:p-6"
               aria-labelledby="parent-announcements-heading"
             >
               <h2
@@ -2009,7 +2143,7 @@ function ParentPortalWorkspaceView({
                 Latest From {centerName ?? "Your School"}
               </h2>
               {announcements[0] ? (
-                <div className="mt-5">
+                <div className="mt-5 hidden sm:block">
                   <BellRing
                     className="size-6 text-primary"
                     aria-hidden="true"
@@ -2031,6 +2165,75 @@ function ParentPortalWorkspaceView({
                   No new announcements.
                 </p>
               )}
+              {announcements[0] ? (
+                <details className="mt-4 rounded-xl border bg-background/45 p-3 sm:hidden">
+                  <summary className="cursor-pointer select-none font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    {announcements[0].title}
+                  </summary>
+                  <p className="mt-3 border-t pt-3 text-sm leading-6 text-muted-foreground">
+                    {announcements[0].body}
+                  </p>
+                  {announcements[0].sendAt ? (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {formatDate(announcements[0].sendAt)}
+                    </p>
+                  ) : null}
+                </details>
+              ) : null}
+            </section>
+
+            <section
+              className="rounded-[1.5rem] border bg-card p-4 sm:p-6 lg:col-span-2 xl:col-span-1"
+              aria-labelledby="parent-account-heading"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <h2 id="parent-account-heading" className="text-xl font-semibold">
+                  Account &amp; Payments
+                </h2>
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <CreditCard className="size-5" aria-hidden="true" />
+                </span>
+              </div>
+              {parentBalanceReviewRequired ? (
+                <div className="mt-5 rounded-2xl border border-amber-400/35 bg-amber-400/10 p-4">
+                  <p className="font-semibold">Balance review in progress</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Your school is confirming family and agency responsibility before showing a payable amount.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-5">
+                  <p className="text-3xl font-semibold tabular-nums">
+                    {money(balanceCents)}
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    {balanceCents > 0
+                      ? checkoutBlocked
+                        ? "Payment details are available; online checkout is temporarily unavailable."
+                        : "Review invoices and choose a payment method."
+                      : balanceCents < 0
+                        ? "This account has a family credit."
+                        : "Your family balance is current."}
+                  </p>
+                </div>
+              )}
+              <Link
+                href={workspaceHref("payments", { familyId: family.id })}
+                className={buttonVariants({
+                  variant: balanceCents > 0 && !checkoutBlocked ? "default" : "outline",
+                  className: "mt-5 w-full",
+                })}
+              >
+                {balanceCents > 0 && !checkoutBlocked ? "Review & Pay" : "View Payment Details"}
+                <ArrowRight data-icon="inline-end" aria-hidden="true" />
+              </Link>
+              <p className="mt-3 text-xs text-muted-foreground">
+                {openInvoices.length
+                  ? `${openInvoices.length} open invoice${openInvoices.length === 1 ? "" : "s"}`
+                  : latestAccountLedgerEntry
+                    ? `Latest activity ${formatDate(latestAccountLedgerEntry.effectiveAt)}`
+                    : "No open invoices"}
+              </p>
             </section>
           </div>
 
@@ -2041,9 +2244,17 @@ function ParentPortalWorkspaceView({
             >
               Quick Actions
             </h2>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
               {(
                 [
+                  [
+                    workspaceHref("updates", { familyId: family.id }),
+                    "Photos & Daily Reports",
+                    latestReport
+                      ? `${latestReport.child.fullName} · ${formatDate(latestReport.date)}`
+                      : "See shared classroom moments",
+                    Camera,
+                  ],
                   [
                     workspaceHref("messages", { familyId: family.id }),
                     "Message the School",
@@ -2070,12 +2281,12 @@ function ParentPortalWorkspaceView({
                 <Link
                   key={href}
                   href={href}
-                  className="group flex min-h-20 items-center gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/60 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="group flex min-h-20 items-center gap-2 rounded-xl border bg-card p-3 transition-colors hover:border-primary/60 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-3 sm:p-4"
                 >
                   <Icon className="size-5 shrink-0" aria-hidden="true" />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold">{label}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
+                    <span className="block text-xs font-semibold sm:text-sm">{label}</span>
+                    <span className="mt-1 hidden text-xs text-muted-foreground sm:block">
                       {detail}
                     </span>
                   </span>
@@ -2131,15 +2342,25 @@ function ParentPortalWorkspaceView({
             {(selectedUpdateDay?.reports ?? []).map((report) => {
               const timedCareEvents = dailyReportTimedCareEvents(report);
               return (
-                <article
+                <details
                   key={report.id}
                   id="daily-reports"
-                  className="grid gap-4 py-6 first:pt-1 sm:grid-cols-[3rem_minmax(0,1fr)]"
+                  className="group py-3 first:pt-1"
                 >
-                  <span className="grid size-11 place-items-center rounded-full bg-primary/12 text-primary">
-                    <ClipboardList className="size-5" aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0">
+                  <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 rounded-2xl border bg-background/55 p-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                    <span className="grid size-11 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
+                      <ClipboardList className="size-5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold">{report.child.fullName}</span>
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        {report.mood ? `${displayTokenLabel(report.mood)} · ` : ""}{formatDate(report.date)}
+                      </span>
+                    </span>
+                    <span className="text-xs font-medium text-primary group-open:hidden">View day</span>
+                    <span className="hidden text-xs font-medium text-primary group-open:inline">Close</span>
+                  </summary>
+                  <div className="mx-2 rounded-b-2xl border border-t-0 bg-card px-4 pb-4 pt-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <h2 className="font-semibold">Daily report · {report.child.fullName}</h2>
@@ -2179,7 +2400,7 @@ function ParentPortalWorkspaceView({
                       ))}
                     </dl>
                   </div>
-                </article>
+                </details>
               );
             })}
 
@@ -2237,6 +2458,99 @@ function ParentPortalWorkspaceView({
         />
       ) : null}
 
+      {activeView === "family" && activeFamilySection === "billing" ? (
+        <Card id="billing-settings" className="scroll-mt-28 shadow-none">
+          <CardHeader>
+            <CardTitle as="h2" className="flex items-center gap-2">
+              <CreditCard className="text-primary" aria-hidden="true" />
+              Billing Settings
+            </CardTitle>
+            <CardDescription>
+              Manage the saved payment method and autopay used for this family account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <dl className="grid grid-cols-2 gap-3">
+              <div className="min-w-0 rounded-2xl border bg-background/45 p-3">
+                <dt className="text-xs text-muted-foreground">Billing email</dt>
+                <dd className="mt-1 truncate font-medium">
+                  {family.billingEmail ?? family.guardians[0]?.email ?? "Not set"}
+                </dd>
+              </div>
+              <div className="rounded-2xl border bg-background/45 p-3">
+                <dt className="text-xs text-muted-foreground">Autopay</dt>
+                <dd className="mt-1 font-medium capitalize">{autopayStatus}</dd>
+              </div>
+            </dl>
+            <div className="rounded-2xl border bg-background/40 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 font-medium">
+                    Payment method &amp; autopay
+                    <InfoTip label="About payment methods and autopay">
+                      Saving a debit or credit card or bank account does not enable autopay. Enable it separately, or make a one-time payment from Payments.
+                    </InfoTip>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {autopayStatus === "enabled"
+                      ? "Account credit is applied first, then the saved method pays eligible invoices."
+                      : paymentMethodManagement?.hasSavedPaymentMethod
+                        ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` · updated ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}`
+                        : paymentMethodManagement?.autopayStatus === "pending"
+                          ? "Bank verification is pending."
+                          : "No saved payment method yet."}
+                  </p>
+                </div>
+                <div className="flex min-h-11 items-center gap-2 rounded-full border bg-card px-3">
+                  <Label htmlFor="parent-family-autopay-toggle" className="text-sm">Autopay</Label>
+                  <Switch
+                    id="parent-family-autopay-toggle"
+                    checked={autopayStatus === "enabled"}
+                    onCheckedChange={toggleAutopay}
+                    disabled={isPending || !family || autopayStatus === "pending"}
+                    aria-label="Enable or disable autopay"
+                  />
+                  <span className="text-xs font-medium text-muted-foreground">{autopayStatus === "enabled" ? "On" : "Off"}</span>
+                </div>
+              </div>
+              {autopayConfirmation ? (
+                <Alert className="mt-4 border-emerald-500/30 bg-emerald-500/10">
+                  <CheckCircle2 />
+                  <AlertTitle>Autopay status confirmed</AlertTitle>
+                  <AlertDescription>{autopayConfirmation}</AlertDescription>
+                </Alert>
+              ) : null}
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <Button disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")}>
+                  <CreditCard data-icon="inline-start" />
+                  {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace card" : "Save card"}
+                </Button>
+                <Button disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                  <Building2 data-icon="inline-start" />
+                  {paymentMethodManagement?.autopayStatus === "pending" ? "Verify bank account" : "Connect bank account"}
+                </Button>
+                <Button disabled={isPending || !paymentMethodManagement?.hasStripeCustomer} onClick={() => managePaymentMethod("portal")} variant="outline">
+                  Manage methods
+                </Button>
+              </div>
+              {autopayRequirements.length ? (
+                <Alert className="mt-3">
+                  <AlertCircle className="size-4" />
+                  <AlertTitle>Autopay requirements</AlertTitle>
+                  <AlertDescription className="space-y-1">
+                    {autopayRequirements.map((requirement) => <p key={requirement}>{requirement}</p>)}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+            </div>
+            <Link href={workspaceHref("payments", { familyId: family.id, section: null, hash: null })} className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
+              <ArrowRight data-icon="inline-start" aria-hidden="true" />
+              Return to Payments
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {activeView === "family" && activeFamilySection === "children" ? (
         <div className="grid gap-4">
           <Card id="children" className="scroll-mt-28 shadow-none">
@@ -2248,25 +2562,29 @@ function ParentPortalWorkspaceView({
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
               {family.children.map((child) => (
-                <div
+                <details
                   key={child.id}
-                  className="rounded-xl border bg-background/40 p-4"
+                  className="group rounded-2xl border bg-background/40"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="font-medium">{child.fullName}</div>
-                      <div className="text-xs text-muted-foreground">
+                  <summary className="flex min-h-20 cursor-pointer list-none items-center gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                    <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary/12 font-semibold text-primary" aria-hidden="true">
+                      {(child.preferredName ?? child.fullName).slice(0, 1).toUpperCase()}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{child.fullName}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
                         {child.preferredName
                           ? `Preferred: ${child.preferredName} · `
                           : ""}
                         {child.ageGroup}
-                      </div>
-                    </div>
+                      </span>
+                    </span>
                     <Badge variant="outline">
                       {displayTokenLabel(child.enrollmentStatus)}
                     </Badge>
-                  </div>
-                  <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                  </summary>
+                  <div className="border-t px-4 pb-4 pt-3">
+                  <div className="grid gap-2 text-xs text-muted-foreground">
                     <span>
                       Classroom: {child.classroom?.name ?? "Unassigned"}
                     </span>
@@ -2295,7 +2613,8 @@ function ParentPortalWorkspaceView({
                       {child.fieldTripPermission ? "Allowed" : "Contact school"}
                     </Badge>
                   </div>
-                </div>
+                  </div>
+                </details>
               ))}
             </CardContent>
           </Card>
@@ -2350,12 +2669,8 @@ function ParentPortalWorkspaceView({
 
       {activeView === "payments" ? (
         <Card id="billing" className="scroll-mt-28 shadow-none">
-          <CardHeader>
-            <CardTitle as="h2">Family Balance and Account</CardTitle>
-            <CardDescription>
-              Review charges, payments, invoices, and payment methods. No
-              processing fee is added to your payment.
-            </CardDescription>
+          <CardHeader className="sr-only">
+            <CardTitle as="h2">Payment account</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {paymentTransitionActive ? (
@@ -2378,21 +2693,25 @@ function ParentPortalWorkspaceView({
                 </AlertDescription>
               </Alert>
             ) : null}
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-xl border bg-background/40 p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border bg-background/40 p-3 sm:p-4">
                 <div className="text-xs text-muted-foreground">Balance due</div>
                 <div className="mt-1 text-2xl font-semibold">
                   {parentBalanceReviewRequired
                     ? "Being confirmed"
                     : money(balanceCents)}
                 </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {parentBalanceReviewRequired
-                    ? "Your school is confirming the amount your family owes. You can still choose an amount to pay."
-                    : "This is the amount currently due from your family."}
-                </div>
+                {parentBalanceReviewRequired ? (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Your school is confirming the amount. You can still choose an amount to pay.
+                  </div>
+                ) : (
+                  <p className="sr-only">
+                    This is the amount currently due from your family.
+                  </p>
+                )}
               </div>
-              <div className="rounded-xl border bg-background/40 p-4">
+              <div className="rounded-xl border bg-background/40 p-3 sm:p-4">
                 <div className="text-xs text-muted-foreground">
                   Latest account activity
                 </div>
@@ -2410,22 +2729,6 @@ function ParentPortalWorkspaceView({
                     No account activity recorded
                   </div>
                 )}
-              </div>
-              <div className="rounded-xl border bg-background/40 p-4">
-                <div className="text-xs text-muted-foreground">
-                  Billing email
-                </div>
-                <div className="mt-1 truncate font-medium">
-                  {family.billingEmail ??
-                    family.guardians[0]?.email ??
-                    "Not set"}
-                </div>
-              </div>
-              <div className="rounded-xl border bg-background/40 p-4">
-                <div className="text-xs text-muted-foreground">Autopay</div>
-                <div className="mt-1 font-medium capitalize">
-                  {autopayStatus}
-                </div>
               </div>
             </div>
             {family.children.some(
@@ -2510,7 +2813,51 @@ function ParentPortalWorkspaceView({
                 </div>
               </div>
             ) : null}
-            <div className="rounded-xl border bg-background/40 p-4">
+            <details className="rounded-xl border bg-background/40 p-4 sm:hidden">
+              <summary className="cursor-pointer select-none font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                View account history
+              </summary>
+              <div className="mt-4 space-y-4 border-t pt-4">
+                <div>
+                  <div className="mb-2 text-sm font-medium">Account activity</div>
+                  <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                    {ledgerEntries.map((entry) => (
+                      <div key={entry.id} className="rounded-lg bg-background/45 p-3 text-sm">
+                        <div className="font-medium">{entry.description}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {displayTokenLabel(entry.type)} · {formatDate(entry.effectiveAt)}
+                        </div>
+                      </div>
+                    ))}
+                    {!ledgerEntries.length ? (
+                      <p className="text-sm text-muted-foreground">No account activity yet.</p>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="border-t pt-4">
+                  <div className="mb-2 text-sm font-medium">Recent payments</div>
+                  <div className="space-y-2">
+                    {parentVisiblePayments.slice(0, 5).map((payment) => {
+                      const completed = payment.status === "PAID";
+                      return (
+                        <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
+                          <span className="text-muted-foreground">
+                            {paymentProviderLabel(payment.provider)} · {paymentListLabel(payment, timeZone)}
+                          </span>
+                          <span className={completed ? "font-medium text-emerald-700 dark:text-emerald-300" : "font-medium text-muted-foreground"}>
+                            {completed ? "−" : ""}{money(payment.amountCents)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {!parentVisiblePayments.length ? (
+                      <p className="text-sm text-muted-foreground">No payments posted yet.</p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </details>
+            <div className="hidden rounded-xl border bg-background/40 p-4 sm:block">
               <div className="mb-3">
                 <div className="font-medium">Account Activity</div>
                 <div className="text-xs text-muted-foreground">
@@ -2573,7 +2920,7 @@ function ParentPortalWorkspaceView({
                 </div>
               ) : null}
             </div>
-            <div className="rounded-xl border bg-background/40 p-4">
+            <div className="hidden rounded-xl border bg-background/40 p-4 sm:block">
               <div className="mb-3 flex items-center gap-2 text-sm font-medium">
                 <ReceiptText className="size-4 text-primary" />
                 Recent payments
@@ -2610,102 +2957,14 @@ function ParentPortalWorkspaceView({
                 ) : null}
               </div>
             </div>
-            <div className="rounded-xl border bg-background/40 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 font-medium">
-                    Payment methods and autopay
-                    <InfoTip label="About payment methods and autopay">
-                      Saving a debit or credit card or bank account does not enable
-                      autopay. Enable it separately, or make a one-time payment
-                      on an open invoice below.
-                    </InfoTip>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {autopayStatus === "enabled"
-                      ? "Autopay is enabled. Account credit is applied first, and the saved method pays any remaining balance on eligible invoices."
-                      : paymentMethodManagement?.hasSavedPaymentMethod
-                        ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}`
-                        : paymentMethodManagement?.autopayStatus === "pending"
-                          ? "Bank verification is pending."
-                          : "No saved payment method yet."}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label
-                    htmlFor="parent-autopay-toggle"
-                    className="text-xs text-muted-foreground"
-                  >
-                    Autopay
-                  </Label>
-                  <Switch
-                    id="parent-autopay-toggle"
-                    checked={autopayStatus === "enabled"}
-                    onCheckedChange={toggleAutopay}
-                    disabled={
-                      isPending || !family || autopayStatus === "pending"
-                    }
-                    aria-label="Enable or disable autopay"
-                  />
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {autopayStatus === "enabled" ? "On" : "Off"}
-                  </span>
-                </div>
-              </div>
-              {autopayConfirmation ? (
-                <Alert className="mt-4 border-emerald-500/30 bg-emerald-500/10">
-                  <CheckCircle2 />
-                  <AlertTitle>Autopay status confirmed</AlertTitle>
-                  <AlertDescription>{autopayConfirmation}</AlertDescription>
-                </Alert>
-              ) : null}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  className="w-full sm:w-auto"
-                  disabled={isPending || !family}
-                  onClick={() => managePaymentMethod("setup", "card")}
-                >
-                  <CreditCard data-icon="inline-start" />
-                  {paymentMethodManagement?.hasSavedPaymentMethod
-                    ? "Replace saved card"
-                    : "Save card"}
-                </Button>
-                <Button
-                  className="w-full sm:w-auto"
-                  disabled={isPending || !family}
-                  onClick={() => managePaymentMethod("setup", "link_bank")}
-                  variant="outline"
-                >
-                  <Building2 data-icon="inline-start" />
-                  {paymentMethodManagement?.autopayStatus === "pending"
-                    ? "Verify bank account"
-                    : paymentMethodManagement?.hasSavedPaymentMethod
-                      ? "Replace with bank account"
-                      : "Connect bank account"}
-                </Button>
-                <Button
-                  className="w-full sm:w-auto"
-                  disabled={
-                    isPending || !paymentMethodManagement?.hasStripeCustomer
-                  }
-                  onClick={() => managePaymentMethod("portal")}
-                  variant="outline"
-                >
-                  Manage payment methods
-                </Button>
-              </div>
-            </div>
-            {autopayRequirements.length ? (
-              <Alert className="mt-3">
-                <AlertCircle className="size-4" />
-                <AlertTitle>Autopay requirements</AlertTitle>
-                <AlertDescription className="space-y-1">
-                  {autopayRequirements.map((requirement) => (
-                    <p key={requirement}>{requirement}</p>
-                  ))}
-                </AlertDescription>
-              </Alert>
-            ) : null}
+            <Link
+              href={workspaceHref("family", { familyId: family.id, section: "billing", hash: null })}
+              className="flex min-h-16 items-center gap-3 rounded-2xl border bg-background/55 p-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary"><CreditCard className="size-5" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1"><span className="block font-semibold">Billing settings</span><span className="block truncate text-xs text-muted-foreground">Payment methods, billing email &amp; autopay</span></span>
+              <ArrowRight className="size-5 shrink-0 text-primary" aria-hidden="true" />
+            </Link>
             {showFamilyPaymentPanel ? (
               <div className="rounded-xl border bg-primary/10 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -3015,13 +3274,28 @@ function ParentPortalWorkspaceView({
                 </div>
               </div>
             ) : null}
-            <div className="pt-2">
-              <div className="font-medium">Invoice history</div>
-              <div className="text-xs text-muted-foreground">
-                Review invoice dates and payment status. The balance above is
-                the current amount due from your family.
-              </div>
-            </div>
+            <details className="rounded-xl border bg-background/40 p-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <span className="flex items-center gap-3">
+                  <span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <ReceiptText className="size-5" aria-hidden="true" />
+                  </span>
+                  <span>
+                    <span className="block font-semibold">Invoice history</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {openInvoices.length
+                        ? `${openInvoices.length} open invoice${openInvoices.length === 1 ? "" : "s"}`
+                        : `${invoices.length} invoice${invoices.length === 1 ? "" : "s"}`}
+                    </span>
+                  </span>
+                </span>
+                <Plus className="size-5 shrink-0 text-primary" aria-hidden="true" />
+              </summary>
+              <div className="mt-4 space-y-3 border-t pt-4">
+                <p className="sr-only">
+                  Review invoice dates and payment status. The balance above is
+                  the current amount due from your family.
+                </p>
             {invoices.map((invoice) => {
               const invoiceHasPendingPayment = Boolean(invoice.pendingPayment);
               return (
@@ -3087,6 +3361,8 @@ function ParentPortalWorkspaceView({
                 No invoices are visible yet.
               </p>
             ) : null}
+              </div>
+            </details>
           </CardContent>
         </Card>
       ) : null}
@@ -3094,10 +3370,10 @@ function ParentPortalWorkspaceView({
       {activeView === "messages" ? (
         <Card
           id="messages"
-          className={`${styles.parentWorkspace} scroll-mt-28 shadow-none`}
+          className={`${styles.parentWorkspace} ${previewMode ? styles.parentWorkspacePreview : ""} scroll-mt-28 gap-0 py-0 shadow-none`}
         >
-          <CardHeader className={`${styles.smokedHeader} border-b`}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardHeader className={`${styles.smokedHeader} border-b px-4 py-3`}>
+            <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
                 <span
                   className="flex size-11 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background"
@@ -3115,17 +3391,16 @@ function ParentPortalWorkspaceView({
                     {centerName ?? "Your school"}
                   </CardTitle>
                   <CardDescription className="truncate">
-                    Family conversation · usually replies during school hours
+                    Typically replies during school hours
                   </CardDescription>
                 </div>
               </div>
-              <p className="max-w-xs text-right text-xs leading-5 text-muted-foreground">
-                Only your family and school can see this conversation.
-              </p>
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-emerald-500/10" aria-label="Private family conversation"><span className="size-2.5 rounded-full bg-emerald-600" aria-hidden="true" /></span>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className={`${styles.parentChatContent} p-0`}>
             <ol
+              ref={messageTimelineRef}
               className={styles.parentTimeline}
               aria-label={`Messages with ${centerName ?? "your school"}`}
             >
@@ -3236,118 +3511,115 @@ function ParentPortalWorkspaceView({
               ) : null}
             </ol>
 
-            <div className={`${styles.parentComposer} space-y-3`}>
+            <form
+              className={styles.parentComposer}
+              onSubmit={(event) => {
+                event.preventDefault();
+                sendMessage();
+              }}
+            >
               {replyToMessageId ? (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/55 p-3 text-sm">
-                  <div>
-                    <div className="font-medium">
-                      Replying in this conversation
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {replyingToSubject || "Selected school message"}
-                    </div>
-                  </div>
+                <div className={styles.parentReplyContext}>
+                  <Reply className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-medium">Replying to school</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {replyingToSubject || "Selected message"}
+                    </span>
+                  </span>
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
+                    size="icon"
                     onClick={() => {
                       setReplyToMessageId("");
                       setReplyingToSubject("");
                     }}
+                    aria-label="Cancel reply"
                   >
-                    <X data-icon="inline-start" />
-                    Cancel reply
+                    <X className="size-4" aria-hidden="true" />
                   </Button>
                 </div>
               ) : null}
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)]">
-                <div className="space-y-1">
-                  <Label htmlFor="portal-subject">Subject</Label>
-                  <Input
-                    id="portal-subject"
-                    name="message-subject"
-                    autoComplete="off"
-                    className="bg-background/75"
-                    value={subject}
-                    onChange={(event) => setSubject(event.target.value)}
-                  />
+
+              {messageAttachments.length ? (
+                <div className={styles.parentAttachmentTray} aria-label="Selected attachments">
+                  {messageAttachments.map((file, index) => (
+                    <span
+                      key={`${file.name}-${file.size}-${index}`}
+                      className="inline-flex min-h-11 max-w-[15rem] shrink-0 items-center gap-2 rounded-full border bg-card px-3 text-xs"
+                    >
+                      <Paperclip className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                      <span className="truncate">{file.name || "attachment"}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeMessageAttachment(index)}
+                        aria-label={`Remove ${file.name || "attachment"}`}
+                        className="-mr-2"
+                      >
+                        <X className="size-3.5" aria-hidden="true" />
+                      </Button>
+                    </span>
+                  ))}
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="portal-message">Message</Label>
-                  <Textarea
-                    id="portal-message"
-                    name="message-body"
-                    autoComplete="off"
-                    className="min-h-24 resize-y rounded-xl bg-background/75"
-                    placeholder={`Message ${centerName ?? "your school"}`}
-                    value={message}
-                    onChange={(event) => setMessage(event.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                <div className="space-y-2 rounded-xl border bg-background/45 p-3">
-                  <Label
-                    htmlFor="portal-message-attachments"
-                    className="flex items-center gap-2 text-xs text-muted-foreground"
-                  >
-                    <Paperclip className="size-3.5" aria-hidden="true" />
-                    Attach photos or files
-                  </Label>
-                  <Input
-                    key={messageAttachmentInputKey}
-                    id="portal-message-attachments"
-                    name="message-attachments"
-                    type="file"
-                    multiple
-                    accept="image/*,.pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-                    onChange={(event) =>
-                      addMessageAttachments(event.target.files)
-                    }
-                  />
-                  {messageAttachments.length ? (
-                    <div className="flex flex-wrap gap-2">
-                      {messageAttachments.map((file, index) => (
-                        <span
-                          key={`${file.name}-${file.size}-${index}`}
-                            className="inline-flex min-h-10 max-w-full items-center gap-2 rounded-lg border bg-card px-2.5 py-1 text-xs"
-                        >
-                          <span className="truncate">
-                            {file.name || "attachment"}
-                          </span>
-                          <span className="shrink-0 text-muted-foreground">
-                            {formatFileSize(file.size)}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeMessageAttachment(index)}
-                            aria-label={`Remove ${file.name || "attachment"}`}
-                          >
-                            <X className="size-3" aria-hidden="true" />
-                          </Button>
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
+              ) : null}
+
+              <div className={styles.parentComposerRow}>
+                <Input
+                  key={messageAttachmentInputKey}
+                  id="portal-message-attachments"
+                  name="message-attachments"
+                  type="file"
+                  multiple
+                  className="sr-only"
+                  accept="image/*,.pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                  onChange={(event) => addMessageAttachments(event.target.files)}
+                />
+                <Label
+                  htmlFor="portal-message-attachments"
+                  className={styles.parentAttachButton}
+                  aria-label="Attach photos or files"
+                >
+                  <Paperclip className="size-5" aria-hidden="true" />
+                </Label>
+                <Label htmlFor="portal-message" className="sr-only">Message</Label>
+                <Textarea
+                  id="portal-message"
+                  name="message-body"
+                  autoComplete="off"
+                  enterKeyHint="send"
+                  rows={1}
+                  className={styles.parentMessageInput}
+                  placeholder="Message"
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  aria-describedby="parent-message-privacy"
+                />
                 <Button
-                  className="w-full px-5 sm:w-auto"
+                  type="submit"
+                  size="icon"
+                  className={styles.parentSendButton}
                   disabled={
                     isPending || (!message.trim() && !messageAttachments.length)
                   }
-                  onClick={sendMessage}
+                  aria-label={isPending ? "Sending message" : "Send message"}
                 >
-                  <MessageSquare data-icon="inline-start" />
-                  {isPending ? "Sending…" : "Send message"}
+                  <SendHorizontal className="size-5" aria-hidden="true" />
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p id="parent-message-privacy" className="sr-only">
                 Only your family and school can see this conversation.
               </p>
-            </div>
+              <input
+                id="portal-subject"
+                name="message-subject"
+                type="hidden"
+                value={subject}
+                readOnly
+              />
+            </form>
           </CardContent>
         </Card>
       ) : null}
@@ -3365,17 +3637,24 @@ function ParentPortalWorkspaceView({
               </CardHeader>
               <CardContent className="space-y-4">
                 {documents.slice(0, 5).map((document) => (
-                  <div
+                  <details
                     key={document.id}
-                    className="space-y-3 rounded-xl border bg-background/40 p-3"
+                    className="group rounded-2xl border bg-background/40"
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-medium">{document.name}</div>
-                        <div className="text-xs text-muted-foreground">
+                    <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary" aria-hidden="true">
+                        <FileText className="size-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{document.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
                           {displayTokenLabel(document.type)} · expires{" "}
                           {formatDate(document.expiresAt)}
-                        </div>
+                        </span>
+                      </span>
+                      <Badge>{displayTokenLabel(document.status)}</Badge>
+                    </summary>
+                    <div className="space-y-3 border-t px-4 pb-4 pt-3">
                         {document.downloadUrl ? (
                           <a
                             className="text-xs font-medium text-primary underline-offset-4 hover:underline"
@@ -3386,9 +3665,6 @@ function ParentPortalWorkspaceView({
                             Open uploaded file
                           </a>
                         ) : null}
-                      </div>
-                      <Badge>{displayTokenLabel(document.status)}</Badge>
-                    </div>
                     {document.status !== "APPROVED" ? (
                       <div className="space-y-2">
                         {requiresDocumentSignature(document) ? (
@@ -3484,16 +3760,21 @@ function ParentPortalWorkspaceView({
                         </Button>
                       </div>
                     ) : null}
-                  </div>
+                    </div>
+                  </details>
                 ))}
-                <div
+                <details
                   id="contact-request"
-                  className="scroll-mt-28 space-y-2"
+                  className="group scroll-mt-28 rounded-2xl border bg-background/40"
                   aria-labelledby="contact-request-heading"
                 >
-                  <h3 id="contact-request-heading" className="text-sm font-medium">
-                    Request an emergency contact or pickup change
-                  </h3>
+                  <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary" aria-hidden="true"><FileCheck2 className="size-5" /></span>
+                    <span id="contact-request-heading" className="flex-1 text-sm font-medium">Contact or pickup change</span>
+                    <span className="text-xs font-medium text-primary group-open:hidden">Start request</span>
+                    <span className="hidden text-xs font-medium text-primary group-open:inline">Close</span>
+                  </summary>
+                  <div className="space-y-3 border-t px-4 pb-4 pt-3">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="space-y-1 text-sm">
                       <span>Record type</span>
@@ -3631,7 +3912,8 @@ function ParentPortalWorkspaceView({
                     <FileText data-icon="inline-start" />
                     Send change request
                   </Button>
-                </div>
+                  </div>
+                </details>
               </CardContent>
             </Card>
           ) : null}
@@ -3651,18 +3933,24 @@ function ParentPortalWorkspaceView({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-xl border bg-background/40 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="font-medium">
+            <details className="group rounded-2xl border bg-background/40">
+              <summary className="flex min-h-20 cursor-pointer list-none items-center gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary" aria-hidden="true"><KeyRound className="size-5" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">
                     {currentGuardian?.fullName ??
                       family.guardians[0]?.fullName ??
                       "Parent or guardian"}
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Contact information on file with your school
-                  </p>
-                </div>
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {currentGuardian?.email ?? family.guardians[0]?.email ?? "Email pending"}
+                  </span>
+                </span>
+                <span className="text-xs font-medium text-primary group-open:hidden">Account details</span>
+                <span className="hidden text-xs font-medium text-primary group-open:inline">Close</span>
+              </summary>
+              <div className="border-t px-4 pb-4 pt-3">
+              <div className="flex justify-end">
                 <Link
                   href={workspaceHref("family", {
                     familyId: family.id,
@@ -3708,8 +3996,7 @@ function ParentPortalWorkspaceView({
                   </dd>
                 </div>
               </dl>
-            </div>
-            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="mt-4 rounded-xl border bg-card/70 p-3">
               <div className="text-xs text-muted-foreground">
                 Sign-in email
               </div>
@@ -3721,7 +4008,9 @@ function ParentPortalWorkspaceView({
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
                 This is the personal guardian email on file with the school.
               </p>
-            </div>
+              </div>
+              </div>
+            </details>
             {passwordConfirmation ? (
               <Alert className="border-emerald-500/30 bg-emerald-500/10">
                 <CheckCircle2 />
@@ -3729,8 +4018,15 @@ function ParentPortalWorkspaceView({
                 <AlertDescription>{passwordConfirmation}</AlertDescription>
               </Alert>
             ) : null}
+            <details className="group rounded-2xl border bg-background/40">
+              <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                <KeyRound className="size-5 text-primary" aria-hidden="true" />
+                <span className="flex-1 font-medium">Password & sign-in</span>
+                <span className="text-xs font-medium text-primary group-open:hidden">Manage</span>
+                <span className="hidden text-xs font-medium text-primary group-open:inline">Close</span>
+              </summary>
             <form
-              className="space-y-4"
+              className="space-y-4 border-t px-4 pb-4 pt-3"
               onSubmit={(event) => {
                 event.preventDefault();
                 updateProfilePassword();
@@ -3813,6 +4109,7 @@ function ParentPortalWorkspaceView({
                 Update Password
               </Button>
             </form>
+            </details>
             <div className="flex flex-col gap-3 rounded-xl border bg-background/40 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="font-medium">
@@ -3835,7 +4132,13 @@ function ParentPortalWorkspaceView({
                 Open support
               </Link>
             </div>
-            <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+            <details className="group rounded-2xl border border-destructive/30 bg-destructive/5">
+              <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                <ShieldCheck className="size-5 text-destructive" aria-hidden="true" />
+                <span className="flex-1 font-medium">Privacy & account deletion</span>
+                {accountDeletionRequest ? <Badge variant="outline">{displayTokenLabel(accountDeletionRequest.status)}</Badge> : <span className="text-xs font-medium text-primary group-open:hidden">Review</span>}
+              </summary>
+              <div className="space-y-3 border-t px-4 pb-4 pt-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 font-medium">
@@ -3913,7 +4216,8 @@ function ParentPortalWorkspaceView({
                   </Button>
                 </>
               )}
-            </div>
+              </div>
+            </details>
           </CardContent>
         </Card>
       ) : null}

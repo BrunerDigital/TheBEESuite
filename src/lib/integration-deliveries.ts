@@ -470,6 +470,20 @@ export async function retryPendingIntegrationDeliveries({
   dryRun?: boolean;
 }) {
   const now = new Date();
+  const stalePayoutAttemptBefore = new Date(now.getTime() - 15 * 60_000);
+  const stalePayoutAttempts = await prisma.integrationDelivery.updateMany({
+    where: {
+      status: "attempting",
+      purpose: "payout_notification_sms",
+      updatedAt: { lte: stalePayoutAttemptBefore },
+    },
+    data: {
+      status: "failed",
+      lastError: "Twilio acceptance is unknown after the payout SMS attempt stopped before finalization. Manual reconciliation is required; this alert was not retried to prevent a duplicate text.",
+      nextAttemptAt: null,
+      deliveredAt: null,
+    },
+  });
   const deliveries = await prisma.integrationDelivery.findMany({
     where: {
       status: "pending",
@@ -595,6 +609,7 @@ export async function retryPendingIntegrationDeliveries({
 
   return {
     processed: results.length,
+    payoutAttemptsRequiringManualReview: stalePayoutAttempts.count,
     results,
   };
 }

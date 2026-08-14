@@ -89,8 +89,21 @@ test("every parent setup and billing mutation enforces unambiguous family scope"
     "src/app/api/billing/family-payment/route.ts",
     "src/app/api/billing/payment-method-session/route.ts",
   ]) {
-    assert.match(readFileSync(path, "utf8"), /getParentPortalFamilyScope\(user\.id,/, path);
+    assert.match(readFileSync(path, "utf8"), /getParentPortalFamilyScope\(user\.id, user\.tenantId,/, path);
   }
+});
+
+test("runtime family lookup restricts guardian links to the signed-in tenant", () => {
+  const source = readFileSync("src/lib/parent-portal-family-scope.ts", "utf8");
+  assert.match(source, /prisma\.center\.findMany\(\{[\s\S]*organization: \{ tenantId \}/);
+  assert.match(source, /family: \{ centerId: \{ in: tenantCenterIds \} \}/);
+});
+
+test("parent portal rejects a requested unlinked family before choosing a default", () => {
+  const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  assert.match(page, /getParentPortalFamilyScope\(user\.id, user\.tenantId, requestedParentFamilyId\)/);
+  assert.match(page, /requestedParentFamilyScope && !requestedParentFamilyScope\.ok/);
+  assert.match(page, /centerId: scopedCenterIds/);
 });
 
 test("parent setup page includes each current linked family and excludes historical family rows", () => {

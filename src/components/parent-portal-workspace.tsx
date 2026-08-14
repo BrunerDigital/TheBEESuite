@@ -1278,12 +1278,15 @@ function ParentPortalWorkspaceView({
     paymentMethodCategory: "ach" | "card" | "link_bank",
   ) {
     if (previewOnly()) return;
+    if (!family) {
+      return showError("Choose a linked family before making a payment.");
+    }
     if (checkoutBlocked) {
       return showError(
         checkoutBlockedMessage,
       );
     }
-    if (!family || !billingAccount) {
+    if (!billingAccount) {
       return showError("Your family billing account is not available yet.");
     }
     if (balanceCents <= 0 && !parentBalanceReviewRequired) {
@@ -1314,7 +1317,7 @@ function ParentPortalWorkspaceView({
           billingAccountId: billingAccount.id,
           familyId: family.id,
           method,
-          returnPath: "/parent-portal",
+          returnPath: workspaceHref("family", { familyId: family.id, section: "billing" }),
           amountCents: accountPaymentRequestCents,
         }),
       });
@@ -1344,6 +1347,9 @@ function ParentPortalWorkspaceView({
     paymentMethodCategory: "card" | "link_bank",
   ) {
     if (previewOnly()) return;
+    if (!family) {
+      return showError("Choose a linked family before paying this invoice.");
+    }
     if (checkoutBlocked) {
       return showError(
         checkoutBlockedMessage,
@@ -1363,7 +1369,7 @@ function ParentPortalWorkspaceView({
         body: JSON.stringify({
           invoiceId,
           paymentMethodCategory,
-          returnPath: "/parent-portal",
+          returnPath: workspaceHref("family", { familyId: family.id, section: "billing" }),
         }),
       });
       const json = (await response.json().catch(() => null)) as {
@@ -1451,7 +1457,7 @@ function ParentPortalWorkspaceView({
         body: JSON.stringify({
           invoiceId: purchaseJson.invoice.id,
           paymentMethodCategory,
-          returnPath: "/parent-portal",
+          returnPath: workspaceHref("family", { familyId: family.id, section: "billing" }),
         }),
       });
       const checkoutJson = (await checkoutResponse
@@ -1499,7 +1505,7 @@ function ParentPortalWorkspaceView({
           familyId: family.id,
           action,
           paymentMethodCategory,
-          returnPath: "/parent-portal",
+          returnPath: workspaceHref("family", { familyId: family.id, section: "billing" }),
         }),
       });
       const json = (await response.json().catch(() => null)) as {

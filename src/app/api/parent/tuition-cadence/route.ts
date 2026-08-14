@@ -34,7 +34,7 @@ async function POSTHandler(request: NextRequest) {
       : null;
   if (!childId || !cadence) return NextResponse.json({ ok: false, error: "Child and billing cycle are required." }, { status: 400 });
 
-  const scope = await getParentPortalFamilyScope(user.id, familyId || null);
+  const scope = await getParentPortalFamilyScope(user.id, user.tenantId, familyId || null);
   if (!scope.ok) return NextResponse.json({ ok: false, error: "A single linked family is required." }, { status: 403 });
   const child = await prisma.child.findFirst({
     where: { id: childId, familyId: scope.familyId },

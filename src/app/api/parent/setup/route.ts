@@ -64,7 +64,7 @@ async function POSTHandler(request: NextRequest) {
   if (!guardianId) {
     return NextResponse.json({ ok: false, error: "Guardian profile is required." }, { status: 400 });
   }
-  const familyScope = await getParentPortalFamilyScope(user.id, familyId || null);
+  const familyScope = await getParentPortalFamilyScope(user.id, user.tenantId, familyId || null);
   if (!familyScope.ok) {
     return NextResponse.json({ ok: false, error: "Your family link needs review before setup can continue." }, { status: 409 });
   }

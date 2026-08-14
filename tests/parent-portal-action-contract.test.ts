@@ -51,7 +51,7 @@ test("parent billing and setup actions resolve one linked family before mutation
   ]) {
     const route = readFileSync(routePath, "utf8");
     assert.match(route, /getCurrentUser\(\)/, routePath);
-    assert.match(route, /getParentPortalFamilyScope\(user\.id,/, routePath);
+    assert.match(route, /getParentPortalFamilyScope\(user\.id, user\.tenantId,/, routePath);
   }
 });
 
@@ -110,6 +110,11 @@ test("parent actions turn offline fetch failures into recoverable UI errors", ()
   );
   assert.equal((workspace.match(/\bfetch\(/g) ?? []).length, 1);
   assert.ok((workspace.match(/await parentPortalRequest\(/g) ?? []).length >= 13);
+});
+
+test("parent payment redirects preserve the selected family billing view", () => {
+  assert.equal((workspace.match(/returnPath: workspaceHref\("family", \{ familyId: family\.id, section: "billing" \}\)/g) ?? []).length, 4);
+  assert.doesNotMatch(workspace, /returnPath: "\/parent-portal"/);
 });
 
 test("profile password controls use a semantic form and submit contract", () => {

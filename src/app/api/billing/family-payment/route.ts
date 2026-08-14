@@ -140,7 +140,7 @@ async function POSTHandler(request: NextRequest) {
   const billingAccountId = clean(body.billingAccountId);
   const familyId = clean(body.familyId);
   const parentFamilyScope = userIsParentGuardian && !userCanManageBilling
-    ? await getParentPortalFamilyScope(user.id, familyId || null)
+    ? await getParentPortalFamilyScope(user.id, user.tenantId, familyId || null)
     : null;
   if (parentFamilyScope && !parentFamilyScope.ok) {
     return NextResponse.json({ ok: false, error: "Your family link needs review before payment can continue." }, { status: 409 });

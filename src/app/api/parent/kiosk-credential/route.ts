@@ -73,7 +73,7 @@ async function POSTHandler(request: NextRequest) {
   if (!guardianId || !pin) {
     return NextResponse.json({ ok: false, error: "Guardian ID and a 4 digit PIN are required." }, { status: 400 });
   }
-  const familyScope = await getParentPortalFamilyScope(user.id, familyId || null);
+  const familyScope = await getParentPortalFamilyScope(user.id, user.tenantId, familyId || null);
   if (!familyScope.ok) {
     return NextResponse.json({ ok: false, error: "Your family link needs review before kiosk credentials can be managed." }, { status: 409 });
   }

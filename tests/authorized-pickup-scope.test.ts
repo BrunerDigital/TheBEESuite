@@ -36,7 +36,7 @@ test("authorized pickup migration cannot reset or replace guardian PINs", () => 
 test("existing parent guardian portal path remains separate", () => {
   const parentStart = page.indexOf("const parentPortalView");
   const parentPortal = page.slice(parentStart);
-  assert.match(parentPortal, /user\.role === UserRole\.PARENT_GUARDIAN[\s\S]*getParentPortalFamilyScope\(user\.id, selectedParentFamilyId\)/);
+  assert.match(parentPortal, /user\.role === UserRole\.PARENT_GUARDIAN[\s\S]*getParentPortalFamilyScope\(user\.id, user\.tenantId, requestedParentFamilyId\)/);
   assert.match(parentPortal, /buildGuardianKioskCredential/);
   assert.match(parentPortal, /checkInPinHash: guardian\.checkInPinHash/);
 });

@@ -1983,10 +1983,17 @@ async function renderLivePage(
     const parentFamilySection = firstSearchParam(searchParams.section) || "children";
     const requestedParentFamilyId = firstSearchParam(searchParams.familyId) || null;
     const requestedLedgerPage = boundedPage(searchParams.ledgerPage);
+    const requestedParentFamilyScope = user.role === UserRole.PARENT_GUARDIAN && requestedParentFamilyId
+      ? await getParentPortalFamilyScope(user.id, user.tenantId, requestedParentFamilyId)
+      : null;
+    if (requestedParentFamilyScope && !requestedParentFamilyScope.ok) {
+      return <ParentPortalAccessBlocked />;
+    }
     const linkedParentFamilies = user.role === UserRole.PARENT_GUARDIAN
       ? await prisma.family.findMany({
           where: {
             ...parentPortalFamilyScopeWhere({ userId: user.id }),
+            centerId: scopedCenterIds,
             children: { some: currentlyEnrolledChildWhere() },
           },
           orderBy: [{ name: "asc" }, { createdAt: "asc" }],
@@ -2002,7 +2009,7 @@ async function renderLivePage(
       ? requestedParentFamilyId
       : linkedParentFamilies[0]?.id ?? null;
     const parentFamilyScope = user.role === UserRole.PARENT_GUARDIAN
-      ? await getParentPortalFamilyScope(user.id, selectedParentFamilyId)
+      ? requestedParentFamilyScope ?? await getParentPortalFamilyScope(user.id, user.tenantId, selectedParentFamilyId)
       : null;
     if (parentFamilyScope && !parentFamilyScope.ok) {
       return <ParentPortalAccessBlocked />;

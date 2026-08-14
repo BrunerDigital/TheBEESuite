@@ -174,6 +174,9 @@ model Center {
   dataDeletionRequests     DataDeletionRequest[]
   tuitionPlans             TuitionPlan[]
   refundRequests           RefundRequest[]
+  agencyPrograms           AgencyProgram[]
+  subsidyAuthorizations    SubsidyAuthorization[]
+  subsidyClaims            SubsidyClaim[]
 
   @@index([crmLocationId])
   @@index([locationId])
@@ -280,8 +283,8 @@ model User {
   deviceSessions            DeviceSession[]           @relation("UserDeviceSessions")
   revokedDeviceSessions     DeviceSession[]           @relation("DeviceSessionRevokedBy")
   dataDeletionRequests      DataDeletionRequest[]
-  requestedRefunds          RefundRequest[]            @relation("RefundRequestedBy")
-  reviewedRefunds           RefundRequest[]            @relation("RefundReviewedBy")
+  requestedRefunds          RefundRequest[]           @relation("RefundRequestedBy")
+  reviewedRefunds           RefundRequest[]           @relation("RefundReviewedBy")
 }
 
 model UserAccessGrant {
@@ -438,17 +441,18 @@ model Family {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  guardians            Guardian[]
-  children             Child[]
-  pickups              AuthorizedPickup[]
-  emergencyContacts    EmergencyContact[]
-  billingAccount       BillingAccount?
-  messages             Message[]
-  documents            Document[]
-  notesList            Note[]
-  surveyResponses      SurveyResponse[]
-  dataDeletionRequests DataDeletionRequest[]
-  refundRequests       RefundRequest[]
+  guardians             Guardian[]
+  children              Child[]
+  pickups               AuthorizedPickup[]
+  emergencyContacts     EmergencyContact[]
+  billingAccount        BillingAccount?
+  messages              Message[]
+  documents             Document[]
+  notesList             Note[]
+  surveyResponses       SurveyResponse[]
+  dataDeletionRequests  DataDeletionRequest[]
+  refundRequests        RefundRequest[]
+  subsidyAuthorizations SubsidyAuthorization[]
 
   @@index([centerId, sourceSystem, externalId])
 }
@@ -503,20 +507,22 @@ model Child {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  family              Family                    @relation(fields: [familyId], references: [id])
-  classroom           Classroom?                @relation(fields: [classroomId], references: [id])
-  medicalNotes        ChildMedicalNote[]
-  allergies           Allergy[]
-  enrollments         Enrollment[]
-  attendance          AttendanceRecord[]
-  checkLogs           CheckInOutLog[]
-  dailyReports        DailyReport[]
-  incidents           IncidentReport[]
-  documents           Document[]
-  media               ChildMedia[]
-  medicationLogs      MedicationLog[]
-  liveLocation        ChildLiveLocation?
-  locationTransitions ChildLocationTransition[]
+  family                Family                    @relation(fields: [familyId], references: [id])
+  classroom             Classroom?                @relation(fields: [classroomId], references: [id])
+  medicalNotes          ChildMedicalNote[]
+  allergies             Allergy[]
+  enrollments           Enrollment[]
+  attendance            AttendanceRecord[]
+  checkLogs             CheckInOutLog[]
+  dailyReports          DailyReport[]
+  incidents             IncidentReport[]
+  documents             Document[]
+  media                 ChildMedia[]
+  medicationLogs        MedicationLog[]
+  liveLocation          ChildLiveLocation?
+  locationTransitions   ChildLocationTransition[]
+  subsidyAuthorizations SubsidyAuthorization[]
+  subsidyClaimLines     SubsidyClaimLine[]
 
   @@index([sourceSystem, externalId])
 }
@@ -1221,6 +1227,151 @@ model BillingAccount {
   @@index([sourceSystem, externalId])
 }
 
+model AgencyProgram {
+  id                  String   @id @default(cuid())
+  centerId            String
+  name                String
+  programName         String?
+  stateCode           String
+  providerNumber      String?
+  vendorNumber        String?
+  submissionMethod    String   @default("agency_portal")
+  portalUrl           String?
+  remittanceEmail     String?
+  paymentInstructions String?
+  requirements        Json?
+  status              String   @default("setup_required")
+  customFields        Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  center         Center                 @relation(fields: [centerId], references: [id])
+  authorizations SubsidyAuthorization[]
+  claims         SubsidyClaim[]
+
+  @@unique([centerId, name, programName])
+  @@index([centerId, status])
+  @@index([stateCode, name])
+}
+
+model SubsidyAuthorization {
+  id                  String   @id @default(cuid())
+  centerId            String
+  agencyProgramId     String
+  familyId            String
+  childId             String
+  authorizationNumber String
+  coverageStart       DateTime
+  coverageEnd         DateTime
+  authorizedRateCents Int
+  familyCopayCents    Int      @default(0)
+  unitType            String   @default("weekly")
+  authorizedUnits     Float?
+  status              String   @default("active")
+  requiredDocuments   Json?
+  customFields        Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  center        Center         @relation(fields: [centerId], references: [id])
+  agencyProgram AgencyProgram  @relation(fields: [agencyProgramId], references: [id])
+  family        Family         @relation(fields: [familyId], references: [id])
+  child         Child          @relation(fields: [childId], references: [id])
+  claims        SubsidyClaim[]
+
+  @@unique([agencyProgramId, authorizationNumber, childId])
+  @@index([centerId, status, coverageEnd])
+  @@index([familyId, childId])
+}
+
+model SubsidyClaim {
+  id                 String    @id @default(cuid())
+  centerId           String
+  agencyProgramId    String
+  authorizationId    String?
+  number             String    @unique
+  servicePeriodStart DateTime
+  servicePeriodEnd   DateTime
+  dueDate            DateTime?
+  status             String    @default("draft")
+  claimedCents       Int
+  approvedCents      Int?
+  paidCents          Int       @default(0)
+  submittedAt        DateTime?
+  approvedAt         DateTime?
+  denialReason       String?
+  externalReference  String?
+  customFields       Json?
+  createdById        String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  center        Center                 @relation(fields: [centerId], references: [id])
+  agencyProgram AgencyProgram          @relation(fields: [agencyProgramId], references: [id])
+  authorization SubsidyAuthorization?  @relation(fields: [authorizationId], references: [id])
+  lines         SubsidyClaimLine[]
+  documents     SubsidyClaimDocument[]
+  remittances   SubsidyRemittance[]
+
+  @@index([centerId, status, dueDate])
+  @@index([agencyProgramId, servicePeriodStart, servicePeriodEnd])
+  @@index([authorizationId])
+}
+
+model SubsidyClaimLine {
+  id             String   @id @default(cuid())
+  claimId        String
+  childId        String
+  description    String
+  serviceUnits   Float
+  unitType       String
+  rateCents      Int
+  amountCents    Int
+  attendanceDays Int?
+  attendanceData Json?
+  createdAt      DateTime @default(now())
+
+  claim SubsidyClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  child Child        @relation(fields: [childId], references: [id])
+
+  @@index([claimId])
+  @@index([childId])
+}
+
+model SubsidyClaimDocument {
+  id         String   @id @default(cuid())
+  claimId    String
+  documentId String?
+  name       String
+  type       String
+  status     String   @default("required")
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  claim SubsidyClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([claimId, status])
+  @@index([documentId])
+}
+
+model SubsidyRemittance {
+  id                String   @id @default(cuid())
+  claimId           String
+  amountCents       Int
+  paidAt            DateTime
+  paymentMethod     String
+  externalReference String
+  notes             String?
+  enteredById       String
+  createdAt         DateTime @default(now())
+
+  claim SubsidyClaim @relation(fields: [claimId], references: [id])
+
+  @@unique([claimId, externalReference])
+  @@index([claimId, paidAt])
+}
+
 model Invoice {
   id               String        @id @default(cuid())
   billingAccountId String
@@ -1291,7 +1442,7 @@ model LedgerEntry {
 }
 
 model RefundRequest {
-  id                   String   @id @default(cuid())
+  id                   String    @id @default(cuid())
   tenantId             String
   centerId             String
   familyId             String
@@ -1299,16 +1450,16 @@ model RefundRequest {
   reviewedById         String?
   amountCents          Int
   reason               String
-  selectedPaymentIds   String[] @default([])
-  status               String   @default("pending")
+  selectedPaymentIds   String[]  @default([])
+  status               String    @default("pending")
   decisionReason       String?
   failureReason        String?
-  processedAmountCents Int      @default(0)
+  processedAmountCents Int       @default(0)
   allocations          Json?
-  requestedAt          DateTime @default(now())
+  requestedAt          DateTime  @default(now())
   reviewedAt           DateTime?
   processedAt          DateTime?
-  updatedAt            DateTime @updatedAt
+  updatedAt            DateTime  @updatedAt
 
   tenant      Tenant @relation(fields: [tenantId], references: [id])
   center      Center @relation(fields: [centerId], references: [id])

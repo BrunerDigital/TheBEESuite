@@ -125,6 +125,16 @@ test("parent portal rejects a requested unlinked family before choosing a defaul
   assert.match(page, /parentPortalTenantFamilyWhere\(parentPortalTenantCenterIds\)/);
 });
 
+test("parent portal data fanout stays within the production database pool", () => {
+  const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const start = page.indexOf("const [billingAccount, latestLedgerEntry");
+  const end = page.indexOf("const [signedDocuments, signedMedia, signedMessages]", start);
+  assert.ok(start >= 0 && end > start, "parent portal data fanout block was not found");
+  const fanout = page.slice(start, end);
+  assert.match(fanout, /await prisma\.\$transaction\(\[/);
+  assert.doesNotMatch(fanout, /await Promise\.all\(\[/);
+});
+
 test("parent setup page includes each current linked family and excludes historical family rows", () => {
   const page = readFileSync("src/app/parent-portal/setup/page.tsx", "utf8");
   assert.match(page, /selectParentPortalCurrentGuardians\(guardians\)/);

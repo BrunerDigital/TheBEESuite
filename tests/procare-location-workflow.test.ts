@@ -74,7 +74,8 @@ test("rendered billing evidence keeps payer boundaries and nets distinct weekly 
   write(path.join(source, "Sample - Account Balance Summary.csv"), "Account ID,Balance,Person ID,Full Name\naccount-1,0.00,payer-1,Parent One");
   const renderedRows = [
     '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Base Tuition",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","125.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
-    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Discount",,-$25.00,-$25.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","125.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Discount",,-$10.00,-$10.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","125.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Discount",,-$15.00,-$15.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","125.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
     '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"TWO Primary, Parent Two","Weekly","Base Tuition",,140.00,140.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","140.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
     '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","Punctuation, Child","4 Yr","Infants","Standard Billing",,"A-B Primary, Parent","Weekly","Base Tuition",,100.00,100.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","100.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
     '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","Punctuation, Child","4 Yr","Infants","Standard Billing",,"A B Primary, Parent","Weekly","Base Tuition",,110.00,110.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","110.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
@@ -90,7 +91,34 @@ test("rendered billing evidence keeps payer boundaries and nets distinct weekly 
     ["A B Primary, Parent", "11000", "11000"],
     ["A-B Primary, Parent", "10000", "10000"],
   ]);
-  assert.equal(rates[0]["source component count"], "2");
+  assert.equal(rates[0]["source component count"], "3");
+});
+
+test("rendered tuition remains blocked until every enrolled child has unique coverage", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "bee-procare-rendered-coverage-"));
+  const source = path.join(root, "source");
+  const output = path.join(root, "output");
+  fs.mkdirSync(source);
+  write(path.join(source, "Sample - Enrollment.csv"), [
+    "Child ID,Person ID,Person Type,Full Name,First Name,Last Name,Primary Classroom,Classroom ID,Enrollment Status,Status Start Date,Relationship 1 Id",
+    "child-1,child-person-1,Child,Child One,Child,One,Infants,room-1,Enrolled,1/1/2026,payer-1",
+    "child-2,child-person-2,Child,Child Two,Child,Two,Infants,room-1,Enrolled,1/1/2026,payer-2",
+  ].join("\n"));
+  write(path.join(source, "Sample - Relationships.csv"), [
+    "Child ID,Row ID,Person ID,Person Type,Full Name,Relationship Type,Lives With,Emergency,Authorized Pickup",
+    "child-1,row-1,payer-1,Relationship,Parent One,Mom,Checked,Checked,Checked",
+    "child-2,row-2,payer-2,Relationship,Parent Two,Mom,Checked,Checked,Checked",
+  ].join("\n"));
+  write(path.join(source, "Sample - Account Balance Summary.csv"), [
+    "Account ID,Balance,Person ID,Full Name",
+    "account-1,0.00,payer-1,Parent One",
+    "account-2,0.00,payer-2,Parent Two",
+  ].join("\n"));
+  write(path.join(source, "Sample - Child Contract Billing Summary.csv"), '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Base Tuition",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","150.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"');
+
+  const result = await prepareProcareLocationWorkflow({ location: "Sample", sourceDirectory: source, outputDirectory: output });
+  assert.equal(result.metrics.renderedBillingCoveredChildren, 1);
+  assert.equal(result.gates["Weekly tuition"].status, "blocked");
 });
 
 test("location workflow rejects duplicate account rows before deriving payer ownership", async () => {

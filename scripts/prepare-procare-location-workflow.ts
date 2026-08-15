@@ -262,6 +262,7 @@ function renderedContractBillingReview(source: SourceFile | null) {
     payerLabel: string;
     cadence: string;
     descriptions: Set<string>;
+    componentCount: number;
     amountCents: number;
   }>();
   for (const component of uniqueComponents.values()) {
@@ -272,9 +273,11 @@ function renderedContractBillingReview(source: SourceFile | null) {
       payerLabel: component.payerLabel,
       cadence: component.cadence,
       descriptions: new Set<string>(),
+      componentCount: 0,
       amountCents: 0,
     };
     existing.descriptions.add(component.description);
+    existing.componentCount += 1;
     existing.amountCents += component.amountCents;
     grouped.set(key, existing);
   }
@@ -287,7 +290,7 @@ function renderedContractBillingReview(source: SourceFile | null) {
       "source payer label": item.payerLabel,
       "source cadence": item.cadence,
       "source charge descriptions": descriptions.join(" | "),
-      "source component count": String(descriptions.length),
+      "source component count": String(item.componentCount),
       "source amount cents": String(item.amountCents),
       "confirmed child id": "",
       "confirmed account id": "",
@@ -334,6 +337,11 @@ function renderedClassroomScheduleReview(source: SourceFile | null) {
     left["source classroom"].localeCompare(right["source classroom"])
     || left["source child name"].localeCompare(right["source child name"])
   ));
+}
+
+function renderedChildNameKey(value: string) {
+  const parts = clean(value).split(",").map((part) => part.trim()).filter(Boolean);
+  return evidenceKey(parts.length === 2 ? `${parts[1]} ${parts[0]}` : value);
 }
 
 function singleSource(sources: SourceFile[], kind: string, required = true) {
@@ -1130,6 +1138,19 @@ export async function prepareProcareLocationWorkflow(input: {
   const activeAccountsMissingBalance = [...enrolledChildrenByAccount.keys()].filter((accountId) => !balance!.rows.some((row) => field(row, "Account ID") === accountId)).length;
   const weeklyStatementCandidateChildren = weeklyTuitionReview.filter((row) => row.status === "candidate_from_recurring_statement_history_requires_approval").length;
   const weeklyStatementEvidenceRows = (ledger?.rows ?? []).filter(isTuitionChargeLedgerRow).length;
+  const enrolledRenderedNameCounts = new Map<string, number>();
+  for (const record of enrolledRecords) {
+    const key = renderedChildNameKey(record["child name"] ?? "");
+    if (key) enrolledRenderedNameCounts.set(key, (enrolledRenderedNameCounts.get(key) ?? 0) + 1);
+  }
+  const renderedBillingChildNames = new Set(renderedBillingReview.map((row) => renderedChildNameKey(row["source child name"] ?? "")).filter(Boolean));
+  const renderedBillingCoveredChildren = enrolledRecords.filter((record) => {
+    const key = renderedChildNameKey(record["child name"] ?? "");
+    return Boolean(key) && enrolledRenderedNameCounts.get(key) === 1 && renderedBillingChildNames.has(key);
+  }).length;
+  const renderedBillingCoverageComplete = Boolean(renderedContractBilling)
+    && renderedBillingReview.length > 0
+    && renderedBillingCoveredChildren === enrolledRecords.length;
   const parentPortalBlockedFamilies = parentPortalBillingReview.filter((row) => row.status === "blocked").length;
   const parentPortalReadyFamilies = parentPortalBillingReview.length - parentPortalBlockedFamilies;
   const activePortalSafeAccountIds = new Set(parentPortalBillingReview
@@ -1198,17 +1219,17 @@ export async function prepareProcareLocationWorkflow(input: {
       ],
     },
     "Weekly tuition": {
-      status: tuition || renderedContractBilling || weeklyStatementCandidateChildren === enrolledRecords.length ? "review_required" : "blocked",
+      status: tuition || renderedBillingCoverageComplete || weeklyStatementCandidateChildren === enrolledRecords.length ? "review_required" : "blocked",
       summary: tuition
         ? `Detected ${tuition.filename}; rates still require child-level review and an explicit effective week.`
         : renderedContractBilling
-          ? `Detected ${renderedContractBilling.filename} with ${renderedBillingReview.length} editable charge rows; stable Child IDs and effective dates still require confirmation.`
+          ? `Detected ${renderedContractBilling.filename} with ${renderedBillingReview.length} editable charge rows covering ${renderedBillingCoveredChildren}/${enrolledRecords.length} enrolled children by unique reviewed name evidence; stable Child IDs and effective dates still require confirmation.`
           : `${weeklyStatementCandidateChildren}/${enrolledRecords.length} enrolled children have a defensible recurring weekly statement-rate candidate; ${ledger?.rows.length ?? 0} ledger rows were supplied.`,
       details: [
         tuition
           ? "The detected tuition source must provide Child ID, amount, cadence, and effective-date evidence before a rate manifest can be approved."
           : renderedContractBilling
-            ? "The rendered contract report preserves child name, classroom, charge description, amount, and cadence, but contains no stable Child ID. Reviewers must bind each accepted row to one source-backed Child ID or hold it."
+            ? `The rendered contract report preserves child name, classroom, charge description, amount, and cadence, but contains no stable Child ID. Reviewers must bind each accepted row to one source-backed Child ID or hold it; ${enrolledRecords.length - renderedBillingCoveredChildren} enrolled child row(s) still lack unique rendered name coverage.`
             : "A statement-derived candidate requires the same positive tuition amount at least three times at 5-9 day intervals, and can be assigned only when the account has exactly one enrolled child. Payments, credits, late fees, payroll rates, and point-in-time balances are excluded.",
         `${weeklyStatementEvidenceRows} supplied ledger rows qualify as positive tuition charges; ${weeklyStatementCandidateChildren} child-level weekly candidates were produced.`,
         "If statement evidence is incomplete or account-level amounts cover multiple children, provide a ProCare child contract/billing schedule export containing Child ID, charge description, amount, frequency/cadence, and effective dates.",
@@ -1252,6 +1273,7 @@ export async function prepareProcareLocationWorkflow(input: {
     sourceChildInfoPresent: Boolean(childInfo),
     sourceWeeklyTuitionPresent: Boolean(tuition),
     renderedContractBillingRows: renderedBillingReview.length,
+    renderedBillingCoveredChildren,
     renderedClassroomScheduleRows: renderedScheduleReview.length,
     sourceLedgerPresent: Boolean(ledger),
     sourceLedgerRows: ledger?.rows.length ?? 0,

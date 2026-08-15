@@ -2087,7 +2087,7 @@ async function renderLivePage(
     const parentVisibleLedgerWhere: Prisma.LedgerEntryWhereInput = {
       NOT: agencyOnlyLedgerWhere,
     };
-    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs] = await Promise.all([
+    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs] = await prisma.$transaction([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -2217,21 +2217,19 @@ async function renderLivePage(
         take: 8,
         select: { id: true, title: true, body: true, sendAt: true },
       }),
-      family?.centerId
-        ? prisma.center.findUnique({
-            where: { id: family.centerId },
+      prisma.center.findUnique({
+        where: { id: family?.centerId ?? "__none__" },
+        select: {
+          id: true,
+          customFields: true,
+          organization: {
             select: {
-              id: true,
-              customFields: true,
-              organization: {
-                select: {
-                  tenant: { select: { name: true, slug: true } },
-                  brand: { select: { name: true, slug: true } },
-                },
-              },
+              tenant: { select: { name: true, slug: true } },
+              brand: { select: { name: true, slug: true } },
             },
-          })
-        : Promise.resolve(null),
+          },
+        },
+      }),
       prisma.attendanceRecord.findMany({
         where: {
           childId: { in: childIds.length ? childIds : ["__none__"] },

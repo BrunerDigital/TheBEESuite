@@ -12,6 +12,7 @@ test("school software fee reconciliation is fail closed and preview only", () =>
   assert.match(source, /stop_account_not_ready/);
   assert.match(source, /stop_subscription_configuration_mismatch/);
   assert.match(source, /stop_subscription_center_mismatch/);
+  assert.match(source, /stop_evidence_center_mismatch/);
   assert.match(source, /stop_stripe_read_failed/);
   assert.doesNotMatch(source, /method:\s*"POST"/);
   assert.doesNotMatch(source, /prisma\.[a-zA-Z]+\.(?:create|update|upsert|delete)/);
@@ -35,4 +36,8 @@ test("school software fees preserve policy and deterministic monthly evidence", 
   assert.match(source, /activeSubscriptions\[0\]\.effectiveMonthlyAmountCents === policy\.unitAmountCents/);
   assert.match(source, /exactMonthlyConfiguration/);
   assert.match(source, /metadataCenterId !== center\.id/);
+  assert.match(source, /allCenterAccountMappings/);
+  assert.match(source, /!item\.centerId && accountId && item\.accountId === accountId/);
+  assert.match(source, /unresolvedSubscriptions/);
+  assert.match(source, /scheduledCancellation/);
 });

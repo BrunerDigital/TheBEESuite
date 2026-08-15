@@ -235,7 +235,7 @@ async function main() {
   if (!/^(sk|rk)_live_/.test(apiKey)) throw new Error("A live Stripe secret or restricted key is required.");
   if (process.argv.includes("--apply")) throw new Error("This reconciliation build is preview-only until its exact table is reviewed.");
 
-  const [centers, paymentIntents, transfers, subscriptions, invoices] = await Promise.all([
+  const [centers, allCenterAccountMappings, paymentIntents, transfers, subscriptions, invoices] = await Promise.all([
     prisma.center.findMany({
       where: {
         status: { notIn: ["closed", "archived", "inactive"] },
@@ -261,6 +261,9 @@ async function main() {
         },
       },
     }),
+    prisma.center.findMany({
+      select: { id: true, name: true, status: true, customFields: true },
+    }),
     listAll(apiKey, `/v1/payment_intents?limit=100&created[gte]=${CREATED_SINCE}&expand[]=data.latest_charge`),
     listAll(apiKey, `/v1/transfers?limit=100&created[gte]=${CREATED_SINCE}`),
     listAll(apiKey, "/v1/subscriptions?limit=100&status=all"),
@@ -268,7 +271,7 @@ async function main() {
   ]);
 
   const accountUsage = new Map<string, string[]>();
-  for (const center of centers) {
+  for (const center of allCenterAccountMappings) {
     const accountId = readStripeConnectedAccountId(center.customFields);
     if (!accountId) continue;
     accountUsage.set(accountId, [...(accountUsage.get(accountId) ?? []), center.id]);
@@ -299,10 +302,13 @@ async function main() {
     const idempotencyKey = accountId
       ? `school-software-fee:${JULY_REFERENCE_DATE}:${center.id}:${accountId}`
       : null;
-    const directEvidence = [
-      ...softwarePayments.filter((item) => item.centerId === center.id || (accountId && item.accountId === accountId)),
-      ...softwareTransfers.filter((item) => item.centerId === center.id || (accountId && item.accountId === accountId)),
-    ];
+    const directEvidenceCandidates = [...softwarePayments, ...softwareTransfers];
+    const directEvidence = directEvidenceCandidates.filter((item) =>
+      item.centerId === center.id || (!item.centerId && accountId && item.accountId === accountId),
+    );
+    const conflictingDirectEvidence = directEvidenceCandidates.filter((item) =>
+      Boolean(item.centerId) && item.centerId !== center.id && accountId && item.accountId === accountId,
+    );
     const storedSubscriptionId = clean(fields.stripeSoftwareSubscriptionId);
     const conflictingStoredSubscription = softwareSubscriptions.find((item) => {
       if (clean(item.id) !== storedSubscriptionId) return false;
@@ -318,6 +324,8 @@ async function main() {
       id: clean(item.id),
       status: clean(item.status),
       latestInvoiceId: clean(item.latest_invoice) || null,
+      cancelAtPeriodEnd: item.cancel_at_period_end === true,
+      cancelAt: integer(item.cancel_at) || null,
       ...subscriptionConfiguration(item),
     }));
     const subscriptionInvoices = softwareInvoices.filter((item) =>
@@ -387,13 +395,21 @@ async function main() {
         ["succeeded", "paid"].includes(item.status),
       ) || julySubscriptionEvidence.length > 0;
       const activeSubscriptions = stripeSubscriptions.filter((item) => ["active", "trialing"].includes(item.status));
+      const unresolvedSubscriptions = stripeSubscriptions.filter((item) =>
+        !["active", "trialing", "canceled", "incomplete_expired"].includes(item.status),
+      );
+      const scheduledCancellation = activeSubscriptions.some((item) => item.cancelAtPeriodEnd || item.cancelAt);
       const subscriptionConfigured = activeSubscriptions.length === 1 &&
+        !scheduledCancellation &&
         activeSubscriptions[0].exactMonthlyConfiguration &&
         activeSubscriptions[0].effectiveMonthlyAmountCents === policy.unitAmountCents;
-      const subscriptionConfigurationAmbiguous = activeSubscriptions.length > 0 && !subscriptionConfigured;
+      const subscriptionConfigurationAmbiguous =
+        unresolvedSubscriptions.length > 0 ||
+        scheduledCancellation ||
+        (activeSubscriptions.length > 0 && !subscriptionConfigured);
       const accountExact = clean(account.id) === accountId;
       const cardPaymentsActive = clean(record(account.capabilities).card_payments) === "active";
-      const status = !accountExact || !cardPaymentsActive || conflictingStoredSubscription
+      const status = !accountExact || !cardPaymentsActive || conflictingStoredSubscription || conflictingDirectEvidence.length > 0
         ? "ambiguous"
         : subscriptionConfigurationAmbiguous
           ? "ambiguous"
@@ -409,6 +425,8 @@ async function main() {
             ? "stop_account_not_ready"
             : conflictingStoredSubscription
               ? "stop_subscription_center_mismatch"
+              : conflictingDirectEvidence.length > 0
+                ? "stop_evidence_center_mismatch"
               : "stop_subscription_configuration_mismatch"
           : status === "deferred"
             ? "carry_forward_until_available_balance"
@@ -436,6 +454,9 @@ async function main() {
         julyPaid,
         subscriptionConfigured,
         conflictingStoredSubscriptionId: conflictingStoredSubscription ? clean(conflictingStoredSubscription.id) : null,
+        conflictingEvidenceIds: conflictingDirectEvidence.map((item) => item.id),
+        unresolvedSubscriptionIds: unresolvedSubscriptions.map((item) => item.id),
+        scheduledCancellation,
         augustPeriod: AUGUST_PERIOD,
       };
     } catch (error) {

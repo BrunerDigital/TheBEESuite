@@ -241,6 +241,7 @@ function renderedContractBillingReview(source: SourceFile | null) {
     payerLabel: string;
     cadence: string;
     description: string;
+    note: string;
     amountCents: number;
   }>();
   for (const row of source.renderedRows) {
@@ -250,10 +251,11 @@ function renderedContractBillingReview(source: SourceFile | null) {
     const payerLabel = clean(row[13]);
     const cadence = clean(row[14]);
     const description = clean(row[15]);
+    const note = clean(row[16]);
     const amountCents = parseMoneyCell(row[17] ?? "");
     if (!childName || !classroom || !cadence || !description || amountCents === null) continue;
-    const key = [childName, classroom, payerLabel, cadence, description].map(evidenceKey).concat(String(amountCents)).join("\u0000");
-    if (!uniqueComponents.has(key)) uniqueComponents.set(key, { childName, classroom, payerLabel, cadence, description, amountCents });
+    const key = [childName, classroom, payerLabel, cadence, description, note].map(evidenceKey).concat(String(amountCents)).join("\u0000");
+    if (!uniqueComponents.has(key)) uniqueComponents.set(key, { childName, classroom, payerLabel, cadence, description, note, amountCents });
   }
 
   const grouped = new Map<string, {
@@ -262,6 +264,7 @@ function renderedContractBillingReview(source: SourceFile | null) {
     payerLabel: string;
     cadence: string;
     descriptions: Set<string>;
+    notes: Set<string>;
     componentCount: number;
     amountCents: number;
   }>();
@@ -273,10 +276,12 @@ function renderedContractBillingReview(source: SourceFile | null) {
       payerLabel: component.payerLabel,
       cadence: component.cadence,
       descriptions: new Set<string>(),
+      notes: new Set<string>(),
       componentCount: 0,
       amountCents: 0,
     };
     existing.descriptions.add(component.description);
+    if (component.note) existing.notes.add(component.note);
     existing.componentCount += 1;
     existing.amountCents += component.amountCents;
     grouped.set(key, existing);
@@ -284,12 +289,14 @@ function renderedContractBillingReview(source: SourceFile | null) {
 
   return [...grouped.values()].map((item): CsvRow => {
     const descriptions = [...item.descriptions].sort((left, right) => left.localeCompare(right));
+    const notes = [...item.notes].sort((left, right) => left.localeCompare(right));
     return {
       "source child name": item.childName,
       "source classroom": item.classroom,
       "source payer label": item.payerLabel,
       "source cadence": item.cadence,
       "source charge descriptions": descriptions.join(" | "),
+      "source charge notes": notes.join(" | "),
       "source component count": String(item.componentCount),
       "source amount cents": String(item.amountCents),
       "confirmed child id": "",

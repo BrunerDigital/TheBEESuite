@@ -227,7 +227,8 @@ function loadSources(sourceDirectory: string, location: string) {
 }
 
 function parseMoneyCell(value: string) {
-  const normalized = clean(value).replaceAll(",", "").replace(/^\$/, "");
+  const source = clean(value).replaceAll(",", "").replaceAll("$", "");
+  const normalized = /^\(.*\)$/.test(source) ? `-${source.slice(1, -1)}` : source;
   if (!/^-?\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
   return Math.round(Number(normalized) * 100);
 }
@@ -312,7 +313,7 @@ function renderedClassroomScheduleReview(source: SourceFile | null) {
     const dates = row.slice(6, 11).map(clean);
     const schedules = row.slice(12, 17).map(clean);
     if (!classroom || !childName) continue;
-    const key = [normalize(classroom), normalize(childName), ...schedules.map(normalize)].join("\u0000");
+    const key = [classroom, childName, ...schedules].map(evidenceKey).join("\u0000");
     if (!unique.has(key)) unique.set(key, {
       "source child name": childName,
       "source classroom": classroom,

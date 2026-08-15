@@ -35,14 +35,17 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
     '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child\'s Name and Age","Primary Classroom and Billing Cycle","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Infant Full Time",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","150.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
   ].join("\n"));
   write(path.join(source, "Sample East - Child Contract Billing Summary.csv"), '"Child Contract Billing Summary","School address","Other School","As of 8/9/2026","other@example.com",,"Child","Age","Foreign, Child","4 Yr","Infants","Standard Billing",,"FOREIGN Primary, Parent","Weekly","Base Tuition",,999.00,999.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","999.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"');
-  write(path.join(source, "Sample - Classroom Schedule Summary Weekly.csv"), '"Sample School","Classroom Schedule Summary","School address","school@example.com",,"Infants","Mon 8/3/2026","Tue 8/4/2026","Wed 8/5/2026","Thu 8/6/2026","Fri 8/7/2026","One, Child","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM",,,,,,,,,,,"Grouped","Page 1","bje: Schedule Summary - Weekly, FD_ClassroomScheduleSummary02.rpt"');
+  write(path.join(source, "Sample - Classroom Schedule Summary Weekly.csv"), [
+    '"Sample School","Classroom Schedule Summary","School address","school@example.com",,"Infants","Mon 8/3/2026","Tue 8/4/2026","Wed 8/5/2026","Thu 8/6/2026","Fri 8/7/2026","One, Child","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM",,,,,,,,,,,"Grouped","Page 1","bje: Schedule Summary - Weekly, FD_ClassroomScheduleSummary02.rpt"',
+    '"Sample School","Classroom Schedule Summary","School address","school@example.com",,"Infants","Mon 8/3/2026","Tue 8/4/2026","Wed 8/5/2026","Thu 8/6/2026","Fri 8/7/2026","One Child","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM",,,,,,,,,,,"Grouped","Page 1","bje: Schedule Summary - Weekly, FD_ClassroomScheduleSummary02.rpt"',
+  ].join("\n"));
 
   const result = await prepareProcareLocationWorkflow({ location: "Sample", sourceDirectory: source, outputDirectory: output });
   assert.equal(result.metrics.parentInfoMode, "derived_primary_payer");
   assert.equal(result.metrics.enrolledReadyRecords, 1);
   assert.equal(result.metrics.currentFamilyBalanceTotalCents, 12_550);
   assert.equal(result.metrics.renderedContractBillingRows, 1);
-  assert.equal(result.metrics.renderedClassroomScheduleRows, 1);
+  assert.equal(result.metrics.renderedClassroomScheduleRows, 2);
   assert.equal(result.gates["Roster and relationships"].status, "review_required");
   assert.equal(result.gates["Weekly tuition"].status, "review_required");
   assert.equal(result.gates["Child information"].status, "blocked");
@@ -58,6 +61,7 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
   const renderedSchedules = parseCsvBuffer(fs.readFileSync(path.join(output, "16-rendered-classroom-schedule-review.csv")), "rendered schedules").rows;
   assert.equal(renderedSchedules[0]["source classroom"], "Infants");
   assert.equal(renderedSchedules[0]["confirmed child id"], "");
+  assert.deepEqual(renderedSchedules.map((row) => row["source child name"]), ["One Child", "One, Child"]);
 });
 
 test("rendered billing evidence keeps payer boundaries and nets distinct weekly components", async () => {
@@ -70,7 +74,7 @@ test("rendered billing evidence keeps payer boundaries and nets distinct weekly 
   write(path.join(source, "Sample - Account Balance Summary.csv"), "Account ID,Balance,Person ID,Full Name\naccount-1,0.00,payer-1,Parent One");
   const renderedRows = [
     '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Base Tuition",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","125.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
-    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Discount",,-25.00,-25.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","125.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Discount",,-$25.00,-$25.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","125.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
     '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"TWO Primary, Parent Two","Weekly","Base Tuition",,140.00,140.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","140.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
     '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","Punctuation, Child","4 Yr","Infants","Standard Billing",,"A-B Primary, Parent","Weekly","Base Tuition",,100.00,100.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","100.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
     '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","Punctuation, Child","4 Yr","Infants","Standard Billing",,"A B Primary, Parent","Weekly","Base Tuition",,110.00,110.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","110.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',

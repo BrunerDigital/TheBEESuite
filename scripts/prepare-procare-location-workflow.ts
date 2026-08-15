@@ -186,12 +186,25 @@ function renderedReportKind(values: string[][]) {
   return "";
 }
 
+function sourceFilenameMatchesLocation(filename: string, location: string) {
+  const name = filename.toLocaleLowerCase("en-US");
+  const normalizedLocation = location.trim().toLocaleLowerCase("en-US");
+  if (name.startsWith(`${normalizedLocation} - `)) return true;
+  const suffix = name.slice(normalizedLocation.length + 1);
+  return name.startsWith(`${normalizedLocation} `) && (
+    suffix.startsWith("child contract billing summary") ||
+    suffix.startsWith("classroom schedule summary")
+  );
+}
+
+function evidenceKey(value: string) {
+  return clean(value).normalize("NFKC").toLocaleLowerCase("en-US").replace(/\s+/g, " ");
+}
+
 function loadSources(sourceDirectory: string, location: string) {
-  const prefix = `${location} - `.toLowerCase();
-  const loosePrefix = `${location} `.toLowerCase();
   return fs.readdirSync(sourceDirectory, { withFileTypes: true })
     .filter((entry) => entry.isFile()
-      && (entry.name.toLowerCase().startsWith(prefix) || entry.name.toLowerCase().startsWith(loosePrefix))
+      && sourceFilenameMatchesLocation(entry.name, location)
       && /\.(csv|tsv|txt)$/i.test(entry.name))
     .map((entry): SourceFile => {
       const filePath = path.join(sourceDirectory, entry.name);
@@ -238,7 +251,7 @@ function renderedContractBillingReview(source: SourceFile | null) {
     const description = clean(row[15]);
     const amountCents = parseMoneyCell(row[17] ?? "");
     if (!childName || !classroom || !cadence || !description || amountCents === null) continue;
-    const key = [normalize(childName), normalize(classroom), normalize(payerLabel), normalize(cadence), normalize(description), amountCents].join("\u0000");
+    const key = [childName, classroom, payerLabel, cadence, description].map(evidenceKey).concat(String(amountCents)).join("\u0000");
     if (!uniqueComponents.has(key)) uniqueComponents.set(key, { childName, classroom, payerLabel, cadence, description, amountCents });
   }
 
@@ -251,7 +264,7 @@ function renderedContractBillingReview(source: SourceFile | null) {
     amountCents: number;
   }>();
   for (const component of uniqueComponents.values()) {
-    const key = [normalize(component.childName), normalize(component.classroom), normalize(component.payerLabel), normalize(component.cadence)].join("\u0000");
+    const key = [component.childName, component.classroom, component.payerLabel, component.cadence].map(evidenceKey).join("\u0000");
     const existing = grouped.get(key) ?? {
       childName: component.childName,
       classroom: component.classroom,

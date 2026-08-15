@@ -48,6 +48,7 @@ test("ProCare imports require the exact completed review before commit", () => {
 
   assert.match(panel, /Submit this exact source export for review before committing it/);
   assert.match(panel, /BEE Suite School Migration Review/);
+  assert.match(panel, /setupBillingRows \|\| setupAttendanceRows \? "next" : "needs_review"/);
   assert.match(route, /status: "needs_resolution"/);
   assert.match(route, /procare\.import\.rows_disposed/);
   assert.match(panel, /Unresolved imported data/);

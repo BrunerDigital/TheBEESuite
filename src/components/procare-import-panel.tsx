@@ -558,7 +558,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       detail: setupBillingRows || setupAttendanceRows
         ? `${setupBillingRows.toLocaleString()} billing/ledger row(s) and ${setupAttendanceRows.toLocaleString()} attendance/check-log row(s) were detected. Verify these modules before use.`
         : "No billing, ledger, attendance, or check-log history was detected. Confirm whether those records are intentionally out of scope before launch.",
-      status: setupBillingRows || setupAttendanceRows ? "next" : "ready",
+      status: setupBillingRows || setupAttendanceRows ? "next" : "needs_review",
       href: setupBillingRows ? "/billing-settings" : "/classroom-dashboard",
     },
     {

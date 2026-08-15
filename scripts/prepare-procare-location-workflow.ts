@@ -63,6 +63,17 @@ function checked(value: string) {
   return /^(checked|yes|true|1|x)$/i.test(value.trim());
 }
 
+function decodeCsvBuffer(buffer: Buffer) {
+  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+    return buffer.subarray(2).toString("utf16le");
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    return new TextDecoder("windows-1252").decode(buffer);
+  }
+}
+
 function detectDelimiter(text: string) {
   const sample = text.split(/\r?\n/).find((line) => line.trim()) ?? "";
   const candidates = [",", "\t", ";", "|"] as const;
@@ -82,7 +93,7 @@ function detectDelimiter(text: string) {
 }
 
 export function parseCsvValues(buffer: Buffer, reportName: string) {
-  const text = buffer.toString("utf8").replace(/^\ufeff/, "");
+  const text = decodeCsvBuffer(buffer).replace(/^\ufeff/, "");
   const delimiter = detectDelimiter(text);
   const values: string[][] = [];
   let value = "";
@@ -210,32 +221,72 @@ function parseMoneyCell(value: string) {
 
 function renderedContractBillingReview(source: SourceFile | null) {
   if (!source) return [] as CsvRow[];
-  const unique = new Map<string, CsvRow>();
+  const uniqueComponents = new Map<string, {
+    childName: string;
+    classroom: string;
+    payerLabel: string;
+    cadence: string;
+    description: string;
+    amountCents: number;
+  }>();
   for (const row of source.renderedRows) {
     if (clean(row[0]) !== "Child Contract Billing Summary") continue;
     const childName = clean(row[8]);
     const classroom = clean(row[10]);
+    const payerLabel = clean(row[13]);
     const cadence = clean(row[14]);
     const description = clean(row[15]);
     const amountCents = parseMoneyCell(row[17] ?? "");
     if (!childName || !classroom || !cadence || !description || amountCents === null) continue;
-    const key = [normalize(childName), normalize(classroom), normalize(cadence), normalize(description), amountCents].join("\u0000");
-    if (!unique.has(key)) unique.set(key, {
-      "source child name": childName,
-      "source classroom": classroom,
-      "source cadence": cadence,
-      "source charge description": description,
-      "source amount cents": String(amountCents),
+    const key = [normalize(childName), normalize(classroom), normalize(payerLabel), normalize(cadence), normalize(description), amountCents].join("\u0000");
+    if (!uniqueComponents.has(key)) uniqueComponents.set(key, { childName, classroom, payerLabel, cadence, description, amountCents });
+  }
+
+  const grouped = new Map<string, {
+    childName: string;
+    classroom: string;
+    payerLabel: string;
+    cadence: string;
+    descriptions: Set<string>;
+    amountCents: number;
+  }>();
+  for (const component of uniqueComponents.values()) {
+    const key = [normalize(component.childName), normalize(component.classroom), normalize(component.payerLabel), normalize(component.cadence)].join("\u0000");
+    const existing = grouped.get(key) ?? {
+      childName: component.childName,
+      classroom: component.classroom,
+      payerLabel: component.payerLabel,
+      cadence: component.cadence,
+      descriptions: new Set<string>(),
+      amountCents: 0,
+    };
+    existing.descriptions.add(component.description);
+    existing.amountCents += component.amountCents;
+    grouped.set(key, existing);
+  }
+
+  return [...grouped.values()].map((item): CsvRow => {
+    const descriptions = [...item.descriptions].sort((left, right) => left.localeCompare(right));
+    return {
+      "source child name": item.childName,
+      "source classroom": item.classroom,
+      "source payer label": item.payerLabel,
+      "source cadence": item.cadence,
+      "source charge descriptions": descriptions.join(" | "),
+      "source component count": String(descriptions.length),
+      "source amount cents": String(item.amountCents),
       "confirmed child id": "",
       "confirmed account id": "",
-      "confirmed tuition cents": /^weekly$/i.test(cadence) ? String(amountCents) : "",
-      "confirmed cadence": cadence,
+      "confirmed tuition cents": /^weekly$/i.test(item.cadence) && item.amountCents > 0 ? String(item.amountCents) : "",
+      "confirmed cadence": item.cadence,
       "effective date": "",
       disposition: "review_required",
-      "review note": "Rendered report has no stable Child ID. Match to one reviewed child or hold; do not match by name alone.",
-    });
-  }
-  return [...unique.values()].sort((left, right) => left["source child name"].localeCompare(right["source child name"]));
+      "review note": "Rendered report has no stable Child or Account ID. Use the payer label only as supporting evidence; match to one reviewed child and account or hold.",
+    };
+  }).sort((left, right) => (
+    left["source child name"].localeCompare(right["source child name"])
+    || left["source payer label"].localeCompare(right["source payer label"])
+  ));
 }
 
 function renderedClassroomScheduleReview(source: SourceFile | null) {

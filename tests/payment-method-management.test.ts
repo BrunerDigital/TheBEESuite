@@ -75,8 +75,9 @@ test("payment method summary does not keep expired setup sessions pending", () =
     customFields: {
       stripeCustomerId: "cus_123",
       stripeSetupCheckoutSessionId: "cs_expired",
+      stripeSetupCheckoutSessionExpiresAt: Math.floor(Date.now() / 1000) - 60,
       paymentMethodManagementStatus: "setup_session_expired",
-      autopayStatus: "disabled",
+      autopayStatus: "pending",
     },
   });
 
@@ -84,6 +85,38 @@ test("payment method summary does not keep expired setup sessions pending", () =
   assert.equal(summary.autopayStatus, "disabled");
   assert.equal(summary.hasStripeCustomer, true);
   assert.equal(summary.hasSavedPaymentMethod, false);
+});
+
+test("payment method summary keeps an unexpired explicitly pending setup session pending", () => {
+  const summary = paymentMethodManagementSummary({
+    autopayPlaceholder: false,
+    customFields: {
+      stripeCustomerId: "cus_123",
+      stripeSetupCheckoutSessionId: "cs_pending",
+      stripeSetupCheckoutSessionExpiresAt: Math.floor(Date.now() / 1000) + 60,
+      autopayStatus: "pending",
+    },
+  });
+
+  assert.equal(summary.autopayEnabled, false);
+  assert.equal(summary.autopayStatus, "pending");
+});
+
+test("payment method summary preserves completed bank verification pending past the original session deadline", () => {
+  const summary = paymentMethodManagementSummary({
+    autopayPlaceholder: false,
+    customFields: {
+      stripeCustomerId: "cus_123",
+      stripeDefaultPaymentMethodId: "pm_bank_123",
+      stripeSetupCheckoutSessionId: "cs_completed",
+      stripeSetupCheckoutSessionExpiresAt: Math.floor(Date.now() / 1000) - 60,
+      paymentMethodManagementStatus: "payment_method_saved",
+      autopayStatus: "pending",
+    },
+  });
+
+  assert.equal(summary.hasSavedPaymentMethod, true);
+  assert.equal(summary.autopayStatus, "pending");
 });
 
 test("setup expiration preserves an already saved bank payment method", () => {

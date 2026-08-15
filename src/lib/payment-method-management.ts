@@ -52,7 +52,8 @@ export function paymentMethodManagementSummary(input: {
   const savedAt = clean(custom.stripePaymentMethodSavedAt);
   const status = clean(custom.autopayStatus);
   const enabled = custom.autopayEnabled === true || input.autopayPlaceholder === true;
-  const pending = status === "pending";
+  const setupExplicitlyExpired = clean(custom.paymentMethodManagementStatus) === "setup_session_expired";
+  const pending = status === "pending" && !setupExplicitlyExpired;
 
   return {
     autopayEnabled: enabled,

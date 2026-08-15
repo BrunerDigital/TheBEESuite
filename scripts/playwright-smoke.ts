@@ -17,7 +17,7 @@ type SmokeRoute = {
   expectedText?: RegExp;
 };
 
-const loginScreenText = /Log in to The BEE Suite|Log in as a director|Log in as an executive|Log in to your parent portal|Log in to your teacher portal/i;
+const loginScreenText = /(?:Log|Sign) in to The BEE Suite|(?:Log|Sign) in as a director|(?:Log|Sign) in as an executive|(?:Log|Sign) in to your parent portal|(?:Log|Sign) in to your teacher portal|Director sign-in|Parent and guardian sign-in|Teacher sign-in/i;
 
 const smokeRoutes: SmokeRoute[] = [
   { name: "public landing", path: "/", expectedText: /The BEE Suite|childcare/i },

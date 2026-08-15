@@ -21,6 +21,11 @@ test("notification polling uses the lightweight unread endpoint", () => {
   const centerLookup = summaryRoute.indexOf("prisma.center.findMany");
 
   assert.match(appShell, /notifications\/summary\?mode=count/);
+  assert.match(appShell, /notificationAccessRef\.current = false/);
+  assert.match(appShell, /response\.status === 401 \|\| response\.status === 403/);
+  assert.match(appShell, /setSummary\(null\)/);
+  assert.match(appShell, /NotificationDropdown key=\{`\$\{currentUser\?\.id \?\? currentUser\?\.email\}:\$\{currentUser\?\.role\}`\}/);
+  assert.match(appShell, /notificationAccessRef\.current && mountedRef\.current && json\?\.ok/);
   assert.match(appShell, /onOpenChange=\{\(open\)/);
   assert.ok(countMode > -1);
   assert.ok(centerLookup > countMode, "count mode must return before the multi-center summary queries");

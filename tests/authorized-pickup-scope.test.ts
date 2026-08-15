@@ -4,8 +4,12 @@ import test from "node:test";
 
 const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
-const migration = readFileSync(
+const prismaMigration = readFileSync(
   "prisma/migrations/20260812120000_authorized_pickup_user_link/migration.sql",
+  "utf8",
+);
+const supabaseMigration = readFileSync(
+  "supabase/migrations/20260812120000_authorized_pickup_user_link.sql",
   "utf8",
 );
 
@@ -29,8 +33,11 @@ test("authorized pickup portal fails closed and verifies the linked family tenan
 });
 
 test("authorized pickup migration cannot reset or replace guardian PINs", () => {
-  assert.match(migration, /ALTER TABLE "AuthorizedPickup" ADD COLUMN "userId"/);
-  assert.doesNotMatch(migration, /ALTER TABLE "Guardian"|UPDATE "Guardian"|DELETE FROM "Guardian"|checkInPinHash|checkInPinSetAt/i);
+  assert.match(prismaMigration, /ALTER TABLE "AuthorizedPickup" ADD COLUMN "userId"/);
+  assert.match(supabaseMigration, /ALTER TABLE "AuthorizedPickup" ADD COLUMN IF NOT EXISTS "userId"/);
+  assert.match(supabaseMigration, /CREATE UNIQUE INDEX IF NOT EXISTS "AuthorizedPickup_userId_key"/);
+  assert.match(supabaseMigration, /IF NOT EXISTS[\s\S]*AuthorizedPickup_userId_fkey/);
+  assert.doesNotMatch(supabaseMigration, /ALTER TABLE "Guardian"|UPDATE "Guardian"|DELETE FROM "Guardian"|checkInPinHash|checkInPinSetAt/i);
 });
 
 test("existing parent guardian portal path remains separate", () => {

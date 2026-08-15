@@ -29,8 +29,9 @@ export function isActiveStripeCheckoutPayment(payment: {
 }) {
   if (payment.provider !== "stripe" || payment.status !== PaymentStatus.DRAFT) return false;
   const fields = jsonRecord(payment.customFields);
-  if (isPastTimestamp(fields.stripeCheckoutSessionExpiresAt)) return false;
-  return fields.status === "checkout_pending" || fields.status === "checkout_created";
+  if (fields.status === "checkout_pending") return true;
+  if (fields.status !== "checkout_created") return false;
+  return !isPastTimestamp(fields.stripeCheckoutSessionExpiresAt);
 }
 
 function stringField(value: unknown) {

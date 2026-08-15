@@ -47,7 +47,7 @@ test("ProCare imports require the exact completed review before commit", () => {
   const panel = readFileSync(new URL("../src/components/procare-import-panel.tsx", import.meta.url), "utf8");
 
   assert.match(panel, /Submit this exact source export for review before committing it/);
-  assert.match(panel, /Import Family Accounts/);
+  assert.match(panel, /BEE Suite School Migration Review/);
   assert.match(route, /status: "needs_resolution"/);
   assert.match(route, /procare\.import\.rows_disposed/);
   assert.match(panel, /Unresolved imported data/);
@@ -65,7 +65,7 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(route, /childIdentity/);
   assert.match(route, /accountIdentity/);
   assert.match(panel, /mapping-follow-up/);
-  assert.match(panel, /staff, schedule, attendance, sign-in\/out, health, and account-balance reports from that same supported format/);
+  assert.match(panel, /families, children, guardians, classrooms, schedules, balances, tuition evidence, staff, and operating history intact/);
   assert.match(route, /looksLikeStandardMultiReportShard/);
   assert.match(route, /sourceType: "csv_files"/);
   assert.match(route, /Choose either uploaded files or pasted CSV text/);
@@ -93,12 +93,12 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(panel, /Data import progress/);
   assert.match(panel, /Upload and import complete/);
   assert.match(panel, /lastImportSummary/);
-  assert.match(panel, /Post-import setup readiness/);
+  assert.match(panel, /School transition readiness/);
   assert.match(panel, /Open school setup/);
   assert.match(panel, /billing-settings\?view=setup/);
   assert.match(panel, /Import does not activate the school by itself/);
-  assert.match(panel, /Supported previous-system export format only/);
-  assert.match(panel, /Do not upload an export from another provider/);
+  assert.match(panel, /Supported previous-system export folder or files/);
+  assert.match(panel, /Exports from another provider require their own reviewed source adapter/);
   assert.match(panel, /Enrollment, ParentInfo, Relationships, and ChildInfo/);
   assert.match(panel, /Parent invitations, kiosk\/PIN credentials, billing\/payment activation, previous-system cutover, and source-file archival each stay held off/);
   assert.match(panel, /useRouter/);

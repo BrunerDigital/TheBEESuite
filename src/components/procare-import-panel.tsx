@@ -529,7 +529,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const setupSourceCount = setupSummary?.datasetCoverage?.sourceInventory?.filter((source) => source.reportKind !== "ignored").length ?? 0;
   const setupReadinessStages: Array<{ title: string; detail: string; status: SetupReadinessStatus; href?: string }> = setupSummary ? [
     {
-      title: "Source package",
+      title: "Source records",
       detail: setupSourceCount
         ? `${setupSourceCount.toLocaleString()} recognized source file(s), ${setupRows.toLocaleString()} row(s) tracked in the import review.`
         : `${setupRows.toLocaleString()} source row(s) tracked in the import review.`,
@@ -537,7 +537,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     },
     {
       title: "Families",
-      detail: `${setupFamilyGroups.toLocaleString()} family group(s) detected or written. Review household names, inactive/past records, and balances before inviting parents.`,
+      detail: `${setupFamilyGroups.toLocaleString()} family group(s) detected or written. Reconcile household ownership, current versus historical enrollment, and each opening balance before launch.`,
       status: setupFamilyGroups ? "ready" : "needs_review",
       href: "/family-detail",
     },
@@ -554,10 +554,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       href: "/family-detail",
     },
     {
-      title: "Optional operational rows",
+      title: "Balances and operating history",
       detail: setupBillingRows || setupAttendanceRows
         ? `${setupBillingRows.toLocaleString()} billing/ledger row(s) and ${setupAttendanceRows.toLocaleString()} attendance/check-log row(s) were detected. Verify these modules before use.`
-        : "No optional billing, ledger, attendance, or check-log rows were detected in this export.",
+        : "No billing, ledger, attendance, or check-log history was detected. Confirm whether those records are intentionally out of scope before launch.",
       status: setupBillingRows || setupAttendanceRows ? "next" : "ready",
       href: setupBillingRows ? "/billing-settings" : "/classroom-dashboard",
     },
@@ -584,24 +584,24 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   return (
     <Card className="shadow-none [&_button]:min-h-10" aria-busy={busy}>
       <CardHeader>
-        <CardTitle as="h2">Import Family Accounts</CardTitle>
+        <CardTitle as="h2">BEE Suite School Migration Review</CardTitle>
         <CardDescription>
-          This importer supports only the previous-system export format built from Enrollment, ParentInfo, Relationships, and ChildInfo reports. Those reports populate families, guardians, children, classrooms, enrollment details, allergies, emergency contacts, and pickups. Add staff, schedule, attendance, sign-in/out, health, and account-balance reports from that same supported format to the upload or ZIP; supported rows are linked by source IDs, while reports without a safe destination mapping are identified for migration follow-up.
+          Bring an established school into BEE Suite with its families, children, guardians, classrooms, schedules, balances, tuition evidence, staff, and operating history intact. BEE Suite converts supported previous-system exports into a reviewable school dataset, identifies anything incomplete or conflicting, and holds every unresolved record for confirmation before import.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Alert>
           <AlertCircle className="size-4" />
-          <AlertTitle>Supported previous-system export format only</AlertTitle>
+          <AlertTitle>Accuracy before launch</AlertTitle>
           <AlertDescription>
-            Use only the configured legacy reports named above. Do not upload an export from another provider; it requires a separately reviewed importer so its source identity and matching rules remain exact.
+            Every family relationship and balance must remain tied to stable source evidence. Names can help reviewers locate a record, but they never silently establish identity, household ownership, or financial responsibility. Exports from another provider require their own reviewed source adapter.
           </AlertDescription>
         </Alert>
         <div className="space-y-3 rounded-xl border bg-muted/20 p-4" aria-live="polite">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-medium">Onboarding import workflow</div>
-              <p className="text-xs text-muted-foreground">Progress includes source selection, detection, normalization, review, confirmations, duplicate decisions, commit, and handoff.</p>
+              <div className="text-sm font-medium">BEE Suite migration workflow</div>
+              <p className="text-xs text-muted-foreground">Progress includes source custody, conversion to BEE Suite records, family and balance reconciliation, corrections, confirmation, import, and school handoff.</p>
             </div>
             <Badge variant="outline">{completedWorkflowSteps} of {workflowStages.length} steps</Badge>
           </div>
@@ -618,9 +618,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
           <DialogContent className="max-h-[92vh] overflow-hidden p-0 sm:max-w-[min(96vw,76rem)]">
             <DialogHeader className="px-5 pt-5">
-              <DialogTitle>Data Import Review</DialogTitle>
+              <DialogTitle>BEE Suite Migration Review</DialogTitle>
               <DialogDescription>
-                Review the mapped rows before committing. Directors can close this review and commit from the import panel when there are no blocking cleanup warnings.
+                Confirm the converted families, children, relationships, classrooms, and opening balances. Correct or hold anything that does not match the school before committing the unchanged reviewed package.
               </DialogDescription>
             </DialogHeader>
             {preview ? (
@@ -756,7 +756,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div className="text-sm font-medium">Post-import setup readiness</div>
+                <div className="text-sm font-medium">School transition readiness</div>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   Use this as the director handoff after review or import. It shows what BEE Suite can use now, what still needs cleanup, and which launch actions stay gated.
                 </p>

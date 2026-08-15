@@ -30,18 +30,31 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
     "Employee ID,Is Hidden,Person ID,Full Name,First Name,Last Name,Primary Work Area,Work Area ID,Employment Status,Email,Phone 1",
     "employee-1,Unchecked,staff-person-1,Teacher One,Teacher,One,Infants,room-1,Currently Employed,teacher@example.com,Cell 555-555-0102",
   ].join("\n"));
+  write(path.join(source, "Sample - Child Contract Billing Summary.csv"), [
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child\'s Name and Age","Primary Classroom and Billing Cycle","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Infant Full Time",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","150.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child\'s Name and Age","Primary Classroom and Billing Cycle","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Infant Full Time",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","150.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+  ].join("\n"));
+  write(path.join(source, "Sample - Classroom Schedule Summary Weekly.csv"), '"Sample School","Classroom Schedule Summary","School address","school@example.com",,"Infants","Mon 8/3/2026","Tue 8/4/2026","Wed 8/5/2026","Thu 8/6/2026","Fri 8/7/2026","One, Child","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM",,,,,,,,,,,"Grouped","Page 1","bje: Schedule Summary - Weekly, FD_ClassroomScheduleSummary02.rpt"');
 
   const result = await prepareProcareLocationWorkflow({ location: "Sample", sourceDirectory: source, outputDirectory: output });
   assert.equal(result.metrics.parentInfoMode, "derived_primary_payer");
   assert.equal(result.metrics.enrolledReadyRecords, 1);
   assert.equal(result.metrics.currentFamilyBalanceTotalCents, 12_550);
+  assert.equal(result.metrics.renderedContractBillingRows, 1);
+  assert.equal(result.metrics.renderedClassroomScheduleRows, 1);
   assert.equal(result.gates["Roster and relationships"].status, "review_required");
-  assert.equal(result.gates["Weekly tuition"].status, "blocked");
+  assert.equal(result.gates["Weekly tuition"].status, "review_required");
   assert.equal(result.gates["Child information"].status, "blocked");
   assert.ok(fs.existsSync(path.join(output, "01-roster-reviewed-import.csv")));
   assert.ok(fs.existsSync(path.join(output, "10-derived-primary-payer-source.csv")));
   assert.ok(fs.existsSync(path.join(output, "13-active-portal-safe-import.csv")));
   assert.ok(fs.existsSync(path.join(output, "14-active-portal-safe-balance-review.csv")));
+  const renderedRates = parseCsvBuffer(fs.readFileSync(path.join(output, "15-rendered-contract-billing-review.csv")), "rendered rates").rows;
+  assert.equal(renderedRates[0]["source amount cents"], "15000");
+  assert.equal(renderedRates[0].disposition, "review_required");
+  const renderedSchedules = parseCsvBuffer(fs.readFileSync(path.join(output, "16-rendered-classroom-schedule-review.csv")), "rendered schedules").rows;
+  assert.equal(renderedSchedules[0]["source classroom"], "Infants");
+  assert.equal(renderedSchedules[0]["confirmed child id"], "");
 });
 
 test("location workflow rejects duplicate account rows before deriving payer ownership", async () => {

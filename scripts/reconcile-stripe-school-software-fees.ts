@@ -106,6 +106,75 @@ function transferEvidence(item: JsonRecord) {
   };
 }
 
+function subscriptionIdFromInvoice(item: JsonRecord) {
+  const parent = record(item.parent);
+  const subscriptionDetails = record(parent.subscription_details);
+  return clean(subscriptionDetails.subscription) || clean(item.subscription) || null;
+}
+
+function subscriptionMetadataFromInvoice(item: JsonRecord) {
+  const parent = record(item.parent);
+  const subscriptionDetails = record(parent.subscription_details);
+  return record(subscriptionDetails.metadata);
+}
+
+function subscriptionInvoiceEvidence(item: JsonRecord) {
+  const metadata = subscriptionMetadataFromInvoice(item);
+  const payments = array(record(item.payments).data);
+  return {
+    kind: "subscription_invoice",
+    id: clean(item.id),
+    status: clean(item.status),
+    amountCents: integer(item.amount_paid),
+    feePeriod: clean(metadata.feePeriod) || clean(metadata.softwareFeePeriod) || null,
+    referenceDate: clean(metadata.referenceDate) || clean(metadata.softwareFeeReferenceDate) || null,
+    centerId: clean(metadata.centerId) || null,
+    accountId: clean(metadata.connectedAccountId) || clean(metadata.accountId) || null,
+    chargeId: payments.map((payment) => {
+      const details = record(payment.payment);
+      return clean(details.payment_intent) || clean(details.charge) || clean(details.payment_record);
+    }).filter(Boolean).join(",") || null,
+    subscriptionId: subscriptionIdFromInvoice(item),
+    created: integer(item.created),
+    currency: clean(item.currency).toLowerCase(),
+  };
+}
+
+function subscriptionConfiguration(item: JsonRecord) {
+  const items = array(record(item.items).data);
+  const normalized = items.map((entry) => {
+    const price = record(entry.price);
+    const recurring = record(price.recurring);
+    const quantity = Math.max(1, integer(entry.quantity) || 1);
+    const unitAmountCents = integer(price.unit_amount);
+    const exactMonthlyLicensedPrice =
+      clean(price.currency).toLowerCase() === "usd" &&
+      clean(price.billing_scheme || "per_unit") === "per_unit" &&
+      clean(recurring.interval) === "month" &&
+      integer(recurring.interval_count || 1) === 1 &&
+      clean(recurring.usage_type || "licensed") === "licensed" &&
+      unitAmountCents >= 0;
+    return {
+      priceId: clean(price.id) || null,
+      quantity,
+      unitAmountCents,
+      recurringInterval: clean(recurring.interval) || null,
+      recurringIntervalCount: integer(recurring.interval_count || 1),
+      usageType: clean(recurring.usage_type || "licensed"),
+      currency: clean(price.currency).toLowerCase() || null,
+      exactMonthlyLicensedPrice,
+    };
+  });
+  return {
+    items: normalized,
+    effectiveMonthlyAmountCents: normalized.reduce(
+      (sum, entry) => sum + (entry.exactMonthlyLicensedPrice ? entry.unitAmountCents * entry.quantity : 0),
+      0,
+    ),
+    exactMonthlyConfiguration: normalized.length > 0 && normalized.every((entry) => entry.exactMonthlyLicensedPrice),
+  };
+}
+
 async function mapWithConcurrency<T, R>(items: T[], limit: number, work: (item: T) => Promise<R>) {
   const output = new Array<R>(items.length);
   let cursor = 0;
@@ -127,7 +196,7 @@ async function main() {
   if (!/^(sk|rk)_live_/.test(apiKey)) throw new Error("A live Stripe secret or restricted key is required.");
   if (process.argv.includes("--apply")) throw new Error("This reconciliation build is preview-only until its exact table is reviewed.");
 
-  const [centers, paymentIntents, transfers, subscriptions] = await Promise.all([
+  const [centers, paymentIntents, transfers, subscriptions, invoices] = await Promise.all([
     prisma.center.findMany({
       where: {
         status: { notIn: ["closed", "archived", "inactive"] },
@@ -156,6 +225,7 @@ async function main() {
     listAll(apiKey, `/v1/payment_intents?limit=100&created[gte]=${CREATED_SINCE}`),
     listAll(apiKey, `/v1/transfers?limit=100&created[gte]=${CREATED_SINCE}`),
     listAll(apiKey, "/v1/subscriptions?limit=100&status=all"),
+    listAll(apiKey, `/v1/invoices?limit=100&created[gte]=${CREATED_SINCE}&expand[]=data.payments`),
   ]);
 
   const accountUsage = new Map<string, string[]>();
@@ -172,6 +242,12 @@ async function main() {
     .filter((item) => ["school_software_fee", "school_software_fee_catchup"].includes(clean(record(item.metadata).purpose)))
     .map(transferEvidence);
   const softwareSubscriptions = subscriptions.filter((item) => clean(record(item.metadata).paymentScope) === "school_software_fee");
+  const softwareSubscriptionIds = new Set(softwareSubscriptions.map((item) => clean(item.id)).filter(Boolean));
+  const softwareInvoices = invoices.filter((item) => {
+    const subscriptionId = subscriptionIdFromInvoice(item);
+    const metadata = subscriptionMetadataFromInvoice(item);
+    return (subscriptionId && softwareSubscriptionIds.has(subscriptionId)) || clean(metadata.paymentScope) === "school_software_fee";
+  }).map(subscriptionInvoiceEvidence);
 
   const rows = await mapWithConcurrency(centers, 8, async (center) => {
     const policy = getSchoolSoftwareFeePolicyForCenter(center);
@@ -180,15 +256,25 @@ async function main() {
     const idempotencyKey = accountId
       ? `school-software-fee:${JULY_REFERENCE_DATE}:${center.id}:${accountId}`
       : null;
-    const evidence = [
+    const directEvidence = [
       ...softwarePayments.filter((item) => item.centerId === center.id || (accountId && item.accountId === accountId)),
       ...softwareTransfers.filter((item) => item.centerId === center.id || (accountId && item.accountId === accountId)),
     ];
     const storedSubscriptionId = clean(fields.stripeSoftwareSubscriptionId);
-    const stripeSubscriptions = softwareSubscriptions.filter((item) => {
+    const matchingSubscriptionObjects = softwareSubscriptions.filter((item) => {
       const metadata = record(item.metadata);
       return clean(item.id) === storedSubscriptionId || clean(metadata.centerId) === center.id;
-    }).map((item) => ({ id: clean(item.id), status: clean(item.status), latestInvoiceId: clean(item.latest_invoice) || null }));
+    });
+    const stripeSubscriptions = matchingSubscriptionObjects.map((item) => ({
+      id: clean(item.id),
+      status: clean(item.status),
+      latestInvoiceId: clean(item.latest_invoice) || null,
+      ...subscriptionConfiguration(item),
+    }));
+    const subscriptionInvoices = softwareInvoices.filter((item) =>
+      stripeSubscriptions.some((subscription) => subscription.id === item.subscriptionId),
+    );
+    const evidence = [...directEvidence, ...subscriptionInvoices];
 
     if (!accountId) {
       return {
@@ -238,17 +324,31 @@ async function main() {
         ["charge", "payment"].includes(clean(item.type)) && integer(item.net) > 0,
       );
       const eligibleProceedsSinceJulyCents = eligibleProceeds.reduce((sum, item) => sum + integer(item.net), 0);
+      const julySubscriptionEvidence = subscriptionInvoices.filter((item) => {
+        const created = item.created ? new Date(item.created * 1000) : null;
+        const createdInJuly = created !== null && created.getUTCFullYear() === 2026 && created.getUTCMonth() === 6;
+        return item.status === "paid" &&
+          item.currency === "usd" &&
+          item.amountCents === policy.unitAmountCents &&
+          (item.feePeriod === JULY_PERIOD || item.referenceDate === JULY_REFERENCE_DATE || createdInJuly);
+      });
       const julyPaid = evidence.some((item) =>
         item.amountCents === policy.unitAmountCents &&
         (item.feePeriod === JULY_PERIOD || item.referenceDate === JULY_REFERENCE_DATE) &&
         ["succeeded", "paid"].includes(item.status),
-      );
-      const subscriptionActive = stripeSubscriptions.some((item) => ["active", "trialing"].includes(item.status));
+      ) || julySubscriptionEvidence.length > 0;
+      const activeSubscriptions = stripeSubscriptions.filter((item) => ["active", "trialing"].includes(item.status));
+      const subscriptionConfigured = activeSubscriptions.length === 1 &&
+        activeSubscriptions[0].exactMonthlyConfiguration &&
+        activeSubscriptions[0].effectiveMonthlyAmountCents === policy.unitAmountCents;
+      const subscriptionConfigurationAmbiguous = activeSubscriptions.length > 0 && !subscriptionConfigured;
       const accountExact = clean(account.id) === accountId;
       const cardPaymentsActive = clean(record(account.capabilities).card_payments) === "active";
       const status = !accountExact || !cardPaymentsActive
         ? "ambiguous"
-        : julyPaid && subscriptionActive
+        : subscriptionConfigurationAmbiguous
+          ? "ambiguous"
+        : julyPaid && subscriptionConfigured
           ? "paid"
           : availableBalanceCents < policy.unitAmountCents
             ? "deferred"
@@ -256,7 +356,9 @@ async function main() {
       const proposedAction = status === "paid"
         ? "none"
         : status === "ambiguous"
-          ? "stop_account_not_ready"
+          ? !accountExact || !cardPaymentsActive
+            ? "stop_account_not_ready"
+            : "stop_subscription_configuration_mismatch"
           : status === "deferred"
             ? "carry_forward_until_available_balance"
             : julyPaid
@@ -278,8 +380,10 @@ async function main() {
         proposedAction,
         idempotencyKey,
         subscriptions: stripeSubscriptions,
+        subscriptionInvoiceEvidence: subscriptionInvoices,
         accountReady: accountExact && cardPaymentsActive,
         julyPaid,
+        subscriptionConfigured,
         augustPeriod: AUGUST_PERIOD,
       };
     } catch (error) {

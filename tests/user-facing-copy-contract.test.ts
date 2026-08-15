@@ -77,8 +77,10 @@ test("authored import and setup UI copy omits the legacy vendor name", () => {
   assert.match(instructionGraphics, /previous-system cutover, source-file archival, and wider rollout are separate decisions/);
   assert.match(instructionGraphics, /Archive source files separately/);
   const importPanel = source("src/components/procare-import-panel.tsx");
-  assert.match(importPanel, /supports only the previous-system export format built from Enrollment, ParentInfo, Relationships, and ChildInfo reports/);
-  assert.match(importPanel, /Do not upload an export from another provider/);
+  assert.match(importPanel, /BEE Suite School Migration Review/);
+  assert.match(importPanel, /families, children, guardians, classrooms, schedules, balances, tuition evidence, staff, and operating history intact/);
+  assert.match(importPanel, /Every family relationship and balance must remain tied to stable source evidence/);
+  assert.match(importPanel, /Exports from another provider require their own reviewed source adapter/);
 });
 
 test("stored values, lookup keys, and import provenance remain exact", () => {

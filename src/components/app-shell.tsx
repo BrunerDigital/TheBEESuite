@@ -78,6 +78,7 @@ import {
 import type { WorkspaceScopeContext } from "@/lib/workspace-scope";
 
 type ShellUser = {
+  id?: string;
   name: string;
   email: string;
   role: string;
@@ -449,6 +450,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
   const [unread, setUnread] = useState(0);
   const mountedRef = useRef(true);
+  const notificationAccessRef = useRef(true);
   const canViewEnrollment = canAccessShellModule(currentUser, "crm-leads");
   const canViewTasks = canViewEnrollment;
   const canViewFteReports = canAccessShellModule(currentUser, "fte-reports");
@@ -462,23 +464,45 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
     }
   }, []);
 
+  const clearCachedNotifications = useCallback(() => {
+    notificationAccessRef.current = false;
+    if (!mountedRef.current) return;
+    setSummary(null);
+    setUnread(0);
+    syncAppBadge(0);
+  }, [syncAppBadge]);
+
   const loadUnreadCount = useCallback(() => {
+    if (!notificationAccessRef.current) return;
     fetch("/api/notifications/summary?mode=count", { cache: "no-store" })
-      .then((response) => response.json())
+      .then((response) => {
+        if (response.status === 401 || response.status === 403) {
+          clearCachedNotifications();
+          return null;
+        }
+        return response.ok ? response.json() : null;
+      })
       .then((json) => {
-        if (mountedRef.current && json?.ok && typeof json.unread === "number") {
+        if (notificationAccessRef.current && mountedRef.current && json?.ok && typeof json.unread === "number") {
           setUnread(json.unread);
           syncAppBadge(json.unread);
         }
       })
       .catch(() => undefined);
-  }, [syncAppBadge]);
+  }, [clearCachedNotifications, syncAppBadge]);
 
   const loadSummary = useCallback(() => {
+    if (!notificationAccessRef.current) return;
     fetch("/api/notifications/summary", { cache: "no-store" })
-      .then((response) => response.json())
+      .then((response) => {
+        if (response.status === 401 || response.status === 403) {
+          clearCachedNotifications();
+          return null;
+        }
+        return response.ok ? response.json() : null;
+      })
       .then((json) => {
-        if (mountedRef.current && json?.ok) {
+        if (notificationAccessRef.current && mountedRef.current && json?.ok) {
           const nextSummary = json as NotificationSummary;
           setSummary(nextSummary);
           setUnread(nextSummary.stats.unread);
@@ -486,7 +510,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
         }
       })
       .catch(() => undefined);
-  }, [syncAppBadge]);
+  }, [clearCachedNotifications, syncAppBadge]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1388,7 +1412,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                   <AccountsReceivableSheet executive={isExecutiveAccountBalanceView(currentUser)} />
                 </div>
               ) : null}
-              {showNotificationTools ? <NotificationDropdown currentUser={currentUser} /> : null}
+              {showNotificationTools ? <NotificationDropdown key={`${currentUser?.id ?? currentUser?.email}:${currentUser?.role}`} currentUser={currentUser} /> : null}
               <Button variant="outline" size="icon" aria-label="Toggle theme" onClick={toggleTheme}>
                 <Moon className="dark:hidden" />
                 <Sun className="hidden dark:block" />

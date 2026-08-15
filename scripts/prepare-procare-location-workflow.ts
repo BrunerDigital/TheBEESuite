@@ -14,6 +14,7 @@ type SourceFile = {
   sha256: string;
   headers: string[];
   rows: CsvRow[];
+  renderedRows: string[][];
   kinds: string[];
 };
 
@@ -62,6 +63,17 @@ function checked(value: string) {
   return /^(checked|yes|true|1|x)$/i.test(value.trim());
 }
 
+function decodeCsvBuffer(buffer: Buffer) {
+  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+    return buffer.subarray(2).toString("utf16le");
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    return new TextDecoder("windows-1252").decode(buffer);
+  }
+}
+
 function detectDelimiter(text: string) {
   const sample = text.split(/\r?\n/).find((line) => line.trim()) ?? "";
   const candidates = [",", "\t", ";", "|"] as const;
@@ -80,8 +92,8 @@ function detectDelimiter(text: string) {
   return ranked[0].delimiter;
 }
 
-export function parseCsvBuffer(buffer: Buffer, reportName: string) {
-  const text = buffer.toString("utf8").replace(/^\ufeff/, "");
+export function parseCsvValues(buffer: Buffer, reportName: string) {
+  const text = decodeCsvBuffer(buffer).replace(/^\ufeff/, "");
   const delimiter = detectDelimiter(text);
   const values: string[][] = [];
   let value = "";
@@ -108,6 +120,11 @@ export function parseCsvBuffer(buffer: Buffer, reportName: string) {
   if (quoted) throw new Error(`${reportName} contains an unterminated quoted value.`);
   row.push(value.trim());
   if (row.some(Boolean)) values.push(row);
+  return values;
+}
+
+export function parseCsvBuffer(buffer: Buffer, reportName: string) {
+  const values = parseCsvValues(buffer, reportName);
   const headers = (values[0] ?? []).map((header) => header.replace(/^\ufeff/, "").trim());
   if (!headers.length) throw new Error(`${reportName} has no header row.`);
   const normalizedHeaders = headers.map(normalize);
@@ -158,14 +175,43 @@ function classify(headers: string[]) {
   return kinds;
 }
 
+function renderedReportKind(values: string[][]) {
+  const first = values[0] ?? [];
+  if (clean(first[0]) === "Child Contract Billing Summary" && /FA_ContractBillingSummary/i.test(clean(first.at(-1)))) {
+    return "rendered_contract_billing";
+  }
+  if (clean(first[1]) === "Classroom Schedule Summary" && /FD_ClassroomScheduleSummary/i.test(clean(first.at(-1)))) {
+    return "rendered_classroom_schedule";
+  }
+  return "";
+}
+
+function sourceFilenameMatchesLocation(filename: string, location: string) {
+  const name = filename.toLocaleLowerCase("en-US");
+  const normalizedLocation = location.trim().toLocaleLowerCase("en-US");
+  if (name.startsWith(`${normalizedLocation} - `)) return true;
+  const suffix = name.slice(normalizedLocation.length + 1);
+  return name.startsWith(`${normalizedLocation} `) && (
+    suffix.startsWith("child contract billing summary") ||
+    suffix.startsWith("classroom schedule summary")
+  );
+}
+
+function evidenceKey(value: string) {
+  return clean(value).normalize("NFKC").toLocaleLowerCase("en-US").replace(/\s+/g, " ");
+}
+
 function loadSources(sourceDirectory: string, location: string) {
-  const prefix = `${location} - `.toLowerCase();
   return fs.readdirSync(sourceDirectory, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.toLowerCase().startsWith(prefix) && /\.(csv|tsv|txt)$/i.test(entry.name))
+    .filter((entry) => entry.isFile()
+      && sourceFilenameMatchesLocation(entry.name, location)
+      && /\.(csv|tsv|txt)$/i.test(entry.name))
     .map((entry): SourceFile => {
       const filePath = path.join(sourceDirectory, entry.name);
       const buffer = fs.readFileSync(filePath);
-      const parsed = parseCsvBuffer(buffer, entry.name);
+      const renderedRows = parseCsvValues(buffer, entry.name);
+      const renderedKind = renderedReportKind(renderedRows);
+      const parsed = renderedKind ? { headers: [] as string[], rows: [] as CsvRow[] } : parseCsvBuffer(buffer, entry.name);
       return {
         filename: entry.name,
         path: filePath,
@@ -173,10 +219,136 @@ function loadSources(sourceDirectory: string, location: string) {
         sha256: sha256(buffer),
         headers: parsed.headers,
         rows: parsed.rows,
-        kinds: classify(parsed.headers),
+        renderedRows,
+        kinds: renderedKind ? [renderedKind] : classify(parsed.headers),
       };
     })
     .sort((left, right) => left.filename.localeCompare(right.filename));
+}
+
+function parseMoneyCell(value: string) {
+  const source = clean(value).replaceAll(",", "").replaceAll("$", "");
+  const normalized = /^\(.*\)$/.test(source) ? `-${source.slice(1, -1)}` : source;
+  if (!/^-?\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+  return Math.round(Number(normalized) * 100);
+}
+
+function renderedContractBillingReview(source: SourceFile | null) {
+  if (!source) return [] as CsvRow[];
+  const uniqueComponents = new Map<string, {
+    childName: string;
+    classroom: string;
+    payerLabel: string;
+    cadence: string;
+    description: string;
+    note: string;
+    amountCents: number;
+  }>();
+  for (const row of source.renderedRows) {
+    if (clean(row[0]) !== "Child Contract Billing Summary") continue;
+    const childName = clean(row[8]);
+    const classroom = clean(row[10]);
+    const payerLabel = clean(row[13]);
+    const cadence = clean(row[14]);
+    const description = clean(row[15]);
+    const note = clean(row[16]);
+    const amountCents = parseMoneyCell(row[17] ?? "");
+    if (!childName || !classroom || !cadence || !description || amountCents === null) continue;
+    const key = [childName, classroom, payerLabel, cadence, description, note].map(evidenceKey).concat(String(amountCents)).join("\u0000");
+    if (!uniqueComponents.has(key)) uniqueComponents.set(key, { childName, classroom, payerLabel, cadence, description, note, amountCents });
+  }
+
+  const grouped = new Map<string, {
+    childName: string;
+    classroom: string;
+    payerLabel: string;
+    cadence: string;
+    descriptions: Set<string>;
+    notes: Set<string>;
+    componentCount: number;
+    amountCents: number;
+  }>();
+  for (const component of uniqueComponents.values()) {
+    const key = [component.childName, component.classroom, component.payerLabel, component.cadence].map(evidenceKey).join("\u0000");
+    const existing = grouped.get(key) ?? {
+      childName: component.childName,
+      classroom: component.classroom,
+      payerLabel: component.payerLabel,
+      cadence: component.cadence,
+      descriptions: new Set<string>(),
+      notes: new Set<string>(),
+      componentCount: 0,
+      amountCents: 0,
+    };
+    existing.descriptions.add(component.description);
+    if (component.note) existing.notes.add(component.note);
+    existing.componentCount += 1;
+    existing.amountCents += component.amountCents;
+    grouped.set(key, existing);
+  }
+
+  return [...grouped.values()].map((item): CsvRow => {
+    const descriptions = [...item.descriptions].sort((left, right) => left.localeCompare(right));
+    const notes = [...item.notes].sort((left, right) => left.localeCompare(right));
+    return {
+      "source child name": item.childName,
+      "source classroom": item.classroom,
+      "source payer label": item.payerLabel,
+      "source cadence": item.cadence,
+      "source charge descriptions": descriptions.join(" | "),
+      "source charge notes": notes.join(" | "),
+      "source component count": String(item.componentCount),
+      "source amount cents": String(item.amountCents),
+      "confirmed child id": "",
+      "confirmed account id": "",
+      "confirmed tuition cents": /^weekly$/i.test(item.cadence) && item.amountCents > 0 ? String(item.amountCents) : "",
+      "confirmed cadence": item.cadence,
+      "effective date": "",
+      disposition: "review_required",
+      "review note": "Rendered report has no stable Child or Account ID. Use the payer label only as supporting evidence; match to one reviewed child and account or hold.",
+    };
+  }).sort((left, right) => (
+    left["source child name"].localeCompare(right["source child name"])
+    || left["source payer label"].localeCompare(right["source payer label"])
+  ));
+}
+
+function renderedClassroomScheduleReview(source: SourceFile | null) {
+  if (!source) return [] as CsvRow[];
+  const unique = new Map<string, CsvRow>();
+  for (const row of source.renderedRows) {
+    if (clean(row[1]) !== "Classroom Schedule Summary") continue;
+    const classroom = clean(row[5]);
+    const childName = clean(row[11]);
+    const dates = row.slice(6, 11).map(clean);
+    const schedules = row.slice(12, 17).map(clean);
+    if (!classroom || !childName) continue;
+    const key = [classroom, childName, ...schedules].map(evidenceKey).join("\u0000");
+    if (!unique.has(key)) unique.set(key, {
+      "source child name": childName,
+      "source classroom": classroom,
+      monday: schedules[0] ?? "",
+      tuesday: schedules[1] ?? "",
+      wednesday: schedules[2] ?? "",
+      thursday: schedules[3] ?? "",
+      friday: schedules[4] ?? "",
+      "source week": dates.filter(Boolean).join(" | "),
+      "confirmed child id": "",
+      "confirmed classroom id": "",
+      "confirmed classroom name": classroom,
+      disposition: "review_required",
+      "review note": "Rendered report has no stable Child or Classroom ID. Confirm both against reviewed source IDs or hold.",
+    });
+  }
+  return [...unique.values()].sort((left, right) => (
+    left["source classroom"].localeCompare(right["source classroom"])
+    || left["source child name"].localeCompare(right["source child name"])
+  ));
+}
+
+function renderedChildNameKey(value: string) {
+  const parts = clean(value).split(",").map((part) => part.trim()).filter(Boolean);
+  return evidenceKey(parts.length === 2 ? `${parts[1]} ${parts[0]}` : value);
 }
 
 function singleSource(sources: SourceFile[], kind: string, required = true) {
@@ -529,13 +701,16 @@ function canonicalizeExactGuardianAliases(record: CsvRow) {
 }
 
 function sourceSummary(sources: SourceFile[]) {
-  return sources.map((source) => ({
-    filename: source.filename,
-    sha256: source.sha256,
-    rows: source.rows.length,
-    columns: source.headers.length,
-    classifiedAs: source.kinds.length ? source.kinds : ["ignored"],
-  }));
+  return sources.map((source) => {
+    const rendered = source.kinds.some((kind) => kind.startsWith("rendered_"));
+    return {
+      filename: source.filename,
+      sha256: source.sha256,
+      rows: rendered ? source.renderedRows.length : source.rows.length,
+      columns: rendered ? Math.max(0, ...source.renderedRows.map((row) => row.length)) : source.headers.length,
+      classifiedAs: source.kinds.length ? source.kinds : ["ignored"],
+    };
+  });
 }
 
 function markdownReport(input: {
@@ -603,6 +778,10 @@ export async function prepareProcareLocationWorkflow(input: {
   const childInfo = singleSource(sources, "childinfo", false);
   const tuition = singleSource(sources, "tuition", false);
   const classroomSettings = singleSource(sources, "classroom_settings", false);
+  const renderedContractBilling = singleSource(sources, "rendered_contract_billing", false);
+  const renderedClassroomSchedule = singleSource(sources, "rendered_classroom_schedule", false);
+  const renderedBillingReview = renderedContractBillingReview(renderedContractBilling);
+  const renderedScheduleReview = renderedClassroomScheduleReview(renderedClassroomSchedule);
   const canonicalParentInfo = singleSource(sources, "parentinfo", false);
   const employeeSources = sources.filter((source) => source.kinds.includes("employee"));
   const staffSource = employeeSources.sort((left, right) => {
@@ -969,6 +1148,22 @@ export async function prepareProcareLocationWorkflow(input: {
   const activeAccountsMissingBalance = [...enrolledChildrenByAccount.keys()].filter((accountId) => !balance!.rows.some((row) => field(row, "Account ID") === accountId)).length;
   const weeklyStatementCandidateChildren = weeklyTuitionReview.filter((row) => row.status === "candidate_from_recurring_statement_history_requires_approval").length;
   const weeklyStatementEvidenceRows = (ledger?.rows ?? []).filter(isTuitionChargeLedgerRow).length;
+  const enrolledRenderedNameCounts = new Map<string, number>();
+  for (const record of enrolledRecords) {
+    const key = renderedChildNameKey(record["child name"] ?? "");
+    if (key) enrolledRenderedNameCounts.set(key, (enrolledRenderedNameCounts.get(key) ?? 0) + 1);
+  }
+  const renderedBillingChildNames = new Set(renderedBillingReview
+    .filter((row) => Number(row["confirmed tuition cents"]) > 0 && /^weekly$/i.test(row["confirmed cadence"] ?? ""))
+    .map((row) => renderedChildNameKey(row["source child name"] ?? ""))
+    .filter(Boolean));
+  const renderedBillingCoveredChildren = enrolledRecords.filter((record) => {
+    const key = renderedChildNameKey(record["child name"] ?? "");
+    return Boolean(key) && enrolledRenderedNameCounts.get(key) === 1 && renderedBillingChildNames.has(key);
+  }).length;
+  const renderedBillingCoverageComplete = Boolean(renderedContractBilling)
+    && renderedBillingReview.length > 0
+    && renderedBillingCoveredChildren === enrolledRecords.length;
   const parentPortalBlockedFamilies = parentPortalBillingReview.filter((row) => row.status === "blocked").length;
   const parentPortalReadyFamilies = parentPortalBillingReview.length - parentPortalBlockedFamilies;
   const activePortalSafeAccountIds = new Set(parentPortalBillingReview
@@ -1021,7 +1216,9 @@ export async function prepareProcareLocationWorkflow(input: {
         `${activeUnknownClassrooms} active classroom ID/name combinations are missing or Unknown.`,
         classroomSettings
           ? `Detected ${classroomSettings.filename}; capacities and ratios still require director review before classroom setup.`
-          : "Required source: a classroom/work-area setup report or director-confirmed table with Classroom ID, name, licensed capacity, age group, and ratio rule.",
+          : renderedClassroomSchedule
+            ? `Detected ${renderedClassroomSchedule.filename} with ${renderedScheduleReview.length} editable child schedule rows. It proves classroom names and schedules, but not stable Classroom IDs, licensed capacity, age group, or ratio rule.`
+            : "Required source: a classroom/work-area setup report or director-confirmed table with Classroom ID, name, licensed capacity, age group, and ratio rule.",
       ],
     },
     "Current-family balances": {
@@ -1035,14 +1232,18 @@ export async function prepareProcareLocationWorkflow(input: {
       ],
     },
     "Weekly tuition": {
-      status: tuition || weeklyStatementCandidateChildren === enrolledRecords.length ? "review_required" : "blocked",
+      status: tuition || renderedBillingCoverageComplete || weeklyStatementCandidateChildren === enrolledRecords.length ? "review_required" : "blocked",
       summary: tuition
         ? `Detected ${tuition.filename}; rates still require child-level review and an explicit effective week.`
-        : `${weeklyStatementCandidateChildren}/${enrolledRecords.length} enrolled children have a defensible recurring weekly statement-rate candidate; ${ledger?.rows.length ?? 0} ledger rows were supplied.`,
+        : renderedContractBilling
+          ? `Detected ${renderedContractBilling.filename} with ${renderedBillingReview.length} editable charge rows covering ${renderedBillingCoveredChildren}/${enrolledRecords.length} enrolled children by unique reviewed name evidence; stable Child IDs and effective dates still require confirmation.`
+          : `${weeklyStatementCandidateChildren}/${enrolledRecords.length} enrolled children have a defensible recurring weekly statement-rate candidate; ${ledger?.rows.length ?? 0} ledger rows were supplied.`,
       details: [
         tuition
           ? "The detected tuition source must provide Child ID, amount, cadence, and effective-date evidence before a rate manifest can be approved."
-          : "A statement-derived candidate requires the same positive tuition amount at least three times at 5-9 day intervals, and can be assigned only when the account has exactly one enrolled child. Payments, credits, late fees, payroll rates, and point-in-time balances are excluded.",
+          : renderedContractBilling
+            ? `The rendered contract report preserves child name, classroom, charge description, amount, and cadence, but contains no stable Child ID. Reviewers must bind each accepted row to one source-backed Child ID or hold it; ${enrolledRecords.length - renderedBillingCoveredChildren} enrolled child row(s) still lack unique rendered name coverage.`
+            : "A statement-derived candidate requires the same positive tuition amount at least three times at 5-9 day intervals, and can be assigned only when the account has exactly one enrolled child. Payments, credits, late fees, payroll rates, and point-in-time balances are excluded.",
         `${weeklyStatementEvidenceRows} supplied ledger rows qualify as positive tuition charges; ${weeklyStatementCandidateChildren} child-level weekly candidates were produced.`,
         "If statement evidence is incomplete or account-level amounts cover multiple children, provide a ProCare child contract/billing schedule export containing Child ID, charge description, amount, frequency/cadence, and effective dates.",
         "Employee ST Rate and OT Rate fields are payroll rates and are never treated as child tuition.",
@@ -1084,6 +1285,9 @@ export async function prepareProcareLocationWorkflow(input: {
     derivedMultiAccountPeople,
     sourceChildInfoPresent: Boolean(childInfo),
     sourceWeeklyTuitionPresent: Boolean(tuition),
+    renderedContractBillingRows: renderedBillingReview.length,
+    renderedBillingCoveredChildren,
+    renderedClassroomScheduleRows: renderedScheduleReview.length,
     sourceLedgerPresent: Boolean(ledger),
     sourceLedgerRows: ledger?.rows.length ?? 0,
     weeklyStatementEvidenceRows,
@@ -1142,9 +1346,11 @@ export async function prepareProcareLocationWorkflow(input: {
   ]);
   fs.writeFileSync(path.join(outputDirectory, "13-active-portal-safe-import.csv"), activePortalSafeCsv, "utf8");
   writeCsv(path.join(outputDirectory, "14-active-portal-safe-balance-review.csv"), activePortalSafeBalanceRows);
+  writeCsv(path.join(outputDirectory, "15-rendered-contract-billing-review.csv"), renderedBillingReview);
+  writeCsv(path.join(outputDirectory, "16-rendered-classroom-schedule-review.csv"), renderedScheduleReview);
 
   const manifest = {
-    version: 2,
+    version: 3,
     location: input.location,
     generatedAt,
     preparationOnly: true,
@@ -1160,6 +1366,8 @@ export async function prepareProcareLocationWorkflow(input: {
       balance: balance!.filename,
       ledger: ledger?.filename ?? null,
       tuition: tuition?.filename ?? null,
+      renderedContractBilling: renderedContractBilling?.filename ?? null,
+      renderedClassroomSchedule: renderedClassroomSchedule?.filename ?? null,
       classroomSettings: classroomSettings?.filename ?? null,
       staff: staffSource?.filename ?? null,
     },

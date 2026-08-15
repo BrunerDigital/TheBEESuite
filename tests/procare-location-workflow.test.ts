@@ -30,18 +30,102 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
     "Employee ID,Is Hidden,Person ID,Full Name,First Name,Last Name,Primary Work Area,Work Area ID,Employment Status,Email,Phone 1",
     "employee-1,Unchecked,staff-person-1,Teacher One,Teacher,One,Infants,room-1,Currently Employed,teacher@example.com,Cell 555-555-0102",
   ].join("\n"));
+  write(path.join(source, "Sample - Child Contract Billing Summary.csv"), [
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child\'s Name and Age","Primary Classroom and Billing Cycle","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Infant Full Time",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","150.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child\'s Name and Age","Primary Classroom and Billing Cycle","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Infant Full Time",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","150.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+  ].join("\n"));
+  write(path.join(source, "Sample - Empty Optional.csv"), "Unused Column,Other Column");
+  write(path.join(source, "Sample East - Child Contract Billing Summary.csv"), '"Child Contract Billing Summary","School address","Other School","As of 8/9/2026","other@example.com",,"Child","Age","Foreign, Child","4 Yr","Infants","Standard Billing",,"FOREIGN Primary, Parent","Weekly","Base Tuition",,999.00,999.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","999.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"');
+  write(path.join(source, "Sample - Classroom Schedule Summary Weekly.csv"), [
+    '"Sample School","Classroom Schedule Summary","School address","school@example.com",,"Infants","Mon 8/3/2026","Tue 8/4/2026","Wed 8/5/2026","Thu 8/6/2026","Fri 8/7/2026","One, Child","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM",,,,,,,,,,,"Grouped","Page 1","bje: Schedule Summary - Weekly, FD_ClassroomScheduleSummary02.rpt"',
+    '"Sample School","Classroom Schedule Summary","School address","school@example.com",,"Infants","Mon 8/3/2026","Tue 8/4/2026","Wed 8/5/2026","Thu 8/6/2026","Fri 8/7/2026","One Child","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM",,,,,,,,,,,"Grouped","Page 1","bje: Schedule Summary - Weekly, FD_ClassroomScheduleSummary02.rpt"',
+  ].join("\n"));
 
   const result = await prepareProcareLocationWorkflow({ location: "Sample", sourceDirectory: source, outputDirectory: output });
   assert.equal(result.metrics.parentInfoMode, "derived_primary_payer");
   assert.equal(result.metrics.enrolledReadyRecords, 1);
   assert.equal(result.metrics.currentFamilyBalanceTotalCents, 12_550);
+  assert.equal(result.metrics.renderedContractBillingRows, 1);
+  assert.equal(result.metrics.renderedClassroomScheduleRows, 2);
   assert.equal(result.gates["Roster and relationships"].status, "review_required");
-  assert.equal(result.gates["Weekly tuition"].status, "blocked");
+  assert.equal(result.gates["Weekly tuition"].status, "review_required");
   assert.equal(result.gates["Child information"].status, "blocked");
   assert.ok(fs.existsSync(path.join(output, "01-roster-reviewed-import.csv")));
   assert.ok(fs.existsSync(path.join(output, "10-derived-primary-payer-source.csv")));
   assert.ok(fs.existsSync(path.join(output, "13-active-portal-safe-import.csv")));
   assert.ok(fs.existsSync(path.join(output, "14-active-portal-safe-balance-review.csv")));
+  const manifest = JSON.parse(fs.readFileSync(path.join(output, "manifest.json"), "utf8")) as { sourceFiles: Array<{ filename: string; rows: number }> };
+  assert.equal(manifest.sourceFiles.find((item) => item.filename === "Sample - Empty Optional.csv")?.rows, 0);
+  const renderedRates = parseCsvBuffer(fs.readFileSync(path.join(output, "15-rendered-contract-billing-review.csv")), "rendered rates").rows;
+  assert.equal(renderedRates[0]["source amount cents"], "15000");
+  assert.equal(renderedRates[0]["source payer label"], "ONE Primary, Parent One");
+  assert.equal(renderedRates[0]["confirmed tuition cents"], "15000");
+  assert.equal(renderedRates[0].disposition, "review_required");
+  const renderedSchedules = parseCsvBuffer(fs.readFileSync(path.join(output, "16-rendered-classroom-schedule-review.csv")), "rendered schedules").rows;
+  assert.equal(renderedSchedules[0]["source classroom"], "Infants");
+  assert.equal(renderedSchedules[0]["confirmed child id"], "");
+  assert.deepEqual(renderedSchedules.map((row) => row["source child name"]), ["One Child", "One, Child"]);
+});
+
+test("rendered billing evidence keeps payer boundaries and nets distinct weekly components", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "bee-procare-rendered-billing-"));
+  const source = path.join(root, "source");
+  const output = path.join(root, "output");
+  fs.mkdirSync(source);
+  write(path.join(source, "Sample - Enrollment.csv"), "Child ID,Person ID,Person Type,Full Name,Primary Classroom,Classroom ID,Enrollment Status,Status Start Date,Relationship 1 Id\nchild-1,child-person-1,Child,One Child,Infants,room-1,Enrolled,1/1/2026,payer-1");
+  write(path.join(source, "Sample - Relationships.csv"), "Child ID,Row ID,Person ID,Person Type,Full Name,Relationship Type,Lives With,Emergency,Authorized Pickup\nchild-1,row-1,payer-1,Relationship,Parent One,Mom,Checked,Checked,Checked");
+  write(path.join(source, "Sample - Account Balance Summary.csv"), "Account ID,Balance,Person ID,Full Name\naccount-1,0.00,payer-1,Parent One");
+  const renderedRows = [
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Base Tuition",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","125.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Discount","Sibling",-$12.50,-$12.50,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","125.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Discount","Staff",-$12.50,-$12.50,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","125.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"TWO Primary, Parent Two","Weekly","Base Tuition",,140.00,140.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","140.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","Punctuation, Child","4 Yr","Infants","Standard Billing",,"A-B Primary, Parent","Weekly","Base Tuition",,100.00,100.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","100.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","Punctuation, Child","4 Yr","Infants","Standard Billing",,"A B Primary, Parent","Weekly","Base Tuition",,110.00,110.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","110.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+  ].join("\r\n");
+  fs.writeFileSync(path.join(source, "Sample - Child Contract Billing Summary.csv"), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(renderedRows, "utf16le")]));
+
+  const result = await prepareProcareLocationWorkflow({ location: "Sample", sourceDirectory: source, outputDirectory: output });
+  assert.equal(result.metrics.renderedContractBillingRows, 4);
+  const rates = parseCsvBuffer(fs.readFileSync(path.join(output, "15-rendered-contract-billing-review.csv")), "rendered rates").rows;
+  assert.deepEqual(rates.map((row) => [row["source payer label"], row["source amount cents"], row["confirmed tuition cents"]]), [
+    ["ONE Primary, Parent One", "12500", "12500"],
+    ["TWO Primary, Parent Two", "14000", "14000"],
+    ["A B Primary, Parent", "11000", "11000"],
+    ["A-B Primary, Parent", "10000", "10000"],
+  ]);
+  assert.equal(rates[0]["source component count"], "3");
+  assert.equal(rates[0]["source charge notes"], "Sibling | Staff");
+});
+
+test("rendered tuition remains blocked until every enrolled child has unique coverage", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "bee-procare-rendered-coverage-"));
+  const source = path.join(root, "source");
+  const output = path.join(root, "output");
+  fs.mkdirSync(source);
+  write(path.join(source, "Sample - Enrollment.csv"), [
+    "Child ID,Person ID,Person Type,Full Name,First Name,Last Name,Primary Classroom,Classroom ID,Enrollment Status,Status Start Date,Relationship 1 Id",
+    "child-1,child-person-1,Child,Child One,Child,One,Infants,room-1,Enrolled,1/1/2026,payer-1",
+    "child-2,child-person-2,Child,Child Two,Child,Two,Infants,room-1,Enrolled,1/1/2026,payer-2",
+  ].join("\n"));
+  write(path.join(source, "Sample - Relationships.csv"), [
+    "Child ID,Row ID,Person ID,Person Type,Full Name,Relationship Type,Lives With,Emergency,Authorized Pickup",
+    "child-1,row-1,payer-1,Relationship,Parent One,Mom,Checked,Checked,Checked",
+    "child-2,row-2,payer-2,Relationship,Parent Two,Mom,Checked,Checked,Checked",
+  ].join("\n"));
+  write(path.join(source, "Sample - Account Balance Summary.csv"), [
+    "Account ID,Balance,Person ID,Full Name",
+    "account-1,0.00,payer-1,Parent One",
+    "account-2,0.00,payer-2,Parent Two",
+  ].join("\n"));
+  write(path.join(source, "Sample - Child Contract Billing Summary.csv"), [
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Base Tuition",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","150.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","Two, Child","4 Yr","Infants","Standard Billing",,"TWO Primary, Parent Two","Monthly","Base Tuition",,600.00,600.00,"Child Count:",1,"Billing Cycle","Cycle Total","Monthly","600.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+  ].join("\n"));
+
+  const result = await prepareProcareLocationWorkflow({ location: "Sample", sourceDirectory: source, outputDirectory: output });
+  assert.equal(result.metrics.renderedBillingCoveredChildren, 1);
+  assert.equal(result.gates["Weekly tuition"].status, "blocked");
 });
 
 test("location workflow rejects duplicate account rows before deriving payer ownership", async () => {

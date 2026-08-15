@@ -114,7 +114,10 @@ test("rendered tuition remains blocked until every enrolled child has unique cov
     "account-1,0.00,payer-1,Parent One",
     "account-2,0.00,payer-2,Parent Two",
   ].join("\n"));
-  write(path.join(source, "Sample - Child Contract Billing Summary.csv"), '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Base Tuition",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","150.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"');
+  write(path.join(source, "Sample - Child Contract Billing Summary.csv"), [
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Base Tuition",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","150.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+    '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child","Age","Two, Child","4 Yr","Infants","Standard Billing",,"TWO Primary, Parent Two","Monthly","Base Tuition",,600.00,600.00,"Child Count:",1,"Billing Cycle","Cycle Total","Monthly","600.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
+  ].join("\n"));
 
   const result = await prepareProcareLocationWorkflow({ location: "Sample", sourceDirectory: source, outputDirectory: output });
   assert.equal(result.metrics.renderedBillingCoveredChildren, 1);

@@ -1143,7 +1143,10 @@ export async function prepareProcareLocationWorkflow(input: {
     const key = renderedChildNameKey(record["child name"] ?? "");
     if (key) enrolledRenderedNameCounts.set(key, (enrolledRenderedNameCounts.get(key) ?? 0) + 1);
   }
-  const renderedBillingChildNames = new Set(renderedBillingReview.map((row) => renderedChildNameKey(row["source child name"] ?? "")).filter(Boolean));
+  const renderedBillingChildNames = new Set(renderedBillingReview
+    .filter((row) => Number(row["confirmed tuition cents"]) > 0 && /^weekly$/i.test(row["confirmed cadence"] ?? ""))
+    .map((row) => renderedChildNameKey(row["source child name"] ?? ""))
+    .filter(Boolean));
   const renderedBillingCoveredChildren = enrolledRecords.filter((record) => {
     const key = renderedChildNameKey(record["child name"] ?? "");
     return Boolean(key) && enrolledRenderedNameCounts.get(key) === 1 && renderedBillingChildNames.has(key);

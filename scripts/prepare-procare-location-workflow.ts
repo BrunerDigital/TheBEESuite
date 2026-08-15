@@ -701,13 +701,16 @@ function canonicalizeExactGuardianAliases(record: CsvRow) {
 }
 
 function sourceSummary(sources: SourceFile[]) {
-  return sources.map((source) => ({
-    filename: source.filename,
-    sha256: source.sha256,
-    rows: source.rows.length || source.renderedRows.length,
-    columns: source.headers.length || Math.max(0, ...source.renderedRows.map((row) => row.length)),
-    classifiedAs: source.kinds.length ? source.kinds : ["ignored"],
-  }));
+  return sources.map((source) => {
+    const rendered = source.kinds.some((kind) => kind.startsWith("rendered_"));
+    return {
+      filename: source.filename,
+      sha256: source.sha256,
+      rows: rendered ? source.renderedRows.length : source.rows.length,
+      columns: rendered ? Math.max(0, ...source.renderedRows.map((row) => row.length)) : source.headers.length,
+      classifiedAs: source.kinds.length ? source.kinds : ["ignored"],
+    };
+  });
 }
 
 function markdownReport(input: {

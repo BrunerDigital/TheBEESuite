@@ -34,6 +34,7 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
     '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child\'s Name and Age","Primary Classroom and Billing Cycle","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Infant Full Time",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","150.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
     '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child\'s Name and Age","Primary Classroom and Billing Cycle","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Infant Full Time",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","150.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
   ].join("\n"));
+  write(path.join(source, "Sample - Empty Optional.csv"), "Unused Column,Other Column");
   write(path.join(source, "Sample East - Child Contract Billing Summary.csv"), '"Child Contract Billing Summary","School address","Other School","As of 8/9/2026","other@example.com",,"Child","Age","Foreign, Child","4 Yr","Infants","Standard Billing",,"FOREIGN Primary, Parent","Weekly","Base Tuition",,999.00,999.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","999.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"');
   write(path.join(source, "Sample - Classroom Schedule Summary Weekly.csv"), [
     '"Sample School","Classroom Schedule Summary","School address","school@example.com",,"Infants","Mon 8/3/2026","Tue 8/4/2026","Wed 8/5/2026","Thu 8/6/2026","Fri 8/7/2026","One, Child","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM",,,,,,,,,,,"Grouped","Page 1","bje: Schedule Summary - Weekly, FD_ClassroomScheduleSummary02.rpt"',
@@ -53,6 +54,8 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
   assert.ok(fs.existsSync(path.join(output, "10-derived-primary-payer-source.csv")));
   assert.ok(fs.existsSync(path.join(output, "13-active-portal-safe-import.csv")));
   assert.ok(fs.existsSync(path.join(output, "14-active-portal-safe-balance-review.csv")));
+  const manifest = JSON.parse(fs.readFileSync(path.join(output, "manifest.json"), "utf8")) as { sourceFiles: Array<{ filename: string; rows: number }> };
+  assert.equal(manifest.sourceFiles.find((item) => item.filename === "Sample - Empty Optional.csv")?.rows, 0);
   const renderedRates = parseCsvBuffer(fs.readFileSync(path.join(output, "15-rendered-contract-billing-review.csv")), "rendered rates").rows;
   assert.equal(renderedRates[0]["source amount cents"], "15000");
   assert.equal(renderedRates[0]["source payer label"], "ONE Primary, Parent One");

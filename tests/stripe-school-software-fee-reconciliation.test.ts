@@ -11,6 +11,7 @@ test("school software fee reconciliation is fail closed and preview only", () =>
   assert.match(source, /stop_account_mapped_to_multiple_centers/);
   assert.match(source, /stop_account_not_ready/);
   assert.match(source, /stop_subscription_configuration_mismatch/);
+  assert.match(source, /stop_subscription_center_mismatch/);
   assert.match(source, /stop_stripe_read_failed/);
   assert.doesNotMatch(source, /method:\s*"POST"/);
   assert.doesNotMatch(source, /prisma\.[a-zA-Z]+\.(?:create|update|upsert|delete)/);
@@ -23,10 +24,15 @@ test("school software fees preserve policy and deterministic monthly evidence", 
   assert.match(source, /carry_forward_until_available_balance/);
   assert.match(source, /collect_july_catchup_then_start_august_monthly_collection/);
   assert.match(source, /paymentScope\) === "school_software_fee"/);
-  assert.match(source, /item\.reversed === true \? "reversed" : "paid"/);
+  assert.match(source, /amountReversedCents/);
+  assert.match(source, /"partially_reversed"/);
+  assert.match(source, /amountRefundedCents/);
+  assert.match(source, /"refund_state_unknown"/);
+  assert.match(source, /expand\[\]=data\.latest_charge/);
   assert.match(source, /v1\/invoices\?limit=100&created\[gte\]=\$\{CREATED_SINCE\}&expand\[\]=data\.payments/);
   assert.match(source, /subscriptionInvoiceEvidence/);
   assert.match(source, /item\.amountCents === policy\.unitAmountCents/);
   assert.match(source, /activeSubscriptions\[0\]\.effectiveMonthlyAmountCents === policy\.unitAmountCents/);
   assert.match(source, /exactMonthlyConfiguration/);
+  assert.match(source, /metadataCenterId !== center\.id/);
 });

@@ -77,27 +77,47 @@ function usdAmount(rows: JsonRecord[]) {
 function paymentEvidence(item: JsonRecord) {
   const metadata = record(item.metadata);
   const latestCharge = record(item.latest_charge);
-  const amount = integer(item.amount_received) || integer(item.amount);
+  const grossAmountCents = integer(item.amount_received) || integer(item.amount);
+  const chargeId = clean(latestCharge.id) || clean(item.latest_charge) || null;
+  const refundStateKnown = !chargeId || clean(latestCharge.id) === chargeId;
+  const amountRefundedCents = refundStateKnown ? integer(latestCharge.amount_refunded) : 0;
+  const amountCents = Math.max(0, grossAmountCents - amountRefundedCents);
+  const providerStatus = clean(item.status);
+  const status = !refundStateKnown
+    ? "refund_state_unknown"
+    : amountRefundedCents > 0
+      ? amountCents === 0 ? "refunded" : "partially_refunded"
+      : providerStatus;
   return {
     kind: "payment_intent",
     id: clean(item.id),
-    status: clean(item.status),
-    amountCents: amount,
+    status,
+    amountCents,
+    grossAmountCents,
+    amountRefundedCents,
+    refundStateKnown,
     feePeriod: clean(metadata.feePeriod) || clean(metadata.softwareFeePeriod) || null,
     referenceDate: clean(metadata.referenceDate) || clean(metadata.softwareFeeReferenceDate) || null,
     centerId: clean(metadata.centerId) || null,
     accountId: clean(metadata.connectedAccountId) || clean(metadata.accountId) || null,
-    chargeId: clean(latestCharge.id) || clean(item.latest_charge) || null,
+    chargeId,
   };
 }
 
 function transferEvidence(item: JsonRecord) {
   const metadata = record(item.metadata);
+  const grossAmountCents = integer(item.amount);
+  const amountReversedCents = integer(item.amount_reversed);
+  const amountCents = Math.max(0, grossAmountCents - amountReversedCents);
   return {
     kind: "transfer",
     id: clean(item.id),
-    status: item.reversed === true ? "reversed" : "paid",
-    amountCents: integer(item.amount),
+    status: item.reversed === true || amountReversedCents > 0
+      ? amountCents === 0 ? "reversed" : "partially_reversed"
+      : "paid",
+    amountCents,
+    grossAmountCents,
+    amountReversedCents,
     feePeriod: clean(metadata.feePeriod) || clean(metadata.softwareFeePeriod) || null,
     referenceDate: clean(metadata.referenceDate) || clean(metadata.softwareFeeReferenceDate) || null,
     centerId: clean(metadata.centerId) || null,
@@ -118,14 +138,33 @@ function subscriptionMetadataFromInvoice(item: JsonRecord) {
   return record(subscriptionDetails.metadata);
 }
 
-function subscriptionInvoiceEvidence(item: JsonRecord) {
+function subscriptionInvoiceEvidence(
+  item: JsonRecord,
+  paymentIntentsById: Map<string, ReturnType<typeof paymentEvidence>>,
+) {
   const metadata = subscriptionMetadataFromInvoice(item);
   const payments = array(record(item.payments).data);
+  const paymentIds = payments.map((payment) => clean(record(payment.payment).payment_intent)).filter(Boolean);
+  const paymentSnapshots = paymentIds.map((id) => paymentIntentsById.get(id) ?? null);
+  const refundStateKnown = paymentIds.length > 0 && paymentSnapshots.every((payment) => payment?.refundStateKnown);
+  const grossAmountCents = integer(item.amount_paid);
+  const amountCents = refundStateKnown
+    ? Math.min(grossAmountCents, paymentSnapshots.reduce((sum, payment) => sum + (payment?.amountCents ?? 0), 0))
+    : 0;
+  const status = clean(item.status) !== "paid"
+    ? clean(item.status)
+    : !refundStateKnown
+      ? "refund_state_unknown"
+      : amountCents === grossAmountCents
+        ? "paid"
+        : amountCents === 0 ? "refunded" : "partially_refunded";
   return {
     kind: "subscription_invoice",
     id: clean(item.id),
-    status: clean(item.status),
-    amountCents: integer(item.amount_paid),
+    status,
+    amountCents,
+    grossAmountCents,
+    refundStateKnown,
     feePeriod: clean(metadata.feePeriod) || clean(metadata.softwareFeePeriod) || null,
     referenceDate: clean(metadata.referenceDate) || clean(metadata.softwareFeeReferenceDate) || null,
     centerId: clean(metadata.centerId) || null,
@@ -222,7 +261,7 @@ async function main() {
         },
       },
     }),
-    listAll(apiKey, `/v1/payment_intents?limit=100&created[gte]=${CREATED_SINCE}`),
+    listAll(apiKey, `/v1/payment_intents?limit=100&created[gte]=${CREATED_SINCE}&expand[]=data.latest_charge`),
     listAll(apiKey, `/v1/transfers?limit=100&created[gte]=${CREATED_SINCE}`),
     listAll(apiKey, "/v1/subscriptions?limit=100&status=all"),
     listAll(apiKey, `/v1/invoices?limit=100&created[gte]=${CREATED_SINCE}&expand[]=data.payments`),
@@ -235,9 +274,13 @@ async function main() {
     accountUsage.set(accountId, [...(accountUsage.get(accountId) ?? []), center.id]);
   }
 
-  const softwarePayments = paymentIntents
-    .filter((item) => clean(record(item.metadata).paymentScope) === "school_software_fee")
-    .map(paymentEvidence);
+  const paymentIntentEvidence = paymentIntents.map(paymentEvidence);
+  const paymentIntentsById = new Map(paymentIntentEvidence.map((item) => [item.id, item]));
+  const softwarePayments = paymentIntentEvidence
+    .filter((item) => {
+      const source = paymentIntents.find((candidate) => clean(candidate.id) === item.id);
+      return clean(record(source?.metadata).paymentScope) === "school_software_fee";
+    });
   const softwareTransfers = transfers
     .filter((item) => ["school_software_fee", "school_software_fee_catchup"].includes(clean(record(item.metadata).purpose)))
     .map(transferEvidence);
@@ -247,7 +290,7 @@ async function main() {
     const subscriptionId = subscriptionIdFromInvoice(item);
     const metadata = subscriptionMetadataFromInvoice(item);
     return (subscriptionId && softwareSubscriptionIds.has(subscriptionId)) || clean(metadata.paymentScope) === "school_software_fee";
-  }).map(subscriptionInvoiceEvidence);
+  }).map((item) => subscriptionInvoiceEvidence(item, paymentIntentsById));
 
   const rows = await mapWithConcurrency(centers, 8, async (center) => {
     const policy = getSchoolSoftwareFeePolicyForCenter(center);
@@ -261,9 +304,15 @@ async function main() {
       ...softwareTransfers.filter((item) => item.centerId === center.id || (accountId && item.accountId === accountId)),
     ];
     const storedSubscriptionId = clean(fields.stripeSoftwareSubscriptionId);
+    const conflictingStoredSubscription = softwareSubscriptions.find((item) => {
+      if (clean(item.id) !== storedSubscriptionId) return false;
+      const metadataCenterId = clean(record(item.metadata).centerId);
+      return Boolean(metadataCenterId) && metadataCenterId !== center.id;
+    });
     const matchingSubscriptionObjects = softwareSubscriptions.filter((item) => {
       const metadata = record(item.metadata);
-      return clean(item.id) === storedSubscriptionId || clean(metadata.centerId) === center.id;
+      const metadataCenterId = clean(metadata.centerId);
+      return metadataCenterId === center.id || (clean(item.id) === storedSubscriptionId && !metadataCenterId);
     });
     const stripeSubscriptions = matchingSubscriptionObjects.map((item) => ({
       id: clean(item.id),
@@ -344,7 +393,7 @@ async function main() {
       const subscriptionConfigurationAmbiguous = activeSubscriptions.length > 0 && !subscriptionConfigured;
       const accountExact = clean(account.id) === accountId;
       const cardPaymentsActive = clean(record(account.capabilities).card_payments) === "active";
-      const status = !accountExact || !cardPaymentsActive
+      const status = !accountExact || !cardPaymentsActive || conflictingStoredSubscription
         ? "ambiguous"
         : subscriptionConfigurationAmbiguous
           ? "ambiguous"
@@ -358,7 +407,9 @@ async function main() {
         : status === "ambiguous"
           ? !accountExact || !cardPaymentsActive
             ? "stop_account_not_ready"
-            : "stop_subscription_configuration_mismatch"
+            : conflictingStoredSubscription
+              ? "stop_subscription_center_mismatch"
+              : "stop_subscription_configuration_mismatch"
           : status === "deferred"
             ? "carry_forward_until_available_balance"
             : julyPaid
@@ -384,6 +435,7 @@ async function main() {
         accountReady: accountExact && cardPaymentsActive,
         julyPaid,
         subscriptionConfigured,
+        conflictingStoredSubscriptionId: conflictingStoredSubscription ? clean(conflictingStoredSubscription.id) : null,
         augustPeriod: AUGUST_PERIOD,
       };
     } catch (error) {

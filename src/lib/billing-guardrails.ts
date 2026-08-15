@@ -4,24 +4,6 @@ export function jsonRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function timestampMs(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value > 10_000_000_000 ? value : value * 1000;
-  }
-  if (typeof value === "string" && value.trim()) {
-    const numeric = Number(value);
-    if (Number.isFinite(numeric)) return numeric > 10_000_000_000 ? numeric : numeric * 1000;
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-}
-
-function isPastTimestamp(value: unknown) {
-  const ms = timestampMs(value);
-  return ms !== null && ms <= Date.now();
-}
-
 export function isActiveStripeCheckoutPayment(payment: {
   status: PaymentStatus;
   provider: string;
@@ -29,9 +11,7 @@ export function isActiveStripeCheckoutPayment(payment: {
 }) {
   if (payment.provider !== "stripe" || payment.status !== PaymentStatus.DRAFT) return false;
   const fields = jsonRecord(payment.customFields);
-  if (fields.status === "checkout_pending") return true;
-  if (fields.status !== "checkout_created") return false;
-  return !isPastTimestamp(fields.stripeCheckoutSessionExpiresAt);
+  return fields.status === "checkout_pending" || fields.status === "checkout_created";
 }
 
 function stringField(value: unknown) {

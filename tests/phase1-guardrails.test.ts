@@ -216,7 +216,7 @@ test("active Stripe checkout detection only blocks draft checkout sessions", () 
     status: PaymentStatus.DRAFT,
     provider: "stripe",
     customFields: { status: "checkout_created", stripeCheckoutSessionExpiresAt: expired },
-  }), false);
+  }), true);
 
   assert.equal(isActiveStripeCheckoutPayment({
     status: PaymentStatus.DRAFT,

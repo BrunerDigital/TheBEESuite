@@ -269,17 +269,12 @@ export function buildPaymentMethodRequestCheckoutBranding(input: {
   centerLabel: string;
   familyName: string;
   intent?: PaymentMethodRequestIntent;
-  logoUrl?: string | null;
-  iconUrl?: string | null;
 }) {
   const sender = paymentMethodRequestBrandSender(input.centerLabel);
   const familyName = clean(input.familyName) || "your family";
   const instantBank = input.intent === "instant_bank_verification";
   const reauthorization = input.intent === "payment_method_reauthorization";
   return {
-    displayName: sender,
-    logoUrl: input.logoUrl ?? null,
-    iconUrl: input.iconUrl ?? null,
     submitMessage: reauthorization
       ? `Securely save a replacement payment method for future tuition payments. No payment will be charged today, and your existing autopay choice will not change.`
       : instantBank

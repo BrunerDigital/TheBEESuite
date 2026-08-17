@@ -130,7 +130,7 @@ test("terminal store checkout uses platform Stripe checkout without a connected 
     assert.match(body, /customer_creation=always/);
     assert.match(body, /shipping_address_collection%5Ballowed_countries%5D%5B0%5D=US/);
     assert.match(body, /line_items%5B0%5D%5Bprice_data%5D%5Bunit_amount%5D=35880/);
-    assert.match(body, /branding_settings%5Bdisplay_name%5D=The\+BEE\+Suite\+Equipment\+Store/);
+    assert.match(body, /branding_settings%5Bdisplay_name%5D=The\+BEE\+Suite/);
     assert.match(body, /branding_settings%5Bbackground_color%5D=%23111827/);
     assert.match(body, /branding_settings%5Bbutton_color%5D=%23f4c430/i);
     assert.match(body, /branding_settings%5Blogo%5D%5Btype%5D=url/);

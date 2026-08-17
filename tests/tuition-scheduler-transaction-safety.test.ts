@@ -11,6 +11,10 @@ test("tuition cron isolates invoice transactions and reports per-child failures"
   assert.match(route, /prisma\.\$transaction\(async \(tx\) =>/);
   assert.match(route, /status: \{ not: PaymentStatus\.VOID \}/);
   assert.match(route, /path: \["billingPeriod"\], equals: entry\.billingPeriod/);
+  assert.match(route, /path: \["coverageStartsPeriod"\], equals: entry\.billingPeriod/);
+  assert.match(route, /path: \["mode"\], equals: "recurring"/);
+  assert.match(route, /path: \["countsTowardRecurringCoverage"\], equals: true/);
+  assert.match(route, /path: \["sourceId"\], equals: entry\.planId/);
   assert.match(route, /path: \["childId"\], equals: entry\.child\.id/);
   assert.match(route, /autopaySuppressed: true/);
   assert.match(route, /noPaymentSubmitted: true/);

@@ -95,6 +95,7 @@ export type ClockEditRow = {
   id: string;
   action: StaffClockAction;
   occurredAt: string;
+  originalOccurredAt?: string;
   notes: string;
 };
 
@@ -218,7 +219,7 @@ export function clockEditRowsForEditor<T extends { id: string; occurredAt: strin
 export function clampClockEditDateTimeToPayPeriod(localValue: string, startDate: string, endDate: string) {
   const dateKey = localValue.slice(0, 10);
   if (
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(localValue)
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(localValue)
     || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)
     || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
     || startDate > endDate
@@ -236,7 +237,8 @@ function clockEditRowsFromEvents(events: StaffClockEvent[], timeZone: string): C
     .map((event, index) => ({
       id: `clock-event-${index}-${event.occurredAt}`,
       action: event.action,
-      occurredAt: zonedDateTimeLocalValue(event.occurredAt, timeZone),
+      occurredAt: zonedDateTimeLocalValue(event.occurredAt, timeZone, true),
+      originalOccurredAt: event.occurredAt,
       notes: event.notes ?? "",
     }));
 }
@@ -248,7 +250,7 @@ export function clockEditRowsFromSavedEvents(
 ) {
   const rowIdByOccurredAt = new Map<string, string>();
   for (const row of existingRows) {
-    const occurredAt = zonedDateTimeLocalToUtc(row.occurredAt, timeZone);
+    const occurredAt = clockEditRowOccurredAtUtc(row, timeZone);
     if (occurredAt) rowIdByOccurredAt.set(occurredAt.toISOString(), row.id);
   }
   return [...events]
@@ -257,9 +259,23 @@ export function clockEditRowsFromSavedEvents(
       id: rowIdByOccurredAt.get(new Date(event.occurredAt).toISOString())
         ?? `clock-event-${index}-${event.occurredAt}`,
       action: event.action,
-      occurredAt: zonedDateTimeLocalValue(event.occurredAt, timeZone),
+      occurredAt: zonedDateTimeLocalValue(event.occurredAt, timeZone, true),
+      originalOccurredAt: event.occurredAt,
       notes: event.notes ?? "",
     }));
+}
+
+export function clockEditRowOccurredAtUtc(row: ClockEditRow, timeZone: string) {
+  if (row.originalOccurredAt) {
+    const original = new Date(row.originalOccurredAt);
+    if (
+      !Number.isNaN(original.getTime())
+      && zonedDateTimeLocalValue(original, timeZone, true) === row.occurredAt
+    ) {
+      return original;
+    }
+  }
+  return zonedDateTimeLocalToUtc(row.occurredAt, timeZone);
 }
 
 function nextClockEditAction(rows: ClockEditRow[]): StaffClockAction {
@@ -734,7 +750,7 @@ export function StaffManagementPanel({
           id: rowId,
           action: nextClockEditAction(currentPeriodRows),
           occurredAt: clampClockEditDateTimeToPayPeriod(
-            zonedDateTimeLocalValue(new Date(), clockTimeZone),
+            zonedDateTimeLocalValue(new Date(), clockTimeZone, true),
             payrollStartDate,
             payrollEndDate,
           ),
@@ -784,7 +800,7 @@ export function StaffManagementPanel({
 
     const events: { action: StaffClockAction; occurredAt: string; notes: string | null }[] = [];
     for (const row of clockEditRows) {
-      const occurredAt = zonedDateTimeLocalToUtc(row.occurredAt, clockTimeZone);
+      const occurredAt = clockEditRowOccurredAtUtc(row, clockTimeZone);
       if (!occurredAt) {
         setErrorMessage("Every punch needs a valid date and time.");
         setClockEditMessage("Not saved: every punch needs a valid date and time.");
@@ -1402,6 +1418,7 @@ export function StaffManagementPanel({
                               id={occurredAtId}
                               aria-label={`Date and time for ${rowAccessibleName}`}
                               type="datetime-local"
+                              step={1}
                               value={row.occurredAt}
                               disabled={isPending}
                               onChange={(event) => updateClockEditRow(row.id, { occurredAt: event.target.value })}

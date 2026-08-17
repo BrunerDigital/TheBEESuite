@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/button";
 
 export default function AppError({
   error,
-  reset,
+  unstable_retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  unstable_retry: () => void;
 }) {
   useEffect(() => {
     reportClientError(error, "react.error_boundary", { digest: error.digest });
@@ -26,7 +26,7 @@ export default function AppError({
           <Button variant="outline" nativeButton={false} render={<Link href="/" />}>
             Go to home
           </Button>
-          <Button type="button" onClick={reset}>
+          <Button type="button" onClick={unstable_retry}>
             Try again
           </Button>
         </>

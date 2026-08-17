@@ -17,18 +17,45 @@ async function GETHandler() {
     return NextResponse.json({ ok: false, error: "Billing access required." }, { status: 403 });
   }
 
-  const recentPayments = user.centerIds.length
-    ? await prisma.payment.findMany({
+  const paymentWhere = {
+    billingAccount: { family: { centerId: { in: user.centerIds } } },
+  };
+  const [recentPayments, paymentStatusCounts, latestLedgerEntry] = user.centerIds.length
+    ? await Promise.all([
+      prisma.payment.findMany({
         where: {
-          billingAccount: { family: { centerId: { in: user.centerIds } } },
+          ...paymentWhere,
         },
         orderBy: { id: "desc" },
-        take: 25,
-        select: { id: true, status: true, paidAt: true },
-      })
-    : [];
+        take: 100,
+        select: { id: true, status: true, paidAt: true, customFields: true },
+      }),
+      prisma.payment.groupBy({
+        by: ["status"],
+        where: paymentWhere,
+        _count: { _all: true },
+        orderBy: { status: "asc" },
+      }),
+      prisma.ledgerEntry.findFirst({
+        where: { billingAccount: paymentWhere.billingAccount },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: { id: true, createdAt: true },
+      }),
+    ])
+    : [[], [], null] as const;
+  const paymentVersions = recentPayments.map((payment) => {
+    const fields = payment.customFields && typeof payment.customFields === "object" && !Array.isArray(payment.customFields)
+      ? payment.customFields as Record<string, unknown>
+      : {};
+    return {
+      id: payment.id,
+      status: payment.status,
+      paidAt: payment.paidAt,
+      refundedCents: Number(fields.stripeAmountRefundedCents) || 0,
+    };
+  });
   const version = createHash("sha256")
-    .update(JSON.stringify(recentPayments))
+    .update(JSON.stringify({ paymentVersions, paymentStatusCounts, latestLedgerEntry }))
     .digest("base64url");
 
   return NextResponse.json(

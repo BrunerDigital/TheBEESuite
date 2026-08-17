@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
-import { canManageBilling, getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { canAccessModule } from "@/lib/rbac";
 import { withApiLogging } from "@/lib/request-response-logging";
 
 export const runtime = "nodejs";
@@ -11,23 +13,23 @@ async function GETHandler() {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
-  if (!canManageBilling(user)) {
+  if (!canAccessModule(user, "billing-invoices") && !canAccessModule(user, "payments")) {
     return NextResponse.json({ ok: false, error: "Billing access required." }, { status: 403 });
   }
 
-  const latestPaymentEntry = user.centerIds.length
-    ? await prisma.ledgerEntry.findFirst({
+  const recentPayments = user.centerIds.length
+    ? await prisma.payment.findMany({
         where: {
-          paymentId: { not: null },
           billingAccount: { family: { centerId: { in: user.centerIds } } },
         },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        select: { id: true, createdAt: true },
+        orderBy: { id: "desc" },
+        take: 25,
+        select: { id: true, status: true, paidAt: true },
       })
-    : null;
-  const version = latestPaymentEntry
-    ? `${latestPaymentEntry.createdAt.toISOString()}:${latestPaymentEntry.id}`
-    : "none";
+    : [];
+  const version = createHash("sha256")
+    .update(JSON.stringify(recentPayments))
+    .digest("base64url");
 
   return NextResponse.json(
     { ok: true, version },

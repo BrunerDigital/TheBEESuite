@@ -16,9 +16,12 @@ test("session heartbeats preserve sign-out handling and refresh live billing onl
   assert.match(liveRefresh, /pathname\.startsWith\("\/billing-invoices"\)\) return 15_000/);
   assert.match(liveRefresh, /fetch\("\/api\/billing\/live-version", \{ cache: "no-store" \}\)/);
   assert.match(liveRefresh, /previousVersion && nextVersion && previousVersion !== nextVersion/);
-  assert.match(billingVersion, /paymentId: \{ not: null \}/);
-  assert.match(billingVersion, /findFirst\(\{/);
-  assert.doesNotMatch(billingVersion, /findMany/);
+  assert.match(billingVersion, /canAccessModule\(user, "billing-invoices"\)/);
+  assert.match(billingVersion, /canAccessModule\(user, "payments"\)/);
+  assert.match(billingVersion, /prisma\.payment\.findMany\(\{/);
+  assert.match(billingVersion, /take: 25/);
+  assert.match(billingVersion, /select: \{ id: true, status: true, paidAt: true \}/);
+  assert.match(billingVersion, /createHash\("sha256"\)/);
   assert.match(billingVersion, /centerId: \{ in: user\.centerIds \}/);
   assert.match(billingVersion, /"Cache-Control": "private, no-store"/);
 });

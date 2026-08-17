@@ -166,7 +166,15 @@ async function GETHandler(request: NextRequest) {
               status: { not: PaymentStatus.VOID },
               billingAccount: { familyId: entry.child.familyId },
               AND: [
+                {
+                  OR: [
+                    { customFields: { path: ["mode"], equals: "recurring" } },
+                    { customFields: { path: ["mode"], equals: "manual_weekly_recovery" } },
+                    { customFields: { path: ["countsTowardRecurringCoverage"], equals: true } },
+                  ],
+                },
                 { customFields: { path: ["billingPeriod"], equals: entry.billingPeriod } },
+                { customFields: { path: ["coverageStartsPeriod"], equals: entry.billingPeriod } },
                 { customFields: { path: ["childId"], equals: entry.child.id } },
                 { customFields: { path: ["chargeSource"], equals: "tuitionPlan" } },
               ],

@@ -103,6 +103,13 @@ async function POSTHandler(request: NextRequest) {
     accountId,
     refreshUrl: refreshUrl.toString(),
     returnUrl: returnUrl.toString(),
+    dashboard: retrieved.account.dashboard,
+    payoutBankConfirmed: Boolean(
+      center.customFields &&
+      typeof center.customFields === "object" &&
+      !Array.isArray(center.customFields) &&
+      clean((center.customFields as Record<string, unknown>).stripePayoutBankLast4),
+    ),
     tenantId: user.tenantId,
   });
   if (!link.ok || !link.url) {

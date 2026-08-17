@@ -32,7 +32,12 @@ async function main() {
       SELECT p.proname AS name
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname = 'public' AND p.prosecdef
+      WHERE n.nspname = 'public'
+        AND p.prosecdef
+        AND (
+          NOT ('search_path=pg_catalog, pg_temp' = ANY(COALESCE(p.proconfig, ARRAY[]::text[])))
+          OR has_function_privilege('public', p.oid, 'EXECUTE')
+        )
       ORDER BY p.proname
     `,
     prisma.$queryRaw<NameRow[]>`
@@ -47,9 +52,9 @@ async function main() {
   ]);
 
   const posture: DatabaseSecurityPosture = {
-    // 89 Prisma models plus Prisma's implicit _LeadTags relation table and
+    // 95 Prisma models plus Prisma's implicit _LeadTags relation table and
     // _prisma_migrations metadata table are present in the public schema.
-    expectedPublicTableCount: Number(process.env.EXPECTED_PUBLIC_TABLE_COUNT ?? "91"),
+    expectedPublicTableCount: Number(process.env.EXPECTED_PUBLIC_TABLE_COUNT ?? "97"),
     publicTableCount: Number(counts[0]?.public_table_count ?? 0),
     rlsEnabledCount: Number(counts[0]?.rls_enabled_count ?? 0),
     tablesWithoutRls: noRls.map((row) => row.name),

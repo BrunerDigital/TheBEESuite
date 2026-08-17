@@ -54,8 +54,9 @@ test("director launch checklist opens payout bank setup in billing settings", ()
 
   assert.ok(payoutTask);
   assert.equal(payoutTask.href, "/billing-settings#payout-setup");
-  assert.match(payoutTask.description, /Directors and executives/i);
-  assert.match(payoutTask.description, /payout processor onboarding/i);
+  assert.match(payoutTask.description, /Stripe account already exists/i);
+  assert.match(payoutTask.description, /school email and its existing Stripe password/i);
+  assert.match(payoutTask.description, /no password was set/i);
 });
 
 test("director payout checklist can open the stable school reauthorization page", () => {
@@ -67,7 +68,8 @@ test("director payout checklist can open the stable school reauthorization page"
 
   assert.ok(payoutTask);
   assert.equal(payoutTask.href, "/stripe-reauthorization?center=center_1");
-  assert.match(payoutTask.title, /reauthorization/i);
+  assert.match(payoutTask.title, /existing Stripe account/i);
+  assert.match(payoutTask.description, /school email and existing Stripe password/i);
   assert.match(payoutTask.description, /Parent payments remain/i);
 });
 

@@ -1053,7 +1053,7 @@ async function renderLivePage(
         evidence: readiness.evidence,
         metrics: readiness.metrics,
         requiredActions: readiness.requiredActions,
-        actionLabel: definition.field === "integrationSetup" ? "Open school payout setup" : setupActionLabel(definition.field),
+        actionLabel: definition.field === "integrationSetup" ? "Finish school Stripe setup" : setupActionLabel(definition.field),
         secondaryAction: definition.field === "integrationSetup"
           ? { href: definition.href, label: "Open other integrations" }
           : undefined,

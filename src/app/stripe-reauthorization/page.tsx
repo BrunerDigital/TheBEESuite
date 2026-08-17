@@ -24,8 +24,8 @@ import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Secure Stripe Reauthorization | The BEE Suite",
-  description: "Securely complete school business and payout reauthorization for The BEE Suite.",
+  title: "Finish School Stripe Setup | The BEE Suite",
+  description: "Securely finish an existing school's Stripe business and payout setup.",
 };
 
 export default async function StripeReauthorizationPage({
@@ -47,7 +47,7 @@ export default async function StripeReauthorizationPage({
   if (!centerId) notFound();
   const center = await prisma.center.findUnique({
     where: { id: centerId },
-    select: { id: true, name: true, city: true, state: true, customFields: true, organization: { select: { tenantId: true } } },
+    select: { id: true, name: true, email: true, city: true, state: true, customFields: true, organization: { select: { tenantId: true } } },
   });
   if (!center) notFound();
   if (corporateVerification) {
@@ -98,12 +98,12 @@ export default async function StripeReauthorizationPage({
               <ShieldCheck className="size-4" /> Secure account update
             </div>
             <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
-              {corporateVerification ? "Complete this school's Stripe bank verification" : "Complete your school's Stripe reauthorization"}
+              {corporateVerification ? "Finish this school's existing Stripe account" : "Finish your school's existing Stripe account"}
             </h1>
             <p className="mt-5 max-w-3xl text-base leading-7 text-slate-200 sm:text-lg">
               {corporateVerification
-                ? "This secure BEE Suite page checks the approved school account and opens a fresh Stripe-hosted session for only the requirements that are currently due."
-                : "To support the payment processes and capabilities requested by schools, The BEE Suite updated how each school is configured through the Stripe API. Completing this secure reauthorization gives The BEE Suite stronger account-level verification and reconciliation for tuition, approved payment accommodations, state-funding allocations, subsidies, and other school payment workflows."}
+                ? "This secure BEE Suite page checks the approved existing school account and opens its account-specific Stripe-hosted session for only the requirements that are currently due."
+                : "The Stripe account has already been created for this school. Use the school's existing Stripe login, or create its Stripe login if a password was not set yet, to complete the remaining business and payout requirements."}
             </p>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-300">
               Stripe securely verifies the business, authorized representative, and payout information. Program eligibility and funding approvals remain with the applicable school and government agency.
@@ -129,6 +129,7 @@ export default async function StripeReauthorizationPage({
               <CorporateStripeVerificationCard
                 centerId={center.id}
                 schoolName={`${center.name}${center.city || center.state ? ` — ${[center.city, center.state].filter(Boolean).join(", ")}` : ""}`}
+                schoolEmail={center.email}
                 initialStatus={initialStatus}
                 returning={params.stripeMigration === "return"}
                 autoStart={autoStart}
@@ -137,6 +138,7 @@ export default async function StripeReauthorizationPage({
               <StripeReauthorizationCard
                 centerId={center.id}
                 schoolName={`${center.name}${center.city || center.state ? ` — ${[center.city, center.state].filter(Boolean).join(", ")}` : ""}`}
+                schoolEmail={center.email}
                 initialStatus={initialStatus}
                 returning={params.stripeMigration === "return"}
                 returnToCorporatePortfolio={returnToCorporatePortfolio}

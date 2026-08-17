@@ -133,7 +133,7 @@ export const schoolOnboardingSetupSections = [
     label: "External accounts and integrations",
     owner: "Owner, director, or admin",
     href: "/billing-settings?view=integrations",
-    description: "Complete the exact school's payout authorization, then verify SendGrid/email sender, Twilio/SMS, Google Sheets/Calendar, storage, and signature provider readiness.",
+    description: "Finish the exact school's existing Stripe account with its school email and Stripe login, then verify SendGrid/email sender, Twilio/SMS, Google Sheets/Calendar, storage, and signature provider readiness.",
     placeholder: "Payout owner\nSendGrid sender/domain\nTwilio phone/sender\nGoogle Calendar/Sheets access\nStorage/signature provider",
   },
   {

@@ -54,8 +54,8 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
   },
   {
     id: "payout-bank-account",
-    title: "Connect the school bank account",
-    description: "Directors and executives open Billing Settings to complete payout processor onboarding so tuition funds can route to the school account once parent payments are enabled.",
+    title: "Finish the school's Stripe account setup",
+    description: "The Stripe account already exists. Sign in to The BEE Suite with the school login, open this school-specific step, then use the school email and its existing Stripe password—or create the Stripe login if no password was set—to finish payout verification.",
     href: PAYOUT_SETUP_SETTINGS_PATH,
   },
   {
@@ -113,9 +113,9 @@ export function directorLaunchChecklistTasksForPayoutSetup(flow?: PayoutSetupChe
   return directorLaunchChecklistTasks.map((task) => task.id === "payout-bank-account"
     ? {
         ...task,
-        title: flow.replacementInProgress ? "Complete secure Stripe reauthorization" : task.title,
+        title: flow.replacementInProgress ? "Finish the school's existing Stripe account" : task.title,
         description: flow.replacementInProgress
-          ? "Open the authenticated BEE Suite payout flow, confirm the school and terms, then continue to a fresh school-specific Stripe session. Parent payments remain on the current verified account until a controlled cutover."
+          ? "Sign in to The BEE Suite with the school login, confirm the exact school, then open its account-specific Stripe page. Use the school email and existing Stripe password, or create the Stripe login if no password was set. Parent payments remain on the current verified account until a controlled cutover."
           : task.description,
         href: flow.href,
       }

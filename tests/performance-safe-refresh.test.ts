@@ -6,12 +6,14 @@ function source(path: string) {
   return readFileSync(path, "utf8");
 }
 
-test("session heartbeats preserve sign-out handling without refreshing successful pages", () => {
+test("session heartbeats preserve sign-out handling and refresh live billing only", () => {
   const liveRefresh = source("src/components/live-refresh-status.tsx");
 
-  assert.equal(liveRefresh.match(/router\.refresh\(\)/g)?.length, 1);
+  assert.equal(liveRefresh.match(/router\.refresh\(\)/g)?.length, 2);
   assert.doesNotMatch(liveRefresh, /sync\((true|false)\)/);
   assert.match(liveRefresh, /response\.status === 401/);
+  assert.match(liveRefresh, /pathname\.startsWith\("\/billing-invoices"\)\) return 15_000/);
+  assert.match(liveRefresh, /if \(shouldRefreshRouteData\(pathname\)\) router\.refresh\(\)/);
 });
 
 test("notification polling uses the lightweight unread endpoint", () => {

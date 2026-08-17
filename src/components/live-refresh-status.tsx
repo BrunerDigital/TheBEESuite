@@ -24,9 +24,14 @@ function getServerReadySnapshot() {
 }
 
 function refreshIntervalMs(pathname: string, role?: string) {
+  if (pathname.startsWith("/billing-invoices")) return 15_000;
   if (role === "TEACHER" || role === "PARENT_GUARDIAN" || role === "AUTHORIZED_PICKUP") return 30_000;
   if (pathname.startsWith("/attendance") || pathname.startsWith("/teacher-portal") || pathname.startsWith("/parent-portal")) return 30_000;
   return 60_000;
+}
+
+function shouldRefreshRouteData(pathname: string) {
+  return pathname.startsWith("/billing-invoices");
 }
 
 function syncText(state: SyncState, lastSyncedAt: Date | null, timeZone: string) {
@@ -69,6 +74,7 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
         }
         if (!response.ok) throw new Error("Live refresh failed.");
 
+        if (shouldRefreshRouteData(pathname)) router.refresh();
         setLastSyncedAt(new Date());
         setState("idle");
       } catch {

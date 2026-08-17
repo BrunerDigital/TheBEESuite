@@ -1576,12 +1576,14 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
 
 async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeChargeObject) {
   const metadata = metadataOf(charge);
+  let affectedBillingAccountId: string | null = null;
 
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       const payment = await findPaymentForStripeObject(tx, charge);
       if (!payment) return;
+      affectedBillingAccountId = payment.billingAccountId;
 
       const currentFields = jsonObject(payment.customFields);
       const previousRefundedCents = numeric(currentFields.stripeAmountRefundedCents);
@@ -1645,18 +1647,22 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
 
   if (metadata.invoiceId) {
     await writeSystemAudit(metadata.invoiceId, event.id, charge.id, "billing.charge.refunded");
+  } else if (affectedBillingAccountId) {
+    await writeBillingAccountSystemAudit(affectedBillingAccountId, event.id, charge.id, "billing.charge.refunded");
   }
   return NextResponse.json({ ok: true });
 }
 
 async function handleDisputeLifecycle(event: StripeWebhookEvent, dispute: StripeDisputeObject) {
   const metadata = metadataOf(dispute);
+  let affectedBillingAccountId: string | null = null;
 
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       const payment = await findPaymentForStripeObject(tx, dispute);
       if (!payment) return;
+      affectedBillingAccountId = payment.billingAccountId;
       const currentFields = jsonObject(payment.customFields);
       const disputeAmountCents = numeric(dispute.amount);
       const ledgerActive = currentFields.stripeDisputeLedgerActive === true;
@@ -1749,6 +1755,13 @@ async function handleDisputeLifecycle(event: StripeWebhookEvent, dispute: Stripe
 
   if (metadata.invoiceId) {
     await writeSystemAudit(metadata.invoiceId, event.id, dispute.id, `billing.${event.type.replaceAll(".", "_")}`);
+  } else if (affectedBillingAccountId) {
+    await writeBillingAccountSystemAudit(
+      affectedBillingAccountId,
+      event.id,
+      dispute.id,
+      `billing.${event.type.replaceAll(".", "_")}`,
+    );
   }
   return NextResponse.json({ ok: true });
 }

@@ -31,8 +31,12 @@ test("session heartbeats preserve sign-out handling and refresh live billing onl
   assert.match(billingVersion, /"Cache-Control": "private, no-store"/);
   assert.match(audit, /input\.action\.startsWith\("billing\."\)/);
   assert.match(audit, /prisma\.center\.update\(\{ where: \{ id: input\.centerId \}, data: \{ updatedAt: new Date\(\) \} \}\)/);
-  assert.match(dunning, /prisma\.center\.update\(\{ where: \{ id: center\.id \}, data: \{ updatedAt: now \} \}\)/);
+  assert.match(dunning, /billingActivityCenterIds\.add\(center\.id\)/);
+  assert.match(dunning, /prisma\.center\.updateMany/);
+  assert.match(dunning, /data: \{ updatedAt: new Date\(\) \}/);
   assert.match(stripeWebhook, /writeSystemAudit\(invoiceId, event\.id, session\.id, "billing\.checkout\.pending"\)/);
+  assert.equal(stripeWebhook.match(/else if \(affectedBillingAccountId\)/g)?.length, 2);
+  assert.match(stripeWebhook, /writeBillingAccountSystemAudit\(affectedBillingAccountId, event\.id, charge\.id, "billing\.charge\.refunded"\)/);
 });
 
 test("notification polling uses the lightweight unread endpoint", () => {

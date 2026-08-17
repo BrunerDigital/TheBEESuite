@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -375,6 +376,15 @@ type Props = {
   previewMode?: boolean;
 };
 
+type PaymentCheckoutMethod = "ach" | "card" | "link_bank" | null;
+
+type ParentPortalWorkspaceViewProps = Props & {
+  paymentCheckoutMethod: PaymentCheckoutMethod;
+  setPaymentCheckoutMethod: Dispatch<SetStateAction<PaymentCheckoutMethod>>;
+  paymentCheckoutError: string;
+  setPaymentCheckoutError: Dispatch<SetStateAction<string>>;
+};
+
 const defaultNotificationPreferences: NotificationPreferences = {
   portal: true,
   email: true,
@@ -665,6 +675,9 @@ export function ParentPortalWorkspace(props: Props) {
   const activeView = props.activeView ?? "home";
   const familySection = normalizeParentFamilySection(props.familySection);
   const familyId = props.family?.id ?? "no-family";
+  const [paymentCheckoutMethod, setPaymentCheckoutMethod] =
+    useState<PaymentCheckoutMethod>(null);
+  const [paymentCheckoutError, setPaymentCheckoutError] = useState("");
 
   return (
     <ParentPortalWorkspaceView
@@ -672,6 +685,10 @@ export function ParentPortalWorkspace(props: Props) {
       {...props}
       activeView={activeView}
       familySection={familySection}
+      paymentCheckoutMethod={paymentCheckoutMethod}
+      setPaymentCheckoutMethod={setPaymentCheckoutMethod}
+      paymentCheckoutError={paymentCheckoutError}
+      setPaymentCheckoutError={setPaymentCheckoutError}
     />
   );
 }
@@ -706,7 +723,11 @@ function ParentPortalWorkspaceView({
   centerName = null,
   demoMode,
   previewMode = false,
-}: Props) {
+  paymentCheckoutMethod,
+  setPaymentCheckoutMethod,
+  paymentCheckoutError,
+  setPaymentCheckoutError,
+}: ParentPortalWorkspaceViewProps) {
   const timeZone = useSchoolTimeZone();
   const formatDate = (value: string | Date | null) =>
     formatDateInTimeZone(value, timeZone);
@@ -804,10 +825,6 @@ function ParentPortalWorkspaceView({
   >({});
   const [accountPaymentAmountDollars, setAccountPaymentAmountDollars] =
     useState("");
-  const [paymentCheckoutMethod, setPaymentCheckoutMethod] = useState<
-    "ach" | "card" | "link_bank" | null
-  >(null);
-  const [paymentCheckoutError, setPaymentCheckoutError] = useState("");
   const [isPending, startTransition] = useTransition();
   const passwordLengthReady = newPassword.length >= 8;
   const passwordsMatch =

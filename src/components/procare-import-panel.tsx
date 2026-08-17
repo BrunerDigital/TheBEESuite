@@ -209,6 +209,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [correlationConfirmations, setCorrelationConfirmations] = useState<string[]>([]);
   const [reviewStale, setReviewStale] = useState(false);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [activeWorkflowStep, setActiveWorkflowStep] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
   const [progressPercent, setProgressPercent] = useState(0);
   const [progressPhase, setProgressPhase] = useState<"idle" | "uploading" | "processing" | "complete">("idle");
@@ -345,6 +346,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             : json?.error || `Data import could not be processed${response.status ? ` (error ${response.status})` : ""}.`);
           if (dryRun && json?.summary) {
             setPreview(json.summary);
+            setActiveWorkflowStep(1);
             setPreviewDialogOpen(true);
           }
           return;
@@ -354,6 +356,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           setProgressPercent(100);
           setProgressMessage("Upload complete. Import review is ready.");
           setPreview(json.summary ?? null);
+          setActiveWorkflowStep(1);
           setLastImportSummary(null);
           setPreviewDialogOpen(true);
           setDuplicateReviewConfirmed(false);
@@ -377,6 +380,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           setSelectedFiles([]);
         } else {
           setPreview(completedSummary);
+          setActiveWorkflowStep(5);
           setPreviewDialogOpen(false);
         }
         setLastImportSummary(completedSummary);
@@ -491,17 +495,36 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     && !["row type", "import warning"].includes(header.normalized)
   )) ?? [];
   const workflowStages = [
-    { label: "Select sources", complete: hasImportSource || Boolean(preview) || importCommitted },
-    { label: "Detect reports", complete: Boolean(preview) || importCommitted },
-    { label: "Normalize records", complete: Boolean(preview) || importCommitted },
-    { label: "Review data", complete: hasCompletedPreview || importCommitted },
     {
-      label: "Confirm sources and mappings",
-      complete: (hasReviewedImport && sourceInventoryReady && (!requiredCorrelationSections.length || !missingCorrelationSections.length)) || importCommitted,
+      label: "Upload reports",
+      detail: "Choose the full previous-system report folder or ZIP for this school.",
+      complete: hasImportSource || Boolean(preview) || importCommitted,
     },
-    { label: "Resolve duplicates", complete: (hasReviewedImport && (!duplicateReviewRows || duplicateReviewConfirmed)) || importCommitted },
-    { label: "Commit safely", complete: Boolean(lastBatchId) },
-    { label: "Handoff ready", complete: importCommitted },
+    {
+      label: "Parse and match",
+      detail: "Review detected files, stable IDs, mappings, and duplicate candidates.",
+      complete: Boolean(preview) || importCommitted,
+    },
+    {
+      label: "Families and children",
+      detail: "Confirm each household, child, guardian relationship, enrollment, and classroom.",
+      complete: (hasReviewedImport && !missingCorrelationSections.some((section) => /family|child|guardian|relationship|classroom/i.test(section.title))) || importCommitted,
+    },
+    {
+      label: "Balances and tuition",
+      detail: "Confirm one opening family balance and the weekly rate for every enrolled child.",
+      complete: (hasReviewedImport && sourceInventoryReady && sumCounts(preview?.balanceRows, preview?.invoiceRows, preview?.ledgerRows) > 0) || importCommitted,
+    },
+    {
+      label: "Exceptions",
+      detail: "Correct, match, exclude, or hold every unresolved and warning row.",
+      complete: (hasReviewedImport && !sumCounts(preview?.unresolved, preview?.warningRows) && (!duplicateReviewRows || duplicateReviewConfirmed)) || importCommitted,
+    },
+    {
+      label: "Confirm package",
+      detail: "Review the unchanged final package and import only after every required check passes.",
+      complete: importCommitted,
+    },
   ];
   const completedWorkflowSteps = workflowStages.filter((stage) => stage.complete).length;
   const workflowPercent = Math.round((completedWorkflowSteps / workflowStages.length) * 100);
@@ -584,7 +607,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   return (
     <Card className="shadow-none [&_button]:min-h-10" aria-busy={busy}>
       <CardHeader>
-        <CardTitle as="h2">BEE Suite School Migration Review</CardTitle>
+        <CardTitle as="h2">Guided school migration setup</CardTitle>
         <CardDescription>
           Bring an established school into BEE Suite with its families, children, guardians, classrooms, schedules, balances, tuition evidence, staff, and operating history intact. BEE Suite converts supported previous-system exports into a reviewable school dataset, identifies anything incomplete or conflicting, and holds every unresolved record for confirmation before import.
         </CardDescription>
@@ -609,10 +632,19 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             <ProgressLabel>Overall readiness</ProgressLabel>
             <ProgressValue>{() => `${workflowPercent}%`}</ProgressValue>
           </Progress>
-          <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
-            {workflowStages.map((stage) => (
-              <div key={stage.label} className={stage.complete ? "text-foreground" : ""}>{stage.complete ? "✓" : "○"} {stage.label}</div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+            {workflowStages.map((stage, index) => (
+              <button key={stage.label} type="button" aria-current={activeWorkflowStep === index ? "step" : undefined} onClick={() => setActiveWorkflowStep(index)} className={`rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${activeWorkflowStep === index ? "border-primary bg-primary/10" : "bg-background/60 hover:border-primary/30"}`}>
+                <span className="flex items-center gap-2 text-xs font-medium"><span className={`grid size-6 place-items-center rounded-full ${stage.complete ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"}`}>{stage.complete ? "✓" : index + 1}</span>{stage.label}</span>
+              </button>
             ))}
+          </div>
+          <div className="flex flex-col gap-3 rounded-xl border border-primary/25 bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><div className="text-sm font-semibold">Step {activeWorkflowStep + 1}: {workflowStages[activeWorkflowStep].label}</div><p className="mt-1 text-xs leading-5 text-muted-foreground">{workflowStages[activeWorkflowStep].detail}</p></div>
+            <div className="flex shrink-0 gap-2">
+              {activeWorkflowStep > 0 ? <Button size="sm" variant="outline" onClick={() => setActiveWorkflowStep((step) => Math.max(0, step - 1))}>Previous</Button> : null}
+              {activeWorkflowStep < workflowStages.length - 1 ? <Button size="sm" onClick={() => { if (!preview && canPreview) submit(true); else { setActiveWorkflowStep((step) => Math.min(workflowStages.length - 1, step + 1)); if (preview) setPreviewDialogOpen(true); } }} disabled={busy || (!preview && !canPreview)}>{!preview ? "Upload and parse" : "Review this step"}</Button> : <Button size="sm" onClick={() => preview ? setPreviewDialogOpen(true) : submit(true)} disabled={busy || (!preview && !canPreview)}>Confirm reviewed package</Button>}
+            </div>
           </div>
         </div>
         <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>

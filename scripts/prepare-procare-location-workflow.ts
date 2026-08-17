@@ -190,11 +190,22 @@ function sourceFilenameMatchesLocation(filename: string, location: string) {
   const name = filename.toLocaleLowerCase("en-US");
   const normalizedLocation = location.trim().toLocaleLowerCase("en-US");
   if (name.startsWith(`${normalizedLocation} - `)) return true;
+  // Procare's rendered report downloads often omit the separator used by its
+  // structured exports (for example, "Baden Strasse Account balance summary").
+  // The full normalized location prefix still provides a fail-closed boundary.
+  if (!name.startsWith(`${normalizedLocation} `)) return false;
   const suffix = name.slice(normalizedLocation.length + 1);
-  return name.startsWith(`${normalizedLocation} `) && (
-    suffix.startsWith("child contract billing summary") ||
-    suffix.startsWith("classroom schedule summary")
-  );
+  return [
+    "account balance summary",
+    "account information",
+    "child all enrollment status",
+    "child contract billing summary",
+    "child relationships",
+    "child timecards",
+    "classroom schedule summary",
+    "employee information",
+    "employee timecards",
+  ].some((reportName) => suffix.startsWith(reportName));
 }
 
 function evidenceKey(value: string) {
@@ -470,6 +481,31 @@ function recurringWeeklyLedgerCandidates(rows: CsvRow[]) {
     result.set(accountId, { ledgerRows: accountRows.length, tuitionChargeRows: tuitionRows.length, candidates });
   }
   return result;
+}
+
+function formalWeeklyTuitionCandidates(rows: CsvRow[]) {
+  const byChild = new Map<string, Array<{
+    amountCents: number;
+    cadence: string;
+    effectiveDate: string;
+    description: string;
+  }>>();
+  for (const row of rows) {
+    const childId = field(row, "Child ID", "Child Key", "Student ID");
+    const amountCents = parseMoneyCents(field(row, "Weekly Rate", "Tuition Rate", "Charge Amount", "Amount", "Rate"));
+    const cadence = field(row, "Frequency", "Cadence", "Billing Period", "Charge Frequency");
+    if (!childId || amountCents === null) continue;
+    const candidate = {
+      amountCents,
+      cadence,
+      effectiveDate: field(row, "Effective Date", "Start Date", "Status Start Date"),
+      description: field(row, "Description", "Charge Description", "Tuition Plan", "Plan Name"),
+    };
+    const existing = byChild.get(childId) ?? [];
+    if (!existing.some((item) => JSON.stringify(item) === JSON.stringify(candidate))) existing.push(candidate);
+    byChild.set(childId, existing);
+  }
+  return byChild;
 }
 
 function statusOf(record: CsvRow) {
@@ -908,6 +944,17 @@ export async function prepareProcareLocationWorkflow(input: {
   }
 
   const ledgerCandidates = recurringWeeklyLedgerCandidates(ledger?.rows ?? []);
+  const formalTuitionCandidates = formalWeeklyTuitionCandidates(tuition?.rows ?? []);
+  const renderedTuitionByName = new Map<string, CsvRow[]>();
+  for (const row of renderedBillingReview) {
+    const key = renderedChildNameKey(row["source child name"] ?? "");
+    if (key) renderedTuitionByName.set(key, [...(renderedTuitionByName.get(key) ?? []), row]);
+  }
+  const enrolledNameCountsForTuition = new Map<string, number>();
+  for (const record of enrolledRecords) {
+    const key = renderedChildNameKey(record["child name"] ?? "");
+    if (key) enrolledNameCountsForTuition.set(key, (enrolledNameCountsForTuition.get(key) ?? 0) + 1);
+  }
   const enrolledChildrenPerAccount = new Map<string, number>();
   for (const record of enrolledRecords) {
     const accountId = record["account id"];
@@ -918,34 +965,77 @@ export async function prepareProcareLocationWorkflow(input: {
     const accountId = record["account id"];
     const evidence = ledgerCandidates.get(accountId);
     const candidates = evidence?.candidates ?? [];
+    const formalCandidates = formalTuitionCandidates.get(record["child id"]) ?? [];
+    const exactFormalCandidates = formalCandidates.filter((item) => /^weekly$/i.test(item.cadence) && item.amountCents > 0);
+    const renderedNameKey = renderedChildNameKey(record["child name"] ?? "");
+    const renderedCandidates = (enrolledNameCountsForTuition.get(renderedNameKey) === 1
+      ? renderedTuitionByName.get(renderedNameKey) ?? []
+      : []).filter((item) => /^weekly$/i.test(item["confirmed cadence"] ?? "") && Number(item["confirmed tuition cents"]) > 0);
     const singleChildAccount = (enrolledChildrenPerAccount.get(accountId) ?? 0) === 1;
     const candidate = candidates.length === 1 && singleChildAccount ? candidates[0] : null;
     let status = tuition
-      ? "source_requires_review"
+      ? "blocked_formal_tuition_source_missing_exact_weekly_child_row"
+      : renderedContractBilling
+        ? "blocked_rendered_contract_requires_unique_child_match"
       : ledger
         ? "blocked_incomplete_statement_history_and_missing_contract_source"
         : "blocked_missing_contract_or_tuition_rate_source";
     let evidenceNote = tuition
-      ? "A formal tuition source is present and requires child-level review."
+      ? "The formal tuition source did not produce one exact positive weekly row for this stable Child ID."
+      : renderedContractBilling
+        ? "The rendered contract source must match exactly one enrolled child name and one positive weekly charge group, then be confirmed against the stable Child and Account IDs."
       : ledger
         ? "The supplied ledger does not contain three recurring weekly tuition charge rows for this child/account."
         : "No formal tuition source or statement ledger was supplied.";
-    if (!tuition && candidates.length === 1 && !singleChildAccount) {
+    let sourceAmountCents = "";
+    let sourceCadence = "";
+    let sourceEffectiveDate = "";
+    let sourceDescription = "";
+    let sourceKind = "";
+    if (tuition && exactFormalCandidates.length === 1 && formalCandidates.length === 1) {
+      const exact = exactFormalCandidates[0];
+      sourceAmountCents = String(exact.amountCents);
+      sourceCadence = "weekly";
+      sourceEffectiveDate = exact.effectiveDate;
+      sourceDescription = exact.description;
+      sourceKind = "formal_child_contract";
+      status = "exact_weekly_contract_requires_confirmation";
+      evidenceNote = "One exact positive weekly tuition row is keyed to this stable Child ID; confirm the amount, account link, and effective week.";
+    } else if (tuition && formalCandidates.length > 0) {
+      status = "blocked_conflicting_or_nonweekly_formal_tuition_rows";
+      evidenceNote = "The stable Child ID has conflicting, nonweekly, nonpositive, or duplicate formal tuition rows. Resolve the source rather than selecting one automatically.";
+    } else if (!tuition && renderedCandidates.length === 1) {
+      const exact = renderedCandidates[0];
+      sourceAmountCents = exact["confirmed tuition cents"];
+      sourceCadence = "weekly";
+      sourceEffectiveDate = exact["effective date"];
+      sourceDescription = exact["source charge descriptions"];
+      sourceKind = "rendered_contract_name_candidate";
+      status = "rendered_weekly_contract_requires_stable_id_confirmation";
+      evidenceNote = "A unique enrolled name matches one rendered weekly contract group. The reviewer must confirm the stable Child ID, Account ID, amount, and effective week.";
+    } else if (!tuition && !renderedContractBilling && candidates.length === 1 && !singleChildAccount) {
       status = "blocked_account_total_cannot_be_allocated_across_children";
       evidenceNote = "Recurring weekly statement history exists at the account level, but the account has multiple enrolled children and the source does not allocate the amount by Child ID.";
-    } else if (!tuition && candidates.length > 1) {
+    } else if (!tuition && !renderedContractBilling && candidates.length > 1) {
       status = "blocked_conflicting_recurring_statement_rates";
       evidenceNote = "More than one recurring weekly tuition amount appears in statement history; a child contract or billing schedule is required.";
-    } else if (!tuition && candidate) {
+    } else if (!tuition && !renderedContractBilling && candidate) {
       status = "candidate_from_recurring_statement_history_requires_approval";
       evidenceNote = "One positive tuition charge amount repeated at 5-9 day intervals at least three times for a single-child account. The effective week still requires confirmation.";
+      sourceAmountCents = String(candidate.amountCents);
+      sourceCadence = "weekly";
+      sourceKind = "recurring_statement_history";
     }
     return {
       "child id": record["child id"],
       "account id": accountId,
       "classroom id": record["classroom id"],
       classroom: record["classroom"],
-      "weekly tuition cents": candidate ? String(candidate.amountCents) : "",
+      "weekly tuition cents": sourceAmountCents,
+      "source cadence": sourceCadence,
+      "source effective date": sourceEffectiveDate,
+      "source description": sourceDescription,
+      "source kind": sourceKind,
       "observed first post date": candidate?.dates[0] ?? "",
       "observed last post date": candidate?.dates.at(-1) ?? "",
       "effective week": "",
@@ -1222,7 +1312,7 @@ export async function prepareProcareLocationWorkflow(input: {
       ],
     },
     "Current-family balances": {
-      status: invalidBalanceRows || activeAccountsMissingBalance || activeRelationshipWarnings ? "blocked" : "review_required",
+      status: invalidBalanceRows || activeAccountsMissingBalance || activeRelationshipWarnings || currentHiddenBalanceAccounts ? "blocked" : "review_required",
       summary: `${currentBalanceRows.length} current-family accounts total ${currentBalanceTotalCents} cents in the source balance report.`,
       details: [
         `${historicalBalanceRows.length} historical or unmatched accounts were separated from the current-family balance review.`,
@@ -1324,6 +1414,41 @@ export async function prepareProcareLocationWorkflow(input: {
   const readyCsv = `${preparedProcareCsv(readyRecords)}\r\n`;
   const resolutionCsv = resolutionRecords.length ? `${preparedProcareCsv(resolutionRecords)}\r\n` : "";
   const activePortalSafeCsv = `${preparedProcareCsv(activePortalSafeRecords)}\r\n`;
+  const balanceByAccount = new Map(currentBalanceRows.map((row) => [field(row, "Account ID"), row]));
+  const tuitionByChild = new Map(weeklyTuitionReview.map((row) => [row["child id"], row]));
+  const migrationTemplateRows = enrolledRecords.map((record): CsvRow => {
+    const accountId = record["account id"];
+    const balanceRow = balanceByAccount.get(accountId);
+    const tuitionRow = tuitionByChild.get(record["child id"]);
+    const counts = relationshipCounts(record);
+    return {
+      "BEE Migration Template Version": "1",
+      Location: input.location,
+      "Source Account ID": accountId,
+      "Source Child ID": record["child id"],
+      "Source Child Name": record["child name"],
+      "Enrollment Status": record["child status"],
+      "Source Classroom ID": record["classroom id"],
+      "Source Classroom Name": record.classroom,
+      "Guardian Relationship Count": String(counts.guardians),
+      "Source Opening Balance Cents": balanceRow?.["BEE Balance Cents"] ?? "",
+      "Source Weekly Tuition Cents": tuitionRow?.["weekly tuition cents"] ?? "",
+      "Source Tuition Kind": tuitionRow?.["source kind"] ?? "",
+      "Source Tuition Evidence": tuitionRow?.["rate evidence"] ?? "",
+      "Confirmed Account ID": accountId,
+      "Confirmed Child ID": record["child id"],
+      "Confirmed Opening Balance Cents": balanceRow?.["BEE Balance Cents"] ?? "",
+      "Opening Balance Confirmation": "",
+      "Confirmed Weekly Tuition Cents": tuitionRow?.["weekly tuition cents"] ?? "",
+      "Confirmed Tuition Cadence": tuitionRow?.["source cadence"] ?? "",
+      "Tuition Effective Week": "",
+      "Tuition Confirmation": "",
+      "Family Child Link Confirmation": "",
+      Disposition: "review_required",
+      "Review Notes": record["import warning"] || tuitionRow?.status || "",
+    };
+  });
+  const migrationTemplateCsv = csvFromRows(migrationTemplateRows);
   fs.writeFileSync(path.join(outputDirectory, "01-roster-reviewed-import.csv"), reviewedCsv, "utf8");
   fs.writeFileSync(path.join(outputDirectory, "02-roster-ready-reference.csv"), readyCsv, "utf8");
   fs.writeFileSync(path.join(outputDirectory, "03-roster-needs-resolution.csv"), resolutionCsv, "utf8");
@@ -1348,9 +1473,10 @@ export async function prepareProcareLocationWorkflow(input: {
   writeCsv(path.join(outputDirectory, "14-active-portal-safe-balance-review.csv"), activePortalSafeBalanceRows);
   writeCsv(path.join(outputDirectory, "15-rendered-contract-billing-review.csv"), renderedBillingReview);
   writeCsv(path.join(outputDirectory, "16-rendered-classroom-schedule-review.csv"), renderedScheduleReview);
+  fs.writeFileSync(path.join(outputDirectory, "17-bee-suite-migration-source-of-truth.csv"), migrationTemplateCsv, "utf8");
 
   const manifest = {
-    version: 3,
+    version: 4,
     location: input.location,
     generatedAt,
     preparationOnly: true,
@@ -1378,6 +1504,7 @@ export async function prepareProcareLocationWorkflow(input: {
       readyReferenceSha256: sha256(readyCsv),
       needsResolutionSha256: sha256(resolutionCsv),
       activePortalSafeImportSha256: sha256(activePortalSafeCsv),
+      migrationSourceOfTruthTemplateSha256: sha256(migrationTemplateCsv),
     },
   };
   fs.writeFileSync(path.join(outputDirectory, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");

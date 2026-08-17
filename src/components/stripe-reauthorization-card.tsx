@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 type Props = {
   centerId: string;
   schoolName: string;
+  schoolEmail: string | null;
   initialStatus: string;
   returning: boolean;
   returnToCorporatePortfolio?: boolean;
@@ -17,6 +18,7 @@ const CORPORATE_PORTFOLIO_PATH = "/stripe-reauthorization/corporate";
 export function StripeReauthorizationCard({
   centerId,
   schoolName,
+  schoolEmail,
   initialStatus,
   returning,
   returnToCorporatePortfolio = false,
@@ -84,6 +86,10 @@ export function StripeReauthorizationCard({
         <div><strong>Selected school:</strong> {schoolName}. Confirm this is the business you are authorized to represent.</div>
       </div>
 
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+        <strong>This school&apos;s Stripe account already exists.</strong> On Stripe&apos;s page, sign in with <span className="break-all font-semibold">{schoolEmail || "the school email on file"}</span> and the existing Stripe password. If no Stripe password was created, choose Stripe&apos;s create-account or password-setup option for that same email. The BEE Suite login and Stripe login are separate, and The BEE Suite never receives or stores the Stripe password.
+      </div>
+
       <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm leading-6">
         <input
           type="checkbox"
@@ -102,7 +108,7 @@ export function StripeReauthorizationCard({
         ) : (
           <Button type="button" size="lg" disabled={!authorized || busy} onClick={() => void startReauthorization()}>
             {busy ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : null}
-            Continue to secure Stripe setup
+            Continue to Stripe sign in or setup
             {!busy ? <ArrowUpRight data-icon="inline-end" /> : null}
           </Button>
         )}

@@ -431,6 +431,14 @@ export function StripeConnectPanel({
           </span>
         </div>
         {migrationCount ? (
+          <div className="flex gap-3 rounded-xl border border-slate-300/60 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+            <LockKeyhole className="mt-0.5 size-5 shrink-0 text-slate-700" />
+            <span>
+              The replacement Stripe accounts already exist. The school signs in on Stripe with its school email and existing Stripe password. If no Stripe password was set, Stripe lets the school create its login for that same email. The BEE Suite never receives or stores the Stripe password.
+            </span>
+          </div>
+        ) : null}
+        {migrationCount ? (
           <div className="flex gap-3 rounded-xl border border-blue-300/40 bg-blue-50 p-4 text-sm leading-6 text-slate-800">
             <ShieldCheck className="mt-0.5 size-5 shrink-0 text-blue-700" />
             <span>
@@ -589,7 +597,7 @@ export function StripeConnectPanel({
                           disabled={busyCenterId === center.id || !stripeConfigured}
                         >
                           <ShieldCheck data-icon="inline-start" />
-                          Continue secure setup
+                          Finish Stripe setup
                         </Button>
                       ) : migrationInProgress ? (
                         <span className="max-w-52 text-right text-xs leading-5 text-muted-foreground">

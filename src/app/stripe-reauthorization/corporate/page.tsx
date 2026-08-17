@@ -14,8 +14,8 @@ import { CORPORATE_STRIPE_PORTFOLIO_EMAIL, CORPORATE_STRIPE_PORTFOLIO_PATH } fro
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Corporate Stripe Reauthorization | The BEE Suite",
-  description: "Complete Stripe reauthorization for the Kid City USA corporate school portfolio.",
+  title: "Finish Corporate School Stripe Setup | The BEE Suite",
+  description: "Finish the existing Stripe accounts for the Kid City USA corporate school portfolio.",
 };
 
 const inactiveCenterStatuses = ["closed", "archived", "inactive"];
@@ -87,9 +87,9 @@ export default async function CorporateStripeReauthorizationPage() {
           <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">
             <ShieldCheck className="size-4" /> Secure corporate portfolio
           </div>
-          <h1 className="mt-5 max-w-4xl text-4xl font-semibold tracking-tight sm:text-5xl">Complete Stripe reauthorization for corporate schools</h1>
+          <h1 className="mt-5 max-w-4xl text-4xl font-semibold tracking-tight sm:text-5xl">Finish the existing Stripe accounts for corporate schools</h1>
           <p className="mt-5 max-w-3xl text-base leading-7 text-slate-200 sm:text-lg">
-            Use this single progress page to complete each school&apos;s separate legal business, tax, representative, and payout authorization. Stripe keeps every EIN and bank account attached only to its matching school.
+            Each school&apos;s Stripe account has already been created. Open one school at a time, then sign in with that school&apos;s Stripe login—or create its Stripe login if a password was not set—to complete the remaining legal business, tax, representative, and payout requirements.
           </p>
         </section>
 
@@ -113,7 +113,7 @@ export default async function CorporateStripeReauthorizationPage() {
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Corporate school progress</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                Each secure Stripe form is generated only when you select a school. Temporary Stripe links are never stored in this page or sent by email.
+                Each secure Stripe form is generated only when you select a school. Temporary Stripe links and Stripe passwords are never stored in this page or sent by email.
               </p>
             </div>
             {nextSchool ? (

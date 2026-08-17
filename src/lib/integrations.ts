@@ -2656,30 +2656,79 @@ export async function createStripePayoutBankSelectionLink({
   accountId,
   refreshUrl,
   returnUrl,
+  dashboard,
+  payoutBankConfirmed,
   tenantId,
   credentials,
 }: {
   accountId: string;
   refreshUrl: string;
   returnUrl: string;
+  dashboard?: string | null;
+  payoutBankConfirmed?: boolean;
   tenantId?: string | null;
   credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult & { mode: "dashboard" | "onboarding" }> {
-  const dashboard = await createStripeExpressDashboardLoginLink({
-    accountId,
+  const connectedAccountId = clean(accountId);
+  const dashboardType = clean(dashboard).toLowerCase();
+
+  if (dashboardType === "full") {
+    const apiKey = await getStripeSecretKey({ tenantId, credentials });
+    if (!apiKey) {
+      return {
+        ok: false,
+        configured: false,
+        provider: "stripe",
+        error: "Payment processor is not configured.",
+        mode: "onboarding",
+      };
+    }
+    if (!connectedAccountId.startsWith("acct_")) {
+      return {
+        ok: false,
+        configured: true,
+        provider: "stripe",
+        error: "Connected payout account id is invalid.",
+        mode: "onboarding",
+      };
+    }
+
+    if (payoutBankConfirmed) {
+      return {
+        ok: true,
+        configured: true,
+        provider: "stripe",
+        id: connectedAccountId,
+        url: "https://dashboard.stripe.com/settings/payouts",
+        mode: "dashboard",
+      };
+    }
+
+    const onboarding = await createStripeAccountLink({
+      accountId: connectedAccountId,
+      refreshUrl,
+      returnUrl,
+      tenantId,
+      credentials,
+    });
+    return { ...onboarding, mode: "onboarding" };
+  }
+
+  const dashboardLink = await createStripeExpressDashboardLoginLink({
+    accountId: connectedAccountId,
     tenantId,
     credentials,
   });
-  if (dashboard.ok && dashboard.url) {
-    return { ...dashboard, mode: "dashboard" };
+  if (dashboardLink.ok && dashboardLink.url) {
+    return { ...dashboardLink, mode: "dashboard" };
   }
 
-  if (!/has not completed onboarding/i.test(dashboard.error || "")) {
-    return { ...dashboard, mode: "dashboard" };
+  if (!/has not completed onboarding/i.test(dashboardLink.error || "")) {
+    return { ...dashboardLink, mode: "dashboard" };
   }
 
   const onboarding = await createStripeAccountLink({
-    accountId,
+    accountId: connectedAccountId,
     refreshUrl,
     returnUrl,
     tenantId,

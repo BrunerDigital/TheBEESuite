@@ -1,4 +1,5 @@
 import { STAFF_MESSAGING_HREF } from "@/lib/messaging-navigation";
+import { PAYOUT_SETUP_SETTINGS_PATH } from "@/lib/stripe-payout-setup-flow";
 
 export type SetupChecklistKey = "director_launch" | "teacher_profile";
 
@@ -19,7 +20,7 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
     id: "login-school-profile",
     title: "Log in and confirm school profile",
     description: "Sign in with the school email, reset the password if prompted, and confirm school contact details, hours, timezone, capacity, and launch owner.",
-    href: "/school-setup",
+    href: "/billing-settings?view=setup",
   },
   {
     id: "classrooms-ratios",
@@ -43,7 +44,7 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
     id: "required-documents",
     title: "Complete required documents",
     description: "Review family, child, and staff document checklists, upload missing files, verify signatures, and confirm expiration dates.",
-    href: "/documents",
+    href: "/forms?view=documents",
   },
   {
     id: "tuition-billing-rules",
@@ -53,21 +54,21 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
   },
   {
     id: "payout-bank-account",
-    title: "Connect the school bank account",
-    description: "Directors and executives open Billing Settings to complete payout processor onboarding so tuition funds can route to the school account once parent payments are enabled.",
-    href: "/billing-settings#payout-setup",
+    title: "Finish the school's Stripe account setup",
+    description: "The Stripe account already exists. Sign in to The BEE Suite with the school login, open this school-specific step, then use the school email and its existing Stripe password—or create the Stripe login if no password was set—to finish payout verification.",
+    href: PAYOUT_SETUP_SETTINGS_PATH,
   },
   {
     id: "parent-portal",
     title: "Configure parent portal access",
     description: "Verify guardian emails, family links, child visibility, custody restrictions, payment access, document access, and invite order.",
-    href: "/parent-portal",
+    href: "/family-detail#family-guardians",
   },
   {
     id: "attendance-kiosk",
     title: "Test attendance, kiosk, QR, and PIN workflows",
     description: "Verify guardian check-in/out, authorized pickups, staff clock-in/out, classroom attendance, late pickup flags, and ratio snapshots.",
-    href: "/attendance",
+    href: "/classroom-dashboard?view=attendance",
   },
   {
     id: "messages-notifications",
@@ -85,7 +86,7 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
     id: "compliance-incidents",
     title: "Configure compliance, incidents, and medication logs",
     description: "Enter licensing details, drill cadence, medication rules, compliance tasks, incident admin review, parent acknowledgement, and export readiness.",
-    href: "/compliance",
+    href: "/forms?view=compliance",
   },
   {
     id: "enrollment-registration",
@@ -112,9 +113,9 @@ export function directorLaunchChecklistTasksForPayoutSetup(flow?: PayoutSetupChe
   return directorLaunchChecklistTasks.map((task) => task.id === "payout-bank-account"
     ? {
         ...task,
-        title: flow.replacementInProgress ? "Complete secure Stripe reauthorization" : task.title,
+        title: flow.replacementInProgress ? "Finish the school's existing Stripe account" : task.title,
         description: flow.replacementInProgress
-          ? "Open the authenticated BEE Suite payout flow, confirm the school and terms, then continue to a fresh school-specific Stripe session. Parent payments remain on the current verified account until a controlled cutover."
+          ? "Sign in to The BEE Suite with the school login, confirm the exact school, then open its account-specific Stripe page. Use the school email and existing Stripe password, or create the Stripe login if no password was set. Parent payments remain on the current verified account until a controlled cutover."
           : task.description,
         href: flow.href,
       }
@@ -198,7 +199,7 @@ export const teacherProfileChecklistTasks: SetupChecklistTask[] = [
     id: "schedule-coverage",
     title: "Confirm schedule and coverage",
     description: "Confirm your shift, classroom coverage, ratio expectations, and who to notify when you float, call out, arrive late, or leave early.",
-    href: "/staff",
+    href: "/teacher-portal",
   },
 ];
 

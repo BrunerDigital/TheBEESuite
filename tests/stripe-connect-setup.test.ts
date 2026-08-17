@@ -392,6 +392,83 @@ test("Stripe payout bank selection falls back to onboarding before the Express D
   }
 });
 
+test("Stripe payout bank setup uses hosted onboarding for an existing Full Dashboard account", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    requestedUrls.push(String(url));
+    if (requestedUrls.length === 1) {
+      return new Response(JSON.stringify({
+        id: "acct_123",
+        dashboard: "full",
+        configuration: {
+          merchant: {},
+          recipient: {},
+        },
+        requirements: {},
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({
+      url: "https://connect.stripe.com/setup/acct_123/secure",
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripePayoutBankSelectionLink({
+      accountId: "acct_123",
+      dashboard: "full",
+      payoutBankConfirmed: false,
+      refreshUrl: "https://thebeesuite.io/api/billing/connect/refresh?centerId=center_123",
+      returnUrl: "https://thebeesuite.io/billing-settings?stripeConnect=return&center=center_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.mode, "onboarding");
+    assert.equal(result.url, "https://connect.stripe.com/setup/acct_123/secure");
+    assert.match(requestedUrls[0], /^https:\/\/api\.stripe\.com\/v2\/core\/accounts\/acct_123\?/);
+    assert.equal(requestedUrls[1], "https://api.stripe.com/v2/core/account_links");
+    assert.equal(requestedUrls.some((url) => url.includes("/login_links")), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe payout bank changes send Full Dashboard schools to Stripe sign in", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = (async () => {
+    fetchCalled = true;
+    return new Response(null, { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripePayoutBankSelectionLink({
+      accountId: "acct_123",
+      dashboard: "full",
+      payoutBankConfirmed: true,
+      refreshUrl: "https://thebeesuite.io/api/billing/connect/refresh?centerId=center_123",
+      returnUrl: "https://thebeesuite.io/billing-settings?stripeConnect=return&center=center_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.mode, "dashboard");
+    assert.equal(result.url, "https://dashboard.stripe.com/settings/payouts");
+    assert.equal(fetchCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Stripe account links match the configurations applied to the Accounts v2 account", async () => {
   const originalFetch = globalThis.fetch;
   let accountLinkBody: Record<string, unknown> = {};

@@ -245,8 +245,10 @@ test("branded invitation accurately separates Stripe verification from program e
     schoolName: "Kid City USA - Example",
     reauthorizationUrl: "https://thebeesuite.io/stripe-reauthorization?center=center_1",
   });
-  assert.match(invite.subject, /BEE Suite Stripe reauthorization/);
-  assert.match(invite.text, /state-funding allocations, subsidies/i);
+  assert.match(invite.subject, /Finish your school's Stripe account setup/);
+  assert.match(invite.text, /school email and its existing Stripe password/i);
+  assert.match(invite.text, /no password was set/i);
+  assert.match(invite.text, /never receives or stores the Stripe password/i);
   assert.match(invite.text, /Program eligibility and funding approvals remain/i);
   assert.match(invite.text, /Parent payments can continue/i);
   assert.match(invite.html, /logo-primary-horizontal-white\.png/);
@@ -362,6 +364,9 @@ test("dashboard and setup checklists route prepared schools through secure reaut
   assert.match(dashboardPage, /directorLaunchChecklistTasksForPayoutSetup/);
   assert.match(dashboard, /checklist\.tasks/);
   assert.match(schoolSetup, /directorChecklistTasks: directorLaunchChecklistTasksForPayoutSetup/);
+  assert.match(schoolSetup, /definition\.field === "integrationSetup" \? payoutSetupFlow\.href/);
+  assert.match(schoolSetup, /Finish school Stripe setup/);
+  assert.match(schoolSetup, /Open other integrations/);
   assert.match(payoutPanel, /id="payout-setup"/);
   assert.match(payoutPanel, /stripeReauthorizationHref\(center\.id\)/);
   assert.match(payoutPanel, /center\.stripeReauthorizationAvailable !== false/);
@@ -396,9 +401,17 @@ test("approved corporate verification links are current-due only and cannot invo
   assert.match(card, /termsAccepted/);
   assert.match(card, /authorizedRepresentative: true/);
   assert.match(card, /I agree to the terms of service/);
+  assert.match(card, /schoolEmail/);
+  assert.match(card, /existing Stripe password/);
+  assert.match(card, /no Stripe password was created/);
+  assert.match(card, /never receives or stores the Stripe password/);
   assert.doesNotMatch(card, /\$99|software-payment-method|stripe_balance/);
   const standardCard = readFileSync("src/components/stripe-reauthorization-card.tsx", "utf8");
   assert.match(standardCard, /I agree to the terms of service/);
+  assert.match(standardCard, /schoolEmail/);
+  assert.match(standardCard, /existing Stripe password/);
+  assert.match(standardCard, /no Stripe password was created/);
+  assert.match(standardCard, /never receives or stores the Stripe password/);
   assert.doesNotMatch(standardCard, /\$99|software-payment-method|stripe_balance/);
   assert.match(migrationRoute, /collectionFields: corporateVerification \? "currently_due" : "eventually_due"/);
   assert.match(migrationRoute, /stripeConnectMigrationTargetRequirementFields: target\.account\.currentlyDueRequirementFields/);

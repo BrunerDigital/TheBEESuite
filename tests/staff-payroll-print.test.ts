@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import {
   buildPayrollDayRows,
   clampClockEditDateTimeToPayPeriod,
+  clockEditRowOccurredAtUtc,
   clockEditRowsFromSavedEvents,
   clockEditRowsForEditor,
   filterClockEditRowsByPayPeriod,
@@ -61,6 +62,31 @@ test("school-local datetime inputs round trip across daylight saving changes", (
   );
 });
 
+test("payroll punch editor preserves distinct punches within the same minute", () => {
+  const timeZone = "America/Indiana/Indianapolis";
+  const rows = clockEditRowsFromSavedEvents([
+    { action: "clock_out", occurredAt: "2026-08-17T13:10:26.895Z" },
+    { action: "clock_in", occurredAt: "2026-08-17T13:10:49.698Z" },
+  ], timeZone, []);
+
+  assert.deepEqual(rows.map((row) => row.occurredAt), [
+    "2026-08-17T09:10:26",
+    "2026-08-17T09:10:49",
+  ]);
+  assert.deepEqual(rows.map((row) => clockEditRowOccurredAtUtc(row, timeZone)?.toISOString()), [
+    "2026-08-17T13:10:26.895Z",
+    "2026-08-17T13:10:49.698Z",
+  ]);
+  assert.equal(
+    clockEditRowOccurredAtUtc({ ...rows[1], occurredAt: "2026-08-17T09:11:00" }, timeZone)?.toISOString(),
+    "2026-08-17T13:11:00.000Z",
+  );
+  assert.equal(
+    clampClockEditDateTimeToPayPeriod("2026-08-30T09:11:42", "2026-08-03", "2026-08-16"),
+    "2026-08-16T09:11:42",
+  );
+});
+
 test("staff clock punches are viewed by pay period without dropping other periods", () => {
   const punches = [
     { id: "before", occurredAt: "2026-07-05T16:30" },
@@ -94,7 +120,7 @@ test("saved clock rows keep their editor identity while displaying canonical sch
   );
 
   assert.equal(rows[0]?.id, "edited-row");
-  assert.equal(rows[0]?.occurredAt, "2026-03-08T03:30");
+  assert.equal(rows[0]?.occurredAt, "2026-03-08T03:30:00");
 });
 
 test("manual punch visibility protection is school-agnostic", () => {

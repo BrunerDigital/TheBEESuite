@@ -45,11 +45,12 @@ export function zonedDateInputToUtc(value: string, timeZone: string, endOfDay = 
   return endOfDay ? new Date(date.getTime() + 999) : date;
 }
 
-export function zonedDateTimeLocalValue(value: Date | string, timeZone: string) {
+export function zonedDateTimeLocalValue(value: Date | string, timeZone: string, includeSeconds = false) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   const parts = partsInTimeZone(date, timeZone);
-  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}T${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
+  const minuteValue = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}T${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
+  return includeSeconds ? `${minuteValue}:${String(parts.second).padStart(2, "0")}` : minuteValue;
 }
 
 export function zonedDateTimeLocalToUtc(value: string, timeZone: string) {

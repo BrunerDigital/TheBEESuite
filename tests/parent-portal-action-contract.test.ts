@@ -117,6 +117,21 @@ test("parent payment redirects preserve the selected family billing view", () =>
   assert.doesNotMatch(workspace, /returnPath: "\/parent-portal"/);
 });
 
+test("parent account checkout keeps the workspace interactive and reports mobile progress inline", () => {
+  const paymentAction = workspace.slice(
+    workspace.indexOf("function payFamilyBalance"),
+    workspace.indexOf("function payBalance"),
+  );
+
+  assert.doesNotMatch(paymentAction, /startTransition/);
+  assert.match(paymentAction, /setPaymentCheckoutMethod\(paymentMethodCategory\)/);
+  assert.match(paymentAction, /setPaymentCheckoutError\(message\)/);
+  assert.match(workspace, /Opening secure checkout…/);
+  assert.match(workspace, /Secure payment setup can take a few seconds on a mobile connection\./);
+  assert.match(workspace, /No payment was started\. Choose a payment method to try again\./);
+  assert.match(workspace, /aria-busy=\{paymentCheckoutMethod === "card"\}/);
+});
+
 test("profile password controls use a semantic form and submit contract", () => {
   assert.match(workspace, /<form[\s\S]*onSubmit=\{\(event\) => \{[\s\S]*updateProfilePassword\(\);/);
   assert.match(workspace, /id="profile-current-password"/);

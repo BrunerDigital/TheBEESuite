@@ -23,6 +23,7 @@ import {
   Home,
   KeyRound,
   LifeBuoy,
+  LoaderCircle,
   MessageSquare,
   Minus,
   Paperclip,
@@ -803,6 +804,10 @@ function ParentPortalWorkspaceView({
   >({});
   const [accountPaymentAmountDollars, setAccountPaymentAmountDollars] =
     useState("");
+  const [paymentCheckoutMethod, setPaymentCheckoutMethod] = useState<
+    "ach" | "card" | "link_bank" | null
+  >(null);
+  const [paymentCheckoutError, setPaymentCheckoutError] = useState("");
   const [isPending, startTransition] = useTransition();
   const passwordLengthReady = newPassword.length >= 8;
   const passwordsMatch =
@@ -1305,7 +1310,11 @@ function ParentPortalWorkspaceView({
         "Payment amount cannot exceed your current family balance.",
       );
     }
-    startTransition(async () => {
+    setPaymentCheckoutMethod(paymentMethodCategory);
+    setPaymentCheckoutError("");
+    setError("");
+    setStatus("");
+    void (async () => {
       const method =
         paymentMethodCategory === "card"
           ? "card_checkout"
@@ -1329,12 +1338,15 @@ function ParentPortalWorkspaceView({
         configured?: boolean;
       } | null;
       if (!response.ok || !json?.url) {
-        return showError(
-          json?.error || "Payment checkout is not configured yet.",
-        );
+        const message =
+          json?.error || "Payment checkout is not configured yet.";
+        setPaymentCheckoutMethod(null);
+        setPaymentCheckoutError(message);
+        showError(message);
+        return;
       }
       window.location.href = json.url;
-    });
+    })();
   }
 
   function payBalance(paymentMethodCategory: "ach" | "card" | "link_bank") {
@@ -3058,37 +3070,81 @@ function ParentPortalWorkspaceView({
                     <Button
                       className="w-full sm:w-auto"
                       disabled={
-                        isPending || checkoutBlocked || accountPaymentDisabled
+                        paymentCheckoutMethod !== null ||
+                        checkoutBlocked ||
+                        accountPaymentDisabled
                       }
+                      aria-busy={paymentCheckoutMethod === "card"}
                       onClick={() => payBalance("card")}
                     >
-                      <CreditCard data-icon="inline-start" />
-                      Debit or credit card
+                      {paymentCheckoutMethod === "card" ? (
+                        <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                      ) : (
+                        <CreditCard data-icon="inline-start" />
+                      )}
+                      {paymentCheckoutMethod === "card"
+                        ? "Opening secure checkout…"
+                        : "Debit or credit card"}
                     </Button>
                     <Button
                       className="w-full sm:w-auto"
                       disabled={
-                        isPending || checkoutBlocked || accountPaymentDisabled
+                        paymentCheckoutMethod !== null ||
+                        checkoutBlocked ||
+                        accountPaymentDisabled
                       }
+                      aria-busy={paymentCheckoutMethod === "link_bank"}
                       onClick={() => payBalance("link_bank")}
                       variant="outline"
                     >
-                      <CreditCard data-icon="inline-start" />
-                      Pay with Link
+                      {paymentCheckoutMethod === "link_bank" ? (
+                        <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                      ) : (
+                        <CreditCard data-icon="inline-start" />
+                      )}
+                      {paymentCheckoutMethod === "link_bank"
+                        ? "Opening secure checkout…"
+                        : "Pay with Link"}
                     </Button>
                     <Button
                       className="w-full sm:w-auto"
                       disabled={
-                        isPending || checkoutBlocked || accountPaymentDisabled
+                        paymentCheckoutMethod !== null ||
+                        checkoutBlocked ||
+                        accountPaymentDisabled
                       }
+                      aria-busy={paymentCheckoutMethod === "ach"}
                       onClick={() => payBalance("ach")}
                       variant="outline"
                     >
-                      <Building2 data-icon="inline-start" />
-                      Bank account
+                      {paymentCheckoutMethod === "ach" ? (
+                        <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                      ) : (
+                        <Building2 data-icon="inline-start" />
+                      )}
+                      {paymentCheckoutMethod === "ach"
+                        ? "Opening secure checkout…"
+                        : "Bank account"}
                     </Button>
                   </div>
                 </div>
+                {paymentCheckoutMethod ? (
+                  <Alert className="mt-3" role="status" aria-live="polite">
+                    <LoaderCircle className="size-4 animate-spin" />
+                    <AlertTitle>Opening secure checkout</AlertTitle>
+                    <AlertDescription>
+                      Keep this screen open. Secure payment setup can take a few seconds on a mobile connection.
+                    </AlertDescription>
+                  </Alert>
+                ) : paymentCheckoutError ? (
+                  <Alert className="mt-3" variant="destructive" role="alert">
+                    <AlertCircle className="size-4" />
+                    <AlertTitle>Checkout did not open</AlertTitle>
+                    <AlertDescription>
+                      {paymentCheckoutError} No payment was started. Choose a payment method to try again.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
                 <div className="mt-2 text-xs text-muted-foreground">
                   No processing fee is added to your payment.
                 </div>

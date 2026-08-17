@@ -18,14 +18,14 @@ test("session heartbeats preserve sign-out handling and refresh live billing onl
   assert.match(liveRefresh, /previousVersion && nextVersion && previousVersion !== nextVersion/);
   assert.match(billingVersion, /canAccessModule\(user, "billing-invoices"\)/);
   assert.match(billingVersion, /canAccessModule\(user, "payments"\)/);
-  assert.match(billingVersion, /prisma\.payment\.findMany\(\{/);
-  assert.match(billingVersion, /take: 100/);
-  assert.match(billingVersion, /stripeAmountRefundedCents/);
-  assert.match(billingVersion, /prisma\.payment\.groupBy\(\{/);
-  assert.match(billingVersion, /_count: \{ _all: true \}/);
-  assert.match(billingVersion, /prisma\.ledgerEntry\.findFirst\(\{/);
+  assert.match(billingVersion, /FROM pg_stat_user_tables/);
+  assert.match(billingVersion, /n_tup_ins::text AS inserted/);
+  assert.match(billingVersion, /n_tup_upd::text AS updated/);
+  assert.match(billingVersion, /n_tup_del::text AS deleted/);
+  assert.match(billingVersion, /'Payment', 'Invoice', 'LedgerEntry'/);
+  assert.doesNotMatch(billingVersion, /prisma\.payment\.(?:findMany|groupBy)/);
   assert.match(billingVersion, /createHash\("sha256"\)/);
-  assert.match(billingVersion, /centerId: \{ in: user\.centerIds \}/);
+  assert.match(billingVersion, /user\.centerIds\.length/);
   assert.match(billingVersion, /"Cache-Control": "private, no-store"/);
 });
 

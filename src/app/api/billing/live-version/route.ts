@@ -17,45 +17,26 @@ async function GETHandler() {
     return NextResponse.json({ ok: false, error: "Billing access required." }, { status: 403 });
   }
 
-  const paymentWhere = {
-    billingAccount: { family: { centerId: { in: user.centerIds } } },
-  };
-  const [recentPayments, paymentStatusCounts, latestLedgerEntry] = user.centerIds.length
-    ? await Promise.all([
-      prisma.payment.findMany({
-        where: {
-          ...paymentWhere,
-        },
-        orderBy: { id: "desc" },
-        take: 100,
-        select: { id: true, status: true, paidAt: true, customFields: true },
-      }),
-      prisma.payment.groupBy({
-        by: ["status"],
-        where: paymentWhere,
-        _count: { _all: true },
-        orderBy: { status: "asc" },
-      }),
-      prisma.ledgerEntry.findFirst({
-        where: { billingAccount: paymentWhere.billingAccount },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        select: { id: true, createdAt: true },
-      }),
-    ])
-    : [[], [], null] as const;
-  const paymentVersions = recentPayments.map((payment) => {
-    const fields = payment.customFields && typeof payment.customFields === "object" && !Array.isArray(payment.customFields)
-      ? payment.customFields as Record<string, unknown>
-      : {};
-    return {
-      id: payment.id,
-      status: payment.status,
-      paidAt: payment.paidAt,
-      refundedCents: Number(fields.stripeAmountRefundedCents) || 0,
-    };
-  });
+  const tableActivity = user.centerIds.length
+    ? await prisma.$queryRaw<Array<{
+        relname: string;
+        inserted: string;
+        updated: string;
+        deleted: string;
+      }>>`
+        SELECT
+          relname,
+          n_tup_ins::text AS inserted,
+          n_tup_upd::text AS updated,
+          n_tup_del::text AS deleted
+        FROM pg_stat_user_tables
+        WHERE schemaname = current_schema()
+          AND relname IN ('Payment', 'Invoice', 'LedgerEntry')
+        ORDER BY relname
+      `
+    : [];
   const version = createHash("sha256")
-    .update(JSON.stringify({ paymentVersions, paymentStatusCounts, latestLedgerEntry }))
+    .update(JSON.stringify(tableActivity))
     .digest("base64url");
 
   return NextResponse.json(

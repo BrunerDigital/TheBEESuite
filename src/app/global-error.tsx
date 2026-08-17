@@ -7,10 +7,10 @@ import "./globals.css";
 
 export default function GlobalError({
   error,
-  reset,
+  unstable_retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  unstable_retry: () => void;
 }) {
   useEffect(() => {
     reportClientError(error, "react.global_error", { digest: error.digest });
@@ -31,7 +31,7 @@ export default function GlobalError({
             </Link>
             <button
               type="button"
-              onClick={reset}
+              onClick={unstable_retry}
               className="rounded-md bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
             >
               Try loading again

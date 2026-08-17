@@ -54,9 +54,6 @@ export type StripeCheckoutFeePolicy = {
 };
 
 export type StripeCheckoutBranding = {
-  displayName?: string | null;
-  logoUrl?: string | null;
-  iconUrl?: string | null;
   submitMessage?: string | null;
   afterSubmitMessage?: string | null;
   productDescription?: string | null;
@@ -330,35 +327,17 @@ function stripeCheckoutText(value: unknown, maxLength: number) {
   return text.length > maxLength ? `${text.slice(0, Math.max(0, maxLength - 1)).trim()}...` : text;
 }
 
-function stripeCheckoutHttpsUrl(value: unknown) {
-  const rawUrl = clean(value);
-  if (!rawUrl) return "";
-  try {
-    const url = new URL(rawUrl);
-    return url.protocol === "https:" ? url.toString() : "";
-  } catch {
-    return "";
-  }
-}
-
 export function addStripeCheckoutBrandingParams(body: URLSearchParams, branding?: StripeCheckoutBranding | null) {
-  const displayName = stripeCheckoutText(branding?.displayName, 80) || BEE_SUITE_CHECKOUT_DISPLAY_NAME;
-  body.set("branding_settings[display_name]", displayName);
+  body.set("branding_settings[display_name]", BEE_SUITE_CHECKOUT_DISPLAY_NAME);
   body.set("branding_settings[background_color]", BEE_SUITE_CHECKOUT_BACKGROUND_COLOR);
   body.set("branding_settings[button_color]", BEE_SUITE_CHECKOUT_BUTTON_COLOR);
   body.set("branding_settings[border_style]", "rounded");
   body.set("branding_settings[font_family]", "source_sans_pro");
 
-  const logoUrl = stripeCheckoutHttpsUrl(branding?.logoUrl) || BEE_SUITE_CHECKOUT_LOGO_URL;
-  const iconUrl = stripeCheckoutHttpsUrl(branding?.iconUrl) || BEE_SUITE_CHECKOUT_ICON_URL;
-  if (logoUrl) {
-    body.set("branding_settings[logo][type]", "url");
-    body.set("branding_settings[logo][url]", logoUrl);
-  }
-  if (iconUrl) {
-    body.set("branding_settings[icon][type]", "url");
-    body.set("branding_settings[icon][url]", iconUrl);
-  }
+  body.set("branding_settings[logo][type]", "url");
+  body.set("branding_settings[logo][url]", BEE_SUITE_CHECKOUT_LOGO_URL);
+  body.set("branding_settings[icon][type]", "url");
+  body.set("branding_settings[icon][url]", BEE_SUITE_CHECKOUT_ICON_URL);
 
   const submitMessage = stripeCheckoutText(branding?.submitMessage, 255) || BEE_SUITE_CHECKOUT_SUBMIT_MESSAGE;
   if (submitMessage) body.set("custom_text[submit][message]", submitMessage);

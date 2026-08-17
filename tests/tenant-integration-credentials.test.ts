@@ -345,8 +345,6 @@ test("Stripe checkout can be constrained to card-only entry", async () => {
       paymentMethodCategory: "card",
       idempotencyKey: "checkout:pay_1",
       checkoutBranding: {
-        displayName: "Sarasota via The BEE Suite",
-        logoUrl: "https://thebeesuite.io/brand/the-bee-suite/app-icon-dark.png",
         submitMessage: "The BEE Suite secure tuition payment",
         productDescription: "The BEE Suite tuition payment for Johnson Family.",
         paymentDescription: "The BEE Suite tuition payment for Johnson Family.",
@@ -358,7 +356,7 @@ test("Stripe checkout can be constrained to card-only entry", async () => {
     assert.equal(idempotencyKey, "checkout:pay_1:payment_method_types");
     assert.match(body, /payment_method_types%5B0%5D=card/);
     assert.match(body, /metadata%5BcollectionMode%5D=director_card_terminal/);
-    assert.match(body, /branding_settings%5Bdisplay_name%5D=Sarasota\+via\+The\+BEE\+Suite/);
+    assert.match(body, /branding_settings%5Bdisplay_name%5D=The\+BEE\+Suite/);
     assert.match(body, /branding_settings%5Bbackground_color%5D=%23111827/);
     assert.match(body, /branding_settings%5Bbutton_color%5D=%23f4c430/i);
     assert.match(body, /branding_settings%5Bborder_style%5D=rounded/);
@@ -776,8 +774,6 @@ test("Stripe setup checkout can require instant bank verification", async () => 
       cancelUrl: "https://app.test/cancel",
       metadata: { billingAccountId: "ba_1", familyId: "family_1" },
       checkoutBranding: {
-        displayName: "Sarasota via The BEE Suite",
-        iconUrl: "https://thebeesuite.io/brand/the-bee-suite/favicon-dark.png",
         submitMessage: "The BEE Suite secure bank verification",
         setupDescription: "The BEE Suite payment profile setup for Johnson Family.",
       },
@@ -787,7 +783,7 @@ test("Stripe setup checkout can require instant bank verification", async () => 
     assert.equal(result.ok, true);
     assert.match(body, /payment_method_options%5Bus_bank_account%5D%5Bverification_method%5D=instant/);
     assert.match(body, /payment_method_options%5Bus_bank_account%5D%5Bfinancial_connections%5D%5Bpermissions%5D%5B0%5D=payment_method/);
-    assert.match(body, /branding_settings%5Bdisplay_name%5D=Sarasota\+via\+The\+BEE\+Suite/);
+    assert.match(body, /branding_settings%5Bdisplay_name%5D=The\+BEE\+Suite/);
     assert.match(body, /branding_settings%5Bbackground_color%5D=%23111827/);
     assert.match(body, /branding_settings%5Bbutton_color%5D=%23f4c430/i);
     assert.match(body, /branding_settings%5Bborder_style%5D=rounded/);

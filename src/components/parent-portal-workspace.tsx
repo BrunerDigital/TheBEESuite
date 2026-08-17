@@ -3075,6 +3075,7 @@ function ParentPortalWorkspaceView({
                     <Button
                       className="w-full sm:w-auto"
                       disabled={
+                        isPending ||
                         paymentCheckoutMethod !== null ||
                         checkoutBlocked ||
                         accountPaymentDisabled
@@ -3094,6 +3095,7 @@ function ParentPortalWorkspaceView({
                     <Button
                       className="w-full sm:w-auto"
                       disabled={
+                        isPending ||
                         paymentCheckoutMethod !== null ||
                         checkoutBlocked ||
                         accountPaymentDisabled
@@ -3114,6 +3116,7 @@ function ParentPortalWorkspaceView({
                     <Button
                       className="w-full sm:w-auto"
                       disabled={
+                        isPending ||
                         paymentCheckoutMethod !== null ||
                         checkoutBlocked ||
                         accountPaymentDisabled

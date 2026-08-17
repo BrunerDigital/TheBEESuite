@@ -132,6 +132,10 @@ test("parent account checkout keeps the workspace interactive and reports mobile
   assert.match(workspace, /aria-busy=\{paymentCheckoutMethod === "card"\}/);
   assert.match(
     workspace,
+    /disabled=\{[\s\S]*?isPending \|\|[\s\S]*?paymentCheckoutMethod !== null \|\|[\s\S]*?checkoutBlocked \|\|[\s\S]*?accountPaymentDisabled/,
+  );
+  assert.match(
+    workspace,
     /disabled=\{isPending \|\| paymentCheckoutMethod !== null \|\| !family\}/,
   );
   assert.match(

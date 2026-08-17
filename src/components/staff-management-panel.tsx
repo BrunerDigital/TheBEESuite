@@ -250,10 +250,7 @@ export function clockEditRowsFromSavedEvents(
 ) {
   const rowIdByOccurredAt = new Map<string, string>();
   for (const row of existingRows) {
-    const originalOccurredAt = row.originalOccurredAt ? new Date(row.originalOccurredAt) : null;
-    const occurredAt = originalOccurredAt && !Number.isNaN(originalOccurredAt.getTime())
-      ? originalOccurredAt
-      : zonedDateTimeLocalToUtc(row.occurredAt, timeZone);
+    const occurredAt = clockEditRowOccurredAtUtc(row, timeZone);
     if (occurredAt) rowIdByOccurredAt.set(occurredAt.toISOString(), row.id);
   }
   return [...events]

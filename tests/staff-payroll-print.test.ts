@@ -121,6 +121,21 @@ test("saved clock rows keep their editor identity while displaying canonical sch
 
   assert.equal(rows[0]?.id, "edited-row");
   assert.equal(rows[0]?.occurredAt, "2026-03-08T03:30:00");
+
+  const movedRows = clockEditRowsFromSavedEvents(
+    [{ action: "clock_in", occurredAt: "2026-03-09T12:30:00.000Z", timeZone: "America/Indiana/Indianapolis", notes: null }],
+    "America/Indiana/Indianapolis",
+    [{
+      id: "moved-row",
+      action: "clock_in",
+      occurredAt: "2026-03-09T08:30:00",
+      originalOccurredAt: "2026-03-08T07:30:00.000Z",
+      notes: "",
+    }],
+  );
+
+  assert.equal(movedRows[0]?.id, "moved-row");
+  assert.equal(movedRows[0]?.occurredAt, "2026-03-09T08:30:00");
 });
 
 test("manual punch visibility protection is school-agnostic", () => {

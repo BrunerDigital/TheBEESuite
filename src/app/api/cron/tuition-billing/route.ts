@@ -169,6 +169,7 @@ async function GETHandler(request: NextRequest) {
                 {
                   OR: [
                     { customFields: { path: ["mode"], equals: "recurring" } },
+                    { customFields: { path: ["mode"], equals: "manual_weekly_recovery" } },
                     { customFields: { path: ["countsTowardRecurringCoverage"], equals: true } },
                   ],
                 },

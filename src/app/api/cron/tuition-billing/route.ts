@@ -176,7 +176,6 @@ async function GETHandler(request: NextRequest) {
                 { customFields: { path: ["coverageStartsPeriod"], equals: entry.billingPeriod } },
                 { customFields: { path: ["childId"], equals: entry.child.id } },
                 { customFields: { path: ["chargeSource"], equals: "tuitionPlan" } },
-                { customFields: { path: ["sourceId"], equals: entry.planId } },
               ],
             },
             select: { id: true, number: true, totalCents: true },

@@ -1793,6 +1793,9 @@ async function writeSystemAudit(invoiceId: string, stripeEventId: string, sessio
       },
     },
   });
+  if (center?.id) {
+    await prisma.center.update({ where: { id: center.id }, data: { updatedAt: new Date() } });
+  }
 }
 
 async function writeBillingAccountSystemAudit(billingAccountId: string, stripeEventId: string, sessionId: string, action: string) {
@@ -1831,6 +1834,9 @@ async function writeBillingAccountSystemAudit(billingAccountId: string, stripeEv
       },
     },
   });
+  if (center?.id) {
+    await prisma.center.update({ where: { id: center.id }, data: { updatedAt: new Date() } });
+  }
 }
 
 async function dispatchAuthenticatedEvent(
@@ -1999,6 +2005,7 @@ async function dispatchAuthenticatedEvent(
       }
       throw error;
     }
+    await writeSystemAudit(invoiceId, event.id, session.id, "billing.checkout.pending");
     return NextResponse.json({ ok: true, pending: true });
   }
 

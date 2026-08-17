@@ -78,7 +78,7 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
           const nextVersion = json?.version ?? null;
           const previousVersion = billingVersionRef.current;
           billingVersionRef.current = nextVersion;
-          if (previousVersion && nextVersion && previousVersion !== nextVersion) router.refresh();
+          if (nextVersion && (!previousVersion || previousVersion !== nextVersion)) router.refresh();
         }
         setLastSyncedAt(new Date());
         setState("idle");

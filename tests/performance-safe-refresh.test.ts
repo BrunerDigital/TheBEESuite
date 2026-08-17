@@ -9,24 +9,30 @@ function source(path: string) {
 test("session heartbeats preserve sign-out handling and refresh live billing only", () => {
   const liveRefresh = source("src/components/live-refresh-status.tsx");
   const billingVersion = source("src/app/api/billing/live-version/route.ts");
+  const audit = source("src/lib/audit.ts");
+  const dunning = source("src/app/api/cron/payment-dunning/route.ts");
+  const stripeWebhook = source("src/app/api/billing/stripe-webhook/route.ts");
 
   assert.equal(liveRefresh.match(/router\.refresh\(\)/g)?.length, 2);
   assert.doesNotMatch(liveRefresh, /sync\((true|false)\)/);
   assert.match(liveRefresh, /response\.status === 401/);
   assert.match(liveRefresh, /pathname\.startsWith\("\/billing-invoices"\)\) return 15_000/);
   assert.match(liveRefresh, /fetch\("\/api\/billing\/live-version", \{ cache: "no-store" \}\)/);
-  assert.match(liveRefresh, /previousVersion && nextVersion && previousVersion !== nextVersion/);
+  assert.match(liveRefresh, /nextVersion && \(!previousVersion \|\| previousVersion !== nextVersion\)/);
   assert.match(billingVersion, /canAccessModule\(user, "billing-invoices"\)/);
   assert.match(billingVersion, /canAccessModule\(user, "payments"\)/);
-  assert.match(billingVersion, /FROM pg_stat_user_tables/);
-  assert.match(billingVersion, /n_tup_ins::text AS inserted/);
-  assert.match(billingVersion, /n_tup_upd::text AS updated/);
-  assert.match(billingVersion, /n_tup_del::text AS deleted/);
-  assert.match(billingVersion, /'Payment', 'Invoice', 'LedgerEntry'/);
+  assert.match(billingVersion, /prisma\.center\.findMany/);
+  assert.match(billingVersion, /id: \{ in: user\.centerIds \}/);
+  assert.match(billingVersion, /select: \{ id: true, updatedAt: true \}/);
+  assert.doesNotMatch(billingVersion, /pg_stat_user_tables/);
   assert.doesNotMatch(billingVersion, /prisma\.payment\.(?:findMany|groupBy)/);
   assert.match(billingVersion, /createHash\("sha256"\)/);
   assert.match(billingVersion, /user\.centerIds\.length/);
   assert.match(billingVersion, /"Cache-Control": "private, no-store"/);
+  assert.match(audit, /input\.action\.startsWith\("billing\."\)/);
+  assert.match(audit, /prisma\.center\.update\(\{ where: \{ id: input\.centerId \}, data: \{ updatedAt: new Date\(\) \} \}\)/);
+  assert.match(dunning, /prisma\.center\.update\(\{ where: \{ id: center\.id \}, data: \{ updatedAt: now \} \}\)/);
+  assert.match(stripeWebhook, /writeSystemAudit\(invoiceId, event\.id, session\.id, "billing\.checkout\.pending"\)/);
 });
 
 test("notification polling uses the lightweight unread endpoint", () => {

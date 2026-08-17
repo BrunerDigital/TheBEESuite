@@ -330,6 +330,9 @@ async function GETHandler(request: NextRequest) {
           } satisfies Prisma.InputJsonObject,
         },
       });
+      if (center) {
+        await prisma.center.update({ where: { id: center.id }, data: { updatedAt: now } });
+      }
       paymentsUpdated += 1;
     }
   }

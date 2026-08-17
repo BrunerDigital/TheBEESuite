@@ -472,6 +472,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
               }),
             },
           });
+          await tx.center.update({ where: { id: center.id }, data: { updatedAt: new Date() } });
         }
         return applied;
       }, { maxWait: 10_000, timeout: 30_000 });
@@ -815,6 +816,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         }),
       },
     });
+    await prisma.center.update({ where: { id: center.id }, data: { updatedAt: new Date() } });
 
     const resultStatus: AutopayRunResultStatus = appliedImmediately
       ? "paid"

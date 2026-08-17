@@ -22,6 +22,9 @@ export async function writeAuditLog(user: CurrentUser, input: AuditInput) {
       metadata: input.metadata || {},
     },
   });
+  if (input.centerId && input.action.startsWith("billing.")) {
+    await prisma.center.update({ where: { id: input.centerId }, data: { updatedAt: new Date() } });
+  }
 }
 
 export async function writeSystemAuditLog(input: AuditInput & { tenantId: string }) {
@@ -36,4 +39,7 @@ export async function writeSystemAuditLog(input: AuditInput & { tenantId: string
       metadata: input.metadata || {},
     },
   });
+  if (input.centerId && input.action.startsWith("billing.")) {
+    await prisma.center.update({ where: { id: input.centerId }, data: { updatedAt: new Date() } });
+  }
 }

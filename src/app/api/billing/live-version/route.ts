@@ -17,26 +17,15 @@ async function GETHandler() {
     return NextResponse.json({ ok: false, error: "Billing access required." }, { status: 403 });
   }
 
-  const tableActivity = user.centerIds.length
-    ? await prisma.$queryRaw<Array<{
-        relname: string;
-        inserted: string;
-        updated: string;
-        deleted: string;
-      }>>`
-        SELECT
-          relname,
-          n_tup_ins::text AS inserted,
-          n_tup_upd::text AS updated,
-          n_tup_del::text AS deleted
-        FROM pg_stat_user_tables
-        WHERE schemaname = current_schema()
-          AND relname IN ('Payment', 'Invoice', 'LedgerEntry')
-        ORDER BY relname
-      `
+  const centerActivity = user.centerIds.length
+    ? await prisma.center.findMany({
+        where: { id: { in: user.centerIds } },
+        select: { id: true, updatedAt: true },
+        orderBy: { id: "asc" },
+      })
     : [];
   const version = createHash("sha256")
-    .update(JSON.stringify(tableActivity))
+    .update(JSON.stringify(centerActivity))
     .digest("base64url");
 
   return NextResponse.json(

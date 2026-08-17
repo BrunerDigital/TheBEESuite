@@ -154,6 +154,10 @@ test("parent account checkout keeps the workspace interactive and reports mobile
     workspace,
     /<ParentPortalWorkspaceView[\s\S]*paymentCheckoutMethod=\{paymentCheckoutMethod\}/,
   );
+  assert.match(
+    workspace,
+    /function ParentPortalWorkspaceView[\s\S]*const \[paymentCheckoutError, setPaymentCheckoutError\] = useState\(""\)/,
+  );
 });
 
 test("profile password controls use a semantic form and submit contract", () => {

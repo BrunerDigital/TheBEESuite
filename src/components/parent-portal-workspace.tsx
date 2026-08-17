@@ -381,8 +381,6 @@ type PaymentCheckoutMethod = "ach" | "card" | "link_bank" | null;
 type ParentPortalWorkspaceViewProps = Props & {
   paymentCheckoutMethod: PaymentCheckoutMethod;
   setPaymentCheckoutMethod: Dispatch<SetStateAction<PaymentCheckoutMethod>>;
-  paymentCheckoutError: string;
-  setPaymentCheckoutError: Dispatch<SetStateAction<string>>;
 };
 
 const defaultNotificationPreferences: NotificationPreferences = {
@@ -677,7 +675,6 @@ export function ParentPortalWorkspace(props: Props) {
   const familyId = props.family?.id ?? "no-family";
   const [paymentCheckoutMethod, setPaymentCheckoutMethod] =
     useState<PaymentCheckoutMethod>(null);
-  const [paymentCheckoutError, setPaymentCheckoutError] = useState("");
 
   return (
     <ParentPortalWorkspaceView
@@ -687,8 +684,6 @@ export function ParentPortalWorkspace(props: Props) {
       familySection={familySection}
       paymentCheckoutMethod={paymentCheckoutMethod}
       setPaymentCheckoutMethod={setPaymentCheckoutMethod}
-      paymentCheckoutError={paymentCheckoutError}
-      setPaymentCheckoutError={setPaymentCheckoutError}
     />
   );
 }
@@ -725,8 +720,6 @@ function ParentPortalWorkspaceView({
   previewMode = false,
   paymentCheckoutMethod,
   setPaymentCheckoutMethod,
-  paymentCheckoutError,
-  setPaymentCheckoutError,
 }: ParentPortalWorkspaceViewProps) {
   const timeZone = useSchoolTimeZone();
   const formatDate = (value: string | Date | null) =>
@@ -825,6 +818,7 @@ function ParentPortalWorkspaceView({
   >({});
   const [accountPaymentAmountDollars, setAccountPaymentAmountDollars] =
     useState("");
+  const [paymentCheckoutError, setPaymentCheckoutError] = useState("");
   const [isPending, startTransition] = useTransition();
   const passwordLengthReady = newPassword.length >= 8;
   const passwordsMatch =

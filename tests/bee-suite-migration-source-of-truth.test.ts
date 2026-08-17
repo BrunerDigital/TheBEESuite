@@ -111,3 +111,28 @@ test("BEE migration confirmation rejects source-field edits and balance drift", 
     }),
   }), /opening balance does not match the source/);
 });
+
+test("BEE migration confirmation rejects hidden current-family balance accounts", async () => {
+  const prepared = await preparedSiblingPackage();
+  const manifestPath = path.join(prepared.output, "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  manifest.metrics.currentHiddenBalanceAccounts = 1;
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  assert.throws(() => confirmBeeSuiteMigrationSourceOfTruth({
+    packageDirectory: prepared.output,
+    reviewedTemplatePath: reviewedTemplate(prepared.output),
+  }), /hidden current-family balance accounts/);
+});
+
+test("BEE migration confirmation rejects impossible ISO effective weeks", async () => {
+  for (const effectiveWeek of ["2026-W00", "2026-W99", "2025-W53"]) {
+    const prepared = await preparedSiblingPackage();
+    assert.throws(() => confirmBeeSuiteMigrationSourceOfTruth({
+      packageDirectory: prepared.output,
+      reviewedTemplatePath: reviewedTemplate(prepared.output, (row) => {
+        row["Tuition Effective Week"] = effectiveWeek;
+      }),
+    }), /valid ISO effective week/);
+  }
+});

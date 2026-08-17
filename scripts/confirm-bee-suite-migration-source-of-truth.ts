@@ -14,6 +14,7 @@ type PreparationManifest = {
     enrolledRecords?: number;
     activePortalSafeRecords?: number;
     currentFamilyBalanceAccounts?: number;
+    currentHiddenBalanceAccounts?: number;
   };
   outputHashes: {
     activePortalSafeImportSha256: string;
@@ -84,6 +85,20 @@ function confirmed(value: string) {
   return clean(value).toLowerCase() === "confirmed";
 }
 
+function isoWeeksInYear(year: number) {
+  const januaryFirstDay = new Date(Date.UTC(year, 0, 1)).getUTCDay() || 7;
+  const decemberLastDay = new Date(Date.UTC(year, 11, 31)).getUTCDay() || 7;
+  return januaryFirstDay === 4 || decemberLastDay === 4 ? 53 : 52;
+}
+
+function validIsoWeek(value: string) {
+  const match = /^(\d{4})-W(\d{2})$/.exec(clean(value));
+  if (!match) return false;
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  return week >= 1 && week <= isoWeeksInYear(year);
+}
+
 function sourceKey(row: CsvRow) {
   return `${clean(row["Source Account ID"])}\u0000${clean(row["Source Child ID"])}`;
 }
@@ -142,6 +157,7 @@ export function confirmBeeSuiteMigrationSourceOfTruth(input: {
   invariant(safeRoster.rows.length === baseline.rows.length, "Not every enrolled child is in the portal-safe guarded roster. Resolve family, guardian, or balance blockers and regenerate.");
   invariant(manifest.metrics.enrolledRecords === baseline.rows.length, "The template child count no longer matches the preparation manifest.");
   invariant(manifest.metrics.activePortalSafeRecords === baseline.rows.length, "The preparation manifest still has blocked active family rows.");
+  invariant(manifest.metrics.currentHiddenBalanceAccounts === 0, "The preparation manifest still has hidden current-family balance accounts. Resolve those balances and regenerate the package.");
 
   const baselineByKey = new Map<string, CsvRow>();
   for (const [index, row] of baseline.rows.entries()) {
@@ -181,7 +197,7 @@ export function confirmBeeSuiteMigrationSourceOfTruth(input: {
     const confirmedTuitionCents = integer(row["Confirmed Weekly Tuition Cents"], `Reviewed template row ${rowNumber} confirmed weekly tuition`);
     invariant(sourceTuitionCents > 0 && sourceTuitionCents === confirmedTuitionCents, `Reviewed template row ${rowNumber} weekly tuition must be a positive exact source match.`);
     invariant(clean(row["Confirmed Tuition Cadence"]).toLowerCase() === "weekly", `Reviewed template row ${rowNumber} tuition cadence must be weekly.`);
-    invariant(/^\d{4}-W\d{2}$/.test(clean(row["Tuition Effective Week"])), `Reviewed template row ${rowNumber} needs an ISO effective week such as 2026-W34.`);
+    invariant(validIsoWeek(row["Tuition Effective Week"]), `Reviewed template row ${rowNumber} needs a valid ISO effective week such as 2026-W34.`);
     invariant(confirmed(row["Tuition Confirmation"]), `Reviewed template row ${rowNumber} must confirm weekly tuition.`);
     invariant(clean(row.Disposition).toLowerCase() === "ready", `Reviewed template row ${rowNumber} disposition must be ready.`);
     return {

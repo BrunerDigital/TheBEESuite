@@ -128,8 +128,20 @@ test("parent account checkout keeps the workspace interactive and reports mobile
   assert.match(paymentAction, /setPaymentCheckoutError\(message\)/);
   assert.match(workspace, /Opening secure checkout…/);
   assert.match(workspace, /Secure payment setup can take a few seconds on a mobile connection\./);
-  assert.match(workspace, /No payment was started\. Choose a payment method to try again\./);
+  assert.match(workspace, /Your payment status may still be updating\. Wait a moment before trying again\./);
   assert.match(workspace, /aria-busy=\{paymentCheckoutMethod === "card"\}/);
+  assert.match(
+    workspace,
+    /disabled=\{isPending \|\| paymentCheckoutMethod !== null \|\| !family\}/,
+  );
+  assert.match(
+    workspace,
+    /paymentCheckoutMethod !== null \|\|[\s\S]*checkoutBlocked \|\|[\s\S]*!selectedUniformProduct/,
+  );
+  assert.match(
+    workspace,
+    /paymentCheckoutMethod !== null \|\|[\s\S]*checkoutBlocked[\s\S]*payProductInvoice/,
+  );
 });
 
 test("profile password controls use a semantic form and submit contract", () => {

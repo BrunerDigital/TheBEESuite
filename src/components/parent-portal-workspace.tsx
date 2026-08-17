@@ -2535,7 +2535,12 @@ function ParentPortalWorkspaceView({
                     id="parent-family-autopay-toggle"
                     checked={autopayStatus === "enabled"}
                     onCheckedChange={toggleAutopay}
-                    disabled={isPending || !family || autopayStatus === "pending"}
+                    disabled={
+                      isPending ||
+                      paymentCheckoutMethod !== null ||
+                      !family ||
+                      autopayStatus === "pending"
+                    }
                     aria-label="Enable or disable autopay"
                   />
                   <span className="text-xs font-medium text-muted-foreground">{autopayStatus === "enabled" ? "On" : "Off"}</span>
@@ -2549,15 +2554,15 @@ function ParentPortalWorkspaceView({
                 </Alert>
               ) : null}
               <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                <Button disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")}>
+                <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
                   <CreditCard data-icon="inline-start" />
                   {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace card" : "Save card"}
                 </Button>
-                <Button disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
                   <Building2 data-icon="inline-start" />
                   {paymentMethodManagement?.autopayStatus === "pending" ? "Verify bank account" : "Connect bank account"}
                 </Button>
-                <Button disabled={isPending || !paymentMethodManagement?.hasStripeCustomer} onClick={() => managePaymentMethod("portal")} variant="outline">
+                <Button disabled={isPending || paymentCheckoutMethod !== null || !paymentMethodManagement?.hasStripeCustomer} onClick={() => managePaymentMethod("portal")} variant="outline">
                   Manage methods
                 </Button>
               </div>
@@ -3141,7 +3146,7 @@ function ParentPortalWorkspaceView({
                     <AlertCircle className="size-4" />
                     <AlertTitle>Checkout did not open</AlertTitle>
                     <AlertDescription>
-                      {paymentCheckoutError} No payment was started. Choose a payment method to try again.
+                      {paymentCheckoutError} Your payment status may still be updating. Wait a moment before trying again.
                     </AlertDescription>
                   </Alert>
                 ) : null}
@@ -3327,7 +3332,10 @@ function ParentPortalWorkspaceView({
                   <Button
                     className="w-full sm:w-auto"
                     disabled={
-                      isPending || checkoutBlocked || !selectedUniformProduct
+                      isPending ||
+                      paymentCheckoutMethod !== null ||
+                      checkoutBlocked ||
+                      !selectedUniformProduct
                     }
                     onClick={() => buyUniform("card")}
                   >
@@ -3337,7 +3345,10 @@ function ParentPortalWorkspaceView({
                   <Button
                     className="w-full sm:w-auto"
                     disabled={
-                      isPending || checkoutBlocked || !selectedUniformProduct
+                      isPending ||
+                      paymentCheckoutMethod !== null ||
+                      checkoutBlocked ||
+                      !selectedUniformProduct
                     }
                     onClick={() => buyUniform("link_bank")}
                     variant="outline"
@@ -3403,7 +3414,11 @@ function ParentPortalWorkspaceView({
                     <div className="flex basis-full flex-wrap gap-2 sm:justify-end">
                       <Button
                         className="w-full sm:w-auto"
-                        disabled={isPending || checkoutBlocked}
+                        disabled={
+                          isPending ||
+                          paymentCheckoutMethod !== null ||
+                          checkoutBlocked
+                        }
                         onClick={() => payProductInvoice(invoice.id, "card")}
                       >
                         <CreditCard data-icon="inline-start" />
@@ -3411,7 +3426,11 @@ function ParentPortalWorkspaceView({
                       </Button>
                       <Button
                         className="w-full sm:w-auto"
-                        disabled={isPending || checkoutBlocked}
+                        disabled={
+                          isPending ||
+                          paymentCheckoutMethod !== null ||
+                          checkoutBlocked
+                        }
                         onClick={() =>
                           payProductInvoice(invoice.id, "link_bank")
                         }

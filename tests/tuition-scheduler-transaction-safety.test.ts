@@ -13,6 +13,7 @@ test("tuition cron isolates invoice transactions and reports per-child failures"
   assert.match(route, /path: \["billingPeriod"\], equals: entry\.billingPeriod/);
   assert.match(route, /path: \["coverageStartsPeriod"\], equals: entry\.billingPeriod/);
   assert.match(route, /path: \["mode"\], equals: "recurring"/);
+  assert.match(route, /path: \["mode"\], equals: "manual_weekly_recovery"/);
   assert.match(route, /path: \["countsTowardRecurringCoverage"\], equals: true/);
   assert.match(route, /path: \["childId"\], equals: entry\.child\.id/);
   const coverageLookup = route.slice(

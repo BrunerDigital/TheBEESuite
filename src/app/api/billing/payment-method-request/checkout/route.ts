@@ -26,7 +26,6 @@ import {
 } from "@/lib/payment-disclosures";
 import {
   buildPaymentMethodRequestCheckoutBranding,
-  buildPublicPaymentBrandAssetUrl,
   PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
   paymentMethodRequestRecipientOptions,
   validatePaymentMethodRequestToken,
@@ -38,7 +37,6 @@ import {
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
-import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
@@ -416,16 +414,6 @@ async function POSTHandler(request: NextRequest) {
   const baseUrl = getSecurePaymentAppBaseUrl(request.url);
   const formPath = `/payment-method-form/${encodeURIComponent(token)}`;
   const centerLabel = center.crmLocationId ?? center.name;
-  const branding = resolveWorkspaceBranding({
-    tenantName: center.organization.tenant.name,
-    tenantSlug: center.organization.tenant.slug,
-    brandName: center.organization.brand?.name,
-    brandSlug: center.organization.brand?.slug,
-    organizationName: center.name,
-    email: payload.email,
-  });
-  const logoUrl = buildPublicPaymentBrandAssetUrl(baseUrl, branding.logoSrc);
-  const iconUrl = buildPublicPaymentBrandAssetUrl(baseUrl, branding.markSrc);
   const successPath = appendRawQuery(
     appendQuery(appendQuery(formPath, "payment", "success"), "invoice", invoice.id),
     "session_id",
@@ -479,8 +467,6 @@ async function POSTHandler(request: NextRequest) {
       centerLabel,
       familyName: family.name,
       intent: bankAccountVerificationMethod === "instant" ? "instant_bank_verification" : "payment_steps",
-      logoUrl,
-      iconUrl,
     }),
     tenantId: payload.tenantId,
   });

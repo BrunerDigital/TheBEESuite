@@ -9,7 +9,6 @@ import {
 import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
 import {
   buildPaymentMethodRequestCheckoutBranding,
-  buildPublicPaymentBrandAssetUrl,
   PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
   paymentMethodRequestRecipientOptions,
   validatePaymentMethodRequestToken,
@@ -21,7 +20,6 @@ import {
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
-import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { readStripeConnectMigration, stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
@@ -204,16 +202,6 @@ async function POSTHandler(request: NextRequest) {
   const baseUrl = requestBaseUrl(request);
   const formPath = `/payment-method-form/${encodeURIComponent(token)}`;
   const centerLabel = center.crmLocationId ?? center.name;
-  const branding = resolveWorkspaceBranding({
-    tenantName: center.organization.tenant.name,
-    tenantSlug: center.organization.tenant.slug,
-    brandName: center.organization.brand?.name,
-    brandSlug: center.organization.brand?.slug,
-    organizationName: center.organization.name,
-    email: payload.email,
-  });
-  const logoUrl = buildPublicPaymentBrandAssetUrl(baseUrl, branding.logoSrc);
-  const iconUrl = buildPublicPaymentBrandAssetUrl(baseUrl, branding.markSrc);
   const setup = await createStripeSetupCheckoutSession({
     customerId,
     customerEmail: payload.email,
@@ -241,8 +229,6 @@ async function POSTHandler(request: NextRequest) {
       centerLabel,
       familyName: family.name,
       intent: payload.intent ?? (bankAccountVerificationMethod === "instant" ? "instant_bank_verification" : "payment_steps"),
-      logoUrl,
-      iconUrl,
     }),
     tenantId: payload.tenantId,
   });

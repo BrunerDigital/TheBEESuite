@@ -25,6 +25,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -134,6 +135,8 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
   const [page, setPage] = useState(1);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [bulkTaskIds, setBulkTaskIds] = useState<string[]>([]);
+  const [schoolFilter, setSchoolFilter] = useState("all");
+  const [bulkPreviewOpen, setBulkPreviewOpen] = useState(false);
   const [action, setAction] = useState<DataReadinessDecision>("confirm");
   const [note, setNote] = useState("");
   const [proposedValue, setProposedValue] = useState("");
@@ -147,6 +150,9 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
   const exportHref = `/api/data-readiness?${exportParams.toString()}`;
 
   const categories = useMemo(() => [...new Set(tasks.map((task) => task.category))], [tasks]);
+  const schoolOptions = useMemo(() => [...new Map(tasks.map((task) => [task.centerId, task.centerName])).entries()]
+    .map(([id, name]) => ({ id, name }))
+    .toSorted((left, right) => left.name.localeCompare(right.name)), [tasks]);
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
     const contextCategories = categoryContext
@@ -154,6 +160,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
       : [];
     return tasks
       .filter((task) => {
+        if (schoolFilter !== "all" && task.centerId !== schoolFilter) return false;
         if (statusFilter === "actionable" && !["BLOCKED", "CONFIRM", "FAILED"].includes(task.status)) return false;
         if (statusFilter !== "all" && statusFilter !== "actionable" && task.status !== statusFilter) return false;
         if (riskFilter !== "all" && task.risk !== riskFilter) return false;
@@ -172,12 +179,13 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
           || left.priority - right.priority
           || right.updatedAt.localeCompare(left.updatedAt);
       });
-  }, [categoryContext, categoryFilter, riskFilter, search, sort, statusFilter, tasks]);
+  }, [categoryContext, categoryFilter, riskFilter, schoolFilter, search, sort, statusFilter, tasks]);
   const pageCount = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
   const safePage = Math.min(page, pageCount);
   const visibleTasks = filteredTasks.slice((safePage - 1) * pageSize, safePage * pageSize);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
   const bulkEligibleVisible = visibleTasks.filter((task) => task.bulkEligible).map((task) => task.id);
+  const bulkPreviewTasks = tasks.filter((task) => bulkTaskIds.includes(task.id));
 
   function updateView(next: Partial<Pick<DataReadinessViewFilters, "tab" | "status" | "risk" | "category" | "sort">>) {
     const view = {
@@ -256,10 +264,12 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
       <section className="border-b border-border/80 pb-6">
         <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_34rem] xl:items-end">
           <div>
-            <Badge className="mb-4" variant="outline"><ListChecks data-icon="inline-start" /> Director workflow</Badge>
-            <h1 className="max-w-3xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">Data Readiness Center</h1>
+            <Badge className="mb-4" variant="outline"><ListChecks data-icon="inline-start" /> {allowBulkImport ? "Executive multi-school review" : "Director guided migration"}</Badge>
+            <h1 className="max-w-3xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">{allowBulkImport ? "Migration data workbook" : "School migration setup"}</h1>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-              Resolve reviewed source-data differences with school-scoped evidence. Decisions are append-only and do not change operational records, access, balances, invitations, payments, or launch state.
+              {allowBulkImport
+                ? "Review every authorized school's migration exceptions in one spreadsheet-style workspace. Corrections are retained as school-scoped proposals and never change operational records until the exact reviewed import package is separately confirmed."
+                : "Upload the school's previous-system reports, review parsed families and children, confirm balances and weekly tuition, resolve exceptions, and create the final BEE Suite migration package."}
             </p>
             <div className="mt-5 flex flex-wrap gap-2 text-xs text-muted-foreground">
               <Badge variant="outline">{data.summary.sourceRows.toLocaleString()} retained source rows</Badge>
@@ -297,9 +307,9 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
 
       <Tabs value={tab} onValueChange={(value) => { const nextTab = value as DataReadinessViewFilters["tab"]; setTab(nextTab); updateView({ tab: nextTab }); }} className="gap-5">
         <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-xl border bg-card p-1 sm:w-fit" aria-label="Data readiness views">
-          <TabsTrigger value="overview" className="min-h-10 px-4"><ShieldCheck /> Overview</TabsTrigger>
-          <TabsTrigger value="queue" className="min-h-10 px-4"><ListChecks /> Action queue <Badge variant="secondary">{data.summary.actionable}</Badge></TabsTrigger>
-          <TabsTrigger value="procare" className="min-h-10 px-4"><Database /> Data onboarding</TabsTrigger>
+          <TabsTrigger value="overview" className="min-h-10 px-4"><ShieldCheck /> {allowBulkImport ? "Portfolio" : "Readiness"}</TabsTrigger>
+          <TabsTrigger value="queue" className="min-h-10 px-4"><ListChecks /> {allowBulkImport ? "Migration workbook" : "Review and correct"} <Badge variant="secondary">{data.summary.actionable}</Badge></TabsTrigger>
+          <TabsTrigger value="procare" className="min-h-10 px-4"><Database /> {allowBulkImport ? "Import and parse" : "Start migration"}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="grid gap-6">
@@ -362,13 +372,14 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
           <Card className="shadow-none">
             <CardHeader className="border-b">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-              <div><CardTitle as="h2">Prioritized action queue</CardTitle><CardDescription>Search, filter, sort, and open a focused review drawer. Results stay inside your authorized school scope.</CardDescription></div>
+              <div><CardTitle as="h2">{allowBulkImport ? "Master migration spreadsheet" : "Prioritized migration review"}</CardTitle><CardDescription>{allowBulkImport ? "Filter by school, compare source evidence with the proposed BEE value, and preview every selected correction before saving." : "Search, filter, and open each family, child, balance, tuition, or setup exception for confirmation."}</CardDescription></div>
                 <Button variant="outline" nativeButton={false} render={<Link href={exportHref} />}><Download data-icon="inline-start" /> Export CSV</Button>
               </div>
             </CardHeader>
             <CardContent className="grid gap-4 pt-5">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(15rem,1fr)_11rem_11rem_16rem_11rem]">
+              <div className={cn("grid gap-3 md:grid-cols-2", allowBulkImport ? "xl:grid-cols-[minmax(15rem,1fr)_14rem_10rem_10rem_14rem_10rem]" : "xl:grid-cols-[minmax(15rem,1fr)_11rem_11rem_16rem_11rem]")}>
                 <label className="relative"><span className="sr-only">Search readiness tasks</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search readiness tasks" className="min-h-11 pl-10" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search entity, location, or source ID…" /></label>
+                {allowBulkImport ? <Select value={schoolFilter} onValueChange={(value) => { if (value) { setSchoolFilter(value); setBulkTaskIds([]); setPage(1); } }}><SelectTrigger aria-label="Filter by school" className="min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All authorized schools</SelectItem>{schoolOptions.map((school) => <SelectItem key={school.id} value={school.id}>{school.name}</SelectItem>)}</SelectContent></Select> : null}
                 <Select value={statusFilter} onValueChange={(value) => { if (value) { setStatusFilter(value); setPage(1); updateView({ status: value }); } }}><SelectTrigger aria-label="Filter by readiness status" className="min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="actionable">Actionable</SelectItem><SelectItem value="all">All statuses</SelectItem>{DATA_READINESS_STATUSES.map((status) => <SelectItem key={status} value={status}>{statusCopy[status].label}</SelectItem>)}</SelectContent></Select>
                 <Select value={riskFilter} onValueChange={(value) => { if (value) { setRiskFilter(value); setPage(1); updateView({ risk: value }); } }}><SelectTrigger aria-label="Filter by risk" className="min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All risks</SelectItem>{["critical", "high", "medium", "low"].map((risk) => <SelectItem key={risk} value={risk}>{risk}</SelectItem>)}</SelectContent></Select>
                 <Select value={categoryFilter} onValueChange={(value) => { if (value) { setCategoryFilter(value); setPage(1); updateView({ category: value }); } }}><SelectTrigger aria-label="Filter by readiness category" className="min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categoryContext ? <SelectItem value={`context:${categoryContext}`}>{DATA_READINESS_CONTEXTS[categoryContext].label}</SelectItem> : null}{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select>
@@ -379,13 +390,13 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
                 <div className="flex items-center gap-2 text-sm text-muted-foreground"><Filter className="size-4" /> {filteredTasks.length.toLocaleString()} matching task{filteredTasks.length === 1 ? "" : "s"}{data.truncated ? " · older row tasks are available in source backups" : ""}</div>
                 <div className="flex flex-wrap gap-2">
                   {bulkEligibleVisible.length ? <Button size="sm" variant="outline" onClick={() => setBulkTaskIds(bulkTaskIds.length === bulkEligibleVisible.length ? [] : bulkEligibleVisible)}>{bulkTaskIds.length === bulkEligibleVisible.length ? "Clear page selection" : "Select safe page rows"}</Button> : null}
-                  <Button size="sm" disabled={!bulkTaskIds.length || saving} onClick={() => recordDecision(bulkTaskIds, "confirm")}>Confirm {bulkTaskIds.length || "safe"} low-risk row{bulkTaskIds.length === 1 ? "" : "s"}</Button>
+                  <Button size="sm" disabled={!bulkTaskIds.length || saving} onClick={() => setBulkPreviewOpen(true)}>Preview {bulkTaskIds.length || "safe"} selected row{bulkTaskIds.length === 1 ? "" : "s"}</Button>
                 </div>
               </div>
 
               <div className="hidden overflow-hidden rounded-xl border lg:block">
                 <Table>
-                  <TableHeader><TableRow><TableHead className="w-10"><span className="sr-only">Select</span></TableHead><TableHead>Status</TableHead><TableHead>Priority</TableHead><TableHead>Entity and location</TableHead><TableHead>Reason</TableHead><TableHead>Source</TableHead><TableHead className="text-right">Review</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead className="w-10"><span className="sr-only">Select</span></TableHead><TableHead>Status</TableHead><TableHead>Priority</TableHead><TableHead>Record and school</TableHead>{allowBulkImport ? <><TableHead>Current value</TableHead><TableHead>Proposed correction</TableHead></> : <TableHead>Reason</TableHead>}<TableHead>Source evidence</TableHead><TableHead className="text-right">Review</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {visibleTasks.map((task) => (
                       <TableRow key={task.id}>
@@ -393,12 +404,12 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
                         <TableCell><Badge variant={statusVariant(task.status)}>{statusCopy[task.status].label}</Badge></TableCell>
                         <TableCell><div className="flex items-center gap-2"><span className="grid size-7 place-items-center rounded-lg bg-primary/12 text-xs font-semibold text-primary">{task.priority}</span><Badge variant="outline" className={riskClass(task.risk)}>{riskLabel(task.risk)}</Badge></div></TableCell>
                         <TableCell><div className="font-medium">{task.entity}</div><div className="max-w-56 truncate text-xs text-muted-foreground">{task.centerName}</div></TableCell>
-                        <TableCell className="max-w-[25rem] whitespace-normal"><div className="line-clamp-2 text-sm">{task.reason}</div><div className="mt-1 text-xs text-muted-foreground">{task.category}</div></TableCell>
+                        {allowBulkImport ? <><TableCell className="max-w-52 whitespace-normal"><div className="line-clamp-3 text-sm">{task.currentValue}</div><div className="mt-1 text-xs text-muted-foreground">{task.category}</div></TableCell><TableCell className="max-w-52 whitespace-normal"><div className="line-clamp-3 text-sm">{task.proposedValue || "No correction entered"}</div><div className="mt-1 text-xs text-muted-foreground">{task.reason}</div></TableCell></> : <TableCell className="max-w-[25rem] whitespace-normal"><div className="line-clamp-2 text-sm">{task.reason}</div><div className="mt-1 text-xs text-muted-foreground">{task.category}</div></TableCell>}
                         <TableCell className="max-w-48"><div className="truncate text-xs">{task.sourceFilename}</div><div className="text-xs text-muted-foreground">{task.sourceRow ? `Row ${task.sourceRow}` : "Batch evidence"}</div></TableCell>
                         <TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => openTask(task)}>Open <ArrowRight data-icon="inline-end" /></Button></TableCell>
                       </TableRow>
                     ))}
-                    {!visibleTasks.length ? <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">No readiness tasks match these filters.</TableCell></TableRow> : null}
+                    {!visibleTasks.length ? <TableRow><TableCell colSpan={allowBulkImport ? 8 : 7} className="py-10 text-center text-muted-foreground">No readiness tasks match these filters.</TableCell></TableRow> : null}
                   </TableBody>
                 </Table>
               </div>
@@ -442,7 +453,7 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
                   <section aria-labelledby="readiness-difference-heading"><h2 id="readiness-difference-heading" className="text-sm font-semibold">Reviewed difference</h2><div className="mt-3 grid gap-3 sm:grid-cols-2"><div className="rounded-xl border bg-background p-4"><div className="text-xs font-medium text-muted-foreground">Current BEE value</div><div className="mt-2 text-sm">{selectedTask.currentValue}</div></div><div className="rounded-xl border border-primary/30 bg-primary/[0.08] p-4"><div className="text-xs font-medium text-primary">Proposed source value</div><div className="mt-2 text-sm">{selectedTask.proposedValue}</div></div></div><p className="mt-2 text-xs text-muted-foreground">{selectedTask.difference}</p></section>
                   <section className="grid gap-3 rounded-xl border bg-background/45 p-4" aria-labelledby="readiness-evidence-heading"><h2 id="readiness-evidence-heading" className="text-sm font-semibold">Source evidence</h2><dl className="grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-muted-foreground">Filename</dt><dd className="break-all">{selectedTask.sourceFilename}</dd></div><div><dt className="text-xs text-muted-foreground">Source row</dt><dd>{selectedTask.sourceRow ?? "Batch-level evidence"}</dd></div><div><dt className="text-xs text-muted-foreground">Parsing confidence</dt><dd className="capitalize">{selectedTask.parsingConfidence}</dd></div><div><dt className="text-xs text-muted-foreground">Last updated</dt><dd>{formatDate(selectedTask.updatedAt)}</dd></div></dl>{selectedTask.sourceIds.length ? <div><div className="text-xs text-muted-foreground">Source IDs</div><div className="mt-2 flex flex-wrap gap-2">{selectedTask.sourceIds.map((id) => <Badge key={id} variant="outline" className="h-auto max-w-full whitespace-normal break-all py-1">{id}</Badge>)}</div></div> : <Alert variant="destructive"><AlertTriangle className="size-4" /><AlertTitle>No stable source ID detected</AlertTitle><AlertDescription>Do not use bulk confirmation. Resolve this row individually against the source export.</AlertDescription></Alert>}</section>
                   <section className="rounded-xl border bg-background/45 p-4"><h2 className="text-sm font-semibold">Downstream impact</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{selectedTask.downstreamImpact}</p>{selectedTask.relatedRecords.length ? <div className="mt-3 flex flex-wrap gap-2">{selectedTask.relatedRecords.map((record) => <Badge key={record} variant="outline">{record}</Badge>)}</div> : null}</section>
-                  <section aria-labelledby="readiness-decision-heading"><h2 id="readiness-decision-heading" className="text-sm font-semibold">Director decision</h2><div className="mt-3 grid gap-2 sm:grid-cols-2">{decisionOptions.map((option) => <button key={option.action} type="button" aria-pressed={action === option.action} onClick={() => setAction(option.action)} className={cn("min-h-16 rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", action === option.action ? "border-primary/45 bg-primary/10" : "bg-background/55 hover:border-primary/30")}><span className="block text-sm font-medium">{option.label}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.detail}</span></button>)}</div></section>
+                  <section aria-labelledby="readiness-decision-heading"><h2 id="readiness-decision-heading" className="text-sm font-semibold">{allowBulkImport ? "Executive correction" : "Director confirmation"}</h2><div className="mt-3 grid gap-2 sm:grid-cols-2">{decisionOptions.map((option) => <button key={option.action} type="button" aria-pressed={action === option.action} onClick={() => setAction(option.action)} className={cn("min-h-16 rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", action === option.action ? "border-primary/45 bg-primary/10" : "bg-background/55 hover:border-primary/30")}><span className="block text-sm font-medium">{option.label}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.detail}</span></button>)}</div></section>
                   <label className="grid gap-2 text-sm"><span className="font-medium">Proposed resolution</span><Textarea aria-label="Proposed resolution" value={proposedValue} onChange={(event) => setProposedValue(event.target.value)} rows={3} maxLength={500} /><span className="text-xs text-muted-foreground">Evidence only; this does not write to a family, child, staff, billing, access, or import record.</span></label>
                   <label className="grid gap-2 text-sm"><span className="font-medium">Decision note</span><Textarea aria-label="Decision note" value={note} onChange={(event) => setNote(event.target.value)} rows={4} maxLength={1000} placeholder="Explain the source evidence or next action…" /><span className="text-xs text-muted-foreground">Required for edit, exclude, and request-information decisions.</span></label>
                   {feedback ? <Alert role={feedback.tone === "error" ? "alert" : "status"} aria-live="polite" variant={feedback.tone === "error" ? "destructive" : "default"}><AlertTitle>{feedback.tone === "error" ? "Decision not saved" : "Decision recorded"}</AlertTitle><AlertDescription>{feedback.message}</AlertDescription></Alert> : null}
@@ -457,6 +468,19 @@ export function DataReadinessCenter({ data, centers, allowBulkImport, initialVie
           ) : null}
         </SheetContent>
       </Sheet>
+      <Dialog open={bulkPreviewOpen} onOpenChange={setBulkPreviewOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Preview selected migration decisions</DialogTitle>
+            <DialogDescription>Confirm this exact school-scoped set. This records review evidence only; it does not alter operational family records, balances, tuition, access, billing, or launch state.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[55vh] overflow-auto rounded-xl border">
+            <Table><TableHeader><TableRow><TableHead>School</TableHead><TableHead>Record</TableHead><TableHead>Source</TableHead><TableHead>Decision</TableHead></TableRow></TableHeader><TableBody>{bulkPreviewTasks.map((task) => <TableRow key={task.id}><TableCell>{task.centerName}</TableCell><TableCell><div className="font-medium">{task.entity}</div><div className="text-xs text-muted-foreground">{task.category}</div></TableCell><TableCell><div className="max-w-52 truncate">{task.sourceFilename}</div><div className="text-xs text-muted-foreground">{task.sourceRow ? `Row ${task.sourceRow}` : "Batch evidence"}</div></TableCell><TableCell><Badge variant="outline">Confirm reviewed source</Badge></TableCell></TableRow>)}</TableBody></Table>
+          </div>
+          <div className="rounded-xl border bg-muted/35 p-3 text-xs text-muted-foreground">Exact preview: {bulkPreviewTasks.length} low-risk row{bulkPreviewTasks.length === 1 ? "" : "s"} across {new Set(bulkPreviewTasks.map((task) => task.centerId)).size} school{new Set(bulkPreviewTasks.map((task) => task.centerId)).size === 1 ? "" : "s"}. High-risk billing, identity, custody, and access rows remain individual-review only.</div>
+          <DialogFooter><Button variant="outline" onClick={() => setBulkPreviewOpen(false)}>Return to workbook</Button><Button disabled={!bulkPreviewTasks.length || saving} onClick={() => { setBulkPreviewOpen(false); void recordDecision(bulkTaskIds, "confirm"); }}>Confirm reviewed selection</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

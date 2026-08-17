@@ -26,6 +26,8 @@ ProCare remains the operational source of truth until every blocker below is com
 | Approved secure handoff used | |
 | Untouched export filename and timestamp | |
 | Export SHA-256 from import preview | |
+| Generated BEE migration template SHA-256 | |
+| Reviewed BEE migration template SHA-256 and confirmation fingerprint | |
 | Secure archive location and retention owner | |
 | Raw-row retention review date and deletion approver | |
 | No bank credentials or full payment details collected | |
@@ -44,6 +46,8 @@ ProCare remains the operational source of truth until every blocker below is com
 
 Record the preview counts, warnings, exclusions, duplicate candidates, and approved resolutions. Files over the duplicate-review safety limit must not be committed unless split into approved batches or the importer is enhanced and retested.
 
+Attach the successful `confirmation.json` from `npm run procare:confirm-source-of-truth`. Its family count must count each source Account ID once even when the family has siblings. Its child count, opening-balance total, and child-level weekly-tuition total must match the reviewed packet. A successful confirmation is preparation evidence, not import, billing, invitation, payment, or cutover approval.
+
 ## Import batches
 
 | Order | Source filename | SHA-256 | Preview counts | Duplicate decision | Batch ID/status | Errors/exceptions | Backup filename |
@@ -60,6 +64,7 @@ Record the preview counts, warnings, exclusions, duplicate candidates, and appro
 | Staff | | | | |
 | Classrooms | | | | |
 | Account balances | | | | |
+| Child-level weekly tuition assignments | | | | |
 | Credits | | | | |
 | Open invoices | | | | |
 

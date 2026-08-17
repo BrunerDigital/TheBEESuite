@@ -3,14 +3,17 @@ import Link from "next/link";
 import { Moon, Sun } from "lucide-react";
 import { DirectorPaymentTerminalWorkspace } from "@/components/director-payment-terminal-workspace";
 import { DirectorReviewInbox } from "@/components/director-review-inbox";
+import { DataReadinessCenter } from "@/components/data-readiness-center";
 import { EndOfDayClosingBoard } from "@/components/end-of-day-closing-board";
 import { FamilyRelationshipMapPreview } from "@/components/family-relationship-map-preview";
 import type { EditableFamilyRecord } from "@/components/family-record-editor";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { DataReadinessWorkspaceData } from "@/lib/data-readiness";
+import { dataReadinessViewFilters } from "@/lib/data-readiness-context";
 
-type PreviewView = "family" | "terminal" | "closing" | "inbox";
+type PreviewView = "family" | "terminal" | "closing" | "inbox" | "migration-director" | "migration-executive";
 
 const family: EditableFamilyRecord = {
   id: "preview-family",
@@ -99,10 +102,26 @@ const inboxItems = [
   { id: "messages", label: "Family Messages", count: 5, detail: "Unread family conversations that may need a response.", href: "#", tone: "standard" as const },
 ];
 
+const migrationPreviewData: DataReadinessWorkspaceData = {
+  generatedAt: "2026-08-17T12:00:00.000Z",
+  truncated: false,
+  summary: { BLOCKED: 2, CONFIRM: 2, READY: 1, EXCLUDED: 0, IMPORTED: 0, VERIFIED: 0, FAILED: 0, actionable: 4, total: 5, completionPercent: 20, sourceRows: 389, lastUpdated: "2026-08-17T12:00:00.000Z" },
+  batches: [{ id: "batch-baden", centerId: "baden", centerName: "Baden Strasse", filename: "Previous-system report package", status: "REVIEW", sourceSha256: "preview-source-hash", reviewFingerprint: "preview-review-fingerprint", rowCount: 389, importedRows: 0, unresolvedRows: 38, disposedRows: 0, createdAt: "2026-08-17T12:00:00.000Z", verified: false }],
+  tasks: [
+    ["family-link", "baden", "Baden Strasse", "Family account 1042 · Child 2078", "Access and identity", "BLOCKED", "high", 2, "Child-to-family link is not proven by a stable source relationship.", "No confirmed family link", "Match source Account ID 1042", "Child relationships.csv", 18, false],
+    ["balance", "baden", "Baden Strasse", "Family account 1091", "Billing and balances", "CONFIRM", "high", 3, "Opening balance requires an exact school confirmation.", "$58.00 source balance", "$58.00 opening balance", "Account balance summary.csv", 44, false],
+    ["tuition", "baden", "Baden Strasse", "Child 2120", "Billing and balances", "CONFIRM", "medium", 3, "Weekly tuition needs a stable child binding and effective week.", "No confirmed weekly rate", "$245.00 weekly starting 2026-W35", "child contract billing summary.csv", 27, false],
+    ["classroom", "east", "Jasper East", "Child 4108", "Enrollment and classroom placement", "BLOCKED", "medium", 4, "The source classroom is unknown.", "Unknown", "Butterflies", "Classroom schedule summary weekly.csv", 12, true],
+    ["contact", "east", "Jasper East", "Family account 3098", "Parent communication readiness", "READY", "low", 6, "Guardian contact evidence is complete.", "Source contact", "Confirmed", "Child relationships.csv", 31, true],
+  ].map(([id, centerId, centerName, entity, category, status, risk, priority, reason, currentValue, proposedValue, sourceFilename, sourceRow, bulkEligible]) => ({
+    id: String(id), resource: "ProcareImportRow" as const, resourceId: String(id), batchId: "batch-baden", centerId: String(centerId), centerName: String(centerName), entity: String(entity), category: String(category), status: status as "BLOCKED" | "CONFIRM" | "READY", risk: risk as "high" | "medium" | "low", priority: Number(priority), dueDate: null, reason: String(reason), currentValue: String(currentValue), proposedValue: String(proposedValue), difference: String(reason), sourceFilename: String(sourceFilename), sourceRow: Number(sourceRow), sourceIds: [`source-${id}`], parsingConfidence: "high" as const, relatedRecords: [], downstreamImpact: "Held from the confirmed migration package until reviewed.", bulkEligible: Boolean(bulkEligible), decision: null, decisionNote: "", updatedAt: "2026-08-17T12:00:00.000Z",
+  })),
+};
+
 export default async function UiPreviewPage({ searchParams }: { searchParams: Promise<{ view?: string; theme?: string; chrome?: string }> }) {
   if (process.env.NODE_ENV !== "development") notFound();
   const params = await searchParams;
-  const view: PreviewView = params.view === "terminal" || params.view === "closing" || params.view === "inbox" ? params.view : "family";
+  const view: PreviewView = ["terminal", "closing", "inbox", "migration-director", "migration-executive"].includes(params.view ?? "") ? params.view as PreviewView : "family";
   const dark = params.theme === "dark";
   const showChrome = params.chrome !== "0";
   const nextTheme = dark ? "light" : "dark";
@@ -114,7 +133,7 @@ export default async function UiPreviewPage({ searchParams }: { searchParams: Pr
           <div className="mx-auto flex max-w-[96rem] flex-wrap items-center justify-between gap-3">
             <div><Badge>Honeyglass UI Preview</Badge><span className="ml-3 text-sm text-muted-foreground">Synthetic data only</span></div>
             <nav className="flex flex-wrap gap-2" aria-label="Preview screens">
-              {(["family", "terminal", "closing", "inbox"] as const).map((item) => <Link key={item} href={`/ui-preview?view=${item}&theme=${dark ? "dark" : "light"}`} className={buttonVariants({ variant: view === item ? "default" : "outline", size: "sm" })}>{item}</Link>)}
+              {(["family", "terminal", "closing", "inbox", "migration-director", "migration-executive"] as const).map((item) => <Link key={item} href={`/ui-preview?view=${item}&theme=${dark ? "dark" : "light"}`} className={buttonVariants({ variant: view === item ? "default" : "outline", size: "sm" })}>{item}</Link>)}
               <Link href={`/ui-preview?view=${view}&theme=${nextTheme}`} className={buttonVariants({ variant: "outline", size: "sm" })}>{dark ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}{dark ? "Light" : "Dark"}</Link>
             </nav>
           </div>
@@ -125,6 +144,8 @@ export default async function UiPreviewPage({ searchParams }: { searchParams: Pr
         {view === "terminal" ? <DirectorPaymentTerminalWorkspace families={[terminalFamily]} centers={[terminalCenter]} initialFamilyId={family.id} previewMode /> : null}
         {view === "closing" ? <EndOfDayClosingBoard data={closingData} /> : null}
         {view === "inbox" ? <DirectorReviewInbox items={inboxItems} /> : null}
+        {view === "migration-director" ? <DataReadinessCenter data={migrationPreviewData} centers={[{ id: "baden", name: "Baden Strasse" }]} allowBulkImport={false} initialView={dataReadinessViewFilters({ tab: "procare" })} /> : null}
+        {view === "migration-executive" ? <DataReadinessCenter data={migrationPreviewData} centers={[{ id: "baden", name: "Baden Strasse" }, { id: "east", name: "Jasper East" }]} allowBulkImport initialView={dataReadinessViewFilters({ tab: "queue" })} /> : null}
       </main>
     </div>
   );

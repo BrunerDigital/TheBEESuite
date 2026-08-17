@@ -1118,6 +1118,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const isParentDashboard = visibleLenses.length === 1 && visibleLenses.includes("parent");
   const isPickupDashboard = visibleLenses.length === 1 && visibleLenses.includes("pickup");
   const isDirectorDashboard = visibleLenses.includes("director");
+  const isExecutiveDashboard = Boolean(live?.executiveMetrics);
   const dashboardTitle = isTeacherDashboard
     ? "Classroom overview"
     : isBillingDashboard
@@ -1216,14 +1217,14 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     title: row.kpi.label,
     children: renderKpiCard(row, "text-3xl", true),
   })),
-    ...(isDirectorDashboard && live?.dataReadiness ? [{
+    ...((isDirectorDashboard || isExecutiveDashboard) && live?.dataReadiness ? [{
       id: "top-kpi-data-readiness",
-      title: "Data readiness",
+      title: isExecutiveDashboard ? "Migration data workbook" : "School migration setup",
       children: (
-        <Link href="/data-readiness" className="honeycomb-kpi-link group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Open Data Readiness Center with ${live.dataReadiness.actionable} actionable tasks`}>
+        <Link href="/data-readiness" className="honeycomb-kpi-link group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Open ${isExecutiveDashboard ? "the migration data workbook" : "school migration setup"} with ${live.dataReadiness.actionable} actionable tasks`}>
           <Card className="honeycomb-kpi-card h-full transition-colors group-hover:border-primary/40 group-hover:bg-muted/30">
-            <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2"><CardDescription>Data readiness</CardDescription><ShieldCheck className="text-sky-500" /></CardHeader>
-            <CardContent><div className="text-3xl font-semibold">{live.dataReadiness.actionable}</div><p className="mt-1 text-xs text-muted-foreground">{live.dataReadiness.blocked} blocked · {live.dataReadiness.failed} failed · {live.dataReadiness.completionPercent}% resolved</p><span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">Open queue <ArrowUpRight className="size-3" /></span></CardContent>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2"><CardDescription>{isExecutiveDashboard ? "Migration data workbook" : "School migration setup"}</CardDescription><ShieldCheck className="text-sky-500" /></CardHeader>
+            <CardContent><div className="text-3xl font-semibold">{live.dataReadiness.actionable}</div><p className="mt-1 text-xs text-muted-foreground">{live.dataReadiness.blocked} blocked · {live.dataReadiness.failed} failed · {live.dataReadiness.completionPercent}% resolved</p><span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">{isExecutiveDashboard ? "Open workbook" : "Continue setup"} <ArrowUpRight className="size-3" /></span></CardContent>
           </Card>
         </Link>
       ),
@@ -1507,9 +1508,9 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   <ArrowUpRight data-icon="inline-start" aria-hidden="true" />
                   Open pipeline
                 </Button> : null}
-                {isDirectorDashboard && live?.dataReadiness ? <Button className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" variant="outline" nativeButton={false} render={<Link href="/data-readiness" />}>
+                {(isDirectorDashboard || isExecutiveDashboard) && live?.dataReadiness ? <Button className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" variant="outline" nativeButton={false} render={<Link href="/data-readiness" />}>
                   <ShieldCheck data-icon="inline-start" aria-hidden="true" />
-                  Data readiness
+                  {isExecutiveDashboard ? "Migration data workbook" : "School migration setup"}
                 </Button> : null}
             </div>
           </div>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 type Props = {
   centerId: string;
   schoolName: string;
+  schoolEmail: string | null;
   initialStatus: string;
   returning: boolean;
   autoStart: boolean;
@@ -31,6 +32,7 @@ function statusMessage(status: string) {
 export function CorporateStripeVerificationCard({
   centerId,
   schoolName,
+  schoolEmail,
   initialStatus,
   returning,
   autoStart,
@@ -112,6 +114,10 @@ export function CorporateStripeVerificationCard({
         <div><strong>Selected school:</strong> {schoolName}. This page is pinned to the approved Stripe account for this location.</div>
       </div>
 
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+        <strong>This school&apos;s Stripe account already exists.</strong> On Stripe&apos;s page, sign in with <span className="break-all font-semibold">{schoolEmail || "the school email on file"}</span> and the existing Stripe password. If no Stripe password was created, choose Stripe&apos;s create-account or password-setup option for that same email. The BEE Suite never receives or stores the Stripe password.
+      </div>
+
       <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm leading-6">
         <input
           type="checkbox"
@@ -134,7 +140,7 @@ export function CorporateStripeVerificationCard({
         ) : (
           <Button type="button" size="lg" disabled={!termsAccepted || busy} onClick={() => void startVerification()}>
             {busy ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : null}
-            Open secure Stripe verification
+            Continue to Stripe sign in or setup
             {!busy ? <ArrowUpRight data-icon="inline-end" /> : null}
           </Button>
         )}

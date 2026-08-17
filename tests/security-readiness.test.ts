@@ -27,6 +27,13 @@ test("database drift evaluation fails missing RLS and browser grants", () => {
   ]);
 });
 
+test("the live security audit accepts only hardened non-public definer functions", async () => {
+  const audit = await readFile("scripts/audit-supabase-security.ts", "utf8");
+  assert.match(audit, /search_path=pg_catalog, pg_temp/);
+  assert.match(audit, /has_function_privilege\('public', p\.oid, 'EXECUTE'\)/);
+  assert.match(audit, /EXPECTED_PUBLIC_TABLE_COUNT \?\? "97"/);
+});
+
 test("parent setup tokens remain server-only in both migration ledgers", async () => {
   const prismaMigration = await readFile(
     "prisma/migrations/20260720201430_enable_rls_parent_portal_setup_token/migration.sql",

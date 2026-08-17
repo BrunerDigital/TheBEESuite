@@ -4,6 +4,7 @@
   "author": "BrunerDigital",
   "private": true,
   "overrides": {
+    "deepmerge-ts": "8.0.0",
     "esbuild": "^0.28.1",
     "postcss": "^8.5.18",
     "sharp": "^0.35.3"
@@ -34,6 +35,7 @@
     "procare:import-reviewed": "tsx scripts/import-reviewed-procare-package.ts",
     "procare:prepare-multi": "tsx scripts/prepare-procare-multi-report-import.ts",
     "procare:prepare-rendered": "tsx scripts/prepare-rendered-procare-import.ts",
+    "procare:confirm-source-of-truth": "tsx scripts/confirm-bee-suite-migration-source-of-truth.ts",
     "mobile:store:check": "node scripts/mobile-store-readiness-check.mjs",
     "ops:check": "node scripts/deployment-ops-check.mjs",
     "ios:parent:add": "node scripts/run-capacitor-app.mjs parent add ios",

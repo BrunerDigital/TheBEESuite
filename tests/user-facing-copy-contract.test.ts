@@ -77,7 +77,7 @@ test("authored import and setup UI copy omits the legacy vendor name", () => {
   assert.match(instructionGraphics, /previous-system cutover, source-file archival, and wider rollout are separate decisions/);
   assert.match(instructionGraphics, /Archive source files separately/);
   const importPanel = source("src/components/procare-import-panel.tsx");
-  assert.match(importPanel, /BEE Suite School Migration Review/);
+  assert.match(importPanel, /Guided school migration setup/);
   assert.match(importPanel, /families, children, guardians, classrooms, schedules, balances, tuition evidence, staff, and operating history intact/);
   assert.match(importPanel, /Every family relationship and balance must remain tied to stable source evidence/);
   assert.match(importPanel, /Exports from another provider require their own reviewed source adapter/);
@@ -100,7 +100,8 @@ test("stored values, lookup keys, and import provenance remain exact", () => {
   assert.match(billingWorkbench, /Textarea value=\{invoiceEditDescription\}/);
   assert.match(liveOps, /crmLeadSearchHref\(lead\.familyName\)/);
   assert.match(dataReadinessContext, /tab: "overview" \| "queue" \| "procare"/);
-  assert.match(dataReadinessCenter, /TabsTrigger value="procare"[^\n]+Data onboarding/);
+  assert.match(dataReadinessCenter, /TabsTrigger value="procare"[^\n]+Start migration/);
+  assert.match(dataReadinessCenter, /TabsTrigger value="procare"[^\n]+Import and parse/);
 
   assert.match(route, /sourceSystem:\s*"procare"/);
   assert.match(route, /filename: "pasted-procare-import\.csv"/);

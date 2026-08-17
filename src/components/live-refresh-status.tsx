@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { RefreshCw, WifiOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -30,10 +30,6 @@ function refreshIntervalMs(pathname: string, role?: string) {
   return 60_000;
 }
 
-function shouldRefreshRouteData(pathname: string) {
-  return pathname.startsWith("/billing-invoices");
-}
-
 function syncText(state: SyncState, lastSyncedAt: Date | null, timeZone: string) {
   if (state === "offline") return "Offline";
   if (state === "signed-out") return "Session ended";
@@ -48,6 +44,7 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
   const pathname = usePathname();
   const [state, setState] = useState<SyncState>("idle");
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const billingVersionRef = useRef<string | null>(null);
   const mounted = useSyncExternalStore(subscribeClientReady, getClientReadySnapshot, getServerReadySnapshot);
   const intervalMs = refreshIntervalMs(pathname, role);
 
@@ -74,7 +71,15 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
         }
         if (!response.ok) throw new Error("Live refresh failed.");
 
-        if (shouldRefreshRouteData(pathname)) router.refresh();
+        if (pathname.startsWith("/billing-invoices")) {
+          const versionResponse = await fetch("/api/billing/live-version", { cache: "no-store" });
+          if (!versionResponse.ok) throw new Error("Billing refresh failed.");
+          const json = await versionResponse.json().catch(() => null) as { version?: string } | null;
+          const nextVersion = json?.version ?? null;
+          const previousVersion = billingVersionRef.current;
+          billingVersionRef.current = nextVersion;
+          if (previousVersion && nextVersion && previousVersion !== nextVersion) router.refresh();
+        }
         setLastSyncedAt(new Date());
         setState("idle");
       } catch {

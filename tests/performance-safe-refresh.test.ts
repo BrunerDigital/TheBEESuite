@@ -8,12 +8,19 @@ function source(path: string) {
 
 test("session heartbeats preserve sign-out handling and refresh live billing only", () => {
   const liveRefresh = source("src/components/live-refresh-status.tsx");
+  const billingVersion = source("src/app/api/billing/live-version/route.ts");
 
   assert.equal(liveRefresh.match(/router\.refresh\(\)/g)?.length, 2);
   assert.doesNotMatch(liveRefresh, /sync\((true|false)\)/);
   assert.match(liveRefresh, /response\.status === 401/);
   assert.match(liveRefresh, /pathname\.startsWith\("\/billing-invoices"\)\) return 15_000/);
-  assert.match(liveRefresh, /if \(shouldRefreshRouteData\(pathname\)\) router\.refresh\(\)/);
+  assert.match(liveRefresh, /fetch\("\/api\/billing\/live-version", \{ cache: "no-store" \}\)/);
+  assert.match(liveRefresh, /previousVersion && nextVersion && previousVersion !== nextVersion/);
+  assert.match(billingVersion, /paymentId: \{ not: null \}/);
+  assert.match(billingVersion, /findFirst\(\{/);
+  assert.doesNotMatch(billingVersion, /findMany/);
+  assert.match(billingVersion, /centerId: \{ in: user\.centerIds \}/);
+  assert.match(billingVersion, /"Cache-Control": "private, no-store"/);
 });
 
 test("notification polling uses the lightweight unread endpoint", () => {

@@ -117,6 +117,49 @@ test("parent payment redirects preserve the selected family billing view", () =>
   assert.doesNotMatch(workspace, /returnPath: "\/parent-portal"/);
 });
 
+test("parent account checkout keeps the workspace interactive and reports mobile progress inline", () => {
+  const paymentAction = workspace.slice(
+    workspace.indexOf("function payFamilyBalance"),
+    workspace.indexOf("function payBalance"),
+  );
+
+  assert.doesNotMatch(paymentAction, /startTransition/);
+  assert.match(paymentAction, /setPaymentCheckoutMethod\(paymentMethodCategory\)/);
+  assert.match(paymentAction, /setPaymentCheckoutError\(message\)/);
+  assert.match(workspace, /Opening secure checkout…/);
+  assert.match(workspace, /Secure payment setup can take a few seconds on a mobile connection\./);
+  assert.match(workspace, /Your payment status may still be updating\. Wait a moment before trying again\./);
+  assert.match(workspace, /aria-busy=\{paymentCheckoutMethod === "card"\}/);
+  assert.match(
+    workspace,
+    /disabled=\{[\s\S]*?isPending \|\|[\s\S]*?paymentCheckoutMethod !== null \|\|[\s\S]*?checkoutBlocked \|\|[\s\S]*?accountPaymentDisabled/,
+  );
+  assert.match(
+    workspace,
+    /disabled=\{isPending \|\| paymentCheckoutMethod !== null \|\| !family\}/,
+  );
+  assert.match(
+    workspace,
+    /paymentCheckoutMethod !== null \|\|[\s\S]*checkoutBlocked \|\|[\s\S]*!selectedUniformProduct/,
+  );
+  assert.match(
+    workspace,
+    /paymentCheckoutMethod !== null \|\|[\s\S]*checkoutBlocked[\s\S]*payProductInvoice/,
+  );
+  assert.match(
+    workspace,
+    /export function ParentPortalWorkspace[\s\S]*useState<PaymentCheckoutMethod>\(null\)[\s\S]*<ParentPortalWorkspaceView/,
+  );
+  assert.match(
+    workspace,
+    /<ParentPortalWorkspaceView[\s\S]*paymentCheckoutMethod=\{paymentCheckoutMethod\}/,
+  );
+  assert.match(
+    workspace,
+    /function ParentPortalWorkspaceView[\s\S]*const \[paymentCheckoutError, setPaymentCheckoutError\] = useState\(""\)/,
+  );
+});
+
 test("profile password controls use a semantic form and submit contract", () => {
   assert.match(workspace, /<form[\s\S]*onSubmit=\{\(event\) => \{[\s\S]*updateProfilePassword\(\);/);
   assert.match(workspace, /id="profile-current-password"/);

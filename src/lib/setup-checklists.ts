@@ -1,4 +1,5 @@
 import { STAFF_MESSAGING_HREF } from "@/lib/messaging-navigation";
+import { PAYOUT_SETUP_SETTINGS_PATH } from "@/lib/stripe-payout-setup-flow";
 
 export type SetupChecklistKey = "director_launch" | "teacher_profile";
 
@@ -19,7 +20,7 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
     id: "login-school-profile",
     title: "Log in and confirm school profile",
     description: "Sign in with the school email, reset the password if prompted, and confirm school contact details, hours, timezone, capacity, and launch owner.",
-    href: "/school-setup",
+    href: "/billing-settings?view=setup",
   },
   {
     id: "classrooms-ratios",
@@ -43,7 +44,7 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
     id: "required-documents",
     title: "Complete required documents",
     description: "Review family, child, and staff document checklists, upload missing files, verify signatures, and confirm expiration dates.",
-    href: "/documents",
+    href: "/forms?view=documents",
   },
   {
     id: "tuition-billing-rules",
@@ -55,19 +56,19 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
     id: "payout-bank-account",
     title: "Connect the school bank account",
     description: "Directors and executives open Billing Settings to complete payout processor onboarding so tuition funds can route to the school account once parent payments are enabled.",
-    href: "/billing-settings#payout-setup",
+    href: PAYOUT_SETUP_SETTINGS_PATH,
   },
   {
     id: "parent-portal",
     title: "Configure parent portal access",
     description: "Verify guardian emails, family links, child visibility, custody restrictions, payment access, document access, and invite order.",
-    href: "/parent-portal",
+    href: "/family-detail#family-guardians",
   },
   {
     id: "attendance-kiosk",
     title: "Test attendance, kiosk, QR, and PIN workflows",
     description: "Verify guardian check-in/out, authorized pickups, staff clock-in/out, classroom attendance, late pickup flags, and ratio snapshots.",
-    href: "/attendance",
+    href: "/classroom-dashboard?view=attendance",
   },
   {
     id: "messages-notifications",
@@ -85,7 +86,7 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
     id: "compliance-incidents",
     title: "Configure compliance, incidents, and medication logs",
     description: "Enter licensing details, drill cadence, medication rules, compliance tasks, incident admin review, parent acknowledgement, and export readiness.",
-    href: "/compliance",
+    href: "/forms?view=compliance",
   },
   {
     id: "enrollment-registration",
@@ -198,7 +199,7 @@ export const teacherProfileChecklistTasks: SetupChecklistTask[] = [
     id: "schedule-coverage",
     title: "Confirm schedule and coverage",
     description: "Confirm your shift, classroom coverage, ratio expectations, and who to notify when you float, call out, arrive late, or leave early.",
-    href: "/staff",
+    href: "/teacher-portal",
   },
 ];
 

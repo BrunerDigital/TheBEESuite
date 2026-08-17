@@ -1027,6 +1027,10 @@ async function renderLivePage(
       },
     };
 
+    const payoutSetupFlow = stripePayoutSetupFlowForCenters(selectedCenter ? [{
+      ...selectedCenter,
+      stripeReauthorizationAvailable: !readCorporateStripeVerificationTarget(selectedCenter.id) || canUseCorporateStripeVerification(user),
+    }] : [], { userEmail: user.email });
     const sections = schoolOnboardingSetupSections.map((definition) => {
       const saved = schoolSetup.setup.sections[definition.storageKey];
       const readiness = readyData[definition.field] ?? {
@@ -1041,7 +1045,7 @@ async function renderLivePage(
         group: setupGroupForField(definition.field),
         label: definition.label,
         owner: definition.owner,
-        href: definition.href,
+        href: definition.field === "integrationSetup" ? payoutSetupFlow.href : definition.href,
         description: definition.description,
         placeholder: definition.placeholder,
         value: saved.value,
@@ -1049,16 +1053,15 @@ async function renderLivePage(
         evidence: readiness.evidence,
         metrics: readiness.metrics,
         requiredActions: readiness.requiredActions,
-        actionLabel: setupActionLabel(definition.field),
+        actionLabel: definition.field === "integrationSetup" ? "Open school payout setup" : setupActionLabel(definition.field),
+        secondaryAction: definition.field === "integrationSetup"
+          ? { href: definition.href, label: "Open other integrations" }
+          : undefined,
       };
     });
     const completedSections = sections.filter((section) => section.status === "complete").length;
     const blockingSections = sections.filter((section) => section.status === "missing").length;
     const progress = sections.length ? Math.round((completedSections / sections.length) * 100) : 0;
-    const payoutSetupFlow = stripePayoutSetupFlowForCenters(selectedCenter ? [{
-      ...selectedCenter,
-      stripeReauthorizationAvailable: !readCorporateStripeVerificationTarget(selectedCenter.id) || canUseCorporateStripeVerification(user),
-    }] : [], { userEmail: user.email });
     const directorChecklistAutomaticCompletedIds = deriveDirectorLaunchAutoCompletedIds({
       centerCount: selectedCenter ? 1 : 0,
       schoolProfileReady: Boolean(selectedCenter?.email && selectedCenter?.state && selectedCenter.licensedCapacity > 0),

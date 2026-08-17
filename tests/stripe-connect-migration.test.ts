@@ -362,6 +362,9 @@ test("dashboard and setup checklists route prepared schools through secure reaut
   assert.match(dashboardPage, /directorLaunchChecklistTasksForPayoutSetup/);
   assert.match(dashboard, /checklist\.tasks/);
   assert.match(schoolSetup, /directorChecklistTasks: directorLaunchChecklistTasksForPayoutSetup/);
+  assert.match(schoolSetup, /definition\.field === "integrationSetup" \? payoutSetupFlow\.href/);
+  assert.match(schoolSetup, /Open school payout setup/);
+  assert.match(schoolSetup, /Open other integrations/);
   assert.match(payoutPanel, /id="payout-setup"/);
   assert.match(payoutPanel, /stripeReauthorizationHref\(center\.id\)/);
   assert.match(payoutPanel, /center\.stripeReauthorizationAvailable !== false/);

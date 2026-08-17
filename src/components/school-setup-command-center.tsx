@@ -37,6 +37,10 @@ export type SchoolSetupCommandSection = {
   metrics: string[];
   requiredActions: string[];
   actionLabel: string;
+  secondaryAction?: {
+    href: string;
+    label: string;
+  };
 };
 
 export type SchoolSetupCommandCenterData = {
@@ -299,7 +303,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
                     {activeSection.requiredActions.map((action) => <li key={action}>{action}</li>)}
                   </ul>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <Button onClick={saveSetup} disabled={isPending || !data.centerId || !hasUnsavedChanges}>
                     {isPending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}
                     Save setup input
@@ -308,6 +312,12 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
                     <ExternalLink data-icon="inline-start" />
                     {activeSection.actionLabel}
                   </Button>
+                  {activeSection.secondaryAction ? (
+                    <Button variant="outline" nativeButton={false} render={<Link href={activeSection.secondaryAction.href} />}>
+                      <ExternalLink data-icon="inline-start" />
+                      {activeSection.secondaryAction.label}
+                    </Button>
+                  ) : null}
                 </div>
                 {message ? <div role="status" aria-live="polite" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700">{message}</div> : null}
                 {error ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}

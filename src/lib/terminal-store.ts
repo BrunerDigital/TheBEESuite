@@ -229,7 +229,6 @@ export async function createTerminalStoreCheckoutSession({
     "invoice_creation[enabled]": "true",
   });
   addStripeCheckoutBrandingParams(body, {
-    displayName: "The BEE Suite Equipment Store",
     submitMessage: "Review your BEE Suite equipment order, shipping details, and total before submitting payment.",
     afterSubmitMessage: "You will return to The BEE Suite after your equipment order is submitted.",
   });

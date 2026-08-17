@@ -183,21 +183,19 @@ test("payment method request app URL keeps emailed links on the secure Bee Suite
   }
 });
 
-test("payment method request checkout branding uses public Bee Suite assets and school copy", () => {
+test("payment method request checkout branding keeps school context without overriding the BEE Suite identity", () => {
   const logoUrl = buildPublicPaymentBrandAssetUrl("https://thebeesuite.io/", "/brand/the-bee-suite/app-icon-dark.png");
   const localLogoUrl = buildPublicPaymentBrandAssetUrl("http://localhost:3000", "/brand/the-bee-suite/app-icon-dark.png");
   const branding = buildPaymentMethodRequestCheckoutBranding({
     centerLabel: "Sarasota",
     familyName: "Johnson Family",
     intent: "instant_bank_verification",
-    logoUrl,
-    iconUrl: "https://thebeesuite.io/brand/the-bee-suite/favicon-dark.png",
   });
 
   assert.equal(logoUrl, "https://thebeesuite.io/brand/the-bee-suite/app-icon-dark.png");
   assert.equal(localLogoUrl, null);
-  assert.equal(branding.displayName, "Sarasota via The BEE Suite");
-  assert.equal(branding.logoUrl, logoUrl);
+  assert.equal("displayName" in branding, false);
+  assert.equal("logoUrl" in branding, false);
   assert.match(branding.submitMessage ?? "", /Connect your bank account/i);
   assert.match(branding.submitMessage ?? "", /does not turn on autopay/i);
   assert.match(branding.submitMessage ?? "", /does not store your bank sign-in credentials/i);

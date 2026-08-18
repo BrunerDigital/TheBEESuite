@@ -107,7 +107,18 @@ export function allOpenInvoicesResponsibilitySeparated(invoices: Array<{
   totalCents: number;
   customFields: unknown;
 }>) {
-  const openInvoices = invoices.filter((invoice) => invoice.status === "OPEN" && invoice.totalCents > 0);
-  return openInvoices.length > 0
-    && openInvoices.every((invoice) => invoiceResponsibilitySeparation(invoice.customFields) !== null);
+  const relevantInvoices = invoices.filter((invoice) => {
+    if (invoice.status === "OPEN" && invoice.totalCents > 0) return true;
+    const separation = invoiceResponsibilitySeparation(invoice.customFields);
+    return invoice.status === "VOID" && separation?.familyResponsibilityCents === 0;
+  });
+  return relevantInvoices.length > 0
+    && relevantInvoices.every((invoice) => invoiceResponsibilitySeparation(invoice.customFields) !== null);
+}
+
+export function invoiceResponsibilityReviewExempt(customFields: unknown) {
+  const fields = record(customFields);
+  return text(fields.checkoutPurpose) === "product_purchase"
+    || text(fields.receiptKind) === "product"
+    || text(fields.chargeSource) === "product";
 }

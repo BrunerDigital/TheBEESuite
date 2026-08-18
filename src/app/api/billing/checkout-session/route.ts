@@ -35,7 +35,7 @@ import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
-import { invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
+import { invoiceResponsibilityReviewExempt, invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
@@ -207,7 +207,7 @@ async function POSTHandler(request: NextRequest) {
   if (invoice.totalCents <= 0) {
     return NextResponse.json({ ok: false, error: "Invoice total must be greater than zero." }, { status: 400 });
   }
-  if (parentBalanceNeedsResponsibilityReview({
+  if (!invoiceResponsibilityReviewExempt(invoice.customFields) && parentBalanceNeedsResponsibilityReview({
     accountBalanceCents: invoice.billingAccount.balanceCents,
     agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
     invoiceId: invoice.id,

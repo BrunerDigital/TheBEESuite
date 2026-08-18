@@ -242,7 +242,7 @@ async function GETHandler(request: NextRequest) {
         autopayPlaceholder: true,
         customFields: true,
         invoices: {
-          where: { status: PaymentStatus.OPEN, totalCents: { gt: 0 } },
+          where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.VOID] } },
           select: { status: true, totalCents: true, customFields: true },
         },
         ledgerEntries: {

@@ -43,7 +43,7 @@ import {
   AGENCY_LEDGER_SOURCE_SYSTEM,
   parentBalanceNeedsResponsibilityReview,
 } from "@/lib/parent-billing-visibility";
-import { invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
+import { invoiceResponsibilityReviewExempt, invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 
 export type AutopayRunResultStatus = "would_charge" | "paid" | "processing" | "failed" | "skipped";
 
@@ -365,7 +365,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
 
-    if (parentBalanceNeedsResponsibilityReview({
+    if (!invoiceResponsibilityReviewExempt(invoice.customFields) && parentBalanceNeedsResponsibilityReview({
       accountBalanceCents: invoice.billingAccount.balanceCents,
       agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
       invoiceId: invoice.id,

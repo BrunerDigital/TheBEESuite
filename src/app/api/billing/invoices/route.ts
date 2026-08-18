@@ -21,6 +21,7 @@ import { refundSubmissionMode } from "@/lib/refund-approval";
 import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
 import { invoiceLedgerBalanceCents, invoiceVoidBlocker } from "@/lib/invoice-void";
 import {
+  invoiceResponsibilityReviewExempt,
   invoiceResponsibilitySeparation,
   responsibilitySeparationError,
 } from "@/lib/invoice-responsibility-separation";
@@ -855,9 +856,9 @@ async function updateInvoice(user: CurrentBillingUser, body: Record<string, unkn
   if (invoice.status !== PaymentStatus.OPEN) {
     return NextResponse.json({ ok: false, error: "Only open invoices can be edited." }, { status: 400 });
   }
-  if (amountProvided && invoiceResponsibilitySeparation(invoice.customFields)) {
+  if ((amountProvided || descriptionProvided) && invoiceResponsibilitySeparation(invoice.customFields)) {
     return NextResponse.json(
-      { ok: false, error: "The amount cannot be changed after family and agency responsibility has been separated." },
+      { ok: false, error: "The amount or item description cannot be changed after family and agency responsibility has been separated." },
       { status: 409 },
     );
   }
@@ -1233,6 +1234,9 @@ async function separateInvoiceResponsibility(user: CurrentBillingUser, body: Rec
       agencyName,
     });
     if (validationError) throw new Error(`RESPONSIBILITY_SPLIT_BLOCKED:${validationError}`);
+    if (invoiceResponsibilityReviewExempt(invoice.customFields)) {
+      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:Product purchases do not use agency tuition responsibility.");
+    }
     if (!hasSubsidyResponsibilityEvidence(
       invoice.customFields,
       invoice.billingAccount.customFields,

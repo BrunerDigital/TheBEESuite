@@ -164,6 +164,7 @@ import {
 import { invoicePurposeLabel } from "@/lib/product-billing";
 import {
   allOpenInvoicesResponsibilitySeparated,
+  invoiceResponsibilityReviewExempt,
   invoiceResponsibilitySeparation,
   responsibilitySeparatedBillingAmounts,
 } from "@/lib/invoice-responsibility-separation";
@@ -3740,7 +3741,7 @@ async function renderLivePage(
             status: invoice.status,
             dueDate: invoice.dueDate,
             totalCents: invoice.totalCents,
-            responsibilityReviewRequired: parentBalanceNeedsResponsibilityReview({
+            responsibilityReviewRequired: !invoiceResponsibilityReviewExempt(invoice.customFields) && parentBalanceNeedsResponsibilityReview({
               accountBalanceCents: invoice.billingAccount.balanceCents,
               agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
               invoiceId: invoice.id,

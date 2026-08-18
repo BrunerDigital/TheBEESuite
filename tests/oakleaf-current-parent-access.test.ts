@@ -13,6 +13,11 @@ test("Oakleaf parent access preparation is scoped, no-invite, and billing safe",
   assert.match(source, /prepareWithoutInvite: true/);
   assert.match(source, /invitationsToSend: 0/);
   assert.match(source, /blockedMissingEmail/);
+  assert.match(source, /currentAuthReady/);
+  assert.match(source, /!guardian\.currentAccessDisabled/);
+  assert.match(source, /listAuthUsers\(\)/);
+  assert.match(source, /missingEmailHolds/);
+  assert.match(source, /missing_authoritative_email/);
   assert.doesNotMatch(source, /Barnhart Family/);
   assert.doesNotMatch(source, /Abigail Brown Family/);
   assert.doesNotMatch(source, /Lamarriel Johnson Family/);
@@ -26,5 +31,6 @@ test("Oakleaf parent access preparation is scoped, no-invite, and billing safe",
   assert.match(source, /An Oakleaf invoice changed while preparing parent access/);
   assert.match(source, /An Oakleaf payment changed while preparing parent access/);
   assert.match(source, /An Oakleaf ledger entry changed while preparing parent access/);
+  assert.match(source, /confirmed app and Supabase Auth access/);
   assert.doesNotMatch(source, /sendEmail|sendParentInvitation|sendImportedParentInvitation/);
 });

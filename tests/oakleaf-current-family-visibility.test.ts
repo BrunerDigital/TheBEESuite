@@ -24,6 +24,9 @@ test("Oakleaf current-family visibility repair is source-locked and financially 
   assert.doesNotMatch(source, /tx\.invoice\.(?:create|update|delete|upsert)/);
   assert.doesNotMatch(source, /tx\.payment\.(?:create|update|delete|upsert)/);
   assert.doesNotMatch(source, /tx\.ledgerEntry\.(?:create|update|delete|upsert)/);
+  assert.match(auditSource, /reviewedVoucher/);
+  assert.match(auditSource, /reviewedCombinedResponsibility/);
+  assert.match(auditSource, /child\.configured/);
 });
 
 test("Oakleaf visibility audit rejects a source whose bytes do not match the reviewed fingerprint", () => {

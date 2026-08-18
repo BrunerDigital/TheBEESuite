@@ -1,11 +1,13 @@
 import "./load-env";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { createClient, type User as SupabaseUser } from "@supabase/supabase-js";
 import { UserRole } from "@prisma/client";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { ensureParentPortalLoginForGuardian, parentPortalAccessDisabled, parentPortalAccessFields } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
+import { getSupabaseAuthConfig } from "@/lib/supabase-auth";
 
 const CENTER_ID = "cmp4ew9h2001m6alwxssr4wr6";
 const CENTER_NAME = "Kid City USA - Oakleaf";
@@ -19,10 +21,10 @@ const targets = [
 ] as const;
 
 const blockedMissingEmail = [
-  "Balais Family",
-  "Cadet Family",
-  "Nsairat Family",
-  "Tyler Ramirez Family",
+  ["cmsnpjiez0004l1046gilrn04", "Balais Family", "Naomi Balais"],
+  ["cmsnpo2jd000fjl04cl5pvi17", "Cadet Family", "Estra Cadet"],
+  ["cmsnpvxe4001ojl042ys18sih", "Nsairat Family", "Fatima Al Nsairat"],
+  ["cms67l0k600dx6a40hbwt914v", "Tyler Ramirez Family", "Tyler Ramirez"],
 ] as const;
 
 function invariant(value: unknown, message: string): asserts value {
@@ -48,6 +50,26 @@ function validEmail(value: string | null) {
   return Boolean(value?.trim().match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/));
 }
 
+function activeAuthUser(user: SupabaseUser | undefined) {
+  return Boolean(
+    user?.email_confirmed_at
+    && (!user.banned_until || new Date(user.banned_until) <= new Date()),
+  );
+}
+
+async function listAuthUsers() {
+  const { url, key } = getSupabaseAuthConfig("service");
+  const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const users: SupabaseUser[] = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await client.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    users.push(...data.users);
+    if (data.users.length < 1000) return users;
+  }
+  throw new Error("Supabase Auth inventory exceeded 20,000 users; refusing a partial access audit.");
+}
+
 function sourceEmails() {
   const path = process.env.OAKLEAF_PROCARE_ACCOUNT_CSV_PATH?.trim() ?? "";
   invariant(path, "OAKLEAF_PROCARE_ACCOUNT_CSV_PATH is required.");
@@ -69,8 +91,8 @@ function sourceEmails() {
 }
 
 async function loadState(source: ReturnType<typeof sourceEmails>) {
-  const familyIds = targets.map(([familyId]) => familyId);
-  const [center, families, accounts, invoices, payments, ledgerEntries] = await Promise.all([
+  const familyIds = [...targets.map(([familyId]) => familyId), ...blockedMissingEmail.map(([familyId]) => familyId)];
+  const [center, families, accounts, invoices, payments, ledgerEntries, authUsers] = await Promise.all([
     prisma.center.findUnique({ where: { id: CENTER_ID }, select: { id: true, name: true, status: true, organization: { select: { tenantId: true } } } }),
     prisma.family.findMany({
       where: { id: { in: familyIds } },
@@ -88,9 +110,11 @@ async function loadState(source: ReturnType<typeof sourceEmails>) {
     prisma.invoice.findMany({ where: { billingAccount: { family: { centerId: CENTER_ID } } }, select: { id: true }, orderBy: { id: "asc" } }),
     prisma.payment.findMany({ where: { billingAccount: { family: { centerId: CENTER_ID } } }, select: { id: true }, orderBy: { id: "asc" } }),
     prisma.ledgerEntry.findMany({ where: { billingAccount: { family: { centerId: CENTER_ID } } }, select: { id: true }, orderBy: { id: "asc" } }),
+    listAuthUsers(),
   ]);
   invariant(center?.name === CENTER_NAME && center.status === "active", "Oakleaf center identity or status changed.");
-  invariant(families.length === targets.length, "An Oakleaf parent-access target family is missing.");
+  invariant(families.length === familyIds.length, "An Oakleaf parent-access target or hold family is missing.");
+  const authByEmail = new Map(authUsers.flatMap((user) => user.email ? [[user.email.trim().toLowerCase(), user] as const] : []));
   const targetGuardians = targets.map(([familyId, familyName, guardianName]) => {
     const family = families.find((item) => item.id === familyId);
     invariant(family?.name === familyName && family.centerId === CENTER_ID, `${familyName} identity changed.`);
@@ -103,11 +127,22 @@ async function loadState(source: ReturnType<typeof sourceEmails>) {
     invariant(!validEmail(guardian.email) || guardian.email!.trim().toLowerCase() === sourceEmail, `${guardianName} gained a conflicting email.`);
     invariant((guardian.phone ?? "").replace(/\D/g, "").length >= 4, `${guardianName} needs a reviewed phone/PIN source.`);
     invariant(!guardian.userId || (guardian.user?.tenantId === center.organization.tenantId && guardian.user.role === UserRole.PARENT_GUARDIAN), `${guardianName} has a conflicting app-user link.`);
-    return { familyId, familyName, guardianId: guardian.id, guardianName, sourceEmail, currentEmailReady: validEmail(guardian.email), currentUserId: guardian.userId, currentUserActive: guardian.user?.isActive ?? false, currentAccessDisabled: parentPortalAccessDisabled(guardian.customFields) };
+    return { familyId, familyName, guardianId: guardian.id, guardianName, sourceEmail, currentEmailReady: validEmail(guardian.email), currentUserId: guardian.userId, currentUserActive: guardian.user?.isActive ?? false, currentAccessDisabled: parentPortalAccessDisabled(guardian.customFields), currentAuthReady: activeAuthUser(authByEmail.get(sourceEmail)) };
+  });
+  const missingEmailHolds = blockedMissingEmail.flatMap(([familyId, familyName, guardianName]) => {
+    const family = families.find((item) => item.id === familyId);
+    invariant(family?.name === familyName && family.centerId === CENTER_ID, `${familyName} hold identity changed.`);
+    invariant(family.children.length > 0, `${familyName} no longer has a current child.`);
+    invariant(family.guardians.length === 1 && family.guardians[0].fullName.trim().toLowerCase() === guardianName.toLowerCase(), `${familyName} guardian identity changed.`);
+    const guardian = family.guardians[0];
+    const hasActiveAppAccess = Boolean(guardian.userId && guardian.user?.isActive && !parentPortalAccessDisabled(guardian.customFields));
+    if (validEmail(guardian.email) || hasActiveAppAccess) return [];
+    return [{ familyId, familyName, guardianId: guardian.id, guardianName, reason: "missing_authoritative_email" as const }];
   });
   invariant(new Set(targetGuardians.map((guardian) => guardian.sourceEmail)).size === targetGuardians.length, "Oakleaf parent-access targets contain a duplicate email across families.");
   const state = {
     targetGuardians,
+    missingEmailHolds,
     accountBalances: accounts,
     invoiceIds: invoices.map((invoice) => invoice.id),
     paymentIds: payments.map((payment) => payment.id),
@@ -126,8 +161,8 @@ async function main() {
     center: { id: before.center.id, name: before.center.name, status: before.center.status },
     source: { sha256: SOURCE_SHA256, matchedEmails: source.emails.size },
     fingerprint: before.fingerprint,
-    targets: before.state.targetGuardians.map((guardian) => ({ familyName: guardian.familyName, guardianName: guardian.guardianName, alreadyActive: Boolean(guardian.currentUserId && guardian.currentUserActive) })),
-    planned: { parentAccountsToPrepare: before.state.targetGuardians.filter((guardian) => !(guardian.currentUserId && guardian.currentUserActive)).length, heldMissingAuthoritativeEmail: blockedMissingEmail, invitationsToSend: 0, billingChanges: 0 },
+    targets: before.state.targetGuardians.map((guardian) => ({ familyName: guardian.familyName, guardianName: guardian.guardianName, alreadyActive: Boolean(guardian.currentEmailReady && guardian.currentUserId && guardian.currentUserActive && !guardian.currentAccessDisabled && guardian.currentAuthReady) })),
+    planned: { parentAccountsToPrepare: before.state.targetGuardians.filter((guardian) => !(guardian.currentEmailReady && guardian.currentUserId && guardian.currentUserActive && !guardian.currentAccessDisabled && guardian.currentAuthReady)).length, heldMissingAuthoritativeEmail: before.state.missingEmailHolds, invitationsToSend: 0, billingChanges: 0 },
   }, null, 2));
   if (!applyRequested) return;
   invariant(process.argv.includes(CONFIRM), `Apply requires ${CONFIRM}.`);
@@ -138,7 +173,7 @@ async function main() {
   let alreadyActive = 0;
   let guardianEmailsReconciled = 0;
   for (const target of before.state.targetGuardians) {
-    if (target.currentUserId && target.currentUserActive) {
+    if (target.currentEmailReady && target.currentUserId && target.currentUserActive && !target.currentAccessDisabled && target.currentAuthReady) {
       alreadyActive += 1;
       continue;
     }
@@ -184,7 +219,7 @@ async function main() {
   }
 
   const after = await loadState(source);
-  invariant(after.state.targetGuardians.every((guardian) => guardian.currentUserId && guardian.currentUserActive), "One or more Oakleaf guardians still lack active parent access.");
+  invariant(after.state.targetGuardians.every((guardian) => guardian.currentEmailReady && guardian.currentUserId && guardian.currentUserActive && !guardian.currentAccessDisabled && guardian.currentAuthReady), "One or more Oakleaf guardians still lack confirmed app and Supabase Auth access.");
   invariant(JSON.stringify(after.state.accountBalances) === JSON.stringify(before.state.accountBalances), "An Oakleaf balance changed while preparing parent access.");
   invariant(JSON.stringify(after.state.invoiceIds) === JSON.stringify(before.state.invoiceIds), "An Oakleaf invoice changed while preparing parent access.");
   invariant(JSON.stringify(after.state.paymentIds) === JSON.stringify(before.state.paymentIds), "An Oakleaf payment changed while preparing parent access.");
@@ -194,7 +229,7 @@ async function main() {
     prisma.integrationDelivery.count({ where: { createdAt: { gte: startedAt }, purpose: { in: ["parent_invitation_email", "parent_guide_email"] } } }),
   ]);
   invariant(invitationAuditCount === 0 && invitationDeliveryCount === 0, "Unexpected invitation activity occurred during Oakleaf parent-access preparation.");
-  console.log(JSON.stringify({ ok: true, guardianEmailsReconciled, prepared, alreadyActive, activeParentFamilies: after.state.targetGuardians.length, heldMissingAuthoritativeEmail: blockedMissingEmail.length, invitationsSent: 0, balancesChanged: 0, invoicesChanged: 0, paymentsChanged: 0, ledgerEntriesChanged: 0 }, null, 2));
+  console.log(JSON.stringify({ ok: true, guardianEmailsReconciled, prepared, alreadyActive, activeParentFamilies: after.state.targetGuardians.length, heldMissingAuthoritativeEmail: after.state.missingEmailHolds, invitationsSent: 0, balancesChanged: 0, invoicesChanged: 0, paymentsChanged: 0, ledgerEntriesChanged: 0 }, null, 2));
 }
 
 void main()

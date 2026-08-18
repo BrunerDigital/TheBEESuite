@@ -180,13 +180,27 @@ async function main() {
     const reconciliation = object(object(account?.customFields).oakleafBalanceReconciliation as Prisma.JsonValue | null | undefined);
     const children = family.children.map((child) => {
       const fields = object(child.customFields);
+      const rateEvidence = object(fields.tuitionRateEvidence as Prisma.JsonValue | null | undefined);
+      const enabled = fields.tuitionBillingEnabled === true;
+      const savedWeeklyCents = Number(fields.tuitionPlanAmountCents ?? 0);
+      const planId = clean(fields.tuitionPlanId);
+      const holdReason = clean(fields.tuitionBillingHoldReason);
+      const reviewedVoucher = enabled && savedWeeklyCents === 0 && Boolean(planId) && clean(fields.tuitionFundingType) === "voucher";
+      const reviewedCombinedResponsibility = !enabled
+        && savedWeeklyCents === 0
+        && holdReason.toLowerCase().includes("reviewed combined weekly responsibility")
+        && rateEvidence.combinedFamilyResponsibility === true
+        && clean(rateEvidence.sourceSha256) === SOURCE_SHA256;
       return {
         id: child.id,
         name: child.fullName,
-        enabled: fields.tuitionBillingEnabled === true,
-        savedWeeklyCents: Number(fields.tuitionPlanAmountCents ?? 0),
-        planId: clean(fields.tuitionPlanId),
+        enabled,
+        savedWeeklyCents,
+        planId,
         fundingType: clean(fields.tuitionFundingType),
+        holdReason,
+        configured: (enabled && savedWeeklyCents > 0 && Boolean(planId)) || reviewedVoucher || reviewedCombinedResponsibility,
+        configurationKind: reviewedVoucher ? "reviewed_voucher_zero" : reviewedCombinedResponsibility ? "reviewed_combined_responsibility_zero" : enabled && savedWeeklyCents > 0 && planId ? "reviewed_positive_rate" : "unconfigured",
       };
     });
     return {
@@ -218,7 +232,7 @@ async function main() {
 
   const allSourceAnnotations = [...source.values()].flat();
   const unconfiguredChildren = records.flatMap((record) => record.children
-    .filter((child) => !child.enabled || child.savedWeeklyCents <= 0 || !child.planId)
+    .filter((child) => !child.configured)
     .map((child) => {
       const childTokens = child.name.toLowerCase().match(/[a-z0-9]+/g)?.filter((token) => token.length >= 4) ?? [];
       const familyTokens = record.familyName.toLowerCase().match(/[a-z0-9]+/g)?.filter((token) => token.length >= 4 && token !== "family") ?? [];
@@ -279,7 +293,7 @@ async function main() {
     summary: {
       currentFamilies: records.length,
       currentChildren: records.reduce((sum, record) => sum + record.children.length, 0),
-      configuredChildren: records.reduce((sum, record) => sum + record.children.filter((child) => child.enabled && child.savedWeeklyCents > 0 && child.planId).length, 0),
+      configuredChildren: records.reduce((sum, record) => sum + record.children.filter((child) => child.configured).length, 0),
       unconfiguredChildren: unconfiguredChildren.length,
       directorBalanceCents: records.reduce((sum, record) => sum + record.directorBalanceCents, 0),
       parentVisibleBalanceCents: records.reduce((sum, record) => sum + record.parentVisibleBalanceCents, 0),

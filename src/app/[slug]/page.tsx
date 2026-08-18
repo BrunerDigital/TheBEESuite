@@ -83,6 +83,7 @@ import {
 } from "@/lib/enrollment-status";
 import { SCHOOL_DASHBOARD_LIST_LIMIT } from "@/lib/dashboard-query-limits";
 import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
+import { invoiceBelongsToFteWeek } from "@/lib/fte-billing-period";
 import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } from "@/lib/fte-report-rollups";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
@@ -136,6 +137,7 @@ import {
 import {
   normalizeBillingCadence,
   defaultRecurringBillingPeriod,
+  isoWeekBillingPeriod,
   normalizeRecurringBillingDay,
   normalizeRecurringBillingPeriod,
   shouldCreateRecurringTuitionInvoice,
@@ -611,6 +613,7 @@ async function buildFtePrefills(
   const weekStart = startOfFteWeek(new Date());
   const weekEndExclusive = new Date(weekStart);
   weekEndExclusive.setUTCDate(weekEndExclusive.getUTCDate() + 7);
+  const billingPeriod = isoWeekBillingPeriod(weekStart);
 
   const [children, invoices, accountBalances, staffProfiles] = await Promise.all([prisma.child.findMany({
     where: {
@@ -632,9 +635,14 @@ async function buildFtePrefills(
   }), prisma.invoice.findMany({
     where: {
       billingAccount: { family: { centerId: centerIdFilter(centerIds) } },
-      createdAt: { gte: weekStart, lt: weekEndExclusive },
+      OR: [
+        { createdAt: { gte: weekStart, lt: weekEndExclusive } },
+        { customFields: { path: ["billingPeriod"], equals: billingPeriod } },
+        { customFields: { path: ["coverageStartsPeriod"], equals: billingPeriod } },
+      ],
     },
     select: {
+      createdAt: true,
       status: true,
       totalCents: true,
       customFields: true,
@@ -705,6 +713,7 @@ async function buildFtePrefills(
   }
 
   for (const invoice of invoices) {
+    if (!invoiceBelongsToFteWeek(invoice, weekStart)) continue;
     const row = invoice.billingAccount.family.centerId ? byCenter.get(invoice.billingAccount.family.centerId) : null;
     if (!row) continue;
     const separated = responsibilitySeparatedBillingAmounts({

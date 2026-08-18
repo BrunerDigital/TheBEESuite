@@ -46,6 +46,9 @@ test("account review resolves only when every open invoice has an exact separati
   assert.equal(allOpenInvoicesResponsibilitySeparated([
     { status: "VOID", totalCents: 0, customFields: { responsibilitySeparation: { ...separation, familyResponsibilityCents: 0, agencyResponsibilityCents: 12_000 } } },
   ]), true);
+  assert.equal(allOpenInvoicesResponsibilitySeparated([
+    { status: "PAID", totalCents: 2_000, customFields: { responsibilitySeparation: separation } },
+  ]), true);
   assert.equal(invoiceResponsibilityReviewExempt({ checkoutPurpose: "product_purchase" }), true);
   assert.equal(invoiceResponsibilityReviewExempt({ chargeSource: "tuition" }), false);
   assert.equal(allOpenInvoicesResponsibilitySeparated([

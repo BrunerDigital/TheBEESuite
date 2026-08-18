@@ -30,6 +30,7 @@ import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
   parentBalanceNeedsResponsibilityReview,
+  parentVisibleBillingBalanceCents,
 } from "@/lib/parent-billing-visibility";
 import {
   applySucceededStripeFamilyBalancePayment,
@@ -319,7 +320,7 @@ async function processPayment(body: Record<string, unknown>) {
     where: billingAccountId ? { id: billingAccountId } : { familyId },
     include: {
       invoices: {
-        where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.VOID] } },
+        where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.PAID, PaymentStatus.VOID] } },
         select: { status: true, totalCents: true, customFields: true, items: { select: { description: true } } },
       },
       ledgerEntries: {
@@ -371,7 +372,14 @@ async function processPayment(body: Record<string, unknown>) {
     return NextResponse.json({ ok: false, error: "Separate family and agency responsibility before collecting an in-person card payment." }, { status: 409 });
   }
   const requestedAmountCents = int(body.amountCents);
-  const amountCents = invoice?.totalCents ?? (requestedAmountCents > 0 ? requestedAmountCents : billingAccount.balanceCents);
+  const familyVisibleBalanceCents = parentVisibleBillingBalanceCents({
+    accountBalanceCents: billingAccount.balanceCents,
+    agencyLedgerEntries: billingAccount.ledgerEntries,
+  });
+  if (!invoice && requestedAmountCents > familyVisibleBalanceCents) {
+    return NextResponse.json({ ok: false, error: "The in-person payment cannot exceed the family-responsibility balance." }, { status: 409 });
+  }
+  const amountCents = invoice?.totalCents ?? (requestedAmountCents > 0 ? requestedAmountCents : familyVisibleBalanceCents);
   if (amountCents <= 0) {
     return NextResponse.json({ ok: false, error: "Payment amount must be greater than zero." }, { status: 400 });
   }

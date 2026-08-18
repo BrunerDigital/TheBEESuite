@@ -157,7 +157,7 @@ async function POSTHandler(request: NextRequest) {
     where: billingAccountId ? { id: billingAccountId } : { familyId },
     include: {
       invoices: {
-        where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.VOID] } },
+        where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.PAID, PaymentStatus.VOID] } },
         select: { status: true, totalCents: true, customFields: true, items: { select: { description: true } } },
       },
       family: {

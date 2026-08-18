@@ -2116,7 +2116,7 @@ async function renderLivePage(
           autopayPlaceholder: true,
           customFields: true,
           invoices: {
-            where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.VOID] } },
+            where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.PAID, PaymentStatus.VOID] } },
             select: {
               status: true,
               totalCents: true,

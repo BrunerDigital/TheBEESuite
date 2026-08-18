@@ -111,6 +111,7 @@ export function allOpenInvoicesResponsibilitySeparated(invoices: Array<{
     if (invoiceResponsibilityReviewExempt(invoice.customFields)) return false;
     if (invoice.status === "OPEN" && invoice.totalCents > 0) return true;
     const separation = invoiceResponsibilitySeparation(invoice.customFields);
+    if (invoice.status === "PAID" && separation) return true;
     return invoice.status === "VOID" && separation?.familyResponsibilityCents === 0;
   });
   return relevantInvoices.length > 0

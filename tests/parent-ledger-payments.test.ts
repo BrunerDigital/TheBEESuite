@@ -75,7 +75,7 @@ test("a positive family balance remains payable when no open invoice exists", ()
   assert.match(workspace, /available for\s+secure account payment/);
 });
 
-test("automated payment processing treats ambiguous subsidy markers as advisory", () => {
+test("automated payment holds invoice-level agency evidence without treating account markers as a hold", () => {
   const source = readFileSync("src/lib/autopay-processing.ts", "utf8");
   const visibility = readFileSync("src/lib/parent-billing-visibility.ts", "utf8");
   const holdIndex = source.indexOf("paymentCollectionResponsibilityHoldRequired({");
@@ -85,7 +85,8 @@ test("automated payment processing treats ambiguous subsidy markers as advisory"
   assert.ok(holdIndex > 0);
   assert.ok(creditIndex > holdIndex);
   assert.ok(stripeIndex > holdIndex);
-  assert.doesNotMatch(source, /enforceCollectionHold:\s*true/);
+  assert.match(source, /responsibilityEvidence:\s*\[\s*invoiceFields,\s*invoice\.items\.map/);
+  assert.match(source, /enforceCollectionHold:\s*true/);
   assert.match(visibility, /input\.enforceCollectionHold === true/);
 });
 

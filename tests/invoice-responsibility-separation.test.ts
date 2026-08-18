@@ -115,10 +115,12 @@ test("responsibility separation remains available without blocking payment colle
   assert.match(actions, /This records an agency receivable; it does not record an agency payment/);
   assert.match(visibility, /paymentCollectionResponsibilityHoldRequired/);
   assert.match(visibility, /input\.enforceCollectionHold === true && parentBalanceNeedsResponsibilityReview/);
-  for (const paymentPath of [checkout, emailedCheckout, autopay]) {
+  for (const paymentPath of [checkout, emailedCheckout]) {
     assert.doesNotMatch(paymentPath, /enforceCollectionHold:\s*true/);
     assert.match(paymentPath, /paymentCollectionResponsibilityHoldRequired/);
   }
+  assert.match(autopay, /enforceCollectionHold:\s*true/);
+  assert.match(autopay, /responsibilityEvidence:\s*\[\s*invoiceFields,\s*invoice\.items\.map/);
   assert.match(reminders, /enforceCollectionHold:\s*true/);
   assert.doesNotMatch(actions, /invoice\.responsibilityReviewRequired\) return "Separate family and agency responsibility before collecting payment/);
   assert.doesNotMatch(actions, /invoice\.responsibilityReviewRequired\) return setError/);

@@ -373,10 +373,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       responsibilityEvidence: [
         invoiceFields,
         invoice.items.map((item) => item.description),
-        invoice.billingAccount.customFields,
-        family.customFields,
-        ...family.children.map((child) => child.customFields),
       ],
+      enforceCollectionHold: true,
     })) {
       results.push({
         ...baseResult,

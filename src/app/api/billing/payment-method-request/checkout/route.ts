@@ -491,6 +491,7 @@ async function POSTHandler(request: NextRequest) {
         }),
       },
     });
+    await prisma.center.update({ where: { id: center.id }, data: { updatedAt: new Date() } });
     return NextResponse.json(
       {
         ok: false,
@@ -556,6 +557,7 @@ async function POSTHandler(request: NextRequest) {
       },
     },
   });
+  await prisma.center.update({ where: { id: center.id }, data: { updatedAt: new Date() } });
 
   return NextResponse.json({
     ok: true,

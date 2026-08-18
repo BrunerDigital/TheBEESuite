@@ -256,6 +256,9 @@ export async function issueFamilyRefund(
       },
     },
   });
+  if (account.family.centerId) {
+    await prisma.center.update({ where: { id: account.family.centerId }, data: { updatedAt: new Date() } });
+  }
 
   return {
     ok: true,

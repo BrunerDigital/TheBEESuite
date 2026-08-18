@@ -113,11 +113,15 @@ test("responsibility separation remains available without blocking payment colle
   assert.match(actions, /Separate responsibility/);
   assert.match(actions, /responsibilityReviewRequired/);
   assert.match(actions, /This records an agency receivable; it does not record an agency payment/);
-  assert.match(visibility, /input\.enforceCollectionHold === true/);
+  assert.match(visibility, /paymentCollectionResponsibilityHoldRequired/);
+  assert.match(visibility, /input\.enforceCollectionHold === true && parentBalanceNeedsResponsibilityReview/);
   for (const paymentPath of [checkout, emailedCheckout, autopay]) {
     assert.doesNotMatch(paymentPath, /enforceCollectionHold:\s*true/);
+    assert.match(paymentPath, /paymentCollectionResponsibilityHoldRequired/);
   }
   assert.match(reminders, /enforceCollectionHold:\s*true/);
+  assert.doesNotMatch(actions, /invoice\.responsibilityReviewRequired\) return "Separate family and agency responsibility before collecting payment/);
+  assert.doesNotMatch(actions, /invoice\.responsibilityReviewRequired\) return setError/);
   assert.match(autopay, /invoice\.items\.map/);
   assert.match(invoiceRoute, /amount or item description cannot be changed after family and agency responsibility has been separated/);
   assert.match(livePage, /invoice\.status === PaymentStatus\.VOID && \(!separated \|\| separated\.familyResponsibilityCents > 0\)/);

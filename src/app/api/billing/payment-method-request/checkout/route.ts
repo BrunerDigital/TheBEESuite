@@ -45,7 +45,7 @@ import { invoiceResponsibilityReviewExempt, invoiceResponsibilitySeparation } fr
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
-  parentBalanceNeedsResponsibilityReview,
+  paymentCollectionResponsibilityHoldRequired,
 } from "@/lib/parent-billing-visibility";
 
 export const runtime = "nodejs";
@@ -181,7 +181,7 @@ async function POSTHandler(request: NextRequest) {
   if (invoice.totalCents <= 0) {
     return NextResponse.json({ ok: false, error: "Invoice total must be greater than zero." }, { status: 400 });
   }
-  if (!invoiceResponsibilityReviewExempt(invoice.customFields) && parentBalanceNeedsResponsibilityReview({
+  if (!invoiceResponsibilityReviewExempt(invoice.customFields) && paymentCollectionResponsibilityHoldRequired({
     accountBalanceCents: billingAccount.balanceCents,
     agencyLedgerEntries,
     invoiceId: invoice.id,

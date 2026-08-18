@@ -41,7 +41,7 @@ import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
-  parentBalanceNeedsResponsibilityReview,
+  paymentCollectionResponsibilityHoldRequired,
 } from "@/lib/parent-billing-visibility";
 import { invoiceResponsibilityReviewExempt, invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 
@@ -365,7 +365,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
 
-    if (!invoiceResponsibilityReviewExempt(invoice.customFields) && parentBalanceNeedsResponsibilityReview({
+    if (!invoiceResponsibilityReviewExempt(invoice.customFields) && paymentCollectionResponsibilityHoldRequired({
       accountBalanceCents: invoice.billingAccount.balanceCents,
       agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
       invoiceId: invoice.id,

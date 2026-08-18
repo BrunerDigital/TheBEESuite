@@ -65,7 +65,6 @@ function disabledReason(invoice: InvoiceStoredPaymentActionData) {
   const method = invoice.billingAccount.paymentMethodManagement;
   if (invoice.status !== "OPEN") return "Invoice is not open.";
   if (invoice.totalCents <= 0) return "Invoice total must be greater than zero.";
-  if (invoice.responsibilityReviewRequired) return "Separate family and agency responsibility before collecting payment.";
   if (method.autopayStatus !== "enabled") return "The parent has not enabled autopay.";
   if (!method.hasStripeCustomer || !method.hasSavedPaymentMethod) return "No saved payment method.";
   return null;
@@ -180,7 +179,6 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   function openInstantBankCheckout() {
     if (invoice.status !== "OPEN") return setError("Invoice is not open.");
     if (invoice.totalCents <= 0) return setError("Invoice total must be greater than zero.");
-    if (invoice.responsibilityReviewRequired) return setError("Separate family and agency responsibility before opening payment.");
     const confirmed = window.confirm(
       `Open a secure Link payment form for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
     );
@@ -210,7 +208,6 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   function openCardCheckout() {
     if (invoice.status !== "OPEN") return setError("Invoice is not open.");
     if (invoice.totalCents <= 0) return setError("Invoice total must be greater than zero.");
-    if (invoice.responsibilityReviewRequired) return setError("Separate family and agency responsibility before opening payment.");
     const confirmed = window.confirm(
       `Open a secure card payment form for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
     );
@@ -251,7 +248,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         </Button>
         <Button
           size="sm"
-          disabled={isPending || invoice.status !== "OPEN" || invoice.totalCents <= 0 || invoice.responsibilityReviewRequired}
+          disabled={isPending || invoice.status !== "OPEN" || invoice.totalCents <= 0}
           onClick={openInstantBankCheckout}
           variant="outline"
         >
@@ -260,7 +257,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         </Button>
         <Button
           size="sm"
-          disabled={isPending || invoice.status !== "OPEN" || invoice.totalCents <= 0 || invoice.responsibilityReviewRequired}
+          disabled={isPending || invoice.status !== "OPEN" || invoice.totalCents <= 0}
           onClick={openCardCheckout}
           variant="outline"
         >

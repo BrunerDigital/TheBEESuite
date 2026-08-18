@@ -35,7 +35,7 @@ import {
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
-  parentBalanceNeedsResponsibilityReview,
+  paymentCollectionResponsibilityHoldRequired,
   parentPaymentAmountCents,
 } from "@/lib/parent-billing-visibility";
 import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
@@ -239,7 +239,7 @@ async function POSTHandler(request: NextRequest) {
         select: { type: true, sourceSystem: true, amountCents: true },
       })
     : [];
-  const responsibilityReviewRequired = parentCheckout && parentBalanceNeedsResponsibilityReview({
+  const responsibilityReviewRequired = parentCheckout && paymentCollectionResponsibilityHoldRequired({
     accountBalanceCents: billingAccount.balanceCents,
     agencyLedgerEntries,
     invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(billingAccount.invoices),

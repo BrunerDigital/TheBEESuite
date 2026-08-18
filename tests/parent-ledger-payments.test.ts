@@ -36,7 +36,7 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(route, /const userIsParentGuardian = isParentGuardian\(user\)/);
   assert.match(route, /guardians:\s*\{ select:\s*\{ userId: true \} \}/);
   assert.match(route, /parentPaymentAmountCents\(/);
-  assert.match(route, /parentBalanceNeedsResponsibilityReview\(/);
+  assert.match(route, /paymentCollectionResponsibilityHoldRequired\(/);
   assert.doesNotMatch(route, /enforceCollectionHold:\s*true/);
   assert.match(route, /parent_account_payment_responsibility_review_required/);
   assert.match(route, /requestedAmountCents,\s*responsibilityReviewRequired/);
@@ -78,7 +78,7 @@ test("a positive family balance remains payable when no open invoice exists", ()
 test("automated payment processing treats ambiguous subsidy markers as advisory", () => {
   const source = readFileSync("src/lib/autopay-processing.ts", "utf8");
   const visibility = readFileSync("src/lib/parent-billing-visibility.ts", "utf8");
-  const holdIndex = source.indexOf("parentBalanceNeedsResponsibilityReview({");
+  const holdIndex = source.indexOf("paymentCollectionResponsibilityHoldRequired({");
   const creditIndex = source.indexOf("allocateAccountCreditToInvoice({", holdIndex);
   const stripeIndex = source.indexOf("createStripeOffSessionPaymentIntent", holdIndex);
 

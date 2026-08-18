@@ -29,7 +29,7 @@ import {
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
-  parentBalanceNeedsResponsibilityReview,
+  paymentCollectionResponsibilityHoldRequired,
   parentVisibleBillingBalanceCents,
 } from "@/lib/parent-billing-visibility";
 import {
@@ -355,14 +355,14 @@ async function processPayment(body: Record<string, unknown>) {
     ...billingAccount.invoices.flatMap((item) => [item.customFields, item.items.map((line) => line.description)]),
   ];
   const responsibilityReviewRequired = invoice
-    ? !invoiceResponsibilityReviewExempt(invoice.customFields) && parentBalanceNeedsResponsibilityReview({
+    ? !invoiceResponsibilityReviewExempt(invoice.customFields) && paymentCollectionResponsibilityHoldRequired({
         accountBalanceCents: billingAccount.balanceCents,
         agencyLedgerEntries: billingAccount.ledgerEntries,
         invoiceId: invoice.id,
         invoiceResponsibilitySeparated: invoiceResponsibilitySeparation(invoice.customFields) !== null,
         responsibilityEvidence: [invoice.customFields, invoice.items.map((item) => item.description), ...responsibilityEvidence],
       })
-    : parentBalanceNeedsResponsibilityReview({
+    : paymentCollectionResponsibilityHoldRequired({
         accountBalanceCents: billingAccount.balanceCents,
         agencyLedgerEntries: billingAccount.ledgerEntries,
         invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(billingAccount.invoices),

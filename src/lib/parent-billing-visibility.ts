@@ -91,7 +91,6 @@ export function parentBalanceNeedsResponsibilityReview(input: {
   responsibilityEvidence: unknown[];
   invoiceId?: string | null;
   invoiceResponsibilitySeparated?: boolean;
-  enforceCollectionHold?: boolean;
 }) {
   const invoiceId = input.invoiceId?.trim() || null;
   const hasSeparatedResponsibility = invoiceId
@@ -104,13 +103,15 @@ export function parentBalanceNeedsResponsibilityReview(input: {
         return metadata.sourceInvoiceId === invoiceId || metadata.invoiceId === invoiceId;
       })
     : input.invoiceResponsibilitySeparated === true;
-  // Ambiguous subsidy markers are advisory for payment collection. Exact agency
-  // receivables still reduce the parent-visible amount below; non-payment callers
-  // such as reminder selection may explicitly request a hold.
-  return input.enforceCollectionHold === true
-    && input.accountBalanceCents > 0
+  return input.accountBalanceCents > 0
     && hasSubsidyResponsibilityEvidence(...input.responsibilityEvidence)
     && !hasSeparatedResponsibility;
+}
+
+export function paymentCollectionResponsibilityHoldRequired(input: Parameters<typeof parentBalanceNeedsResponsibilityReview>[0] & {
+  enforceCollectionHold?: boolean;
+}) {
+  return input.enforceCollectionHold === true && parentBalanceNeedsResponsibilityReview(input);
 }
 
 export function isAgencyOnlyLedgerEntry(entry: Pick<AgencyLedgerEntry, "type" | "sourceSystem">) {

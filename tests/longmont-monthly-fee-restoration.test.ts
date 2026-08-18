@@ -50,6 +50,22 @@ test("Longmont monthly fee restoration is exact, fingerprinted, and approval gat
   assert.match(source, /recurringDueDateForPeriod\(BILLING_PERIOD, currentBillingDay, "monthly"\)/);
   assert.match(source, /invoice\.dueDate\.getTime\(\) === expectedDueDate\.getTime\(\)/);
   assert.match(source, /Prisma\.TransactionIsolationLevel\.Serializable/);
+  for (const table of [
+    "Center",
+    "Organization",
+    "User",
+    "UserAccessGrant",
+    "BillingAccount",
+    "Child",
+    "TuitionPlan",
+    "Invoice",
+    "InvoiceItem",
+    "Payment",
+    "LedgerEntry",
+  ]) {
+    assert.match(source, new RegExp(`FROM "${table}"[\\s\\S]*?FOR UPDATE`));
+  }
+  assert.ok(source.indexOf('FROM "LedgerEntry"') < source.indexOf("const locked = await loadState(tx)"));
 });
 
 test("Longmont monthly fee restoration preserves payment and external-provider history", () => {

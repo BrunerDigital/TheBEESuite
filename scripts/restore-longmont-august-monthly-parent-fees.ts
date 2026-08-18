@@ -388,9 +388,69 @@ async function main() {
   const restoredAt = new Date();
   await prisma.$transaction(async (tx) => {
     const accountIds = [...pending.map((target) => target.billingAccountId)].sort();
+    const childIds = [...pending.map((target) => target.childId)].sort();
+    const invoiceIds = [...pending.map((target) => target.id)].sort();
+    const planIds = [...new Set(pending.map((target) => target.livePlan.id))].sort();
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "Center"
+      WHERE "id" = ${CENTER_ID}
+      FOR UPDATE
+    `);
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "Organization"
+      WHERE "id" = ${before.center.organization.id}
+      FOR UPDATE
+    `);
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "User"
+      WHERE "id" = ${before.user.id}
+      FOR UPDATE
+    `);
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "UserAccessGrant"
+      WHERE "userId" = ${before.user.id}
+      ORDER BY "id"
+      FOR UPDATE
+    `);
     await tx.$queryRaw(Prisma.sql`
       SELECT "id" FROM "BillingAccount"
       WHERE "id" IN (${Prisma.join(accountIds)})
+      ORDER BY "id"
+      FOR UPDATE
+    `);
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "Child"
+      WHERE "id" IN (${Prisma.join(childIds)})
+      ORDER BY "id"
+      FOR UPDATE
+    `);
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "TuitionPlan"
+      WHERE "id" IN (${Prisma.join(planIds)})
+      ORDER BY "id"
+      FOR UPDATE
+    `);
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "Invoice"
+      WHERE "id" IN (${Prisma.join(invoiceIds)})
+      ORDER BY "id"
+      FOR UPDATE
+    `);
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "InvoiceItem"
+      WHERE "invoiceId" IN (${Prisma.join(invoiceIds)})
+      ORDER BY "id"
+      FOR UPDATE
+    `);
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "Payment"
+      WHERE "billingAccountId" IN (${Prisma.join(accountIds)})
+      ORDER BY "id"
+      FOR UPDATE
+    `);
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "LedgerEntry"
+      WHERE "billingAccountId" IN (${Prisma.join(accountIds)})
       ORDER BY "id"
       FOR UPDATE
     `);

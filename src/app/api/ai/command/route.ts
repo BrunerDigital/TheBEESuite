@@ -478,6 +478,7 @@ async function applyAiProfileChange(
           },
         });
       }
+      await tx.center.update({ where: { id: selectedCenterId }, data: { updatedAt: new Date() } });
     });
   } else if (name === "update_child_enrollment") {
     const child = await prisma.child.findFirst({ where: { id: recordId, family: { centerId: selectedCenterId } } });

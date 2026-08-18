@@ -190,6 +190,7 @@ async function GETHandler(request: NextRequest) {
   let paused = 0;
   let familyMessagesCreated = 0;
   let paymentsUpdated = 0;
+  const billingActivityCenterIds = new Set<string>();
 
   for (const payment of failedPayments) {
     const fields = objectFromJson(payment.customFields);
@@ -330,8 +331,16 @@ async function GETHandler(request: NextRequest) {
           } satisfies Prisma.InputJsonObject,
         },
       });
+      if (center) billingActivityCenterIds.add(center.id);
       paymentsUpdated += 1;
     }
+  }
+
+  if (!dryRun && billingActivityCenterIds.size) {
+    await prisma.center.updateMany({
+      where: { id: { in: Array.from(billingActivityCenterIds) } },
+      data: { updatedAt: new Date() },
+    });
   }
 
   const notificationDedupeKeys = notificationData

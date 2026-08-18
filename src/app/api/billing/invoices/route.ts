@@ -1098,6 +1098,7 @@ async function voidInvoice(user: CurrentBillingUser, body: Record<string, unknow
         },
       },
     });
+    await tx.center.update({ where: { id: centerId }, data: { updatedAt: voidedAt } });
     return {
       invoice: { id: current.id, number: current.number, status: PaymentStatus.VOID, totalCents: current.totalCents },
       reversedCents: reversalCents,

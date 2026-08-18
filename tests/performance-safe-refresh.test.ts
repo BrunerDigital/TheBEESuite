@@ -6,12 +6,61 @@ function source(path: string) {
   return readFileSync(path, "utf8");
 }
 
-test("session heartbeats preserve sign-out handling without refreshing successful pages", () => {
+test("session heartbeats preserve sign-out handling and refresh live billing only", () => {
   const liveRefresh = source("src/components/live-refresh-status.tsx");
+  const billingVersion = source("src/app/api/billing/live-version/route.ts");
+  const audit = source("src/lib/audit.ts");
+  const dunning = source("src/app/api/cron/payment-dunning/route.ts");
+  const stripeWebhook = source("src/app/api/billing/stripe-webhook/route.ts");
+  const terminalPayment = source("src/app/api/billing/terminal-payment/route.ts");
+  const familyRefunds = source("src/lib/family-refunds.ts");
+  const paymentRequestCheckout = source("src/app/api/billing/payment-method-request/checkout/route.ts");
+  const checkoutSession = source("src/app/api/billing/checkout-session/route.ts");
+  const familyPayment = source("src/app/api/billing/family-payment/route.ts");
+  const billingInvoices = source("src/lib/billing-invoices.ts");
+  const registrationReview = source("src/app/api/registration/[id]/review/route.ts");
+  const aiCommand = source("src/app/api/ai/command/route.ts");
+  const familyIntake = source("src/app/api/families/intake/route.ts");
+  const operationsRecords = source("src/app/api/operations/records/route.ts");
+  const procareImport = source("src/app/api/imports/procare/route.ts");
 
-  assert.equal(liveRefresh.match(/router\.refresh\(\)/g)?.length, 1);
+  assert.equal(liveRefresh.match(/router\.refresh\(\)/g)?.length, 2);
   assert.doesNotMatch(liveRefresh, /sync\((true|false)\)/);
   assert.match(liveRefresh, /response\.status === 401/);
+  assert.match(liveRefresh, /pathname\.startsWith\("\/billing-invoices"\)\) return 15_000/);
+  assert.match(liveRefresh, /fetch\("\/api\/billing\/live-version", \{ cache: "no-store" \}\)/);
+  assert.match(liveRefresh, /nextVersion && \(!previousVersion \|\| previousVersion !== nextVersion\)/);
+  assert.match(billingVersion, /canAccessModule\(user, "billing-invoices"\)/);
+  assert.match(billingVersion, /canAccessModule\(user, "payments"\)/);
+  assert.match(billingVersion, /prisma\.center\.findMany/);
+  assert.match(billingVersion, /id: \{ in: user\.centerIds \}/);
+  assert.match(billingVersion, /select: \{ id: true, updatedAt: true \}/);
+  assert.doesNotMatch(billingVersion, /pg_stat_user_tables/);
+  assert.doesNotMatch(billingVersion, /prisma\.payment\.(?:findMany|groupBy)/);
+  assert.match(billingVersion, /createHash\("sha256"\)/);
+  assert.match(billingVersion, /user\.centerIds\.length/);
+  assert.match(billingVersion, /"Cache-Control": "private, no-store"/);
+  assert.match(audit, /input\.action\.startsWith\("billing\."\)/);
+  assert.match(audit, /prisma\.center\.update\(\{ where: \{ id: input\.centerId \}, data: \{ updatedAt: new Date\(\) \} \}\)/);
+  assert.match(dunning, /billingActivityCenterIds\.add\(center\.id\)/);
+  assert.match(dunning, /prisma\.center\.updateMany/);
+  assert.match(dunning, /data: \{ updatedAt: new Date\(\) \}/);
+  assert.match(stripeWebhook, /writeSystemAudit\(invoiceId, event\.id, session\.id, "billing\.checkout\.pending"\)/);
+  assert.equal(stripeWebhook.match(/else if \(affectedBillingAccountId\)/g)?.length, 2);
+  assert.match(stripeWebhook, /writeBillingAccountSystemAudit\(affectedBillingAccountId, event\.id, charge\.id, "billing\.charge\.refunded"\)/);
+  assert.match(terminalPayment, /"billing\.terminal\.payment_failed"/);
+  assert.doesNotMatch(terminalPayment, /"billing\.terminal\.payment_processing"/);
+  assert.match(familyRefunds, /prisma\.center\.update\(\{ where: \{ id: account\.family\.centerId \}/);
+  assert.equal(paymentRequestCheckout.match(/prisma\.center\.update\(\{ where: \{ id: center\.id \}/g)?.length, 2);
+  assert.match(checkoutSession, /status: PaymentStatus\.FAILED,[\s\S]*?prisma\.center\.update\(\{\s*where: \{ id: centerId! \}/);
+  assert.equal(familyPayment.match(/status: PaymentStatus\.FAILED,[\s\S]*?prisma\.center\.update\(\{\s*where: \{ id: center\.id \}/g)?.length, 2);
+  assert.match(billingInvoices, /include: \{ family: \{ select: \{ centerId: true \} \} \}/);
+  assert.match(billingInvoices, /tx\.center\.update/);
+  assert.match(registrationReview, /billingAccount\.family\.centerId/);
+  assert.match(aiCommand, /tx\.center\.update\(\{ where: \{ id: selectedCenterId \}/);
+  assert.match(familyIntake, /if \(result\.invoiceId\)/);
+  assert.match(operationsRecords, /entity === "invoice" \|\| entity === "ledgerEntry" \|\| entity === "familyMerge"/);
+  assert.match(procareImport, /const importedAnyRows = rowResults\.some/);
 });
 
 test("notification polling uses the lightweight unread endpoint", () => {

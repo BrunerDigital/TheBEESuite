@@ -3297,7 +3297,9 @@ async function POSTHandler(request: NextRequest) {
     data: { status: isPartial ? "processing" : summary.errors || summary.unresolved ? "completed_with_errors" : "completed", summary },
   });
 
-  if (rowResults.some((row) => row.status === "imported")) {
+  const importedAnyRows = rowResults.some((row) => row.status === "imported");
+  if (importedAnyRows) {
+    await prisma.center.update({ where: { id: center.id }, data: { updatedAt: new Date() } });
     revalidatePath("/", "layout");
   }
 

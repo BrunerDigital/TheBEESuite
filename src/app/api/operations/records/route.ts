@@ -2020,6 +2020,9 @@ async function POSTHandler(request: NextRequest) {
     resourceId,
     metadata: auditMetadata as Prisma.InputJsonObject,
   });
+  if (centerId && (entity === "invoice" || entity === "ledgerEntry" || entity === "familyMerge")) {
+    await prisma.center.update({ where: { id: centerId }, data: { updatedAt: new Date() } });
+  }
 
   if (entity === "child" || entity === "childMerge") {
     revalidatePath("/family-detail");

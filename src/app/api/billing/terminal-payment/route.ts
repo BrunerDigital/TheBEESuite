@@ -618,6 +618,15 @@ async function paymentStatus(body: Record<string, unknown>) {
       }),
     },
   });
+  if (terminalStatus === "failed") {
+    await writeAuditLog(context.user, {
+      centerId: context.center.id,
+      action: "billing.terminal.payment_failed",
+      resource: "Payment",
+      resourceId: payment.id,
+      metadata: { stripePaymentIntentId: paymentIntentId, paymentIntentStatus: intent.paymentIntent.status },
+    });
+  }
   return NextResponse.json({
     ok: terminalStatus !== "failed",
     status: terminalStatus,

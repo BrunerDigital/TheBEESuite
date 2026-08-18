@@ -24,6 +24,11 @@ test("Longmont monthly fee restoration is exact, fingerprinted, and approval gat
   assert.match(source, /grant\.centerId === CENTER_ID/);
   assert.match(source, /TENANT_WIDE_BILLING_ROLES\.has\(user\.role\) \|\| hasActiveLongmontGrant/);
   assert.match(source, /auditActor/);
+  assert.match(source, /db\.tuitionPlan\.findMany/);
+  assert.match(source, /plan\?\.centerId === CENTER_ID/);
+  assert.match(source, /clean\(plan\.cadence\)\.toLowerCase\(\) === "monthly"/);
+  assert.match(source, /plan\.amountCents === positiveItemCents/);
+  assert.match(source, /livePlan: plan/);
   assert.match(source, /Prisma\.TransactionIsolationLevel\.Serializable/);
 });
 

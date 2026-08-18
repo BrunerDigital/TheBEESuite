@@ -181,6 +181,12 @@ async function loadState(db: DbClient) {
   });
   invariant(children.length === expectedInvoices.size, "A monthly fee target child is no longer currently enrolled at Longmont.");
   const childById = new Map(children.map((child) => [child.id, child]));
+  const planIds = [...new Set(children.map((child) => clean(object(child.customFields).tuitionPlanId)).filter(Boolean))];
+  const plans = await db.tuitionPlan.findMany({
+    where: { id: { in: planIds } },
+    select: { id: true, centerId: true, cadence: true, amountCents: true },
+  });
+  const planById = new Map(plans.map((plan) => [plan.id, plan]));
 
   const targets = invoices.map((invoice) => {
     const expectedCents = expectedInvoices.get(invoice.number);
@@ -195,9 +201,14 @@ async function loadState(db: DbClient) {
     invariant(fields.voidReason === INCORRECT_VOID_REASON, `${invoice.number} no longer has the reviewed incorrect-void reason.`);
     invariant(childFields.tuitionBillingEnabled === true, `${invoice.number} current monthly assignment is disabled.`);
     invariant(childFields.tuitionBillingCadence === "monthly" && childFields.tuitionBillingStartsPeriod === BILLING_PERIOD, `${invoice.number} current cadence or start period changed.`);
-    invariant(clean(childFields.tuitionPlanId) === clean(fields.sourceId), `${invoice.number} current plan identity changed.`);
+    const planId = clean(fields.sourceId);
+    invariant(clean(childFields.tuitionPlanId) === planId, `${invoice.number} current plan identity changed.`);
+    const plan = planById.get(planId);
+    invariant(plan?.centerId === CENTER_ID, `${invoice.number} live tuition plan moved outside Longmont or disappeared.`);
+    invariant(clean(plan.cadence).toLowerCase() === "monthly", `${invoice.number} live tuition plan cadence changed.`);
     const positiveItemCents = invoice.items.filter((item) => item.amountCents > 0).reduce((sum, item) => sum + item.amountCents, 0);
     invariant(Number(childFields.tuitionPlanAmountCents) === positiveItemCents, `${invoice.number} current plan amount no longer matches the reviewed gross charge.`);
+    invariant(plan.amountCents === positiveItemCents, `${invoice.number} live tuition plan amount no longer matches the reviewed gross charge.`);
     invariant(invoice.items.reduce((sum, item) => sum + item.amountCents, 0) === invoice.totalCents, `${invoice.number} items no longer net to the invoice total.`);
 
     const alternatives = invoice.billingAccount.invoices.filter((candidate) => {
@@ -239,6 +250,7 @@ async function loadState(db: DbClient) {
       billingAccountId: invoice.billingAccount.id,
       familyId: invoice.billingAccount.family.id,
       childId,
+      livePlan: plan,
       balanceCents: invoice.billingAccount.balanceCents,
       parentVisibleBalanceCents: parentVisibleBillingBalanceCents({
         accountBalanceCents: invoice.billingAccount.balanceCents,
@@ -271,6 +283,7 @@ async function loadState(db: DbClient) {
       billingAccountId: target.billingAccountId,
       familyId: target.familyId,
       childId: target.childId,
+      livePlan: target.livePlan,
       balanceCents: target.balanceCents,
       parentVisibleBalanceCents: target.parentVisibleBalanceCents,
       ledgerEntries: target.ledgerEntries,

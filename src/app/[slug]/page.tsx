@@ -5763,7 +5763,6 @@ async function renderLivePage(
     const staff = await prisma.staffProfile.findMany({
       where: staffWhere,
       orderBy: [{ title: "asc" }, { id: "asc" }],
-      take: 200,
       include: {
         user: { select: { name: true, email: true, role: true, isActive: true, customFields: true } },
         center: { select: { id: true, name: true, crmLocationId: true, state: true, licensedCapacity: true, customFields: true } },

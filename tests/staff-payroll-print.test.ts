@@ -199,6 +199,15 @@ test("submitted payroll reports include every employee shown for the pay period"
   assert.match(sendSummary, /overtimeMinutes: row\.overtimeMinutes/);
 });
 
+test("executive payroll loads the complete authorized teacher roster", async () => {
+  const source = await readFile("src/app/[slug]/page.tsx", "utf8");
+  const staffRoute = source.slice(source.indexOf('if (slug === "staff")'), source.indexOf('if (slug === "forms")'));
+  const staffQuery = staffRoute.slice(staffRoute.indexOf("prisma.staffProfile.findMany"), staffRoute.indexOf("const classrooms"));
+
+  assert.match(staffQuery, /where: staffWhere/);
+  assert.doesNotMatch(staffQuery, /take:\s*200/);
+});
+
 test("executives can filter, open, and print school-specific payroll reports", async () => {
   const source = await readFile("src/components/dashboard.tsx", "utf8");
   assert.match(source, /payrollSchoolFilter/);

@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { stripeWebhookSecretFingerprint, verifyStripeSignature } from "../src/lib/integrations";
+import { succeededFamilyBalancePaymentClaim } from "../src/lib/stripe-payment-application";
 import { STRIPE_WEBHOOK_SUPPORTED_EVENT_TYPES, stripeWebhookObjectForRouting } from "../src/lib/stripe-webhook-event-types";
 import {
   isStripeWebhookReceiptUniqueConflict,
@@ -42,6 +43,38 @@ test("webhook secret readiness uses a one-way masked fingerprint", () => {
 test("event identity, not object identity, is the dedupe key", () => {
   assert.equal(stripeWebhookDedupeKey("evt_checkout_completed"), "evt_checkout_completed");
   assert.notEqual(stripeWebhookDedupeKey("evt_checkout_completed"), stripeWebhookDedupeKey("evt_checkout_expired"));
+});
+
+test("a succeeded family payment recovers only the same previously failed PaymentIntent", () => {
+  assert.deepEqual(succeededFamilyBalancePaymentClaim({
+    paymentStatus: "DRAFT",
+    succeededStripePaymentIntentId: "pi_succeeded",
+  }), {
+    ok: true,
+    reason: null,
+    claimStatus: "DRAFT",
+    recoveredFromFailedAttempt: false,
+  });
+  assert.deepEqual(succeededFamilyBalancePaymentClaim({
+    paymentStatus: "FAILED",
+    storedStripePaymentIntentId: "pi_succeeded",
+    succeededStripePaymentIntentId: "pi_succeeded",
+  }), {
+    ok: true,
+    reason: null,
+    claimStatus: "FAILED",
+    recoveredFromFailedAttempt: true,
+  });
+  assert.equal(succeededFamilyBalancePaymentClaim({
+    paymentStatus: "FAILED",
+    storedStripePaymentIntentId: "pi_different",
+    succeededStripePaymentIntentId: "pi_succeeded",
+  }).ok, false);
+  assert.equal(succeededFamilyBalancePaymentClaim({
+    paymentStatus: "PAID",
+    storedStripePaymentIntentId: "pi_succeeded",
+    succeededStripePaymentIntentId: "pi_succeeded",
+  }).reason, "payment_already_applied");
 });
 
 test("concurrent deliveries reserve exactly one durable receipt", async () => {

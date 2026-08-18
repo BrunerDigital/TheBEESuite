@@ -29,6 +29,7 @@ import {
   stripeWebhookDedupeKey,
 } from "@/lib/stripe-webhook-receipts";
 import { matchStripeWebhookSecret } from "@/lib/stripe-webhook-readiness";
+import { succeededFamilyBalancePaymentClaim } from "@/lib/stripe-payment-application";
 import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
@@ -557,20 +558,21 @@ async function handleFamilyBalancePaymentSucceeded(
         return;
       }
       billingAccountId = currentPayment.billingAccountId;
-      if (currentPayment.status === PaymentStatus.PAID) {
-        ignoredReason = "payment_already_applied";
-        return;
-      }
-      if (currentPayment.status !== PaymentStatus.DRAFT) {
-        ignoredReason = "payment_not_chargeable";
+      const currentFields = jsonObject(currentPayment.customFields);
+      const stripePaymentIntentId = input.stripePaymentIntentId || clean(currentFields.stripePaymentIntentId) || null;
+      const claim = succeededFamilyBalancePaymentClaim({
+        paymentStatus: currentPayment.status,
+        storedStripePaymentIntentId: clean(currentFields.stripePaymentIntentId) || null,
+        succeededStripePaymentIntentId: stripePaymentIntentId || "",
+      });
+      if (!claim.ok) {
+        ignoredReason = claim.reason;
         return;
       }
 
       const paidAt = new Date();
-      const currentFields = jsonObject(currentPayment.customFields);
-      const stripePaymentIntentId = input.stripePaymentIntentId || clean(currentFields.stripePaymentIntentId) || null;
       const claimedPayment = await tx.payment.updateMany({
-        where: { id: input.paymentId, status: PaymentStatus.DRAFT },
+        where: { id: input.paymentId, status: claim.claimStatus },
         data: {
           status: PaymentStatus.PAID,
           paidAt,
@@ -595,6 +597,8 @@ async function handleFamilyBalancePaymentSucceeded(
             paymentMethodCategory: clean(input.metadata.paymentMethodCategory) || null,
             bankAccountVerificationMethod: clean(input.metadata.bankAccountVerificationMethod) || null,
             ...productPaymentMetadata(input.metadata),
+            recoveredFromFailedAttempt: claim.recoveredFromFailedAttempt,
+            recoveredStripePaymentIntentId: claim.recoveredFromFailedAttempt ? stripePaymentIntentId : null,
             status: "paid",
           },
         },
@@ -1294,8 +1298,8 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       await recordStripeWebhookEvent(tx, event);
       const currentPayment = await tx.payment.findUnique({ where: { id: metadata.paymentId }, select: { customFields: true } });
       if (!currentPayment) return;
-      await tx.payment.update({
-        where: { id: metadata.paymentId },
+      await tx.payment.updateMany({
+        where: { id: metadata.paymentId, status: { in: [PaymentStatus.DRAFT, PaymentStatus.FAILED] } },
         data: {
           status: PaymentStatus.FAILED,
           customFields: {

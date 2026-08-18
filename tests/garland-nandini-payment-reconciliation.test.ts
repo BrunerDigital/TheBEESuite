@@ -10,8 +10,12 @@ test("Nandini reconciliation is exact, provider-verified, fingerprinted, and ide
   assert.match(source, /amountCents: 27_000/);
   assert.match(source, /retrieveStripeCheckoutSession/);
   assert.match(source, /retrieveStripePaymentIntent/);
+  assert.match(source, /\/v1\/charges\/\$\{encodeURIComponent\(latestChargeId\)\}/);
   assert.match(source, /sessionPaymentStatus === "paid"/);
   assert.match(source, /intentStatus === "succeeded"/);
+  assert.match(source, /state\.stripe\.charge\.status === "succeeded"/);
+  assert.match(source, /state\.stripe\.charge\.paid/);
+  assert.match(source, /const appliedAt = new Date\(review\.state\.stripe\.charge\.createdAt!\)/);
   assert.match(source, /--confirm-nandini-payment-reconciliation/);
   assert.match(source, /--confirm-fingerprint=/);
   assert.match(source, /FOR UPDATE/);

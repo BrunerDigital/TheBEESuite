@@ -3,6 +3,7 @@ import "./load-env";
 import { createHash } from "node:crypto";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import {
+  getStripeSecretKey,
   retrieveStripeCheckoutSession,
   retrieveStripePaymentIntent,
 } from "../src/lib/integrations";
@@ -105,6 +106,34 @@ async function inspect() {
     connectedAccountId,
     tenantId: center.organization.tenantId,
   });
+  const intentRaw = jsonRecord(intent.paymentIntent?.raw);
+  const latestChargeId = typeof intentRaw.latest_charge === "string" ? intentRaw.latest_charge : null;
+  const stripeKey = await getStripeSecretKey({ tenantId: center.organization.tenantId });
+  let charge: {
+    ok: boolean;
+    id: string | null;
+    status: string | null;
+    paid: boolean;
+    amountCents: number | null;
+    paymentIntentId: string | null;
+    createdAt: string | null;
+  } = { ok: false, id: null, status: null, paid: false, amountCents: null, paymentIntentId: null, createdAt: null };
+  if (stripeKey && connectedAccountId && latestChargeId?.startsWith("ch_")) {
+    const response = await fetch(`https://api.stripe.com/v1/charges/${encodeURIComponent(latestChargeId)}`, {
+      headers: { Authorization: `Bearer ${stripeKey}`, "Stripe-Account": connectedAccountId },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const raw = await response.json().catch(() => null) as Record<string, unknown> | null;
+    charge = {
+      ok: response.ok && raw?.id === latestChargeId,
+      id: typeof raw?.id === "string" ? raw.id : null,
+      status: typeof raw?.status === "string" ? raw.status : null,
+      paid: raw?.paid === true,
+      amountCents: typeof raw?.amount === "number" ? raw.amount : null,
+      paymentIntentId: typeof raw?.payment_intent === "string" ? raw.payment_intent : null,
+      createdAt: typeof raw?.created === "number" ? new Date(raw.created * 1000).toISOString() : null,
+    };
+  }
 
   const paymentFields = jsonRecord(payment.customFields);
   const state = {
@@ -143,6 +172,7 @@ async function inspect() {
       intentStatus: intent.paymentIntent?.status ?? null,
       intentAmountCents: intent.paymentIntent?.amountCents ?? null,
       intentId: intent.paymentIntent?.id ?? null,
+      charge,
     },
   };
 
@@ -184,6 +214,12 @@ function assertUncorrected(review: Awaited<ReturnType<typeof inspect>>) {
     state.stripe.intentStatus === "succeeded",
     state.stripe.intentAmountCents === EXPECTED.amountCents,
     state.stripe.intentId === EXPECTED.stripePaymentIntentId,
+    state.stripe.charge.ok,
+    state.stripe.charge.status === "succeeded",
+    state.stripe.charge.paid,
+    state.stripe.charge.amountCents === EXPECTED.amountCents,
+    state.stripe.charge.paymentIntentId === EXPECTED.stripePaymentIntentId,
+    state.stripe.charge.createdAt !== null,
   ];
   if (mismatches.some((matches) => !matches)) {
     throw new Error("Live state no longer matches the reviewed Nandini payment correction plan.");
@@ -229,9 +265,7 @@ async function main() {
     throw new Error(`Apply requires ${CONFIRM_FLAG} and --confirm-fingerprint=${review.fingerprint}`);
   }
 
-  const rawIntent = jsonRecord(review.intent.paymentIntent?.raw);
-  const stripeCreatedAtSeconds = typeof rawIntent.created === "number" ? rawIntent.created : null;
-  const appliedAt = stripeCreatedAtSeconds ? new Date(stripeCreatedAtSeconds * 1000) : new Date();
+  const appliedAt = new Date(review.state.stripe.charge.createdAt!);
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "BillingAccount" WHERE "id" = ${EXPECTED.billingAccountId} FOR UPDATE`);
     const locked = await tx.payment.findUniqueOrThrow({

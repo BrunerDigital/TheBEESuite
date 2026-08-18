@@ -91,7 +91,10 @@ async function main() {
     };
   });
 
-  const groups = Object.groupBy(rows, (row) => row.classification);
+  const groups = rows.reduce<Record<string, typeof rows>>((result, row) => {
+    (result[row.classification] ??= []).push(row);
+    return result;
+  }, {});
   console.log(JSON.stringify({
     summary: {
       currentFamilies: rows.length,

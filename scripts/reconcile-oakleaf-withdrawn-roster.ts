@@ -76,6 +76,9 @@ async function loadState(client: Prisma.TransactionClient | typeof prisma = pris
   const plans = targets.map((target) => {
     const family = families.find((item) => item.id === target.familyId)!;
     invariant(family.name === target.familyName && family.billingAccount, `${target.familyName} identity or billing account changed.`);
+    if ("compensatePreparedParentAccess" in target && target.compensatePreparedParentAccess) {
+      invariant(family.guardians.some((guardian) => guardian.fullName === "Mariah Barnhart"), "Barnhart compensation guardian is missing or renamed.");
+    }
     const reviewedChildren = target.children.map((expected) => {
       const child = family.children.find((item) => item.id === expected.id);
       invariant(child?.fullName === expected.name, `${expected.name} identity changed.`);
@@ -100,6 +103,7 @@ async function loadState(client: Prisma.TransactionClient | typeof prisma = pris
     children: plan.reviewedChildren.map((child) => ({ id: child.id, status: child.enrollmentStatus, classroomId: child.classroomId, customFields: child.customFields })),
     invoices: plan.tuitionInvoices.map((invoice) => ({ id: invoice.id, status: invoice.status, totalCents: invoice.totalCents, ledgerEntries: invoice.ledgerEntries })),
     paymentIds: plan.account.payments.map((payment) => payment.id),
+    guardians: plan.family.guardians.map((guardian) => ({ id: guardian.id, fullName: guardian.fullName, userId: guardian.userId, customFields: guardian.customFields, user: guardian.user })),
   })) });
   return { center, actor, plans, fingerprint };
 }
@@ -132,6 +136,7 @@ async function apply(expectedFingerprint: string) {
     ));
     invariant(barnhart, "Barnhart compensation target missing.");
     const guardian = barnhart.family.guardians.find((item) => item.fullName === "Mariah Barnhart");
+    invariant(guardian, "Barnhart compensation guardian is missing or renamed.");
     if (guardian?.userId) {
       invariant(guardian.user?.role === "PARENT_GUARDIAN" && guardian.user.mustResetPassword, "Barnhart parent link is not the prepared no-invite account.");
       await tx.guardian.update({

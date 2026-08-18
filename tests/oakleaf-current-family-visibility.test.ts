@@ -6,6 +6,7 @@ const source = readFileSync(new URL("../scripts/reconcile-oakleaf-current-family
 const auditSource = readFileSync(new URL("../scripts/audit-oakleaf-family-visibility.ts", import.meta.url), "utf8");
 const rosterAuditSource = readFileSync(new URL("../scripts/audit-oakleaf-source-roster.ts", import.meta.url), "utf8");
 const withdrawnSource = readFileSync(new URL("../scripts/reconcile-oakleaf-withdrawn-roster.ts", import.meta.url), "utf8");
+const balanceAuditSource = readFileSync(new URL("../scripts/audit-oakleaf-balance-vs-weekly.ts", import.meta.url), "utf8");
 
 test("Oakleaf current-family visibility repair is source-locked and financially non-mutating", () => {
   assert.match(source, /SOURCE_SHA256 = "[a-f0-9]{64}"/);
@@ -40,6 +41,8 @@ test("Oakleaf roster audit is locked to the reviewed source bytes", () => {
   assert.match(rosterAuditSource, /createHash\("sha256"\)\.update\(sourceBuffer\)\.digest\("hex"\)/);
   assert.match(rosterAuditSource, /sourceSha256 !== SOURCE_SHA256/);
   assert.match(rosterAuditSource, /sourceSha256,/);
+  assert.doesNotMatch(rosterAuditSource, /Object\.groupBy/);
+  assert.doesNotMatch(balanceAuditSource, /Object\.groupBy/);
 });
 
 test("Oakleaf withdrawn-family access compensation is atomic with the financial correction", () => {
@@ -48,4 +51,6 @@ test("Oakleaf withdrawn-family access compensation is atomic with the financial 
   assert.match(transactionBody, /await tx\.user\.updateMany/);
   assert.match(transactionBody, /parentPortalAccessFields/);
   assert.doesNotMatch(withdrawnSource, /disableParentPortalLoginForGuardian/);
+  assert.match(withdrawnSource, /Barnhart compensation guardian is missing or renamed/);
+  assert.match(withdrawnSource, /guardians: plan\.family\.guardians\.map/);
 });

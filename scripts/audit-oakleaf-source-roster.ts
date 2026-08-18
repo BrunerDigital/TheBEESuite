@@ -95,7 +95,10 @@ async function main() {
       sourceRows: matched.map((row) => ({ accountKey: row.accountKey, payerName: row.payerName, hidden: row.hidden, balanceCents: row.balanceCents })),
     };
   });
-  const groups = Object.groupBy(classified, (row) => row.classification);
+  const groups = classified.reduce<Record<string, typeof classified>>((result, row) => {
+    (result[row.classification] ??= []).push(row);
+    return result;
+  }, {});
   const rateComparison = classified.filter((row) => row.classification === "source_current").map((row) => {
     const sourceRates = rateRows.filter((rate) => row.keys.includes(rate.accountKey) && row.sourceRows.some((source) => name(source.payerName) === name(rate.payerName))).map((rate) => rate.weeklyCents!);
     const beeRates = row.currentChildren.filter((child) => child.enabled).map((child) => child.weeklyCents);

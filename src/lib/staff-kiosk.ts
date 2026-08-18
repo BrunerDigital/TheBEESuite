@@ -280,7 +280,7 @@ export function validateNextStaffClockAction(action: StaffClockAction, state: St
 
 export function normalizeStaffClockEventEdits(
   value: unknown,
-  options: { timeZone?: string | null; maxEvents?: number } = {},
+  options: { timeZone?: string | null; maxEvents?: number; allowLeadingClockOut?: boolean } = {},
 ) {
   if (!Array.isArray(value)) {
     return { ok: false as const, error: "Clock events must be an array." };
@@ -311,7 +311,7 @@ export function normalizeStaffClockEventEdits(
   }
 
   const sorted = [...events].sort((left, right) => (dateMs(left.occurredAt) ?? 0) - (dateMs(right.occurredAt) ?? 0));
-  let expectedAction: StaffClockAction = sorted[0]?.action === "clock_out" && sorted.length >= LEGACY_STAFF_CLOCK_EVENT_LIMIT
+  let expectedAction: StaffClockAction = options.allowLeadingClockOut && sorted[0]?.action === "clock_out"
     ? "clock_out"
     : "clock_in";
   let previousMs: number | null = null;
@@ -337,6 +337,13 @@ export function normalizeStaffClockEventEdits(
   }
 
   return { ok: true as const, events: sorted };
+}
+
+export function hasLegacyTruncatedStaffClockHistory(customFields: unknown) {
+  const events = readStaffClockState(customFields).events;
+  if (events.length !== LEGACY_STAFF_CLOCK_EVENT_LIMIT) return false;
+  const oldest = [...events].sort((left, right) => (dateMs(left.occurredAt) ?? 0) - (dateMs(right.occurredAt) ?? 0))[0];
+  return oldest?.action === "clock_out";
 }
 
 function clockEventsForStorage(events: StaffClockEvent[]) {

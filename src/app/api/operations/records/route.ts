@@ -14,6 +14,7 @@ import { prisma } from "@/lib/prisma";
 import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib/staff-scheduling";
 import { hasStaffCompensationPayload, normalizeStaffCompensationPayload, staffCompensationCustomFields } from "@/lib/staff-compensation";
 import {
+  hasLegacyTruncatedStaffClockHistory,
   normalizeStaffClockAction,
   normalizeStaffClockEventEdits,
   readStaffClockState,
@@ -1469,7 +1470,10 @@ async function POSTHandler(request: NextRequest) {
     centerId = staff.centerId;
 
     if (hasEventEditPayload) {
-      const normalized = normalizeStaffClockEventEdits(body.events, { timeZone });
+      const normalized = normalizeStaffClockEventEdits(body.events, {
+        timeZone,
+        allowLeadingClockOut: hasLegacyTruncatedStaffClockHistory(staff.customFields),
+      });
       if (!normalized.ok) return NextResponse.json({ ok: false, error: normalized.error }, { status: 400 });
       const editedAt = new Date();
       result = await prisma.staffProfile.update({

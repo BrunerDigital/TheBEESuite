@@ -11,6 +11,7 @@ import {
   validateNextStaffClockAction,
   formatStaffHours,
   formatStaffDecimalHours,
+  hasLegacyTruncatedStaffClockHistory,
 } from "@/lib/staff-kiosk";
 import { hashStaffPin } from "@/lib/kiosk";
 
@@ -146,8 +147,18 @@ test("director time card edits remain available after the legacy 120-punch cap",
   if (!normalized.ok) return;
   assert.equal(normalized.events.length, 121);
 
-  const legacyTruncatedHistory = completeHistory.slice(1);
-  const repaired = normalizeStaffClockEventEdits([...legacyTruncatedHistory, addedPunch]);
+  const longerHistory = [...completeHistory, addedPunch];
+  const legacyTruncatedHistory = longerHistory.slice(1);
+  const legacyFields = {
+    timeClock: {
+      events: [...legacyTruncatedHistory].reverse(),
+    },
+  };
+  assert.equal(hasLegacyTruncatedStaffClockHistory(legacyFields), true);
+  assert.equal(normalizeStaffClockEventEdits(legacyTruncatedHistory).ok, false);
+
+  const shortenedLegacyHistory = legacyTruncatedHistory.slice(0, -2);
+  const repaired = normalizeStaffClockEventEdits(shortenedLegacyHistory, { allowLeadingClockOut: true });
 
   assert.equal(repaired.ok, true);
   if (!repaired.ok) return;
@@ -158,7 +169,7 @@ test("director time card edits remain available after the legacy 120-punch cap",
   });
   const stored = readStaffClockState(fields).events;
   assert.equal(stored.at(-1)?.action, "clock_in");
-  assert.equal(stored.length, 119);
+  assert.equal(stored.length, 117);
 });
 
 test("staff kiosk credential resolves by unique PIN without requiring email", () => {

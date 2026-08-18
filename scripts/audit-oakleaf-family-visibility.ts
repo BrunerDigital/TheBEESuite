@@ -1,4 +1,5 @@
 import "./load-env";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Prisma } from "@prisma/client";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
@@ -72,7 +73,13 @@ function parseCsv(text: string) {
 }
 
 function sourceAnnotations(path: string) {
-  const rows = parseCsv(readFileSync(path, "utf8"));
+  const sourceBuffer = readFileSync(path);
+  const sourceSha256 = createHash("sha256").update(sourceBuffer).digest("hex");
+  invariant(
+    sourceSha256 === SOURCE_SHA256,
+    `Oakleaf source fingerprint mismatch: expected ${SOURCE_SHA256}, received ${sourceSha256}.`,
+  );
+  const rows = parseCsv(sourceBuffer.toString("utf8"));
   const byAccount = new Map<string, Array<{ accountKey: string; payerName: string; weeklyCents: number | null; balanceCents: number | null; notes: string[] }>>();
   for (const row of rows) {
     const key = accountKey(row[9] ?? "");

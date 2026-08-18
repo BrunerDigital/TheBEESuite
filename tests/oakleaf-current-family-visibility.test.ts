@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const source = readFileSync(new URL("../scripts/reconcile-oakleaf-current-family-visibility.ts", import.meta.url), "utf8");
+const auditSource = readFileSync(new URL("../scripts/audit-oakleaf-family-visibility.ts", import.meta.url), "utf8");
 
 test("Oakleaf current-family visibility repair is source-locked and financially non-mutating", () => {
   assert.match(source, /SOURCE_SHA256 = "[a-f0-9]{64}"/);
@@ -21,4 +22,10 @@ test("Oakleaf current-family visibility repair is source-locked and financially 
   assert.doesNotMatch(source, /tx\.invoice\.(?:create|update|delete|upsert)/);
   assert.doesNotMatch(source, /tx\.payment\.(?:create|update|delete|upsert)/);
   assert.doesNotMatch(source, /tx\.ledgerEntry\.(?:create|update|delete|upsert)/);
+});
+
+test("Oakleaf visibility audit rejects a source whose bytes do not match the reviewed fingerprint", () => {
+  assert.match(auditSource, /createHash\("sha256"\)\.update\(sourceBuffer\)\.digest\("hex"\)/);
+  assert.match(auditSource, /sourceSha256 === SOURCE_SHA256/);
+  assert.match(auditSource, /Oakleaf source fingerprint mismatch/);
 });

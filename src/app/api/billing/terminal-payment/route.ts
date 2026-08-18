@@ -22,6 +22,16 @@ import { withApiLogging } from "@/lib/request-response-logging";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import {
+  allOpenInvoicesResponsibilitySeparated,
+  invoiceResponsibilityReviewExempt,
+  invoiceResponsibilitySeparation,
+} from "@/lib/invoice-responsibility-separation";
+import {
+  AGENCY_LEDGER_ENTRY_TYPES,
+  AGENCY_LEDGER_SOURCE_SYSTEM,
+  parentBalanceNeedsResponsibilityReview,
+} from "@/lib/parent-billing-visibility";
+import {
   applySucceededStripeFamilyBalancePayment,
   applySucceededStripeInvoicePayment,
 } from "@/lib/stripe-payment-application";
@@ -308,8 +318,16 @@ async function processPayment(body: Record<string, unknown>) {
   const billingAccount = await prisma.billingAccount.findFirst({
     where: billingAccountId ? { id: billingAccountId } : { familyId },
     include: {
+      invoices: {
+        where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.VOID] } },
+        select: { status: true, totalCents: true, customFields: true, items: { select: { description: true } } },
+      },
+      ledgerEntries: {
+        where: { OR: [{ type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } }, { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM }] },
+        select: { type: true, sourceSystem: true, amountCents: true, invoiceId: true, metadata: true },
+      },
       family: {
-        select: { id: true, name: true, billingEmail: true, centerId: true },
+        select: { id: true, name: true, billingEmail: true, centerId: true, customFields: true, children: { select: { customFields: true } } },
       },
     },
   });
@@ -320,7 +338,7 @@ async function processPayment(body: Record<string, unknown>) {
   const invoice = invoiceId
     ? await prisma.invoice.findFirst({
         where: { id: invoiceId, billingAccountId: billingAccount.id },
-        select: { id: true, number: true, totalCents: true, status: true },
+        select: { id: true, number: true, totalCents: true, status: true, customFields: true, items: { select: { description: true } } },
       })
     : null;
   if (invoiceId && !invoice) {
@@ -328,6 +346,29 @@ async function processPayment(body: Record<string, unknown>) {
   }
   if (invoice && invoice.status !== PaymentStatus.OPEN) {
     return NextResponse.json({ ok: false, error: "The selected invoice is no longer open." }, { status: 409 });
+  }
+  const responsibilityEvidence = [
+    billingAccount.customFields,
+    billingAccount.family.customFields,
+    ...billingAccount.family.children.map((child) => child.customFields),
+    ...billingAccount.invoices.flatMap((item) => [item.customFields, item.items.map((line) => line.description)]),
+  ];
+  const responsibilityReviewRequired = invoice
+    ? !invoiceResponsibilityReviewExempt(invoice.customFields) && parentBalanceNeedsResponsibilityReview({
+        accountBalanceCents: billingAccount.balanceCents,
+        agencyLedgerEntries: billingAccount.ledgerEntries,
+        invoiceId: invoice.id,
+        invoiceResponsibilitySeparated: invoiceResponsibilitySeparation(invoice.customFields) !== null,
+        responsibilityEvidence: [invoice.customFields, invoice.items.map((item) => item.description), ...responsibilityEvidence],
+      })
+    : parentBalanceNeedsResponsibilityReview({
+        accountBalanceCents: billingAccount.balanceCents,
+        agencyLedgerEntries: billingAccount.ledgerEntries,
+        invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(billingAccount.invoices),
+        responsibilityEvidence,
+      });
+  if (responsibilityReviewRequired) {
+    return NextResponse.json({ ok: false, error: "Separate family and agency responsibility before collecting an in-person card payment." }, { status: 409 });
   }
   const requestedAmountCents = int(body.amountCents);
   const amountCents = invoice?.totalCents ?? (requestedAmountCents > 0 ? requestedAmountCents : billingAccount.balanceCents);

@@ -447,8 +447,8 @@ async function applyAiProfileChange(
     if (!invoice) throw new Error("Invoice not found in the selected school.");
     if (invoice.status !== PaymentStatus.OPEN) throw new Error("Only open invoices can be edited.");
     const values = cleanAiPatch(patch, invoiceAiFields);
-    if ("amountCents" in values && invoiceResponsibilitySeparation(invoice.customFields)) {
-      throw new Error("The invoice amount cannot be changed after family and agency responsibility has been separated.");
+    if (("amountCents" in values || "description" in values) && invoiceResponsibilitySeparation(invoice.customFields)) {
+      throw new Error("The invoice amount or item description cannot be changed after family and agency responsibility has been separated.");
     }
     const totalCents = "amountCents" in values ? Number(values.amountCents) : invoice.totalCents;
     if (!Number.isInteger(totalCents) || totalCents <= 0) throw new Error("Invoice amount must be a positive whole number of cents.");

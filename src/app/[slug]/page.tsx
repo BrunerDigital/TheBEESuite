@@ -709,7 +709,7 @@ async function buildFtePrefills(
       invoiceTotalCents: invoice.totalCents,
       customFields: invoice.customFields,
     });
-    if (invoice.status === PaymentStatus.VOID && !separated) continue;
+    if (invoice.status === PaymentStatus.VOID && (!separated || separated.familyResponsibilityCents > 0)) continue;
     if (separated) {
       row.totalBilledAmount += separated.totalResponsibilityCents / 100;
       row.subsidyBillAmount += separated.agencyResponsibilityCents / 100;

@@ -100,6 +100,7 @@ async function POSTHandler(request: NextRequest) {
       guardians: {
         select: { id: true, fullName: true, email: true, userId: true },
       },
+      children: { select: { customFields: true } },
       billingAccount: {
         select: {
           id: true,
@@ -164,12 +165,12 @@ async function POSTHandler(request: NextRequest) {
   const invoice = invoiceId
     ? await prisma.invoice.findFirst({
         where: { id: invoiceId, billingAccountId: billingAccount.id },
-        include: { billingAccount: { include: { family: true } } },
+        include: { items: { select: { description: true } }, billingAccount: { include: { family: true } } },
       })
     : await prisma.invoice.findFirst({
         where: { billingAccountId: billingAccount.id, status: PaymentStatus.OPEN },
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-        include: { billingAccount: { include: { family: true } } },
+        include: { items: { select: { description: true } }, billingAccount: { include: { family: true } } },
       });
   if (!invoice) {
     return NextResponse.json({ ok: false, error: "No open invoice is available for this payment link." }, { status: 404 });
@@ -187,8 +188,10 @@ async function POSTHandler(request: NextRequest) {
     invoiceResponsibilitySeparated: invoiceResponsibilitySeparation(invoice.customFields) !== null,
     responsibilityEvidence: [
       invoice.customFields,
+      invoice.items.map((item) => item.description),
       billingAccount.customFields,
       family.customFields,
+      ...family.children.map((child) => child.customFields),
     ],
   })) {
     return NextResponse.json(

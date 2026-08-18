@@ -80,6 +80,8 @@ test("all online payment paths stay blocked until responsibility is separated", 
   const autopay = readFileSync("src/lib/autopay-processing.ts", "utf8");
   const invoiceRoute = readFileSync("src/app/api/billing/invoices/route.ts", "utf8");
   const livePage = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const aiRoute = readFileSync("src/app/api/ai/command/route.ts", "utf8");
+  const operationsRoute = readFileSync("src/app/api/operations/records/route.ts", "utf8");
 
   assert.match(actions, /Separate responsibility/);
   assert.match(actions, /responsibilityReviewRequired/);
@@ -90,5 +92,10 @@ test("all online payment paths stay blocked until responsibility is separated", 
   assert.ok(emailedCheckout.indexOf("parentBalanceNeedsResponsibilityReview({") < emailedCheckout.indexOf("const stripeSecretConfigured"));
   assert.match(autopay, /Automated payment is blocked until the school separates agency and family responsibility/);
   assert.match(invoiceRoute, /amount cannot be changed after family and agency responsibility has been separated/);
-  assert.match(livePage, /invoice\.status === PaymentStatus\.VOID && !separated/);
+  assert.match(livePage, /invoice\.status === PaymentStatus\.VOID && \(!separated \|\| separated\.familyResponsibilityCents > 0\)/);
+  assert.match(emailedCheckout, /invoice\.items\.map/);
+  assert.match(emailedCheckout, /family\.children\.map/);
+  assert.match(aiRoute, /invoiceResponsibilitySeparation\(invoice\.customFields\)/);
+  assert.match(operationsRoute, /invoiceResponsibilitySeparation\(existingInvoice\.customFields\)/);
+  assert.match(invoiceRoute, /A separated invoice cannot be voided because it has a linked agency receivable/);
 });

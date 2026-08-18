@@ -25,7 +25,7 @@ test("subsidy evidence without a separated agency ledger fails closed", () => {
     accountBalanceCents: 157_241,
     agencyLedgerEntries: [{ type: "agency_receivable", sourceSystem: "bee_suite", amountCents: 120_000 }],
     responsibilityEvidence: [{ tags: ["subsidy"] }],
-  }), false);
+  }), true);
 });
 
 test("agency responsibility is separated per invoice, not once for every future invoice", () => {

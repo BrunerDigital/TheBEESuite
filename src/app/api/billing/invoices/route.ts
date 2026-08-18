@@ -1035,6 +1035,12 @@ async function voidInvoice(user: CurrentBillingUser, body: Record<string, unknow
   }
   const initialBlocker = invoiceVoidBlocker({ ...invoice, payments: invoice.billingAccount.payments });
   if (initialBlocker) return NextResponse.json({ ok: false, error: initialBlocker }, { status: 409 });
+  if (invoiceResponsibilitySeparation(invoice.customFields)) {
+    return NextResponse.json(
+      { ok: false, error: "A separated invoice cannot be voided because it has a linked agency receivable." },
+      { status: 409 },
+    );
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     const current = await tx.invoice.findUniqueOrThrow({
@@ -1051,6 +1057,9 @@ async function voidInvoice(user: CurrentBillingUser, body: Record<string, unknow
     });
     const blocker = invoiceVoidBlocker({ ...current, payments: current.billingAccount.payments });
     if (blocker) throw new Error(`INVOICE_VOID_BLOCKED:${blocker}`);
+    if (invoiceResponsibilitySeparation(current.customFields)) {
+      throw new Error("INVOICE_VOID_BLOCKED:A separated invoice cannot be voided because it has a linked agency receivable.");
+    }
 
     const voidedAt = new Date();
     const updated = await tx.invoice.updateMany({

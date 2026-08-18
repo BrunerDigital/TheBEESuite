@@ -102,7 +102,7 @@ export function parentBalanceNeedsResponsibilityReview(input: {
           : {};
         return metadata.sourceInvoiceId === invoiceId || metadata.invoiceId === invoiceId;
       })
-    : input.agencyLedgerEntries.some(isAgencyOnlyLedgerEntry);
+    : input.invoiceResponsibilitySeparated === true;
   return input.accountBalanceCents > 0
     && hasSubsidyResponsibilityEvidence(...input.responsibilityEvidence)
     && !hasSeparatedResponsibility;

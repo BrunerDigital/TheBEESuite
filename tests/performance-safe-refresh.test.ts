@@ -15,6 +15,7 @@ test("session heartbeats preserve sign-out handling and refresh live billing onl
   const terminalPayment = source("src/app/api/billing/terminal-payment/route.ts");
   const familyRefunds = source("src/lib/family-refunds.ts");
   const paymentRequestCheckout = source("src/app/api/billing/payment-method-request/checkout/route.ts");
+  const billingInvoices = source("src/lib/billing-invoices.ts");
 
   assert.equal(liveRefresh.match(/router\.refresh\(\)/g)?.length, 2);
   assert.doesNotMatch(liveRefresh, /sync\((true|false)\)/);
@@ -44,6 +45,8 @@ test("session heartbeats preserve sign-out handling and refresh live billing onl
   assert.doesNotMatch(terminalPayment, /"billing\.terminal\.payment_processing"/);
   assert.match(familyRefunds, /prisma\.center\.update\(\{ where: \{ id: account\.family\.centerId \}/);
   assert.equal(paymentRequestCheckout.match(/prisma\.center\.update\(\{ where: \{ id: center\.id \}/g)?.length, 2);
+  assert.match(billingInvoices, /include: \{ family: \{ select: \{ centerId: true \} \} \}/);
+  assert.match(billingInvoices, /tx\.center\.update/);
 });
 
 test("notification polling uses the lightweight unread endpoint", () => {

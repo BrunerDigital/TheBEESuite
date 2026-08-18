@@ -39,6 +39,7 @@ export async function createBillingInvoiceForFamily(
     where: { familyId: input.familyId },
     update: {},
     create: { familyId: input.familyId, balanceCents: 0 },
+    include: { family: { select: { centerId: true } } },
   });
 
   const dedupeKey = clean(input.customFields.dedupeKey);
@@ -115,6 +116,13 @@ export async function createBillingInvoiceForFamily(
         externalId: `invoice:${invoice.id}`,
         metadata: metadataJson(input.customFields),
       },
+    });
+  }
+
+  if (billingAccount.family.centerId) {
+    await tx.center.update({
+      where: { id: billingAccount.family.centerId },
+      data: { updatedAt: new Date() },
     });
   }
 

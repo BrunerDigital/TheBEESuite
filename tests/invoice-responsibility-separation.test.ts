@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  allOpenInvoicesResponsibilitySeparated,
   invoiceResponsibilitySeparation,
   responsibilitySeparatedBillingAmounts,
   responsibilitySeparationError,
@@ -30,6 +31,17 @@ test("a reviewed invoice separation preserves exact family, agency, and gross to
     agencyResponsibilityCents: 10_000,
     totalResponsibilityCents: 12_000,
   });
+});
+
+test("account review resolves only when every open invoice has an exact separation", () => {
+  assert.equal(allOpenInvoicesResponsibilitySeparated([
+    { status: "OPEN", totalCents: 2_000, customFields: { responsibilitySeparation: separation } },
+  ]), true);
+  assert.equal(allOpenInvoicesResponsibilitySeparated([
+    { status: "OPEN", totalCents: 2_000, customFields: { responsibilitySeparation: separation } },
+    { status: "OPEN", totalCents: 5_000, customFields: {} },
+  ]), false);
+  assert.equal(allOpenInvoicesResponsibilitySeparated([]), false);
 });
 
 test("responsibility separation fails closed on mismatched totals and ambiguous account credit", () => {
@@ -91,6 +103,7 @@ test("all online payment paths stay blocked until responsibility is separated", 
   assert.match(emailedCheckout, /parentBalanceNeedsResponsibilityReview/);
   assert.ok(emailedCheckout.indexOf("parentBalanceNeedsResponsibilityReview({") < emailedCheckout.indexOf("const stripeSecretConfigured"));
   assert.match(autopay, /Automated payment is blocked until the school separates agency and family responsibility/);
+  assert.match(autopay, /invoice\.items\.map/);
   assert.match(invoiceRoute, /amount cannot be changed after family and agency responsibility has been separated/);
   assert.match(livePage, /invoice\.status === PaymentStatus\.VOID && \(!separated \|\| separated\.familyResponsibilityCents > 0\)/);
   assert.match(emailedCheckout, /invoice\.items\.map/);

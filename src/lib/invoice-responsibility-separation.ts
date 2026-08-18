@@ -101,3 +101,13 @@ export function responsibilitySeparatedBillingAmounts(input: {
     totalResponsibilityCents: separation.originalInvoiceTotalCents,
   };
 }
+
+export function allOpenInvoicesResponsibilitySeparated(invoices: Array<{
+  status: string;
+  totalCents: number;
+  customFields: unknown;
+}>) {
+  const openInvoices = invoices.filter((invoice) => invoice.status === "OPEN" && invoice.totalCents > 0);
+  return openInvoices.length > 0
+    && openInvoices.every((invoice) => invoiceResponsibilitySeparation(invoice.customFields) !== null);
+}

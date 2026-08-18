@@ -163,6 +163,7 @@ import {
 } from "@/lib/parent-billing-visibility";
 import { invoicePurposeLabel } from "@/lib/product-billing";
 import {
+  allOpenInvoicesResponsibilitySeparated,
   invoiceResponsibilitySeparation,
   responsibilitySeparatedBillingAmounts,
 } from "@/lib/invoice-responsibility-separation";
@@ -2162,7 +2163,7 @@ async function renderLivePage(
         where: { billingAccount: { familyId } },
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
         take: 20,
-        select: { id: true, number: true, status: true, dueDate: true, customFields: true },
+        select: { id: true, number: true, status: true, dueDate: true, totalCents: true, customFields: true },
       }),
       prisma.dailyReport.findMany({
         where: { childId: { in: childIds.length ? childIds : ["__none__"] } },
@@ -2447,6 +2448,7 @@ async function renderLivePage(
       ? parentBalanceNeedsResponsibilityReview({
           accountBalanceCents: billingAccount.balanceCents,
           agencyLedgerEntries,
+          invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(invoices),
           responsibilityEvidence: [
             billingAccount.customFields,
             family?.customFields,

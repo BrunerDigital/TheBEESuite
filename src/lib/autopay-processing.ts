@@ -182,6 +182,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       ? { cursor: { id: input.cursorInvoiceId }, skip: 1 }
       : {}),
     include: {
+      items: { select: { description: true } },
       billingAccount: {
         select: {
           id: true,
@@ -371,6 +372,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       invoiceResponsibilitySeparated: invoiceResponsibilitySeparation(invoice.customFields) !== null,
       responsibilityEvidence: [
         invoiceFields,
+        invoice.items.map((item) => item.description),
         invoice.billingAccount.customFields,
         family.customFields,
         ...family.children.map((child) => child.customFields),

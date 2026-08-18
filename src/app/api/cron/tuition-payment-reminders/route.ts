@@ -42,6 +42,7 @@ import {
   type TuitionPaymentReminderPhase,
 } from "@/lib/tuition-payment-reminders";
 import { withApiLogging } from "@/lib/request-response-logging";
+import { allOpenInvoicesResponsibilitySeparated } from "@/lib/invoice-responsibility-separation";
 
 export const runtime = "nodejs";
 
@@ -240,6 +241,10 @@ async function GETHandler(request: NextRequest) {
         balanceCents: true,
         autopayPlaceholder: true,
         customFields: true,
+        invoices: {
+          where: { status: PaymentStatus.OPEN, totalCents: { gt: 0 } },
+          select: { status: true, totalCents: true, customFields: true },
+        },
         ledgerEntries: {
           where: {
             OR: [
@@ -365,6 +370,7 @@ async function GETHandler(request: NextRequest) {
     const responsibilityReviewRequired = parentBalanceNeedsResponsibilityReview({
       accountBalanceCents: account.balanceCents,
       agencyLedgerEntries: account.ledgerEntries,
+      invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(account.invoices),
       responsibilityEvidence: [
         account.customFields,
         family.customFields,

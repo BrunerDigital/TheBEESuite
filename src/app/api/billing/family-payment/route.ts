@@ -42,6 +42,7 @@ import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
+import { allOpenInvoicesResponsibilitySeparated } from "@/lib/invoice-responsibility-separation";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
@@ -155,6 +156,10 @@ async function POSTHandler(request: NextRequest) {
   const billingAccount = await prisma.billingAccount.findFirst({
     where: billingAccountId ? { id: billingAccountId } : { familyId },
     include: {
+      invoices: {
+        where: { status: PaymentStatus.OPEN, totalCents: { gt: 0 } },
+        select: { status: true, totalCents: true, customFields: true },
+      },
       family: {
         select: {
           id: true,
@@ -237,6 +242,7 @@ async function POSTHandler(request: NextRequest) {
   const responsibilityReviewRequired = parentCheckout && parentBalanceNeedsResponsibilityReview({
     accountBalanceCents: billingAccount.balanceCents,
     agencyLedgerEntries,
+    invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(billingAccount.invoices),
     responsibilityEvidence: [
       billingAccount.customFields,
       billingAccount.family.customFields,

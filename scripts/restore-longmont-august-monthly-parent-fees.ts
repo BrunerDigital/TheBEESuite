@@ -1,6 +1,7 @@
 import "./load-env";
 import { createHash } from "node:crypto";
 import { PaymentStatus, Prisma, PrismaClient, UserRole } from "@prisma/client";
+import { normalizeRecurringBillingDay, recurringDueDateForPeriod } from "@/lib/billing-workflows";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { parentVisibleBillingBalanceCents } from "@/lib/parent-billing-visibility";
 import { prisma } from "@/lib/prisma";
@@ -149,6 +150,7 @@ async function loadState(db: DbClient) {
       number: true,
       status: true,
       totalCents: true,
+      dueDate: true,
       customFields: true,
       items: { select: { amountCents: true } },
       ledgerEntries: {
@@ -209,6 +211,9 @@ async function loadState(db: DbClient) {
     invariant(clean(fields.recoveryManifestFingerprint).length > 0, `${invoice.number} lost its reviewed recovery fingerprint.`);
     invariant(childFields.tuitionBillingEnabled === true, `${invoice.number} current monthly assignment is disabled.`);
     invariant(childFields.tuitionBillingCadence === "monthly" && childFields.tuitionBillingStartsPeriod === BILLING_PERIOD, `${invoice.number} current cadence or start period changed.`);
+    const currentBillingDay = normalizeRecurringBillingDay(childFields.tuitionBillingDay, "monthly");
+    const expectedDueDate = recurringDueDateForPeriod(BILLING_PERIOD, currentBillingDay, "monthly");
+    invariant(invoice.dueDate.getTime() === expectedDueDate.getTime(), `${invoice.number} due date no longer matches the current monthly billing day.`);
     const planId = clean(fields.sourceId);
     invariant(clean(childFields.tuitionPlanId) === planId, `${invoice.number} current plan identity changed.`);
     const plan = planById.get(planId);
@@ -274,6 +279,8 @@ async function loadState(db: DbClient) {
       billingAccountId: invoice.billingAccount.id,
       familyId: invoice.billingAccount.family.id,
       childId,
+      dueDate: invoice.dueDate,
+      currentBillingDay,
       livePlan: plan,
       currentAssignmentAdjustments: {
         additionalCharges: currentAdditionalCharges,
@@ -319,6 +326,8 @@ async function loadState(db: DbClient) {
       billingAccountId: target.billingAccountId,
       familyId: target.familyId,
       childId: target.childId,
+      dueDate: target.dueDate,
+      currentBillingDay: target.currentBillingDay,
       livePlan: target.livePlan,
       currentAssignmentAdjustments: target.currentAssignmentAdjustments,
       noPaymentSafeguards: target.noPaymentSafeguards,

@@ -1,5 +1,5 @@
 import "./load-env";
-import { Prisma } from "@prisma/client";
+import { PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const CENTER_ID = "cmp4ew6f3000a6alwmz62n7w2";
@@ -63,7 +63,12 @@ async function main() {
           balanceCents: true,
           family: { select: { id: true, name: true } },
           payments: {
-            where: { paidAt: { gte: START } },
+            where: {
+              OR: [
+                { status: PaymentStatus.DRAFT },
+                { paidAt: { gte: START } },
+              ],
+            },
             select: { id: true, amountCents: true, status: true, provider: true, paidAt: true, customFields: true },
           },
         },

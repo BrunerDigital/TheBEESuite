@@ -42,6 +42,9 @@ test("Longmont monthly fee restoration is exact, fingerprinted, and approval gat
   assert.match(source, /reviewedItemAmounts\) === JSON\.stringify\(expectedItemAmounts\)/);
   assert.match(source, /currentAssignmentAdjustments/);
   assert.match(source, /noPaymentSafeguards/);
+  assert.match(source, /normalizeRecurringBillingDay\(childFields\.tuitionBillingDay, "monthly"\)/);
+  assert.match(source, /recurringDueDateForPeriod\(BILLING_PERIOD, currentBillingDay, "monthly"\)/);
+  assert.match(source, /invoice\.dueDate\.getTime\(\) === expectedDueDate\.getTime\(\)/);
   assert.match(source, /Prisma\.TransactionIsolationLevel\.Serializable/);
 });
 
@@ -59,4 +62,9 @@ test("Longmont voided-fee audit reports billing logs outside the selected invoic
   assert.match(auditSource, /const invoiceIds = new Set\(invoices\.map\(\(invoice\) => invoice\.id\)\)/);
   assert.match(auditSource, /!log\.resourceId \|\| !invoiceIds\.has\(log\.resourceId\)/);
   assert.doesNotMatch(auditSource, /!logsByResource\.has\(log\.resourceId\)/);
+});
+
+test("Longmont voided-fee audit includes draft checkouts without paid dates", () => {
+  assert.match(auditSource, /status: PaymentStatus\.DRAFT/);
+  assert.match(auditSource, /paidAt: \{ gte: START \}/);
 });

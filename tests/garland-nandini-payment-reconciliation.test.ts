@@ -31,6 +31,9 @@ test("Nandini reconciliation is exact, provider-verified, fingerprinted, and ide
   assert.match(source, /ledger\?\.externalId === EXPECTED\.stripePaymentIntentId/);
   assert.match(source, /state\.intentLedger\?\.paymentId === EXPECTED\.paymentId/);
   assert.match(source, /state\.payment\.paidAt === state\.stripe\.charge\.createdAt/);
+  assert.match(source, /state\.payment\.billingAccountId === EXPECTED\.billingAccountId/);
+  assert.match(source, /state\.payment\.stripeCheckoutSessionId === EXPECTED\.stripeCheckoutSessionId/);
+  assert.match(source, /state\.payment\.familyId === EXPECTED\.familyId/);
   assert.match(source, /applySucceededStripeFamilyBalancePayment/);
   assert.match(source, /newChargeCreated: false/);
   assert.match(source, /refundCreated: false/);

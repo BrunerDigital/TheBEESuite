@@ -26,6 +26,8 @@ export function succeededFamilyBalancePaymentClaim(input: {
   paymentStatus: PaymentStatus;
   storedStripePaymentIntentId?: string | null;
   succeededStripePaymentIntentId: string;
+  storedCheckoutAmountCents?: number | null;
+  succeededAmountTotalCents?: number | null;
 }) {
   if (input.paymentStatus === PaymentStatus.PAID) {
     return { ok: false as const, reason: "payment_already_applied", claimStatus: null, recoveredFromFailedAttempt: false };
@@ -36,10 +38,14 @@ export function succeededFamilyBalancePaymentClaim(input: {
 
   const storedStripePaymentIntentId = clean(input.storedStripePaymentIntentId);
   const succeededStripePaymentIntentId = clean(input.succeededStripePaymentIntentId);
+  const storedCheckoutAmountCents = centsFrom(input.storedCheckoutAmountCents);
+  const succeededAmountTotalCents = centsFrom(input.succeededAmountTotalCents);
   if (
     input.paymentStatus === PaymentStatus.FAILED
     && storedStripePaymentIntentId
     && storedStripePaymentIntentId === succeededStripePaymentIntentId
+    && storedCheckoutAmountCents > 0
+    && storedCheckoutAmountCents === succeededAmountTotalCents
   ) {
     return { ok: true as const, reason: null, claimStatus: PaymentStatus.FAILED, recoveredFromFailedAttempt: true };
   }
@@ -606,6 +612,8 @@ export async function applySucceededStripeFamilyBalancePayment(
     paymentStatus: currentPayment.status,
     storedStripePaymentIntentId: clean(currentFields.stripePaymentIntentId) || null,
     succeededStripePaymentIntentId: input.stripePaymentIntentId,
+    storedCheckoutAmountCents: centsFrom(currentFields.checkoutTotalCents) || currentPayment.amountCents,
+    succeededAmountTotalCents: input.stripeAmountTotalCents,
   });
   if (!claim.ok) {
     return { applied: false, reason: claim.reason, billingAccountId: currentPayment.billingAccountId };

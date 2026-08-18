@@ -59,6 +59,8 @@ test("a succeeded family payment recovers only the same previously failed Paymen
     paymentStatus: "FAILED",
     storedStripePaymentIntentId: "pi_succeeded",
     succeededStripePaymentIntentId: "pi_succeeded",
+    storedCheckoutAmountCents: 27_000,
+    succeededAmountTotalCents: 27_000,
   }), {
     ok: true,
     reason: null,
@@ -69,6 +71,15 @@ test("a succeeded family payment recovers only the same previously failed Paymen
     paymentStatus: "FAILED",
     storedStripePaymentIntentId: "pi_different",
     succeededStripePaymentIntentId: "pi_succeeded",
+    storedCheckoutAmountCents: 27_000,
+    succeededAmountTotalCents: 27_000,
+  }).ok, false);
+  assert.equal(succeededFamilyBalancePaymentClaim({
+    paymentStatus: "FAILED",
+    storedStripePaymentIntentId: "pi_succeeded",
+    succeededStripePaymentIntentId: "pi_succeeded",
+    storedCheckoutAmountCents: 27_000,
+    succeededAmountTotalCents: 13_500,
   }).ok, false);
   assert.equal(succeededFamilyBalancePaymentClaim({
     paymentStatus: "PAID",

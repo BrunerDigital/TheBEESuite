@@ -567,6 +567,8 @@ async function handleFamilyBalancePaymentSucceeded(
         paymentStatus: currentPayment.status,
         storedStripePaymentIntentId: clean(currentFields.stripePaymentIntentId) || null,
         succeededStripePaymentIntentId: stripePaymentIntentId || "",
+        storedCheckoutAmountCents: metadataCents(currentFields.checkoutTotalCents) || currentPayment.amountCents,
+        succeededAmountTotalCents: input.stripeAmountTotalCents,
       });
       if (!claim.ok) {
         ignoredReason = claim.reason;

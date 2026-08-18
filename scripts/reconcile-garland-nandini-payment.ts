@@ -261,6 +261,47 @@ function assertUncorrected(review: Awaited<ReturnType<typeof inspect>>) {
   }
 }
 
+function assertApplied(review: Awaited<ReturnType<typeof inspect>>) {
+  const { state } = review;
+  const ledger = state.payment.ledgerEntries[0];
+  const matches = [
+    state.payment.status === PaymentStatus.PAID,
+    state.payment.paidAt === state.stripe.charge.createdAt,
+    state.balanceCents === 0,
+    state.latestLedgerBalanceCents === 0,
+    state.payment.ledgerEntries.length === 1,
+    ledger?.externalId === EXPECTED.stripePaymentIntentId,
+    ledger?.amountCents === -EXPECTED.amountCents,
+    ledger?.balanceAfterCents === 0,
+    state.intentLedger?.id === ledger?.id,
+    state.intentLedger?.paymentId === EXPECTED.paymentId,
+    state.intentLedger?.amountCents === -EXPECTED.amountCents,
+    state.intentLedger?.balanceAfterCents === 0,
+    state.invoice.status === PaymentStatus.PAID,
+    state.candidateInvoices.length === 0,
+    state.stripe.sessionOk,
+    state.stripe.sessionStatus === "complete",
+    state.stripe.sessionPaymentStatus === "paid",
+    state.stripe.sessionAmountCents === EXPECTED.amountCents,
+    state.stripe.sessionPaymentIntentId === EXPECTED.stripePaymentIntentId,
+    state.stripe.intentOk,
+    state.stripe.intentStatus === "succeeded",
+    state.stripe.intentAmountCents === EXPECTED.amountCents,
+    state.stripe.intentId === EXPECTED.stripePaymentIntentId,
+    state.stripe.charge.ok,
+    state.stripe.charge.status === "succeeded",
+    state.stripe.charge.paid,
+    state.stripe.charge.amountCents === EXPECTED.amountCents,
+    state.stripe.charge.amountRefundedCents === 0,
+    !state.stripe.charge.refunded,
+    !state.stripe.charge.disputed,
+    state.stripe.charge.paymentIntentId === EXPECTED.stripePaymentIntentId,
+  ];
+  if (matches.some((matchesExpected) => !matchesExpected)) {
+    throw new Error("Applied payment no longer matches the exact ledger and Stripe provider state.");
+  }
+}
+
 async function main() {
   const apply = process.argv.includes(APPLY_FLAG);
   const confirmed = process.argv.includes(CONFIRM_FLAG);
@@ -274,6 +315,7 @@ async function main() {
     && review.state.payment.ledgerEntries.length === 1
     && review.state.invoice.status === PaymentStatus.PAID
   ) {
+    assertApplied(review);
     console.log(JSON.stringify({ ok: true, mode: "already_applied", state: review.state }, null, 2));
     return;
   }
@@ -381,19 +423,7 @@ async function main() {
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   const verified = await inspect();
-  if (
-    verified.state.payment.status !== PaymentStatus.PAID
-    || verified.state.payment.paidAt === null
-    || verified.state.balanceCents !== 0
-    || verified.state.latestLedgerBalanceCents !== 0
-    || verified.state.payment.ledgerEntries.length !== 1
-    || verified.state.payment.ledgerEntries[0]?.amountCents !== -EXPECTED.amountCents
-    || verified.state.payment.ledgerEntries[0]?.balanceAfterCents !== 0
-    || verified.state.invoice.status !== PaymentStatus.PAID
-    || verified.state.stripe.intentStatus !== "succeeded"
-  ) {
-    throw new Error("Post-apply verification failed.");
-  }
+  assertApplied(verified);
   console.log(JSON.stringify({ ok: true, mode: "applied", state: verified.state }, null, 2));
 }
 

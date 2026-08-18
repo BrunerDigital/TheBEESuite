@@ -635,6 +635,10 @@ async function POSTHandler(request: NextRequest) {
           }),
         },
       });
+      await prisma.center.update({
+        where: { id: center.id },
+        data: { updatedAt: new Date() },
+      });
       return NextResponse.json(
         { ok: false, configured: intent.configured, error: intent.error || "Saved payment method could not be charged." },
         { status: intent.configured ? 502 : 503 },
@@ -810,6 +814,10 @@ async function POSTHandler(request: NextRequest) {
           status: "checkout_failed",
         }),
       },
+    });
+    await prisma.center.update({
+      where: { id: center.id },
+      data: { updatedAt: new Date() },
     });
     return NextResponse.json(
       {

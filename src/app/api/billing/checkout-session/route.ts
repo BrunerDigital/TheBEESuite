@@ -215,10 +215,8 @@ async function POSTHandler(request: NextRequest) {
     responsibilityEvidence: [
       invoice.customFields,
       invoice.items.map((item) => item.description),
-      invoice.billingAccount.customFields,
-      invoice.billingAccount.family.customFields,
-      ...invoice.billingAccount.family.children.map((child) => child.customFields),
     ],
+    enforceCollectionHold: true,
   })) {
     return NextResponse.json(
       { ok: false, error: "Separate family and agency responsibility before opening payment." },

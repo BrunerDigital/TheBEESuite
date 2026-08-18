@@ -189,10 +189,8 @@ async function POSTHandler(request: NextRequest) {
     responsibilityEvidence: [
       invoice.customFields,
       invoice.items.map((item) => item.description),
-      billingAccount.customFields,
-      family.customFields,
-      ...family.children.map((child) => child.customFields),
     ],
+    enforceCollectionHold: true,
   })) {
     return NextResponse.json(
       { ok: false, error: "The school must separate family and agency responsibility before this invoice can be paid." },

@@ -53,6 +53,8 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(route, /invoice checkout is already processing/);
   assert.match(invoiceCheckoutRoute, /userIsParentGuardian && !userCanManageBilling && !productCheckoutBranding/);
   assert.match(invoiceCheckoutRoute, /pay the family balance shown there/);
+  assert.match(invoiceCheckoutRoute, /enforceCollectionHold:\s*true/);
+  assert.match(invoiceCheckoutRoute, /responsibilityEvidence:\s*\[\s*invoice\.customFields,\s*invoice\.items\.map/);
   assert.match(workspace, /payProductInvoice/);
   assert.match(workspace, /parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed[\s\S]{0,80}\? "Being confirmed"/);
   assert.match(workspace, /Amount to pay/);

@@ -39,7 +39,7 @@ import { invoiceResponsibilityReviewExempt, invoiceResponsibilitySeparation } fr
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
-  parentBalanceNeedsResponsibilityReview,
+  paymentCollectionResponsibilityHoldRequired,
 } from "@/lib/parent-billing-visibility";
 import {
   PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
@@ -207,7 +207,7 @@ async function POSTHandler(request: NextRequest) {
   if (invoice.totalCents <= 0) {
     return NextResponse.json({ ok: false, error: "Invoice total must be greater than zero." }, { status: 400 });
   }
-  if (!invoiceResponsibilityReviewExempt(invoice.customFields) && parentBalanceNeedsResponsibilityReview({
+  if (!invoiceResponsibilityReviewExempt(invoice.customFields) && paymentCollectionResponsibilityHoldRequired({
     accountBalanceCents: invoice.billingAccount.balanceCents,
     agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
     invoiceId: invoice.id,
@@ -215,10 +215,8 @@ async function POSTHandler(request: NextRequest) {
     responsibilityEvidence: [
       invoice.customFields,
       invoice.items.map((item) => item.description),
-      invoice.billingAccount.customFields,
-      invoice.billingAccount.family.customFields,
-      ...invoice.billingAccount.family.children.map((child) => child.customFields),
     ],
+    enforceCollectionHold: true,
   })) {
     return NextResponse.json(
       { ok: false, error: "Separate family and agency responsibility before opening payment." },

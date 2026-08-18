@@ -6,12 +6,13 @@ import {
   isAgencyOnlyLedgerEntry,
   isParentVisiblePayment,
   parentBalanceNeedsResponsibilityReview,
+  paymentCollectionResponsibilityHoldRequired,
   parentPaymentAmountCents,
   parentVisibleBillingBalanceCents,
   withoutConfirmedFamilyResponsibility,
 } from "../src/lib/parent-billing-visibility";
 
-test("subsidy evidence without a separated agency ledger fails closed", () => {
+test("subsidy evidence remains visible for review but only blocks collection when explicitly requested", () => {
   assert.equal(hasSubsidyResponsibilityEvidence({ tuitionFundingType: "voucher" }), true);
   assert.equal(hasSubsidyResponsibilityEvidence({ tuitionFundingType: "family" }), false);
   assert.equal(hasSubsidyResponsibilityEvidence({ agencyResponsibilityCents: 0 }), false);
@@ -21,10 +22,16 @@ test("subsidy evidence without a separated agency ledger fails closed", () => {
     agencyLedgerEntries: [],
     responsibilityEvidence: [{ tags: ["subsidy"] }],
   }), true);
-  assert.equal(parentBalanceNeedsResponsibilityReview({
+  assert.equal(paymentCollectionResponsibilityHoldRequired({
+    accountBalanceCents: 157_241,
+    agencyLedgerEntries: [],
+    responsibilityEvidence: [{ tags: ["subsidy"] }],
+  }), false);
+  assert.equal(paymentCollectionResponsibilityHoldRequired({
     accountBalanceCents: 157_241,
     agencyLedgerEntries: [{ type: "agency_receivable", sourceSystem: "bee_suite", amountCents: 120_000 }],
     responsibilityEvidence: [{ tags: ["subsidy"] }],
+    enforceCollectionHold: true,
   }), true);
 });
 

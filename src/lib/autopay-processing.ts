@@ -41,7 +41,7 @@ import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
-  parentBalanceNeedsResponsibilityReview,
+  paymentCollectionResponsibilityHoldRequired,
 } from "@/lib/parent-billing-visibility";
 import { invoiceResponsibilityReviewExempt, invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 
@@ -365,7 +365,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
 
-    if (!invoiceResponsibilityReviewExempt(invoice.customFields) && parentBalanceNeedsResponsibilityReview({
+    if (!invoiceResponsibilityReviewExempt(invoice.customFields) && paymentCollectionResponsibilityHoldRequired({
       accountBalanceCents: invoice.billingAccount.balanceCents,
       agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
       invoiceId: invoice.id,
@@ -373,10 +373,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       responsibilityEvidence: [
         invoiceFields,
         invoice.items.map((item) => item.description),
-        invoice.billingAccount.customFields,
-        family.customFields,
-        ...family.children.map((child) => child.customFields),
       ],
+      enforceCollectionHold: true,
     })) {
       results.push({
         ...baseResult,
@@ -409,10 +407,9 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       const consentIsFromLinkedGuardian = Boolean(
         consentUserId && family.guardians.some((guardian) => guardian.userId === consentUserId),
       );
-      const consentMatchesSavedMethod = Boolean(
-        consentedPaymentMethodId && consentedPaymentMethodId === paymentMethod.stripeDefaultPaymentMethodId,
-      );
-      if (!consentIsFromLinkedGuardian || !consentMatchesSavedMethod) {
+      const consentAllowsSavedMethod = !consentedPaymentMethodId
+        || consentedPaymentMethodId === paymentMethod.stripeDefaultPaymentMethodId;
+      if (!consentIsFromLinkedGuardian || !consentAllowsSavedMethod) {
         results.push({
           ...baseResult,
           status: "skipped",

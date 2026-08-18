@@ -108,6 +108,12 @@ export function parentBalanceNeedsResponsibilityReview(input: {
     && !hasSeparatedResponsibility;
 }
 
+export function paymentCollectionResponsibilityHoldRequired(input: Parameters<typeof parentBalanceNeedsResponsibilityReview>[0] & {
+  enforceCollectionHold?: boolean;
+}) {
+  return input.enforceCollectionHold === true && parentBalanceNeedsResponsibilityReview(input);
+}
+
 export function isAgencyOnlyLedgerEntry(entry: Pick<AgencyLedgerEntry, "type" | "sourceSystem">) {
   return AGENCY_LEDGER_ENTRY_TYPES.includes(entry.type.trim().toLowerCase())
     || entry.sourceSystem?.trim().toLowerCase() === AGENCY_LEDGER_SOURCE_SYSTEM;

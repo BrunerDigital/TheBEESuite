@@ -36,6 +36,13 @@ export default function GlobalError({
             >
               Try loading again
             </button>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
+            >
+              Reload this page
+            </button>
           </section>
         </main>
       </body>

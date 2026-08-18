@@ -36,7 +36,8 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(route, /const userIsParentGuardian = isParentGuardian\(user\)/);
   assert.match(route, /guardians:\s*\{ select:\s*\{ userId: true \} \}/);
   assert.match(route, /parentPaymentAmountCents\(/);
-  assert.match(route, /parentBalanceNeedsResponsibilityReview\(/);
+  assert.match(route, /paymentCollectionResponsibilityHoldRequired\(/);
+  assert.doesNotMatch(route, /enforceCollectionHold:\s*true/);
   assert.match(route, /parent_account_payment_responsibility_review_required/);
   assert.match(route, /requestedAmountCents,\s*responsibilityReviewRequired/);
   assert.match(route, /source = parentCheckout \? "parent_portal"/);
@@ -52,6 +53,8 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(route, /invoice checkout is already processing/);
   assert.match(invoiceCheckoutRoute, /userIsParentGuardian && !userCanManageBilling && !productCheckoutBranding/);
   assert.match(invoiceCheckoutRoute, /pay the family balance shown there/);
+  assert.match(invoiceCheckoutRoute, /enforceCollectionHold:\s*true/);
+  assert.match(invoiceCheckoutRoute, /responsibilityEvidence:\s*\[\s*invoice\.customFields,\s*invoice\.items\.map/);
   assert.match(workspace, /payProductInvoice/);
   assert.match(workspace, /parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed[\s\S]{0,80}\? "Being confirmed"/);
   assert.match(workspace, /Amount to pay/);
@@ -74,16 +77,19 @@ test("a positive family balance remains payable when no open invoice exists", ()
   assert.match(workspace, /available for\s+secure account payment/);
 });
 
-test("automated payment processing blocks unresolved subsidy responsibility before applying credit or charging Stripe", () => {
+test("automated payment holds invoice-level agency evidence without treating account markers as a hold", () => {
   const source = readFileSync("src/lib/autopay-processing.ts", "utf8");
-  const holdIndex = source.indexOf("parentBalanceNeedsResponsibilityReview({");
+  const visibility = readFileSync("src/lib/parent-billing-visibility.ts", "utf8");
+  const holdIndex = source.indexOf("paymentCollectionResponsibilityHoldRequired({");
   const creditIndex = source.indexOf("allocateAccountCreditToInvoice({", holdIndex);
   const stripeIndex = source.indexOf("createStripeOffSessionPaymentIntent", holdIndex);
 
   assert.ok(holdIndex > 0);
   assert.ok(creditIndex > holdIndex);
   assert.ok(stripeIndex > holdIndex);
-  assert.match(source, /Automated payment is blocked until the school separates agency and family responsibility/);
+  assert.match(source, /responsibilityEvidence:\s*\[\s*invoiceFields,\s*invoice\.items\.map/);
+  assert.match(source, /enforceCollectionHold:\s*true/);
+  assert.match(visibility, /input\.enforceCollectionHold === true/);
 });
 
 test("a changed ProCare balance invalidates prior family-responsibility confirmation", () => {

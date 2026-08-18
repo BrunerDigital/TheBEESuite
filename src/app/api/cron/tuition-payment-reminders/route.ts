@@ -22,7 +22,7 @@ import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
-  parentBalanceNeedsResponsibilityReview,
+  paymentCollectionResponsibilityHoldRequired,
   parentVisibleBillingBalanceCents,
 } from "@/lib/parent-billing-visibility";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
@@ -367,7 +367,7 @@ async function GETHandler(request: NextRequest) {
       accountBalanceCents: account.balanceCents,
       agencyLedgerEntries: account.ledgerEntries,
     });
-    const responsibilityReviewRequired = parentBalanceNeedsResponsibilityReview({
+    const responsibilityReviewRequired = paymentCollectionResponsibilityHoldRequired({
       accountBalanceCents: account.balanceCents,
       agencyLedgerEntries: account.ledgerEntries,
       invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(account.invoices),
@@ -377,6 +377,7 @@ async function GETHandler(request: NextRequest) {
         ...family.children.map((child) => child.customFields),
         ...account.invoices.flatMap((invoice) => [invoice.customFields, invoice.items.map((item) => item.description)]),
       ],
+      enforceCollectionHold: true,
     });
     if (responsibilityReviewRequired) {
       counters.subsidyResponsibilityReviewSkipped += 1;

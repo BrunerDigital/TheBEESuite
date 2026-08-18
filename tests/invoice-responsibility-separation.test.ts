@@ -98,7 +98,7 @@ test("the director split is atomic, audited, and does not change the total accou
   assert.doesNotMatch(source, /tx\.billingAccount\.update/);
 });
 
-test("all online payment paths stay blocked until responsibility is separated", () => {
+test("responsibility separation remains available without blocking payment collection by default", () => {
   const actions = readFileSync("src/components/invoice-stored-payment-button.tsx", "utf8");
   const checkout = readFileSync("src/app/api/billing/checkout-session/route.ts", "utf8");
   const emailedCheckout = readFileSync("src/app/api/billing/payment-method-request/checkout/route.ts", "utf8");
@@ -107,15 +107,17 @@ test("all online payment paths stay blocked until responsibility is separated", 
   const livePage = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const aiRoute = readFileSync("src/app/api/ai/command/route.ts", "utf8");
   const operationsRoute = readFileSync("src/app/api/operations/records/route.ts", "utf8");
+  const visibility = readFileSync("src/lib/parent-billing-visibility.ts", "utf8");
+  const reminders = readFileSync("src/app/api/cron/tuition-payment-reminders/route.ts", "utf8");
 
   assert.match(actions, /Separate responsibility/);
   assert.match(actions, /responsibilityReviewRequired/);
   assert.match(actions, /This records an agency receivable; it does not record an agency payment/);
-  assert.match(checkout, /Separate family and agency responsibility before opening payment/);
-  assert.ok(checkout.indexOf("parentBalanceNeedsResponsibilityReview({") < checkout.indexOf("const stripeSecretConfigured"));
-  assert.match(emailedCheckout, /parentBalanceNeedsResponsibilityReview/);
-  assert.ok(emailedCheckout.indexOf("parentBalanceNeedsResponsibilityReview({") < emailedCheckout.indexOf("const stripeSecretConfigured"));
-  assert.match(autopay, /Automated payment is blocked until the school separates agency and family responsibility/);
+  assert.match(visibility, /input\.enforceCollectionHold === true/);
+  for (const paymentPath of [checkout, emailedCheckout, autopay]) {
+    assert.doesNotMatch(paymentPath, /enforceCollectionHold:\s*true/);
+  }
+  assert.match(reminders, /enforceCollectionHold:\s*true/);
   assert.match(autopay, /invoice\.items\.map/);
   assert.match(invoiceRoute, /amount or item description cannot be changed after family and agency responsibility has been separated/);
   assert.match(livePage, /invoice\.status === PaymentStatus\.VOID && \(!separated \|\| separated\.familyResponsibilityCents > 0\)/);

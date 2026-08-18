@@ -32,7 +32,8 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(autopayProcessor, /guardians: \{ select: \{ userId: true \} \}/);
   assert.match(autopayProcessor, /autopayEnabledByUserId/);
   assert.match(autopayProcessor, /consentIsFromLinkedGuardian/);
-  assert.match(autopayProcessor, /consentMatchesSavedMethod/);
+  assert.match(autopayProcessor, /consentAllowsSavedMethod/);
+  assert.match(autopayProcessor, /!consentedPaymentMethodId/);
   assert.match(paymentMethodRoute, /autopayPaymentMethodId: paymentMethod\.stripeDefaultPaymentMethodId/);
   assert.match(stripeWebhook, /replacementDisablesAutopay/);
   assert.match(stripeWebhook, /autopayDisabledReason: "saved_payment_method_replaced"/);

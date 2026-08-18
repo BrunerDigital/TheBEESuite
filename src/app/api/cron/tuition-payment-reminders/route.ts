@@ -377,6 +377,7 @@ async function GETHandler(request: NextRequest) {
         ...family.children.map((child) => child.customFields),
         ...account.invoices.flatMap((invoice) => [invoice.customFields, invoice.items.map((item) => item.description)]),
       ],
+      enforceCollectionHold: true,
     });
     if (responsibilityReviewRequired) {
       counters.subsidyResponsibilityReviewSkipped += 1;

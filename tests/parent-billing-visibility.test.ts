@@ -11,7 +11,7 @@ import {
   withoutConfirmedFamilyResponsibility,
 } from "../src/lib/parent-billing-visibility";
 
-test("subsidy evidence without a separated agency ledger fails closed", () => {
+test("subsidy evidence is advisory for collection unless a caller explicitly holds it", () => {
   assert.equal(hasSubsidyResponsibilityEvidence({ tuitionFundingType: "voucher" }), true);
   assert.equal(hasSubsidyResponsibilityEvidence({ tuitionFundingType: "family" }), false);
   assert.equal(hasSubsidyResponsibilityEvidence({ agencyResponsibilityCents: 0 }), false);
@@ -20,11 +20,18 @@ test("subsidy evidence without a separated agency ledger fails closed", () => {
     accountBalanceCents: 157_241,
     agencyLedgerEntries: [],
     responsibilityEvidence: [{ tags: ["subsidy"] }],
+  }), false);
+  assert.equal(parentBalanceNeedsResponsibilityReview({
+    accountBalanceCents: 157_241,
+    agencyLedgerEntries: [],
+    responsibilityEvidence: [{ tags: ["subsidy"] }],
+    enforceCollectionHold: true,
   }), true);
   assert.equal(parentBalanceNeedsResponsibilityReview({
     accountBalanceCents: 157_241,
     agencyLedgerEntries: [{ type: "agency_receivable", sourceSystem: "bee_suite", amountCents: 120_000 }],
     responsibilityEvidence: [{ tags: ["subsidy"] }],
+    enforceCollectionHold: true,
   }), true);
 });
 
@@ -42,6 +49,7 @@ test("agency responsibility is separated per invoice, not once for every future 
     responsibilityEvidence: [{ tuitionFundingType: "voucher" }],
     invoiceId: "invoice_current",
     invoiceResponsibilitySeparated: false,
+    enforceCollectionHold: true,
   }), true);
   assert.equal(parentBalanceNeedsResponsibilityReview({
     accountBalanceCents: 12_000,
@@ -49,6 +57,7 @@ test("agency responsibility is separated per invoice, not once for every future 
     responsibilityEvidence: [{ tuitionFundingType: "voucher" }],
     invoiceId: "invoice_prior",
     invoiceResponsibilitySeparated: true,
+    enforceCollectionHold: true,
   }), false);
 });
 
@@ -68,11 +77,13 @@ test("an exact reviewed family-responsibility balance is parent visible", () => 
     accountBalanceCents: 5_200,
     agencyLedgerEntries: [],
     responsibilityEvidence: [{ tuitionPlanName: "CCMS COPAY" }, reviewedEvidence],
+    enforceCollectionHold: true,
   }), true);
   assert.equal(parentBalanceNeedsResponsibilityReview({
     accountBalanceCents: 5_300,
     agencyLedgerEntries: [],
     responsibilityEvidence: [{ tuitionPlanName: "CCMS COPAY" }, reviewedEvidence],
+    enforceCollectionHold: true,
   }), true);
   assert.equal(hasConfirmedFamilyResponsibility(5_300, "ledger-reviewed-balance", reviewedEvidence), false);
   assert.equal(hasConfirmedFamilyResponsibility(5_200, "ledger-new-balance", reviewedEvidence), false);

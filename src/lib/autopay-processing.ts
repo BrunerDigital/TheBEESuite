@@ -409,10 +409,9 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       const consentIsFromLinkedGuardian = Boolean(
         consentUserId && family.guardians.some((guardian) => guardian.userId === consentUserId),
       );
-      const consentMatchesSavedMethod = Boolean(
-        consentedPaymentMethodId && consentedPaymentMethodId === paymentMethod.stripeDefaultPaymentMethodId,
-      );
-      if (!consentIsFromLinkedGuardian || !consentMatchesSavedMethod) {
+      const consentAllowsSavedMethod = !consentedPaymentMethodId
+        || consentedPaymentMethodId === paymentMethod.stripeDefaultPaymentMethodId;
+      if (!consentIsFromLinkedGuardian || !consentAllowsSavedMethod) {
         results.push({
           ...baseResult,
           status: "skipped",

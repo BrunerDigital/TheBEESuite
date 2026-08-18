@@ -168,6 +168,7 @@ test("payment races re-read a winning success and suppress stale failure audits"
   assert.match(route, /failureApplied = failedPayment\.count === 1/);
   assert.match(route, /if \(!failureApplied\)[\s\S]*payment_intent_failure_ignored/);
   assert.match(route, /reason: paymentFound \? "payment_not_chargeable" : "payment_not_found"/);
+  assert.match(route, /claimedPayment\.count !== 1[\s\S]*applySucceededStripeFamilyBalancePayment\(tx/);
 });
 
 test("disputes add the chargeback to the parent ledger and reverse it only when funds return", async () => {

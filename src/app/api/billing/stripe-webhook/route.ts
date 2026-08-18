@@ -29,7 +29,10 @@ import {
   stripeWebhookDedupeKey,
 } from "@/lib/stripe-webhook-receipts";
 import { matchStripeWebhookSecret } from "@/lib/stripe-webhook-readiness";
-import { succeededFamilyBalancePaymentClaim } from "@/lib/stripe-payment-application";
+import {
+  applySucceededStripeFamilyBalancePayment,
+  succeededFamilyBalancePaymentClaim,
+} from "@/lib/stripe-payment-application";
 import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
@@ -604,7 +607,25 @@ async function handleFamilyBalancePaymentSucceeded(
         },
       });
       if (claimedPayment.count !== 1) {
-        ignoredReason = "payment_already_applied";
+        const retry = await applySucceededStripeFamilyBalancePayment(tx, {
+          paymentId: input.paymentId,
+          externalId: input.externalId,
+          stripePaymentIntentId: stripePaymentIntentId || "",
+          stripePaymentStatus: input.stripePaymentStatus || null,
+          stripePaymentIntentStatus: input.stripePaymentStatus || null,
+          stripeAmountTotalCents: input.stripeAmountTotalCents ?? null,
+          stripeEventId: event.id,
+          stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
+          metadata: input.metadata,
+          descriptionFallback: input.descriptionFallback,
+          appliedAt: paidAt,
+        });
+        billingAccountId = retry.billingAccountId || billingAccountId;
+        if (retry.applied) {
+          applied = true;
+          return;
+        }
+        ignoredReason = retry.reason;
         return;
       }
       const payment = await tx.payment.findUniqueOrThrow({

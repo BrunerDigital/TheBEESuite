@@ -431,6 +431,26 @@ export function getStripeCheckoutAmounts(invoiceAmountCents: number, policy: Str
   };
 }
 
+function connectedAccountApplicationFeeError({
+  connectedAccountId,
+  invoiceAmountCents,
+  applicationFeeAmountCents,
+}: {
+  connectedAccountId?: string | null;
+  invoiceAmountCents: number;
+  applicationFeeAmountCents: number;
+}) {
+  const accountId = clean(connectedAccountId);
+  if (!accountId) return null;
+  if (!accountId.startsWith("acct_")) return "The school's connected Stripe account is invalid.";
+
+  const requiredBeeSuiteFeeCents = getStripePaymentOperationsFeeAmount(invoiceAmountCents);
+  if (!Number.isInteger(applicationFeeAmountCents) || applicationFeeAmountCents < requiredBeeSuiteFeeCents) {
+    return "Connected-account tuition payments must retain the complete 1% BEE Suite fee before payout.";
+  }
+  return null;
+}
+
 export function readStripeConnectedAccountId(customFields: unknown) {
   return readStripeConnectAccountId(customFields);
 }
@@ -780,6 +800,14 @@ export async function createStripeCheckoutSession({
   if (invalidPaymentRedirectUrl(successUrl, cancelUrl)) {
     return { ok: false, configured: true, provider: "stripe", error: "Payment return links must use secure HTTPS URLs." };
   }
+  const applicationFeeError = connectedAccountApplicationFeeError({
+    connectedAccountId,
+    invoiceAmountCents,
+    applicationFeeAmountCents,
+  });
+  if (applicationFeeError) {
+    return { ok: false, configured: true, provider: "stripe", error: applicationFeeError };
+  }
 
   const fallbackPaymentMethodTypes = stripeCheckoutPaymentMethodTypes(paymentMethodCategory);
   type CheckoutPaymentMethodMode = "configuration" | "payment_method_types" | "dynamic";
@@ -1077,6 +1105,14 @@ export async function createStripeOffSessionPaymentIntent({
   }
   if (!clean(paymentMethodId)) {
     return { ok: false, configured: true, provider: "stripe", error: "A saved payment method is required." };
+  }
+  const applicationFeeError = connectedAccountApplicationFeeError({
+    connectedAccountId,
+    invoiceAmountCents,
+    applicationFeeAmountCents,
+  });
+  if (applicationFeeError) {
+    return { ok: false, configured: true, provider: "stripe", error: applicationFeeError };
   }
 
   const description = `${centerName ? `${centerName} ` : ""}invoice ${invoiceNumber} ${clean(descriptionLabel) || "saved-method payment"}`;
@@ -1382,6 +1418,14 @@ export async function createStripeTerminalPaymentIntent({
   }
   if (amountCents <= 0 || invoiceAmountCents <= 0) {
     return { ok: false, configured: true, provider: "stripe", error: "Payment amount must be greater than zero." };
+  }
+  const applicationFeeError = connectedAccountApplicationFeeError({
+    connectedAccountId,
+    invoiceAmountCents,
+    applicationFeeAmountCents,
+  });
+  if (applicationFeeError) {
+    return { ok: false, configured: true, provider: "stripe", error: applicationFeeError };
   }
   const body = new URLSearchParams({
     amount: String(amountCents),

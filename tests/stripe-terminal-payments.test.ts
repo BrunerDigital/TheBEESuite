@@ -102,6 +102,31 @@ test("card-present PaymentIntents use Terminal hardware and connected-account ro
   }
 });
 
+test("card-present tuition refuses a connected-account application fee below 1 percent", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = async () => {
+    fetchCalled = true;
+    throw new Error("Stripe must not be called when the application fee is incomplete.");
+  };
+  try {
+    const result = await createStripeTerminalPaymentIntent({
+      amountCents: 10_000,
+      invoiceAmountCents: 10_000,
+      invoiceNumber: "INV-TERMINAL-FEE-GUARD",
+      metadata: { collectionMode: "director_card_present" },
+      connectedAccountId: "acct_school",
+      applicationFeeAmountCents: 99,
+      credentials,
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.error || "", /complete 1% BEE Suite fee before payout/);
+    assert.equal(fetchCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("reader processing lets the present parent cancel and skips tipping", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input, init) => {

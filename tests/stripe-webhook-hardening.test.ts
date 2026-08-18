@@ -167,6 +167,8 @@ test("payment races re-read a winning success and suppress stale failure audits"
   assert.match(application, /claim\.claimStatus === PaymentStatus\.DRAFT[\s\S]*latestPayment\?\.status === PaymentStatus\.FAILED[\s\S]*applySucceededStripeFamilyBalancePayment\(tx, input\)/);
   assert.match(route, /failureApplied = failedPayment\.count === 1/);
   assert.match(route, /if \(!failureApplied\)[\s\S]*payment_intent_failure_ignored/);
+  assert.match(route, /candidateInvoiceId[\s\S]*billingAccountId: currentPayment\.billingAccountId/);
+  assert.match(route, /if \(paymentFound && verifiedInvoiceId\)[\s\S]*else if \(paymentFound && storedBillingAccountId\)/);
   assert.match(route, /reason: paymentFound \? "payment_not_chargeable" : "payment_not_found"/);
   assert.match(route, /claimedPayment\.count !== 1[\s\S]*applySucceededStripeFamilyBalancePayment\(tx/);
 });

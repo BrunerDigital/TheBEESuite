@@ -1315,19 +1315,34 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
         : "payment_intent_failed";
   let failureApplied = false;
   let paymentFound = false;
+  let storedBillingAccountId: string | null = null;
+  let verifiedInvoiceId: string | null = null;
 
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
-      const currentPayment = await tx.payment.findUnique({ where: { id: metadata.paymentId }, select: { customFields: true } });
+      const currentPayment = await tx.payment.findUnique({
+        where: { id: metadata.paymentId },
+        select: { billingAccountId: true, customFields: true },
+      });
       if (!currentPayment) return;
       paymentFound = true;
+      storedBillingAccountId = currentPayment.billingAccountId;
+      const currentFields = jsonObject(currentPayment.customFields);
+      const candidateInvoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId);
+      if (candidateInvoiceId) {
+        const verifiedInvoice = await tx.invoice.findFirst({
+          where: { id: candidateInvoiceId, billingAccountId: currentPayment.billingAccountId },
+          select: { id: true },
+        });
+        verifiedInvoiceId = verifiedInvoice?.id ?? null;
+      }
       const failedPayment = await tx.payment.updateMany({
         where: { id: metadata.paymentId, status: { in: [PaymentStatus.DRAFT, PaymentStatus.FAILED] } },
         data: {
           status: PaymentStatus.FAILED,
           customFields: {
-            ...jsonObject(currentPayment?.customFields),
+            ...currentFields,
             stripePaymentIntentId: paymentIntent.id,
             stripeEventId: event.id,
             stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
@@ -1349,11 +1364,11 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
   }
 
   if (!failureApplied) {
-    if (paymentFound && metadata.invoiceId) {
-      await writeSystemAudit(metadata.invoiceId, event.id, paymentIntent.id, "billing.payment_intent.failure_ignored");
-    } else if (paymentFound && clean(metadata.paymentScope) === "family_balance" && metadata.billingAccountId) {
+    if (paymentFound && verifiedInvoiceId) {
+      await writeSystemAudit(verifiedInvoiceId, event.id, paymentIntent.id, "billing.payment_intent.failure_ignored");
+    } else if (paymentFound && storedBillingAccountId) {
       await writeBillingAccountSystemAudit(
-        metadata.billingAccountId,
+        storedBillingAccountId,
         event.id,
         paymentIntent.id,
         "billing.family_payment.payment_intent_failure_ignored",

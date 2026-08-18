@@ -115,9 +115,21 @@ async function inspect() {
     status: string | null;
     paid: boolean;
     amountCents: number | null;
+    amountRefundedCents: number | null;
+    refunded: boolean;
     paymentIntentId: string | null;
     createdAt: string | null;
-  } = { ok: false, id: null, status: null, paid: false, amountCents: null, paymentIntentId: null, createdAt: null };
+  } = {
+    ok: false,
+    id: null,
+    status: null,
+    paid: false,
+    amountCents: null,
+    amountRefundedCents: null,
+    refunded: false,
+    paymentIntentId: null,
+    createdAt: null,
+  };
   if (stripeKey && connectedAccountId && latestChargeId?.startsWith("ch_")) {
     const response = await fetch(`https://api.stripe.com/v1/charges/${encodeURIComponent(latestChargeId)}`, {
       headers: { Authorization: `Bearer ${stripeKey}`, "Stripe-Account": connectedAccountId },
@@ -130,6 +142,8 @@ async function inspect() {
       status: typeof raw?.status === "string" ? raw.status : null,
       paid: raw?.paid === true,
       amountCents: typeof raw?.amount === "number" ? raw.amount : null,
+      amountRefundedCents: typeof raw?.amount_refunded === "number" ? raw.amount_refunded : null,
+      refunded: raw?.refunded === true,
       paymentIntentId: typeof raw?.payment_intent === "string" ? raw.payment_intent : null,
       createdAt: typeof raw?.created === "number" ? new Date(raw.created * 1000).toISOString() : null,
     };
@@ -218,6 +232,8 @@ function assertUncorrected(review: Awaited<ReturnType<typeof inspect>>) {
     state.stripe.charge.status === "succeeded",
     state.stripe.charge.paid,
     state.stripe.charge.amountCents === EXPECTED.amountCents,
+    state.stripe.charge.amountRefundedCents === 0,
+    !state.stripe.charge.refunded,
     state.stripe.charge.paymentIntentId === EXPECTED.stripePaymentIntentId,
     state.stripe.charge.createdAt !== null,
   ];

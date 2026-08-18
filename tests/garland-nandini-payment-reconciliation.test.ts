@@ -15,6 +15,8 @@ test("Nandini reconciliation is exact, provider-verified, fingerprinted, and ide
   assert.match(source, /intentStatus === "succeeded"/);
   assert.match(source, /state\.stripe\.charge\.status === "succeeded"/);
   assert.match(source, /state\.stripe\.charge\.paid/);
+  assert.match(source, /state\.stripe\.charge\.amountRefundedCents === 0/);
+  assert.match(source, /!state\.stripe\.charge\.refunded/);
   assert.match(source, /const appliedAt = new Date\(review\.state\.stripe\.charge\.createdAt!\)/);
   assert.match(source, /--confirm-nandini-payment-reconciliation/);
   assert.match(source, /--confirm-fingerprint=/);

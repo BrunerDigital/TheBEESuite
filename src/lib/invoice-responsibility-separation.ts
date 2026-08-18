@@ -108,6 +108,7 @@ export function allOpenInvoicesResponsibilitySeparated(invoices: Array<{
   customFields: unknown;
 }>) {
   const relevantInvoices = invoices.filter((invoice) => {
+    if (invoiceResponsibilityReviewExempt(invoice.customFields)) return false;
     if (invoice.status === "OPEN" && invoice.totalCents > 0) return true;
     const separation = invoiceResponsibilitySeparation(invoice.customFields);
     return invoice.status === "VOID" && separation?.familyResponsibilityCents === 0;

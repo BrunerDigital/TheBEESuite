@@ -158,7 +158,7 @@ async function POSTHandler(request: NextRequest) {
     include: {
       invoices: {
         where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.VOID] } },
-        select: { status: true, totalCents: true, customFields: true },
+        select: { status: true, totalCents: true, customFields: true, items: { select: { description: true } } },
       },
       family: {
         select: {
@@ -247,6 +247,7 @@ async function POSTHandler(request: NextRequest) {
       billingAccount.customFields,
       billingAccount.family.customFields,
       ...billingAccount.family.children.map((child) => child.customFields),
+      ...billingAccount.invoices.flatMap((invoice) => [invoice.customFields, invoice.items.map((item) => item.description)]),
     ],
   });
   if (responsibilityReviewRequired && requestedAmountCents <= 0) {

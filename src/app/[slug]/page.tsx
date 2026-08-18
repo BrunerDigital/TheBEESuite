@@ -2115,6 +2115,15 @@ async function renderLivePage(
           balanceCents: true,
           autopayPlaceholder: true,
           customFields: true,
+          invoices: {
+            where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.VOID] } },
+            select: {
+              status: true,
+              totalCents: true,
+              customFields: true,
+              items: { select: { description: true } },
+            },
+          },
           payments: {
             where: {
               NOT: { provider: AGENCY_LEDGER_SOURCE_SYSTEM },
@@ -2449,11 +2458,12 @@ async function renderLivePage(
       ? parentBalanceNeedsResponsibilityReview({
           accountBalanceCents: billingAccount.balanceCents,
           agencyLedgerEntries,
-          invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(invoices),
+          invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(billingAccount.invoices),
           responsibilityEvidence: [
             billingAccount.customFields,
             family?.customFields,
             ...(family?.children.map((child) => child.customFields) ?? []),
+            ...billingAccount.invoices.flatMap((invoice) => [invoice.customFields, invoice.items.map((item) => item.description)]),
           ],
         })
       : false;

@@ -48,6 +48,10 @@ test("account review resolves only when every open invoice has an exact separati
   ]), true);
   assert.equal(invoiceResponsibilityReviewExempt({ checkoutPurpose: "product_purchase" }), true);
   assert.equal(invoiceResponsibilityReviewExempt({ chargeSource: "tuition" }), false);
+  assert.equal(allOpenInvoicesResponsibilitySeparated([
+    { status: "OPEN", totalCents: 8_000, customFields: { checkoutPurpose: "product_purchase" } },
+    { status: "OPEN", totalCents: 2_000, customFields: { responsibilitySeparation: separation } },
+  ]), true);
 });
 
 test("responsibility separation fails closed on mismatched totals and ambiguous account credit", () => {

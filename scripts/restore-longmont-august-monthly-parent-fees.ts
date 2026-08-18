@@ -388,6 +388,7 @@ async function main() {
   const restoredAt = new Date();
   await prisma.$transaction(async (tx) => {
     const accountIds = [...pending.map((target) => target.billingAccountId)].sort();
+    const familyIds = [...new Set(pending.map((target) => target.familyId))].sort();
     const childIds = [...pending.map((target) => target.childId)].sort();
     const invoiceIds = [...pending.map((target) => target.id)].sort();
     const planIds = [...new Set(pending.map((target) => target.livePlan.id))].sort();
@@ -415,6 +416,12 @@ async function main() {
     await tx.$queryRaw(Prisma.sql`
       SELECT "id" FROM "BillingAccount"
       WHERE "id" IN (${Prisma.join(accountIds)})
+      ORDER BY "id"
+      FOR UPDATE
+    `);
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "Family"
+      WHERE "id" IN (${Prisma.join(familyIds)})
       ORDER BY "id"
       FOR UPDATE
     `);

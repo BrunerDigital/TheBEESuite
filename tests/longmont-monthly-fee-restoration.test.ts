@@ -56,6 +56,7 @@ test("Longmont monthly fee restoration is exact, fingerprinted, and approval gat
     "User",
     "UserAccessGrant",
     "BillingAccount",
+    "Family",
     "Child",
     "TuitionPlan",
     "Invoice",

@@ -177,6 +177,13 @@ function parentPortalShellHref(
   });
 }
 
+function ParentPortalDocumentLink({
+  href,
+  ...props
+}: React.ComponentPropsWithoutRef<"a"> & { href: string }) {
+  return <a href={href} {...props} />;
+}
+
 function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) {
   if (slug === "data-readiness" && !dataReadinessCenterEnabled()) return false;
   if (slug === "terminal-store" && !terminalStoreEnabled()) return false;
@@ -342,7 +349,7 @@ function SidebarRail({ currentUser, onLogout, previewMode = false, previewHrefBa
               <Tooltip key={view}>
                 <TooltipTrigger
                   render={(
-                    <Link
+                    <ParentPortalDocumentLink
                       href={href}
                       aria-label={label}
                       aria-current={active ? "page" : undefined}
@@ -709,7 +716,7 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
                   const href = parentPortalShellHref(view, previewMode, previewHrefBase, pathname, familyId);
                   const active = activeView === view;
                   return (
-                    <Link
+                    <ParentPortalDocumentLink
                       key={view}
                       href={href}
                       onClick={() => {
@@ -726,7 +733,7 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
                         <span className="block text-sm font-semibold">{label}</span>
                         <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">{description}</span>
                       </span>
-                    </Link>
+                    </ParentPortalDocumentLink>
                   );
                 })}
               </div>
@@ -992,8 +999,9 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
               : selectedPath === pathname
                 ? selectedTarget === href
                 : pathname === hrefPath && !href.includes("#") && !href.includes("?");
+          const NavigationLink = parentView ? ParentPortalDocumentLink : Link;
           return (
-            <Link
+            <NavigationLink
               key={href}
               href={previewHref}
               aria-current={active ? "page" : undefined}
@@ -1007,7 +1015,7 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
             >
               <Icon className="size-4" aria-hidden="true" />
               <span className="truncate">{label}</span>
-            </Link>
+            </NavigationLink>
           );
         })}
         {moreItems.length ? <Sheet open={moreOpen} onOpenChange={setMoreOpen}>

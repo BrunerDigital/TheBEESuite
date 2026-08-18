@@ -2,7 +2,9 @@ import type { Prisma } from "@prisma/client";
 import { verifyStaffPin } from "@/lib/kiosk";
 
 export const STAFF_CLOCK_ACTIONS = ["clock_in", "clock_out"] as const;
-const STAFF_CLOCK_EVENT_LIMIT = 120;
+const LEGACY_STAFF_CLOCK_EVENT_LIMIT = 120;
+const STAFF_CLOCK_EVENT_LIMIT = 2_000;
+const STAFF_CLOCK_EDIT_EVENT_LIMIT = STAFF_CLOCK_EVENT_LIMIT + 100;
 export type StaffClockAction = typeof STAFF_CLOCK_ACTIONS[number];
 export type StaffClockStatus = "clocked_in" | "clocked_out";
 
@@ -279,13 +281,13 @@ export function validateNextStaffClockAction(action: StaffClockAction, state: St
 
 export function normalizeStaffClockEventEdits(
   value: unknown,
-  options: { timeZone?: string | null; maxEvents?: number } = {},
+  options: { timeZone?: string | null; maxEvents?: number; allowLeadingClockOut?: boolean } = {},
 ) {
   if (!Array.isArray(value)) {
     return { ok: false as const, error: "Clock events must be an array." };
   }
 
-  const maxEvents = options.maxEvents ?? STAFF_CLOCK_EVENT_LIMIT;
+  const maxEvents = options.maxEvents ?? STAFF_CLOCK_EDIT_EVENT_LIMIT;
   if (value.length > maxEvents) {
     return { ok: false as const, error: `A time card can include up to ${maxEvents} punch events.` };
   }
@@ -310,7 +312,9 @@ export function normalizeStaffClockEventEdits(
   }
 
   const sorted = [...events].sort((left, right) => (dateMs(left.occurredAt) ?? 0) - (dateMs(right.occurredAt) ?? 0));
-  let expectedAction: StaffClockAction = "clock_in";
+  let expectedAction: StaffClockAction = options.allowLeadingClockOut && sorted[0]?.action === "clock_out"
+    ? "clock_out"
+    : "clock_in";
   let previousMs: number | null = null;
 
   for (const [index, event] of sorted.entries()) {
@@ -334,6 +338,25 @@ export function normalizeStaffClockEventEdits(
   }
 
   return { ok: true as const, events: sorted };
+}
+
+export function hasLegacyTruncatedStaffClockHistory(customFields: unknown) {
+  const events = readStaffClockState(customFields).events;
+  if (events.length !== LEGACY_STAFF_CLOCK_EVENT_LIMIT) return false;
+  const oldest = [...events].sort((left, right) => (dateMs(left.occurredAt) ?? 0) - (dateMs(right.occurredAt) ?? 0))[0];
+  return oldest?.action === "clock_out";
+}
+
+function clockEventsForStorage(events: StaffClockEvent[]) {
+  const storedEvents = [...events]
+    .filter((event) => dateMs(event.occurredAt) !== null)
+    .sort((left, right) => (dateMs(right.occurredAt) ?? 0) - (dateMs(left.occurredAt) ?? 0))
+    .slice(0, STAFF_CLOCK_EVENT_LIMIT);
+
+  // The former rolling limit could discard the clock-in half of the oldest
+  // retained shift. Do not keep or recreate an unmatched legacy clock-out.
+  while (storedEvents.at(-1)?.action === "clock_out") storedEvents.pop();
+  return storedEvents;
 }
 
 export function staffKioskPinFields({
@@ -368,10 +391,7 @@ export function staffClockEditFields({
 }) {
   const fields = asRecord(customFields);
   const previous = readStaffClockState(fields);
-  const storedEvents = [...events]
-    .filter((event) => dateMs(event.occurredAt) !== null)
-    .sort((left, right) => (dateMs(right.occurredAt) ?? 0) - (dateMs(left.occurredAt) ?? 0))
-    .slice(0, STAFF_CLOCK_EVENT_LIMIT);
+  const storedEvents = clockEventsForStorage(events);
   const newest = storedEvents[0] ?? null;
   const status: StaffClockStatus = newest?.action === "clock_in" ? "clocked_in" : "clocked_out";
   const summary = summarizeClockEvents(storedEvents, { now: editedAt });
@@ -417,7 +437,7 @@ export function staffClockFields({
     timeZone: timeZone || null,
     notes: notes || null,
   };
-  const events = [event, ...previous.events].slice(0, STAFF_CLOCK_EVENT_LIMIT);
+  const events = clockEventsForStorage([event, ...previous.events]);
   const summary = summarizeClockEvents(events, { now: occurredAt });
 
   return {

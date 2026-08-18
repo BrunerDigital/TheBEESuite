@@ -87,6 +87,15 @@ async function inspect() {
     where: { id: EXPECTED.invoiceId },
     select: { id: true, billingAccountId: true, status: true, totalCents: true },
   });
+  const candidateInvoices = await prisma.invoice.findMany({
+    where: {
+      billingAccountId: EXPECTED.billingAccountId,
+      status: PaymentStatus.OPEN,
+      totalCents: { gt: 0 },
+    },
+    orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+    select: { id: true, billingAccountId: true, status: true, totalCents: true },
+  });
   const intentLedger = await prisma.ledgerEntry.findFirst({
     where: { sourceSystem: "stripe", externalId: EXPECTED.stripePaymentIntentId },
     select: { id: true, paymentId: true, amountCents: true, balanceAfterCents: true },
@@ -175,6 +184,7 @@ async function inspect() {
       ledgerEntries: payment.ledgerEntries,
     },
     invoice,
+    candidateInvoices,
     intentLedger,
     stripe: {
       sessionOk: session.ok,
@@ -218,6 +228,11 @@ function assertUncorrected(review: Awaited<ReturnType<typeof inspect>>) {
     state.invoice.billingAccountId === EXPECTED.billingAccountId,
     state.invoice.status === PaymentStatus.OPEN,
     state.invoice.totalCents === EXPECTED.invoiceAmountCents,
+    state.candidateInvoices.length === 1,
+    state.candidateInvoices[0]?.id === EXPECTED.invoiceId,
+    state.candidateInvoices[0]?.billingAccountId === EXPECTED.billingAccountId,
+    state.candidateInvoices[0]?.status === PaymentStatus.OPEN,
+    state.candidateInvoices[0]?.totalCents === EXPECTED.invoiceAmountCents,
     state.intentLedger === null,
     state.stripe.sessionOk,
     state.stripe.sessionStatus === "complete",
@@ -292,6 +307,15 @@ async function main() {
       where: { id: EXPECTED.billingAccountId },
       select: { balanceCents: true },
     });
+    const lockedCandidateInvoices = await tx.invoice.findMany({
+      where: {
+        billingAccountId: EXPECTED.billingAccountId,
+        status: PaymentStatus.OPEN,
+        totalCents: { gt: 0 },
+      },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+      select: { id: true, totalCents: true },
+    });
     const lockedFields = jsonRecord(locked.customFields);
     if (
       locked.status !== PaymentStatus.FAILED
@@ -300,6 +324,9 @@ async function main() {
       || lockedAccount.balanceCents !== EXPECTED.amountCents
       || locked.ledgerEntries.length !== 0
       || lockedFields.stripePaymentIntentId !== EXPECTED.stripePaymentIntentId
+      || lockedCandidateInvoices.length !== 1
+      || lockedCandidateInvoices[0]?.id !== EXPECTED.invoiceId
+      || lockedCandidateInvoices[0]?.totalCents !== EXPECTED.invoiceAmountCents
     ) {
       throw new Error("Locked payment state changed after preview; correction aborted.");
     }
@@ -316,7 +343,11 @@ async function main() {
       descriptionFallback: "Director card payment",
       appliedAt,
     });
-    if (!application.applied || !application.appliedInvoiceIds?.includes(EXPECTED.invoiceId)) {
+    if (
+      !application.applied
+      || application.appliedInvoiceIds?.length !== 1
+      || application.appliedInvoiceIds[0] !== EXPECTED.invoiceId
+    ) {
       throw new Error(`Payment application failed: ${application.reason ?? "invoice_not_applied"}`);
     }
 

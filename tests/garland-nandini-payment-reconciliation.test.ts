@@ -22,6 +22,9 @@ test("Nandini reconciliation is exact, provider-verified, fingerprinted, and ide
   assert.match(source, /--confirm-fingerprint=/);
   assert.match(source, /FOR UPDATE/);
   assert.match(source, /TransactionIsolationLevel\.Serializable/);
+  assert.match(source, /candidateInvoices\.length === 1/);
+  assert.match(source, /lockedCandidateInvoices\.length !== 1/);
+  assert.match(source, /application\.appliedInvoiceIds\?\.length !== 1/);
   assert.match(source, /mode: "already_applied"/);
   assert.match(source, /applySucceededStripeFamilyBalancePayment/);
   assert.match(source, /newChargeCreated: false/);

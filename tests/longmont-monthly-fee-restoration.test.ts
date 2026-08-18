@@ -31,8 +31,17 @@ test("Longmont monthly fee restoration is exact, fingerprinted, and approval gat
   assert.match(source, /db\.tuitionPlan\.findMany/);
   assert.match(source, /plan\?\.centerId === CENTER_ID/);
   assert.match(source, /clean\(plan\.cadence\)\.toLowerCase\(\) === "monthly"/);
-  assert.match(source, /plan\.amountCents === positiveItemCents/);
+  assert.match(source, /Number\(childFields\.tuitionPlanAmountCents\) === plan\.amountCents/);
   assert.match(source, /livePlan: plan/);
+  assert.match(source, /fields\.autopaySuppressed === true && fields\.noPaymentSubmitted === true/);
+  assert.match(source, /recoveryManifestFingerprint/);
+  assert.match(source, /normalizeTuitionAdditionalCharges\(childFields\.tuitionAdditionalCharges\)/);
+  assert.match(source, /normalizeTuitionCredits\(childFields\.tuitionCredits\)/);
+  assert.match(source, /currentAdditionalCharges\) === JSON\.stringify\(reviewedAdditionalCharges\)/);
+  assert.match(source, /currentCredits\) === JSON\.stringify\(reviewedCredits\)/);
+  assert.match(source, /reviewedItemAmounts\) === JSON\.stringify\(expectedItemAmounts\)/);
+  assert.match(source, /currentAssignmentAdjustments/);
+  assert.match(source, /noPaymentSafeguards/);
   assert.match(source, /Prisma\.TransactionIsolationLevel\.Serializable/);
 });
 

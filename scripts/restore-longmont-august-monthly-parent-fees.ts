@@ -4,6 +4,12 @@ import { PaymentStatus, Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { parentVisibleBillingBalanceCents } from "@/lib/parent-billing-visibility";
 import { prisma } from "@/lib/prisma";
+import {
+  normalizeTuitionAdditionalCharges,
+  normalizeTuitionCredits,
+  totalTuitionAdditionalChargesCents,
+  totalTuitionCreditsCents,
+} from "@/lib/tuition-credits";
 
 const CENTER_ID = "cmp4ew6f3000a6alwmz62n7w2";
 const CENTER_NAME = "Kid City USA - Longmont";
@@ -199,6 +205,8 @@ async function loadState(db: DbClient) {
     const childFields = object(child.customFields);
     invariant(fields.billingPeriod === BILLING_PERIOD && fields.billingCadence === "monthly" && fields.chargeSource === "tuitionPlan", `${invoice.number} is not the reviewed August monthly parent fee.`);
     invariant(fields.voidReason === INCORRECT_VOID_REASON, `${invoice.number} no longer has the reviewed incorrect-void reason.`);
+    invariant(fields.autopaySuppressed === true && fields.noPaymentSubmitted === true, `${invoice.number} lost its no-payment safeguards.`);
+    invariant(clean(fields.recoveryManifestFingerprint).length > 0, `${invoice.number} lost its reviewed recovery fingerprint.`);
     invariant(childFields.tuitionBillingEnabled === true, `${invoice.number} current monthly assignment is disabled.`);
     invariant(childFields.tuitionBillingCadence === "monthly" && childFields.tuitionBillingStartsPeriod === BILLING_PERIOD, `${invoice.number} current cadence or start period changed.`);
     const planId = clean(fields.sourceId);
@@ -206,9 +214,25 @@ async function loadState(db: DbClient) {
     const plan = planById.get(planId);
     invariant(plan?.centerId === CENTER_ID, `${invoice.number} live tuition plan moved outside Longmont or disappeared.`);
     invariant(clean(plan.cadence).toLowerCase() === "monthly", `${invoice.number} live tuition plan cadence changed.`);
-    const positiveItemCents = invoice.items.filter((item) => item.amountCents > 0).reduce((sum, item) => sum + item.amountCents, 0);
-    invariant(Number(childFields.tuitionPlanAmountCents) === positiveItemCents, `${invoice.number} current plan amount no longer matches the reviewed gross charge.`);
-    invariant(plan.amountCents === positiveItemCents, `${invoice.number} live tuition plan amount no longer matches the reviewed gross charge.`);
+    invariant(Number(childFields.tuitionPlanAmountCents) === plan.amountCents, `${invoice.number} assignment snapshot no longer matches the live tuition plan amount.`);
+    const currentAdditionalCharges = normalizeTuitionAdditionalCharges(childFields.tuitionAdditionalCharges);
+    const reviewedAdditionalCharges = normalizeTuitionAdditionalCharges(fields.tuitionAdditionalCharges);
+    const currentCredits = normalizeTuitionCredits(childFields.tuitionCredits);
+    const reviewedCredits = normalizeTuitionCredits(fields.tuitionCredits);
+    invariant(JSON.stringify(currentAdditionalCharges) === JSON.stringify(reviewedAdditionalCharges), `${invoice.number} current additional charges changed.`);
+    invariant(JSON.stringify(currentCredits) === JSON.stringify(reviewedCredits), `${invoice.number} current tuition credits changed.`);
+    const additionalChargesCents = totalTuitionAdditionalChargesCents(currentAdditionalCharges);
+    const creditsCents = totalTuitionCreditsCents(currentCredits);
+    invariant(Number(fields.tuitionAdditionalChargesTotalCents ?? 0) === additionalChargesCents, `${invoice.number} reviewed additional-charge total changed.`);
+    invariant(Number(fields.tuitionCreditsTotalCents ?? 0) === creditsCents, `${invoice.number} reviewed tuition-credit total changed.`);
+    const expectedItemAmounts = [
+      plan.amountCents,
+      ...currentAdditionalCharges.map((charge) => charge.amountCents),
+      ...currentCredits.map((credit) => -credit.amountCents),
+    ].sort((left, right) => left - right);
+    const reviewedItemAmounts = invoice.items.map((item) => item.amountCents).sort((left, right) => left - right);
+    invariant(JSON.stringify(reviewedItemAmounts) === JSON.stringify(expectedItemAmounts), `${invoice.number} reviewed invoice lines no longer match the current assignment.`);
+    invariant(plan.amountCents + additionalChargesCents - creditsCents === invoice.totalCents, `${invoice.number} current assignment no longer nets to the reviewed invoice total.`);
     invariant(invoice.items.reduce((sum, item) => sum + item.amountCents, 0) === invoice.totalCents, `${invoice.number} items no longer net to the invoice total.`);
 
     const alternatives = invoice.billingAccount.invoices.filter((candidate) => {
@@ -251,6 +275,18 @@ async function loadState(db: DbClient) {
       familyId: invoice.billingAccount.family.id,
       childId,
       livePlan: plan,
+      currentAssignmentAdjustments: {
+        additionalCharges: currentAdditionalCharges,
+        additionalChargesCents,
+        credits: currentCredits,
+        creditsCents,
+      },
+      noPaymentSafeguards: {
+        autopaySuppressed: fields.autopaySuppressed,
+        autopaySuppressedReason: clean(fields.autopaySuppressedReason),
+        noPaymentSubmitted: fields.noPaymentSubmitted,
+        recoveryManifestFingerprint: clean(fields.recoveryManifestFingerprint),
+      },
       balanceCents: invoice.billingAccount.balanceCents,
       parentVisibleBalanceCents: parentVisibleBillingBalanceCents({
         accountBalanceCents: invoice.billingAccount.balanceCents,
@@ -284,6 +320,8 @@ async function loadState(db: DbClient) {
       familyId: target.familyId,
       childId: target.childId,
       livePlan: target.livePlan,
+      currentAssignmentAdjustments: target.currentAssignmentAdjustments,
+      noPaymentSafeguards: target.noPaymentSafeguards,
       balanceCents: target.balanceCents,
       parentVisibleBalanceCents: target.parentVisibleBalanceCents,
       ledgerEntries: target.ledgerEntries,

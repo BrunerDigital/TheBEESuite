@@ -65,7 +65,7 @@ async function main() {
           payments: {
             where: {
               OR: [
-                { status: PaymentStatus.DRAFT },
+                { status: { in: [PaymentStatus.DRAFT, PaymentStatus.FAILED] } },
                 { paidAt: { gte: START } },
               ],
             },

@@ -69,6 +69,6 @@ test("Longmont voided-fee audit reports billing logs outside the selected invoic
 });
 
 test("Longmont voided-fee audit includes draft checkouts without paid dates", () => {
-  assert.match(auditSource, /status: PaymentStatus\.DRAFT/);
+  assert.match(auditSource, /status: \{ in: \[PaymentStatus\.DRAFT, PaymentStatus\.FAILED\] \}/);
   assert.match(auditSource, /paidAt: \{ gte: START \}/);
 });

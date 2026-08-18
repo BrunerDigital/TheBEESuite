@@ -129,6 +129,38 @@ test("director time card edits reject invalid punch order", () => {
   });
 });
 
+test("director time card edits remain available after the legacy 120-punch cap", () => {
+  const start = new Date("2026-06-01T12:00:00.000Z").getTime();
+  const completeHistory = Array.from({ length: 120 }, (_, index) => ({
+    action: index % 2 === 0 ? "clock_in" as const : "clock_out" as const,
+    occurredAt: new Date(start + index * 60 * 60 * 1000).toISOString(),
+  }));
+  const addedPunch = {
+    action: "clock_in" as const,
+    occurredAt: new Date(start + 120 * 60 * 60 * 1000).toISOString(),
+  };
+
+  const normalized = normalizeStaffClockEventEdits([...completeHistory, addedPunch]);
+
+  assert.equal(normalized.ok, true);
+  if (!normalized.ok) return;
+  assert.equal(normalized.events.length, 121);
+
+  const legacyTruncatedHistory = completeHistory.slice(1);
+  const repaired = normalizeStaffClockEventEdits([...legacyTruncatedHistory, addedPunch]);
+
+  assert.equal(repaired.ok, true);
+  if (!repaired.ok) return;
+  const fields = staffClockEditFields({
+    customFields: null,
+    events: repaired.events,
+    editedAt: new Date(addedPunch.occurredAt),
+  });
+  const stored = readStaffClockState(fields).events;
+  assert.equal(stored.at(-1)?.action, "clock_in");
+  assert.equal(stored.length, 119);
+});
+
 test("staff kiosk credential resolves by unique PIN without requiring email", () => {
   process.env.PIN_HASH_SECRET = "staff-kiosk-test-secret";
   const candidates = [

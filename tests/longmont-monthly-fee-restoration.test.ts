@@ -17,6 +17,13 @@ test("Longmont monthly fee restoration is exact, fingerprinted, and approval gat
   assert.match(source, /livePaymentsEnabled: centerFields\.livePaymentsEnabled === true/);
   assert.match(source, /tuitionBillingEnabled: centerFields\.tuitionBillingEnabled === true/);
   assert.match(source, /stripeBillingApproved: centerFields\.stripeBillingApproved === true/);
+  assert.match(source, /user\?\.isActive/);
+  assert.match(source, /user\.tenantId === center\.organization\.tenantId/);
+  assert.match(source, /BILLING_MUTATION_ROLES\.has\(user\.role\)/);
+  assert.match(source, /grant\.scopeType === "CENTER"/);
+  assert.match(source, /grant\.centerId === CENTER_ID/);
+  assert.match(source, /TENANT_WIDE_BILLING_ROLES\.has\(user\.role\) \|\| hasActiveLongmontGrant/);
+  assert.match(source, /auditActor/);
   assert.match(source, /Prisma\.TransactionIsolationLevel\.Serializable/);
 });
 

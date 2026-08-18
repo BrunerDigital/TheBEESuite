@@ -1,6 +1,6 @@
 import "./load-env";
 import { createHash } from "node:crypto";
-import { PaymentStatus, Prisma, PrismaClient } from "@prisma/client";
+import { PaymentStatus, Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { parentVisibleBillingBalanceCents } from "@/lib/parent-billing-visibility";
 import { prisma } from "@/lib/prisma";
@@ -34,6 +34,19 @@ const expectedInvoices = new Map([
   ["INV-20260813-C012BDD4", 21_300],
 ]);
 const EXPECTED_TOTAL_CENTS = 233_500;
+const BILLING_MUTATION_ROLES = new Set<UserRole>([
+  UserRole.PLATFORM_OWNER,
+  UserRole.BRAND_ADMIN,
+  UserRole.REGIONAL_MANAGER,
+  UserRole.CENTER_DIRECTOR,
+  UserRole.ASSISTANT_DIRECTOR,
+  UserRole.BILLING_ADMIN,
+]);
+const TENANT_WIDE_BILLING_ROLES = new Set<UserRole>([
+  UserRole.PLATFORM_OWNER,
+  UserRole.BRAND_ADMIN,
+  UserRole.REGIONAL_MANAGER,
+]);
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -80,7 +93,7 @@ function restorationExternalId(invoiceId: string) {
 async function loadState(db: DbClient) {
   const center = await db.center.findUnique({
     where: { id: CENTER_ID },
-    select: { id: true, name: true, status: true, customFields: true, organization: { select: { tenantId: true } } },
+    select: { id: true, name: true, status: true, customFields: true, organization: { select: { id: true, tenantId: true } } },
   });
   invariant(center?.name === CENTER_NAME && center.status !== "closed", "Longmont center identity or status changed.");
   const centerFields = object(center.customFields);
@@ -92,6 +105,35 @@ async function loadState(db: DbClient) {
   invariant(
     Object.values(centerBillingApproval).every(Boolean),
     "Longmont payment or tuition approval is no longer active.",
+  );
+
+  const user = await db.user.findUnique({
+    where: { email: "brenden@kidcityusa.com" },
+    select: {
+      id: true,
+      tenantId: true,
+      email: true,
+      role: true,
+      isActive: true,
+      accessGrants: {
+        where: { isActive: true },
+        select: { tenantId: true, centerId: true, scopeType: true, startsAt: true, endsAt: true },
+      },
+    },
+  });
+  invariant(user?.isActive, "Brenden application audit user is missing or inactive.");
+  invariant(user.tenantId === center.organization.tenantId, "Brenden application audit user moved outside the Longmont tenant.");
+  invariant(BILLING_MUTATION_ROLES.has(user.role), "Brenden application audit user no longer has a billing mutation role.");
+  const now = new Date();
+  const hasActiveLongmontGrant = user.accessGrants.some((grant) =>
+    grant.tenantId === center.organization.tenantId
+    && grant.scopeType === "CENTER"
+    && grant.centerId === CENTER_ID
+    && (!grant.startsAt || grant.startsAt <= now)
+    && (!grant.endsAt || grant.endsAt > now));
+  invariant(
+    TENANT_WIDE_BILLING_ROLES.has(user.role) || hasActiveLongmontGrant,
+    "Brenden application audit user no longer has Longmont access.",
   );
 
   const invoices = await db.invoice.findMany({
@@ -213,6 +255,14 @@ async function loadState(db: DbClient) {
   const state = {
     centerId: center.id,
     centerBillingApproval,
+    auditActor: {
+      id: user.id,
+      tenantId: user.tenantId,
+      role: user.role,
+      isActive: user.isActive,
+      hasActiveLongmontGrant,
+      tenantWideBillingRole: TENANT_WIDE_BILLING_ROLES.has(user.role),
+    },
     targets: targets.map((target) => ({
       id: target.id,
       number: target.number,
@@ -229,7 +279,7 @@ async function loadState(db: DbClient) {
       restored: target.restored,
     })),
   };
-  return { center, targets, state, fingerprint: fingerprint(state) };
+  return { center, user, targets, state, fingerprint: fingerprint(state) };
 }
 
 async function main() {
@@ -256,11 +306,7 @@ async function main() {
   invariant(process.argv.includes(CONFIRM), `Apply requires ${CONFIRM}.`);
   invariant(arg(FINGERPRINT_ARG) === before.fingerprint, "Longmont monthly-fee state changed; rerun and review the dry run.");
   invariant(pending.length === expectedInvoices.size, "This repair must atomically restore the complete reviewed monthly-fee set.");
-  const user = await prisma.user.findUnique({
-    where: { email: "brenden@kidcityusa.com" },
-    select: { id: true, tenantId: true, email: true },
-  });
-  invariant(user, "Brenden application audit user was not found.");
+  const user = before.user;
 
   const restoredAt = new Date();
   await prisma.$transaction(async (tx) => {

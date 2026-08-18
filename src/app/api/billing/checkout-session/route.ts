@@ -553,6 +553,10 @@ async function POSTHandler(request: NextRequest) {
         },
       },
     });
+    await prisma.center.update({
+      where: { id: centerId! },
+      data: { updatedAt: new Date() },
+    });
 
     return NextResponse.json(
       {

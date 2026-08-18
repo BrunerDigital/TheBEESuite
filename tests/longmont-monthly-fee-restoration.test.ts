@@ -42,6 +42,7 @@ test("Longmont monthly fee restoration is exact, fingerprinted, and approval gat
   assert.match(source, /reviewedItemAmounts\) === JSON\.stringify\(expectedItemAmounts\)/);
   assert.match(source, /currentAssignmentAdjustments/);
   assert.match(source, /noPaymentSafeguards/);
+  assert.match(source, /payments\.every\(\(payment\) => payment\.status !== PaymentStatus\.DRAFT\)/);
   assert.match(source, /normalizeRecurringBillingDay\(childFields\.tuitionBillingDay, "monthly"\)/);
   assert.match(source, /recurringDueDateForPeriod\(BILLING_PERIOD, currentBillingDay, "monthly"\)/);
   assert.match(source, /invoice\.dueDate\.getTime\(\) === expectedDueDate\.getTime\(\)/);

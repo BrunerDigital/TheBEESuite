@@ -261,6 +261,7 @@ async function loadState(db: DbClient) {
       && clean(fields.incorrectVoidRestoredAt).length > 0;
     invariant(pending || restored, `${invoice.number} is in neither the exact pre-repair nor post-repair state.`);
     invariant(invoice.ledgerEntries.every((entry) => !entry.paymentId), `${invoice.number} gained invoice-linked payment activity.`);
+    invariant(invoice.billingAccount.payments.every((payment) => payment.status !== PaymentStatus.DRAFT), `${invoice.number} has pending payment activity.`);
     const latestLedger = invoice.billingAccount.ledgerEntries.at(-1) ?? null;
     if (latestLedger?.balanceAfterCents !== null && latestLedger?.balanceAfterCents !== undefined) {
       invariant(latestLedger.balanceAfterCents === invoice.billingAccount.balanceCents, `${invoice.number} account balance does not match its latest ledger balance.`);

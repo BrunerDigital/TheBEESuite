@@ -211,6 +211,35 @@ test("Stripe checkout creates direct connected-account sessions for school custo
   }
 });
 
+test("Stripe checkout refuses a connected-account tuition payment below the 1 percent BEE Suite fee", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = (async () => {
+    fetchCalled = true;
+    throw new Error("Stripe must not be called when the application fee is incomplete.");
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeCheckoutSession({
+      amountCents: 10_000,
+      invoiceAmountCents: 10_000,
+      invoiceNumber: "INV-FEE-GUARD",
+      successUrl: "https://app.test/success",
+      cancelUrl: "https://app.test/cancel",
+      metadata: { invoiceId: "inv_fee_guard" },
+      connectedAccountId: "acct_school",
+      applicationFeeAmountCents: 99,
+      credentials: { STRIPE_SECRET_KEY: "sk_test_tenant" },
+    });
+
+    assert.equal(result.ok, false);
+    assert.match(result.error || "", /complete 1% BEE Suite fee before payout/);
+    assert.equal(fetchCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Stripe checkout can require instant bank verification", async () => {
   const originalFetch = globalThis.fetch;
   let body = "";
@@ -484,6 +513,35 @@ test("Stripe saved card payments declare card on the PaymentIntent", async () =>
 
     assert.equal(result.ok, true);
     assert.match(body, /payment_method_types%5B0%5D=card/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe saved-method tuition refuses a connected-account application fee below 1 percent", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = (async () => {
+    fetchCalled = true;
+    throw new Error("Stripe must not be called when the application fee is incomplete.");
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeOffSessionPaymentIntent({
+      amountCents: 10_000,
+      invoiceAmountCents: 10_000,
+      invoiceNumber: "INV-SAVED-FEE-GUARD",
+      customerId: "cus_saved",
+      paymentMethodId: "pm_saved",
+      metadata: { invoiceId: "inv_saved_fee_guard" },
+      connectedAccountId: "acct_school",
+      applicationFeeAmountCents: 99,
+      credentials: { STRIPE_SECRET_KEY: "sk_test_tenant" },
+    });
+
+    assert.equal(result.ok, false);
+    assert.match(result.error || "", /complete 1% BEE Suite fee before payout/);
+    assert.equal(fetchCalled, false);
   } finally {
     globalThis.fetch = originalFetch;
   }

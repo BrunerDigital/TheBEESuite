@@ -1,4 +1,5 @@
 import "./load-env";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Prisma } from "@prisma/client";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
@@ -6,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { parseRenderedProcareBalanceRows } from "@/lib/procare-rendered-report-import";
 
 const CENTER_ID = "cmp4ew9h2001m6alwxssr4wr6";
+const SOURCE_SHA256 = "1d28dd395fe6c89c82dd0567e8aaa292e118cae346311c78f5fe4e4357e89425";
 
 function clean(value: unknown) { return typeof value === "string" ? value.trim() : ""; }
 function object(value: Prisma.JsonValue | null | undefined) {
@@ -37,6 +39,10 @@ async function main() {
   const sourcePath = clean(process.env.OAKLEAF_PROCARE_BALANCE_CSV_PATH);
   if (!sourcePath) throw new Error("OAKLEAF_PROCARE_BALANCE_CSV_PATH is required.");
   const sourceBuffer = readFileSync(sourcePath);
+  const sourceSha256 = createHash("sha256").update(sourceBuffer).digest("hex");
+  if (sourceSha256 !== SOURCE_SHA256) {
+    throw new Error(`Oakleaf source fingerprint mismatch: expected ${SOURCE_SHA256}, received ${sourceSha256}.`);
+  }
   const rendered = parseRenderedProcareBalanceRows(sourceBuffer);
   const rateRows = csv(sourceBuffer.toString("utf8")).map((row) => ({
     accountKey: row[9]?.match(/\[\*?([A-Z0-9_-]+)\*?\]/i)?.[1]?.toUpperCase() ?? "",
@@ -96,6 +102,7 @@ async function main() {
     return { familyId: row.familyId, familyName: row.familyName, sourceWeeklyCents: sourceRates.reduce((sum, rate) => sum + rate, 0), beeWeeklyCents: beeRates.reduce((sum, rate) => sum + rate, 0), sourceRateCount: sourceRates.length, beeRateCount: beeRates.length, currentChildren: row.currentChildren.map((child) => ({ id: child.id, name: child.name, weeklyCents: child.weeklyCents, enabled: child.enabled })) };
   });
   console.log(JSON.stringify({
+    sourceSha256,
     summary: Object.fromEntries(Object.entries(groups).map(([key, rows]) => [key, { families: rows?.length ?? 0, balanceCents: rows?.reduce((sum, row) => sum + row.balanceCents, 0) ?? 0 }])),
     weeklyRateComparison: { exactFamilies: rateComparison.filter((row) => row.sourceRateCount > 0 && row.sourceWeeklyCents === row.beeWeeklyCents), sourceNoRate: rateComparison.filter((row) => row.sourceRateCount === 0), mismatches: rateComparison.filter((row) => row.sourceRateCount > 0 && row.sourceWeeklyCents !== row.beeWeeklyCents) },
     sourceWithdrawnStillCurrent: groups.source_withdrawn ?? [],

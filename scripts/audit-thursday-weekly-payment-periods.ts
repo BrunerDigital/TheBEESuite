@@ -76,6 +76,9 @@ async function main() {
 
   const reviewed = payments.map((payment) => {
     const paymentFields = object(payment.customFields);
+    const appliedInvoiceIds = Array.isArray(paymentFields.appliedInvoiceIds)
+      ? paymentFields.appliedInvoiceIds.filter((value): value is string => typeof value === "string")
+      : [];
     const weeklyInvoices = payment.billingAccount.invoices
       .map((invoice) => {
         const fields = object(invoice.customFields);
@@ -91,7 +94,9 @@ async function main() {
           mode: string(fields.mode),
           chargeSource: string(fields.chargeSource),
           childId: string(fields.childId),
-          paymentLinked: invoice.ledgerEntries.some((entry) => entry.paymentId === payment.id),
+          paymentLinked: string(fields.paymentId) === payment.id
+            || appliedInvoiceIds.includes(invoice.id)
+            || invoice.ledgerEntries.some((entry) => entry.paymentId === payment.id),
           ledger: invoice.ledgerEntries,
         };
       })
@@ -104,7 +109,7 @@ async function main() {
       collectionMode: string(paymentFields.collectionMode),
       paymentScope: string(paymentFields.paymentScope),
       invoiceIdFromPayment: string(paymentFields.invoiceId),
-      appliedInvoiceIds: Array.isArray(paymentFields.appliedInvoiceIds) ? paymentFields.appliedInvoiceIds : [],
+      appliedInvoiceIds,
       account: {
         id: payment.billingAccount.id,
         balanceCents: payment.billingAccount.balanceCents,

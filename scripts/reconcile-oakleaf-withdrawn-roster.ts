@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { invoiceLedgerBalanceCents, invoiceVoidBlocker } from "@/lib/invoice-void";
-import { disableParentPortalLoginForGuardian } from "@/lib/parent-portal-logins";
+import { parentPortalAccessDisabled, parentPortalAccessFields } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
 import { parseRenderedProcareBalanceRows } from "@/lib/procare-rendered-report-import";
 
@@ -108,6 +108,7 @@ async function apply(expectedFingerprint: string) {
   const before = await loadState();
   invariant(before.fingerprint === expectedFingerprint, "Oakleaf withdrawn-roster state changed; rerun preview.");
   const appliedAt = new Date();
+  let barnhartPreparedAccessCompensated = false;
   await prisma.$transaction(async (tx) => {
     const current = await loadState(tx);
     invariant(current.fingerprint === expectedFingerprint, "Oakleaf withdrawn-roster state changed inside transaction.");
@@ -125,18 +126,39 @@ async function apply(expectedFingerprint: string) {
       await tx.billingAccount.update({ where: { id: plan.account.id }, data: { customFields: input({ ...object(plan.account.customFields), tuitionAutobillEnabled: false, tuitionAutobillUpdatedAt: appliedAt.toISOString(), tuitionAutobillUpdatedBy: "Brenden Bruner - Oakleaf source roster correction 2026-08-18" }) } });
       await tx.auditLog.create({ data: { tenantId: current.actor.tenantId, centerId: CENTER_ID, userId: current.actor.id, action: "billing.oakleaf_withdrawn_roster_corrected", resource: "Family", resourceId: plan.family.id, metadata: { sourceSha256: SOURCE_SHA256, evidence: EVIDENCE, childrenWithdrawn: plan.reviewedChildren.map((child) => child.id), invoicesVoided: plan.tuitionInvoices.map((invoice) => invoice.id), reversedCents: plan.tuitionCents, openingBalancePreservedCents: plan.target.openingBalanceCents, paymentsChanged: false } } });
     }
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10_000, timeout: 60_000 });
 
-  const barnhart = before.plans.find((plan) => (
-    "compensatePreparedParentAccess" in plan.target && plan.target.compensatePreparedParentAccess
-  ));
-  invariant(barnhart, "Barnhart compensation target missing.");
-  const guardian = barnhart.family.guardians.find((item) => item.fullName === "Mariah Barnhart");
-  if (guardian?.userId) {
-    invariant(guardian.user?.role === "PARENT_GUARDIAN" && guardian.user.mustResetPassword, "Barnhart parent link is not the prepared no-invite account.");
-    const disabled = await disableParentPortalLoginForGuardian({ guardianId: guardian.id, actorEmail: before.actor.email, previousUserId: guardian.userId });
-    invariant(disabled.ok, "Barnhart prepared parent access could not be compensated.");
-  }
+    const barnhart = current.plans.find((plan) => (
+      "compensatePreparedParentAccess" in plan.target && plan.target.compensatePreparedParentAccess
+    ));
+    invariant(barnhart, "Barnhart compensation target missing.");
+    const guardian = barnhart.family.guardians.find((item) => item.fullName === "Mariah Barnhart");
+    if (guardian?.userId) {
+      invariant(guardian.user?.role === "PARENT_GUARDIAN" && guardian.user.mustResetPassword, "Barnhart parent link is not the prepared no-invite account.");
+      await tx.guardian.update({
+        where: { id: guardian.id },
+        data: {
+          userId: null,
+          customFields: parentPortalAccessFields({
+            customFields: guardian.customFields,
+            enabled: false,
+            actorEmail: current.actor.email,
+          }),
+        },
+      });
+      const remainingLinkedGuardians = await tx.guardian.findMany({
+        where: { userId: guardian.userId },
+        select: { customFields: true },
+      });
+      if (!remainingLinkedGuardians.some((item) => !parentPortalAccessDisabled(item.customFields))) {
+        const deactivated = await tx.user.updateMany({
+          where: { id: guardian.userId, role: "PARENT_GUARDIAN" },
+          data: { isActive: false, sessionVersion: { increment: 1 } },
+        });
+        invariant(deactivated.count === 1, "Barnhart prepared parent user could not be deactivated.");
+      }
+      barnhartPreparedAccessCompensated = true;
+    }
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10_000, timeout: 60_000 });
 
   const currentFamilies = await prisma.family.count({ where: { centerId: CENTER_ID, children: { some: { enrollmentStatus: { in: ["enrolled", "active", "current"] }, classroomId: { not: null } } } } });
   const verified = await prisma.family.findMany({ where: { id: { in: targets.map((target) => target.familyId) } }, select: { id: true, billingAccount: { select: { balanceCents: true, ledgerEntries: { where: { balanceAfterCents: { not: null } }, orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }], take: 1, select: { balanceAfterCents: true } } } }, children: { select: { id: true, enrollmentStatus: true, classroomId: true } } } });
@@ -150,7 +172,7 @@ async function apply(expectedFingerprint: string) {
     );
     invariant(target.children.every((child) => family.children.find((item) => item.id === child.id)?.enrollmentStatus === "withdrawn"), `${target.familyName} still has a reviewed current child.`);
   }
-  console.log(JSON.stringify({ ok: true, currentFamilies, familiesCorrected: targets.length, childrenWithdrawn: targets.reduce((sum, target) => sum + target.children.length, 0), invoicesVoided: before.plans.reduce((sum, plan) => sum + plan.tuitionInvoices.length, 0), balancesReversedCents: before.plans.reduce((sum, plan) => sum + plan.tuitionCents, 0), sourceOpeningBalancesPreservedCents: targets.reduce((sum, target) => sum + target.openingBalanceCents, 0), paymentsChanged: 0, barnhartPreparedAccessCompensated: Boolean(guardian?.userId) }, null, 2));
+  console.log(JSON.stringify({ ok: true, currentFamilies, familiesCorrected: targets.length, childrenWithdrawn: targets.reduce((sum, target) => sum + target.children.length, 0), invoicesVoided: before.plans.reduce((sum, plan) => sum + plan.tuitionInvoices.length, 0), balancesReversedCents: before.plans.reduce((sum, plan) => sum + plan.tuitionCents, 0), sourceOpeningBalancesPreservedCents: targets.reduce((sum, target) => sum + target.openingBalanceCents, 0), paymentsChanged: 0, barnhartPreparedAccessCompensated }, null, 2));
 }
 
 async function main() {

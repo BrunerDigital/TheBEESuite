@@ -119,7 +119,9 @@ async function main() {
         paidAt: string(invoiceFields.paidAt),
       };
     });
-    const allocatedIds = invoiceId ? [invoiceId] : appliedInvoiceIds;
+    const allocatedIds = appliedInvoiceIds.length > 0
+      ? [...new Set(appliedInvoiceIds)]
+      : invoiceId ? [invoiceId] : [];
     const allocatedInvoices = invoices.filter((invoice) => allocatedIds.includes(invoice.id));
     const w33Paid = invoices.filter((invoice) => invoice.billingPeriod === "2026-W33" && invoice.status === PaymentStatus.PAID && allocatedIds.includes(invoice.id));
     const w34Open = invoices.filter((invoice) => invoice.billingPeriod === "2026-W34" && invoice.status === PaymentStatus.OPEN);

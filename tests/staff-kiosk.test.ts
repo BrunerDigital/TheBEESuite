@@ -172,6 +172,32 @@ test("director time card edits remain available after the legacy 120-punch cap",
   assert.equal(stored.length, 117);
 });
 
+test("director time card edits can add a complete shift at the retention ceiling", () => {
+  const start = new Date("2024-01-01T12:00:00.000Z").getTime();
+  const retainedHistory = Array.from({ length: 2_000 }, (_, index) => ({
+    action: index % 2 === 0 ? "clock_in" as const : "clock_out" as const,
+    occurredAt: new Date(start + index * 60 * 60 * 1000).toISOString(),
+  }));
+  const addedShift = [
+    { action: "clock_in" as const, occurredAt: new Date(start + 2_000 * 60 * 60 * 1000).toISOString() },
+    { action: "clock_out" as const, occurredAt: new Date(start + 2_001 * 60 * 60 * 1000).toISOString() },
+  ];
+
+  const normalized = normalizeStaffClockEventEdits([...retainedHistory, ...addedShift]);
+
+  assert.equal(normalized.ok, true);
+  if (!normalized.ok) return;
+  const fields = staffClockEditFields({
+    customFields: null,
+    events: normalized.events,
+    editedAt: new Date(addedShift[1].occurredAt),
+  });
+  const stored = readStaffClockState(fields).events;
+  assert.equal(stored.length, 2_000);
+  assert.equal(stored.at(-1)?.action, "clock_in");
+  assert.equal(stored[0]?.action, "clock_out");
+});
+
 test("staff kiosk credential resolves by unique PIN without requiring email", () => {
   process.env.PIN_HASH_SECRET = "staff-kiosk-test-secret";
   const candidates = [

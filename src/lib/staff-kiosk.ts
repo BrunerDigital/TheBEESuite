@@ -4,6 +4,7 @@ import { verifyStaffPin } from "@/lib/kiosk";
 export const STAFF_CLOCK_ACTIONS = ["clock_in", "clock_out"] as const;
 const LEGACY_STAFF_CLOCK_EVENT_LIMIT = 120;
 const STAFF_CLOCK_EVENT_LIMIT = 2_000;
+const STAFF_CLOCK_EDIT_EVENT_LIMIT = STAFF_CLOCK_EVENT_LIMIT + 100;
 export type StaffClockAction = typeof STAFF_CLOCK_ACTIONS[number];
 export type StaffClockStatus = "clocked_in" | "clocked_out";
 
@@ -286,7 +287,7 @@ export function normalizeStaffClockEventEdits(
     return { ok: false as const, error: "Clock events must be an array." };
   }
 
-  const maxEvents = options.maxEvents ?? STAFF_CLOCK_EVENT_LIMIT;
+  const maxEvents = options.maxEvents ?? STAFF_CLOCK_EDIT_EVENT_LIMIT;
   if (value.length > maxEvents) {
     return { ok: false as const, error: `A time card can include up to ${maxEvents} punch events.` };
   }

@@ -20,6 +20,17 @@ import { issueFamilyRefund, validateFamilyRefundAvailability } from "@/lib/famil
 import { refundSubmissionMode } from "@/lib/refund-approval";
 import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
 import { invoiceLedgerBalanceCents, invoiceVoidBlocker } from "@/lib/invoice-void";
+import {
+  invoiceResponsibilityReviewExempt,
+  invoiceResponsibilitySeparation,
+  responsibilitySeparationError,
+} from "@/lib/invoice-responsibility-separation";
+import {
+  AGENCY_LEDGER_ENTRY_TYPES,
+  AGENCY_LEDGER_SOURCE_SYSTEM,
+  hasSubsidyResponsibilityEvidence,
+  parentVisibleBillingBalanceCents,
+} from "@/lib/parent-billing-visibility";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -560,11 +571,32 @@ async function createAgencyPayment(user: CurrentBillingUser, body: Record<string
   return NextResponse.json({ ok: true, created: 1, skipped: 0, totalCents: amountCents, payment: result.payment, entry: result.entry });
 }
 
+async function manualFamilyPaymentExceedsVisibleBalance(familyId: string, amountCents: number) {
+  const account = await prisma.billingAccount.findUnique({
+    where: { familyId },
+    select: {
+      balanceCents: true,
+      ledgerEntries: {
+        where: { OR: [{ type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } }, { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM }] },
+        select: { type: true, sourceSystem: true, amountCents: true },
+      },
+    },
+  });
+  if (!account?.ledgerEntries.length) return false;
+  return amountCents > parentVisibleBillingBalanceCents({
+    accountBalanceCents: account.balanceCents,
+    agencyLedgerEntries: account.ledgerEntries,
+  });
+}
+
 async function createManualCheckPayment(user: CurrentBillingUser, body: Record<string, unknown>) {
   const familyAccess = await assertFamilyAccess(user, clean(body.familyId));
   if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
   const amountCents = amountCentsFromBody(body);
   if (amountCents <= 0) return NextResponse.json({ ok: false, error: "Check payment amount is required." }, { status: 400 });
+  if (await manualFamilyPaymentExceedsVisibleBalance(familyAccess.family.id, amountCents)) {
+    return NextResponse.json({ ok: false, error: "Check payment cannot exceed the family-responsibility balance." }, { status: 409 });
+  }
   const checkNumber = clean(body.checkNumber);
   if (!checkNumber) return NextResponse.json({ ok: false, error: "Check number or reference is required." }, { status: 400 });
   const paidAt = parseDate(body.paidAt);
@@ -631,6 +663,9 @@ async function createManualCashPayment(user: CurrentBillingUser, body: Record<st
   if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
   const amountCents = amountCentsFromBody(body);
   if (amountCents <= 0) return NextResponse.json({ ok: false, error: "Cash payment amount is required." }, { status: 400 });
+  if (await manualFamilyPaymentExceedsVisibleBalance(familyAccess.family.id, amountCents)) {
+    return NextResponse.json({ ok: false, error: "Cash payment cannot exceed the family-responsibility balance." }, { status: 409 });
+  }
   const paidAt = parseDate(body.paidAt);
   const reference = clean(body.reference);
   const notes = clean(body.notes);
@@ -850,6 +885,12 @@ async function updateInvoice(user: CurrentBillingUser, body: Record<string, unkn
   if (invoice.status !== PaymentStatus.OPEN) {
     return NextResponse.json({ ok: false, error: "Only open invoices can be edited." }, { status: 400 });
   }
+  if ((amountProvided || descriptionProvided) && invoiceResponsibilitySeparation(invoice.customFields)) {
+    return NextResponse.json(
+      { ok: false, error: "The amount or item description cannot be changed after family and agency responsibility has been separated." },
+      { status: 409 },
+    );
+  }
 
   const currentDescription = invoice.items[0]?.description || clean((jsonObject(invoice.customFields)).description) || invoice.number;
   const description = descriptionProvided ? requestedDescription : currentDescription;
@@ -1024,6 +1065,12 @@ async function voidInvoice(user: CurrentBillingUser, body: Record<string, unknow
   }
   const initialBlocker = invoiceVoidBlocker({ ...invoice, payments: invoice.billingAccount.payments });
   if (initialBlocker) return NextResponse.json({ ok: false, error: initialBlocker }, { status: 409 });
+  if (invoiceResponsibilitySeparation(invoice.customFields)) {
+    return NextResponse.json(
+      { ok: false, error: "A separated invoice cannot be voided because it has a linked agency receivable." },
+      { status: 409 },
+    );
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     const current = await tx.invoice.findUniqueOrThrow({
@@ -1040,6 +1087,9 @@ async function voidInvoice(user: CurrentBillingUser, body: Record<string, unknow
     });
     const blocker = invoiceVoidBlocker({ ...current, payments: current.billingAccount.payments });
     if (blocker) throw new Error(`INVOICE_VOID_BLOCKED:${blocker}`);
+    if (invoiceResponsibilitySeparation(current.customFields)) {
+      throw new Error("INVOICE_VOID_BLOCKED:A separated invoice cannot be voided because it has a linked agency receivable.");
+    }
 
     const voidedAt = new Date();
     const updated = await tx.invoice.updateMany({
@@ -1115,6 +1165,252 @@ async function voidInvoice(user: CurrentBillingUser, body: Record<string, unknow
   return NextResponse.json({ ok: true, voided: true, ...result });
 }
 
+async function separateInvoiceResponsibility(user: CurrentBillingUser, body: Record<string, unknown>) {
+  const invoiceId = clean(body.invoiceId);
+  const expectedInvoiceTotalCents = Number(body.expectedInvoiceTotalCents);
+  const expectedAccountBalanceCents = Number(body.expectedAccountBalanceCents);
+  const familyResponsibilityCents = Number(body.familyResponsibilityCents);
+  const agencyResponsibilityCents = Number(body.agencyResponsibilityCents);
+  const agencyName = clean(body.agencyName).slice(0, 160);
+  const authorizationNumber = clean(body.authorizationNumber).slice(0, 160) || null;
+  const coverageStart = clean(body.coverageStart).slice(0, 10) || null;
+  const coverageEnd = clean(body.coverageEnd).slice(0, 10) || null;
+
+  if (!invoiceId) return NextResponse.json({ ok: false, error: "Invoice is required." }, { status: 400 });
+  if (!Number.isInteger(expectedInvoiceTotalCents) || expectedInvoiceTotalCents <= 0) {
+    return NextResponse.json({ ok: false, error: "Review the current invoice total before separating responsibility." }, { status: 400 });
+  }
+  if (!Number.isInteger(expectedAccountBalanceCents)) {
+    return NextResponse.json({ ok: false, error: "Review the current family balance before separating responsibility." }, { status: 400 });
+  }
+
+  const access = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    select: { billingAccount: { select: { family: { select: { centerId: true } } } } },
+  });
+  if (!access) return NextResponse.json({ ok: false, error: "Invoice not found." }, { status: 404 });
+  const centerId = access.billingAccount.family.centerId;
+  if (!centerId || !canAccessCenter(user, centerId)) {
+    return NextResponse.json({ ok: false, error: "You do not have access to this invoice." }, { status: 403 });
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Invoice" WHERE "id" = ${invoiceId} FOR UPDATE`);
+    const invoice = await tx.invoice.findUniqueOrThrow({
+      where: { id: invoiceId },
+      select: {
+        id: true,
+        number: true,
+        createdAt: true,
+        status: true,
+        totalCents: true,
+        customFields: true,
+        items: { select: { description: true, amountCents: true } },
+        ledgerEntries: { select: { paymentId: true } },
+        billingAccount: {
+          select: {
+            id: true,
+            balanceCents: true,
+            customFields: true,
+            family: {
+              select: {
+                id: true,
+                centerId: true,
+                customFields: true,
+                children: { select: { customFields: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (invoice.billingAccount.family.centerId !== centerId) {
+      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:Invoice school changed. Refresh and try again.");
+    }
+
+    const existing = invoiceResponsibilitySeparation(invoice.customFields);
+    if (existing) {
+      if (
+        existing.originalInvoiceTotalCents === expectedInvoiceTotalCents
+        && existing.familyResponsibilityCents === familyResponsibilityCents
+        && existing.agencyResponsibilityCents === agencyResponsibilityCents
+        && existing.agencyName === agencyName
+      ) {
+        return {
+          alreadySeparated: true,
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          familyResponsibilityCents: existing.familyResponsibilityCents,
+          agencyResponsibilityCents: existing.agencyResponsibilityCents,
+          agencyName: existing.agencyName,
+          invoiceStatus: invoice.status,
+        };
+      }
+      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:This invoice responsibility has already been separated.");
+    }
+    if (invoice.status !== PaymentStatus.OPEN) {
+      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:Only an open invoice can be separated.");
+    }
+    if (invoice.totalCents !== expectedInvoiceTotalCents || invoice.billingAccount.balanceCents !== expectedAccountBalanceCents) {
+      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:The invoice or account balance changed. Refresh and review the current amounts again.");
+    }
+    const itemTotalCents = invoice.items.reduce((sum, item) => sum + item.amountCents, 0);
+    const validationError = responsibilitySeparationError({
+      invoiceTotalCents: invoice.totalCents,
+      accountBalanceCents: invoice.billingAccount.balanceCents,
+      itemTotalCents,
+      familyResponsibilityCents,
+      agencyResponsibilityCents,
+      agencyName,
+    });
+    if (validationError) throw new Error(`RESPONSIBILITY_SPLIT_BLOCKED:${validationError}`);
+    if (invoiceResponsibilityReviewExempt(invoice.customFields)) {
+      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:Product purchases do not use agency tuition responsibility.");
+    }
+    if (!hasSubsidyResponsibilityEvidence(
+      invoice.customFields,
+      invoice.billingAccount.customFields,
+      invoice.billingAccount.family.customFields,
+      invoice.items.map((item) => item.description),
+      invoice.billingAccount.family.children.map((child) => child.customFields),
+    )) {
+      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:This invoice does not contain subsidy or agency responsibility evidence.");
+    }
+
+    const linkedPaymentCount = await tx.payment.count({
+      where: {
+        billingAccountId: invoice.billingAccount.id,
+        status: { in: [PaymentStatus.DRAFT, PaymentStatus.OPEN, PaymentStatus.PAID, PaymentStatus.REFUNDED] },
+        customFields: { path: ["invoiceId"], equals: invoice.id },
+      },
+    });
+    if (linkedPaymentCount > 0 || invoice.ledgerEntries.some((entry) => entry.paymentId)) {
+      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:This invoice has payment activity. Review it before changing responsibility.");
+    }
+    const recentAccountPayments = await tx.payment.findMany({
+      where: {
+        billingAccountId: invoice.billingAccount.id,
+        status: PaymentStatus.PAID,
+        paidAt: { gte: invoice.createdAt },
+        provider: { not: AGENCY_LEDGER_SOURCE_SYSTEM },
+      },
+      select: { customFields: true },
+    });
+    if (recentAccountPayments.some((payment) => !clean(jsonObject(payment.customFields).invoiceId))) {
+      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:This account has an unallocated family payment. Allocate or review it before separating responsibility.");
+    }
+
+    const separatedAt = new Date();
+    const separation = {
+      status: "separated",
+      originalInvoiceTotalCents: invoice.totalCents,
+      familyResponsibilityCents,
+      agencyResponsibilityCents,
+      agencyName,
+      authorizationNumber,
+      coverageStart,
+      coverageEnd,
+      separatedAt: separatedAt.toISOString(),
+      separatedByUserId: user.id,
+    };
+    const updatedStatus = familyResponsibilityCents > 0 ? PaymentStatus.OPEN : PaymentStatus.VOID;
+    const updated = await tx.invoice.updateMany({
+      where: { id: invoice.id, status: PaymentStatus.OPEN, totalCents: expectedInvoiceTotalCents },
+      data: {
+        status: updatedStatus,
+        totalCents: familyResponsibilityCents,
+        customFields: {
+          ...jsonObject(invoice.customFields),
+          responsibilitySeparation: separation,
+          status: familyResponsibilityCents > 0 ? "open" : "agency_responsibility_only",
+        },
+      },
+    });
+    if (updated.count !== 1) {
+      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:Invoice changed before responsibility could be separated. Refresh and try again.");
+    }
+    await tx.invoiceItem.create({
+      data: {
+        invoiceId: invoice.id,
+        description: `${agencyName} agency responsibility transferred`,
+        amountCents: -agencyResponsibilityCents,
+      },
+    });
+
+    const familyBalanceAfterCents = invoice.billingAccount.balanceCents - agencyResponsibilityCents;
+    const familyAdjustment = await tx.ledgerEntry.create({
+      data: {
+        billingAccountId: invoice.billingAccount.id,
+        invoiceId: invoice.id,
+        type: "family_responsibility_adjustment",
+        description: `Family responsibility separated for ${invoice.number}`,
+        amountCents: -agencyResponsibilityCents,
+        balanceAfterCents: familyBalanceAfterCents,
+        effectiveAt: separatedAt,
+        sourceSystem: "bee_suite_responsibility_split",
+        externalId: `responsibility-split:${invoice.id}:family`,
+        metadata: separation,
+      },
+    });
+    const agencyEffectiveAt = new Date(separatedAt.getTime() + 1);
+    const agencyReceivable = await tx.ledgerEntry.create({
+      data: {
+        billingAccountId: invoice.billingAccount.id,
+        invoiceId: null,
+        type: "agency_receivable",
+        description: `${agencyName} responsibility for ${invoice.number}`,
+        amountCents: agencyResponsibilityCents,
+        balanceAfterCents: invoice.billingAccount.balanceCents,
+        effectiveAt: agencyEffectiveAt,
+        sourceSystem: "subsidy_agency",
+        externalId: `responsibility-split:${invoice.id}:agency`,
+        metadata: { ...separation, sourceInvoiceId: invoice.id, sourceInvoiceNumber: invoice.number },
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        centerId,
+        userId: user.id,
+        action: "billing.invoice.responsibility_separated",
+        resource: "Invoice",
+        resourceId: invoice.id,
+        metadata: {
+          familyId: invoice.billingAccount.family.id,
+          invoiceNumber: invoice.number,
+          ...separation,
+          familyAdjustmentLedgerEntryId: familyAdjustment.id,
+          agencyReceivableLedgerEntryId: agencyReceivable.id,
+          accountBalanceCents: invoice.billingAccount.balanceCents,
+        },
+      },
+    });
+    await tx.center.update({ where: { id: centerId }, data: { updatedAt: separatedAt } });
+
+    return {
+      alreadySeparated: false,
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.number,
+      familyResponsibilityCents,
+      agencyResponsibilityCents,
+      agencyName,
+      invoiceStatus: updatedStatus,
+    };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "";
+    if (message.startsWith("RESPONSIBILITY_SPLIT_BLOCKED:")) {
+      return { error: message.slice("RESPONSIBILITY_SPLIT_BLOCKED:".length) } as const;
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      return { error: "Invoice activity changed during the update. Refresh and try again." } as const;
+    }
+    throw error;
+  });
+
+  if ("error" in result) return NextResponse.json({ ok: false, error: result.error }, { status: 409 });
+  return NextResponse.json({ ok: true, separated: true, ...result });
+}
+
 function moneyLabel(cents: number) {
   return new Intl.NumberFormat("en", { style: "currency", currency: "USD" }).format(cents / 100);
 }
@@ -1139,6 +1435,7 @@ async function POSTHandler(request: NextRequest) {
   if (mode === "manualCheckPayment") return createManualCheckPayment(user, body);
   if (mode === "manualCashPayment") return createManualCashPayment(user, body);
   if (mode === "refundPayment") return refundStripePayment(user, body);
+  if (mode === "separateResponsibility") return separateInvoiceResponsibility(user, body);
 
   return NextResponse.json({ ok: false, error: "Unsupported billing action." }, { status: 400 });
 }

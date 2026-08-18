@@ -25,6 +25,30 @@ test("subsidy evidence without a separated agency ledger fails closed", () => {
     accountBalanceCents: 157_241,
     agencyLedgerEntries: [{ type: "agency_receivable", sourceSystem: "bee_suite", amountCents: 120_000 }],
     responsibilityEvidence: [{ tags: ["subsidy"] }],
+  }), true);
+});
+
+test("agency responsibility is separated per invoice, not once for every future invoice", () => {
+  const priorInvoiceAgencyEntry = {
+    type: "agency_receivable",
+    sourceSystem: "subsidy_agency",
+    amountCents: 10_000,
+    invoiceId: null,
+    metadata: { sourceInvoiceId: "invoice_prior" },
+  };
+  assert.equal(parentBalanceNeedsResponsibilityReview({
+    accountBalanceCents: 12_000,
+    agencyLedgerEntries: [priorInvoiceAgencyEntry],
+    responsibilityEvidence: [{ tuitionFundingType: "voucher" }],
+    invoiceId: "invoice_current",
+    invoiceResponsibilitySeparated: false,
+  }), true);
+  assert.equal(parentBalanceNeedsResponsibilityReview({
+    accountBalanceCents: 12_000,
+    agencyLedgerEntries: [priorInvoiceAgencyEntry],
+    responsibilityEvidence: [{ tuitionFundingType: "voucher" }],
+    invoiceId: "invoice_prior",
+    invoiceResponsibilitySeparated: true,
   }), false);
 });
 

@@ -162,6 +162,12 @@ import {
   parentVisibleBillingBalanceCents,
 } from "@/lib/parent-billing-visibility";
 import { invoicePurposeLabel } from "@/lib/product-billing";
+import {
+  allOpenInvoicesResponsibilitySeparated,
+  invoiceResponsibilityReviewExempt,
+  invoiceResponsibilitySeparation,
+  responsibilitySeparatedBillingAmounts,
+} from "@/lib/invoice-responsibility-separation";
 import { defaultProfilePhotoUrlForRole, readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
@@ -627,9 +633,9 @@ async function buildFtePrefills(
     where: {
       billingAccount: { family: { centerId: centerIdFilter(centerIds) } },
       createdAt: { gte: weekStart, lt: weekEndExclusive },
-      status: { not: PaymentStatus.VOID },
     },
     select: {
+      status: true,
       totalCents: true,
       customFields: true,
       items: { select: { description: true, amountCents: true } },
@@ -701,13 +707,24 @@ async function buildFtePrefills(
   for (const invoice of invoices) {
     const row = invoice.billingAccount.family.centerId ? byCenter.get(invoice.billingAccount.family.centerId) : null;
     if (!row) continue;
-    const invoiceMetadataText = JSON.stringify(invoice.customFields).toLowerCase();
-    const subsidyCents = /subsidy|agency|voucher|scholarship|elc|dhs/.test(invoiceMetadataText)
-      ? invoice.totalCents
-      : invoice.items.filter((item) => /subsidy|agency|voucher|scholarship|elc|dhs/i.test(item.description)).reduce((sum, item) => sum + item.amountCents, 0);
-    row.totalBilledAmount += invoice.totalCents / 100;
-    row.subsidyBillAmount += subsidyCents / 100;
-    row.selfPayerBillAmount += Math.max(invoice.totalCents - subsidyCents, 0) / 100;
+    const separated = responsibilitySeparatedBillingAmounts({
+      invoiceTotalCents: invoice.totalCents,
+      customFields: invoice.customFields,
+    });
+    if (invoice.status === PaymentStatus.VOID && (!separated || separated.familyResponsibilityCents > 0)) continue;
+    if (separated) {
+      row.totalBilledAmount += separated.totalResponsibilityCents / 100;
+      row.subsidyBillAmount += separated.agencyResponsibilityCents / 100;
+      row.selfPayerBillAmount += separated.familyResponsibilityCents / 100;
+    } else {
+      const invoiceMetadataText = JSON.stringify(invoice.customFields).toLowerCase();
+      const subsidyCents = /subsidy|agency|voucher|scholarship|elc|dhs/.test(invoiceMetadataText)
+        ? invoice.totalCents
+        : invoice.items.filter((item) => /subsidy|agency|voucher|scholarship|elc|dhs/i.test(item.description)).reduce((sum, item) => sum + item.amountCents, 0);
+      row.totalBilledAmount += invoice.totalCents / 100;
+      row.subsidyBillAmount += subsidyCents / 100;
+      row.selfPayerBillAmount += Math.max(invoice.totalCents - subsidyCents, 0) / 100;
+    }
   }
 
   for (const staff of staffProfiles) {
@@ -2098,6 +2115,15 @@ async function renderLivePage(
           balanceCents: true,
           autopayPlaceholder: true,
           customFields: true,
+          invoices: {
+            where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.PAID, PaymentStatus.VOID] } },
+            select: {
+              status: true,
+              totalCents: true,
+              customFields: true,
+              items: { select: { description: true } },
+            },
+          },
           payments: {
             where: {
               NOT: { provider: AGENCY_LEDGER_SOURCE_SYSTEM },
@@ -2147,7 +2173,7 @@ async function renderLivePage(
         where: { billingAccount: { familyId } },
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
         take: 20,
-        select: { id: true, number: true, status: true, dueDate: true, customFields: true },
+        select: { id: true, number: true, status: true, dueDate: true, totalCents: true, customFields: true },
       }),
       prisma.dailyReport.findMany({
         where: { childId: { in: childIds.length ? childIds : ["__none__"] } },
@@ -2432,10 +2458,12 @@ async function renderLivePage(
       ? parentBalanceNeedsResponsibilityReview({
           accountBalanceCents: billingAccount.balanceCents,
           agencyLedgerEntries,
+          invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(billingAccount.invoices),
           responsibilityEvidence: [
             billingAccount.customFields,
             family?.customFields,
             ...(family?.children.map((child) => child.customFields) ?? []),
+            ...billingAccount.invoices.flatMap((invoice) => [invoice.customFields, invoice.items.map((item) => item.description)]),
           ],
         })
       : false;
@@ -3331,17 +3359,29 @@ async function renderLivePage(
               balanceCents: true,
               autopayPlaceholder: true,
               customFields: true,
+              ledgerEntries: {
+                where: {
+                  OR: [
+                    { type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } },
+                    { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM },
+                  ],
+                },
+                select: { type: true, sourceSystem: true, amountCents: true, invoiceId: true, externalId: true, metadata: true },
+              },
               family: {
                 select: {
                   id: true,
                   name: true,
                   billingEmail: true,
                   centerId: true,
+                  customFields: true,
+                  children: { select: { customFields: true } },
                   _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
                 },
               },
             },
           },
+          items: { select: { description: true } },
           _count: { select: { items: true } },
         },
       }),
@@ -3711,6 +3751,20 @@ async function renderLivePage(
             status: invoice.status,
             dueDate: invoice.dueDate,
             totalCents: invoice.totalCents,
+            responsibilityReviewRequired: !invoiceResponsibilityReviewExempt(invoice.customFields) && parentBalanceNeedsResponsibilityReview({
+              accountBalanceCents: invoice.billingAccount.balanceCents,
+              agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
+              invoiceId: invoice.id,
+              invoiceResponsibilitySeparated: invoiceResponsibilitySeparation(invoice.customFields) !== null,
+              responsibilityEvidence: [
+                invoice.customFields,
+                invoice.items.map((item) => item.description),
+                invoice.billingAccount.customFields,
+                invoice.billingAccount.family.customFields,
+                ...invoice.billingAccount.family.children.map((child) => child.customFields),
+              ],
+            }),
+            responsibilitySeparation: invoiceResponsibilitySeparation(invoice.customFields),
             billingAccount: {
               id: invoice.billingAccount.id,
               balanceCents: invoice.billingAccount.balanceCents,

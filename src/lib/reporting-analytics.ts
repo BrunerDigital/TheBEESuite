@@ -7,6 +7,7 @@ import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { readSchoolEin } from "@/lib/school-tax-id";
 import { formatStaffDecimalHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
 import { zonedDateKey } from "@/lib/zoned-date-time";
+import { responsibilitySeparatedBillingAmounts } from "@/lib/invoice-responsibility-separation";
 
 export { REPORT_DEFINITIONS } from "@/lib/reporting-analytics-shared";
 export type { ReportKind } from "@/lib/reporting-analytics-shared";
@@ -518,6 +519,7 @@ export function buildBillingReports({
     dueDate: Date;
     status: PaymentStatus;
     totalCents: number;
+    customFields?: unknown;
     isCurrentFamily: boolean;
     billingAccount: { family: { centerId: string | null } };
   }>;
@@ -556,7 +558,11 @@ export function buildBillingReports({
 
   invoices.forEach((invoice) => {
     const row = ensureRow(invoice.createdAt, invoice.billingAccount.family.centerId);
-    row.invoiceCents = addCents(row.invoiceCents, invoice.totalCents);
+    const separated = responsibilitySeparatedBillingAmounts({
+      invoiceTotalCents: invoice.totalCents,
+      customFields: invoice.customFields,
+    });
+    row.invoiceCents = addCents(row.invoiceCents, separated?.totalResponsibilityCents ?? invoice.totalCents);
     row.invoiceCount += 1;
     if (invoice.isCurrentFamily && (invoice.status === PaymentStatus.OPEN || invoice.status === PaymentStatus.FAILED)) {
       row.openCents = addCents(row.openCents, invoice.totalCents);
@@ -802,6 +808,7 @@ export async function buildAnalyticsReportData(
         dueDate: true,
         status: true,
         totalCents: true,
+        customFields: true,
         billingAccount: {
           select: {
             family: {

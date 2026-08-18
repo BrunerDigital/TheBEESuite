@@ -52,6 +52,7 @@ import {
   type ProcareGuardianImportRecord,
 } from "@/lib/procare-guardian-merge";
 import { enrollmentClassroomValidationError } from "@/lib/enrollment-status";
+import { invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -3036,6 +3037,19 @@ async function POSTHandler(request: NextRequest) {
 
       if (parsedBalance.present) {
         const importedBillingFields = metadataFromRow(rawData, { mappedCenterId: targetCenter.id });
+        const legacyInvoiceExternalId = `procare-opening-balance:${accountExternalId || family.id}`;
+        const invoiceExternalId = `procare-opening-balance:${targetCenter.id}:${accountExternalId || family.id}`;
+        const existingInvoice = await prisma.invoice.findFirst({
+          where: {
+            billingAccount: { family: { centerId: targetCenter.id } },
+            sourceSystem: "procare",
+            externalId: { in: [invoiceExternalId, legacyInvoiceExternalId] },
+          },
+          select: { id: true, customFields: true },
+        });
+        if (existingInvoice && invoiceResponsibilitySeparation(existingInvoice.customFields)) {
+          throw new Error("A separated ProCare opening-balance invoice cannot be overwritten by a later import.");
+        }
         const existingBillingAccount = await prisma.billingAccount.findUnique({
           where: { familyId: family.id },
           select: { balanceCents: true, customFields: true },
@@ -3060,17 +3074,7 @@ async function POSTHandler(request: NextRequest) {
           },
         });
         let importedInvoiceId: string | null = null;
-        const legacyInvoiceExternalId = `procare-opening-balance:${accountExternalId || family.id}`;
-        const invoiceExternalId = `procare-opening-balance:${targetCenter.id}:${accountExternalId || family.id}`;
         const importedInvoiceFields = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
-        const existingInvoice = await prisma.invoice.findFirst({
-          where: {
-            billingAccount: { family: { centerId: targetCenter.id } },
-            sourceSystem: "procare",
-            externalId: { in: [invoiceExternalId, legacyInvoiceExternalId] },
-          },
-          select: { id: true, customFields: true },
-        });
         const reconciliationProtectedInvoice = existingInvoice
           && typeof jsonObject(existingInvoice.customFields).staleImportedOpeningBalanceVoidedAt === "string";
         if (reconciliationProtectedInvoice) {

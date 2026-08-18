@@ -37,7 +37,7 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(route, /guardians:\s*\{ select:\s*\{ userId: true \} \}/);
   assert.match(route, /parentPaymentAmountCents\(/);
   assert.match(route, /parentBalanceNeedsResponsibilityReview\(/);
-  assert.match(route, /parent_account_payment_amount_required/);
+  assert.match(route, /parent_account_payment_responsibility_review_required/);
   assert.match(route, /requestedAmountCents,\s*responsibilityReviewRequired/);
   assert.match(route, /source = parentCheckout \? "parent_portal"/);
   assert.match(page, /balanceCents:\s*parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed \? 0 : parentBalanceCents/);

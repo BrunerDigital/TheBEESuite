@@ -12,6 +12,7 @@ test("session heartbeats preserve sign-out handling and refresh live billing onl
   const audit = source("src/lib/audit.ts");
   const dunning = source("src/app/api/cron/payment-dunning/route.ts");
   const stripeWebhook = source("src/app/api/billing/stripe-webhook/route.ts");
+  const terminalPayment = source("src/app/api/billing/terminal-payment/route.ts");
 
   assert.equal(liveRefresh.match(/router\.refresh\(\)/g)?.length, 2);
   assert.doesNotMatch(liveRefresh, /sync\((true|false)\)/);
@@ -37,6 +38,8 @@ test("session heartbeats preserve sign-out handling and refresh live billing onl
   assert.match(stripeWebhook, /writeSystemAudit\(invoiceId, event\.id, session\.id, "billing\.checkout\.pending"\)/);
   assert.equal(stripeWebhook.match(/else if \(affectedBillingAccountId\)/g)?.length, 2);
   assert.match(stripeWebhook, /writeBillingAccountSystemAudit\(affectedBillingAccountId, event\.id, charge\.id, "billing\.charge\.refunded"\)/);
+  assert.match(terminalPayment, /"billing\.terminal\.payment_failed"/);
+  assert.match(terminalPayment, /"billing\.terminal\.payment_processing"/);
 });
 
 test("notification polling uses the lightweight unread endpoint", () => {

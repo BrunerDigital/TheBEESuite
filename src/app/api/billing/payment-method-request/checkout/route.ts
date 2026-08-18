@@ -41,6 +41,12 @@ import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts"
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
+import { invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
+import {
+  AGENCY_LEDGER_ENTRY_TYPES,
+  AGENCY_LEDGER_SOURCE_SYSTEM,
+  parentBalanceNeedsResponsibilityReview,
+} from "@/lib/parent-billing-visibility";
 
 export const runtime = "nodejs";
 
@@ -90,6 +96,7 @@ async function POSTHandler(request: NextRequest) {
       centerId: true,
       name: true,
       billingEmail: true,
+      customFields: true,
       guardians: {
         select: { id: true, fullName: true, email: true, userId: true },
       },
@@ -100,6 +107,15 @@ async function POSTHandler(request: NextRequest) {
           balanceCents: true,
           autopayPlaceholder: true,
           customFields: true,
+          ledgerEntries: {
+            where: {
+              OR: [
+                { type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } },
+                { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM },
+              ],
+            },
+            select: { type: true, amountCents: true, sourceSystem: true, invoiceId: true, metadata: true },
+          },
         },
       },
     },
@@ -144,6 +160,7 @@ async function POSTHandler(request: NextRequest) {
     update: {},
     create: { familyId: family.id, balanceCents: 0 },
   });
+  const agencyLedgerEntries = "ledgerEntries" in billingAccount ? billingAccount.ledgerEntries : [];
   const invoice = invoiceId
     ? await prisma.invoice.findFirst({
         where: { id: invoiceId, billingAccountId: billingAccount.id },
@@ -162,6 +179,22 @@ async function POSTHandler(request: NextRequest) {
   }
   if (invoice.totalCents <= 0) {
     return NextResponse.json({ ok: false, error: "Invoice total must be greater than zero." }, { status: 400 });
+  }
+  if (parentBalanceNeedsResponsibilityReview({
+    accountBalanceCents: billingAccount.balanceCents,
+    agencyLedgerEntries,
+    invoiceId: invoice.id,
+    invoiceResponsibilitySeparated: invoiceResponsibilitySeparation(invoice.customFields) !== null,
+    responsibilityEvidence: [
+      invoice.customFields,
+      billingAccount.customFields,
+      family.customFields,
+    ],
+  })) {
+    return NextResponse.json(
+      { ok: false, error: "The school must separate family and agency responsibility before this invoice can be paid." },
+      { status: 409 },
+    );
   }
 
   const stripeSecretConfigured = Boolean(await getStripeSecretKey({ tenantId: payload.tenantId }));

@@ -855,6 +855,12 @@ async function updateInvoice(user: CurrentBillingUser, body: Record<string, unkn
   if (invoice.status !== PaymentStatus.OPEN) {
     return NextResponse.json({ ok: false, error: "Only open invoices can be edited." }, { status: 400 });
   }
+  if (amountProvided && invoiceResponsibilitySeparation(invoice.customFields)) {
+    return NextResponse.json(
+      { ok: false, error: "The amount cannot be changed after family and agency responsibility has been separated." },
+      { status: 409 },
+    );
+  }
 
   const currentDescription = invoice.items[0]?.description || clean((jsonObject(invoice.customFields)).description) || invoice.number;
   const description = descriptionProvided ? requestedDescription : currentDescription;

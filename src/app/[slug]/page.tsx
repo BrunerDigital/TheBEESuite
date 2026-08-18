@@ -631,9 +631,9 @@ async function buildFtePrefills(
     where: {
       billingAccount: { family: { centerId: centerIdFilter(centerIds) } },
       createdAt: { gte: weekStart, lt: weekEndExclusive },
-      status: { not: PaymentStatus.VOID },
     },
     select: {
+      status: true,
       totalCents: true,
       customFields: true,
       items: { select: { description: true, amountCents: true } },
@@ -709,6 +709,7 @@ async function buildFtePrefills(
       invoiceTotalCents: invoice.totalCents,
       customFields: invoice.customFields,
     });
+    if (invoice.status === PaymentStatus.VOID && !separated) continue;
     if (separated) {
       row.totalBilledAmount += separated.totalResponsibilityCents / 100;
       row.subsidyBillAmount += separated.agencyResponsibilityCents / 100;

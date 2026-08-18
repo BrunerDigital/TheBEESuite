@@ -76,12 +76,19 @@ test("the director split is atomic, audited, and does not change the total accou
 test("all online payment paths stay blocked until responsibility is separated", () => {
   const actions = readFileSync("src/components/invoice-stored-payment-button.tsx", "utf8");
   const checkout = readFileSync("src/app/api/billing/checkout-session/route.ts", "utf8");
+  const emailedCheckout = readFileSync("src/app/api/billing/payment-method-request/checkout/route.ts", "utf8");
   const autopay = readFileSync("src/lib/autopay-processing.ts", "utf8");
+  const invoiceRoute = readFileSync("src/app/api/billing/invoices/route.ts", "utf8");
+  const livePage = readFileSync("src/app/[slug]/page.tsx", "utf8");
 
   assert.match(actions, /Separate responsibility/);
   assert.match(actions, /responsibilityReviewRequired/);
   assert.match(actions, /This records an agency receivable; it does not record an agency payment/);
   assert.match(checkout, /Separate family and agency responsibility before opening payment/);
   assert.ok(checkout.indexOf("parentBalanceNeedsResponsibilityReview({") < checkout.indexOf("const stripeSecretConfigured"));
+  assert.match(emailedCheckout, /parentBalanceNeedsResponsibilityReview/);
+  assert.ok(emailedCheckout.indexOf("parentBalanceNeedsResponsibilityReview({") < emailedCheckout.indexOf("const stripeSecretConfigured"));
   assert.match(autopay, /Automated payment is blocked until the school separates agency and family responsibility/);
+  assert.match(invoiceRoute, /amount cannot be changed after family and agency responsibility has been separated/);
+  assert.match(livePage, /invoice\.status === PaymentStatus\.VOID && !separated/);
 });

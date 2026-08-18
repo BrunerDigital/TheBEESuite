@@ -157,6 +157,40 @@ test("billing reports retain historical revenue while excluding past-family debt
   assert.equal(rows[0]?.overdueCents, 12500);
 });
 
+test("billing reports preserve gross billed revenue after responsibility is separated", () => {
+  const centerById = new Map([["center_1", emptyReportData.centers[0]]]);
+  const rows = buildBillingReports({
+    invoices: [{
+      createdAt: new Date("2026-06-08T12:00:00.000Z"),
+      dueDate: new Date("2026-06-09T12:00:00.000Z"),
+      status: "OPEN",
+      totalCents: 2_000,
+      customFields: { responsibilitySeparation: {
+        status: "separated",
+        originalInvoiceTotalCents: 12_000,
+        familyResponsibilityCents: 2_000,
+        agencyResponsibilityCents: 10_000,
+        agencyName: "CCDF",
+        authorizationNumber: null,
+        coverageStart: null,
+        coverageEnd: null,
+        separatedAt: "2026-06-08T12:00:00.000Z",
+        separatedByUserId: "user_1",
+      } },
+      isCurrentFamily: true,
+      billingAccount: { family: { centerId: "center_1" } },
+    }],
+    payments: [],
+    centerById,
+    interval: "weekly",
+    now: new Date("2026-06-11T12:00:00.000Z"),
+  });
+
+  assert.equal(rows[0]?.invoiceCents, 12_000);
+  assert.equal(rows[0]?.openCents, 2_000);
+  assert.equal(rows[0]?.overdueCents, 2_000);
+});
+
 test("weekly billing and payment exports stay separate", () => {
   const weeklyRow = {
     period: "2026-06-01 to 2026-06-07",

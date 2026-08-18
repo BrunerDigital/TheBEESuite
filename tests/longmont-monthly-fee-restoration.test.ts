@@ -68,7 +68,7 @@ test("Longmont voided-fee audit reports billing logs outside the selected invoic
   assert.doesNotMatch(auditSource, /!logsByResource\.has\(log\.resourceId\)/);
 });
 
-test("Longmont voided-fee audit includes draft checkouts without paid dates", () => {
-  assert.match(auditSource, /status: \{ in: \[PaymentStatus\.DRAFT, PaymentStatus\.FAILED\] \}/);
-  assert.match(auditSource, /paidAt: \{ gte: START \}/);
+test("Longmont voided-fee audit includes every payment attempt and outcome", () => {
+  assert.match(auditSource, /payments:\s*\{\s*select: \{ id: true, amountCents: true, status: true, provider: true, paidAt: true, customFields: true \}/);
+  assert.doesNotMatch(auditSource, /payments:\s*\{\s*where:/);
 });

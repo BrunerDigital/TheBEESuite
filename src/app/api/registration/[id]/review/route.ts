@@ -311,6 +311,7 @@ async function ensureRegistrationPaymentInvoice(
         registrationPaymentRequired: true,
       }),
     },
+    include: { family: { select: { centerId: true } } },
   });
 
   const externalId = registrationInvoiceExternalId(input.submissionId);
@@ -400,6 +401,9 @@ async function ensureRegistrationPaymentInvoice(
         }),
       },
     });
+  }
+  if (billingAccount.family.centerId) {
+    await tx.center.update({ where: { id: billingAccount.family.centerId }, data: { updatedAt: new Date() } });
   }
 
   return registrationPaymentStatus({

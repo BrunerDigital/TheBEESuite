@@ -16,6 +16,11 @@ test("session heartbeats preserve sign-out handling and refresh live billing onl
   const familyRefunds = source("src/lib/family-refunds.ts");
   const paymentRequestCheckout = source("src/app/api/billing/payment-method-request/checkout/route.ts");
   const billingInvoices = source("src/lib/billing-invoices.ts");
+  const registrationReview = source("src/app/api/registration/[id]/review/route.ts");
+  const aiCommand = source("src/app/api/ai/command/route.ts");
+  const familyIntake = source("src/app/api/families/intake/route.ts");
+  const operationsRecords = source("src/app/api/operations/records/route.ts");
+  const procareImport = source("src/app/api/imports/procare/route.ts");
 
   assert.equal(liveRefresh.match(/router\.refresh\(\)/g)?.length, 2);
   assert.doesNotMatch(liveRefresh, /sync\((true|false)\)/);
@@ -47,6 +52,11 @@ test("session heartbeats preserve sign-out handling and refresh live billing onl
   assert.equal(paymentRequestCheckout.match(/prisma\.center\.update\(\{ where: \{ id: center\.id \}/g)?.length, 2);
   assert.match(billingInvoices, /include: \{ family: \{ select: \{ centerId: true \} \} \}/);
   assert.match(billingInvoices, /tx\.center\.update/);
+  assert.match(registrationReview, /billingAccount\.family\.centerId/);
+  assert.match(aiCommand, /tx\.center\.update\(\{ where: \{ id: selectedCenterId \}/);
+  assert.match(familyIntake, /if \(result\.invoiceId\)/);
+  assert.match(operationsRecords, /entity === "invoice" \|\| entity === "ledgerEntry" \|\| entity === "familyMerge"/);
+  assert.match(procareImport, /const importedAnyRows = rowResults\.some/);
 });
 
 test("notification polling uses the lightweight unread endpoint", () => {

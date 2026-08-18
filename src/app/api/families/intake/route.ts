@@ -354,6 +354,9 @@ async function POSTHandler(request: NextRequest) {
       pinSet: result.pinWasSet,
     },
   });
+  if (result.invoiceId) {
+    await prisma.center.update({ where: { id: center.id }, data: { updatedAt: new Date() } });
+  }
 
   const notificationMode = result.mode === "created_family" ? "created" : "updated";
   await Promise.all([

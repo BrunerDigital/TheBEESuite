@@ -102,6 +102,7 @@ test("responsibility separation remains available while full invoice collection 
   const actions = readFileSync("src/components/invoice-stored-payment-button.tsx", "utf8");
   const checkout = readFileSync("src/app/api/billing/checkout-session/route.ts", "utf8");
   const emailedCheckout = readFileSync("src/app/api/billing/payment-method-request/checkout/route.ts", "utf8");
+  const terminalCheckout = readFileSync("src/app/api/billing/terminal-payment/route.ts", "utf8");
   const autopay = readFileSync("src/lib/autopay-processing.ts", "utf8");
   const invoiceRoute = readFileSync("src/app/api/billing/invoices/route.ts", "utf8");
   const livePage = readFileSync("src/app/[slug]/page.tsx", "utf8");
@@ -115,7 +116,7 @@ test("responsibility separation remains available while full invoice collection 
   assert.match(actions, /This records an agency receivable; it does not record an agency payment/);
   assert.match(visibility, /paymentCollectionResponsibilityHoldRequired/);
   assert.match(visibility, /input\.enforceCollectionHold === true && parentBalanceNeedsResponsibilityReview/);
-  for (const paymentPath of [checkout, emailedCheckout, autopay]) {
+  for (const paymentPath of [checkout, emailedCheckout, terminalCheckout, autopay]) {
     assert.match(paymentPath, /enforceCollectionHold:\s*true/);
     assert.match(paymentPath, /paymentCollectionResponsibilityHoldRequired/);
     assert.match(paymentPath, /responsibilityEvidence:\s*\[\s*invoice(?:Fields|\.customFields),\s*invoice\.items\.map/);

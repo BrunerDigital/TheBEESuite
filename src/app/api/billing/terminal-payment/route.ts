@@ -360,7 +360,8 @@ async function processPayment(body: Record<string, unknown>) {
         agencyLedgerEntries: billingAccount.ledgerEntries,
         invoiceId: invoice.id,
         invoiceResponsibilitySeparated: invoiceResponsibilitySeparation(invoice.customFields) !== null,
-        responsibilityEvidence: [invoice.customFields, invoice.items.map((item) => item.description), ...responsibilityEvidence],
+        responsibilityEvidence: [invoice.customFields, invoice.items.map((item) => item.description)],
+        enforceCollectionHold: true,
       })
     : paymentCollectionResponsibilityHoldRequired({
         accountBalanceCents: billingAccount.balanceCents,

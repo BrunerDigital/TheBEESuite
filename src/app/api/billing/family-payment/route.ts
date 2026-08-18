@@ -149,7 +149,7 @@ async function POSTHandler(request: NextRequest) {
   const method = familyPaymentMethod(body.method);
   const parentCheckout = userIsParentGuardian && !userCanManageBilling;
   const returnPath = safeReturnPath(body.returnPath, parentCheckout ? "/parent-portal" : "/billing-invoices");
-  let description = parentCheckout ? "Family balance payment" : clean(body.description) || "Tuition payment";
+  const description = parentCheckout ? "Family balance payment" : clean(body.description) || "Tuition payment";
   const source = parentCheckout ? "parent_portal" : clean(body.source) || "director_dashboard";
   const collectionMode = checkoutCollectionMode(method, body.collectionMode, userCanManageBilling);
 
@@ -250,27 +250,16 @@ async function POSTHandler(request: NextRequest) {
       ...billingAccount.invoices.flatMap((invoice) => [invoice.customFields, invoice.items.map((item) => item.description)]),
     ],
   });
-  if (responsibilityReviewRequired && requestedAmountCents <= 0) {
+  if (responsibilityReviewRequired) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Enter the amount you want to pay toward your account while the school reviews the agency and family split.",
-        code: "parent_account_payment_amount_required",
+        error: "The school must separate family and agency responsibility before an account payment can be made.",
+        code: "parent_account_payment_responsibility_review_required",
       },
-      { status: 400 },
+      { status: 409 },
     );
   }
-  if (responsibilityReviewRequired && requestedAmountCents > billingAccount.balanceCents) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Payment amount cannot exceed the current account balance.",
-        code: "parent_account_payment_exceeds_balance",
-      },
-      { status: 400 },
-    );
-  }
-  if (responsibilityReviewRequired) description = "Payment toward family account";
   const amountCents = parentCheckout
     ? parentPaymentAmountCents({
         accountBalanceCents: billingAccount.balanceCents,

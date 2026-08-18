@@ -25,7 +25,12 @@ import {
   invoiceResponsibilitySeparation,
   responsibilitySeparationError,
 } from "@/lib/invoice-responsibility-separation";
-import { hasSubsidyResponsibilityEvidence } from "@/lib/parent-billing-visibility";
+import {
+  AGENCY_LEDGER_ENTRY_TYPES,
+  AGENCY_LEDGER_SOURCE_SYSTEM,
+  hasSubsidyResponsibilityEvidence,
+  parentVisibleBillingBalanceCents,
+} from "@/lib/parent-billing-visibility";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -566,11 +571,32 @@ async function createAgencyPayment(user: CurrentBillingUser, body: Record<string
   return NextResponse.json({ ok: true, created: 1, skipped: 0, totalCents: amountCents, payment: result.payment, entry: result.entry });
 }
 
+async function manualFamilyPaymentExceedsVisibleBalance(familyId: string, amountCents: number) {
+  const account = await prisma.billingAccount.findUnique({
+    where: { familyId },
+    select: {
+      balanceCents: true,
+      ledgerEntries: {
+        where: { OR: [{ type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } }, { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM }] },
+        select: { type: true, sourceSystem: true, amountCents: true },
+      },
+    },
+  });
+  if (!account?.ledgerEntries.length) return false;
+  return amountCents > parentVisibleBillingBalanceCents({
+    accountBalanceCents: account.balanceCents,
+    agencyLedgerEntries: account.ledgerEntries,
+  });
+}
+
 async function createManualCheckPayment(user: CurrentBillingUser, body: Record<string, unknown>) {
   const familyAccess = await assertFamilyAccess(user, clean(body.familyId));
   if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
   const amountCents = amountCentsFromBody(body);
   if (amountCents <= 0) return NextResponse.json({ ok: false, error: "Check payment amount is required." }, { status: 400 });
+  if (await manualFamilyPaymentExceedsVisibleBalance(familyAccess.family.id, amountCents)) {
+    return NextResponse.json({ ok: false, error: "Check payment cannot exceed the family-responsibility balance." }, { status: 409 });
+  }
   const checkNumber = clean(body.checkNumber);
   if (!checkNumber) return NextResponse.json({ ok: false, error: "Check number or reference is required." }, { status: 400 });
   const paidAt = parseDate(body.paidAt);
@@ -637,6 +663,9 @@ async function createManualCashPayment(user: CurrentBillingUser, body: Record<st
   if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
   const amountCents = amountCentsFromBody(body);
   if (amountCents <= 0) return NextResponse.json({ ok: false, error: "Cash payment amount is required." }, { status: 400 });
+  if (await manualFamilyPaymentExceedsVisibleBalance(familyAccess.family.id, amountCents)) {
+    return NextResponse.json({ ok: false, error: "Cash payment cannot exceed the family-responsibility balance." }, { status: 409 });
+  }
   const paidAt = parseDate(body.paidAt);
   const reference = clean(body.reference);
   const notes = clean(body.notes);
@@ -1172,6 +1201,7 @@ async function separateInvoiceResponsibility(user: CurrentBillingUser, body: Rec
       select: {
         id: true,
         number: true,
+        createdAt: true,
         status: true,
         totalCents: true,
         customFields: true,
@@ -1257,6 +1287,18 @@ async function separateInvoiceResponsibility(user: CurrentBillingUser, body: Rec
     if (linkedPaymentCount > 0 || invoice.ledgerEntries.some((entry) => entry.paymentId)) {
       throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:This invoice has payment activity. Review it before changing responsibility.");
     }
+    const recentAccountPayments = await tx.payment.findMany({
+      where: {
+        billingAccountId: invoice.billingAccount.id,
+        status: PaymentStatus.PAID,
+        paidAt: { gte: invoice.createdAt },
+        provider: { not: AGENCY_LEDGER_SOURCE_SYSTEM },
+      },
+      select: { customFields: true },
+    });
+    if (recentAccountPayments.some((payment) => !clean(jsonObject(payment.customFields).invoiceId))) {
+      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:This account has an unallocated family payment. Allocate or review it before separating responsibility.");
+    }
 
     const separatedAt = new Date();
     const separation = {
@@ -1310,6 +1352,7 @@ async function separateInvoiceResponsibility(user: CurrentBillingUser, body: Rec
         metadata: separation,
       },
     });
+    const agencyEffectiveAt = new Date(separatedAt.getTime() + 1);
     const agencyReceivable = await tx.ledgerEntry.create({
       data: {
         billingAccountId: invoice.billingAccount.id,
@@ -1318,7 +1361,7 @@ async function separateInvoiceResponsibility(user: CurrentBillingUser, body: Rec
         description: `${agencyName} responsibility for ${invoice.number}`,
         amountCents: agencyResponsibilityCents,
         balanceAfterCents: invoice.billingAccount.balanceCents,
-        effectiveAt: separatedAt,
+        effectiveAt: agencyEffectiveAt,
         sourceSystem: "subsidy_agency",
         externalId: `responsibility-split:${invoice.id}:agency`,
         metadata: { ...separation, sourceInvoiceId: invoice.id, sourceInvoiceNumber: invoice.number },

@@ -5011,6 +5011,12 @@ export type BillingInvoicesPageData = {
     status: string;
     dueDate: Date | string;
     totalCents: number;
+    responsibilityReviewRequired: boolean;
+    responsibilitySeparation: {
+      familyResponsibilityCents: number;
+      agencyResponsibilityCents: number;
+      agencyName: string;
+    } | null;
     billingAccount: {
       id: string;
       balanceCents: number;
@@ -5347,7 +5353,19 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                   </TableCell>
                   <TableCell><Badge variant={invoice.status === "OPEN" ? "outline" : "default"}>{formatRecordLabel(invoice.status)}</Badge></TableCell>
                   <TableCell>{formatDate(invoice.dueDate)}</TableCell>
-                  <TableCell>{money(invoice.totalCents)}</TableCell>
+                  <TableCell>
+                    {invoice.responsibilitySeparation ? (
+                      <div className="space-y-1">
+                        <div className="font-medium">Family {money(invoice.responsibilitySeparation.familyResponsibilityCents)}</div>
+                        <div className="text-xs text-muted-foreground">{invoice.responsibilitySeparation.agencyName} {money(invoice.responsibilitySeparation.agencyResponsibilityCents)}</div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div>{money(invoice.totalCents)}</div>
+                        {invoice.responsibilityReviewRequired ? <Badge variant="destructive">Needs separation</Badge> : null}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>{invoice._count.items}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-2">

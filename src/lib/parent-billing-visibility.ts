@@ -13,6 +13,9 @@ type AgencyLedgerEntry = {
   type: string;
   sourceSystem?: string | null;
   amountCents: number;
+  invoiceId?: string | null;
+  externalId?: string | null;
+  metadata?: unknown;
 };
 
 const SUBSIDY_MARKER = /subsid|voucher|ccdf|copay|co-pay|familyresponsibility|agencyresponsibility|fundingtype|\belc\b/i;
@@ -86,10 +89,23 @@ export function parentBalanceNeedsResponsibilityReview(input: {
   accountBalanceCents: number;
   agencyLedgerEntries: AgencyLedgerEntry[];
   responsibilityEvidence: unknown[];
+  invoiceId?: string | null;
+  invoiceResponsibilitySeparated?: boolean;
 }) {
+  const invoiceId = input.invoiceId?.trim() || null;
+  const hasSeparatedResponsibility = invoiceId
+    ? input.invoiceResponsibilitySeparated === true || input.agencyLedgerEntries.some((entry) => {
+        if (!isAgencyOnlyLedgerEntry(entry)) return false;
+        if (entry.invoiceId === invoiceId) return true;
+        const metadata = entry.metadata && typeof entry.metadata === "object" && !Array.isArray(entry.metadata)
+          ? entry.metadata as Record<string, unknown>
+          : {};
+        return metadata.sourceInvoiceId === invoiceId || metadata.invoiceId === invoiceId;
+      })
+    : input.invoiceResponsibilitySeparated === true;
   return input.accountBalanceCents > 0
     && hasSubsidyResponsibilityEvidence(...input.responsibilityEvidence)
-    && !input.agencyLedgerEntries.some(isAgencyOnlyLedgerEntry);
+    && !hasSeparatedResponsibility;
 }
 
 export function isAgencyOnlyLedgerEntry(entry: Pick<AgencyLedgerEntry, "type" | "sourceSystem">) {

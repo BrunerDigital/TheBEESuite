@@ -42,6 +42,7 @@ import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
+import { allOpenInvoicesResponsibilitySeparated } from "@/lib/invoice-responsibility-separation";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
@@ -148,13 +149,17 @@ async function POSTHandler(request: NextRequest) {
   const method = familyPaymentMethod(body.method);
   const parentCheckout = userIsParentGuardian && !userCanManageBilling;
   const returnPath = safeReturnPath(body.returnPath, parentCheckout ? "/parent-portal" : "/billing-invoices");
-  let description = parentCheckout ? "Family balance payment" : clean(body.description) || "Tuition payment";
+  const description = parentCheckout ? "Family balance payment" : clean(body.description) || "Tuition payment";
   const source = parentCheckout ? "parent_portal" : clean(body.source) || "director_dashboard";
   const collectionMode = checkoutCollectionMode(method, body.collectionMode, userCanManageBilling);
 
   const billingAccount = await prisma.billingAccount.findFirst({
     where: billingAccountId ? { id: billingAccountId } : { familyId },
     include: {
+      invoices: {
+        where: { status: { in: [PaymentStatus.OPEN, PaymentStatus.PAID, PaymentStatus.VOID] } },
+        select: { status: true, totalCents: true, customFields: true, items: { select: { description: true } } },
+      },
       family: {
         select: {
           id: true,
@@ -237,33 +242,24 @@ async function POSTHandler(request: NextRequest) {
   const responsibilityReviewRequired = parentCheckout && parentBalanceNeedsResponsibilityReview({
     accountBalanceCents: billingAccount.balanceCents,
     agencyLedgerEntries,
+    invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(billingAccount.invoices),
     responsibilityEvidence: [
       billingAccount.customFields,
       billingAccount.family.customFields,
       ...billingAccount.family.children.map((child) => child.customFields),
+      ...billingAccount.invoices.flatMap((invoice) => [invoice.customFields, invoice.items.map((item) => item.description)]),
     ],
   });
-  if (responsibilityReviewRequired && requestedAmountCents <= 0) {
+  if (responsibilityReviewRequired) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Enter the amount you want to pay toward your account while the school reviews the agency and family split.",
-        code: "parent_account_payment_amount_required",
+        error: "The school must separate family and agency responsibility before an account payment can be made.",
+        code: "parent_account_payment_responsibility_review_required",
       },
-      { status: 400 },
+      { status: 409 },
     );
   }
-  if (responsibilityReviewRequired && requestedAmountCents > billingAccount.balanceCents) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Payment amount cannot exceed the current account balance.",
-        code: "parent_account_payment_exceeds_balance",
-      },
-      { status: 400 },
-    );
-  }
-  if (responsibilityReviewRequired) description = "Payment toward family account";
   const amountCents = parentCheckout
     ? parentPaymentAmountCents({
         accountBalanceCents: billingAccount.balanceCents,

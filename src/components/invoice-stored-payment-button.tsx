@@ -5,13 +5,22 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export type InvoiceStoredPaymentActionData = {
   id: string;
   number: string;
   status: string;
   totalCents: number;
+  responsibilityReviewRequired: boolean;
+  responsibilitySeparation: {
+    familyResponsibilityCents: number;
+    agencyResponsibilityCents: number;
+    agencyName: string;
+  } | null;
   billingAccount: {
+    balanceCents: number;
     family: { name: string };
     paymentMethodManagement: {
       autopayStatus: "enabled" | "disabled" | "pending";
@@ -41,6 +50,13 @@ type CheckoutSummary = {
   url?: string;
 };
 
+type ResponsibilitySummary = {
+  ok?: boolean;
+  error?: string;
+  familyResponsibilityCents?: number;
+  agencyResponsibilityCents?: number;
+};
+
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
@@ -49,6 +65,7 @@ function disabledReason(invoice: InvoiceStoredPaymentActionData) {
   const method = invoice.billingAccount.paymentMethodManagement;
   if (invoice.status !== "OPEN") return "Invoice is not open.";
   if (invoice.totalCents <= 0) return "Invoice total must be greater than zero.";
+  if (invoice.responsibilityReviewRequired) return "Separate family and agency responsibility before collecting payment.";
   if (method.autopayStatus !== "enabled") return "The parent has not enabled autopay.";
   if (!method.hasStripeCustomer || !method.hasSavedPaymentMethod) return "No saved payment method.";
   return null;
@@ -59,8 +76,63 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [showResponsibilityForm, setShowResponsibilityForm] = useState(false);
+  const [familyResponsibilityDollars, setFamilyResponsibilityDollars] = useState("");
+  const [agencyResponsibilityDollars, setAgencyResponsibilityDollars] = useState("");
+  const [agencyName, setAgencyName] = useState("");
+  const [authorizationNumber, setAuthorizationNumber] = useState("");
   const method = invoice.billingAccount.paymentMethodManagement;
   const reason = disabledReason(invoice);
+
+  function dollarsToCents(value: string) {
+    const normalized = value.trim().replace(/[$,]/g, "");
+    if (!normalized) return null;
+    const amount = Number(normalized);
+    return Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) : null;
+  }
+
+  function separateResponsibility() {
+    const familyResponsibilityCents = dollarsToCents(familyResponsibilityDollars);
+    const agencyResponsibilityCents = dollarsToCents(agencyResponsibilityDollars);
+    if (familyResponsibilityCents === null || agencyResponsibilityCents === null || agencyResponsibilityCents <= 0) {
+      return setError("Enter the family amount and an agency amount greater than zero.");
+    }
+    if (familyResponsibilityCents + agencyResponsibilityCents !== invoice.totalCents) {
+      return setError(`Family and agency responsibility must total exactly ${money(invoice.totalCents)}.`);
+    }
+    if (!agencyName.trim()) return setError("Enter the agency payer.");
+    const confirmed = window.confirm(
+      `Separate ${invoice.number} into ${money(familyResponsibilityCents)} family responsibility and ${money(agencyResponsibilityCents)} ${agencyName.trim()} responsibility? This records an agency receivable; it does not record an agency payment.`,
+    );
+    if (!confirmed) return;
+
+    startTransition(async () => {
+      setMessage("");
+      setError("");
+      const response = await fetch("/api/billing/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "separateResponsibility",
+          invoiceId: invoice.id,
+          expectedInvoiceTotalCents: invoice.totalCents,
+          expectedAccountBalanceCents: invoice.billingAccount.balanceCents,
+          familyResponsibilityCents,
+          agencyResponsibilityCents,
+          agencyName: agencyName.trim(),
+          authorizationNumber: authorizationNumber.trim() || undefined,
+        }),
+      });
+      const json = await response.json().catch(() => null) as ResponsibilitySummary | null;
+      if (!response.ok || !json?.ok) {
+        setError(json?.error || "Responsibility could not be separated. Refresh the invoice and try again.");
+        return;
+      }
+      setMessage(`Separated: family ${money(familyResponsibilityCents)} · agency ${money(agencyResponsibilityCents)}`);
+      setShowResponsibilityForm(false);
+      router.refresh();
+    });
+  }
 
   function processAuthorizedAutopay() {
     const confirmed = window.confirm(
@@ -108,6 +180,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   function openInstantBankCheckout() {
     if (invoice.status !== "OPEN") return setError("Invoice is not open.");
     if (invoice.totalCents <= 0) return setError("Invoice total must be greater than zero.");
+    if (invoice.responsibilityReviewRequired) return setError("Separate family and agency responsibility before opening payment.");
     const confirmed = window.confirm(
       `Open a secure Link payment form for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
     );
@@ -137,6 +210,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   function openCardCheckout() {
     if (invoice.status !== "OPEN") return setError("Invoice is not open.");
     if (invoice.totalCents <= 0) return setError("Invoice total must be greater than zero.");
+    if (invoice.responsibilityReviewRequired) return setError("Separate family and agency responsibility before opening payment.");
     const confirmed = window.confirm(
       `Open a secure card payment form for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
     );
@@ -177,7 +251,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         </Button>
         <Button
           size="sm"
-          disabled={isPending || invoice.status !== "OPEN" || invoice.totalCents <= 0}
+          disabled={isPending || invoice.status !== "OPEN" || invoice.totalCents <= 0 || invoice.responsibilityReviewRequired}
           onClick={openInstantBankCheckout}
           variant="outline"
         >
@@ -186,17 +260,59 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         </Button>
         <Button
           size="sm"
-          disabled={isPending || invoice.status !== "OPEN" || invoice.totalCents <= 0}
+          disabled={isPending || invoice.status !== "OPEN" || invoice.totalCents <= 0 || invoice.responsibilityReviewRequired}
           onClick={openCardCheckout}
           variant="outline"
         >
           <CreditCard data-icon="inline-start" />
           Debit or credit card
         </Button>
+        {invoice.responsibilityReviewRequired ? (
+          <Button
+            size="sm"
+            disabled={isPending}
+            onClick={() => setShowResponsibilityForm((current) => !current)}
+            variant="outline"
+          >
+            {showResponsibilityForm ? "Cancel separation" : "Separate responsibility"}
+          </Button>
+        ) : null}
       </div>
       <div className="max-w-48 text-xs text-muted-foreground">
         {method.paymentMethodLabel ?? reason ?? ""}
       </div>
+      {invoice.responsibilitySeparation ? (
+        <div className="max-w-72 text-xs text-muted-foreground">
+          Family {money(invoice.responsibilitySeparation.familyResponsibilityCents)} · {invoice.responsibilitySeparation.agencyName} {money(invoice.responsibilitySeparation.agencyResponsibilityCents)}
+        </div>
+      ) : null}
+      {showResponsibilityForm && invoice.responsibilityReviewRequired ? (
+        <div className="mt-2 grid w-full min-w-72 gap-3 rounded-lg border bg-background/70 p-3 sm:grid-cols-2">
+          <div className="space-y-1 sm:col-span-2">
+            <p className="text-xs font-medium">Invoice total: {money(invoice.totalCents)}</p>
+            <p className="text-xs text-muted-foreground">Enter the exact family copay and agency portion. This does not record money received.</p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`family-responsibility-${invoice.id}`}>Family responsibility</Label>
+            <Input id={`family-responsibility-${invoice.id}`} inputMode="decimal" placeholder="20.00" value={familyResponsibilityDollars} onChange={(event) => setFamilyResponsibilityDollars(event.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`agency-responsibility-${invoice.id}`}>Agency responsibility</Label>
+            <Input id={`agency-responsibility-${invoice.id}`} inputMode="decimal" placeholder="100.00" value={agencyResponsibilityDollars} onChange={(event) => setAgencyResponsibilityDollars(event.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`agency-name-${invoice.id}`}>Agency payer</Label>
+            <Input id={`agency-name-${invoice.id}`} placeholder="CCDF, ELC, DHS" value={agencyName} onChange={(event) => setAgencyName(event.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`agency-authorization-${invoice.id}`}>Authorization # (optional)</Label>
+            <Input id={`agency-authorization-${invoice.id}`} value={authorizationNumber} onChange={(event) => setAuthorizationNumber(event.target.value)} />
+          </div>
+          <Button className="sm:col-span-2" disabled={isPending} onClick={separateResponsibility}>
+            {isPending ? "Separating…" : "Confirm responsibility separation"}
+          </Button>
+        </div>
+      ) : null}
       {message ? (
         <Badge variant="outline" className="gap-1">
           <CheckCircle2 className="size-3" />

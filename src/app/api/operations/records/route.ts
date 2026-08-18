@@ -38,6 +38,7 @@ import {
 } from "@/lib/parent-portal-logins";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
 import { activeClassroomWhere } from "@/lib/classroom-status";
+import { invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 import {
   enrollmentClassroomValidationError,
   isCurrentlyEnrolledChildRecord,
@@ -1591,11 +1592,17 @@ async function POSTHandler(request: NextRequest) {
     const existingInvoice = id
       ? await prisma.invoice.findUnique({
           where: { id },
-          select: { id: true, billingAccountId: true, totalCents: true },
+          select: { id: true, billingAccountId: true, totalCents: true, customFields: true },
         })
       : null;
     if (id && (!existingInvoice || existingInvoice.billingAccountId !== billingAccount.id)) {
       return NextResponse.json({ ok: false, error: "Invoice not found for this family." }, { status: 404 });
+    }
+    if (existingInvoice && invoiceResponsibilitySeparation(existingInvoice.customFields)) {
+      return NextResponse.json(
+        { ok: false, error: "The invoice amount cannot be changed after family and agency responsibility has been separated." },
+        { status: 409 },
+      );
     }
     const dueDate = parseDate(body.dueDate || body.expiresAt) ?? new Date();
     const description = clean(body.description) || clean(body.body) || clean(body.name) || "Tuition charge";

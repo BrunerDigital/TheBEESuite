@@ -43,6 +43,7 @@ import {
   AGENCY_LEDGER_SOURCE_SYSTEM,
   parentBalanceNeedsResponsibilityReview,
 } from "@/lib/parent-billing-visibility";
+import { invoiceResponsibilityReviewExempt, invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 
 export type AutopayRunResultStatus = "would_charge" | "paid" | "processing" | "failed" | "skipped";
 
@@ -181,6 +182,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       ? { cursor: { id: input.cursorInvoiceId }, skip: 1 }
       : {}),
     include: {
+      items: { select: { description: true } },
       billingAccount: {
         select: {
           id: true,
@@ -195,7 +197,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
                 { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM },
               ],
             },
-            select: { type: true, sourceSystem: true, amountCents: true },
+            select: { type: true, sourceSystem: true, amountCents: true, invoiceId: true, externalId: true, metadata: true },
           },
           family: {
             select: {
@@ -363,10 +365,14 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
 
-    if (parentBalanceNeedsResponsibilityReview({
+    if (!invoiceResponsibilityReviewExempt(invoice.customFields) && parentBalanceNeedsResponsibilityReview({
       accountBalanceCents: invoice.billingAccount.balanceCents,
       agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
+      invoiceId: invoice.id,
+      invoiceResponsibilitySeparated: invoiceResponsibilitySeparation(invoice.customFields) !== null,
       responsibilityEvidence: [
+        invoiceFields,
+        invoice.items.map((item) => item.description),
         invoice.billingAccount.customFields,
         family.customFields,
         ...family.children.map((child) => child.customFields),

@@ -6,6 +6,10 @@ const source = readFileSync(
   new URL("../scripts/restore-longmont-august-monthly-parent-fees.ts", import.meta.url),
   "utf8",
 );
+const auditSource = readFileSync(
+  new URL("../scripts/audit-longmont-voided-fees.ts", import.meta.url),
+  "utf8",
+);
 
 test("Longmont monthly fee restoration is exact, fingerprinted, and approval gated", () => {
   assert.match(source, /Kid City USA - Longmont/);
@@ -40,4 +44,10 @@ test("Longmont monthly fee restoration preserves payment and external-provider h
     source,
     /tx\.payment\.(?:create|update|upsert|delete)/,
   );
+});
+
+test("Longmont voided-fee audit reports billing logs outside the selected invoice set", () => {
+  assert.match(auditSource, /const invoiceIds = new Set\(invoices\.map\(\(invoice\) => invoice\.id\)\)/);
+  assert.match(auditSource, /!log\.resourceId \|\| !invoiceIds\.has\(log\.resourceId\)/);
+  assert.doesNotMatch(auditSource, /!logsByResource\.has\(log\.resourceId\)/);
 });

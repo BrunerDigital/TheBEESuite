@@ -129,6 +129,7 @@ async function main() {
   const planById = new Map(plans.map((plan) => [plan.id, plan]));
 
   const logsByResource = new Map<string, typeof auditLogs>();
+  const invoiceIds = new Set(invoices.map((invoice) => invoice.id));
   for (const log of auditLogs) {
     if (!log.resourceId) continue;
     const current = logsByResource.get(log.resourceId) ?? [];
@@ -205,7 +206,7 @@ async function main() {
     },
     voided,
     active,
-    unlinkedBillingAuditLogs: auditLogs.filter((log) => !log.resourceId || !logsByResource.has(log.resourceId)),
+    unlinkedBillingAuditLogs: auditLogs.filter((log) => !log.resourceId || !invoiceIds.has(log.resourceId)),
   }, null, 2));
 }
 

@@ -35,6 +35,12 @@ import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import { invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
+import {
+  AGENCY_LEDGER_ENTRY_TYPES,
+  AGENCY_LEDGER_SOURCE_SYSTEM,
+  parentBalanceNeedsResponsibilityReview,
+} from "@/lib/parent-billing-visibility";
 import {
   PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
   paymentServiceError,
@@ -97,7 +103,17 @@ async function canAccessInvoice(input: {
           family: {
             include: {
               guardians: { select: { userId: true } },
+              children: { select: { customFields: true } },
             },
+          },
+          ledgerEntries: {
+            where: {
+              OR: [
+                { type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } },
+                { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM },
+              ],
+            },
+            select: { type: true, sourceSystem: true, amountCents: true, invoiceId: true, externalId: true, metadata: true },
           },
         },
       },
@@ -190,6 +206,24 @@ async function POSTHandler(request: NextRequest) {
   }
   if (invoice.totalCents <= 0) {
     return NextResponse.json({ ok: false, error: "Invoice total must be greater than zero." }, { status: 400 });
+  }
+  if (parentBalanceNeedsResponsibilityReview({
+    accountBalanceCents: invoice.billingAccount.balanceCents,
+    agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
+    invoiceId: invoice.id,
+    invoiceResponsibilitySeparated: invoiceResponsibilitySeparation(invoice.customFields) !== null,
+    responsibilityEvidence: [
+      invoice.customFields,
+      invoice.items.map((item) => item.description),
+      invoice.billingAccount.customFields,
+      invoice.billingAccount.family.customFields,
+      ...invoice.billingAccount.family.children.map((child) => child.customFields),
+    ],
+  })) {
+    return NextResponse.json(
+      { ok: false, error: "Separate family and agency responsibility before opening payment." },
+      { status: 409 },
+    );
   }
 
   const stripeSecretConfigured = Boolean(await getStripeSecretKey({ tenantId: user.tenantId }));

@@ -1,0 +1,103 @@
+type ResponsibilitySeparation = {
+  status: "separated";
+  originalInvoiceTotalCents: number;
+  familyResponsibilityCents: number;
+  agencyResponsibilityCents: number;
+  agencyName: string;
+  authorizationNumber: string | null;
+  coverageStart: string | null;
+  coverageEnd: string | null;
+  separatedAt: string;
+  separatedByUserId: string;
+};
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function cents(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function text(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function invoiceResponsibilitySeparation(customFields: unknown): ResponsibilitySeparation | null {
+  const fields = record(record(customFields).responsibilitySeparation);
+  const originalInvoiceTotalCents = cents(fields.originalInvoiceTotalCents);
+  const familyResponsibilityCents = cents(fields.familyResponsibilityCents);
+  const agencyResponsibilityCents = cents(fields.agencyResponsibilityCents);
+  const agencyName = text(fields.agencyName);
+  const separatedAt = text(fields.separatedAt);
+  const separatedByUserId = text(fields.separatedByUserId);
+  if (
+    fields.status !== "separated"
+    || originalInvoiceTotalCents === null
+    || familyResponsibilityCents === null
+    || agencyResponsibilityCents === null
+    || agencyResponsibilityCents <= 0
+    || familyResponsibilityCents + agencyResponsibilityCents !== originalInvoiceTotalCents
+    || !agencyName
+    || !separatedAt
+    || !separatedByUserId
+  ) return null;
+
+  return {
+    status: "separated",
+    originalInvoiceTotalCents,
+    familyResponsibilityCents,
+    agencyResponsibilityCents,
+    agencyName,
+    authorizationNumber: text(fields.authorizationNumber) || null,
+    coverageStart: text(fields.coverageStart) || null,
+    coverageEnd: text(fields.coverageEnd) || null,
+    separatedAt,
+    separatedByUserId,
+  };
+}
+
+export function responsibilitySeparationError(input: {
+  invoiceTotalCents: number;
+  accountBalanceCents: number;
+  itemTotalCents: number;
+  familyResponsibilityCents: number;
+  agencyResponsibilityCents: number;
+  agencyName: string;
+}) {
+  if (!Number.isInteger(input.invoiceTotalCents) || input.invoiceTotalCents <= 0) {
+    return "Invoice total must be greater than zero.";
+  }
+  if (!Number.isInteger(input.familyResponsibilityCents) || input.familyResponsibilityCents < 0) {
+    return "Family responsibility must be zero or greater.";
+  }
+  if (!Number.isInteger(input.agencyResponsibilityCents) || input.agencyResponsibilityCents <= 0) {
+    return "Agency responsibility must be greater than zero.";
+  }
+  if (!input.agencyName.trim()) return "Agency payer is required.";
+  if (input.familyResponsibilityCents + input.agencyResponsibilityCents !== input.invoiceTotalCents) {
+    return "Family and agency responsibility must exactly equal the current invoice total.";
+  }
+  if (input.itemTotalCents !== input.invoiceTotalCents) {
+    return "Invoice items do not match the invoice total. Review the invoice before separating responsibility.";
+  }
+  if (input.accountBalanceCents < input.agencyResponsibilityCents) {
+    return "The account balance is lower than the agency portion. Review existing credits or payments before separating responsibility.";
+  }
+  return null;
+}
+
+export function responsibilitySeparatedBillingAmounts(input: {
+  invoiceTotalCents: number;
+  customFields: unknown;
+}) {
+  const separation = invoiceResponsibilitySeparation(input.customFields);
+  if (!separation) return null;
+  return {
+    familyResponsibilityCents: separation.familyResponsibilityCents,
+    agencyResponsibilityCents: separation.agencyResponsibilityCents,
+    totalResponsibilityCents: separation.originalInvoiceTotalCents,
+  };
+}

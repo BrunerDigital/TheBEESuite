@@ -28,6 +28,30 @@ test("subsidy evidence without a separated agency ledger fails closed", () => {
   }), false);
 });
 
+test("agency responsibility is separated per invoice, not once for every future invoice", () => {
+  const priorInvoiceAgencyEntry = {
+    type: "agency_receivable",
+    sourceSystem: "subsidy_agency",
+    amountCents: 10_000,
+    invoiceId: null,
+    metadata: { sourceInvoiceId: "invoice_prior" },
+  };
+  assert.equal(parentBalanceNeedsResponsibilityReview({
+    accountBalanceCents: 12_000,
+    agencyLedgerEntries: [priorInvoiceAgencyEntry],
+    responsibilityEvidence: [{ tuitionFundingType: "voucher" }],
+    invoiceId: "invoice_current",
+    invoiceResponsibilitySeparated: false,
+  }), true);
+  assert.equal(parentBalanceNeedsResponsibilityReview({
+    accountBalanceCents: 12_000,
+    agencyLedgerEntries: [priorInvoiceAgencyEntry],
+    responsibilityEvidence: [{ tuitionFundingType: "voucher" }],
+    invoiceId: "invoice_prior",
+    invoiceResponsibilitySeparated: true,
+  }), false);
+});
+
 test("an exact reviewed family-responsibility balance is parent visible", () => {
   const reviewedEvidence = {
     balanceReconciliation: {

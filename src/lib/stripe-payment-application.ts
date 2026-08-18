@@ -22,6 +22,37 @@ function inputJson(value: PaymentMetadata): Prisma.InputJsonObject {
   return value as Prisma.InputJsonObject;
 }
 
+export function succeededFamilyBalancePaymentClaim(input: {
+  paymentStatus: PaymentStatus;
+  storedStripePaymentIntentId?: string | null;
+  succeededStripePaymentIntentId: string;
+  storedCheckoutAmountCents?: number | null;
+  succeededAmountTotalCents?: number | null;
+}) {
+  if (input.paymentStatus === PaymentStatus.PAID) {
+    return { ok: false as const, reason: "payment_already_applied", claimStatus: null, recoveredFromFailedAttempt: false };
+  }
+  if (input.paymentStatus === PaymentStatus.DRAFT) {
+    return { ok: true as const, reason: null, claimStatus: PaymentStatus.DRAFT, recoveredFromFailedAttempt: false };
+  }
+
+  const storedStripePaymentIntentId = clean(input.storedStripePaymentIntentId);
+  const succeededStripePaymentIntentId = clean(input.succeededStripePaymentIntentId);
+  const storedCheckoutAmountCents = centsFrom(input.storedCheckoutAmountCents);
+  const succeededAmountTotalCents = centsFrom(input.succeededAmountTotalCents);
+  if (
+    input.paymentStatus === PaymentStatus.FAILED
+    && storedStripePaymentIntentId
+    && storedStripePaymentIntentId === succeededStripePaymentIntentId
+    && storedCheckoutAmountCents > 0
+    && storedCheckoutAmountCents === succeededAmountTotalCents
+  ) {
+    return { ok: true as const, reason: null, claimStatus: PaymentStatus.FAILED, recoveredFromFailedAttempt: true };
+  }
+
+  return { ok: false as const, reason: "payment_not_chargeable", claimStatus: null, recoveredFromFailedAttempt: false };
+}
+
 function familyPaymentDescription(metadata: PaymentMetadata, fallback: string) {
   return clean(metadata.description) || fallback;
 }
@@ -576,17 +607,21 @@ export async function applySucceededStripeFamilyBalancePayment(
     },
   });
   if (!currentPayment) return { applied: false, reason: "payment_not_found" };
-  if (currentPayment.status === PaymentStatus.PAID) {
-    return { applied: false, reason: "payment_already_applied", billingAccountId: currentPayment.billingAccountId };
-  }
-  if (currentPayment.status !== PaymentStatus.DRAFT) {
-    return { applied: false, reason: "payment_not_chargeable", billingAccountId: currentPayment.billingAccountId };
+  const currentFields = jsonRecord(currentPayment.customFields);
+  const claim = succeededFamilyBalancePaymentClaim({
+    paymentStatus: currentPayment.status,
+    storedStripePaymentIntentId: clean(currentFields.stripePaymentIntentId) || null,
+    succeededStripePaymentIntentId: input.stripePaymentIntentId,
+    storedCheckoutAmountCents: centsFrom(currentFields.checkoutTotalCents) || currentPayment.amountCents,
+    succeededAmountTotalCents: input.stripeAmountTotalCents,
+  });
+  if (!claim.ok) {
+    return { applied: false, reason: claim.reason, billingAccountId: currentPayment.billingAccountId };
   }
 
   const paidAt = input.appliedAt ?? new Date();
-  const currentFields = jsonRecord(currentPayment.customFields);
-  const payment = await tx.payment.update({
-    where: { id: input.paymentId },
+  const claimedPayment = await tx.payment.updateMany({
+    where: { id: input.paymentId, status: claim.claimStatus },
     data: {
       status: PaymentStatus.PAID,
       paidAt,
@@ -612,10 +647,34 @@ export async function applySucceededStripeFamilyBalancePayment(
         paymentMethodCategory: clean(metadata.paymentMethodCategory) || null,
         bankAccountVerificationMethod: clean(metadata.bankAccountVerificationMethod) || null,
         ...productPaymentMetadata(metadata),
+        recoveredFromFailedAttempt: claim.recoveredFromFailedAttempt,
+        recoveredStripePaymentIntentId: claim.recoveredFromFailedAttempt ? input.stripePaymentIntentId : null,
         status: "paid",
       }),
     },
   });
+  if (claimedPayment.count !== 1) {
+    const latestPayment = await tx.payment.findUnique({
+      where: { id: input.paymentId },
+      select: { status: true, customFields: true },
+    });
+    const latestFields = jsonRecord(latestPayment?.customFields);
+    if (
+      latestPayment?.status === PaymentStatus.PAID
+      && clean(latestFields.stripePaymentIntentId) === input.stripePaymentIntentId
+    ) {
+      return { applied: false, reason: "payment_already_applied", billingAccountId: currentPayment.billingAccountId };
+    }
+    if (
+      claim.claimStatus === PaymentStatus.DRAFT
+      && latestPayment?.status === PaymentStatus.FAILED
+      && clean(latestFields.stripePaymentIntentId) === input.stripePaymentIntentId
+    ) {
+      return applySucceededStripeFamilyBalancePayment(tx, input);
+    }
+    return { applied: false, reason: "payment_state_changed", billingAccountId: currentPayment.billingAccountId };
+  }
+  const payment = await tx.payment.findUniqueOrThrow({ where: { id: input.paymentId } });
   const updatedAccount = await tx.billingAccount.update({
     where: { id: payment.billingAccountId },
     data: { balanceCents: { decrement: payment.amountCents } },

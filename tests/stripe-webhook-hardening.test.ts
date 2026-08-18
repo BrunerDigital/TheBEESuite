@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { stripeWebhookSecretFingerprint, verifyStripeSignature } from "../src/lib/integrations";
+import { succeededFamilyBalancePaymentClaim } from "../src/lib/stripe-payment-application";
 import { STRIPE_WEBHOOK_SUPPORTED_EVENT_TYPES, stripeWebhookObjectForRouting } from "../src/lib/stripe-webhook-event-types";
 import {
   isStripeWebhookReceiptUniqueConflict,
@@ -42,6 +43,49 @@ test("webhook secret readiness uses a one-way masked fingerprint", () => {
 test("event identity, not object identity, is the dedupe key", () => {
   assert.equal(stripeWebhookDedupeKey("evt_checkout_completed"), "evt_checkout_completed");
   assert.notEqual(stripeWebhookDedupeKey("evt_checkout_completed"), stripeWebhookDedupeKey("evt_checkout_expired"));
+});
+
+test("a succeeded family payment recovers only the same previously failed PaymentIntent", () => {
+  assert.deepEqual(succeededFamilyBalancePaymentClaim({
+    paymentStatus: "DRAFT",
+    succeededStripePaymentIntentId: "pi_succeeded",
+  }), {
+    ok: true,
+    reason: null,
+    claimStatus: "DRAFT",
+    recoveredFromFailedAttempt: false,
+  });
+  assert.deepEqual(succeededFamilyBalancePaymentClaim({
+    paymentStatus: "FAILED",
+    storedStripePaymentIntentId: "pi_succeeded",
+    succeededStripePaymentIntentId: "pi_succeeded",
+    storedCheckoutAmountCents: 27_000,
+    succeededAmountTotalCents: 27_000,
+  }), {
+    ok: true,
+    reason: null,
+    claimStatus: "FAILED",
+    recoveredFromFailedAttempt: true,
+  });
+  assert.equal(succeededFamilyBalancePaymentClaim({
+    paymentStatus: "FAILED",
+    storedStripePaymentIntentId: "pi_different",
+    succeededStripePaymentIntentId: "pi_succeeded",
+    storedCheckoutAmountCents: 27_000,
+    succeededAmountTotalCents: 27_000,
+  }).ok, false);
+  assert.equal(succeededFamilyBalancePaymentClaim({
+    paymentStatus: "FAILED",
+    storedStripePaymentIntentId: "pi_succeeded",
+    succeededStripePaymentIntentId: "pi_succeeded",
+    storedCheckoutAmountCents: 27_000,
+    succeededAmountTotalCents: 13_500,
+  }).ok, false);
+  assert.equal(succeededFamilyBalancePaymentClaim({
+    paymentStatus: "PAID",
+    storedStripePaymentIntentId: "pi_succeeded",
+    succeededStripePaymentIntentId: "pi_succeeded",
+  }).reason, "payment_already_applied");
 });
 
 test("concurrent deliveries reserve exactly one durable receipt", async () => {
@@ -123,6 +167,21 @@ test("route reads raw text before verification/parsing and reserves before dispa
   assert.ok(reserve < dispatch);
   assert.doesNotMatch(postHandler, /request\.json\s*\(/);
   assert.match(postHandler, /omitRequestBody:\s*true/);
+});
+
+test("payment races re-read a winning success and suppress stale failure audits", async () => {
+  const application = await readFile("src/lib/stripe-payment-application.ts", "utf8");
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+
+  assert.match(application, /claimedPayment\.count !== 1[\s\S]*latestPayment[\s\S]*payment_already_applied/);
+  assert.match(application, /latestFields\.stripePaymentIntentId[\s\S]*input\.stripePaymentIntentId/);
+  assert.match(application, /claim\.claimStatus === PaymentStatus\.DRAFT[\s\S]*latestPayment\?\.status === PaymentStatus\.FAILED[\s\S]*applySucceededStripeFamilyBalancePayment\(tx, input\)/);
+  assert.match(route, /failureApplied = failedPayment\.count === 1/);
+  assert.match(route, /if \(!failureApplied\)[\s\S]*payment_intent_failure_ignored/);
+  assert.match(route, /candidateInvoiceId[\s\S]*billingAccountId: currentPayment\.billingAccountId/);
+  assert.match(route, /if \(paymentFound && verifiedInvoiceId\)[\s\S]*else if \(paymentFound && storedBillingAccountId\)/);
+  assert.match(route, /reason: paymentFound \? "payment_not_chargeable" : "payment_not_found"/);
+  assert.match(route, /claimedPayment\.count !== 1[\s\S]*applySucceededStripeFamilyBalancePayment\(tx/);
 });
 
 test("disputes add the chargeback to the parent ledger and reverse it only when funds return", async () => {

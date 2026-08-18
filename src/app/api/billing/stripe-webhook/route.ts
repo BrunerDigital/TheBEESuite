@@ -29,6 +29,10 @@ import {
   stripeWebhookDedupeKey,
 } from "@/lib/stripe-webhook-receipts";
 import { matchStripeWebhookSecret } from "@/lib/stripe-webhook-readiness";
+import {
+  applySucceededStripeFamilyBalancePayment,
+  succeededFamilyBalancePaymentClaim,
+} from "@/lib/stripe-payment-application";
 import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
@@ -557,20 +561,23 @@ async function handleFamilyBalancePaymentSucceeded(
         return;
       }
       billingAccountId = currentPayment.billingAccountId;
-      if (currentPayment.status === PaymentStatus.PAID) {
-        ignoredReason = "payment_already_applied";
-        return;
-      }
-      if (currentPayment.status !== PaymentStatus.DRAFT) {
-        ignoredReason = "payment_not_chargeable";
+      const currentFields = jsonObject(currentPayment.customFields);
+      const stripePaymentIntentId = input.stripePaymentIntentId || clean(currentFields.stripePaymentIntentId) || null;
+      const claim = succeededFamilyBalancePaymentClaim({
+        paymentStatus: currentPayment.status,
+        storedStripePaymentIntentId: clean(currentFields.stripePaymentIntentId) || null,
+        succeededStripePaymentIntentId: stripePaymentIntentId || "",
+        storedCheckoutAmountCents: metadataCents(currentFields.checkoutTotalCents) || currentPayment.amountCents,
+        succeededAmountTotalCents: input.stripeAmountTotalCents,
+      });
+      if (!claim.ok) {
+        ignoredReason = claim.reason;
         return;
       }
 
       const paidAt = new Date();
-      const currentFields = jsonObject(currentPayment.customFields);
-      const stripePaymentIntentId = input.stripePaymentIntentId || clean(currentFields.stripePaymentIntentId) || null;
       const claimedPayment = await tx.payment.updateMany({
-        where: { id: input.paymentId, status: PaymentStatus.DRAFT },
+        where: { id: input.paymentId, status: claim.claimStatus },
         data: {
           status: PaymentStatus.PAID,
           paidAt,
@@ -595,12 +602,32 @@ async function handleFamilyBalancePaymentSucceeded(
             paymentMethodCategory: clean(input.metadata.paymentMethodCategory) || null,
             bankAccountVerificationMethod: clean(input.metadata.bankAccountVerificationMethod) || null,
             ...productPaymentMetadata(input.metadata),
+            recoveredFromFailedAttempt: claim.recoveredFromFailedAttempt,
+            recoveredStripePaymentIntentId: claim.recoveredFromFailedAttempt ? stripePaymentIntentId : null,
             status: "paid",
           },
         },
       });
       if (claimedPayment.count !== 1) {
-        ignoredReason = "payment_already_applied";
+        const retry = await applySucceededStripeFamilyBalancePayment(tx, {
+          paymentId: input.paymentId,
+          externalId: input.externalId,
+          stripePaymentIntentId: stripePaymentIntentId || "",
+          stripePaymentStatus: input.stripePaymentStatus || null,
+          stripePaymentIntentStatus: input.stripePaymentStatus || null,
+          stripeAmountTotalCents: input.stripeAmountTotalCents ?? null,
+          stripeEventId: event.id,
+          stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
+          metadata: input.metadata,
+          descriptionFallback: input.descriptionFallback,
+          appliedAt: paidAt,
+        });
+        billingAccountId = retry.billingAccountId || billingAccountId;
+        if (retry.applied) {
+          applied = true;
+          return;
+        }
+        ignoredReason = retry.reason;
         return;
       }
       const payment = await tx.payment.findUniqueOrThrow({
@@ -1288,18 +1315,36 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       : collectionMode === "director_saved_method"
         ? "director_saved_method_failed"
         : "payment_intent_failed";
+  let failureApplied = false;
+  let paymentFound = false;
+  let storedBillingAccountId: string | null = null;
+  let verifiedInvoiceId: string | null = null;
 
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
-      const currentPayment = await tx.payment.findUnique({ where: { id: metadata.paymentId }, select: { customFields: true } });
-      if (!currentPayment) return;
-      await tx.payment.update({
+      const currentPayment = await tx.payment.findUnique({
         where: { id: metadata.paymentId },
+        select: { billingAccountId: true, customFields: true },
+      });
+      if (!currentPayment) return;
+      paymentFound = true;
+      storedBillingAccountId = currentPayment.billingAccountId;
+      const currentFields = jsonObject(currentPayment.customFields);
+      const candidateInvoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId);
+      if (candidateInvoiceId) {
+        const verifiedInvoice = await tx.invoice.findFirst({
+          where: { id: candidateInvoiceId, billingAccountId: currentPayment.billingAccountId },
+          select: { id: true },
+        });
+        verifiedInvoiceId = verifiedInvoice?.id ?? null;
+      }
+      const failedPayment = await tx.payment.updateMany({
+        where: { id: metadata.paymentId, status: { in: [PaymentStatus.DRAFT, PaymentStatus.FAILED] } },
         data: {
           status: PaymentStatus.FAILED,
           customFields: {
-            ...jsonObject(currentPayment?.customFields),
+            ...currentFields,
             stripePaymentIntentId: paymentIntent.id,
             stripeEventId: event.id,
             stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
@@ -1311,12 +1356,27 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
           },
         },
       });
+      failureApplied = failedPayment.count === 1;
     });
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) {
       return NextResponse.json({ ok: true, duplicate: true });
     }
     throw error;
+  }
+
+  if (!failureApplied) {
+    if (paymentFound && verifiedInvoiceId) {
+      await writeSystemAudit(verifiedInvoiceId, event.id, paymentIntent.id, "billing.payment_intent.failure_ignored");
+    } else if (paymentFound && storedBillingAccountId) {
+      await writeBillingAccountSystemAudit(
+        storedBillingAccountId,
+        event.id,
+        paymentIntent.id,
+        "billing.family_payment.payment_intent_failure_ignored",
+      );
+    }
+    return NextResponse.json({ ok: true, ignored: true, reason: paymentFound ? "payment_not_chargeable" : "payment_not_found" });
   }
 
   if (metadata.invoiceId) {

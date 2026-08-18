@@ -646,6 +646,17 @@ export async function applySucceededStripeFamilyBalancePayment(
     },
   });
   if (claimedPayment.count !== 1) {
+    const latestPayment = await tx.payment.findUnique({
+      where: { id: input.paymentId },
+      select: { status: true, customFields: true },
+    });
+    const latestFields = jsonRecord(latestPayment?.customFields);
+    if (
+      latestPayment?.status === PaymentStatus.PAID
+      && clean(latestFields.stripePaymentIntentId) === input.stripePaymentIntentId
+    ) {
+      return { applied: false, reason: "payment_already_applied", billingAccountId: currentPayment.billingAccountId };
+    }
     return { applied: false, reason: "payment_state_changed", billingAccountId: currentPayment.billingAccountId };
   }
   const payment = await tx.payment.findUniqueOrThrow({ where: { id: input.paymentId } });

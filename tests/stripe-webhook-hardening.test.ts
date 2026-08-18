@@ -158,6 +158,17 @@ test("route reads raw text before verification/parsing and reserves before dispa
   assert.match(postHandler, /omitRequestBody:\s*true/);
 });
 
+test("payment races re-read a winning success and suppress stale failure audits", async () => {
+  const application = await readFile("src/lib/stripe-payment-application.ts", "utf8");
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+
+  assert.match(application, /claimedPayment\.count !== 1[\s\S]*latestPayment[\s\S]*payment_already_applied/);
+  assert.match(application, /latestFields\.stripePaymentIntentId[\s\S]*input\.stripePaymentIntentId/);
+  assert.match(route, /failureApplied = failedPayment\.count === 1/);
+  assert.match(route, /if \(!failureApplied\)[\s\S]*payment_intent_failure_ignored/);
+  assert.match(route, /reason: paymentFound \? "payment_not_chargeable" : "payment_not_found"/);
+});
+
 test("disputes add the chargeback to the parent ledger and reverse it only when funds return", async () => {
   const source = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   const lifecycle = source.slice(source.indexOf("async function handleDisputeLifecycle"), source.indexOf("async function writeSystemAudit"));

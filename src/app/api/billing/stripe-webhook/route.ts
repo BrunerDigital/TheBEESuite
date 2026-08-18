@@ -1292,13 +1292,16 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       : collectionMode === "director_saved_method"
         ? "director_saved_method_failed"
         : "payment_intent_failed";
+  let failureApplied = false;
+  let paymentFound = false;
 
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       const currentPayment = await tx.payment.findUnique({ where: { id: metadata.paymentId }, select: { customFields: true } });
       if (!currentPayment) return;
-      await tx.payment.updateMany({
+      paymentFound = true;
+      const failedPayment = await tx.payment.updateMany({
         where: { id: metadata.paymentId, status: { in: [PaymentStatus.DRAFT, PaymentStatus.FAILED] } },
         data: {
           status: PaymentStatus.FAILED,
@@ -1315,12 +1318,27 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
           },
         },
       });
+      failureApplied = failedPayment.count === 1;
     });
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) {
       return NextResponse.json({ ok: true, duplicate: true });
     }
     throw error;
+  }
+
+  if (!failureApplied) {
+    if (paymentFound && metadata.invoiceId) {
+      await writeSystemAudit(metadata.invoiceId, event.id, paymentIntent.id, "billing.payment_intent.failure_ignored");
+    } else if (paymentFound && clean(metadata.paymentScope) === "family_balance" && metadata.billingAccountId) {
+      await writeBillingAccountSystemAudit(
+        metadata.billingAccountId,
+        event.id,
+        paymentIntent.id,
+        "billing.family_payment.payment_intent_failure_ignored",
+      );
+    }
+    return NextResponse.json({ ok: true, ignored: true, reason: paymentFound ? "payment_not_chargeable" : "payment_not_found" });
   }
 
   if (metadata.invoiceId) {

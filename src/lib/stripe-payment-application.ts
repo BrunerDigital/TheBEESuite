@@ -657,6 +657,13 @@ export async function applySucceededStripeFamilyBalancePayment(
     ) {
       return { applied: false, reason: "payment_already_applied", billingAccountId: currentPayment.billingAccountId };
     }
+    if (
+      claim.claimStatus === PaymentStatus.DRAFT
+      && latestPayment?.status === PaymentStatus.FAILED
+      && clean(latestFields.stripePaymentIntentId) === input.stripePaymentIntentId
+    ) {
+      return applySucceededStripeFamilyBalancePayment(tx, input);
+    }
     return { applied: false, reason: "payment_state_changed", billingAccountId: currentPayment.billingAccountId };
   }
   const payment = await tx.payment.findUniqueOrThrow({ where: { id: input.paymentId } });

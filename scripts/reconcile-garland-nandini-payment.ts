@@ -126,6 +126,7 @@ async function inspect() {
     amountCents: number | null;
     amountRefundedCents: number | null;
     refunded: boolean;
+    disputed: boolean;
     paymentIntentId: string | null;
     createdAt: string | null;
   } = {
@@ -136,6 +137,7 @@ async function inspect() {
     amountCents: null,
     amountRefundedCents: null,
     refunded: false,
+    disputed: false,
     paymentIntentId: null,
     createdAt: null,
   };
@@ -153,6 +155,7 @@ async function inspect() {
       amountCents: typeof raw?.amount === "number" ? raw.amount : null,
       amountRefundedCents: typeof raw?.amount_refunded === "number" ? raw.amount_refunded : null,
       refunded: raw?.refunded === true,
+      disputed: raw?.disputed === true,
       paymentIntentId: typeof raw?.payment_intent === "string" ? raw.payment_intent : null,
       createdAt: typeof raw?.created === "number" ? new Date(raw.created * 1000).toISOString() : null,
     };
@@ -249,6 +252,7 @@ function assertUncorrected(review: Awaited<ReturnType<typeof inspect>>) {
     state.stripe.charge.amountCents === EXPECTED.amountCents,
     state.stripe.charge.amountRefundedCents === 0,
     !state.stripe.charge.refunded,
+    !state.stripe.charge.disputed,
     state.stripe.charge.paymentIntentId === EXPECTED.stripePaymentIntentId,
     state.stripe.charge.createdAt !== null,
   ];

@@ -80,9 +80,19 @@ function restorationExternalId(invoiceId: string) {
 async function loadState(db: DbClient) {
   const center = await db.center.findUnique({
     where: { id: CENTER_ID },
-    select: { id: true, name: true, status: true, organization: { select: { tenantId: true } } },
+    select: { id: true, name: true, status: true, customFields: true, organization: { select: { tenantId: true } } },
   });
   invariant(center?.name === CENTER_NAME && center.status !== "closed", "Longmont center identity or status changed.");
+  const centerFields = object(center.customFields);
+  const centerBillingApproval = {
+    livePaymentsEnabled: centerFields.livePaymentsEnabled === true,
+    tuitionBillingEnabled: centerFields.tuitionBillingEnabled === true,
+    stripeBillingApproved: centerFields.stripeBillingApproved === true,
+  };
+  invariant(
+    Object.values(centerBillingApproval).every(Boolean),
+    "Longmont payment or tuition approval is no longer active.",
+  );
 
   const invoices = await db.invoice.findMany({
     where: { number: { in: [...expectedInvoices.keys()] } },
@@ -202,6 +212,7 @@ async function loadState(db: DbClient) {
 
   const state = {
     centerId: center.id,
+    centerBillingApproval,
     targets: targets.map((target) => ({
       id: target.id,
       number: target.number,

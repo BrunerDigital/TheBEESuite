@@ -206,6 +206,13 @@ async function loadState(db: DbClient) {
     invariant(child && child.familyId === invoice.billingAccount.family.id, `${invoice.number} child/family scope changed.`);
     const childFields = object(child.customFields);
     invariant(fields.billingPeriod === BILLING_PERIOD && fields.billingCadence === "monthly" && fields.chargeSource === "tuitionPlan", `${invoice.number} is not the reviewed August monthly parent fee.`);
+    const recurringCoverageMode = clean(fields.mode);
+    const countsTowardRecurringCoverage = fields.countsTowardRecurringCoverage === true;
+    invariant(
+      ["recurring", "manual_weekly_recovery"].includes(recurringCoverageMode) || countsTowardRecurringCoverage,
+      `${invoice.number} lost its recurring coverage mode.`,
+    );
+    invariant(fields.coverageStartsPeriod === BILLING_PERIOD, `${invoice.number} recurring coverage start period changed.`);
     invariant(fields.voidReason === INCORRECT_VOID_REASON, `${invoice.number} no longer has the reviewed incorrect-void reason.`);
     invariant(fields.autopaySuppressed === true && fields.noPaymentSubmitted === true, `${invoice.number} lost its no-payment safeguards.`);
     invariant(clean(fields.recoveryManifestFingerprint).length > 0, `${invoice.number} lost its reviewed recovery fingerprint.`);
@@ -295,6 +302,14 @@ async function loadState(db: DbClient) {
         noPaymentSubmitted: fields.noPaymentSubmitted,
         recoveryManifestFingerprint: clean(fields.recoveryManifestFingerprint),
       },
+      recurringCoverageIdentity: {
+        mode: recurringCoverageMode,
+        countsTowardRecurringCoverage,
+        billingPeriod: fields.billingPeriod,
+        coverageStartsPeriod: fields.coverageStartsPeriod,
+        childId: fields.childId,
+        chargeSource: fields.chargeSource,
+      },
       balanceCents: invoice.billingAccount.balanceCents,
       parentVisibleBalanceCents: parentVisibleBillingBalanceCents({
         accountBalanceCents: invoice.billingAccount.balanceCents,
@@ -332,6 +347,7 @@ async function loadState(db: DbClient) {
       livePlan: target.livePlan,
       currentAssignmentAdjustments: target.currentAssignmentAdjustments,
       noPaymentSafeguards: target.noPaymentSafeguards,
+      recurringCoverageIdentity: target.recurringCoverageIdentity,
       balanceCents: target.balanceCents,
       parentVisibleBalanceCents: target.parentVisibleBalanceCents,
       ledgerEntries: target.ledgerEntries,

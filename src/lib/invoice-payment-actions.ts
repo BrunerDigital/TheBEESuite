@@ -8,7 +8,7 @@ export type InvoiceFamilyReference = {
 };
 
 export const PAST_FAMILY_PAYMENT_BLOCK_REASON =
-  "This invoice belongs to a past-family historical account. Open the current enrolled family account to review payment methods or autopay.";
+  "This invoice belongs to a past-family historical account. Autopay is unavailable for historical accounts.";
 
 export function currentFamilyBillingMatch(input: {
   sourceFamily: InvoiceFamilyReference & { accountCategory: InvoicePaymentAccountCategory };

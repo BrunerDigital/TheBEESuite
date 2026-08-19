@@ -64,6 +64,8 @@ test("server-side autopay excludes historical family accounts", () => {
 });
 
 test("past-family historical invoices cannot be mistaken for current autopay state", () => {
+  assert.doesNotMatch(PAST_FAMILY_PAYMENT_BLOCK_REASON, /current enrolled family/i);
+  assert.match(PAST_FAMILY_PAYMENT_BLOCK_REASON, /autopay is unavailable/i);
   assert.equal(invoicePaymentActionBlockReason({
     invoiceStatus: "OPEN",
     invoiceTotalCents: 43_000,

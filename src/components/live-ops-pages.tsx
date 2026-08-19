@@ -5029,6 +5029,11 @@ export type BillingInvoicesPageData = {
         billingEmail: string | null;
         centerId: string | null;
         accountCategory: "current" | "past";
+        currentFamilyMatch: {
+          id: string;
+          name: string;
+          centerId: string | null;
+        } | null;
       };
       paymentMethodManagement: InvoiceStoredPaymentActionData["billingAccount"]["paymentMethodManagement"];
     };
@@ -5336,7 +5341,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                 <TableRow key={invoice.id} className="group">
                   <TableCell className="font-medium">
                     <Link
-                      href={billingFamilyHref(invoice.billingAccount.family)}
+                      href={billingFamilyHref(invoice.billingAccount.family.currentFamilyMatch ?? invoice.billingAccount.family)}
                       className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {invoice.number}
@@ -5352,9 +5357,19 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                     </Link>
                     <div className="text-xs text-muted-foreground">{invoice.billingAccount.family.billingEmail ?? "No billing email"}</div>
                     {invoice.billingAccount.family.accountCategory === "past" ? (
-                      <Badge variant="outline" className="mt-1 border-amber-500/40 text-amber-800 dark:text-amber-200">
-                        Past family — historical account
-                      </Badge>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="border-amber-500/40 text-amber-800 dark:text-amber-200">
+                          Past family — historical account
+                        </Badge>
+                        {invoice.billingAccount.family.currentFamilyMatch ? (
+                          <Link
+                            href={billingFamilyHref(invoice.billingAccount.family.currentFamilyMatch)}
+                            className="text-xs font-medium text-primary underline underline-offset-4"
+                          >
+                            Open current family billing
+                          </Link>
+                        ) : null}
+                      </div>
                     ) : null}
                   </TableCell>
                   <TableCell><Badge variant={invoice.status === "OPEN" ? "outline" : "default"}>{formatRecordLabel(invoice.status)}</Badge></TableCell>

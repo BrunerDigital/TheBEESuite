@@ -44,6 +44,7 @@ import {
   paymentCollectionResponsibilityHoldRequired,
 } from "@/lib/parent-billing-visibility";
 import { invoiceResponsibilityReviewExempt, invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 
 export type AutopayRunResultStatus = "would_charge" | "paid" | "processing" | "failed" | "skipped";
 
@@ -166,12 +167,24 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
   const invoiceWhere: Prisma.InvoiceWhereInput = {
     status: PaymentStatus.OPEN,
     totalCents: { gt: 0 },
+    billingAccount: {
+      family: {
+        is: { children: { some: currentlyEnrolledChildWhere() } },
+      },
+    },
   };
   if (requireDueDate) invoiceWhere.dueDate = { lte: asOf };
   if (input.invoiceId) invoiceWhere.id = input.invoiceId;
   else if (input.invoiceIds?.length) invoiceWhere.id = { in: unique(input.invoiceIds) };
   if (centerIds.length) {
-    invoiceWhere.billingAccount = { family: { is: { centerId: { in: centerIds } } } };
+    invoiceWhere.billingAccount = {
+      family: {
+        is: {
+          centerId: { in: centerIds },
+          children: { some: currentlyEnrolledChildWhere() },
+        },
+      },
+    };
   }
 
   const invoiceCandidates = await prisma.invoice.findMany({

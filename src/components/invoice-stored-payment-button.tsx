@@ -7,6 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  invoiceAutopayBlockReason,
+  invoicePaymentActionBlockReason,
+} from "@/lib/invoice-payment-actions";
 
 export type InvoiceStoredPaymentActionData = {
   id: string;
@@ -21,7 +25,7 @@ export type InvoiceStoredPaymentActionData = {
   } | null;
   billingAccount: {
     balanceCents: number;
-    family: { name: string };
+    family: { name: string; accountCategory: "current" | "past" };
     paymentMethodManagement: {
       autopayStatus: "enabled" | "disabled" | "pending";
       hasStripeCustomer: boolean;
@@ -63,11 +67,14 @@ function money(cents: number) {
 
 function disabledReason(invoice: InvoiceStoredPaymentActionData) {
   const method = invoice.billingAccount.paymentMethodManagement;
-  if (invoice.status !== "OPEN") return "Invoice is not open.";
-  if (invoice.totalCents <= 0) return "Invoice total must be greater than zero.";
-  if (method.autopayStatus !== "enabled") return "The parent has not enabled autopay.";
-  if (!method.hasStripeCustomer || !method.hasSavedPaymentMethod) return "No saved payment method.";
-  return null;
+  return invoiceAutopayBlockReason({
+    accountCategory: invoice.billingAccount.family.accountCategory,
+    invoiceStatus: invoice.status,
+    invoiceTotalCents: invoice.totalCents,
+    autopayStatus: method.autopayStatus,
+    hasStripeCustomer: method.hasStripeCustomer,
+    hasSavedPaymentMethod: method.hasSavedPaymentMethod,
+  });
 }
 
 export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStoredPaymentActionData }) {
@@ -82,6 +89,10 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   const [authorizationNumber, setAuthorizationNumber] = useState("");
   const method = invoice.billingAccount.paymentMethodManagement;
   const reason = disabledReason(invoice);
+  const paymentActionReason = invoicePaymentActionBlockReason({
+    invoiceStatus: invoice.status,
+    invoiceTotalCents: invoice.totalCents,
+  });
 
   function dollarsToCents(value: string) {
     const normalized = value.trim().replace(/[$,]/g, "");
@@ -91,6 +102,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   }
 
   function separateResponsibility() {
+    if (paymentActionReason) return setError(paymentActionReason);
     const familyResponsibilityCents = dollarsToCents(familyResponsibilityDollars);
     const agencyResponsibilityCents = dollarsToCents(agencyResponsibilityDollars);
     if (familyResponsibilityCents === null || agencyResponsibilityCents === null || agencyResponsibilityCents <= 0) {
@@ -134,6 +146,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   }
 
   function processAuthorizedAutopay() {
+    if (reason) return setError(reason);
     const confirmed = window.confirm(
       `Process parent-authorized autopay for ${invoice.number} and ${invoice.billingAccount.family.name}? Account credit is applied first; any remaining balance, up to ${money(invoice.totalCents)}, is charged to the saved autopay method.`,
     );
@@ -177,8 +190,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   }
 
   function openInstantBankCheckout() {
-    if (invoice.status !== "OPEN") return setError("Invoice is not open.");
-    if (invoice.totalCents <= 0) return setError("Invoice total must be greater than zero.");
+    if (paymentActionReason) return setError(paymentActionReason);
     const confirmed = window.confirm(
       `Open a secure Link payment form for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
     );
@@ -206,8 +218,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   }
 
   function openCardCheckout() {
-    if (invoice.status !== "OPEN") return setError("Invoice is not open.");
-    if (invoice.totalCents <= 0) return setError("Invoice total must be greater than zero.");
+    if (paymentActionReason) return setError(paymentActionReason);
     const confirmed = window.confirm(
       `Open a secure card payment form for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
     );
@@ -248,7 +259,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         </Button>
         <Button
           size="sm"
-          disabled={isPending || invoice.status !== "OPEN" || invoice.totalCents <= 0}
+          disabled={isPending || Boolean(paymentActionReason)}
           onClick={openInstantBankCheckout}
           variant="outline"
         >
@@ -257,7 +268,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         </Button>
         <Button
           size="sm"
-          disabled={isPending || invoice.status !== "OPEN" || invoice.totalCents <= 0}
+          disabled={isPending || Boolean(paymentActionReason)}
           onClick={openCardCheckout}
           variant="outline"
         >
@@ -267,7 +278,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         {invoice.responsibilityReviewRequired ? (
           <Button
             size="sm"
-            disabled={isPending}
+            disabled={isPending || Boolean(paymentActionReason)}
             onClick={() => setShowResponsibilityForm((current) => !current)}
             variant="outline"
           >
@@ -276,7 +287,9 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         ) : null}
       </div>
       <div className="max-w-48 text-xs text-muted-foreground">
-        {method.paymentMethodLabel ?? reason ?? ""}
+        {invoice.billingAccount.family.accountCategory === "past"
+          ? reason ?? ""
+          : method.paymentMethodLabel ?? reason ?? ""}
       </div>
       {invoice.responsibilitySeparation ? (
         <div className="max-w-72 text-xs text-muted-foreground">

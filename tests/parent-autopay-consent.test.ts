@@ -6,6 +6,7 @@ test("parents control autopay consent and directors can only run enabled autopay
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
   const familyEditor = readFileSync("src/components/family-record-editor.tsx", "utf8");
   const invoiceAction = readFileSync("src/components/invoice-stored-payment-button.tsx", "utf8");
+  const invoicePaymentActions = readFileSync("src/lib/invoice-payment-actions.ts", "utf8");
   const paymentMethodRoute = readFileSync("src/app/api/billing/payment-method-session/route.ts", "utf8");
   const autopayRoute = readFileSync("src/app/api/billing/autopay/route.ts", "utf8");
   const autopayProcessor = readFileSync("src/lib/autopay-processing.ts", "utf8");
@@ -19,7 +20,8 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.doesNotMatch(familyEditor, /manageFamilyPaymentMethod\("enable_autopay"\)/);
   assert.doesNotMatch(familyEditor, /manageFamilyPaymentMethod\("disable_autopay"\)/);
   assert.match(familyEditor, /Parents enable or disable autopay from their Parent Portal/);
-  assert.match(invoiceAction, /method\.autopayStatus !== "enabled"/);
+  assert.match(invoiceAction, /invoiceAutopayBlockReason/);
+  assert.match(invoicePaymentActions, /input\.autopayStatus !== "enabled"/);
   assert.match(invoiceAction, /Process authorized autopay/);
   assert.doesNotMatch(invoiceAction, /processStoredMethod: true/);
 

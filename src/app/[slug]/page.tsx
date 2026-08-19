@@ -156,6 +156,7 @@ import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { activeNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
+import { currentFamilyBillingMatch } from "@/lib/invoice-payment-actions";
 import {
   normalizeDirectorInvoiceStatus,
   paymentStatusForDirectorInvoiceStatus,
@@ -3561,6 +3562,29 @@ async function renderLivePage(
       getStripeSecretKey({ tenantId: user.tenantId }).then(Boolean),
       getStripeWebhookSecret({ tenantId: user.tenantId }).then(Boolean),
     ]);
+    const historicalFamilyLookupKeys = Array.from(new Map(
+      invoices
+        .filter((invoice) => invoice.billingAccount.family._count.children === 0)
+        .flatMap((invoice) => {
+          const centerId = invoice.billingAccount.family.centerId;
+          const billingEmail = invoice.billingAccount.family.billingEmail?.trim();
+          return centerId && billingEmail
+            ? [[`${centerId}:${billingEmail.toLowerCase()}`, { centerId, billingEmail }] as const]
+            : [];
+        }),
+    ).values());
+    const currentFamilyBillingCandidates = historicalFamilyLookupKeys.length
+      ? await prisma.family.findMany({
+          where: {
+            children: { some: currentlyEnrolledChildWhere() },
+            OR: historicalFamilyLookupKeys.map(({ centerId, billingEmail }) => ({
+              centerId,
+              billingEmail: { equals: billingEmail, mode: "insensitive" },
+            })),
+          },
+          select: { id: true, name: true, centerId: true, billingEmail: true },
+        })
+      : [];
     const allowPlatformOnlyPayments = process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true";
     const currentBillingAccountIds = new Set(
       billingAccountRows
@@ -3797,6 +3821,16 @@ async function renderLivePage(
                 billingEmail: invoice.billingAccount.family.billingEmail,
                 centerId: invoice.billingAccount.family.centerId,
                 accountCategory: invoice.billingAccount.family._count.children > 0 ? "current" as const : "past" as const,
+                currentFamilyMatch: currentFamilyBillingMatch({
+                  sourceFamily: {
+                    id: invoice.billingAccount.family.id,
+                    name: invoice.billingAccount.family.name,
+                    centerId: invoice.billingAccount.family.centerId,
+                    billingEmail: invoice.billingAccount.family.billingEmail,
+                    accountCategory: invoice.billingAccount.family._count.children > 0 ? "current" : "past",
+                  },
+                  currentFamilies: currentFamilyBillingCandidates,
+                }),
               },
             },
             _count: invoice._count,

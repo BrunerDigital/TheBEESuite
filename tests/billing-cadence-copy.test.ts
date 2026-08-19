@@ -27,6 +27,9 @@ test("shared communications copy does not impose a weekly billing cadence", () =
   assert.match(templates, /weekly billing close/i);
   assert.match(page, /canonicalizeSystemMessageTemplate\(template\)/);
   assert.match(route, /canonicalizeSystemMessageTemplate\(storedTemplate\)/);
+  assert.match(route, /body: input\.message \|\| selectedTemplate\.body/);
+  assert.match(route, /body: input\.message \|\| template\.body/);
+  assert.match(route, /message = submittedTemplate\.body/);
 });
 
 test("stale system billing copy is corrected without overwriting school customizations", () => {

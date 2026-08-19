@@ -630,7 +630,7 @@ async function POSTHandler(request: NextRequest) {
       );
     }
 
-    let selectedTemplate: { subject: string; body: string; category: string } | null = null;
+    let selectedTemplate: { name?: string | null; subject: string; body: string; category: string } | null = null;
     if (templateId && !templateId.startsWith("default-")) {
       const storedTemplate = await prisma.messageTemplate.findFirst({
         where: {
@@ -646,8 +646,13 @@ async function POSTHandler(request: NextRequest) {
       selectedTemplate = defaultMessageTemplates.find((item) => item.id === templateId) ?? null;
     }
     if (selectedTemplate) {
-      subject = input.subject || selectedTemplate.subject;
-      message = input.message || selectedTemplate.body;
+      const submittedTemplate = canonicalizeSystemMessageTemplate({
+        ...selectedTemplate,
+        subject: input.subject || selectedTemplate.subject,
+        body: input.message || selectedTemplate.body,
+      });
+      subject = submittedTemplate.subject;
+      message = submittedTemplate.body;
     }
 
     if (assignedToId) {
@@ -891,8 +896,13 @@ async function POSTHandler(request: NextRequest) {
     const template = storedTemplate ? canonicalizeSystemMessageTemplate(storedTemplate) : null;
     if (template) {
       selectedTemplateCategory = template.category;
-      subject = input.subject || template.subject;
-      message = input.message || template.body;
+      const submittedTemplate = canonicalizeSystemMessageTemplate({
+        ...template,
+        subject: input.subject || template.subject,
+        body: input.message || template.body,
+      });
+      subject = submittedTemplate.subject;
+      message = submittedTemplate.body;
     }
   } else if (templateId) {
     const template = defaultMessageTemplates.find((item) => item.id === templateId);

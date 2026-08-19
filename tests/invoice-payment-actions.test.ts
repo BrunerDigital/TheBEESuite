@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
   currentFamilyBillingMatch,
   invoiceAutopayBlockReason,
@@ -48,6 +49,12 @@ test("an ambiguous billing email does not select a current family", () => {
     },
     currentFamilies: [...currentFamilies, { ...currentFamilies[0], id: "second-current-family" }],
   }), null);
+});
+
+test("server-side autopay excludes historical family accounts", () => {
+  const autopayProcessor = readFileSync("src/lib/autopay-processing.ts", "utf8");
+  assert.match(autopayProcessor, /billingAccount:\s*\{[\s\S]*family:\s*\{[\s\S]*children:\s*\{\s*some:\s*currentlyEnrolledChildWhere\(\)/);
+  assert.match(autopayProcessor, /if \(centerIds\.length\)[\s\S]*centerId:\s*\{\s*in:\s*centerIds\s*\}[\s\S]*children:\s*\{\s*some:\s*currentlyEnrolledChildWhere\(\)/);
 });
 
 test("past-family historical invoices cannot be mistaken for current autopay state", () => {

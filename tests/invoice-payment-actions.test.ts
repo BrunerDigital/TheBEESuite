@@ -51,6 +51,12 @@ test("an ambiguous billing email does not select a current family", () => {
   }), null);
 });
 
+test("current-family matches are queried independently of the limited workbench rows", () => {
+  const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  assert.match(page, /historicalFamilyLookupKeys[\s\S]*prisma\.family\.findMany\(\{[\s\S]*children: \{ some: currentlyEnrolledChildWhere\(\) \}[\s\S]*billingEmail: \{ equals: billingEmail, mode: "insensitive" \}/);
+  assert.doesNotMatch(page, /currentFamilyBillingCandidates\s*=\s*billingFamilies\.map/);
+});
+
 test("server-side autopay excludes historical family accounts", () => {
   const autopayProcessor = readFileSync("src/lib/autopay-processing.ts", "utf8");
   assert.match(autopayProcessor, /billingAccount:\s*\{[\s\S]*family:\s*\{[\s\S]*children:\s*\{\s*some:\s*currentlyEnrolledChildWhere\(\)/);

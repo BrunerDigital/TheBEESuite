@@ -3559,6 +3559,29 @@ async function renderLivePage(
       getStripeSecretKey({ tenantId: user.tenantId }).then(Boolean),
       getStripeWebhookSecret({ tenantId: user.tenantId }).then(Boolean),
     ]);
+    const historicalFamilyLookupKeys = Array.from(new Map(
+      invoices
+        .filter((invoice) => invoice.billingAccount.family._count.children === 0)
+        .flatMap((invoice) => {
+          const centerId = invoice.billingAccount.family.centerId;
+          const billingEmail = invoice.billingAccount.family.billingEmail?.trim();
+          return centerId && billingEmail
+            ? [[`${centerId}:${billingEmail.toLowerCase()}`, { centerId, billingEmail }] as const]
+            : [];
+        }),
+    ).values());
+    const currentFamilyBillingCandidates = historicalFamilyLookupKeys.length
+      ? await prisma.family.findMany({
+          where: {
+            children: { some: currentlyEnrolledChildWhere() },
+            OR: historicalFamilyLookupKeys.map(({ centerId, billingEmail }) => ({
+              centerId,
+              billingEmail: { equals: billingEmail, mode: "insensitive" },
+            })),
+          },
+          select: { id: true, name: true, centerId: true, billingEmail: true },
+        })
+      : [];
     const allowPlatformOnlyPayments = process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true";
     const currentBillingAccountIds = new Set(
       billingAccountRows
@@ -3662,12 +3685,6 @@ async function renderLivePage(
       current.push({ id: classroom.id, name: classroom.name, ageGroup: classroom.ageGroup });
       billingClassroomsByCenter.set(classroom.centerId, current);
     }
-    const currentFamilyBillingCandidates = billingFamilies.map((family) => ({
-      id: family.id,
-      name: family.name,
-      centerId: family.centerId,
-      billingEmail: family.billingEmail,
-    }));
 
     return (
       <BillingInvoicesPage

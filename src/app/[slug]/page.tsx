@@ -157,6 +157,10 @@ import { activeNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
 import {
+  normalizeDirectorInvoiceStatus,
+  paymentStatusForDirectorInvoiceStatus,
+} from "@/lib/director-invoice-status";
+import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
   hasConfirmedFamilyResponsibility,
@@ -3336,6 +3340,8 @@ async function renderLivePage(
     const currentBillingAccountWhere = visibleCurrentBillingAccountWhere(visibleCenterIds);
     const invoiceWhere = visibleInvoiceWhere(visibleCenterIds);
     const currentInvoiceWhere = visibleCurrentInvoiceWhere(visibleCenterIds);
+    const invoiceStatus = normalizeDirectorInvoiceStatus(firstSearchParam(searchParams.invoiceStatus));
+    const invoicePaymentStatus = paymentStatusForDirectorInvoiceStatus(invoiceStatus);
     const workbenchFamilyWhere: Prisma.FamilyWhereInput = {
       centerId: scopedCenterIds,
       children: { some: currentlyEnrolledChildWhere() },
@@ -3358,7 +3364,7 @@ async function renderLivePage(
       billingStripeWebhookConfigured,
     ] = await Promise.all([
       prisma.invoice.findMany({
-        where: invoiceWhere,
+        where: { ...invoiceWhere, status: invoicePaymentStatus },
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
         take: 100,
         include: {
@@ -3659,6 +3665,7 @@ async function renderLivePage(
     return (
       <BillingInvoicesPage
         data={{
+          invoiceStatus,
           receiptSchools: centers.map((center) => ({
             id: center.id,
             name: formatCenterName(center),

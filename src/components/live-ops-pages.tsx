@@ -141,6 +141,8 @@ import {
   InvoiceStoredPaymentButton,
   type InvoiceStoredPaymentActionData,
 } from "@/components/invoice-stored-payment-button";
+import { DirectorInvoiceStatusFilter } from "@/components/director-invoice-status-filter";
+import type { DirectorInvoiceStatus } from "@/lib/director-invoice-status";
 import { KidCitySoftwareInvoiceButton } from "@/components/kidcity-software-invoice-button";
 import { LicensingConfigurationPanel, type LicensingConfigurationCenter } from "@/components/licensing-configuration-panel";
 import { MediaReviewActions } from "@/components/media-review-actions";
@@ -4984,6 +4986,7 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
 
 export type BillingInvoicesPageData = {
   canProcessAutopay: boolean;
+  invoiceStatus: DirectorInvoiceStatus;
   initialSelection?: {
     familyId?: string;
     centerId?: string;
@@ -5312,13 +5315,16 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         initialChildId={data.initialSelection?.childId}
         searchQuery={data.initialSelection?.searchQuery}
       />
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle as="h2">Invoices</CardTitle>
-          <CardDescription>Review invoice status, due dates, and family balances.</CardDescription>
+      <Card className="glass-panel" id="invoices">
+        <CardHeader className="gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1.5">
+            <CardTitle as="h2">Invoices</CardTitle>
+            <CardDescription>Choose a status to review its invoices, due dates, and family balances.</CardDescription>
+          </div>
+          <DirectorInvoiceStatusFilter value={data.invoiceStatus} />
         </CardHeader>
         <CardContent>
-          <Table>
+          {data.invoices.length ? <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Invoice</TableHead>
@@ -5394,7 +5400,11 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </Table> : (
+            <div className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+              No {data.invoiceStatus} invoices are available in your billing scope.
+            </div>
+          )}
         </CardContent>
       </Card>
       <FamilyLedgerCard

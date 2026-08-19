@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { canonicalizeSystemMessageTemplate } from "../src/lib/message-templates";
 
 test("family billing copy follows each child's recurring cadence", () => {
   const familyEditor = readFileSync(new URL("../src/components/family-record-editor.tsx", import.meta.url), "utf8");
@@ -26,4 +27,18 @@ test("shared communications copy does not impose a weekly billing cadence", () =
   assert.match(templates, /weekly billing close/i);
   assert.match(page, /canonicalizeSystemMessageTemplate\(template\)/);
   assert.match(route, /canonicalizeSystemMessageTemplate\(storedTemplate\)/);
+});
+
+test("stale system billing copy is corrected without overwriting school customizations", () => {
+  const template = canonicalizeSystemMessageTemplate({
+    id: "stored-template",
+    name: "School billing close procedure",
+    subject: "Canton custom subject",
+    body: "Canton reminder: complete the weekly billing close before Friday.",
+    category: "billing",
+  });
+
+  assert.equal(template.subject, "Canton custom subject");
+  assert.equal(template.body, "Canton reminder: complete the billing close before Friday.");
+  assert.equal(template.id, "stored-template");
 });

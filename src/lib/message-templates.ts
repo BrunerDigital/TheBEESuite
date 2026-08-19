@@ -136,8 +136,7 @@ export function canonicalizeSystemMessageTemplate<T extends { name?: string | nu
   ) {
     return {
       ...template,
-      subject: schoolBillingCloseTemplate.subject,
-      body: schoolBillingCloseTemplate.body,
+      body: template.body.replace(/weekly billing close/gi, "billing close"),
     };
   }
   return template;

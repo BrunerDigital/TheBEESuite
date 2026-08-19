@@ -143,7 +143,7 @@ import {
   shouldCreateRecurringTuitionInvoice,
   utcBillingWeekday,
 } from "@/lib/billing-workflows";
-import { defaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
+import { canonicalizeSystemMessageTemplate, defaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
 import { signMessageAttachmentsFromMetadata } from "@/lib/message-attachments";
 import { buildMessageReplyPath } from "@/lib/message-reply-routing";
 import { staffMessagingHref } from "@/lib/messaging-navigation";
@@ -2950,15 +2950,18 @@ async function renderLivePage(
       ).length,
     }));
     const templateOptions = templates.length
-      ? templates.map((template) => ({
-          id: template.id,
-          name: template.name,
-          subject: template.subject,
-          body: template.body,
-          category: template.category,
-          channel: template.channel,
-          mergeFields: normalizeMergeFields(template.mergeFields),
-        }))
+      ? templates.map((template) => {
+          const canonicalTemplate = canonicalizeSystemMessageTemplate(template);
+          return {
+            id: canonicalTemplate.id,
+            name: canonicalTemplate.name,
+            subject: canonicalTemplate.subject,
+            body: canonicalTemplate.body,
+            category: canonicalTemplate.category,
+            channel: canonicalTemplate.channel,
+            mergeFields: normalizeMergeFields(canonicalTemplate.mergeFields),
+          };
+        })
       : defaultMessageTemplates;
     type MessageThread = {
       key: string;

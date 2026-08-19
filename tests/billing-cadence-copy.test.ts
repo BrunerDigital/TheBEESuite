@@ -7,6 +7,7 @@ test("family billing copy follows each child's recurring cadence", () => {
 
   assert.match(familyEditor, /if \(cadence === "monthly"\) return "monthly"/);
   assert.match(familyEditor, /if \(cadence === "monthly"\) return "month"/);
+  assert.match(familyEditor, /cadence === "four_week" \? amountCents \* 4 : amountCents/);
   assert.match(familyEditor, /Recurring tuition by child/);
   assert.match(familyEditor, /No recurring start period/);
   assert.doesNotMatch(familyEditor, /Family weekly tuition|Weekly tuition by child|No weekly tuition assigned/);

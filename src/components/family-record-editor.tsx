@@ -94,6 +94,10 @@ function tuitionCadenceUnit(cadence: string | null | undefined) {
   return "week";
 }
 
+function tuitionCadenceAmountCents(amountCents: number, cadence: string | null | undefined) {
+  return cadence === "four_week" ? amountCents * 4 : amountCents;
+}
+
 type AuthorizedPickupRecord = {
   id: string;
   fullName: string;
@@ -610,7 +614,10 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     (child) => tuitionCadenceLabel(child.tuitionAssignment?.cadence),
   ));
   const familyTuitionCents = activeTuitionAssignments.reduce(
-    (total, child) => total + (child.tuitionAssignment?.amountCents ?? 0),
+    (total, child) => total + tuitionCadenceAmountCents(
+      child.tuitionAssignment?.amountCents ?? 0,
+      child.tuitionAssignment?.cadence,
+    ),
     0,
   );
   const familyTuitionCadence = familyTuitionCadences.size === 1 ? [...familyTuitionCadences][0] : null;
@@ -1182,7 +1189,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             <SummaryMetric
               label="Selected child"
               value={selectedChildLabel}
-              detail={selectedTuitionAssignment ? `${money(selectedTuitionAssignment.amountCents ?? 0)} ${tuitionCadenceLabel(selectedTuitionAssignment.cadence)} tuition` : selectedChild?.enrollmentStatus?.replaceAll("_", " ") ?? "Family-level edit"}
+              detail={selectedTuitionAssignment ? `${money(tuitionCadenceAmountCents(selectedTuitionAssignment.amountCents ?? 0, selectedTuitionAssignment.cadence))} ${tuitionCadenceLabel(selectedTuitionAssignment.cadence)} tuition` : selectedChild?.enrollmentStatus?.replaceAll("_", " ") ?? "Family-level edit"}
             />
             <SummaryMetric label="Selected parent" value={selectedGuardianLabel} detail={selectedGuardian?.isBillingContact ? "Billing contact" : selectedGuardian?.relation ?? "Guardian"} />
             <SummaryMetric label="Billing account" value={selectedBillingAccount ? money(selectedBillingAccount.balanceCents) : "Not linked"} detail={`Autopay ${selectedAutopayStatus}`} />
@@ -1343,7 +1350,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                   {activeTuitionAssignments.map((child) => (
                     <div key={child.id} className="flex items-center justify-between gap-3">
                       <span className="truncate">{child.fullName}</span>
-                      <span className="shrink-0 font-medium">{money(child.tuitionAssignment?.amountCents ?? 0)}/{tuitionCadenceUnit(child.tuitionAssignment?.cadence)}</span>
+                      <span className="shrink-0 font-medium">{money(tuitionCadenceAmountCents(child.tuitionAssignment?.amountCents ?? 0, child.tuitionAssignment?.cadence))}/{tuitionCadenceUnit(child.tuitionAssignment?.cadence)}</span>
                     </div>
                   ))}
                   {!activeTuitionAssignments.length ? <span className="text-muted-foreground">No recurring tuition assigned.</span> : null}
@@ -1741,7 +1748,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           <div className="grid gap-3 sm:grid-cols-2">
             <SummaryMetric
               label={selectedTuitionAssignment ? `${tuitionCadenceLabel(selectedTuitionAssignment.cadence)[0].toUpperCase()}${tuitionCadenceLabel(selectedTuitionAssignment.cadence).slice(1)} tuition rate` : "Recurring tuition rate"}
-              value={selectedTuitionAssignment ? money(selectedTuitionAssignment.amountCents ?? 0) : "Not assigned"}
+              value={selectedTuitionAssignment ? money(tuitionCadenceAmountCents(selectedTuitionAssignment.amountCents ?? 0, selectedTuitionAssignment.cadence)) : "Not assigned"}
               detail={selectedTuitionAssignment?.tuitionPlanName ?? "Manage this child’s recurring rate in Billing"}
             />
             <SummaryMetric

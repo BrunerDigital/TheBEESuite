@@ -12,7 +12,7 @@ import {
   uniqueMessageNotificationUsers,
 } from "@/lib/message-notification-recipients";
 import { appendInAppMessageReplyInstructions, buildAbsoluteMessageReplyUrl } from "@/lib/message-reply-routing";
-import { defaultMessageTemplates, renderMessageTemplate } from "@/lib/message-templates";
+import { canonicalizeSystemMessageTemplate, defaultMessageTemplates, renderMessageTemplate } from "@/lib/message-templates";
 import {
   broadcastSegmentIsEmpty,
   broadcastSegmentSummary,
@@ -632,15 +632,16 @@ async function POSTHandler(request: NextRequest) {
 
     let selectedTemplate: { subject: string; body: string; category: string } | null = null;
     if (templateId && !templateId.startsWith("default-")) {
-      selectedTemplate = await prisma.messageTemplate.findFirst({
+      const storedTemplate = await prisma.messageTemplate.findFirst({
         where: {
           id: templateId,
           tenantId: user.tenantId,
           isActive: true,
           OR: [{ centerId: null }, { centerId: { in: familyCenterIds } }],
         },
-        select: { subject: true, body: true, category: true },
+        select: { name: true, subject: true, body: true, category: true },
       });
+      selectedTemplate = storedTemplate ? canonicalizeSystemMessageTemplate(storedTemplate) : null;
     } else if (templateId) {
       selectedTemplate = defaultMessageTemplates.find((item) => item.id === templateId) ?? null;
     }
@@ -878,15 +879,16 @@ async function POSTHandler(request: NextRequest) {
 
   let selectedTemplateCategory: string | undefined;
   if (templateId && !templateId.startsWith("default-")) {
-    const template = await prisma.messageTemplate.findFirst({
+    const storedTemplate = await prisma.messageTemplate.findFirst({
       where: {
         id: templateId,
         tenantId: user.tenantId,
         isActive: true,
         OR: [{ centerId: null }, ...(family?.centerId ? [{ centerId: family.centerId }] : [])],
       },
-      select: { subject: true, body: true, category: true },
+      select: { name: true, subject: true, body: true, category: true },
     });
+    const template = storedTemplate ? canonicalizeSystemMessageTemplate(storedTemplate) : null;
     if (template) {
       selectedTemplateCategory = template.category;
       subject = input.subject || template.subject;

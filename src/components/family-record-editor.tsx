@@ -82,6 +82,18 @@ type ChildRecord = {
   } | null;
 };
 
+function tuitionCadenceLabel(cadence: string | null | undefined) {
+  if (cadence === "monthly") return "monthly";
+  if (cadence === "four_week") return "every four weeks";
+  return "weekly";
+}
+
+function tuitionCadenceUnit(cadence: string | null | undefined) {
+  if (cadence === "monthly") return "month";
+  if (cadence === "four_week") return "4 weeks";
+  return "week";
+}
+
 type AuthorizedPickupRecord = {
   id: string;
   fullName: string;
@@ -585,19 +597,23 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     (selectedFamily?.children.reduce((count, child) => count + child.documents.length, 0) ?? 0);
   const selectedCenterLabel = selectedCenter?.name ?? selectedFamily?.centerName ?? "School not set";
   const selectedChildLabel = selectedChild?.fullName ?? (childName.trim() ? `${childName.trim()} (new child)` : "No child selected");
-  const selectedWeeklyTuition = selectedChild?.tuitionAssignment?.enabled
+  const selectedTuitionAssignment = selectedChild?.tuitionAssignment?.enabled
     && typeof selectedChild.tuitionAssignment.amountCents === "number"
     ? selectedChild.tuitionAssignment
     : null;
-  const activeWeeklyTuitionAssignments = selectedFamily?.children.filter(
+  const activeTuitionAssignments = selectedFamily?.children.filter(
     (child) => child.tuitionAssignment?.enabled
       && typeof child.tuitionAssignment.amountCents === "number"
       && child.tuitionAssignment.amountCents >= 0,
   ) ?? [];
-  const familyWeeklyTuitionCents = activeWeeklyTuitionAssignments.reduce(
+  const familyTuitionCadences = new Set(activeTuitionAssignments.map(
+    (child) => tuitionCadenceLabel(child.tuitionAssignment?.cadence),
+  ));
+  const familyTuitionCents = activeTuitionAssignments.reduce(
     (total, child) => total + (child.tuitionAssignment?.amountCents ?? 0),
     0,
   );
+  const familyTuitionCadence = familyTuitionCadences.size === 1 ? [...familyTuitionCadences][0] : null;
   const selectedGuardianLabel = selectedGuardian?.fullName ?? (guardianName.trim() ? `${guardianName.trim()} (new parent)` : "No parent selected");
   const editingTargetLabel = selectedFamily
     ? `${selectedFamily.name} / ${selectedChild?.fullName ?? "family account"}`
@@ -1166,7 +1182,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             <SummaryMetric
               label="Selected child"
               value={selectedChildLabel}
-              detail={selectedWeeklyTuition ? `${money(selectedWeeklyTuition.amountCents ?? 0)} weekly tuition` : selectedChild?.enrollmentStatus?.replaceAll("_", " ") ?? "Family-level edit"}
+              detail={selectedTuitionAssignment ? `${money(selectedTuitionAssignment.amountCents ?? 0)} ${tuitionCadenceLabel(selectedTuitionAssignment.cadence)} tuition` : selectedChild?.enrollmentStatus?.replaceAll("_", " ") ?? "Family-level edit"}
             />
             <SummaryMetric label="Selected parent" value={selectedGuardianLabel} detail={selectedGuardian?.isBillingContact ? "Billing contact" : selectedGuardian?.relation ?? "Guardian"} />
             <SummaryMetric label="Billing account" value={selectedBillingAccount ? money(selectedBillingAccount.balanceCents) : "Not linked"} detail={`Autopay ${selectedAutopayStatus}`} />
@@ -1311,22 +1327,26 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <SummaryMetric
-                label="Family weekly tuition"
-                value={activeWeeklyTuitionAssignments.length ? money(familyWeeklyTuitionCents) : "Not assigned"}
-                detail={activeWeeklyTuitionAssignments.length
-                  ? `${activeWeeklyTuitionAssignments.length} active child rate${activeWeeklyTuitionAssignments.length === 1 ? "" : "s"}`
-                  : "Assign weekly tuition from Billing"}
+                label="Family recurring tuition"
+                value={!activeTuitionAssignments.length
+                  ? "Not assigned"
+                  : familyTuitionCadence
+                    ? `${money(familyTuitionCents)}/${tuitionCadenceUnit(activeTuitionAssignments[0]?.tuitionAssignment?.cadence)}`
+                    : "Multiple cadences"}
+                detail={activeTuitionAssignments.length
+                  ? `${activeTuitionAssignments.length} active child rate${activeTuitionAssignments.length === 1 ? "" : "s"}${familyTuitionCadence ? ` · ${familyTuitionCadence}` : " · review each child"}`
+                  : "Assign recurring tuition from Billing"}
               />
               <div className="rounded-lg border bg-card/50 p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Weekly tuition by child</div>
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recurring tuition by child</div>
                 <div className="mt-2 space-y-1 text-sm">
-                  {activeWeeklyTuitionAssignments.map((child) => (
+                  {activeTuitionAssignments.map((child) => (
                     <div key={child.id} className="flex items-center justify-between gap-3">
                       <span className="truncate">{child.fullName}</span>
-                      <span className="shrink-0 font-medium">{money(child.tuitionAssignment?.amountCents ?? 0)}/week</span>
+                      <span className="shrink-0 font-medium">{money(child.tuitionAssignment?.amountCents ?? 0)}/{tuitionCadenceUnit(child.tuitionAssignment?.cadence)}</span>
                     </div>
                   ))}
-                  {!activeWeeklyTuitionAssignments.length ? <span className="text-muted-foreground">No weekly tuition assigned.</span> : null}
+                  {!activeTuitionAssignments.length ? <span className="text-muted-foreground">No recurring tuition assigned.</span> : null}
                 </div>
               </div>
             </div>
@@ -1720,16 +1740,16 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           <div className="text-sm font-medium">Child profile</div>
           <div className="grid gap-3 sm:grid-cols-2">
             <SummaryMetric
-              label="Weekly tuition rate"
-              value={selectedWeeklyTuition ? money(selectedWeeklyTuition.amountCents ?? 0) : "Not assigned"}
-              detail={selectedWeeklyTuition?.tuitionPlanName ?? "Manage this child’s recurring rate in Billing"}
+              label={selectedTuitionAssignment ? `${tuitionCadenceLabel(selectedTuitionAssignment.cadence)[0].toUpperCase()}${tuitionCadenceLabel(selectedTuitionAssignment.cadence).slice(1)} tuition rate` : "Recurring tuition rate"}
+              value={selectedTuitionAssignment ? money(selectedTuitionAssignment.amountCents ?? 0) : "Not assigned"}
+              detail={selectedTuitionAssignment?.tuitionPlanName ?? "Manage this child’s recurring rate in Billing"}
             />
             <SummaryMetric
-                label="Weekly billing"
-                value={selectedWeeklyTuition?.amountCents === 0 ? "Voucher funded" : selectedWeeklyTuition ? "Active" : "Not active"}
-                detail={selectedWeeklyTuition?.amountCents === 0
+                label={selectedTuitionAssignment ? `${tuitionCadenceLabel(selectedTuitionAssignment.cadence)[0].toUpperCase()}${tuitionCadenceLabel(selectedTuitionAssignment.cadence).slice(1)} billing` : "Recurring billing"}
+                value={selectedTuitionAssignment?.amountCents === 0 ? "Voucher funded" : selectedTuitionAssignment ? "Active" : "Not active"}
+                detail={selectedTuitionAssignment?.amountCents === 0
                   ? "No family invoice or autopay"
-                  : selectedWeeklyTuition?.startsPeriod ? `Starts ${selectedWeeklyTuition.startsPeriod}` : "No recurring start week"}
+                  : selectedTuitionAssignment?.startsPeriod ? `Starts ${selectedTuitionAssignment.startsPeriod}` : "No recurring start period"}
               />
           </div>
           <div className="grid gap-3 md:grid-cols-3">

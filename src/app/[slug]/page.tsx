@@ -156,6 +156,7 @@ import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { activeNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
+import { currentFamilyBillingMatch } from "@/lib/invoice-payment-actions";
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
@@ -3655,21 +3656,12 @@ async function renderLivePage(
       current.push({ id: classroom.id, name: classroom.name, ageGroup: classroom.ageGroup });
       billingClassroomsByCenter.set(classroom.centerId, current);
     }
-    const currentFamiliesByBillingEmail = new Map<string, Array<(typeof billingFamilies)[number]>>();
-    for (const family of billingFamilies) {
-      const billingEmail = family.billingEmail?.trim().toLowerCase();
-      if (!billingEmail || !family.centerId) continue;
-      const key = `${family.centerId}:${billingEmail}`;
-      currentFamiliesByBillingEmail.set(key, [...(currentFamiliesByBillingEmail.get(key) ?? []), family]);
-    }
-    function currentFamilyMatch(family: { id: string; billingEmail: string | null; centerId: string | null }) {
-      const billingEmail = family.billingEmail?.trim().toLowerCase();
-      if (!billingEmail || !family.centerId) return null;
-      const matches = (currentFamiliesByBillingEmail.get(`${family.centerId}:${billingEmail}`) ?? [])
-        .filter((candidate) => candidate.id !== family.id);
-      if (matches.length !== 1) return null;
-      return { id: matches[0].id, name: matches[0].name, centerId: matches[0].centerId };
-    }
+    const currentFamilyBillingCandidates = billingFamilies.map((family) => ({
+      id: family.id,
+      name: family.name,
+      centerId: family.centerId,
+      billingEmail: family.billingEmail,
+    }));
 
     return (
       <BillingInvoicesPage
@@ -3802,7 +3794,16 @@ async function renderLivePage(
                 billingEmail: invoice.billingAccount.family.billingEmail,
                 centerId: invoice.billingAccount.family.centerId,
                 accountCategory: invoice.billingAccount.family._count.children > 0 ? "current" as const : "past" as const,
-                currentFamilyMatch: currentFamilyMatch(invoice.billingAccount.family),
+                currentFamilyMatch: currentFamilyBillingMatch({
+                  sourceFamily: {
+                    id: invoice.billingAccount.family.id,
+                    name: invoice.billingAccount.family.name,
+                    centerId: invoice.billingAccount.family.centerId,
+                    billingEmail: invoice.billingAccount.family.billingEmail,
+                    accountCategory: invoice.billingAccount.family._count.children > 0 ? "current" : "past",
+                  },
+                  currentFamilies: currentFamilyBillingCandidates,
+                }),
               },
             },
             _count: invoice._count,

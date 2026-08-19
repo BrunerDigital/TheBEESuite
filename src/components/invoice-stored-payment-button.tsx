@@ -287,7 +287,9 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         ) : null}
       </div>
       <div className="max-w-48 text-xs text-muted-foreground">
-        {method.paymentMethodLabel ?? reason ?? ""}
+        {invoice.billingAccount.family.accountCategory === "past"
+          ? reason ?? ""
+          : method.paymentMethodLabel ?? reason ?? ""}
       </div>
       {invoice.responsibilitySeparation ? (
         <div className="max-w-72 text-xs text-muted-foreground">

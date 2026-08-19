@@ -3655,6 +3655,21 @@ async function renderLivePage(
       current.push({ id: classroom.id, name: classroom.name, ageGroup: classroom.ageGroup });
       billingClassroomsByCenter.set(classroom.centerId, current);
     }
+    const currentFamiliesByBillingEmail = new Map<string, Array<(typeof billingFamilies)[number]>>();
+    for (const family of billingFamilies) {
+      const billingEmail = family.billingEmail?.trim().toLowerCase();
+      if (!billingEmail || !family.centerId) continue;
+      const key = `${family.centerId}:${billingEmail}`;
+      currentFamiliesByBillingEmail.set(key, [...(currentFamiliesByBillingEmail.get(key) ?? []), family]);
+    }
+    function currentFamilyMatch(family: { id: string; billingEmail: string | null; centerId: string | null }) {
+      const billingEmail = family.billingEmail?.trim().toLowerCase();
+      if (!billingEmail || !family.centerId) return null;
+      const matches = (currentFamiliesByBillingEmail.get(`${family.centerId}:${billingEmail}`) ?? [])
+        .filter((candidate) => candidate.id !== family.id);
+      if (matches.length !== 1) return null;
+      return { id: matches[0].id, name: matches[0].name, centerId: matches[0].centerId };
+    }
 
     return (
       <BillingInvoicesPage
@@ -3787,6 +3802,7 @@ async function renderLivePage(
                 billingEmail: invoice.billingAccount.family.billingEmail,
                 centerId: invoice.billingAccount.family.centerId,
                 accountCategory: invoice.billingAccount.family._count.children > 0 ? "current" as const : "past" as const,
+                currentFamilyMatch: currentFamilyMatch(invoice.billingAccount.family),
               },
             },
             _count: invoice._count,

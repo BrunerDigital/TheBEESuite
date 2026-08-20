@@ -90,6 +90,8 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(panel, /Detected source inventory/);
   assert.match(panel, /sourceInventoryConfirmed/);
   assert.match(route, /Confirm the detected source inventory before importing/);
+  assert.match(panel, /complete intended source for this school import/);
+  assert.match(route, /Confirm the reviewed standalone source before importing/);
   assert.match(panel, /XMLHttpRequest/);
   assert.match(panel, /Data import progress/);
   assert.match(panel, /Upload and import complete/);

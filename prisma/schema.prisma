@@ -1923,14 +1923,19 @@ model ProcareImportBatch {
 }
 
 model ProcareImportRow {
-  id              String  @id @default(cuid())
-  batchId         String
-  rowNumber       Int
-  status          String
-  message         String?
-  rawData         Json
-  createdFamilyId String?
-  createdChildId  String?
+  id                          String    @id @default(cuid())
+  batchId                     String
+  rowNumber                   Int
+  status                      String
+  message                     String?
+  rawData                     Json
+  createdFamilyId             String?
+  createdChildId              String?
+  resolutionCategory          String?
+  resolutionReason            String?
+  resolutionEvidenceReference String?
+  resolvedBy                  String?
+  resolvedAt                  DateTime?
 
   batch ProcareImportBatch @relation(fields: [batchId], references: [id])
 

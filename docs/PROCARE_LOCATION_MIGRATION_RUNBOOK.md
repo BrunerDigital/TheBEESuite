@@ -6,6 +6,8 @@ Purpose: move one school location at a time from ProCare to The BEE Suite as the
 
 This runbook is per location. Do not cut over a group of schools until every location in the group has its own completed evidence packet and signoff.
 
+Use `PROCARE_FLEET_VERIFICATION_GATE.md` as the mandatory machine-verification gate for every remaining Kid City USA location.
+
 ## Source Of Truth Rules
 
 - Before final cutover, ProCare remains the source of truth for live school operations.
@@ -164,6 +166,7 @@ Send the location a written freeze notice:
 3. Export/download the committed import backup.
 4. Save source file, preview summary, final batch ID, and backup path in the evidence packet.
 5. Download the automated reconciliation report. Treat `needs_review` or `not_available` measures as open evidence; the report never grants cutover.
+6. Download the Fleet Verification Packet. It must show `READY_FOR_DIRECTOR_REVIEW` before director validation begins. `NOT_VERIFIED` blocks the school and identifies the exact missing source, reconciliation, or exception evidence.
 
 ### 5. Post-Import Validation
 

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -143,6 +144,21 @@ type ImportPreview = {
     rawSourceRows?: Record<string, number>;
     duplicateSourceRowsRemoved?: Record<string, number>;
   };
+  fleetSourceCoverage?: {
+    requiredDomainsComplete: boolean;
+    domains: Array<{
+      key: string;
+      label: string;
+      requiredForSchoolVerification: boolean;
+      status: "present" | "missing";
+      evidence: string[];
+      missingEvidence: string[];
+      applicableRecordCount: number;
+      incompleteRecordCount: number;
+    }>;
+    ignoredSources: Array<{ sourceName: string; note: string }>;
+    evidenceOnlySources: Array<{ sourceName: string; note: string }>;
+  };
   warnings?: Array<{ rowNumber: number; message: string }>;
   rowResults?: Array<{
     rowNumber: number;
@@ -218,7 +234,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [lastImportSummary, setLastImportSummary] = useState<ImportPreview | null>(null);
   const [lastBatchId, setLastBatchId] = useState("");
-  const [disposedRowNumbers, setDisposedRowNumbers] = useState<number[]>([]);
+  const [resolutionCategory, setResolutionCategory] = useState("");
+  const [resolutionReason, setResolutionReason] = useState("");
+  const [resolutionEvidenceReference, setResolutionEvidenceReference] = useState("");
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
@@ -233,6 +251,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     setCorrelationConfirmations([]);
     setReviewStale(false);
     setLastBatchId("");
+    setResolutionCategory("");
+    setResolutionReason("");
+    setResolutionEvidenceReference("");
     setStatus("");
     setProgressPhase("idle");
     setProgressPercent(0);
@@ -272,6 +293,11 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     window.open(`/api/imports/procare?${params.toString()}`, "_blank", "noopener,noreferrer");
   }
 
+  function downloadFleetVerification(batchId: string) {
+    const params = new URLSearchParams({ batchId, report: "fleet-verification" });
+    window.open(`/api/imports/procare?${params.toString()}`, "_blank", "noopener,noreferrer");
+  }
+
   function submit(dryRun: boolean) {
     if (submitLockedRef.current) return;
     if (!dryRun && (
@@ -299,7 +325,6 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         formData.set("sourceInventoryConfirmed", String(sourceInventoryConfirmed));
         formData.set("fieldMapping", JSON.stringify(fieldMapping));
         formData.set("correlationConfirmations", correlationConfirmations.join(","));
-        formData.set("disposedRowNumbers", disposedRowNumbers.join(","));
         if (!dryRun && preview) {
           formData.set("sourceSha256", preview.sourceSha256 ?? "");
           formData.set("reviewFingerprint", preview.reviewFingerprint ?? "");
@@ -373,7 +398,6 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           setCsv("");
           setPreview(null);
           setPreviewDialogOpen(false);
-          setDisposedRowNumbers([]);
           setCorrelationConfirmations([]);
           setReviewStale(false);
           if (fileRef.current) fileRef.current.value = "";
@@ -406,28 +430,36 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     });
   }
 
-  function disposeRows(rowNumbers: number[], disposeAll = false) {
-    if (!lastBatchId || (!disposeAll && !rowNumbers.length)) return;
+  function disposeRows(rowNumbers: number[]) {
+    if (!lastBatchId || !rowNumbers.length || !resolutionCategory || resolutionReason.trim().length < 12 || resolutionEvidenceReference.trim().length < 6) return;
     startTransition(async () => {
       setError("");
       const response = await fetch("/api/imports/procare", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ batchId: lastBatchId, rowNumbers, action: disposeAll ? "dispose_all" : "dispose" }),
+        body: JSON.stringify({
+          batchId: lastBatchId,
+          rowNumbers,
+          action: "dispose",
+          resolutionCategory,
+          resolutionReason,
+          resolutionEvidenceReference,
+        }),
       });
       const json = await response.json().catch(() => null) as { error?: string; disposed?: number } | null;
       if (!response.ok) {
         setError(json?.error || "The unresolved source data could not be disposed.");
         return;
       }
-      if (!disposeAll) setDisposedRowNumbers((current) => [...new Set([...current, ...rowNumbers])]);
       setPreview((current) => current ? {
         ...current,
         unresolved: Math.max((current.unresolved ?? 0) - (json?.disposed ?? rowNumbers.length), 0),
         warningRows: Math.max(current.warningRows - (json?.disposed ?? rowNumbers.length), 0),
-        rowResults: disposeAll ? [] : current.rowResults?.filter((row) => !rowNumbers.includes(row.rowNumber)),
+        rowResults: current.rowResults?.filter((row) => !rowNumbers.includes(row.rowNumber)),
       } : current);
-      setStatus(`${json?.disposed ?? rowNumbers.length} unresolved source row(s) were disposed with an audit record.`);
+      setResolutionReason("");
+      setResolutionEvidenceReference("");
+      setStatus(`${json?.disposed ?? rowNumbers.length} unresolved source row(s) were excluded with reviewer and evidence details.`);
     });
   }
 
@@ -453,6 +485,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const requiredCorrelationSections = preview?.correlationReview?.filter((section) => section.required) ?? [];
   const missingCorrelationSections = requiredCorrelationSections.filter((section) => !correlationConfirmations.includes(section.id));
   const sourceInventory = preview?.datasetCoverage?.sourceInventory ?? [];
+  const fleetSourceDomains = preview?.fleetSourceCoverage?.domains ?? [];
+  const missingRequiredFleetDomains = fleetSourceDomains.filter((domain) => domain.requiredForSchoolVerification && domain.status === "missing");
   const recognizedSourceFiles = sourceInventory.filter((source) => !["ignored", "evidence_only"].includes(source.reportKind));
   const evidenceOnlySourceFiles = sourceInventory.filter((source) => source.reportKind === "evidence_only");
   const ignoredSourceFiles = sourceInventory.filter((source) => source.reportKind === "ignored");
@@ -466,7 +500,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     ? duplicateSourceRowsRemovedDetails.reduce((total, [, count]) => total + count, 0)
     : 0;
   const importCommitted = progressPhase === "complete" && Boolean(lastBatchId);
-  const needsSourceInventoryConfirmation = Boolean(preview?.datasetCoverage);
+  const needsSourceInventoryConfirmation = Boolean(preview);
   const sourceInventoryReady = !needsSourceInventoryConfirmation || sourceInventoryConfirmed || importCommitted;
   const hasReviewedImport = hasCompletedPreview || importCommitted;
   const commitBlockedReason = noCentersAvailable
@@ -770,6 +804,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                     <Download data-icon="inline-start" />
                     Download Reconciliation Report
                   </Button>
+                  <Button size="sm" variant="outline" onClick={() => downloadFleetVerification(lastBatchId)}>
+                    <Download data-icon="inline-start" />
+                    Fleet Verification Packet
+                  </Button>
                   <Link href="/dashboard" className={buttonVariants({ variant: "outline", size: "sm" })}>
                     Verify dashboard totals
                   </Link>
@@ -832,10 +870,16 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 Open school setup
               </Link>
               {lastBatchId ? (
-                <Button size="sm" variant="outline" onClick={() => downloadReconciliation(lastBatchId)}>
-                  <Download data-icon="inline-start" />
-                  Reconciliation report
-                </Button>
+                <>
+                  <Button size="sm" variant="outline" onClick={() => downloadReconciliation(lastBatchId)}>
+                    <Download data-icon="inline-start" />
+                    Reconciliation report
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => downloadFleetVerification(lastBatchId)}>
+                    <Download data-icon="inline-start" />
+                    Fleet verification
+                  </Button>
+                </>
               ) : null}
             </div>
           </div>
@@ -1147,6 +1191,26 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             </div>
           </div>
         ) : null}
+        {fleetSourceDomains.length ? (
+          <Alert variant={missingRequiredFleetDomains.length ? "destructive" : "default"}>
+            {missingRequiredFleetDomains.length ? <AlertCircle className="size-4" /> : <CheckCircle2 className="size-4" />}
+            <AlertTitle>
+              {missingRequiredFleetDomains.length
+                ? `${missingRequiredFleetDomains.length} required verification domain(s) are missing`
+                : "Required school verification domains were detected"}
+            </AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p>This gate evaluates whether the package can support whole-school verification. It does not activate billing, access, invitations, attendance, or cutover.</p>
+              <div className="flex flex-wrap gap-2">
+                {fleetSourceDomains.map((domain) => (
+                  <Badge key={domain.key} variant={domain.status === "present" ? "outline" : domain.requiredForSchoolVerification ? "destructive" : "secondary"}>
+                    {domain.label}: {domain.status === "present" ? "detected" : domain.requiredForSchoolVerification ? "missing" : "separate gate"}
+                  </Badge>
+                ))}
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {sourceInventory.length ? (
           <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
             <div>
@@ -1219,6 +1283,17 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             </label>
           </div>
         ) : null}
+        {preview && !preview.datasetCoverage ? (
+          <label className="flex min-h-11 items-start gap-2 rounded-lg border bg-muted/20 p-3 text-xs text-foreground">
+            <input
+              type="checkbox"
+              checked={sourceInventoryConfirmed}
+              onChange={(event) => setSourceInventoryConfirmed(event.target.checked)}
+              className="mt-0.5 size-5 shrink-0 accent-primary"
+            />
+            <span>I confirm this reviewed standalone CSV is the complete intended source for this school import.</span>
+          </label>
+        ) : null}
         {preview?.unresolved ? (
           <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
             <div>
@@ -1227,17 +1302,55 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 These rows are stored in the import batch but were not written into family, child, or staff records. Match differently named columns above and import again, or dispose of rows that should not enter The BEE Suite.
               </p>
             </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Exception category</Label>
+                <Select value={resolutionCategory} onValueChange={(value) => setResolutionCategory(value ?? "")}>
+                  <SelectTrigger><SelectValue placeholder="Choose a reviewed category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="duplicate_source_row">Duplicate source row</SelectItem>
+                    <SelectItem value="historical_out_of_scope">Historical record outside approved scope</SelectItem>
+                    <SelectItem value="source_correction_pending">Source correction pending</SelectItem>
+                    <SelectItem value="approved_exclusion">Approved school-specific exclusion</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="procare-exception-evidence">Secure evidence reference</Label>
+                <Input
+                  id="procare-exception-evidence"
+                  value={resolutionEvidenceReference}
+                  onChange={(event) => setResolutionEvidenceReference(event.target.value)}
+                  placeholder="Secure packet, correction ticket, or source report reference"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="procare-exception-reason">Specific exception reason</Label>
+              <Textarea
+                id="procare-exception-reason"
+                value={resolutionReason}
+                onChange={(event) => setResolutionReason(event.target.value)}
+                placeholder="Explain why this exact row must not enter BEE Suite and who owns any correction."
+              />
+              <p className="text-xs text-muted-foreground">The category, reason, secure evidence reference, reviewer, and timestamp are retained with the import row and audit log.</p>
+            </div>
             <div className="space-y-2">
               {preview.rowResults?.map((row) => (
                 <div key={`unresolved-${row.rowNumber}`} className="flex flex-col gap-2 rounded-lg border bg-background p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-xs"><span className="font-medium">Row {row.rowNumber}</span>: {row.message ?? previewRecordLabel(row)}</div>
-                  <Button size="sm" variant="outline" disabled={busy} onClick={() => disposeRows([row.rowNumber])}>Dispose row</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy || !resolutionCategory || resolutionReason.trim().length < 12 || resolutionEvidenceReference.trim().length < 6}
+                    onClick={() => disposeRows([row.rowNumber])}
+                  >
+                    Exclude with evidence
+                  </Button>
                 </div>
               ))}
             </div>
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => disposeRows([], true)}>
-              Dispose all unresolved rows
-            </Button>
+            <p className="text-xs text-muted-foreground">Bulk disposal is disabled. Review and document each unresolved row independently.</p>
           </div>
         ) : null}
         {preview?.rowResults?.length ? (

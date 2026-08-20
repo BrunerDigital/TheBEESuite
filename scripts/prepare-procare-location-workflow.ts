@@ -1377,6 +1377,8 @@ export async function prepareProcareLocationWorkflow(input: {
     const childInfoJson = record["procare child info source records"] || "";
     const counts = relationshipCounts(record);
     const familySource = canonicalParentInfo ?? balance;
+    const selectedPayerId = record["guardian id"];
+    const selectedPayerSourceRows = sourceRows(familySource, "Person ID", selectedPayerId) || `Person ID=${selectedPayerId}`;
     const matchingSchedules = renderedScheduleReview.filter((row) => (
       renderedChildNameKey(row["source child name"] ?? "") === renderedChildNameKey(record["child name"] ?? "")
       && evidenceKey(row["source classroom"] ?? "") === evidenceKey(record.classroom ?? "")
@@ -1386,8 +1388,8 @@ export async function prepareProcareLocationWorkflow(input: {
       ? ["monday", "tuesday", "wednesday", "thursday", "friday"].map((day) => matchedSchedule[day]).filter(Boolean).join(" | ")
       : "";
     for (const [destination, sourceColumn, value, rawValue] of [
-      ["Family.externalId", "Account ID", accountId, sourceCellValues(familySource, "Account ID", accountId, ["Account ID"])],
-      ["Family.name", "Payer Full Name / Last Name", record["family name"], sourceCellValues(familySource, "Account ID", accountId, ["Full Name", "Payer Full Name", "Last Name"])],
+      ["Family.externalId", "Account ID", accountId, sourceCellValues(familySource, "Person ID", selectedPayerId, ["Account ID"])],
+      ["Family.name", "Payer Full Name / Last Name", record["family name"], sourceCellValues(familySource, "Person ID", selectedPayerId, ["Full Name", "Payer Full Name", "Last Name"])],
       ["Child.externalId", "Child ID", childId, sourceCellValues(enrollment, "Child ID", childId, ["Child ID"])],
       ["Child.fullName", "Full Name", record["child name"], sourceCellValues(enrollment, "Child ID", childId, ["Full Name", "Child Name"])],
       ["Child.dateOfBirth", "Date of Birth", record["date of birth"], sourceCellValues(enrollment, "Child ID", childId, ["Date of Birth", "DOB"])],
@@ -1402,12 +1404,12 @@ export async function prepareProcareLocationWorkflow(input: {
       destination,
       source: destination.startsWith("Family") ? parentInfoFilename : enrollment!.filename,
       sourceColumn,
-      sourceRows: destination.startsWith("Family") ? `Account ID=${accountId}` : enrollmentRowNumbers,
+      sourceRows: destination.startsWith("Family") ? selectedPayerSourceRows : enrollmentRowNumbers,
       value,
       rawValue,
     });
     for (const [destination, sourceColumn, value, rawValue] of [
-      ["Family.address", "Payer address columns", record.address, sourceCellEvidence(familySource, "Account ID", accountId, ["Address", "Address 1", "Address 2", "City", "State", "Zip", "Postal Code"])],
+      ["Family.address", "Payer address columns", record.address, sourceCellEvidence(familySource, "Person ID", selectedPayerId, ["Address", "Address 1", "Address 2", "City", "State", "Zip", "Postal Code"])],
       ["Child.gender", "Gender", record.gender, sourceCellValues(enrollment, "Child ID", childId, ["Gender"])],
       ["Child.enrollmentEndDate", "Status End Date", record["end date"], sourceCellValues(enrollment, "Child ID", childId, ["Status End Date", "End Date"])],
       ["Child.ageGroup", "Age Group / Program", record["age group"], sourceCellValues(enrollment, "Child ID", childId, ["Age Group", "Program"])],
@@ -1421,7 +1423,7 @@ export async function prepareProcareLocationWorkflow(input: {
       sourceColumn,
       sourceRows: destination === "Child.schedule"
         ? `Child ID=${childId}; ${matchedSchedule ? "unique reviewed name and classroom match" : `${matchingSchedules.length} matching rendered rows; left unbound`}`
-        : destination.startsWith("Family") ? `Account ID=${accountId}` : enrollmentRowNumbers,
+        : destination.startsWith("Family") ? selectedPayerSourceRows : enrollmentRowNumbers,
       value,
       rawValue,
       required: false,

@@ -239,6 +239,8 @@ test("location workflow emits an enrolled-only import boundary for portal-safe f
   assert.deepEqual(safeRows.map((row) => row["child id"]), ["active-child"]);
   const safeBalances = parseCsvBuffer(fs.readFileSync(path.join(output, "14-active-portal-safe-balance-review.csv")), "balances").rows;
   assert.deepEqual(safeBalances.map((row) => row["Account ID"]), ["active-account"]);
+  const reconciliation = parseCsvBuffer(fs.readFileSync(path.join(output, "18-bee-field-reconciliation.csv")), "field reconciliation").rows;
+  assert.ok(reconciliation.some((row) => row["BEE Suite Field"] === "Family.name" && row["BEE Stable Entity ID"] === "active-account" && row["Source Cell Value"] === "Active Parent" && row["BEE Normalized Value"] === "Active Parent Household" && row["Source Row Number Or Stable Key"] === "3"));
 });
 
 test("location workflow resolves an ambiguous account only from a unique lives-with payer", async () => {

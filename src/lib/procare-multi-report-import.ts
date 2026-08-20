@@ -39,6 +39,7 @@ type ProcareImportDiagnostic = {
     | "source_child_without_enrollment"
     | "enrollment_child_id_missing"
     | "parent_account_id_missing"
+    | "relationship_person_id_missing"
     | "relationship_child_id_missing"
     | "child_info_child_id_missing";
   severity: "warning" | "info";
@@ -535,10 +536,14 @@ function personType(row: CsvRow) {
   return field(row, "Person Type").toLowerCase();
 }
 
-function isRelationshipPerson(row: CsvRow) {
+function hasRelationshipPersonShape(row: CsvRow) {
   const type = personType(row);
   return type === "relationship"
     || (type !== "child" && Boolean(field(row, "Relationship Type")));
+}
+
+function isRelationshipPerson(row: CsvRow) {
+  return Boolean(field(row, "Person ID")) && hasRelationshipPersonShape(row);
 }
 
 function numericSortValue(value: string) {
@@ -899,9 +904,19 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
     const activeAllergySourceRecords = allergySourceRecords.filter((row) => checked(field(row, "Item Is Active")));
     const allergyRecords = activeAllergySourceRecords.map((row) => field(row, "Item Description")).filter(Boolean);
     const relationshipRecords = related.map((row) => relationshipRecord(row, payerPersonIds, childPersonId));
+    const relationshipRowsMissingPersonId = retainedRelationshipSourceRows.filter((row) => (
+      hasRelationshipPersonShape(row) && !field(row, "Person ID")
+    ));
     const diagnostics = [
       ...additionalDiagnostics,
       ...(includeResolutionDiagnostics ? diagnosticForResolution(resolution, payers.length) : []),
+      ...(relationshipRowsMissingPersonId.length ? [{
+        code: "relationship_person_id_missing" as const,
+        severity: "warning" as const,
+        sourceRowCount: relationshipRowsMissingPersonId.length,
+        relationshipRowCount: relationshipRowsMissingPersonId.length,
+        message: `${relationshipRowsMissingPersonId.length} relationship source row(s) lack a stable ProCare Person ID and cannot be imported or matched by name/contact fallback.`,
+      }] : []),
     ];
     const childId = field(child, "Child ID");
     const coverage = {

@@ -254,6 +254,28 @@ test("enrollment ages use the school's calendar date without shifting stored DOB
   );
 });
 
+test("enrollment status rows retain enrolled school-age children older than ten", () => {
+  const centerById = new Map([["center_1", emptyReportData.centers[0]]]);
+  const children = [
+    {
+      id: "child_school_age", fullName: "Schooler, Current", dateOfBirth: new Date("2016-03-10T12:00:00.000Z"), startDate: new Date("2026-08-09T12:00:00.000Z"),
+      ageGroup: "Schoolers", enrollmentStatus: "enrolled", customFields: { gender: "M" }, family: { centerId: "center_1" },
+      classroom: { name: "Schoolers", ageGroup: "Schoolers", centerId: "center_1" },
+    },
+    {
+      id: "child_future_dob", fullName: "DOB, Future", dateOfBirth: new Date("2027-01-01T12:00:00.000Z"), startDate: null,
+      ageGroup: "Infant", enrollmentStatus: "enrolled", customFields: {}, family: { centerId: "center_1" },
+      classroom: { name: "Infants", ageGroup: "Infant", centerId: "center_1" },
+    },
+  ];
+
+  const rows = buildEnrollmentStatusReportRows(children, centerById, new Date("2026-08-20T23:59:59.999Z"));
+
+  assert.deepEqual(rows.map((row) => [row.childId, row.ageInMonths, row.ageLabel]), [
+    ["child_school_age", 125, "10 Yr - 5 Mo"],
+  ]);
+});
+
 test("report filters normalize quick ranges and center ids", () => {
   const filters = normalizeReportFilters(
     { range: "30", centerId: "center_1" },

@@ -1,10 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { UserRole } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
-import { isEmail } from "@/lib/integrations";
 import { DEFAULT_PARENT_INITIAL_PASSWORD, PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
 import { prisma } from "@/lib/prisma";
-import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import { isSupabaseAuthCompatibleEmail, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
 type ParentPortalProvisionResult =
   | {
@@ -154,7 +153,7 @@ export async function ensureParentPortalLoginForGuardian({
   if (parentPortalAccessDisabled(guardian.customFields)) return { ok: false, status: 200, reason: "parent_portal_disabled" };
 
   const email = normalizeEmail(guardian.email ?? "");
-  if (!isEmail(email)) return { ok: false, status: 400, reason: "guardian_email_invalid" };
+  if (!isSupabaseAuthCompatibleEmail(email)) return { ok: false, status: 400, reason: "guardian_email_invalid" };
   const center = guardian.family.centerId
     ? await prisma.center.findUnique({
         where: { id: guardian.family.centerId },
@@ -183,8 +182,8 @@ export async function ensureParentPortalLoginForGuardian({
     return { ok: false, status: 409, reason: "guardian_email_multiple_families" };
   }
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
+  const existingUser = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
     select: { id: true, tenantId: true, role: true, isActive: true },
   });
   if (existingUser && existingUser.tenantId !== center.organization.tenantId) {
@@ -206,27 +205,32 @@ export async function ensureParentPortalLoginForGuardian({
   });
   const credentialCreated = !("alreadyExisted" in authUser && authUser.alreadyExisted);
 
-  const parentUser = await prisma.user.upsert({
-    where: { email },
-    update: {
-      name: guardian.fullName,
-      role: UserRole.PARENT_GUARDIAN,
-      isActive: true,
-      organizationId: center.organizationId,
-      mustResetPassword: prepareWithoutInvite,
-      sessionVersion: { increment: 1 },
-    },
-    create: {
-      tenantId: center.organization.tenantId,
-      organizationId: center.organizationId,
-      email,
-      name: guardian.fullName,
-      role: UserRole.PARENT_GUARDIAN,
-      isActive: true,
-      mustResetPassword: prepareWithoutInvite,
-    },
-    select: { id: true },
-  });
+  const parentUser = existingUser
+    ? await prisma.user.update({
+      where: { id: existingUser.id },
+      data: {
+        email,
+        name: guardian.fullName,
+        role: UserRole.PARENT_GUARDIAN,
+        isActive: true,
+        organizationId: center.organizationId,
+        mustResetPassword: prepareWithoutInvite,
+        sessionVersion: { increment: 1 },
+      },
+      select: { id: true },
+    })
+    : await prisma.user.create({
+      data: {
+        tenantId: center.organization.tenantId,
+        organizationId: center.organizationId,
+        email,
+        name: guardian.fullName,
+        role: UserRole.PARENT_GUARDIAN,
+        isActive: true,
+        mustResetPassword: prepareWithoutInvite,
+      },
+      select: { id: true },
+    });
 
   const linkableGuardians = matchingGuardians.filter((item) => !parentPortalAccessDisabled(item.customFields));
 

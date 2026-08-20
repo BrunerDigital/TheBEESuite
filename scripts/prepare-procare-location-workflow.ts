@@ -483,6 +483,12 @@ function recurringWeeklyLedgerCandidates(rows: CsvRow[]) {
   return result;
 }
 
+const FORMAL_TUITION_CHILD_ID_COLUMNS = ["Child ID", "Child Key", "Student ID"];
+const FORMAL_TUITION_AMOUNT_COLUMNS = ["Weekly Rate", "Tuition Rate", "Charge Amount", "Amount", "Rate"];
+const FORMAL_TUITION_CADENCE_COLUMNS = ["Frequency", "Cadence", "Billing Period", "Charge Frequency"];
+const FORMAL_TUITION_EFFECTIVE_DATE_COLUMNS = ["Effective Date", "Start Date", "Status Start Date"];
+const FORMAL_TUITION_DESCRIPTION_COLUMNS = ["Description", "Charge Description", "Tuition Plan", "Plan Name"];
+
 function formalWeeklyTuitionCandidates(rows: CsvRow[]) {
   const byChild = new Map<string, Array<{
     amountCents: number;
@@ -491,15 +497,15 @@ function formalWeeklyTuitionCandidates(rows: CsvRow[]) {
     description: string;
   }>>();
   for (const row of rows) {
-    const childId = field(row, "Child ID", "Child Key", "Student ID");
-    const amountCents = parseMoneyCents(field(row, "Weekly Rate", "Tuition Rate", "Charge Amount", "Amount", "Rate"));
-    const cadence = field(row, "Frequency", "Cadence", "Billing Period", "Charge Frequency");
+    const childId = field(row, ...FORMAL_TUITION_CHILD_ID_COLUMNS);
+    const amountCents = parseMoneyCents(field(row, ...FORMAL_TUITION_AMOUNT_COLUMNS));
+    const cadence = field(row, ...FORMAL_TUITION_CADENCE_COLUMNS);
     if (!childId || amountCents === null) continue;
     const candidate = {
       amountCents,
       cadence,
-      effectiveDate: field(row, "Effective Date", "Start Date", "Status Start Date"),
-      description: field(row, "Description", "Charge Description", "Tuition Plan", "Plan Name"),
+      effectiveDate: field(row, ...FORMAL_TUITION_EFFECTIVE_DATE_COLUMNS),
+      description: field(row, ...FORMAL_TUITION_DESCRIPTION_COLUMNS),
     };
     const existing = byChild.get(childId) ?? [];
     if (!existing.some((item) => JSON.stringify(item) === JSON.stringify(candidate))) existing.push(candidate);
@@ -1203,10 +1209,14 @@ export async function prepareProcareLocationWorkflow(input: {
   }
 
   const staffRowsByEmployee = new Map<string, Array<{ source: string; row: CsvRow }>>();
+  let currentStaffRowsMissingEmployeeId = 0;
   for (const source of employeeSources) {
     for (const row of source.rows) {
       const employeeId = field(row, "Employee ID");
-      if (!employeeId) continue;
+      if (!employeeId) {
+        if (/^currently employed$/i.test(field(row, "Employment Status")) && !checked(field(row, "Is Hidden"))) currentStaffRowsMissingEmployeeId += 1;
+        continue;
+      }
       staffRowsByEmployee.set(employeeId, [...(staffRowsByEmployee.get(employeeId) ?? []), { source: source.filename, row }]);
     }
   }
@@ -1308,6 +1318,16 @@ export async function prepareProcareLocationWorkflow(input: {
         .filter(Boolean)
         .join(" | ")
     : "";
+  const sourceCellValuesByAliases = (source: SourceFile | null, matchColumns: string[], matchValue: string, valueColumns: string[]) => source
+    ? source.rows
+        .filter((row) => field(row, ...matchColumns) === matchValue)
+        .map((row) => field(row, ...valueColumns))
+        .filter(Boolean)
+        .join(" | ")
+    : "";
+  const sourceRowsByAliases = (source: SourceFile | null, matchColumns: string[], matchValue: string) => source
+    ? source.rows.flatMap((row, index) => field(row, ...matchColumns) === matchValue ? [String(index + 2)] : []).join(" | ")
+    : "";
   const sourceCellEvidence = (source: SourceFile | null, matchColumn: string, matchValue: string, valueColumns: string[]) => source
     ? source.rows
         .filter((row) => field(row, matchColumn) === matchValue)
@@ -1357,6 +1377,14 @@ export async function prepareProcareLocationWorkflow(input: {
     const childInfoJson = record["procare child info source records"] || "";
     const counts = relationshipCounts(record);
     const familySource = canonicalParentInfo ?? balance;
+    const matchingSchedules = renderedScheduleReview.filter((row) => (
+      renderedChildNameKey(row["source child name"] ?? "") === renderedChildNameKey(record["child name"] ?? "")
+      && evidenceKey(row["source classroom"] ?? "") === evidenceKey(record.classroom ?? "")
+    ));
+    const matchedSchedule = matchingSchedules.length === 1 ? matchingSchedules[0] : null;
+    const matchedScheduleValue = matchedSchedule
+      ? ["monday", "tuesday", "wednesday", "thursday", "friday"].map((day) => matchedSchedule[day]).filter(Boolean).join(" | ")
+      : "";
     for (const [destination, sourceColumn, value, rawValue] of [
       ["Family.externalId", "Account ID", accountId, sourceCellValues(familySource, "Account ID", accountId, ["Account ID"])],
       ["Family.name", "Payer Full Name / Last Name", record["family name"], sourceCellValues(familySource, "Account ID", accountId, ["Full Name", "Payer Full Name", "Last Name"])],
@@ -1383,13 +1411,7 @@ export async function prepareProcareLocationWorkflow(input: {
       ["Child.gender", "Gender", record.gender, sourceCellValues(enrollment, "Child ID", childId, ["Gender"])],
       ["Child.enrollmentEndDate", "Status End Date", record["end date"], sourceCellValues(enrollment, "Child ID", childId, ["Status End Date", "End Date"])],
       ["Child.ageGroup", "Age Group / Program", record["age group"], sourceCellValues(enrollment, "Child ID", childId, ["Age Group", "Program"])],
-      ["Child.schedule", "Rendered classroom schedule cells", (() => {
-        const schedule = renderedScheduleReview.find((row) => renderedChildNameKey(row["source child name"] ?? "") === renderedChildNameKey(record["child name"] ?? ""));
-        return schedule ? ["monday", "tuesday", "wednesday", "thursday", "friday"].map((day) => schedule[day]).filter(Boolean).join(" | ") : "";
-      })(), (() => {
-        const schedule = renderedScheduleReview.find((row) => renderedChildNameKey(row["source child name"] ?? "") === renderedChildNameKey(record["child name"] ?? ""));
-        return schedule ? ["monday", "tuesday", "wednesday", "thursday", "friday"].map((day) => schedule[day]).filter(Boolean).join(" | ") : "";
-      })()],
+      ["Child.schedule", "Rendered classroom schedule cells", matchedScheduleValue, matchedScheduleValue],
     ]) requiredCell({
       scope: "additional_import_fields",
       entity: destination.startsWith("Family") ? "Family" : "Child",
@@ -1397,7 +1419,9 @@ export async function prepareProcareLocationWorkflow(input: {
       destination,
       source: destination === "Child.schedule" ? renderedClassroomSchedule?.filename ?? "" : destination.startsWith("Family") ? parentInfoFilename : enrollment!.filename,
       sourceColumn,
-      sourceRows: destination === "Child.schedule" ? `Child ID=${childId}; reviewed name match` : destination.startsWith("Family") ? `Account ID=${accountId}` : enrollmentRowNumbers,
+      sourceRows: destination === "Child.schedule"
+        ? `Child ID=${childId}; ${matchedSchedule ? "unique reviewed name and classroom match" : `${matchingSchedules.length} matching rendered rows; left unbound`}`
+        : destination.startsWith("Family") ? `Account ID=${accountId}` : enrollmentRowNumbers,
       value,
       rawValue,
       required: false,
@@ -1450,10 +1474,10 @@ export async function prepareProcareLocationWorkflow(input: {
       rawValue: field(balanceRow, "Balance"),
     });
     for (const [destination, sourceColumn, value, rawValue] of [
-      ["Tuition assignment amount cents", "Weekly Rate / Charge Amount", tuitionRow?.["weekly tuition cents"] ?? "", sourceCellValues(tuition, "Child ID", childId, ["Weekly Rate", "Charge Amount", "Amount"])],
-      ["Tuition assignment cadence", "Frequency / Cadence", tuitionRow?.["source cadence"] ?? "", sourceCellValues(tuition, "Child ID", childId, ["Frequency", "Cadence"])],
-      ["Tuition assignment effective date", "Effective Date / Start Date", tuitionRow?.["source effective date"] ?? "", sourceCellValues(tuition, "Child ID", childId, ["Effective Date", "Start Date"])],
-      ["Tuition assignment description", "Description / Plan Name", tuitionRow?.["source description"] ?? "", sourceCellValues(tuition, "Child ID", childId, ["Description", "Plan Name"])],
+      ["Tuition assignment amount cents", FORMAL_TUITION_AMOUNT_COLUMNS.join(" / "), tuitionRow?.["weekly tuition cents"] ?? "", sourceCellValuesByAliases(tuition, FORMAL_TUITION_CHILD_ID_COLUMNS, childId, FORMAL_TUITION_AMOUNT_COLUMNS)],
+      ["Tuition assignment cadence", FORMAL_TUITION_CADENCE_COLUMNS.join(" / "), tuitionRow?.["source cadence"] ?? "", sourceCellValuesByAliases(tuition, FORMAL_TUITION_CHILD_ID_COLUMNS, childId, FORMAL_TUITION_CADENCE_COLUMNS)],
+      ["Tuition assignment effective date", FORMAL_TUITION_EFFECTIVE_DATE_COLUMNS.join(" / "), tuitionRow?.["source effective date"] ?? "", sourceCellValuesByAliases(tuition, FORMAL_TUITION_CHILD_ID_COLUMNS, childId, FORMAL_TUITION_EFFECTIVE_DATE_COLUMNS)],
+      ["Tuition assignment description", FORMAL_TUITION_DESCRIPTION_COLUMNS.join(" / "), tuitionRow?.["source description"] ?? "", sourceCellValuesByAliases(tuition, FORMAL_TUITION_CHILD_ID_COLUMNS, childId, FORMAL_TUITION_DESCRIPTION_COLUMNS)],
     ]) requiredCell({
       scope: "weekly_tuition",
       entity: "Child tuition assignment",
@@ -1461,7 +1485,7 @@ export async function prepareProcareLocationWorkflow(input: {
       destination,
       source: tuition?.filename ?? renderedContractBilling?.filename ?? ledger?.filename ?? "",
       sourceColumn,
-      sourceRows: tuition ? (sourceRows(tuition, "Child ID", childId) || `Child ID=${childId}`) : `Child ID=${childId}; ${tuitionRow?.["source kind"] ?? "no matched evidence"}`,
+      sourceRows: tuition ? (sourceRowsByAliases(tuition, FORMAL_TUITION_CHILD_ID_COLUMNS, childId) || `Child ID=${childId}`) : `Child ID=${childId}; ${tuitionRow?.["source kind"] ?? "no matched evidence"}`,
       value,
       rawValue,
     });
@@ -1602,11 +1626,12 @@ export async function prepareProcareLocationWorkflow(input: {
       ],
     },
     Staff: {
-      status: staffSource && staffReview.length > 0 ? "review_required" : "blocked",
-      summary: `${staffReview.length} currently employed visible staff rows are available for review only.`,
+      status: staffSource && staffReview.length > 0 && currentStaffRowsMissingEmployeeId === 0 ? "review_required" : "blocked",
+      summary: `${staffReview.length} currently employed visible staff rows are available for review only; ${currentStaffRowsMissingEmployeeId} current source row(s) lack Employee ID.`,
       details: [
         staffSource ? `Selected ${staffSource.filename} as the strongest employee roster source.` : "No employee roster source was detected.",
         `${staffMissingEmail} rows lack email, ${staffMissingPhone} lack phone, ${staffMissingWorkAreaId} lack Work Area ID, and ${staffUnknownWorkArea} are assigned to Unknown.`,
+        `${currentStaffRowsMissingEmployeeId} visible currently employed source row(s) were held because Employee ID is blank.`,
         "Staff profile creation, users, Auth identities, access grants, invitations, and classroom assignments remain held.",
       ],
     },
@@ -1664,6 +1689,7 @@ export async function prepareProcareLocationWorkflow(input: {
     staffMissingPhone,
     staffMissingWorkAreaId,
     staffUnknownWorkArea,
+    currentStaffRowsMissingEmployeeId,
     beeFieldReconciliationRows: requiredFieldReconciliation.length,
     missingSourceFieldCells: missingSourceFieldCells.length,
   };

@@ -29,6 +29,7 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
   write(path.join(source, "Sample - Employees.csv"), [
     "Employee ID,Is Hidden,Person ID,Full Name,First Name,Last Name,Primary Work Area,Work Area ID,Employment Status,Email,Phone 1",
     "employee-1,Unchecked,staff-person-1,Teacher One,Teacher,One,Infants,room-1,Currently Employed,teacher@example.com,Cell 555-555-0102",
+    ",Unchecked,staff-person-2,Teacher Two,Teacher,Two,Infants,room-1,Currently Employed,teacher2@example.com,Cell 555-555-0103",
   ].join("\n"));
   write(path.join(source, "Sample - Child Contract Billing Summary.csv"), [
     '"Child Contract Billing Summary","School address","Sample School","As of 8/9/2026","school@example.com",,"Child\'s Name and Age","Primary Classroom and Billing Cycle","One, Child","4 Yr","Infants","Standard Billing",,"ONE Primary, Parent One","Weekly","Infant Full Time",,150.00,150.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","150.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"',
@@ -38,7 +39,7 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
   write(path.join(source, "Sample East - Child Contract Billing Summary.csv"), '"Child Contract Billing Summary","School address","Other School","As of 8/9/2026","other@example.com",,"Child","Age","Foreign, Child","4 Yr","Infants","Standard Billing",,"FOREIGN Primary, Parent","Weekly","Base Tuition",,999.00,999.00,"Child Count:",1,"Billing Cycle","Cycle Total","Weekly","999.00","Grouped","Page 1","bje: Child Contract Billing Summary, FA_ContractBillingSummary02.rpt"');
   write(path.join(source, "Sample - Classroom Schedule Summary Weekly.csv"), [
     '"Sample School","Classroom Schedule Summary","School address","school@example.com",,"Infants","Mon 8/3/2026","Tue 8/4/2026","Wed 8/5/2026","Thu 8/6/2026","Fri 8/7/2026","One, Child","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM",,,,,,,,,,,"Grouped","Page 1","bje: Schedule Summary - Weekly, FD_ClassroomScheduleSummary02.rpt"',
-    '"Sample School","Classroom Schedule Summary","School address","school@example.com",,"Infants","Mon 8/3/2026","Tue 8/4/2026","Wed 8/5/2026","Thu 8/6/2026","Fri 8/7/2026","One Child","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM","7 AM to 5 PM",,,,,,,,,,,"Grouped","Page 1","bje: Schedule Summary - Weekly, FD_ClassroomScheduleSummary02.rpt"',
+    '"Sample School","Classroom Schedule Summary","School address","school@example.com",,"Infants","Mon 8/3/2026","Tue 8/4/2026","Wed 8/5/2026","Thu 8/6/2026","Fri 8/7/2026","One, Child","8 AM to 4 PM","8 AM to 4 PM","8 AM to 4 PM","8 AM to 4 PM","8 AM to 4 PM",,,,,,,,,,,"Grouped","Page 1","bje: Schedule Summary - Weekly, FD_ClassroomScheduleSummary02.rpt"',
   ].join("\n"));
 
   const result = await prepareProcareLocationWorkflow({ location: "Sample", sourceDirectory: source, outputDirectory: output });
@@ -50,6 +51,8 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
   assert.equal(result.gates["Roster and relationships"].status, "review_required");
   assert.equal(result.gates["Weekly tuition"].status, "blocked");
   assert.equal(result.gates["Child information"].status, "blocked");
+  assert.equal(result.gates.Staff.status, "blocked");
+  assert.equal(result.metrics.currentStaffRowsMissingEmployeeId, 1);
   assert.ok(fs.existsSync(path.join(output, "01-roster-reviewed-import.csv")));
   assert.ok(fs.existsSync(path.join(output, "10-derived-primary-payer-source.csv")));
   assert.ok(fs.existsSync(path.join(output, "13-active-portal-safe-import.csv")));
@@ -68,12 +71,12 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
   const renderedSchedules = parseCsvBuffer(fs.readFileSync(path.join(output, "16-rendered-classroom-schedule-review.csv")), "rendered schedules").rows;
   assert.equal(renderedSchedules[0]["source classroom"], "Infants");
   assert.equal(renderedSchedules[0]["confirmed child id"], "");
-  assert.deepEqual(renderedSchedules.map((row) => row["source child name"]), ["One Child", "One, Child"]);
+  assert.deepEqual(renderedSchedules.map((row) => row["source child name"]), ["One, Child", "One, Child"]);
   const fieldReconciliation = parseCsvBuffer(fs.readFileSync(path.join(output, "18-bee-field-reconciliation.csv")), "field reconciliation").rows;
   assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "Family.name" && row["Source Cell Value"] === "Parent One" && row["BEE Normalized Value"] === "One Household"));
   assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "Child.dateOfBirth" && row["Source Cell Value"] === "1/2/2022"));
   assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "BillingAccount opening signed balance cents" && row["Source Cell Value"] === "125.50" && row["BEE Normalized Value"] === "12550"));
-  assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "Child.schedule" && row["Source Report"] === "Sample - Classroom Schedule Summary Weekly.csv"));
+  assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "Child.schedule" && row["Source Report"] === "Sample - Classroom Schedule Summary Weekly.csv" && row["Reconciliation Status"] === "source_cell_not_supplied" && /2 matching rendered rows/.test(row["Source Row Number Or Stable Key"])));
   assert.equal(Object.hasOwn(result.gates, "Required BEE field cells"), false);
 });
 
@@ -331,7 +334,7 @@ test("formal tuition source stays blocked until every enrolled child has one wee
     "account-2,0.00,parent-2,Parent Two",
   ].join("\n"));
   write(path.join(source, "Sample - Tuition Contracts.csv"), [
-    "Child ID,Weekly Rate,Cadence,Effective Date,Description",
+    "Child Key,Tuition Rate,Billing Period,Status Start Date,Tuition Plan",
     "child-1,150.00,Week,8/24/2026,Full Time",
     "child-2,175.00,Weekly,8/24/2026,",
   ].join("\n"));
@@ -344,4 +347,6 @@ test("formal tuition source stays blocked until every enrolled child has one wee
   assert.equal(result.preImportStatus, "BLOCKED");
   const rateRows = parseCsvBuffer(fs.readFileSync(path.join(output, "08-weekly-tuition-review.csv")), "rates").rows;
   assert.equal(rateRows.find((row) => row["child id"] === "child-2")?.status, "blocked_formal_tuition_description_missing");
+  const fieldRows = parseCsvBuffer(fs.readFileSync(path.join(output, "18-bee-field-reconciliation.csv")), "field reconciliation").rows;
+  assert.ok(fieldRows.some((row) => row["BEE Stable Entity ID"] === "child-1" && row["BEE Suite Field"] === "Tuition assignment amount cents" && row["Source Cell Value"] === "150.00" && row["BEE Normalized Value"] === "15000"));
 });

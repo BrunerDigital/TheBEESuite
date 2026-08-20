@@ -17,14 +17,16 @@ test("route error actions use the Next.js retry callback that refetches failed c
 });
 
 test("client asset failures and parent network failures receive one guarded full-document recovery", () => {
-  const errorBoundary = source("src/app/error.tsx");
-  assert.match(errorBoundary, /\/parent-portal/);
-  assert.match(errorBoundary, /load failed\|network error\|failed to fetch/i);
-  assert.match(errorBoundary, /ChunkLoadError/);
-  assert.match(errorBoundary, /failed to load chunk\|loading chunk/);
-  assert.match(errorBoundary, /sessionStorage\.getItem\(CLIENT_LOAD_RECOVERY_KEY\)/);
-  assert.match(errorBoundary, /CLIENT_LOAD_RECOVERY_WINDOW_MS = 60_000/);
-  assert.match(errorBoundary, /Reload this page/);
+  for (const path of ["src/app/error.tsx", "src/app/global-error.tsx"]) {
+    const errorBoundary = source(path);
+    assert.match(errorBoundary, /\/parent-portal/);
+    assert.match(errorBoundary, /load failed\|network error\|failed to fetch/i);
+    assert.match(errorBoundary, /ChunkLoadError/);
+    assert.match(errorBoundary, /failed to load chunk\|loading chunk/);
+    assert.match(errorBoundary, /sessionStorage\.getItem\(CLIENT_LOAD_RECOVERY_KEY\)/);
+    assert.match(errorBoundary, /CLIENT_LOAD_RECOVERY_WINDOW_MS = 60_000/);
+    assert.match(errorBoundary, /Reload this page/);
+  }
 });
 
 test("service worker never substitutes the app launcher for authenticated routes", () => {

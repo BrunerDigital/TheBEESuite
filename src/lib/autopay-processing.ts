@@ -370,6 +370,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
     if (!input.retryFailed && attempts.some(isAutopayFailureForInvoice)) {
+      blockedBillingAccountIds.add(invoice.billingAccountId);
       results.push({ ...baseResult, status: "skipped", reason: `${collectionLabel} already failed for this invoice; parent follow-up is in dunning.` });
       continue;
     }

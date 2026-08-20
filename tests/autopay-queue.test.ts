@@ -145,3 +145,11 @@ test("scheduled autopay uses a stable total invoice order for cursor pagination"
   const processing = readFileSync("src/lib/autopay-processing.ts", "utf8");
   assert.match(processing, /orderBy: \[\{ dueDate: "asc" \}, \{ createdAt: "asc" \}, \{ id: "asc" \}\]/);
 });
+
+test("scheduled autopay blocks later family invoices after finding a prior failed attempt", () => {
+  const processing = readFileSync("src/lib/autopay-processing.ts", "utf8");
+  assert.match(
+    processing,
+    /if \(!input\.retryFailed && attempts\.some\(isAutopayFailureForInvoice\)\) \{\s*blockedBillingAccountIds\.add\(invoice\.billingAccountId\);/,
+  );
+});

@@ -81,7 +81,7 @@ export type AutopayRunSummary = {
   results: AutopayRunInvoiceResult[];
 };
 
-type ProcessAutopayInput = {
+export type ProcessAutopayInput = {
   dryRun?: boolean;
   asOf?: Date;
   limit?: number;

@@ -92,6 +92,7 @@ test("agency authorization entry resets and shows the selected child's saved rat
   assert.match(workspace, /authorization\.agencyProgramId === programId/);
   assert.match(workspace, /Saved authorization\{selectedChildAuthorizations\.length === 1/);
   assert.match(workspace, /money\(authorization\.authorizedRateCents\).*authorization\.unitType/);
+  assert.match(workspace, /authorization\.agencyProgram\.name.*money\(authorization\.authorizedRateCents\)/);
   assert.match(workspace, /Switching children clears the new-authorization fields/);
 });
 

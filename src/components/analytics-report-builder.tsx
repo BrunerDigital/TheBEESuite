@@ -221,7 +221,7 @@ export function AnalyticsReportBuilder({
               {selectedCenterDetails?.schoolEin ? <p>Tax ID: {selectedCenterDetails.schoolEin}</p> : null}
               <h2>Enrollment Status Summary</h2>
               <p>As of {formatDate(enrollmentAsOf, timeZone)}</p>
-              <p>Between 0 and 120 months old; missing DOB records remain visible for review.</p>
+              <p>All current enrolled ages are included; missing DOB records remain visible for review.</p>
             </>
           ) : (
             <>

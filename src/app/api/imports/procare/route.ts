@@ -40,6 +40,10 @@ import {
 } from "@/lib/procare-import-review";
 import { buildProcareReconciliationReport, procareRetentionReviewDue } from "@/lib/procare-migration-controls";
 import {
+  assessProcareFleetSourceCoverage,
+  buildProcareFleetVerificationReport,
+} from "@/lib/procare-fleet-verification";
+import {
   buildProcareMultiReportRowsFromFiles,
   decodeProcareTabularBuffer,
   expandProcareSourceEntries,
@@ -1532,6 +1536,11 @@ const importBackupInclude = {
       rawData: true,
       createdFamilyId: true,
       createdChildId: true,
+      resolutionCategory: true,
+      resolutionReason: true,
+      resolutionEvidenceReference: true,
+      resolvedBy: true,
+      resolvedAt: true,
     },
   },
 } as const;
@@ -1610,7 +1619,7 @@ async function GETHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "You do not have access to this import batch." }, { status: 403 });
   }
 
-  if (reportType === "reconciliation") {
+  if (reportType === "reconciliation" || reportType === "fleet-verification") {
     const importedRecords = batch.rows
       .filter((row) => row.status === "imported")
       .map((row) => {
@@ -1769,7 +1778,7 @@ async function GETHandler(request: NextRequest) {
       sourceSystem: "procare",
       externalId: { not: null },
     }));
-    const [families, children, guardians, emergencyContacts, authorizedPickups, staff, classrooms, billingBalances] = await Promise.all([
+    const [families, children, guardians, emergencyContacts, authorizedPickups, staff, classrooms, billingAccounts, openingBalanceInvoices] = await Promise.all([
       familyScopes.length ? prisma.family.count({ where: { OR: familyScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: "procare", externalId })) } }) : Promise.resolve(0),
       childScopes.length ? prisma.child.count({ where: { OR: childScopes.map(({ centerId, externalId }) => ({ family: { centerId }, sourceSystem: "procare", externalId })) } }) : Promise.resolve(0),
       procareRelationshipRowsAcrossSourceFamilies.length ? prisma.guardian.count({ where: { OR: procareRelationshipRowsAcrossSourceFamilies } }) : Promise.resolve(0),
@@ -1778,15 +1787,29 @@ async function GETHandler(request: NextRequest) {
       staffScopes.length ? prisma.staffProfile.count({ where: { OR: staffScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: "procare", externalId })) } }) : Promise.resolve(0),
       classroomScopes.length ? prisma.classroom.count({ where: { OR: classroomScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: "procare", externalId })) } }) : Promise.resolve(0),
       balanceScopes.length
-        ? prisma.billingAccount.aggregate({
+        ? prisma.billingAccount.findMany({
             where: { OR: balanceScopes.map(({ centerId, externalId }) => ({ family: { centerId, sourceSystem: "procare", externalId } })) },
-            _sum: { balanceCents: true },
+            select: { balanceCents: true },
           })
-        : Promise.resolve({ _sum: { balanceCents: null } }),
+        : Promise.resolve([]),
+      familyScopes.length
+        ? prisma.invoice.aggregate({
+            where: {
+              sourceSystem: "procare",
+              externalId: { startsWith: "procare-opening-balance:" },
+              status: PaymentStatus.OPEN,
+              billingAccount: {
+                family: { OR: familyScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: "procare", externalId })) },
+              },
+            },
+            _sum: { totalCents: true },
+          })
+        : Promise.resolve({ _sum: { totalCents: null } }),
     ]);
     const summary = batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary)
       ? batch.summary as Record<string, unknown>
       : {};
+    const sourceBalanceValues = [...balancesByFamily.values()];
     const report = buildProcareReconciliationReport({
       batchId: batch.id,
       sourceSha256: typeof summary.sourceSha256 === "string" ? summary.sourceSha256 : undefined,
@@ -1804,9 +1827,9 @@ async function GETHandler(request: NextRequest) {
         authorizedPickups: hasAuthorizedPickupRows && authorizedPickupsComplete ? authorizedPickupExternalIds.size : null,
         staff: hasStaffRows && staffComplete ? staffExternalIds.size : null,
         classrooms: hasClassroomRows ? classroomExternalIds.size : null,
-        balanceCents: hasBalanceRows && balancesComplete ? [...balancesByFamily.values()].reduce((sum, amount) => sum + amount, 0) : null,
-        creditsCents: null,
-        openInvoicesCents: null,
+        balanceCents: hasBalanceRows && balancesComplete ? sourceBalanceValues.reduce((sum, amount) => sum + amount, 0) : null,
+        creditsCents: hasBalanceRows && balancesComplete ? sourceBalanceValues.filter((amount) => amount < 0).reduce((sum, amount) => sum + Math.abs(amount), 0) : null,
+        openInvoicesCents: hasBalanceRows && balancesComplete ? sourceBalanceValues.filter((amount) => amount > 0).reduce((sum, amount) => sum + amount, 0) : null,
       },
       target: {
         families: hasFamilyRows && familiesComplete ? families : null,
@@ -1816,11 +1839,49 @@ async function GETHandler(request: NextRequest) {
         authorizedPickups: hasAuthorizedPickupRows && authorizedPickupsComplete ? authorizedPickups : null,
         staff: hasStaffRows && staffComplete ? staff : null,
         classrooms: hasClassroomRows ? classrooms : null,
-        balanceCents: hasBalanceRows && balancesComplete ? billingBalances._sum.balanceCents ?? 0 : null,
-        creditsCents: null,
-        openInvoicesCents: null,
+        balanceCents: hasBalanceRows && balancesComplete ? billingAccounts.reduce((sum, account) => sum + account.balanceCents, 0) : null,
+        creditsCents: hasBalanceRows && balancesComplete ? billingAccounts.filter((account) => account.balanceCents < 0).reduce((sum, account) => sum + Math.abs(account.balanceCents), 0) : null,
+        openInvoicesCents: hasBalanceRows && balancesComplete ? openingBalanceInvoices._sum.totalCents ?? 0 : null,
       },
     });
+    if (reportType === "fleet-verification") {
+      const datasetCoverage = summary.datasetCoverage && typeof summary.datasetCoverage === "object" && !Array.isArray(summary.datasetCoverage)
+        ? summary.datasetCoverage as { sourceInventory?: Array<{ sourceName?: string; reportKind?: string; rows?: number; note?: string }> }
+        : null;
+      const sourceCoverage = assessProcareFleetSourceCoverage(importedRecords.map((record) => record.raw), datasetCoverage);
+      const exceptionsWithoutEvidence = batch.rows.filter((row) => (
+        row.status === "disposed"
+        && (!row.resolutionCategory || !row.resolutionReason || !row.resolutionEvidenceReference || !row.resolvedBy || !row.resolvedAt)
+      )).length;
+      const fleetReport = buildProcareFleetVerificationReport({
+        batchId: batch.id,
+        centerId: batch.centerId,
+        school: batch.center,
+        sourceFilename: batch.filename,
+        importedAt: batch.createdAt.toISOString(),
+        sourceSha256: report.sourceSha256,
+        batchStatus: batch.status,
+        sourceInventoryConfirmed: summary.sourceInventoryConfirmed === true,
+        sourceCoverage,
+        reconciliation: report,
+        exceptionsWithoutEvidence,
+      });
+      await writeAuditLog(user, {
+        centerId: batch.centerId,
+        action: "procare.import.fleet_verification_exported",
+        resource: "ProcareImportBatch",
+        resourceId: batch.id,
+        metadata: { status: fleetReport.status, blockerCount: fleetReport.blockers.length, sourceSha256: fleetReport.sourceSha256 },
+      });
+      return NextResponse.json({
+        ok: true,
+        report: fleetReport,
+        retention: {
+          rawRowsReviewDue: procareRetentionReviewDue(batch.createdAt).toISOString(),
+          enforcementPoint: "Deletion requires approved retention ownership and a separately authorized audited cleanup action.",
+        },
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
     await writeAuditLog(user, {
       centerId: batch.centerId,
       action: "procare.import.reconciliation_exported",
@@ -2012,11 +2073,13 @@ async function POSTHandler(request: NextRequest) {
       filename: importPayload.filename,
       duplicateMode,
     });
+    const previewRecords = rows.slice(1).map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""])));
+    const fleetSourceCoverage = assessProcareFleetSourceCoverage(previewRecords, importPayload.datasetCoverage ?? null);
     const reviewFingerprint = buildReviewFingerprint(preview.warningRowNumbers, preview.duplicateReviewRowNumbers);
     return NextResponse.json({
       ok: true,
       dryRun: true,
-      summary: { ...preview, sourceSha256, reviewFingerprint, headerAnalysis, fieldOptions: PROCARE_FIELD_OPTIONS, correlationReview, datasetCoverage: importPayload.datasetCoverage ?? null },
+      summary: { ...preview, sourceSha256, reviewFingerprint, headerAnalysis, fieldOptions: PROCARE_FIELD_OPTIONS, correlationReview, datasetCoverage: importPayload.datasetCoverage ?? null, fleetSourceCoverage },
     });
   }
 
@@ -2094,10 +2157,6 @@ async function POSTHandler(request: NextRequest) {
       validationWarningMessages.set(rowNumber, "This reviewed row needs a field match or disposition before it can be imported.");
     }
   }
-  const disposedRowNumbers = new Set(
-    clean(formData.get("disposedRowNumbers")).split(",").map(Number).filter((rowNumber) => Number.isInteger(rowNumber) && rowNumber > 1),
-  );
-
   let createdFamilies = 0;
   let updatedFamilies = 0;
   let createdChildren = 0;
@@ -2213,10 +2272,6 @@ async function POSTHandler(request: NextRequest) {
       centersTouched.add(checkpointCenter.id);
       rawData.mappedCenterId = checkpointCenter.id;
       rawData.mappedCenter = checkpointCenter.crmLocationId ?? checkpointCenter.name;
-    }
-    if (disposedRowNumbers.has(rowNumber)) {
-      rowResults.push({ rowNumber, status: "disposed", message: "Disposed by the user during import reconciliation.", rawData });
-      continue;
     }
     if (stagedRowNumbers.has(rowNumber)) {
       const warning = validationWarningMessages.get(rowNumber) ?? "This row needs a field match or disposition.";
@@ -3337,20 +3392,48 @@ async function PATCHHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canManageOperations(user)) return NextResponse.json({ ok: false, error: "Data import reconciliation is not allowed for this role." }, { status: 403 });
-  const body = await request.json().catch(() => null) as { batchId?: string; rowNumbers?: number[]; action?: string } | null;
+  const body = await request.json().catch(() => null) as {
+    batchId?: string;
+    rowNumbers?: number[];
+    action?: string;
+    resolutionCategory?: string;
+    resolutionReason?: string;
+    resolutionEvidenceReference?: string;
+  } | null;
   const batch = body?.batchId ? await prisma.procareImportBatch.findUnique({
     where: { id: body.batchId },
     select: { id: true, centerId: true, summary: true, rows: { select: { rawData: true } } },
   }) : null;
   if (!batch || importBatchCenterIds(batch).some((centerId) => !canAccessCenter(user, centerId))) return NextResponse.json({ ok: false, error: "Import batch not found." }, { status: 404 });
   const rowNumbers = [...new Set((body?.rowNumbers ?? []).filter((value) => Number.isInteger(value) && value > 1))];
-  const disposeAll = body?.action === "dispose_all";
-  if ((!disposeAll && body?.action !== "dispose") || (!disposeAll && !rowNumbers.length)) return NextResponse.json({ ok: false, error: "Choose unresolved rows to dispose." }, { status: 400 });
+  const resolutionCategory = clean(body?.resolutionCategory);
+  const resolutionReason = clean(body?.resolutionReason);
+  const resolutionEvidenceReference = clean(body?.resolutionEvidenceReference);
+  if (body?.action !== "dispose" || !rowNumbers.length) return NextResponse.json({ ok: false, error: "Choose unresolved rows to exclude." }, { status: 400 });
+  if (!['duplicate_source_row', 'historical_out_of_scope', 'source_correction_pending', 'approved_exclusion'].includes(resolutionCategory)) {
+    return NextResponse.json({ ok: false, error: "Choose an approved exception category." }, { status: 400 });
+  }
+  if (resolutionReason.length < 12) return NextResponse.json({ ok: false, error: "Enter a specific exception reason of at least 12 characters." }, { status: 400 });
+  if (resolutionEvidenceReference.length < 6) return NextResponse.json({ ok: false, error: "Enter the secure evidence or correction reference for this exception." }, { status: 400 });
   const result = await prisma.procareImportRow.updateMany({
-    where: { batchId: batch.id, ...(disposeAll ? {} : { rowNumber: { in: rowNumbers } }), status: "needs_resolution" },
-    data: { status: "disposed", message: "Disposed by the user during import reconciliation." },
+    where: { batchId: batch.id, rowNumber: { in: rowNumbers }, status: "needs_resolution" },
+    data: {
+      status: "disposed",
+      message: `Excluded after reviewed exception: ${resolutionReason}`,
+      resolutionCategory,
+      resolutionReason,
+      resolutionEvidenceReference,
+      resolvedBy: user.email,
+      resolvedAt: new Date(),
+    },
   });
-  await writeAuditLog(user, { centerId: batch.centerId, action: "procare.import.rows_disposed", resource: "ProcareImportBatch", resourceId: batch.id, metadata: { rowNumbers: disposeAll ? "all_unresolved" : rowNumbers, count: result.count } });
+  await writeAuditLog(user, {
+    centerId: batch.centerId,
+    action: "procare.import.rows_disposed",
+    resource: "ProcareImportBatch",
+    resourceId: batch.id,
+    metadata: { rowNumbers, count: result.count, resolutionCategory, resolutionReason, resolutionEvidenceReference },
+  });
   return NextResponse.json({ ok: true, disposed: result.count });
 }
 

@@ -49,6 +49,7 @@ This note documents how The BEE Suite maps the ProCare data areas visible in the
 ## Remaining Validation Needed
 
 - Obtain unencrypted CSV exports from ProCare.
-- Run one Longmont import into production or a staging database and review `ProcareImportRow` errors.
+- Run each school through the Fleet Verification Packet and require `READY_FOR_DIRECTOR_REVIEW` before director validation.
 - Confirm exact ProCare column names for schedules, immunizations, tuition contracts, subsidy/agency payments, and employee certifications.
 - Add any high-volume ledger transaction imports after the accounting export format is confirmed.
+- Opening balances, opening credits, and positive opening-balance invoices are reconciled automatically. Historical payments, transaction-level credits, subsidies, tuition activation, and prior-system invoice history remain separate evidence/activation gates.

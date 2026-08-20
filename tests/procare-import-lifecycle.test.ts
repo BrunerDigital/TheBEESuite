@@ -156,7 +156,7 @@ test("each family row commits atomically and complete relationship reports remov
 });
 
 test("relationship reconciliation counts all ProCare-owned external-ID rows across source families", () => {
-  const reconciliation = section(route, 'if (reportType === "reconciliation")', "const exportPayload");
+  const reconciliation = section(route, 'if (reportType === "reconciliation" || reportType === "fleet-verification")', "const exportPayload");
 
   assert.match(reconciliation, /procareRelationshipRowsAcrossSourceFamilies/);
   assert.match(reconciliation, /family:\s*\{\s*centerId,\s*sourceSystem:\s*["']procare["'],\s*externalId\s*\}/);
@@ -233,4 +233,20 @@ test("the timeout UI preserves the browser file-source contract", () => {
     { tellsUserToRefresh: false, explainsSafeRetry: true, clearsSelectedFiles: false },
     "Browsers cannot restore File objects after refresh; timeout guidance must preserve or explicitly request the exact same selected source.",
   );
+});
+
+test("ProCare exclusions require row-level reviewer and evidence details", () => {
+  const patchHandler = section(route, "async function PATCHHandler", "const GET =");
+  const rowModel = section(schema, "model ProcareImportRow", "model ");
+
+  assert.match(patchHandler, /resolutionCategory/);
+  assert.match(patchHandler, /resolutionReason\.length < 12/);
+  assert.match(patchHandler, /resolutionEvidenceReference\.length < 6/);
+  assert.match(patchHandler, /resolvedBy:\s*user\.email/);
+  assert.match(patchHandler, /resolvedAt:\s*new Date\(\)/);
+  assert.doesNotMatch(patchHandler, /dispose_all/);
+  assert.doesNotMatch(panel, /Dispose all unresolved rows/);
+  assert.match(rowModel, /resolutionCategory\s+String\?/);
+  assert.match(rowModel, /resolutionEvidenceReference\s+String\?/);
+  assert.match(panel, /Fleet Verification Packet/);
 });

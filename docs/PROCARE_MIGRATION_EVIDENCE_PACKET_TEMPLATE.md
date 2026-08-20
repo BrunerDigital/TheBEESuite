@@ -31,6 +31,7 @@ ProCare remains the operational source of truth until every blocker below is com
 | Secure archive location and retention owner | |
 | Raw-row retention review date and deletion approver | |
 | No bank credentials or full payment details collected | |
+| Fleet Verification Packet status and secure reference | |
 
 ## Mapping and dry-run approval
 
@@ -80,6 +81,8 @@ Spot-check at least 10 families, or every family when fewer than 10. Record only
 - [ ] Rollback owner will pause BEE Suite writes/invitations/billing, preserve post-import writes, return affected modules to ProCare, and reconcile both systems.
 - [ ] Rollback evidence includes batch ID, source SHA-256, backup, affected modules, stop/last-good times, post-import write log, reconciliation owner, and director/corporate decisions.
 - [ ] Automated reconciliation report is attached; every mismatch or unavailable measure has a named owner and approved exception or exact retest.
+- [ ] Fleet Verification Packet is attached and shows `READY_FOR_DIRECTOR_REVIEW`; a `NOT_VERIFIED` packet cannot proceed to written cutover approval.
+- [ ] Every excluded row has an approved category, specific reason, secure evidence reference, authenticated reviewer, timestamp, and signed school-specific exception decision.
 - [ ] Parent invitations and payments remain separately gated.
 
 ## Written decision

@@ -203,7 +203,7 @@ function field(row: CsvRow | undefined, ...names: string[]) {
 }
 
 function checked(value: string) {
-  return /^(checked|yes|true|1|x)$/i.test(value.trim());
+  return /^(checked|yes|y|true|1|x)$/i.test(value.trim());
 }
 
 export function decodeProcareTabularBuffer(buffer: Buffer) {
@@ -535,6 +535,12 @@ function personType(row: CsvRow) {
   return field(row, "Person Type").toLowerCase();
 }
 
+function isRelationshipPerson(row: CsvRow) {
+  const type = personType(row);
+  return type === "relationship"
+    || (type !== "child" && Boolean(field(row, "Relationship Type")));
+}
+
 function numericSortValue(value: string) {
   const number = Number(value);
   return Number.isFinite(number) ? number : Number.MAX_SAFE_INTEGER;
@@ -765,7 +771,7 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
     const childId = field(relationship, "Child ID");
     if (childId) {
       relationshipSourceRowsByChild.set(childId, [...(relationshipSourceRowsByChild.get(childId) ?? []), relationship]);
-      if (personType(relationship) === "relationship") {
+      if (isRelationshipPerson(relationship)) {
         relationshipsByChild.set(childId, [...(relationshipsByChild.get(childId) ?? []), relationship]);
       }
     } else {
@@ -1056,7 +1062,7 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
   }
 
   for (const relationship of relationshipsWithoutChild) {
-    const related = personType(relationship) === "relationship" ? [relationship] : [];
+    const related = isRelationshipPerson(relationship) ? [relationship] : [];
     const resolution = accountResolution({ child: {}, related, accountsByPerson, peopleByAccount });
     normalizedRows.push(buildNormalizedRow({
       rowType: "procare_multi_report_relationship_without_child_id",

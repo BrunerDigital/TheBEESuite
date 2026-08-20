@@ -480,7 +480,7 @@ test("multi-report detection ignores filenames and canonicalizes common header v
     )],
     ["permissions report.txt", csv(
       ["Student Number", "Relationship ID", "Related Person ID", "Relationship Person Type", "Contact Name", "Relation", "Resides With", "Is Emergency Contact", "Can Pickup", "Phone Number"],
-      [["child-1", "rel-1", "person-1", "Relationship", "Jordan Rivera", "Parent", "Yes", "Yes", "Yes", "5551112222"]],
+      [["child-1", "rel-1", "person-1", "Guardian", "Jordan Rivera", "Parent", "Y", "Y", "Y", "5551112222"]],
     )],
     ["health details.anything", Buffer.from([
       ["Student Number", "Information Category", "Information Item", "Active Item"],
@@ -499,6 +499,7 @@ test("multi-report detection ignores filenames and canonicalizes common header v
   assert.equal(row["child status"], "Active");
   assert.equal(row["allergies"], "Peanuts");
   assert.equal(JSON.parse(row["procare relationship records"])[0].authorizedPickup, true);
+  assert.equal(JSON.parse(row["procare relationship records"])[0].guardian, true);
   assert.equal(coverage.reportDetection.enrollment.sourceName, "July roster from office.dat");
   assert.ok(coverage.reportDetection.enrollment.matchedHeaderAliases > 0);
 });

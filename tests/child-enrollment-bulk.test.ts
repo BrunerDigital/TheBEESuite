@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
+import { enrollmentStatusCustomFields } from "@/lib/enrollment-status";
 
 const operationsRoute = readFileSync(new URL("../src/app/api/operations/records/route.ts", import.meta.url), "utf8");
 const enrollmentPanel = readFileSync(new URL("../src/components/enrollment-visibility-panels.tsx", import.meta.url), "utf8");
@@ -55,6 +56,38 @@ test("bulk closed-status changes clear classroom assignments", () => {
   );
 });
 
+test("closed enrollment statuses disable future tuition without removing billing history fields", () => {
+  const updatedAt = new Date("2026-08-20T12:00:00.000Z");
+  assert.deepEqual(
+    enrollmentStatusCustomFields({
+      customFields: { tuitionBillingEnabled: true, tuitionPlanId: "plan-1", importedBalanceCents: 41000 },
+      enrollmentStatus: "withdrawn",
+      updatedAt,
+      updatedBy: "director@example.com",
+    }),
+    {
+      tuitionBillingEnabled: false,
+      tuitionPlanId: "plan-1",
+      importedBalanceCents: 41000,
+      tuitionBillingUpdatedAt: updatedAt.toISOString(),
+      tuitionBillingUpdatedBy: "director@example.com",
+      tuitionBillingDisabledReason: "enrollment_closed",
+    },
+  );
+});
+
+test("non-closed enrollment statuses preserve recurring tuition configuration", () => {
+  assert.deepEqual(
+    enrollmentStatusCustomFields({
+      customFields: { tuitionBillingEnabled: true, tuitionPlanId: "plan-1" },
+      enrollmentStatus: "summer_break",
+      updatedAt: new Date("2026-08-20T12:00:00.000Z"),
+      updatedBy: "director@example.com",
+    }),
+    { tuitionBillingEnabled: true, tuitionPlanId: "plan-1" },
+  );
+});
+
 test("bulk enrollment changes reject unsupported statuses and oversized batches", () => {
   assert.deepEqual(
     buildBulkEnrollmentChange({ childIds: ["child-1"], enrollmentStatus: "unknown" }),
@@ -71,6 +104,7 @@ test("bulk enrollment updates stay school-scoped, audited, and invalidate dashbo
   assert.match(operationsRoute, /canAccessCenter\(user, child\.family\.centerId\)/);
   assert.match(operationsRoute, /selectedCenterId\) => selectedCenterId !== classroom\.centerId/);
   assert.match(operationsRoute, /operations\.child_status\.bulk_updated/);
+  assert.match(operationsRoute, /recurringTuitionDisabled/);
   assert.match(operationsRoute, /revalidatePath\("\/billing-invoices"\)/);
   assert.match(operationsRoute, /revalidatePath\("\/api\/dashboard\/accounts-receivable"\)/);
 });

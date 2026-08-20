@@ -40,7 +40,9 @@ import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
 import { activeClassroomWhere } from "@/lib/classroom-status";
 import { invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 import {
+  enrollmentStatusCustomFields,
   enrollmentClassroomValidationError,
+  isClosedEnrollmentStatus,
   isCurrentlyEnrolledChildRecord,
   isCurrentlyEnrolledStatus,
 } from "@/lib/enrollment-status";
@@ -343,6 +345,7 @@ async function POSTHandler(request: NextRequest) {
         fullName: true,
         enrollmentStatus: true,
         classroomId: true,
+        customFields: true,
         family: { select: { id: true, centerId: true } },
       },
     });
@@ -378,12 +381,32 @@ async function POSTHandler(request: NextRequest) {
         && child.family.centerId
       ))
       .map((child) => ({ familyId: child.family.id, childId: child.id, centerId: child.family.centerId! }));
-    const updated = await prisma.child.updateMany({
-      where: { id: { in: change.value.childIds } },
-      data: {
-        enrollmentStatus: change.value.enrollmentStatus,
-        classroomId: change.value.classroomId,
-      },
+    const statusUpdatedAt = new Date();
+    const updatedCount = await prisma.$transaction(async (tx) => {
+      if (!isClosedEnrollmentStatus(change.value.enrollmentStatus)) {
+        const updated = await tx.child.updateMany({
+          where: { id: { in: change.value.childIds } },
+          data: {
+            enrollmentStatus: change.value.enrollmentStatus,
+            classroomId: change.value.classroomId,
+          },
+        });
+        return updated.count;
+      }
+      await Promise.all(children.map((child) => tx.child.update({
+        where: { id: child.id },
+        data: {
+          enrollmentStatus: change.value.enrollmentStatus,
+          classroomId: change.value.classroomId,
+          customFields: enrollmentStatusCustomFields({
+            customFields: child.customFields,
+            enrollmentStatus: change.value.enrollmentStatus,
+            updatedAt: statusUpdatedAt,
+            updatedBy: user.email,
+          }) as Prisma.InputJsonObject,
+        },
+      })));
+      return children.length;
     });
     await Promise.all(centerIds.map((selectedCenterId) => writeAuditLog(user, {
       centerId: selectedCenterId,
@@ -395,7 +418,8 @@ async function POSTHandler(request: NextRequest) {
         previousStatuses,
         enrollmentStatus: change.value.enrollmentStatus,
         classroomId: change.value.classroomId,
-        updatedCount: updated.count,
+        updatedCount,
+        recurringTuitionDisabled: isClosedEnrollmentStatus(change.value.enrollmentStatus),
       },
     })));
     revalidatePath("/family-detail");
@@ -406,7 +430,7 @@ async function POSTHandler(request: NextRequest) {
       ok: true,
       entity,
       mode: "updated",
-      updatedCount: updated.count,
+      updatedCount,
       enrollmentStatus: change.value.enrollmentStatus,
       classroomId: change.value.classroomId,
       reenrollments,
@@ -977,12 +1001,18 @@ async function POSTHandler(request: NextRequest) {
     } else {
       const careScheduleType = clean(body.careScheduleType || body.fteScheduleType || body.fullTimePartTime).toLowerCase().replace(/[^a-z0-9]+/g, "_");
       const existingCustomFields = jsonObject(existingChild?.customFields);
-      const customFields = ["full_time", "part_time"].includes(careScheduleType)
+      const baseCustomFields = ["full_time", "part_time"].includes(careScheduleType)
         ? { ...existingCustomFields, careScheduleType, fteScheduleType: careScheduleType } as Prisma.InputJsonObject
         : Object.keys(existingCustomFields).length
           ? existingCustomFields as Prisma.InputJsonObject
           : undefined;
       const enrollmentStatus = clean(body.enrollmentStatus) || clean(body.status) || "enrolled";
+      const customFields = enrollmentStatusCustomFields({
+        customFields: baseCustomFields,
+        enrollmentStatus,
+        updatedAt: new Date(),
+        updatedBy: user.email,
+      }) as Prisma.InputJsonObject;
       const classroomError = enrollmentClassroomValidationError({ enrollmentStatus, classroomId });
       if (classroomError) return NextResponse.json({ ok: false, error: classroomError }, { status: 400 });
       const data = {

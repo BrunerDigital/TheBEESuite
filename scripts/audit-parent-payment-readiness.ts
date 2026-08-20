@@ -1,4 +1,5 @@
 import "./load-env";
+import { createClient } from "@supabase/supabase-js";
 import { UserRole } from "@prisma/client";
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
@@ -6,6 +7,8 @@ import {
   parentVisibleBillingBalanceCents,
 } from "@/lib/parent-billing-visibility";
 import { prisma } from "@/lib/prisma";
+import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
+import { getSupabaseAuthConfig } from "@/lib/supabase-auth";
 
 const CURRENT_ENROLLMENT_STATUSES = ["enrolled", "active", "current"];
 
@@ -13,6 +16,26 @@ function jsonObject(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+function normalizedEmail(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+async function loadSupabaseAuthEmails() {
+  const { url, key } = getSupabaseAuthConfig("service");
+  const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const emails = new Set<string>();
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    for (const user of data.users) {
+      const email = normalizedEmail(user.email);
+      if (email) emails.add(email);
+    }
+    if (data.users.length < 1000) break;
+  }
+  return emails;
 }
 
 async function main() {
@@ -25,7 +48,7 @@ async function main() {
     const fields = jsonObject(center.customFields);
     return fields.livePaymentsEnabled === true
       && fields.tuitionBillingEnabled === true
-      && fields.stripeBillingApproved === true;
+      && stripeSchoolBillingApproval({ customFields: center.customFields, centerName: center.name }).approved;
   });
   const paymentCenterIds = paymentCenters.map((center) => center.id);
   const paymentCenterNameById = new Map(paymentCenters.map((center) => [center.id, center.name]));
@@ -46,7 +69,7 @@ async function main() {
           phone: true,
           sourceSystem: true,
           externalId: true,
-          user: { select: { role: true, isActive: true } },
+          user: { select: { email: true, role: true, isActive: true } },
         },
       },
       billingAccount: {
@@ -89,6 +112,7 @@ async function main() {
       latestCreatedLedgerBalanceByAccountId.set(entry.billingAccountId, entry.balanceAfterCents);
     }
   }
+  const supabaseAuthEmails = await loadSupabaseAuthEmails();
 
   const byCenter = new Map<string, {
     school: string;
@@ -147,7 +171,9 @@ async function main() {
       positiveParentBalances += 1;
       center.positiveParentBalances += 1;
       const hasActiveParentLink = family.guardians.some((guardian) => (
-        guardian.user?.role === UserRole.PARENT_GUARDIAN && guardian.user.isActive
+        guardian.user?.role === UserRole.PARENT_GUARDIAN
+        && guardian.user.isActive
+        && supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
       ));
       if (!hasActiveParentLink) {
         positiveBalancesWithoutActiveParentLink += 1;
@@ -164,6 +190,11 @@ async function main() {
           linkedGuardians: family.guardians.filter((guardian) => guardian.user).length,
           inactiveParentLinks: family.guardians.filter((guardian) => guardian.user?.role === UserRole.PARENT_GUARDIAN && !guardian.user.isActive).length,
           nonParentLinks: family.guardians.filter((guardian) => guardian.user && guardian.user.role !== UserRole.PARENT_GUARDIAN).length,
+          activeParentLinksMissingAuth: family.guardians.filter((guardian) => (
+            guardian.user?.role === UserRole.PARENT_GUARDIAN
+            && guardian.user.isActive
+            && !supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
+          )).length,
         });
       }
       if (account.invoices.length === 0) {
@@ -189,6 +220,7 @@ async function main() {
     schoolExceptions: [...byCenter.values()].filter((center) => (
       center.missingBillingAccounts > 0
       || center.positiveBalancesWithoutActiveParentLink > 0
+      || center.positiveBalancesWithoutOpenInvoice > 0
       || center.orderedLedgerBalanceMismatches > 0
       || center.latestCreatedLedgerBalanceMismatches > 0
     )),

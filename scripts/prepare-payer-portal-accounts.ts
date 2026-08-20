@@ -42,7 +42,7 @@ async function loadGuardians() {
   return prisma.guardian.findMany({
     include: {
       user: {
-        select: { role: true, isActive: true },
+        select: { email: true, role: true, isActive: true },
       },
       family: {
         include: {
@@ -66,7 +66,9 @@ async function loadGuardians() {
 }
 
 function hasActiveParentLink(guardian: GuardianRecord) {
-  return guardian.user?.role === UserRole.PARENT_GUARDIAN && guardian.user.isActive;
+  return guardian.user?.role === UserRole.PARENT_GUARDIAN
+    && guardian.user.isActive
+    && normalizedEmail(guardian.user.email) === normalizedEmail(guardian.email);
 }
 
 function guardianIdentity(guardian: GuardianRecord) {
@@ -260,6 +262,12 @@ async function main() {
     const user = existingUserByEmail.get(email);
     const blockers = [
       ...readinessFor(payer).blockers,
+      ...(payer.user && payer.user.role !== UserRole.PARENT_GUARDIAN
+        ? ["The guardian is linked to a non-parent app user."]
+        : []),
+      ...(payer.user && normalizedEmail(payer.user.email) !== email
+        ? ["The guardian's linked app user has a different email."]
+        : []),
       ...(emailTenants.get(email)?.size === 1 ? [] : ["Email appears in more than one tenant."]),
       ...(matchingGuardians.every((guardian) => !parentPortalAccessDisabled(guardian.customFields))
         ? []

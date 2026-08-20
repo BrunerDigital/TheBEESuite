@@ -7,11 +7,14 @@ test("parent payment readiness audit checks balances, access, and account covera
 
   assert.match(source, /livePaymentsEnabled === true/);
   assert.match(source, /tuitionBillingEnabled === true/);
-  assert.match(source, /stripeBillingApproved === true/);
+  assert.match(source, /stripeSchoolBillingApproval/);
   assert.match(source, /parentVisibleBillingBalanceCents/);
   assert.match(source, /positiveBalancesWithoutActiveParentLink/);
   assert.match(source, /currentFamiliesWithoutBillingAccounts/);
   assert.match(source, /latestCreatedLedgerBalanceMismatches/);
+  assert.match(source, /loadSupabaseAuthEmails/);
+  assert.match(source, /activeParentLinksMissingAuth/);
+  assert.match(source, /center\.positiveBalancesWithoutOpenInvoice > 0/);
   assert.match(source, /ledgerEntry\.findMany/);
   assert.doesNotMatch(source, /accountIds\.map\([\s\S]{0,120}ledgerEntry\.findFirst/);
 });

@@ -16,11 +16,33 @@ test("route error actions use the Next.js retry callback that refetches failed c
   }
 });
 
-test("parent load failures receive one guarded full-document recovery", () => {
-  const errorBoundary = source("src/app/error.tsx");
-  assert.match(errorBoundary, /\/parent-portal/);
-  assert.match(errorBoundary, /load failed\|network error\|failed to fetch/i);
-  assert.match(errorBoundary, /sessionStorage\.getItem\(PARENT_LOAD_RECOVERY_KEY\)/);
-  assert.match(errorBoundary, /PARENT_LOAD_RECOVERY_WINDOW_MS = 60_000/);
-  assert.match(errorBoundary, /Reload this page/);
+test("client asset failures and parent network failures receive one guarded full-document recovery", () => {
+  for (const path of ["src/app/error.tsx", "src/app/global-error.tsx"]) {
+    const errorBoundary = source(path);
+    assert.match(errorBoundary, /\/parent-portal/);
+    assert.match(errorBoundary, /load failed\|network error\|failed to fetch/i);
+    assert.match(errorBoundary, /ChunkLoadError/);
+    assert.match(errorBoundary, /failed to load chunk\|loading chunk/);
+    assert.match(errorBoundary, /sessionStorage\.getItem\(CLIENT_LOAD_RECOVERY_KEY\)/);
+    assert.match(errorBoundary, /CLIENT_LOAD_RECOVERY_WINDOW_MS = 60_000/);
+    assert.match(errorBoundary, /Reload this page/);
+  }
+});
+
+test("service worker never substitutes the app launcher for authenticated routes", () => {
+  const serviceWorker = source("public/sw.js");
+  assert.match(serviceWorker, /bee-suite-app-shell-v3/);
+  assert.match(serviceWorker, /cache\.addAll\(APP_SHELL_URLS\)/);
+  assert.doesNotMatch(serviceWorker, /cache\.addAll\(APP_SHELL_URLS\)[\s\S]{0,80}\.catch/);
+  assert.match(serviceWorker, /url\.pathname === "\/app" \|\| url\.pathname === "\/app\/"/);
+  assert.match(serviceWorker, /status: 503/);
+  assert.doesNotMatch(serviceWorker, /fetch\(request\)\.catch\(\(\) => caches\.match\("\/app"\)\)/);
+});
+
+test("service worker controller changes can recover future releases without reload loops", () => {
+  const pwaManager = source("src/components/pwa-install-manager.tsx");
+  assert.match(pwaManager, /const reloadWindowMs = 60_000/);
+  assert.match(pwaManager, /Date\.now\(\) - lastReloadAt < reloadWindowMs/);
+  assert.match(pwaManager, /sessionStorage\.setItem\(reloadKey, String\(Date\.now\(\)\)\)/);
+  assert.doesNotMatch(pwaManager, /alreadyReloaded === "1"/);
 });

@@ -1588,6 +1588,50 @@ async function GETHandler(request: NextRequest) {
   const reportType = clean(request.nextUrl.searchParams.get("report"));
   const wantsLatest = !requestedBatchId || requestedBatchId.toLowerCase() === "latest";
 
+  if (reportType === "batch-history") {
+    if (!requestedCenterId || ["auto", "all", "bulk"].includes(requestedCenterId.toLowerCase())) {
+      return NextResponse.json({ ok: false, error: "Choose one school to continue its existing migration." }, { status: 400 });
+    }
+    if (!canAccessCenter(user, requestedCenterId)) {
+      return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
+    }
+    const batches = await prisma.procareImportBatch.findMany({
+      where: { centerId: requestedCenterId },
+      orderBy: { createdAt: "desc" },
+      take: 25,
+      select: {
+        id: true,
+        filename: true,
+        status: true,
+        summary: true,
+        createdAt: true,
+        _count: { select: { rows: true } },
+      },
+    });
+    return NextResponse.json({
+      ok: true,
+      mode: "continue_existing_migration",
+      currentStateAt: new Date().toISOString(),
+      note: "Reports retain the selected ProCare batch as source evidence and compare it with the school's current BEE Suite records. No records are imported or changed.",
+      batches: batches.map((batch) => {
+        const summary = batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary)
+          ? batch.summary as Record<string, Prisma.JsonValue>
+          : {};
+        return {
+          id: batch.id,
+          filename: batch.filename,
+          status: batch.status,
+          createdAt: batch.createdAt.toISOString(),
+          rowCount: batch._count.rows,
+          importedRows: Number(summary.imported ?? 0),
+          unresolvedRows: Number(summary.unresolved ?? 0),
+          disposedRows: Number(summary.disposed ?? 0),
+          hasRefinedSourceInventory: Boolean(summary.datasetCoverage) && summary.sourceInventoryConfirmed === true,
+        };
+      }),
+    }, { headers: { "Cache-Control": "no-store" } });
+  }
+
   const batch = wantsLatest
     ? await (async () => {
         const autoCenter = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase());

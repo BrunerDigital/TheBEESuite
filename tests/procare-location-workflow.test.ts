@@ -54,8 +54,12 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
   assert.ok(fs.existsSync(path.join(output, "10-derived-primary-payer-source.csv")));
   assert.ok(fs.existsSync(path.join(output, "13-active-portal-safe-import.csv")));
   assert.ok(fs.existsSync(path.join(output, "14-active-portal-safe-balance-review.csv")));
-  const manifest = JSON.parse(fs.readFileSync(path.join(output, "manifest.json"), "utf8")) as { sourceFiles: Array<{ filename: string; rows: number }> };
+  const manifest = JSON.parse(fs.readFileSync(path.join(output, "manifest.json"), "utf8")) as {
+    sourceFiles: Array<{ filename: string; rows: number }>;
+    outputHashes: { beeFieldReconciliationSha256?: string };
+  };
   assert.equal(manifest.sourceFiles.find((item) => item.filename === "Sample - Empty Optional.csv")?.rows, 0);
+  assert.match(manifest.outputHashes.beeFieldReconciliationSha256 ?? "", /^[a-f0-9]{64}$/);
   const renderedRates = parseCsvBuffer(fs.readFileSync(path.join(output, "15-rendered-contract-billing-review.csv")), "rendered rates").rows;
   assert.equal(renderedRates[0]["source amount cents"], "15000");
   assert.equal(renderedRates[0]["source payer label"], "ONE Primary, Parent One");
@@ -65,6 +69,11 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
   assert.equal(renderedSchedules[0]["source classroom"], "Infants");
   assert.equal(renderedSchedules[0]["confirmed child id"], "");
   assert.deepEqual(renderedSchedules.map((row) => row["source child name"]), ["One Child", "One, Child"]);
+  const fieldReconciliation = parseCsvBuffer(fs.readFileSync(path.join(output, "18-bee-field-reconciliation.csv")), "field reconciliation").rows;
+  assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "Child.dateOfBirth" && row["Source Cell Value"] === "1/2/2022"));
+  assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "BillingAccount opening signed balance cents" && row["Source Cell Value"] === "12550"));
+  assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "Child.schedule" && row["Source Report"] === "Sample - Classroom Schedule Summary Weekly.csv"));
+  assert.equal(Object.hasOwn(result.gates, "Required BEE field cells"), false);
 });
 
 test("rendered billing evidence keeps payer boundaries and nets distinct weekly components", async () => {
@@ -291,4 +300,47 @@ test("location workflow derives a weekly candidate only from recurring positive 
   assert.equal(rateRows[0].status, "candidate_from_recurring_statement_history_requires_approval");
   const dedupRows = parseCsvBuffer(fs.readFileSync(path.join(output, "12-guardian-dedup-review.csv")), "dedup").rows;
   assert.equal(dedupRows.length, 0);
+});
+
+test("formal tuition source stays blocked until every enrolled child has one weekly rate with an effective date", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "bee-procare-location-formal-tuition-"));
+  const source = path.join(root, "source");
+  const output = path.join(root, "output");
+  fs.mkdirSync(source);
+  write(path.join(source, "Sample - Enrollment.csv"), [
+    "Child ID,Person ID,Person Type,Full Name,Primary Classroom,Classroom ID,Enrollment Status,Status Start Date,Relationship 1 Id",
+    "child-1,child-person-1,Child,Child One,Infants,room-1,Enrolled,1/1/2026,parent-1",
+    "child-2,child-person-2,Child,Child Two,Toddlers,room-2,Enrolled,1/1/2026,parent-2",
+  ].join("\n"));
+  write(path.join(source, "Sample - Relationships.csv"), [
+    "Child ID,Row ID,Person ID,Person Type,Full Name,Relationship Type,Lives With,Emergency,Authorized Pickup,Email,Phone 1",
+    "child-1,row-1,parent-1,Guardian,Parent One,Mom,Y,Y,Y,parent1@example.com,555-555-0101",
+    "child-2,row-2,parent-2,Guardian,Parent Two,Dad,Y,Y,Y,parent2@example.com,555-555-0102",
+  ].join("\n"));
+  write(path.join(source, "Sample - Account Information.csv"), [
+    "Account ID,Person ID,Person Type,Person Sort ID,Full Name,Email,Phone 1",
+    "account-1,child-person-1,Child,1,Child One,,",
+    "account-1,parent-1,Payer,0,Parent One,parent1@example.com,555-555-0101",
+    "account-2,child-person-2,Child,1,Child Two,,",
+    "account-2,parent-2,Payer,0,Parent Two,parent2@example.com,555-555-0102",
+  ].join("\n"));
+  write(path.join(source, "Sample - Account Balance Summary.csv"), [
+    "Account ID,Balance,Person ID,Full Name",
+    "account-1,0.00,parent-1,Parent One",
+    "account-2,0.00,parent-2,Parent Two",
+  ].join("\n"));
+  write(path.join(source, "Sample - Tuition Contracts.csv"), [
+    "Child ID,Weekly Rate,Cadence,Effective Date,Description",
+    "child-1,150.00,Week,8/24/2026,Full Time",
+    "child-2,175.00,Weekly,2/30/2026,Full Time",
+  ].join("\n"));
+
+  const result = await prepareProcareLocationWorkflow({ location: "Sample", sourceDirectory: source, outputDirectory: output });
+  assert.equal(result.gates["Roster and relationships"].status, "ready");
+  assert.equal(result.metrics.formalWeeklyCoveredChildren, 1);
+  assert.equal(result.metrics.reviewableWeeklyTuitionChildren, 1);
+  assert.equal(result.gates["Weekly tuition"].status, "blocked");
+  assert.equal(result.preImportStatus, "BLOCKED");
+  const rateRows = parseCsvBuffer(fs.readFileSync(path.join(output, "08-weekly-tuition-review.csv")), "rates").rows;
+  assert.equal(rateRows.find((row) => row["child id"] === "child-2")?.status, "blocked_formal_tuition_effective_date_missing_or_invalid");
 });

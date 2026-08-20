@@ -1611,14 +1611,15 @@ async function GETHandler(request: NextRequest) {
         status: true,
         summary: true,
         createdAt: true,
-        rows: { select: { rawData: true } },
+        rows: { select: { rawData: true, status: true } },
         _count: { select: { rows: true } },
       },
     });
     const batches = candidateBatches
       .filter((batch) => {
         const touchedCenterIds = importBatchCenterIds(batch);
-        return touchedCenterIds.includes(requestedCenterId)
+        return touchedCenterIds.length === 1
+          && touchedCenterIds.includes(requestedCenterId)
           && touchedCenterIds.every((centerId) => canAccessCenter(user, centerId));
       })
       .slice(0, 25);
@@ -1637,9 +1638,9 @@ async function GETHandler(request: NextRequest) {
           status: batch.status,
           createdAt: batch.createdAt.toISOString(),
           rowCount: batch._count.rows,
-          importedRows: Number(summary.imported ?? 0),
-          unresolvedRows: Number(summary.unresolved ?? 0),
-          disposedRows: Number(summary.disposed ?? 0),
+          importedRows: batch.rows.filter((row) => row.status === "imported").length,
+          unresolvedRows: batch.rows.filter((row) => row.status === "needs_resolution").length,
+          disposedRows: batch.rows.filter((row) => row.status === "disposed").length,
           hasRefinedSourceInventory: Boolean(summary.datasetCoverage) && summary.sourceInventoryConfirmed === true,
         };
       }),

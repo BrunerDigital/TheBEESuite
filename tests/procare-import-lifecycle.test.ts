@@ -173,7 +173,11 @@ test("relationship reconciliation counts all ProCare-owned external-ID rows acro
 
 test("previously imported schools can continue from current BEE Suite state without re-importing", () => {
   const history = section(route, 'if (reportType === "batch-history")', "const batch = wantsLatest");
-  assert.match(history, /where:\s*\{ centerId: requestedCenterId \}/);
+  assert.match(history, /path:\s*\["centerIdsTouched"\],\s*array_contains:\s*\[requestedCenterId\]/);
+  assert.match(history, /rows:\s*\{ select:\s*\{ rawData:\s*true \} \}/);
+  assert.match(history, /importBatchCenterIds\(batch\)/);
+  assert.match(history, /touchedCenterIds\.includes\(requestedCenterId\)/);
+  assert.match(history, /touchedCenterIds\.every\(\(centerId\) => canAccessCenter\(user, centerId\)\)/);
   assert.match(history, /mode:\s*"continue_existing_migration"/);
   assert.match(history, /No records are imported or changed/);
   assert.doesNotMatch(history, /procareImportBatch\.create|procareImportRow\.create|family\.(create|update)|child\.(create|update)/);

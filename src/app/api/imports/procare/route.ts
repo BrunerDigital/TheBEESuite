@@ -1595,19 +1595,33 @@ async function GETHandler(request: NextRequest) {
     if (!canAccessCenter(user, requestedCenterId)) {
       return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
     }
-    const batches = await prisma.procareImportBatch.findMany({
-      where: { centerId: requestedCenterId },
+    const candidateBatches = await prisma.procareImportBatch.findMany({
+      where: {
+        OR: [
+          { centerId: requestedCenterId },
+          { summary: { path: ["centerIdsTouched"], array_contains: [requestedCenterId] } },
+        ],
+      },
       orderBy: { createdAt: "desc" },
-      take: 25,
+      take: 100,
       select: {
         id: true,
+        centerId: true,
         filename: true,
         status: true,
         summary: true,
         createdAt: true,
+        rows: { select: { rawData: true } },
         _count: { select: { rows: true } },
       },
     });
+    const batches = candidateBatches
+      .filter((batch) => {
+        const touchedCenterIds = importBatchCenterIds(batch);
+        return touchedCenterIds.includes(requestedCenterId)
+          && touchedCenterIds.every((centerId) => canAccessCenter(user, centerId));
+      })
+      .slice(0, 25);
     return NextResponse.json({
       ok: true,
       mode: "continue_existing_migration",

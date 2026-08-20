@@ -363,7 +363,7 @@ export function buildEnrollmentStatusReportRows(
     const missingDob = fields.dateOfBirthMissing === true || child.dateOfBirth.getUTCFullYear() <= 1900;
     const center = centerById.get(centerId)!;
     const ageInMonths = missingDob ? null : childAgeInMonths(child.dateOfBirth, asOf, center.timezone);
-    if (ageInMonths !== null && (ageInMonths < 0 || ageInMonths > 120)) return [];
+    if (ageInMonths !== null && ageInMonths < 0) return [];
     const groupLabel = cleanText(child.classroom.name) || cleanText(child.classroom.ageGroup) || cleanText(child.ageGroup) || "Unassigned";
     return [{
       childId: child.id,

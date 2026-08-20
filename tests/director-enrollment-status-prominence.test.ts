@@ -23,3 +23,12 @@ test("director dashboards and school operations promote the enrollment status vi
   assert.match(page, /\["enrollment", "analytics"\]/);
   assert.match(page, /canViewEnrollmentStatus: canAccessModule\(user, "analytics"\)/);
 });
+
+test("enrollment status guidance includes every current enrolled age", () => {
+  const reportBuilder = readFileSync("src/components/analytics-report-builder.tsx", "utf8");
+  const reportDefinitions = readFileSync("src/lib/reporting-analytics-shared.ts", "utf8");
+
+  assert.match(reportBuilder, /All current enrolled ages are included/);
+  assert.match(reportDefinitions, /all current enrolled ages are included/);
+  assert.doesNotMatch(`${reportBuilder}\n${reportDefinitions}`, /120 months/);
+});

@@ -33,9 +33,9 @@ npm.cmd run procare:preflight-location -- --location "<school>" --source-dir "<s
 
 - [ ] Confirm the source and output folders are different and outside Git.
 - [ ] Require `READY_FOR_PREVIEW_REVIEW` in both `manifest.json` and `READINESS.md`.
-- [ ] Review `18-bee-field-reconciliation.csv`. Every BEE Suite destination is listed whether or not the export supplied a value, with its source report, source column/cell, physical row number or stable row key, source value, and `source_cell_present` or `source_cell_not_supplied` status. This sheet is traceability evidence, not a new activation gate.
+- [ ] Review `18-bee-field-reconciliation.csv`. Every BEE Suite destination is listed whether or not the export supplied a value, with its source report, source column/cell, physical row number or stable row key, exact exported `Source Cell Value`, separate `BEE Normalized Value`, and `source_cell_present` or `source_cell_not_supplied` status. This sheet is traceability evidence, not a new activation gate.
 - [ ] Review the detected source inventory. Replace every ignored, ambiguous, malformed, or missing required report.
-- [ ] Require zero unresolved enrolled-child account links, zero enrolled children without relationship-backed guardians, zero unknown active classrooms, one current balance row per active account, and one reviewable weekly tuition evidence path per enrolled child.
+- [ ] Require zero unresolved enrolled-child account links, zero enrolled children without relationship-backed guardians, zero unknown active classrooms, one current balance row per active account, and one positive weekly tuition rate, description, and valid effective date keyed to each enrolled Child ID. Rendered name matches and recurring statement history stay blocked until replaced by stable child-contract evidence.
 - [ ] Review guardian contact collisions and cross-account Person IDs. Do not auto-merge people merely because names, email addresses, or phone numbers match.
 - [ ] Review current versus historical/withdrawn families separately. Historical balances and old accounts do not become current families by implication.
 - [ ] Correct source data and re-export when blocked. Do not delete warning rows or manually turn a blocked packet into an import file.

@@ -1611,8 +1611,6 @@ async function GETHandler(request: NextRequest) {
         status: true,
         summary: true,
         createdAt: true,
-        rows: { select: { rawData: true, status: true } },
-        _count: { select: { rows: true } },
       },
     });
     const batches = candidateBatches
@@ -1623,6 +1621,19 @@ async function GETHandler(request: NextRequest) {
           && touchedCenterIds.every((centerId) => canAccessCenter(user, centerId));
       })
       .slice(0, 25);
+    const rowStatusCounts = batches.length
+      ? await prisma.procareImportRow.groupBy({
+          by: ["batchId", "status"],
+          where: { batchId: { in: batches.map((batch) => batch.id) } },
+          _count: { _all: true },
+        })
+      : [];
+    const countsByBatch = new Map<string, Record<string, number>>();
+    for (const count of rowStatusCounts) {
+      const counts = countsByBatch.get(count.batchId) ?? {};
+      counts[count.status] = count._count._all;
+      countsByBatch.set(count.batchId, counts);
+    }
     return NextResponse.json({
       ok: true,
       mode: "continue_existing_migration",
@@ -1632,15 +1643,16 @@ async function GETHandler(request: NextRequest) {
         const summary = batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary)
           ? batch.summary as Record<string, Prisma.JsonValue>
           : {};
+        const counts = countsByBatch.get(batch.id) ?? {};
         return {
           id: batch.id,
           filename: batch.filename,
           status: batch.status,
           createdAt: batch.createdAt.toISOString(),
-          rowCount: batch._count.rows,
-          importedRows: batch.rows.filter((row) => row.status === "imported").length,
-          unresolvedRows: batch.rows.filter((row) => row.status === "needs_resolution").length,
-          disposedRows: batch.rows.filter((row) => row.status === "disposed").length,
+          rowCount: Object.values(counts).reduce((total, count) => total + count, 0),
+          importedRows: counts.imported ?? 0,
+          unresolvedRows: counts.needs_resolution ?? 0,
+          disposedRows: counts.disposed ?? 0,
           hasRefinedSourceInventory: Boolean(summary.datasetCoverage) && summary.sourceInventoryConfirmed === true,
         };
       }),

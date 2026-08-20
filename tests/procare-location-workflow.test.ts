@@ -48,7 +48,7 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
   assert.equal(result.metrics.renderedContractBillingRows, 1);
   assert.equal(result.metrics.renderedClassroomScheduleRows, 2);
   assert.equal(result.gates["Roster and relationships"].status, "review_required");
-  assert.equal(result.gates["Weekly tuition"].status, "review_required");
+  assert.equal(result.gates["Weekly tuition"].status, "blocked");
   assert.equal(result.gates["Child information"].status, "blocked");
   assert.ok(fs.existsSync(path.join(output, "01-roster-reviewed-import.csv")));
   assert.ok(fs.existsSync(path.join(output, "10-derived-primary-payer-source.csv")));
@@ -70,8 +70,9 @@ test("location workflow derives a one-to-one primary payer source and keeps miss
   assert.equal(renderedSchedules[0]["confirmed child id"], "");
   assert.deepEqual(renderedSchedules.map((row) => row["source child name"]), ["One Child", "One, Child"]);
   const fieldReconciliation = parseCsvBuffer(fs.readFileSync(path.join(output, "18-bee-field-reconciliation.csv")), "field reconciliation").rows;
+  assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "Family.name" && row["Source Cell Value"] === "Parent One" && row["BEE Normalized Value"] === "One Household"));
   assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "Child.dateOfBirth" && row["Source Cell Value"] === "1/2/2022"));
-  assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "BillingAccount opening signed balance cents" && row["Source Cell Value"] === "12550"));
+  assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "BillingAccount opening signed balance cents" && row["Source Cell Value"] === "125.50" && row["BEE Normalized Value"] === "12550"));
   assert.ok(fieldReconciliation.some((row) => row["BEE Suite Field"] === "Child.schedule" && row["Source Report"] === "Sample - Classroom Schedule Summary Weekly.csv"));
   assert.equal(Object.hasOwn(result.gates, "Required BEE field cells"), false);
 });
@@ -294,10 +295,10 @@ test("location workflow derives a weekly candidate only from recurring positive 
   assert.equal(result.metrics.weeklyStatementCandidateChildren, 1);
   assert.equal(result.metrics.weeklyStatementEvidenceRows, 3);
   assert.equal(result.metrics.exactGuardianAliasResolutions, 1);
-  assert.equal(result.gates["Weekly tuition"].status, "review_required");
+  assert.equal(result.gates["Weekly tuition"].status, "blocked");
   const rateRows = parseCsvBuffer(fs.readFileSync(path.join(output, "08-weekly-tuition-review.csv")), "rates").rows;
   assert.equal(rateRows[0]["weekly tuition cents"], "15000");
-  assert.equal(rateRows[0].status, "candidate_from_recurring_statement_history_requires_approval");
+  assert.equal(rateRows[0].status, "blocked_recurring_statement_history_missing_child_contract_effective_date");
   const dedupRows = parseCsvBuffer(fs.readFileSync(path.join(output, "12-guardian-dedup-review.csv")), "dedup").rows;
   assert.equal(dedupRows.length, 0);
 });
@@ -332,7 +333,7 @@ test("formal tuition source stays blocked until every enrolled child has one wee
   write(path.join(source, "Sample - Tuition Contracts.csv"), [
     "Child ID,Weekly Rate,Cadence,Effective Date,Description",
     "child-1,150.00,Week,8/24/2026,Full Time",
-    "child-2,175.00,Weekly,2/30/2026,Full Time",
+    "child-2,175.00,Weekly,8/24/2026,",
   ].join("\n"));
 
   const result = await prepareProcareLocationWorkflow({ location: "Sample", sourceDirectory: source, outputDirectory: output });
@@ -342,5 +343,5 @@ test("formal tuition source stays blocked until every enrolled child has one wee
   assert.equal(result.gates["Weekly tuition"].status, "blocked");
   assert.equal(result.preImportStatus, "BLOCKED");
   const rateRows = parseCsvBuffer(fs.readFileSync(path.join(output, "08-weekly-tuition-review.csv")), "rates").rows;
-  assert.equal(rateRows.find((row) => row["child id"] === "child-2")?.status, "blocked_formal_tuition_effective_date_missing_or_invalid");
+  assert.equal(rateRows.find((row) => row["child id"] === "child-2")?.status, "blocked_formal_tuition_description_missing");
 });

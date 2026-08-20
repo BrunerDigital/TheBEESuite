@@ -40,9 +40,9 @@ Required controls:
 4. Confirm the prepared CSV contains the `procare dataset coverage manifest` on its first data row. This proves which supported source reports were available during preparation.
 5. Require zero records in the unresolved file before requesting a production preview. Resolve warnings against authoritative all-accounts/DOB source reports; do not infer or manually invent missing relationships.
 6. Preparation does not authorize preview, import commit, invitations, kiosk, billing, payments, communication, source-of-truth cutover, or ProCare retirement.
-7. Require one source-backed, positive weekly tuition rate and source effective date per enrolled Child ID. A detected tuition file alone is not evidence of complete rate coverage.
+7. Require one source-backed, positive weekly tuition rate, description, and valid effective date keyed to each enrolled Child ID. Rendered name matches and recurring statement history remain blocked evidence, not child contracts.
 8. Relationship rows with explicit relationship labels may use ProCare person-type variants, but missing stable Person IDs, ambiguous accounts, and absent guardian relationships remain blocked.
-9. Review `18-bee-field-reconciliation.csv`. Every BEE Suite field remains visible whether the export supplied a source cell or not. The sheet records the exact source report, column/cell, physical row number or stable row key, and source value for traceability; it does not create a new activation requirement.
+9. Review `18-bee-field-reconciliation.csv`. Every BEE Suite field remains visible whether the export supplied a source cell or not. The sheet keeps the exact exported `Source Cell Value` separate from the transformed `BEE Normalized Value`, along with the source report, column/cell, and physical row number or stable row key; it does not create a new activation requirement.
 
 Current July 24 evidence:
 

@@ -174,14 +174,15 @@ test("relationship reconciliation counts all ProCare-owned external-ID rows acro
 test("previously imported schools can continue from current BEE Suite state without re-importing", () => {
   const history = section(route, 'if (reportType === "batch-history")', "const batch = wantsLatest");
   assert.match(history, /path:\s*\["centerIdsTouched"\],\s*array_contains:\s*\[requestedCenterId\]/);
-  assert.match(history, /rows:\s*\{ select:\s*\{ rawData:\s*true,\s*status:\s*true \} \}/);
+  assert.doesNotMatch(history, /rows:\s*\{ select:\s*\{ rawData:/);
   assert.match(history, /importBatchCenterIds\(batch\)/);
   assert.match(history, /touchedCenterIds\.length === 1/);
   assert.match(history, /touchedCenterIds\.includes\(requestedCenterId\)/);
   assert.match(history, /touchedCenterIds\.every\(\(centerId\) => canAccessCenter\(user, centerId\)\)/);
-  assert.match(history, /batch\.rows\.filter\(\(row\) => row\.status === "imported"\)\.length/);
-  assert.match(history, /batch\.rows\.filter\(\(row\) => row\.status === "needs_resolution"\)\.length/);
-  assert.match(history, /batch\.rows\.filter\(\(row\) => row\.status === "disposed"\)\.length/);
+  assert.match(history, /procareImportRow\.groupBy/);
+  assert.match(history, /by:\s*\["batchId",\s*"status"\]/);
+  assert.match(history, /unresolvedRows:\s*counts\.needs_resolution \?\? 0/);
+  assert.match(history, /disposedRows:\s*counts\.disposed \?\? 0/);
   assert.match(history, /mode:\s*"continue_existing_migration"/);
   assert.match(history, /No records are imported or changed/);
   assert.doesNotMatch(history, /procareImportBatch\.create|procareImportRow\.create|family\.(create|update)|child\.(create|update)/);

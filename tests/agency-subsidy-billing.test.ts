@@ -85,6 +85,16 @@ test("agency approvals preserve dollar units when posted", () => {
   assert.doesNotMatch(workspace, /approvedDollars: approvedAmount/);
 });
 
+test("agency authorization entry resets and shows the selected child's saved rate", () => {
+  const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
+  assert.match(workspace, /key=\{`\$\{centerId\}:\$\{programId\}:\$\{familyId\}:\$\{childId\}`\}/);
+  assert.match(workspace, /authorization\.childId === childId/);
+  assert.match(workspace, /authorization\.agencyProgramId === programId/);
+  assert.match(workspace, /Saved authorization\{selectedChildAuthorizations\.length === 1/);
+  assert.match(workspace, /money\(authorization\.authorizedRateCents\).*authorization\.unitType/);
+  assert.match(workspace, /Switching children clears the new-authorization fields/);
+});
+
 test("remittance status uses approved amount when available", () => {
   assert.equal(nextRemittanceStatus({ claimedCents: 50000, approvedCents: 45000, paidCents: 20000 }), "partially_paid");
   assert.equal(nextRemittanceStatus({ claimedCents: 50000, approvedCents: 45000, paidCents: 45000 }), "paid");

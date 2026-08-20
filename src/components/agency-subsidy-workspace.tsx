@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { agencyProgramSetupBlockers } from "@/lib/agency-subsidy-billing";
 
 type Program = { id: string; centerId: string; name: string; programName: string | null; stateCode: string; status: string; providerNumber: string | null; vendorNumber: string | null; submissionMethod: string; portalUrl: string | null; remittanceEmail: string | null; paymentInstructions: string | null; setupBlockers: string[] };
-type Authorization = { id: string; centerId: string; agencyProgramId: string; authorizationNumber: string; coverageStart: string; coverageEnd: string; authorizedRateCents: number; unitType: string; agencyProgram: { name: string; programName: string | null }; family: { name: string }; child: { fullName: string } };
+type Authorization = { id: string; centerId: string; agencyProgramId: string; familyId: string; childId: string; authorizationNumber: string; coverageStart: string; coverageEnd: string; authorizedRateCents: number; familyCopayCents: number; unitType: string; agencyProgram: { name: string; programName: string | null }; family: { name: string }; child: { fullName: string } };
 type ClaimDocument = { id: string; name: string; status: string; notes: string | null };
 type Claim = { id: string; number: string; status: string; claimedCents: number; approvedCents: number | null; paidCents: number; servicePeriodStart: string; servicePeriodEnd: string; agencyProgram: { name: string }; authorization: { child: { fullName: string }; family: { name: string } } | null; documents: ClaimDocument[] };
 type Family = { id: string; centerId: string | null; name: string; children: Array<{ id: string; fullName: string }> };
@@ -74,6 +74,11 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const summary = data?.summary;
   const setupProgram = programs.find((program) => program.id === setupProgramId);
   const setupBlockers = setupProgram ? agencyProgramSetupBlockers(setupProgram) : [];
+  const selectedChild = selectedFamily?.children.find((child) => child.id === childId) ?? null;
+  const selectedChildAuthorizations = authorizations.filter((authorization) => (
+    authorization.childId === childId
+    && (!programId || authorization.agencyProgramId === programId)
+  ));
 
   async function submitProgramSetup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -179,10 +184,20 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
           <Button type="submit" disabled={pending}>{setupProgram ? "Update agency setup" : "Save agency program"}</Button>
         </form></CardContent></Card>
 
-        <Card><CardHeader><CardTitle as="h3">2. Record authorization</CardTitle><CardDescription>Bind one child, family, payer, coverage period, rate, and copay.</CardDescription></CardHeader><CardContent><form className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const ok = await post("createAuthorization", { agencyProgramId: programId, familyId, childId, authorizationNumber: form.get("authorizationNumber"), coverageStart: form.get("coverageStart"), coverageEnd: form.get("coverageEnd"), authorizedRateDollars: form.get("authorizedRateDollars"), familyCopayDollars: form.get("familyCopayDollars"), unitType: form.get("unitType") }); if (ok) event.currentTarget.reset(); }}>
+        <Card><CardHeader><CardTitle as="h3">2. Record authorization</CardTitle><CardDescription>Bind one child, family, payer, coverage period, rate, and copay. Switching children clears the new-authorization fields.</CardDescription></CardHeader><CardContent><form key={`${centerId}:${programId}:${familyId}:${childId}`} className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const ok = await post("createAuthorization", { agencyProgramId: programId, familyId, childId, authorizationNumber: form.get("authorizationNumber"), coverageStart: form.get("coverageStart"), coverageEnd: form.get("coverageEnd"), authorizedRateDollars: form.get("authorizedRateDollars"), familyCopayDollars: form.get("familyCopayDollars"), unitType: form.get("unitType") }); if (ok) event.currentTarget.reset(); }}>
           <div><Label>Agency program</Label><Select value={programId} onValueChange={(value) => value && setProgramId(value)}><SelectTrigger><SelectValue placeholder="Choose a completed agency setup" /></SelectTrigger><SelectContent>{programs.map((program) => { const blocked = agencyProgramSetupBlockers(program).length > 0; return <SelectItem key={program.id} value={program.id} disabled={blocked}>{program.name}{program.programName ? ` · ${program.programName}` : ""}{blocked ? " · setup required" : ""}</SelectItem>; })}</SelectContent></Select></div>
           <div><Label>Family</Label><Select value={familyId} onValueChange={(value) => { setFamilyId(value ?? ""); setChildId(""); }}><SelectTrigger><SelectValue placeholder="Choose family" /></SelectTrigger><SelectContent>{data?.families.map((family) => <SelectItem key={family.id} value={family.id}>{family.name}</SelectItem>)}</SelectContent></Select></div>
           <div><Label>Child</Label><Select value={childId} onValueChange={(value) => value && setChildId(value)}><SelectTrigger><SelectValue placeholder="Choose child" /></SelectTrigger><SelectContent>{selectedFamily?.children.map((child) => <SelectItem key={child.id} value={child.id}>{child.fullName}</SelectItem>)}</SelectContent></Select></div>
+          {selectedChild ? <div className="rounded-lg border bg-background/50 p-3" aria-live="polite">
+            <div className="text-sm font-medium">Saved authorization{selectedChildAuthorizations.length === 1 ? "" : "s"} for {selectedChild.fullName}</div>
+            {selectedChildAuthorizations.length ? <div className="mt-2 space-y-2">
+              {selectedChildAuthorizations.map((authorization) => <div key={authorization.id} className="rounded-md border bg-muted/20 p-2 text-xs">
+                <div className="font-medium">{money(authorization.authorizedRateCents)} / {authorization.unitType}</div>
+                <div className="mt-1 text-muted-foreground">{authorization.agencyProgram.name} · {authorization.authorizationNumber} · {dateOnly(authorization.coverageStart)} – {dateOnly(authorization.coverageEnd)}</div>
+                <div className="text-muted-foreground">Family copay: {money(authorization.familyCopayCents)}</div>
+              </div>)}
+            </div> : <p className="mt-1 text-xs text-muted-foreground">No saved authorization for this child and agency program. The blank fields below create a new one.</p>}
+          </div> : null}
           <div><Label htmlFor="auth-number">Authorization #</Label><Input id="auth-number" name="authorizationNumber" required /></div>
           <div className="grid grid-cols-2 gap-3"><div><Label>Start</Label><Input name="coverageStart" type="date" required /></div><div><Label>End</Label><Input name="coverageEnd" type="date" required /></div></div>
           <div className="grid grid-cols-2 gap-3"><div><Label>Agency rate</Label><Input name="authorizedRateDollars" inputMode="decimal" required placeholder="250.00" /></div><div><Label>Family copay</Label><Input name="familyCopayDollars" inputMode="decimal" placeholder="0.00" /></div></div>
@@ -191,7 +206,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
         </form></CardContent></Card>
 
         <Card><CardHeader><CardTitle as="h3">3. Build agency claim</CardTitle><CardDescription>Create a separate agency invoice with its required-document checklist.</CardDescription></CardHeader><CardContent><form className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const ok = await post("createClaim", { authorizationId, servicePeriodStart: form.get("servicePeriodStart"), servicePeriodEnd: form.get("servicePeriodEnd"), dueDate: form.get("dueDate"), serviceUnits: form.get("serviceUnits"), rateDollars: form.get("rateDollars"), attendanceDays: form.get("attendanceDays") }); if (ok) event.currentTarget.reset(); }}>
-          <div><Label>Authorization</Label><Select value={authorizationId} onValueChange={(value) => value && setAuthorizationId(value)}><SelectTrigger><SelectValue placeholder="Choose authorization" /></SelectTrigger><SelectContent>{authorizations.map((authorization) => <SelectItem key={authorization.id} value={authorization.id}>{authorization.child.fullName} · {authorization.agencyProgram.name} · {authorization.authorizationNumber}</SelectItem>)}</SelectContent></Select></div>
+          <div><Label>Authorization</Label><Select value={authorizationId} onValueChange={(value) => value && setAuthorizationId(value)}><SelectTrigger><SelectValue placeholder="Choose authorization" /></SelectTrigger><SelectContent>{authorizations.map((authorization) => <SelectItem key={authorization.id} value={authorization.id}>{authorization.child.fullName} · {money(authorization.authorizedRateCents)}/{authorization.unitType} · {authorization.authorizationNumber}</SelectItem>)}</SelectContent></Select></div>
           <div className="grid grid-cols-2 gap-3"><div><Label>Service start</Label><Input name="servicePeriodStart" type="date" required /></div><div><Label>Service end</Label><Input name="servicePeriodEnd" type="date" required /></div></div>
           <div className="grid grid-cols-2 gap-3"><div><Label>Units</Label><Input name="serviceUnits" inputMode="decimal" required defaultValue="1" /></div><div><Label>Override rate</Label><Input name="rateDollars" inputMode="decimal" placeholder="Uses authorization" /></div></div>
           <div className="grid grid-cols-2 gap-3"><div><Label>Attendance days</Label><Input name="attendanceDays" type="number" min="0" /></div><div><Label>Claim due</Label><Input name="dueDate" type="date" /></div></div>

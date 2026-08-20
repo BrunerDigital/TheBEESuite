@@ -62,6 +62,10 @@ export function isCurrentlyEnrolledStatus(value: string | null | undefined) {
   return currentlyEnrolledStatusSet.has(normalizedEnrollmentStatus(value));
 }
 
+export function isClosedEnrollmentStatus(value: string | null | undefined) {
+  return closedEnrollmentStatusSet.has(normalizedEnrollmentStatus(value));
+}
+
 export function enrollmentLifecycleCategory(value: string | null | undefined): EnrollmentLifecycleCategory {
   const normalized = normalizedEnrollmentStatus(value);
   if (currentlyEnrolledStatusSet.has(normalized)) return "current";

@@ -6,6 +6,8 @@ import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
 const operationsRoute = readFileSync(new URL("../src/app/api/operations/records/route.ts", import.meta.url), "utf8");
 const enrollmentPanel = readFileSync(new URL("../src/components/enrollment-visibility-panels.tsx", import.meta.url), "utf8");
 const familyEditor = readFileSync(new URL("../src/components/family-record-editor.tsx", import.meta.url), "utf8");
+const enrollmentCloseout = readFileSync(new URL("../src/lib/enrollment-closeout.ts", import.meta.url), "utf8");
+const procareRoute = readFileSync(new URL("../src/app/api/imports/procare/route.ts", import.meta.url), "utf8");
 
 test("bulk enrollment changes deduplicate children and require a classroom for enrolled", () => {
   assert.deepEqual(
@@ -71,8 +73,18 @@ test("bulk enrollment updates stay school-scoped, audited, and invalidate dashbo
   assert.match(operationsRoute, /canAccessCenter\(user, child\.family\.centerId\)/);
   assert.match(operationsRoute, /selectedCenterId\) => selectedCenterId !== classroom\.centerId/);
   assert.match(operationsRoute, /operations\.child_status\.bulk_updated/);
+  assert.match(operationsRoute, /recurringTuitionDisabled/);
+  assert.match(operationsRoute, /closeEnrollmentAndDisableTuitionSql/);
+  assert.match(enrollmentCloseout, /jsonb_set/);
+  assert.match(enrollmentCloseout, /COALESCE\("customFields", '\{\}'::jsonb\)/);
   assert.match(operationsRoute, /revalidatePath\("\/billing-invoices"\)/);
   assert.match(operationsRoute, /revalidatePath\("\/api\/dashboard\/accounts-receivable"\)/);
+});
+
+test("ProCare closeouts atomically disable future tuition for existing children", () => {
+  assert.match(procareRoute, /enrollmentStatusProvided && isClosedEnrollmentStatus\(enrollmentStatus\)/);
+  assert.match(procareRoute, /closeEnrollmentAndDisableTuitionSql/);
+  assert.match(procareRoute, /await prisma\.child\.update[\s\S]*await prisma\.\$executeRaw/);
 });
 
 test("existing children with a missing DOB can be withdrawn without changing the placeholder DOB", () => {

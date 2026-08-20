@@ -38,9 +38,11 @@ import {
 } from "@/lib/parent-portal-logins";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
 import { activeClassroomWhere } from "@/lib/classroom-status";
+import { closeEnrollmentAndDisableTuitionSql } from "@/lib/enrollment-closeout";
 import { invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 import {
   enrollmentClassroomValidationError,
+  isClosedEnrollmentStatus,
   isCurrentlyEnrolledChildRecord,
   isCurrentlyEnrolledStatus,
 } from "@/lib/enrollment-status";
@@ -378,13 +380,26 @@ async function POSTHandler(request: NextRequest) {
         && child.family.centerId
       ))
       .map((child) => ({ familyId: child.family.id, childId: child.id, centerId: child.family.centerId! }));
-    const updated = await prisma.child.updateMany({
-      where: { id: { in: change.value.childIds } },
-      data: {
+    const statusUpdatedAt = new Date();
+    let updatedCount: number;
+    if (!isClosedEnrollmentStatus(change.value.enrollmentStatus)) {
+      const updated = await prisma.child.updateMany({
+        where: { id: { in: change.value.childIds } },
+        data: {
+          enrollmentStatus: change.value.enrollmentStatus,
+          classroomId: change.value.classroomId,
+        },
+      });
+      updatedCount = updated.count;
+    } else {
+      updatedCount = await prisma.$executeRaw(closeEnrollmentAndDisableTuitionSql({
+        childIds: change.value.childIds,
         enrollmentStatus: change.value.enrollmentStatus,
         classroomId: change.value.classroomId,
-      },
-    });
+        updatedAt: statusUpdatedAt,
+        updatedBy: user.email,
+      }));
+    }
     await Promise.all(centerIds.map((selectedCenterId) => writeAuditLog(user, {
       centerId: selectedCenterId,
       action: "operations.child_status.bulk_updated",
@@ -395,7 +410,8 @@ async function POSTHandler(request: NextRequest) {
         previousStatuses,
         enrollmentStatus: change.value.enrollmentStatus,
         classroomId: change.value.classroomId,
-        updatedCount: updated.count,
+        updatedCount,
+        recurringTuitionDisabled: isClosedEnrollmentStatus(change.value.enrollmentStatus),
       },
     })));
     revalidatePath("/family-detail");
@@ -406,7 +422,7 @@ async function POSTHandler(request: NextRequest) {
       ok: true,
       entity,
       mode: "updated",
-      updatedCount: updated.count,
+      updatedCount,
       enrollmentStatus: change.value.enrollmentStatus,
       classroomId: change.value.classroomId,
       reenrollments,
@@ -977,12 +993,13 @@ async function POSTHandler(request: NextRequest) {
     } else {
       const careScheduleType = clean(body.careScheduleType || body.fteScheduleType || body.fullTimePartTime).toLowerCase().replace(/[^a-z0-9]+/g, "_");
       const existingCustomFields = jsonObject(existingChild?.customFields);
-      const customFields = ["full_time", "part_time"].includes(careScheduleType)
+      const baseCustomFields = ["full_time", "part_time"].includes(careScheduleType)
         ? { ...existingCustomFields, careScheduleType, fteScheduleType: careScheduleType } as Prisma.InputJsonObject
         : Object.keys(existingCustomFields).length
           ? existingCustomFields as Prisma.InputJsonObject
           : undefined;
       const enrollmentStatus = clean(body.enrollmentStatus) || clean(body.status) || "enrolled";
+      const customFields = baseCustomFields;
       const classroomError = enrollmentClassroomValidationError({ enrollmentStatus, classroomId });
       if (classroomError) return NextResponse.json({ ok: false, error: classroomError }, { status: 400 });
       const data = {
@@ -1004,7 +1021,21 @@ async function POSTHandler(request: NextRequest) {
         customFields,
       };
       if (!data.fullName) return NextResponse.json({ ok: false, error: "Child name is required." }, { status: 400 });
-      result = id ? await prisma.child.update({ where: { id }, data }) : await prisma.child.create({ data });
+      if (id && isClosedEnrollmentStatus(enrollmentStatus)) {
+        const updatedAt = new Date();
+        [result] = await prisma.$transaction([
+          prisma.child.update({ where: { id }, data }),
+          prisma.$executeRaw(closeEnrollmentAndDisableTuitionSql({
+            childIds: [id],
+            enrollmentStatus,
+            classroomId: null,
+            updatedAt,
+            updatedBy: user.email,
+          })),
+        ]);
+      } else {
+        result = id ? await prisma.child.update({ where: { id }, data }) : await prisma.child.create({ data });
+      }
       const resultId = resultRecordId(result);
       if (
         existingChild

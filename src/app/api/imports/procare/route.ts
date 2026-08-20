@@ -1550,7 +1550,7 @@ function importBatchCenterIds(batch: {
   summary?: Prisma.JsonValue | null;
   rows?: Array<{ rawData: Prisma.JsonValue }>;
 }) {
-  const centerIds = new Set([batch.centerId]);
+  const centerIds = new Set<string>();
   if (batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary)) {
     const savedCenterIds = (batch.summary as Record<string, Prisma.JsonValue>)["centerIdsTouched"];
     if (Array.isArray(savedCenterIds)) {
@@ -1562,6 +1562,7 @@ function importBatchCenterIds(batch: {
     const mappedCenterId = (row.rawData as Record<string, Prisma.JsonValue>)["mappedCenterId"];
     if (typeof mappedCenterId === "string" && mappedCenterId) centerIds.add(mappedCenterId);
   }
+  if (!centerIds.size) centerIds.add(batch.centerId);
   return [...centerIds];
 }
 

@@ -159,6 +159,8 @@ test("relationship reconciliation counts all ProCare-owned external-ID rows acro
   const reconciliation = section(route, 'if (reportType === "reconciliation" || reportType === "fleet-verification")', "const exportPayload");
   assert.match(reconciliation, /Fleet verification reports are school-specific/);
   assert.match(reconciliation, /touchedCenterIds\.length !== 1/);
+  assert.match(route, /const centerIds = new Set<string>\(\)/);
+  assert.match(route, /if \(!centerIds\.size\) centerIds\.add\(batch\.centerId\)/);
 
   assert.match(reconciliation, /procareRelationshipRowsAcrossSourceFamilies/);
   assert.match(reconciliation, /family:\s*\{\s*centerId,\s*sourceSystem:\s*["']procare["'],\s*externalId\s*\}/);

@@ -65,14 +65,12 @@ const DOMAIN_DEFINITIONS = [
     label: "Child safety, medical, allergy, and custody information",
     required: true,
     applicableTo: "child",
-    groups: [[
-      "procare child info source records",
-      "procare allergy records",
-      "allergies",
-      "medical notes",
-      "custody notes",
-      "authorized pickup",
-    ]],
+    groups: [
+      ["procare child info source records", "procare allergy records", "allergies"],
+      ["procare child info source records", "medical notes"],
+      ["procare child info source records", "custody notes"],
+      ["procare child info source records", "authorized pickup"],
+    ],
   },
   {
     key: "staff",

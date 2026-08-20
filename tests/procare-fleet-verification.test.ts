@@ -31,6 +31,22 @@ test("fleet source coverage fails closed when a required school dataset is missi
   assert.equal(balances?.status, "missing");
 });
 
+test("fleet source coverage requires every child-safety category when no complete child-info report is present", () => {
+  const partialSafetyRecord = {
+    ...completeRecord,
+    "procare child info source records": "",
+    allergies: "Peanut allergy",
+  };
+  const coverage = assessProcareFleetSourceCoverage([partialSafetyRecord]);
+  const safety = coverage.domains.find((domain) => domain.key === "child_safety");
+
+  assert.equal(coverage.requiredDomainsComplete, false);
+  assert.equal(safety?.status, "missing");
+  assert.ok(safety?.missingEvidence.some((item) => item.includes("medical notes")));
+  assert.ok(safety?.missingEvidence.some((item) => item.includes("custody notes")));
+  assert.ok(safety?.missingEvidence.some((item) => item.includes("authorized pickup")));
+});
+
 test("fleet source coverage requires balance and tuition evidence for every applicable account and child", () => {
   const incompleteSecondChild = {
     ...completeRecord,

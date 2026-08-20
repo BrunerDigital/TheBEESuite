@@ -22,6 +22,7 @@ import {
   parseCurrencyCents,
   shouldCreateRecurringTuitionInvoice,
   tuitionInvoiceWeekCount,
+  tuitionPlanRecordChanged,
   utcBillingWeekday,
   weeklyTuitionChargeDateForPeriod,
   planFamilyRefundAllocations,
@@ -59,6 +60,15 @@ test("zero-dollar tuition requires an explicit voucher-funded rate", () => {
   assert.equal(canSaveTuitionPlanAmount(-1, true), false);
   assert.equal(isVoucherFundedTuitionAmount(0), true);
   assert.equal(isVoucherFundedTuitionAmount(25000), false);
+});
+
+test("assigned tuition plans detect every shared field that could change a child's displayed rate", () => {
+  const existing = { name: "CCDF child rate", ageGroup: "Preschool", cadence: "weekly", amountCents: 25000 };
+  assert.equal(tuitionPlanRecordChanged(existing, { ...existing }), false);
+  assert.equal(tuitionPlanRecordChanged(existing, { ...existing, name: "Another child rate" }), true);
+  assert.equal(tuitionPlanRecordChanged(existing, { ...existing, ageGroup: "School Age" }), true);
+  assert.equal(tuitionPlanRecordChanged(existing, { ...existing, cadence: "monthly" }), true);
+  assert.equal(tuitionPlanRecordChanged(existing, { ...existing, amountCents: 27500 }), true);
 });
 
 test("agency payment helpers normalize metadata and descriptions", () => {

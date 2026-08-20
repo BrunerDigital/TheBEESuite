@@ -1406,27 +1406,40 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
-      const response = await fetch("/api/operations/records", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entity: "tuitionPlan",
-          id: planEditorId === "new" ? undefined : planEditorId,
-          centerId,
-          name: planName,
-          ageGroup: planAgeGroup,
-          cadence: planCadence,
-          amountDollars: planAmountDollars,
-          zeroDollarVoucher: planFundingType === "voucher",
-        }),
-      });
-      const json = await response.json().catch(() => null) as { error?: string; record?: { id?: string } } | null;
+      const persistRate = async (id?: string) => {
+        const response = await fetch("/api/operations/records", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entity: "tuitionPlan",
+            id,
+            centerId,
+            name: planName,
+            ageGroup: planAgeGroup,
+            cadence: planCadence,
+            amountDollars: planAmountDollars,
+            zeroDollarVoucher: planFundingType === "voucher",
+          }),
+        });
+        const json = await response.json().catch(() => null) as { code?: string; error?: string; record?: { id?: string } } | null;
+        return { response, json };
+      };
+      const existingRateId = planEditorId === "new" ? undefined : planEditorId;
+      let { response, json } = await persistRate(existingRateId);
+      const preserveAssignedChildren = response.status === 409
+        && json?.code === "TUITION_PLAN_ASSIGNED_CREATE_NEW"
+        && Boolean(existingRateId);
+      if (preserveAssignedChildren) {
+        ({ response, json } = await persistRate());
+      }
       if (!response.ok) {
         setErrorMessage(json?.error || "Tuition plan could not be saved.");
         return;
       }
       setStatusMessage(
-        planFundingType === "voucher"
+        preserveAssignedChildren
+          ? `New child-specific ${planCadence === "monthly" ? "monthly" : "weekly"} rate created. Previously saved children kept their existing rates.`
+          : planFundingType === "voucher"
           ? `$0.00 no-family-charge rate ${planEditorId === "new" ? "created" : "updated"}. Assign it to the intended child under Recurring.`
           : `${planCadence === "monthly" ? "Monthly" : "Weekly"} tuition rate ${planEditorId === "new" ? "created" : "updated"}.`,
       );

@@ -22,6 +22,8 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(billing, /updateScope: "enrollment_context"/);
   assert.match(billing, /Save child setup/);
   assert.match(billing, /Tuition and ledger amounts were not changed/);
+  assert.match(billing, /json\?\.code === "TUITION_PLAN_ASSIGNED_CREATE_NEW"/);
+  assert.match(billing, /Previously saved children kept their existing rates/);
 
   assert.match(page, /prisma\.classroom\.findMany\(\{[\s\S]*?where: \{ centerId: scopedCenterIds \}/);
   assert.match(page, /classrooms: billingClassroomsByCenter\.get\(center\.id\) \?\? \[\]/);
@@ -33,4 +35,6 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(operations, /enrollmentClassroomValidationError/);
   assert.match(enrollmentStatus, /Choose a classroom before marking this child enrolled\. Billing and active rosters require a classroom assignment\./);
   assert.match(operations, /auditMetadata\.updateScope = "enrollment_context"/);
+  assert.match(operations, /customFields: \{ path: \["tuitionPlanId"\], equals: id \}/);
+  assert.match(operations, /code: "TUITION_PLAN_ASSIGNED_CREATE_NEW"/);
 });

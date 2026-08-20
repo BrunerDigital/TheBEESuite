@@ -46,7 +46,7 @@ import {
   isCurrentlyEnrolledChildRecord,
   isCurrentlyEnrolledStatus,
 } from "@/lib/enrollment-status";
-import { canSaveTuitionPlanAmount, normalizeBillingCadence } from "@/lib/billing-workflows";
+import { canSaveTuitionPlanAmount, normalizeBillingCadence, tuitionPlanRecordChanged } from "@/lib/billing-workflows";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -1961,7 +1961,7 @@ async function POSTHandler(request: NextRequest) {
     result = id ? await prisma.product.update({ where: { id }, data }) : await prisma.product.create({ data });
   } else if (entity === "tuitionPlan") {
     const requestedCenterId = clean(body.centerId);
-    let existingTuitionPlan: { centerId: string | null; cadence: string } | null = null;
+    let existingTuitionPlan: { centerId: string | null; name: string; ageGroup: string; cadence: string; amountCents: number } | null = null;
     if (!requestedCenterId) {
       return NextResponse.json({ ok: false, error: "School is required for every tuition plan." }, { status: 400 });
     }
@@ -1969,7 +1969,10 @@ async function POSTHandler(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "You do not have access to this school's tuition plans." }, { status: 403 });
     }
     if (id) {
-      const existing = await prisma.tuitionPlan.findUnique({ where: { id }, select: { centerId: true, cadence: true } });
+      const existing = await prisma.tuitionPlan.findUnique({
+        where: { id },
+        select: { centerId: true, name: true, ageGroup: true, cadence: true, amountCents: true },
+      });
       if (!existing) return NextResponse.json({ ok: false, error: "Tuition plan not found." }, { status: 404 });
       if (existing.centerId && existing.centerId !== requestedCenterId) {
         return NextResponse.json({ ok: false, error: "Tuition plan belongs to a different school." }, { status: 403 });
@@ -1985,21 +1988,19 @@ async function POSTHandler(request: NextRequest) {
       cadence: requestedTuitionCadence ? normalizeBillingCadence(requestedTuitionCadence) : "weekly",
       amountCents: intValue(body.amountCents || Number(body.amountDollars) * 100),
     };
-    if (id && existingTuitionPlan && normalizeBillingCadence(existingTuitionPlan.cadence) !== data.cadence) {
-      const activeAssignment = await prisma.child.findFirst({
+    if (id && existingTuitionPlan && tuitionPlanRecordChanged(existingTuitionPlan, data)) {
+      const assignedChild = await prisma.child.findFirst({
         where: {
           family: { centerId: requestedCenterId },
-          AND: [
-            { customFields: { path: ["tuitionBillingEnabled"], equals: true } },
-            { customFields: { path: ["tuitionPlanId"], equals: id } },
-          ],
+          customFields: { path: ["tuitionPlanId"], equals: id },
         },
         select: { id: true },
       });
-      if (activeAssignment) {
+      if (assignedChild) {
         return NextResponse.json({
           ok: false,
-          error: "This rate is assigned to an active child. Create a new rate for a different cadence, then review the child's existing invoice coverage before switching assignments.",
+          code: "TUITION_PLAN_ASSIGNED_CREATE_NEW",
+          error: "This rate is already assigned to a child. Create a new rate so previously saved child rates remain unchanged.",
         }, { status: 409 });
       }
     }

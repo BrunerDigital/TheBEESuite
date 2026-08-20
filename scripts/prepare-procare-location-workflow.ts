@@ -508,7 +508,7 @@ function formalWeeklyTuitionCandidates(rows: CsvRow[]) {
       description: field(row, ...FORMAL_TUITION_DESCRIPTION_COLUMNS),
     };
     const existing = byChild.get(childId) ?? [];
-    if (!existing.some((item) => JSON.stringify(item) === JSON.stringify(candidate))) existing.push(candidate);
+    existing.push(candidate);
     byChild.set(childId, existing);
   }
   return byChild;
@@ -1512,40 +1512,54 @@ export async function prepareProcareLocationWorkflow(input: {
     });
   }
   for (const staff of staffReview) {
-    for (const [destination, sourceColumn, value] of [
-      ["StaffProfile.externalId", "Employee ID", staff["employee id"]],
-      ["StaffProfile.fullName", "Full Name", staff["full name"]],
-      ["StaffProfile.employmentStatus", "Employment Status", staff["employment status"]],
-      ["StaffProfile.classroom/work area externalId", "Work Area ID", staff["work area id"]],
-      ["StaffProfile.classroom/work area name", "Primary Work Area / Work Area Name", staff["work area"]],
-    ]) requiredCell({
+    const employeeId = staff["employee id"];
+    const staffEvidenceRows = employeeSources.flatMap((source) => source.rows.flatMap((row, index) => (
+      field(row, "Employee ID") === employeeId ? [{ source: source.filename, row: String(index + 2), values: row }] : []
+    )));
+    const staffEvidence = (...columns: string[]) => {
+      const match = staffEvidenceRows.find((item) => field(item.values, ...columns));
+      return { source: match?.source ?? "", row: match?.row ?? "", value: field(match?.values, ...columns) };
+    };
+    for (const [destination, sourceColumn, value, evidenceColumns] of [
+      ["StaffProfile.externalId", "Employee ID", employeeId, ["Employee ID"]],
+      ["StaffProfile.fullName", "Full Name", staff["full name"], ["Full Name"]],
+      ["StaffProfile.employmentStatus", "Employment Status", staff["employment status"], ["Employment Status"]],
+      ["StaffProfile.classroom/work area externalId", "Work Area ID", staff["work area id"], ["Work Area ID"]],
+      ["StaffProfile.classroom/work area name", "Primary Work Area / Work Area Name", staff["work area"], ["Primary Work Area", "Work Area Name"]],
+    ] as Array<[string, string, string, string[]]>) {
+      const evidence = staffEvidence(...evidenceColumns);
+      requiredCell({
       scope: "staff_source_evidence",
       entity: "StaffProfile",
-      entityId: staff["employee id"],
+      entityId: employeeId,
       destination,
-      source: staff["source reports"],
+      source: evidence.source,
       sourceColumn,
-      sourceRows: `Employee ID=${staff["employee id"]}`,
+      sourceRows: evidence.row,
       value,
-      rawValue: value,
+      rawValue: evidence.value,
       note: "Staff identity/access creation remains a separate approval gate.",
     });
-    for (const [destination, sourceColumn, value] of [
-      ["StaffProfile.email", "Email", staff.email],
-      ["StaffProfile.phone", "Phone 1 / Phone 2 / Phone 3", staff.phone],
-    ]) requiredCell({
+    }
+    for (const [destination, sourceColumn, value, evidenceColumns] of [
+      ["StaffProfile.email", "Email", staff.email, ["Email"]],
+      ["StaffProfile.phone", "Phone 1 / Phone 2 / Phone 3", staff.phone, ["Phone 1", "Phone 2", "Phone 3"]],
+    ] as Array<[string, string, string, string[]]>) {
+      const evidence = staffEvidence(...evidenceColumns);
+      requiredCell({
       scope: "staff_activation",
       entity: "StaffProfile",
-      entityId: staff["employee id"],
+      entityId: employeeId,
       destination,
-      source: staff["source reports"],
+      source: evidence.source,
       sourceColumn,
-      sourceRows: `Employee ID=${staff["employee id"]}`,
+      sourceRows: evidence.row,
       value,
-      rawValue: value,
+      rawValue: evidence.value,
       required: false,
       note: "Required before staff login/invitation when that activation is approved, not for roster import.",
     });
+    }
   }
   const missingSourceFieldCells = requiredFieldReconciliation.filter((row) => row["Reconciliation Status"] === "source_cell_not_supplied");
   const gates: Record<string, Gate> = {

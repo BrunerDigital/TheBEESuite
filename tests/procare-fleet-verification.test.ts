@@ -50,6 +50,24 @@ test("fleet source coverage requires balance and tuition evidence for every appl
   assert.equal(tuition?.status, "missing");
 });
 
+test("fleet source coverage does not require current tuition terms for withdrawn children", () => {
+  const withdrawnChild = {
+    ...completeRecord,
+    "account id": "account-2",
+    "child id": "child-2",
+    "enrollment status": "Withdrawn",
+    "weekly rate": "",
+    cadence: "",
+    "effective date": "",
+  };
+  const coverage = assessProcareFleetSourceCoverage([completeRecord, withdrawnChild]);
+  const tuition = coverage.domains.find((domain) => domain.key === "tuition");
+
+  assert.equal(tuition?.status, "present");
+  assert.equal(tuition?.applicableRecordCount, 1);
+  assert.equal(tuition?.incompleteRecordCount, 0);
+});
+
 test("fleet verification advances only a complete matched batch to director review", () => {
   const sourceCoverage = assessProcareFleetSourceCoverage([completeRecord], { sourceInventory: [] });
   const reconciliation = buildProcareReconciliationReport({

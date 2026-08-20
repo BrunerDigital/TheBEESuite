@@ -153,6 +153,8 @@ type ImportPreview = {
       status: "present" | "missing";
       evidence: string[];
       missingEvidence: string[];
+      applicableRecordCount: number;
+      incompleteRecordCount: number;
     }>;
     ignoredSources: Array<{ sourceName: string; note: string }>;
     evidenceOnlySources: Array<{ sourceName: string; note: string }>;
@@ -498,7 +500,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     ? duplicateSourceRowsRemovedDetails.reduce((total, [, count]) => total + count, 0)
     : 0;
   const importCommitted = progressPhase === "complete" && Boolean(lastBatchId);
-  const needsSourceInventoryConfirmation = Boolean(preview?.datasetCoverage);
+  const needsSourceInventoryConfirmation = Boolean(preview);
   const sourceInventoryReady = !needsSourceInventoryConfirmation || sourceInventoryConfirmed || importCommitted;
   const hasReviewedImport = hasCompletedPreview || importCommitted;
   const commitBlockedReason = noCentersAvailable
@@ -1280,6 +1282,17 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               </span>
             </label>
           </div>
+        ) : null}
+        {preview && !preview.datasetCoverage ? (
+          <label className="flex min-h-11 items-start gap-2 rounded-lg border bg-muted/20 p-3 text-xs text-foreground">
+            <input
+              type="checkbox"
+              checked={sourceInventoryConfirmed}
+              onChange={(event) => setSourceInventoryConfirmed(event.target.checked)}
+              className="mt-0.5 size-5 shrink-0 accent-primary"
+            />
+            <span>I confirm this reviewed standalone CSV is the complete intended source for this school import.</span>
+          </label>
         ) : null}
         {preview?.unresolved ? (
           <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">

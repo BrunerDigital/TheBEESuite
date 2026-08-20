@@ -1,4 +1,5 @@
 import type { ReconciliationMeasure } from "@/lib/procare-migration-controls";
+import { normalizeProcareEnrollmentStatusWithEndDate } from "@/lib/procare-import-fields";
 
 type SourceRecord = Record<string, string>;
 
@@ -87,7 +88,7 @@ const DOMAIN_DEFINITIONS = [
     key: "tuition",
     label: "Tuition contracts, cadence, and effective dates",
     required: true,
-    applicableTo: "child",
+    applicableTo: "enrolled_child",
     groups: [
       ["weekly rate", "tuition rate", "contract amount", "charge amount"],
       ["frequency", "cadence", "billing period", "charge frequency"],
@@ -156,14 +157,20 @@ function firstValue(record: NormalizedSourceRecord, aliases: readonly string[]) 
   return "";
 }
 
-function applicableGroups(records: NormalizedSourceRecord[], kind: "account" | "child" | "staff") {
-  const contextAliases = kind === "account" ? ACCOUNT_CONTEXT_ALIASES : kind === "child" ? CHILD_CONTEXT_ALIASES : STAFF_CONTEXT_ALIASES;
-  const identityAliases = kind === "account" ? ACCOUNT_ID_ALIASES : kind === "child" ? CHILD_ID_ALIASES : STAFF_ID_ALIASES;
+function applicableGroups(records: NormalizedSourceRecord[], kind: "account" | "child" | "enrolled_child" | "staff") {
+  const entityKind = kind === "enrolled_child" ? "child" : kind;
+  const contextAliases = entityKind === "account" ? ACCOUNT_CONTEXT_ALIASES : entityKind === "child" ? CHILD_CONTEXT_ALIASES : STAFF_CONTEXT_ALIASES;
+  const identityAliases = entityKind === "account" ? ACCOUNT_ID_ALIASES : entityKind === "child" ? CHILD_ID_ALIASES : STAFF_ID_ALIASES;
   const groups = new Map<string, NormalizedSourceRecord[]>();
   records.forEach((record, index) => {
     if (!populated(record, contextAliases)) return;
+    if (kind === "enrolled_child") {
+      const status = firstValue(record, ["enrollment status", "child status", "student status", "status"]);
+      const endDate = firstValue(record, ["end date", "enrollment end date", "withdrawal date", "termination date"]);
+      if (normalizeProcareEnrollmentStatusWithEndDate(status, endDate) !== "enrolled") return;
+    }
     const identity = firstValue(record, identityAliases);
-    const key = identity ? `${kind}:${identity.toLowerCase()}` : `${kind}:missing:${index}`;
+    const key = identity ? `${entityKind}:${identity.toLowerCase()}` : `${entityKind}:missing:${index}`;
     groups.set(key, [...(groups.get(key) ?? []), record]);
   });
   return [...groups.values()];
@@ -192,7 +199,8 @@ export function assessProcareFleetSourceCoverage(
       !recordsForEntity.some((record) => populated(record, group))
     )));
     if (incomplete.length) {
-      missingEvidence.push(`${incomplete.length} of ${applicable.length} applicable ${definition.applicableTo} record(s) lack complete evidence`);
+      const recordLabel = definition.applicableTo === "enrolled_child" ? "enrolled child" : definition.applicableTo;
+      missingEvidence.push(`${incomplete.length} of ${applicable.length} applicable ${recordLabel} record(s) lack complete evidence`);
     }
     return {
       key: definition.key,

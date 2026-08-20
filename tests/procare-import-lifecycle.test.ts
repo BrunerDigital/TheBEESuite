@@ -169,6 +169,17 @@ test("relationship reconciliation counts all ProCare-owned external-ID rows acro
   assert.match(reconciliation, /prisma\.authorizedPickup\.count\(\{\s*where:\s*\{\s*OR:\s*procareRelationshipRowsAcrossSourceFamilies/);
 });
 
+test("ProCare exception exclusions are single-row and audited to the mapped school", () => {
+  const patchHandler = section(route, "async function PATCHHandler", 'export const GET = withApiLogging');
+
+  assert.match(patchHandler, /rowNumbers\.length !== 1/);
+  assert.match(patchHandler, /row\.status === "needs_resolution"/);
+  assert.match(patchHandler, /selectedRawData\.mappedCenterId/);
+  assert.match(patchHandler, /centerId: selectedCenterId/);
+  assert.match(patchHandler, /tx\.auditLog\.create/);
+  assert.match(patchHandler, /disposed !== 1/);
+});
+
 test("staff creation and its audit record commit in the same transaction", () => {
   const postHandler = section(route, "async function POSTHandler", "async function PATCHHandler");
   const staffTransaction = section(postHandler, "const staffWrite = await prisma.$transaction", "if (existingStaff) updatedStaff");

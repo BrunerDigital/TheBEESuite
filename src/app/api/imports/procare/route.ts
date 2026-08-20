@@ -2091,10 +2091,12 @@ async function POSTHandler(request: NextRequest) {
     });
   }
 
-  if (importPayload.datasetCoverage && !sourceInventoryConfirmed) {
+  if (!sourceInventoryConfirmed) {
     return NextResponse.json({
       ok: false,
-      error: "Confirm the detected source inventory before importing.",
+      error: importPayload.datasetCoverage
+        ? "Confirm the detected source inventory before importing."
+        : "Confirm the reviewed standalone source before importing.",
     }, { status: 409 });
   }
 
@@ -3410,7 +3412,7 @@ async function PATCHHandler(request: NextRequest) {
   } | null;
   const batch = body?.batchId ? await prisma.procareImportBatch.findUnique({
     where: { id: body.batchId },
-    select: { id: true, centerId: true, summary: true, rows: { select: { rawData: true } } },
+    select: { id: true, centerId: true, summary: true, rows: { select: { rowNumber: true, status: true, rawData: true } } },
   }) : null;
   if (!batch || importBatchCenterIds(batch).some((centerId) => !canAccessCenter(user, centerId))) return NextResponse.json({ ok: false, error: "Import batch not found." }, { status: 404 });
   const rowNumbers = [...new Set((body?.rowNumbers ?? []).filter((value) => Number.isInteger(value) && value > 1))];
@@ -3418,31 +3420,49 @@ async function PATCHHandler(request: NextRequest) {
   const resolutionReason = clean(body?.resolutionReason);
   const resolutionEvidenceReference = clean(body?.resolutionEvidenceReference);
   if (body?.action !== "dispose" || !rowNumbers.length) return NextResponse.json({ ok: false, error: "Choose unresolved rows to exclude." }, { status: 400 });
+  if (rowNumbers.length !== 1) return NextResponse.json({ ok: false, error: "Review and exclude one unresolved source row at a time." }, { status: 400 });
   if (!['duplicate_source_row', 'historical_out_of_scope', 'source_correction_pending', 'approved_exclusion'].includes(resolutionCategory)) {
     return NextResponse.json({ ok: false, error: "Choose an approved exception category." }, { status: 400 });
   }
   if (resolutionReason.length < 12) return NextResponse.json({ ok: false, error: "Enter a specific exception reason of at least 12 characters." }, { status: 400 });
   if (resolutionEvidenceReference.length < 6) return NextResponse.json({ ok: false, error: "Enter the secure evidence or correction reference for this exception." }, { status: 400 });
-  const result = await prisma.procareImportRow.updateMany({
-    where: { batchId: batch.id, rowNumber: { in: rowNumbers }, status: "needs_resolution" },
-    data: {
-      status: "disposed",
-      message: `Excluded after reviewed exception: ${resolutionReason}`,
-      resolutionCategory,
-      resolutionReason,
-      resolutionEvidenceReference,
-      resolvedBy: user.email,
-      resolvedAt: new Date(),
-    },
+  const selectedRow = batch.rows.find((row) => row.rowNumber === rowNumbers[0] && row.status === "needs_resolution");
+  if (!selectedRow) return NextResponse.json({ ok: false, error: "This source row is no longer unresolved." }, { status: 409 });
+  const selectedRawData = selectedRow.rawData && typeof selectedRow.rawData === "object" && !Array.isArray(selectedRow.rawData)
+    ? selectedRow.rawData as Record<string, Prisma.JsonValue>
+    : {};
+  const selectedCenterId = typeof selectedRawData.mappedCenterId === "string" && selectedRawData.mappedCenterId
+    ? selectedRawData.mappedCenterId
+    : batch.centerId;
+  const disposed = await prisma.$transaction(async (tx) => {
+    const result = await tx.procareImportRow.updateMany({
+      where: { batchId: batch.id, rowNumber: rowNumbers[0], status: "needs_resolution" },
+      data: {
+        status: "disposed",
+        message: `Excluded after reviewed exception: ${resolutionReason}`,
+        resolutionCategory,
+        resolutionReason,
+        resolutionEvidenceReference,
+        resolvedBy: user.email,
+        resolvedAt: new Date(),
+      },
+    });
+    if (result.count !== 1) return 0;
+    await tx.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        centerId: selectedCenterId,
+        userId: user.id,
+        action: "procare.import.rows_disposed",
+        resource: "ProcareImportBatch",
+        resourceId: batch.id,
+        metadata: { rowNumber: rowNumbers[0], count: result.count, resolutionCategory, resolutionReason, resolutionEvidenceReference },
+      },
+    });
+    return result.count;
   });
-  await writeAuditLog(user, {
-    centerId: batch.centerId,
-    action: "procare.import.rows_disposed",
-    resource: "ProcareImportBatch",
-    resourceId: batch.id,
-    metadata: { rowNumbers, count: result.count, resolutionCategory, resolutionReason, resolutionEvidenceReference },
-  });
-  return NextResponse.json({ ok: true, disposed: result.count });
+  if (disposed !== 1) return NextResponse.json({ ok: false, error: "This source row changed before the exclusion was saved." }, { status: 409 });
+  return NextResponse.json({ ok: true, disposed });
 }
 
 export const GET = withApiLogging("GET", GETHandler);

@@ -127,7 +127,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
       return;
     }
     const externalReference = window.prompt("Agency decision or claim reference");
-    if (externalReference?.trim()) void post("recordDecision", { claimId: claim.id, decision: "approved", approvedDollars: approvedAmount, externalReference });
+    if (externalReference?.trim()) void post("recordDecision", { claimId: claim.id, decision: "approved", approvedDollars, externalReference });
   }
 
   function exportClaims() {

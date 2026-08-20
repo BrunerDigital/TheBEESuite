@@ -79,6 +79,12 @@ test("agency readiness compares authorization expiration by UTC calendar day", (
   assert.match(route, /authorization\.coverageEnd < expirationCutoff/);
 });
 
+test("agency approvals preserve dollar units when posted", () => {
+  const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
+  assert.match(workspace, /decision: "approved", approvedDollars, externalReference/);
+  assert.doesNotMatch(workspace, /approvedDollars: approvedAmount/);
+});
+
 test("remittance status uses approved amount when available", () => {
   assert.equal(nextRemittanceStatus({ claimedCents: 50000, approvedCents: 45000, paidCents: 20000 }), "partially_paid");
   assert.equal(nextRemittanceStatus({ claimedCents: 50000, approvedCents: 45000, paidCents: 45000 }), "paid");

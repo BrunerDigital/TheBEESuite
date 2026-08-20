@@ -81,6 +81,11 @@ export type AutopayRunSummary = {
   results: AutopayRunInvoiceResult[];
 };
 
+export type AutopayProcessingRunState = {
+  availableCreditByAccountId: Map<string, number>;
+  blockedBillingAccountIds: Set<string>;
+};
+
 export type ProcessAutopayInput = {
   dryRun?: boolean;
   asOf?: Date;
@@ -95,6 +100,7 @@ export type ProcessAutopayInput = {
   collectionMode?: "autopay" | "stored_method";
   cardProcessingRecoveryAccepted?: boolean;
   requestedByUserId?: string | null;
+  runState?: AutopayProcessingRunState;
 };
 
 type TenantStripeConfig = {
@@ -189,7 +195,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
 
   const invoiceCandidates = await prisma.invoice.findMany({
     where: invoiceWhere,
-    orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+    orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
     take: limit + 1,
     ...(input.cursorInvoiceId && !input.invoiceId && !input.invoiceIds?.length
       ? { cursor: { id: input.cursorInvoiceId }, skip: 1 }
@@ -298,7 +304,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
   const openInvoiceTotalByAccountId = new Map(
     openInvoiceTotals.map((row) => [row.billingAccountId, row._sum.totalCents ?? 0]),
   );
-  const availableCreditByAccountId = new Map<string, number>();
+  const availableCreditByAccountId = input.runState?.availableCreditByAccountId ?? new Map<string, number>();
   for (const invoice of invoices) {
     if (availableCreditByAccountId.has(invoice.billingAccountId)) continue;
     availableCreditByAccountId.set(invoice.billingAccountId, availableAccountCreditCents({
@@ -316,7 +322,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     schoolPaysStripeFeesDirectly: boolean;
   }>();
   const results: AutopayRunInvoiceResult[] = [];
-  const blockedBillingAccountIds = new Set<string>();
+  const blockedBillingAccountIds = input.runState?.blockedBillingAccountIds ?? new Set<string>();
 
   for (const invoice of invoices) {
     const family = invoice.billingAccount.family;

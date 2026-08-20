@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import type {
+  AutopayProcessingRunState,
   AutopayRunInvoiceResult,
   AutopayRunSummary,
   ProcessAutopayInput,
@@ -65,11 +67,16 @@ test("scheduled autopay drains later pages after an entirely blocked first page"
     page({ rows: [result("processing-1", "processing", 8_000)], hasMore: false, nextCursor: null }),
   ];
   const cursors: Array<string | null | undefined> = [];
+  const runStates: AutopayProcessingRunState[] = [];
 
   const summary = await processAutopayQueue({
     input: { dryRun: false, asOf: new Date("2026-08-20T15:30:00.000Z"), limit: 50 },
     processPage: async (input: ProcessAutopayInput) => {
       cursors.push(input.cursorInvoiceId);
+      assert.ok(input.runState);
+      runStates.push(input.runState);
+      if (input.cursorInvoiceId === null) input.runState.blockedBillingAccountIds.add("account-with-failed-invoice");
+      else assert.equal(input.runState.blockedBillingAccountIds.has("account-with-failed-invoice"), true);
       const next = pages.shift();
       assert.ok(next);
       return next;
@@ -77,6 +84,7 @@ test("scheduled autopay drains later pages after an entirely blocked first page"
   });
 
   assert.deepEqual(cursors, [null, "blocked-2", "paid-1"]);
+  assert.equal(new Set(runStates).size, 1);
   assert.equal(summary.pagesProcessed, 3);
   assert.equal(summary.queueDrained, true);
   assert.equal(summary.hasMore, false);
@@ -99,15 +107,41 @@ test("scheduled autopay fails loudly when a page cannot advance its cursor", asy
   );
 });
 
-test("scheduled autopay reports an undrained queue when the safety page cap is reached", async () => {
-  const summary = await processAutopayQueue({
+test("scheduled autopay preserves dry-run credit allocation across queue pages", async () => {
+  const observedCredit: number[] = [];
+  let pageNumber = 0;
+
+  await processAutopayQueue({
     input: { dryRun: true, limit: 50 },
-    maxPages: 1,
-    processPage: async () => page({ rows: [result("blocked-1", "skipped")], hasMore: true, nextCursor: "blocked-1" }),
+    processPage: async (input) => {
+      assert.ok(input.runState);
+      const availableCredit = input.runState.availableCreditByAccountId.get("account-1") ?? 10_000;
+      observedCredit.push(availableCredit);
+      input.runState.availableCreditByAccountId.set("account-1", availableCredit - 6_000);
+      pageNumber += 1;
+      return page({
+        rows: [result(`invoice-${pageNumber}`, "would_charge", 0)],
+        hasMore: pageNumber === 1,
+        nextCursor: pageNumber === 1 ? "invoice-1" : null,
+      });
+    },
   });
 
-  assert.equal(summary.pagesProcessed, 1);
-  assert.equal(summary.queueDrained, false);
-  assert.equal(summary.hasMore, true);
-  assert.equal(summary.nextCursor, "blocked-1");
+  assert.deepEqual(observedCredit, [10_000, 4_000]);
+});
+
+test("scheduled autopay fails loudly when the safety page cap is reached", async () => {
+  await assert.rejects(
+    processAutopayQueue({
+      input: { dryRun: true, limit: 50 },
+      maxPages: 1,
+      processPage: async () => page({ rows: [result("blocked-1", "skipped")], hasMore: true, nextCursor: "blocked-1" }),
+    }),
+    /safety limit/,
+  );
+});
+
+test("scheduled autopay uses a stable total invoice order for cursor pagination", () => {
+  const processing = readFileSync("src/lib/autopay-processing.ts", "utf8");
+  assert.match(processing, /orderBy: \[\{ dueDate: "asc" \}, \{ createdAt: "asc" \}, \{ id: "asc" \}\]/);
 });

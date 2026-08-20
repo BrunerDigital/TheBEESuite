@@ -1,4 +1,5 @@
 import type {
+  AutopayProcessingRunState,
   AutopayRunSummary,
   ProcessAutopayInput,
 } from "@/lib/autopay-processing";
@@ -26,6 +27,10 @@ export async function processAutopayQueue({
   const pageLimit = Math.max(1, Math.trunc(maxPages));
   const results: AutopayRunSummary["results"] = [];
   const seenCursors = new Set<string>();
+  const runState: AutopayProcessingRunState = input.runState ?? {
+    availableCreditByAccountId: new Map<string, number>(),
+    blockedBillingAccountIds: new Set<string>(),
+  };
   let cursorInvoiceId = input.cursorInvoiceId || null;
   let pagesProcessed = 0;
   let scanned = 0;
@@ -44,6 +49,7 @@ export async function processAutopayQueue({
     const page = await processPage({
       ...input,
       cursorInvoiceId,
+      runState,
     });
     pagesProcessed += 1;
     asOf = page.asOf;
@@ -67,6 +73,10 @@ export async function processAutopayQueue({
     cursorInvoiceId = nextCursor;
   }
 
+  if (hasMore) {
+    throw new Error(`Autopay queue still has due invoices after the ${pageLimit}-page safety limit.`);
+  }
+
   return {
     ok: true,
     dryRun: input.dryRun !== false,
@@ -83,6 +93,6 @@ export async function processAutopayQueue({
     nextCursor,
     results,
     pagesProcessed,
-    queueDrained: !hasMore,
+    queueDrained: true,
   };
 }

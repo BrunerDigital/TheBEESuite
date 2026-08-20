@@ -120,8 +120,14 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
 
   function recordClaimApproval(claim: Claim) {
     const approvedDollars = window.prompt("Agency-approved amount", String(claim.claimedCents / 100));
-    const externalReference = approvedDollars ? window.prompt("Agency decision or claim reference") : null;
-    if (approvedDollars && externalReference?.trim()) void post("recordDecision", { claimId: claim.id, decision: "approved", approvedDollars, externalReference });
+    if (approvedDollars === null) return;
+    const approvedAmount = Number.parseFloat(approvedDollars.replace(/[$,]/g, ""));
+    if (!Number.isFinite(approvedAmount) || approvedAmount <= 0) {
+      setError("Approved amount must be greater than zero.");
+      return;
+    }
+    const externalReference = window.prompt("Agency decision or claim reference");
+    if (externalReference?.trim()) void post("recordDecision", { claimId: claim.id, decision: "approved", approvedDollars: approvedAmount, externalReference });
   }
 
   function exportClaims() {

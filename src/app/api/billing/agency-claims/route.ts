@@ -107,14 +107,15 @@ async function getHandler(request: NextRequest) {
     const setupBlockers = agencyProgramSetupBlockers(program);
     return { ...program, status: setupBlockers.length ? "setup_required" : "active", setupBlockers };
   });
-  const today = new Date();
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const expirationCutoff = new Date(today);
-  expirationCutoff.setUTCDate(expirationCutoff.getUTCDate() + 30);
+  expirationCutoff.setUTCDate(expirationCutoff.getUTCDate() + 31);
   const readiness = {
     readyPrograms: programReadiness.filter((program) => program.status === "active").length,
     setupRequiredPrograms: programReadiness.filter((program) => program.status !== "active").length,
     expiredAuthorizations: authorizations.filter((authorization) => authorization.status === "active" && authorization.coverageEnd < today).length,
-    expiringAuthorizations: authorizations.filter((authorization) => authorization.status === "active" && authorization.coverageEnd >= today && authorization.coverageEnd <= expirationCutoff).length,
+    expiringAuthorizations: authorizations.filter((authorization) => authorization.status === "active" && authorization.coverageEnd >= today && authorization.coverageEnd < expirationCutoff).length,
   };
 
   return NextResponse.json({ ok: true, programs: programReadiness, authorizations, claims, families, summary: { ...summary, ...readiness } });
@@ -275,7 +276,8 @@ async function postHandler(request: NextRequest) {
   if (action === "recordDecision") {
     const decision = clean(body.decision);
     if (decision !== "approved" && decision !== "denied") return NextResponse.json({ ok: false, error: "Decision must be approved or denied." }, { status: 400 });
-    const approvedCents = decision === "approved" ? cents(body.approvedDollars) || claim.claimedCents : 0;
+    const approvedCents = decision === "approved" ? cents(body.approvedDollars) : 0;
+    if (decision === "approved" && approvedCents <= 0) return NextResponse.json({ ok: false, error: "Approved amount must be greater than zero." }, { status: 400 });
     if (approvedCents > claim.claimedCents) return NextResponse.json({ ok: false, error: "Approved amount cannot exceed the claim." }, { status: 400 });
     const externalReference = clean(body.externalReference) || claim.externalReference;
     if (!externalReference) return NextResponse.json({ ok: false, error: "Enter the agency decision or claim reference." }, { status: 400 });

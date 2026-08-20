@@ -68,7 +68,15 @@ test("agency mutations require evidence and external references", () => {
   assert.match(route, /Add an evidence note or linked document before marking this item verified/);
   assert.match(route, /Enter the confirmation reference returned by the external agency channel/);
   assert.match(route, /Enter the agency decision or claim reference/);
+  assert.match(route, /approvedCents <= 0/);
   assert.match(route, /Record an agency approval before posting a remittance/);
+});
+
+test("agency readiness compares authorization expiration by UTC calendar day", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  assert.match(route, /Date\.UTC\(now\.getUTCFullYear\(\), now\.getUTCMonth\(\), now\.getUTCDate\(\)\)/);
+  assert.match(route, /expirationCutoff\.getUTCDate\(\) \+ 31/);
+  assert.match(route, /authorization\.coverageEnd < expirationCutoff/);
 });
 
 test("remittance status uses approved amount when available", () => {

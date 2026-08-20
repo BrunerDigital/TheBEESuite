@@ -23,7 +23,8 @@ import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
 import { defaultRecurringBillingPeriod, normalizeBillingCadence, WEEKLY_TUITION_AUTOBILL_CADENCE, WEEKLY_TUITION_AUTOBILL_DAY } from "@/lib/billing-workflows";
 import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
 import { activeClassroomWhere } from "@/lib/classroom-status";
-import { currentlyEnrolledChildWhere, enrollmentStatusCustomFields } from "@/lib/enrollment-status";
+import { closeEnrollmentAndDisableTuitionSql } from "@/lib/enrollment-closeout";
+import { currentlyEnrolledChildWhere, isClosedEnrollmentStatus } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { readStaffClockState } from "@/lib/staff-kiosk";
@@ -496,19 +497,25 @@ async function applyAiProfileChange(
       });
       if (!classroom) throw new Error("Classroom not found in the selected school.");
     }
-    await prisma.child.update({
+    const enrollmentUpdate = prisma.child.update({
       where: { id: child.id },
-      data: {
-        enrollmentStatus: change.value.enrollmentStatus,
-        classroomId: change.value.classroomId,
-        customFields: enrollmentStatusCustomFields({
-          customFields: child.customFields,
-          enrollmentStatus: change.value.enrollmentStatus,
-          updatedAt: new Date(),
-          updatedBy: user.email,
-        }) as Prisma.InputJsonObject,
-      },
+      data: { enrollmentStatus: change.value.enrollmentStatus, classroomId: change.value.classroomId },
     });
+    if (isClosedEnrollmentStatus(change.value.enrollmentStatus)) {
+      const updatedAt = new Date();
+      await prisma.$transaction([
+        enrollmentUpdate,
+        prisma.$executeRaw(closeEnrollmentAndDisableTuitionSql({
+          childIds: [child.id],
+          enrollmentStatus: change.value.enrollmentStatus,
+          classroomId: null,
+          updatedAt,
+          updatedBy: user.email,
+        })),
+      ]);
+    } else {
+      await enrollmentUpdate;
+    }
   } else if (name === "update_family_profile") {
     const current = await prisma.family.findFirst({ where: { id: recordId, centerId: selectedCenterId } });
     if (!current) throw new Error("Family not found in the selected school.");

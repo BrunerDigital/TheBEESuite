@@ -38,9 +38,9 @@ import {
 } from "@/lib/parent-portal-logins";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
 import { activeClassroomWhere } from "@/lib/classroom-status";
+import { closeEnrollmentAndDisableTuitionSql } from "@/lib/enrollment-closeout";
 import { invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 import {
-  enrollmentStatusCustomFields,
   enrollmentClassroomValidationError,
   isClosedEnrollmentStatus,
   isCurrentlyEnrolledChildRecord,
@@ -345,7 +345,6 @@ async function POSTHandler(request: NextRequest) {
         fullName: true,
         enrollmentStatus: true,
         classroomId: true,
-        customFields: true,
         family: { select: { id: true, centerId: true } },
       },
     });
@@ -393,20 +392,13 @@ async function POSTHandler(request: NextRequest) {
       });
       updatedCount = updated.count;
     } else {
-      await prisma.$transaction(children.map((child) => prisma.child.update({
-        where: { id: child.id },
-        data: {
-          enrollmentStatus: change.value.enrollmentStatus,
-          classroomId: change.value.classroomId,
-          customFields: enrollmentStatusCustomFields({
-            customFields: child.customFields,
-            enrollmentStatus: change.value.enrollmentStatus,
-            updatedAt: statusUpdatedAt,
-            updatedBy: user.email,
-          }) as Prisma.InputJsonObject,
-        },
-      })));
-      updatedCount = children.length;
+      updatedCount = await prisma.$executeRaw(closeEnrollmentAndDisableTuitionSql({
+        childIds: change.value.childIds,
+        enrollmentStatus: change.value.enrollmentStatus,
+        classroomId: change.value.classroomId,
+        updatedAt: statusUpdatedAt,
+        updatedBy: user.email,
+      }));
     }
     await Promise.all(centerIds.map((selectedCenterId) => writeAuditLog(user, {
       centerId: selectedCenterId,
@@ -1007,12 +999,7 @@ async function POSTHandler(request: NextRequest) {
           ? existingCustomFields as Prisma.InputJsonObject
           : undefined;
       const enrollmentStatus = clean(body.enrollmentStatus) || clean(body.status) || "enrolled";
-      const customFields = enrollmentStatusCustomFields({
-        customFields: baseCustomFields,
-        enrollmentStatus,
-        updatedAt: new Date(),
-        updatedBy: user.email,
-      }) as Prisma.InputJsonObject;
+      const customFields = baseCustomFields;
       const classroomError = enrollmentClassroomValidationError({ enrollmentStatus, classroomId });
       if (classroomError) return NextResponse.json({ ok: false, error: classroomError }, { status: 400 });
       const data = {
@@ -1034,7 +1021,21 @@ async function POSTHandler(request: NextRequest) {
         customFields,
       };
       if (!data.fullName) return NextResponse.json({ ok: false, error: "Child name is required." }, { status: 400 });
-      result = id ? await prisma.child.update({ where: { id }, data }) : await prisma.child.create({ data });
+      if (id && isClosedEnrollmentStatus(enrollmentStatus)) {
+        const updatedAt = new Date();
+        [result] = await prisma.$transaction([
+          prisma.child.update({ where: { id }, data }),
+          prisma.$executeRaw(closeEnrollmentAndDisableTuitionSql({
+            childIds: [id],
+            enrollmentStatus,
+            classroomId: null,
+            updatedAt,
+            updatedBy: user.email,
+          })),
+        ]);
+      } else {
+        result = id ? await prisma.child.update({ where: { id }, data }) : await prisma.child.create({ data });
+      }
       const resultId = resultRecordId(result);
       if (
         existingChild

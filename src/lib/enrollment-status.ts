@@ -66,29 +66,6 @@ export function isClosedEnrollmentStatus(value: string | null | undefined) {
   return closedEnrollmentStatusSet.has(normalizedEnrollmentStatus(value));
 }
 
-function jsonRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? { ...(value as Record<string, unknown>) }
-    : {};
-}
-
-export function enrollmentStatusCustomFields(input: {
-  customFields: unknown;
-  enrollmentStatus: string | null | undefined;
-  updatedAt: Date;
-  updatedBy: string;
-}) {
-  const fields = jsonRecord(input.customFields);
-  if (!isClosedEnrollmentStatus(input.enrollmentStatus)) return fields;
-  return {
-    ...fields,
-    tuitionBillingEnabled: false,
-    tuitionBillingUpdatedAt: input.updatedAt.toISOString(),
-    tuitionBillingUpdatedBy: input.updatedBy,
-    tuitionBillingDisabledReason: "enrollment_closed",
-  };
-}
-
 export function enrollmentLifecycleCategory(value: string | null | undefined): EnrollmentLifecycleCategory {
   const normalized = normalizedEnrollmentStatus(value);
   if (currentlyEnrolledStatusSet.has(normalized)) return "current";

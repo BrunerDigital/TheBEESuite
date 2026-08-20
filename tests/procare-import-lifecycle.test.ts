@@ -157,6 +157,8 @@ test("each family row commits atomically and complete relationship reports remov
 
 test("relationship reconciliation counts all ProCare-owned external-ID rows across source families", () => {
   const reconciliation = section(route, 'if (reportType === "reconciliation" || reportType === "fleet-verification")', "const exportPayload");
+  assert.match(reconciliation, /Fleet verification reports are school-specific/);
+  assert.match(reconciliation, /touchedCenterIds\.length !== 1/);
 
   assert.match(reconciliation, /procareRelationshipRowsAcrossSourceFamilies/);
   assert.match(reconciliation, /family:\s*\{\s*centerId,\s*sourceSystem:\s*["']procare["'],\s*externalId\s*\}/);

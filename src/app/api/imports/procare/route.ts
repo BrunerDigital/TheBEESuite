@@ -1620,6 +1620,14 @@ async function GETHandler(request: NextRequest) {
   }
 
   if (reportType === "reconciliation" || reportType === "fleet-verification") {
+    const touchedCenterIds = importBatchCenterIds(batch);
+    if (reportType === "fleet-verification" && touchedCenterIds.length !== 1) {
+      return NextResponse.json({
+        ok: false,
+        error: "Fleet verification reports are school-specific. Select or import one school at a time before generating this report.",
+        centerIds: touchedCenterIds,
+      }, { status: 409, headers: { "Cache-Control": "no-store" } });
+    }
     const importedRecords = batch.rows
       .filter((row) => row.status === "imported")
       .map((row) => {

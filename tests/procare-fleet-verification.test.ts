@@ -31,6 +31,25 @@ test("fleet source coverage fails closed when a required school dataset is missi
   assert.equal(balances?.status, "missing");
 });
 
+test("fleet source coverage requires balance and tuition evidence for every applicable account and child", () => {
+  const incompleteSecondChild = {
+    ...completeRecord,
+    "account id": "account-2",
+    "child id": "child-2",
+    balance: "",
+    "weekly rate": "",
+  };
+  const coverage = assessProcareFleetSourceCoverage([completeRecord, incompleteSecondChild]);
+  const balances = coverage.domains.find((domain) => domain.key === "opening_balances");
+  const tuition = coverage.domains.find((domain) => domain.key === "tuition");
+
+  assert.equal(coverage.requiredDomainsComplete, false);
+  assert.equal(balances?.incompleteRecordCount, 1);
+  assert.equal(tuition?.incompleteRecordCount, 1);
+  assert.equal(balances?.status, "missing");
+  assert.equal(tuition?.status, "missing");
+});
+
 test("fleet verification advances only a complete matched batch to director review", () => {
   const sourceCoverage = assessProcareFleetSourceCoverage([completeRecord], { sourceInventory: [] });
   const reconciliation = buildProcareReconciliationReport({

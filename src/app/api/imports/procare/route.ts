@@ -4,6 +4,7 @@ import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { activeClassroomWhere, classroomIsArchived } from "@/lib/classroom-status";
+import { closeEnrollmentAndDisableTuitionSql } from "@/lib/enrollment-closeout";
 import {
   isActiveProcareStaffStatus,
   isActiveProcareEnrollmentStatus,
@@ -51,7 +52,7 @@ import {
   mergeProcareGuardianImports,
   type ProcareGuardianImportRecord,
 } from "@/lib/procare-guardian-merge";
-import { enrollmentClassroomValidationError } from "@/lib/enrollment-status";
+import { enrollmentClassroomValidationError, isClosedEnrollmentStatus } from "@/lib/enrollment-status";
 import { invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -2719,6 +2720,16 @@ async function POSTHandler(request: NextRequest) {
               customFields: mergeCustomFields(existingChild.customFields, childMetadata),
             },
           });
+          if (enrollmentStatusProvided && isClosedEnrollmentStatus(enrollmentStatus)) {
+            const updatedAt = new Date();
+            await prisma.$executeRaw(closeEnrollmentAndDisableTuitionSql({
+              childIds: [existingChild.id],
+              enrollmentStatus,
+              classroomId: null,
+              updatedAt,
+              updatedBy: user.email,
+            }));
+          }
         }
 
         const allergyText = value(rawData, ["allergies", "allergy", "allergy notes", "medical allergy"]);

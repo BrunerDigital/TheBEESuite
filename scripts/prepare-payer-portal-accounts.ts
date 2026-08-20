@@ -1,4 +1,5 @@
 import "./load-env";
+import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { UserRole } from "@prisma/client";
 import { writeSystemAuditLog } from "@/lib/audit";
@@ -6,15 +7,17 @@ import { evaluateParentInvitationReadiness } from "@/lib/parent-invitation-readi
 import { isActiveProcareEnrollmentStatus } from "@/lib/procare-import-fields";
 import {
   ensureParentPortalLoginForGuardian,
+  hasConflictingGuardianFamilyLinks,
   parentPortalAccessDisabled,
 } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
-import { getSupabaseAuthConfig } from "@/lib/supabase-auth";
+import { getSupabaseAuthConfig, isSupabaseAuthCompatibleEmail } from "@/lib/supabase-auth";
 
 const APPLY = process.argv.includes("--apply");
 const ACKNOWLEDGED_NO_INVITES = process.argv.includes("--acknowledge-no-invites");
 const INCLUDE_AUTHORIZED_PICKUPS = process.argv.includes("--include-authorized-pickups");
 const EXCLUDE_TX_TYLER = process.argv.includes("--exclude-tx-tyler");
+const FINGERPRINT_PREFIX = "--confirm-fingerprint=";
 const ACTION = "parent_portal.payer_account_prepared";
 
 function clean(value: string | null | undefined) {
@@ -26,7 +29,7 @@ function normalizedEmail(value: string | null | undefined) {
 }
 
 function validEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  return isSupabaseAuthCompatibleEmail(value);
 }
 
 function isNonProductionCenter(center: { name: string; crmLocationId: string | null } | null | undefined) {
@@ -38,6 +41,9 @@ type GuardianRecord = Awaited<ReturnType<typeof loadGuardians>>[number];
 async function loadGuardians() {
   return prisma.guardian.findMany({
     include: {
+      user: {
+        select: { role: true, isActive: true },
+      },
       family: {
         include: {
           children: {
@@ -59,6 +65,10 @@ async function loadGuardians() {
   });
 }
 
+function hasActiveParentLink(guardian: GuardianRecord) {
+  return guardian.user?.role === UserRole.PARENT_GUARDIAN && guardian.user.isActive;
+}
+
 function guardianIdentity(guardian: GuardianRecord) {
   return {
     id: guardian.id,
@@ -78,6 +88,7 @@ async function main() {
   if (APPLY && INCLUDE_AUTHORIZED_PICKUPS && !EXCLUDE_TX_TYLER) {
     throw new Error("Pickup-inclusive apply mode requires --exclude-tx-tyler.");
   }
+  const suppliedFingerprint = process.argv.find((arg) => arg.startsWith(FINGERPRINT_PREFIX))?.slice(FINGERPRINT_PREFIX.length).trim();
 
   const startedAt = new Date();
   const guardians = await loadGuardians();
@@ -227,7 +238,7 @@ async function main() {
   let missingEmailPayers = 0;
 
   for (const payer of payerGuardians) {
-    if (payer.userId) {
+    if (hasActiveParentLink(payer)) {
       alreadyLinkedPayers += 1;
       continue;
     }
@@ -256,6 +267,9 @@ async function main() {
       ...(matchingGuardians.every((guardian) => guardian.family.centerId === payer.family.centerId)
         ? []
         : ["A matching guardian email belongs to another school."]),
+      ...(hasConflictingGuardianFamilyLinks(payer.familyId, matchingGuardians)
+        ? ["A matching guardian email belongs to another family."]
+        : []),
       ...(matchingGuardians.every((guardian) => candidateGuardianIds.has(guardian.id) || Boolean(guardian.userId))
         ? []
         : ["A matching unlinked guardian is outside the payer or authorized-pickup scope."]),
@@ -276,6 +290,22 @@ async function main() {
   }
 
   const safeGroups = [...safeGroupByKey.values()];
+  const safeTargetFingerprint = createHash("sha256").update(JSON.stringify(
+    safeGroups
+      .map((group) => ({
+        tenantId: tenantIdByGuardianId.get(group[0].id) ?? "",
+        centerId: group[0].family.centerId,
+        email: normalizedEmail(group[0].email),
+        guardianIds: group.map((guardian) => guardian.id).sort(),
+        familyIds: [...new Set(group.map((guardian) => guardian.familyId))].sort(),
+        existingAppUser: existingUserByEmail.has(normalizedEmail(group[0].email)),
+        existingAuthUser: existingAuthEmails.has(normalizedEmail(group[0].email)),
+      }))
+      .sort((left, right) => `${left.tenantId}:${left.email}`.localeCompare(`${right.tenantId}:${right.email}`)),
+  )).digest("hex");
+  if (APPLY && suppliedFingerprint !== safeTargetFingerprint) {
+    throw new Error(`Apply requires ${FINGERPRINT_PREFIX}${safeTargetFingerprint}.`);
+  }
   const centerSummary = new Map<string, {
     center: string;
     payers: number;
@@ -298,7 +328,7 @@ async function main() {
       topBlockers: {},
     };
     item.payers += 1;
-    if (payer.userId) {
+    if (hasActiveParentLink(payer)) {
       item.linked += 1;
     } else if (!validEmail(normalizedEmail(payer.email))) {
       item.blocked += 1;
@@ -328,6 +358,7 @@ async function main() {
     missingEmailPayers,
     safeAccountGroups: safeGroups.length,
     safeUnlinkedPayerRecords: safeGroups.reduce((total, group) => total + group.length, 0),
+    safeTargetFingerprint,
     blockedUnlinkedPayerRecords: payerGuardians.length
       - alreadyLinkedPayers
       - safeGroups.reduce((total, group) => total + group.length, 0),

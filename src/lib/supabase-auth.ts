@@ -35,6 +35,30 @@ export function hasSupabaseAdminAuthConfig() {
   return Boolean(url && serviceKey);
 }
 
+export function isSupabaseAuthCompatibleEmail(value: string) {
+  const email = value.trim();
+  if (!email || email.length > 254 || !/^[\x21-\x7e]+$/.test(email)) return false;
+
+  const parts = email.split("@");
+  if (parts.length !== 2) return false;
+  const [local, domain] = parts;
+  if (
+    !local
+    || local.length > 64
+    || local.startsWith(".")
+    || local.endsWith(".")
+    || local.includes("..")
+    || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(local)
+  ) return false;
+
+  const labels = domain.split(".");
+  return labels.length >= 2 && labels.every((label) => (
+    label.length >= 1
+    && label.length <= 63
+    && /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label)
+  ));
+}
+
 export function buildPublicAppBaseUrl({
   configuredAppUrl,
   requestUrl,

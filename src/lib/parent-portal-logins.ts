@@ -1,10 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { UserRole } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
-import { isEmail } from "@/lib/integrations";
 import { DEFAULT_PARENT_INITIAL_PASSWORD, PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
 import { prisma } from "@/lib/prisma";
-import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import { isSupabaseAuthCompatibleEmail, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
 type ParentPortalProvisionResult =
   | {
@@ -154,7 +153,7 @@ export async function ensureParentPortalLoginForGuardian({
   if (parentPortalAccessDisabled(guardian.customFields)) return { ok: false, status: 200, reason: "parent_portal_disabled" };
 
   const email = normalizeEmail(guardian.email ?? "");
-  if (!isEmail(email)) return { ok: false, status: 400, reason: "guardian_email_invalid" };
+  if (!isSupabaseAuthCompatibleEmail(email)) return { ok: false, status: 400, reason: "guardian_email_invalid" };
   const center = guardian.family.centerId
     ? await prisma.center.findUnique({
         where: { id: guardian.family.centerId },

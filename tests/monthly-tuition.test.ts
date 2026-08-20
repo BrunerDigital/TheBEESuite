@@ -9,9 +9,9 @@ test("director monthly tuition setup preserves cadence and a school-selected bil
   const scheduler = readFileSync("src/app/api/cron/tuition-billing/route.ts", "utf8");
 
   assert.match(plansRoute, /requestedTuitionCadence \? normalizeBillingCadence\(requestedTuitionCadence\) : "weekly"/);
-  assert.match(plansRoute, /normalizeBillingCadence\(existingTuitionPlan\.cadence\) !== data\.cadence/);
+  assert.match(plansRoute, /tuitionPlanRecordChanged\(existingTuitionPlan, data\)/);
   assert.match(plansRoute, /path: \["tuitionPlanId"\], equals: id/);
-  assert.match(plansRoute, /Create a new rate for a different cadence/);
+  assert.match(plansRoute, /Create a new rate so previously saved child rates remain unchanged/);
   assert.match(assignmentRoute, /requestedCadence === "monthly"/);
   assert.match(assignmentRoute, /normalizeRecurringBillingDay\(body\.billingDay, cadence\)/);
   assert.match(assignmentRoute, /planCadence === "monthly" && cadence !== "monthly"/);

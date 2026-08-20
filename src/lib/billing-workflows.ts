@@ -18,6 +18,20 @@ export function canSaveTuitionPlanAmount(amountCents: number, zeroDollarVoucher:
   return Number.isInteger(amountCents) && (amountCents > 0 || (amountCents === 0 && zeroDollarVoucher));
 }
 
+type TuitionPlanRecord = {
+  name: string;
+  ageGroup: string;
+  cadence: string;
+  amountCents: number;
+};
+
+export function tuitionPlanRecordChanged(existing: TuitionPlanRecord, requested: TuitionPlanRecord) {
+  return existing.name !== requested.name
+    || existing.ageGroup !== requested.ageGroup
+    || normalizeBillingCadence(existing.cadence) !== normalizeBillingCadence(requested.cadence)
+    || existing.amountCents !== requested.amountCents;
+}
+
 export function isVoucherFundedTuitionAmount(amountCents: number) {
   return Number.isInteger(amountCents) && amountCents === 0;
 }

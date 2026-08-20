@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  agencyProgramSetupBlockers,
+  agencyProgramStatus,
   claimAmountCents,
   claimSubmissionBlockers,
   nextRemittanceStatus,
@@ -31,12 +34,41 @@ test("submission is fail closed on program setup and documentation", () => {
   assert.deepEqual(claimSubmissionBlockers({
     submissionMethod: "agency_portal",
     documents: [{ name: "Attendance", status: "required" }],
-  }), ["Add the agency provider or vendor number.", "Complete required item: Attendance."]);
+  }), [
+    "Add the school-specific provider or vendor number.",
+    "Add the official agency portal URL.",
+    "Document the verified direct-deposit or payment-vendor setup.",
+    "Complete required item: Attendance.",
+  ]);
   assert.deepEqual(claimSubmissionBlockers({
     providerNumber: "PROV-1",
     submissionMethod: "agency_portal",
+    portalUrl: "https://agency.example/provider",
+    paymentInstructions: "Direct deposit verified with agency vendor",
     documents: [{ name: "Attendance", status: "verified" }],
   }), []);
+});
+
+test("agency setup remains blocked until provider, submission, and payment setup are documented", () => {
+  assert.deepEqual(agencyProgramSetupBlockers({ submissionMethod: "agency_portal" }), [
+    "Add the school-specific provider or vendor number.",
+    "Add the official agency portal URL.",
+    "Document the verified direct-deposit or payment-vendor setup.",
+  ]);
+  assert.equal(agencyProgramStatus({
+    vendorNumber: "VENDOR-9",
+    submissionMethod: "secure_email",
+    paymentInstructions: "ACH enrollment confirmed by agency",
+  }), "active");
+});
+
+test("agency mutations require evidence and external references", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  assert.match(route, /Complete agency setup before adding child authorizations/);
+  assert.match(route, /Add an evidence note or linked document before marking this item verified/);
+  assert.match(route, /Enter the confirmation reference returned by the external agency channel/);
+  assert.match(route, /Enter the agency decision or claim reference/);
+  assert.match(route, /Record an agency approval before posting a remittance/);
 });
 
 test("remittance status uses approved amount when available", () => {

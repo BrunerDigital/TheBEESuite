@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { BadgeDollarSign, Building2, CheckCircle2, Download, FileCheck2, Printer, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,13 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { agencyProgramSetupBlockers } from "@/lib/agency-subsidy-billing";
 
-type Program = { id: string; centerId: string; name: string; programName: string | null; stateCode: string; status: string; providerNumber: string | null; vendorNumber: string | null };
+type Program = { id: string; centerId: string; name: string; programName: string | null; stateCode: string; status: string; providerNumber: string | null; vendorNumber: string | null; submissionMethod: string; portalUrl: string | null; remittanceEmail: string | null; paymentInstructions: string | null; setupBlockers: string[] };
 type Authorization = { id: string; centerId: string; agencyProgramId: string; authorizationNumber: string; coverageStart: string; coverageEnd: string; authorizedRateCents: number; unitType: string; agencyProgram: { name: string; programName: string | null }; family: { name: string }; child: { fullName: string } };
-type ClaimDocument = { id: string; name: string; status: string };
+type ClaimDocument = { id: string; name: string; status: string; notes: string | null };
 type Claim = { id: string; number: string; status: string; claimedCents: number; approvedCents: number | null; paidCents: number; servicePeriodStart: string; servicePeriodEnd: string; agencyProgram: { name: string }; authorization: { child: { fullName: string }; family: { name: string } } | null; documents: ClaimDocument[] };
 type Family = { id: string; centerId: string | null; name: string; children: Array<{ id: string; fullName: string }> };
-type Workspace = { programs: Program[]; authorizations: Authorization[]; claims: Claim[]; families: Family[]; summary: { claimedCents: number; approvedCents: number; paidCents: number; outstandingCents: number; needsSubmission: number; missingDocumentClaims: number } };
+type Workspace = { programs: Program[]; authorizations: Authorization[]; claims: Claim[]; families: Family[]; summary: { claimedCents: number; approvedCents: number; paidCents: number; outstandingCents: number; needsSubmission: number; missingDocumentClaims: number; readyPrograms: number; setupRequiredPrograms: number; expiredAuthorizations: number; expiringAuthorizations: number } };
 
 function money(cents: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100); }
 function dateOnly(value: string) { return value ? new Date(value).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"; }
@@ -27,6 +28,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [setupProgramId, setSetupProgramId] = useState("new");
   const [programId, setProgramId] = useState("");
   const [familyId, setFamilyId] = useState("");
   const [childId, setChildId] = useState("");
@@ -70,6 +72,57 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const authorizations = data?.authorizations ?? [];
   const claims = data?.claims ?? [];
   const summary = data?.summary;
+  const setupProgram = programs.find((program) => program.id === setupProgramId);
+  const setupBlockers = setupProgram ? agencyProgramSetupBlockers(setupProgram) : [];
+
+  async function submitProgramSetup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const action = setupProgram ? "updateProgram" : "createProgram";
+    const fields: Record<string, unknown> = {
+      agencyProgramId: setupProgram?.id,
+      name: form.get("name"),
+      programName: form.get("programName"),
+      stateCode: form.get("stateCode"),
+      providerNumber: form.get("providerNumber"),
+      vendorNumber: form.get("vendorNumber"),
+      submissionMethod: form.get("submissionMethod"),
+      portalUrl: form.get("portalUrl"),
+      remittanceEmail: form.get("remittanceEmail"),
+      paymentInstructions: form.get("paymentInstructions"),
+    };
+    if (!setupProgram) {
+      fields.requirements = [
+        { key: "attendance", label: "Attendance detail", type: "attendance", required: true },
+        { key: "authorization", label: "Current authorization", type: "authorization", required: true },
+      ];
+    }
+    const ok = await post(action, fields);
+    if (ok && !setupProgram) {
+      event.currentTarget.reset();
+      setSetupProgramId("new");
+    }
+  }
+
+  function toggleClaimDocument(claimId: string, document: ClaimDocument) {
+    if (document.status === "verified") {
+      void post("updateDocument", { claimId, documentId: document.id, status: "required" });
+      return;
+    }
+    const notes = window.prompt(`Evidence note for ${document.name}`, document.notes ?? "");
+    if (notes?.trim()) void post("updateDocument", { claimId, documentId: document.id, status: "verified", notes });
+  }
+
+  function markClaimSubmitted(claimId: string) {
+    const externalReference = window.prompt("Enter the confirmation reference returned by the agency portal or submission channel");
+    if (externalReference?.trim()) void post("submitClaim", { claimId, externalReference });
+  }
+
+  function recordClaimApproval(claim: Claim) {
+    const approvedDollars = window.prompt("Agency-approved amount", String(claim.claimedCents / 100));
+    const externalReference = approvedDollars ? window.prompt("Agency decision or claim reference") : null;
+    if (approvedDollars && externalReference?.trim()) void post("recordDecision", { claimId: claim.id, decision: "approved", approvedDollars, externalReference });
+  }
 
   function exportClaims() {
     const quote = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
@@ -98,27 +151,30 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="max-w-md space-y-2"><Label>School</Label><Select value={centerId} onValueChange={(value) => { if (!value) return; setCenterId(value); setProgramId(""); setFamilyId(""); setChildId(""); setAuthorizationId(""); setData(null); setError(""); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>)}</SelectContent></Select></div>
+          <div className="max-w-md space-y-2"><Label>School</Label><Select value={centerId} onValueChange={(value) => { if (!value) return; setCenterId(value); setSetupProgramId("new"); setProgramId(""); setFamilyId(""); setChildId(""); setAuthorizationId(""); setData(null); setError(""); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>)}</SelectContent></Select></div>
           {error ? <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
           {message ? <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200">{message}</p> : null}
-          {summary ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-            {[["Claimed", money(summary.claimedCents)], ["Approved", money(summary.approvedCents)], ["Paid", money(summary.paidCents)], ["Outstanding", money(summary.outstandingCents)], ["Needs submission", summary.needsSubmission], ["Missing documents", summary.missingDocumentClaims]].map(([label, value]) => <div key={label} className="rounded-lg border bg-background/50 p-3"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 text-lg font-semibold">{value}</div></div>)}
+          {summary ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {[["Programs ready", `${summary.readyPrograms}/${summary.readyPrograms + summary.setupRequiredPrograms}`], ["Expired authorizations", summary.expiredAuthorizations], ["Expiring in 30 days", summary.expiringAuthorizations], ["Claimed", money(summary.claimedCents)], ["Approved", money(summary.approvedCents)], ["Paid", money(summary.paidCents)], ["Outstanding", money(summary.outstandingCents)], ["Needs submission", summary.needsSubmission], ["Missing documents", summary.missingDocumentClaims]].map(([label, value]) => <div key={label} className="rounded-lg border bg-background/50 p-3"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 text-lg font-semibold">{value}</div></div>)}
           </div> : null}
         </CardContent>
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <Card><CardHeader><CardTitle as="h3">1. Add agency program</CardTitle><CardDescription>Store the school-specific provider identity and claim requirements.</CardDescription></CardHeader><CardContent><form className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const ok = await post("createProgram", { name: form.get("name"), programName: form.get("programName"), stateCode: form.get("stateCode"), providerNumber: form.get("providerNumber"), submissionMethod: form.get("submissionMethod"), portalUrl: form.get("portalUrl"), requirements: [{ key: "attendance", label: "Attendance detail", type: "attendance", required: true }, { key: "authorization", label: "Current authorization", type: "authorization", required: true }] }); if (ok) event.currentTarget.reset(); }}>
-          <div><Label htmlFor="agency-name">Agency payer</Label><Input id="agency-name" name="name" required placeholder="Indiana FSSA / local subsidy office" /></div>
-          <div><Label htmlFor="agency-program">Program</Label><Input id="agency-program" name="programName" placeholder="CCDF" /></div>
-          <div className="grid grid-cols-2 gap-3"><div><Label htmlFor="agency-state">State</Label><Input id="agency-state" name="stateCode" maxLength={2} required defaultValue={centers.find((center) => center.id === centerId)?.state ?? ""} /></div><div><Label htmlFor="agency-provider">Provider/vendor #</Label><Input id="agency-provider" name="providerNumber" /></div></div>
-          <div><Label htmlFor="agency-method">Submission method</Label><select id="agency-method" name="submissionMethod" className="h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="agency_portal">Agency portal</option><option value="secure_email">Secure email</option><option value="edi">EDI/API</option><option value="paper">Paper/mail</option></select></div>
-          <div><Label htmlFor="agency-portal">Portal or instructions URL</Label><Input id="agency-portal" name="portalUrl" type="url" /></div>
-          <Button type="submit" disabled={pending}>Save agency program</Button>
+        <Card><CardHeader><CardTitle as="h3">1. Complete agency setup</CardTitle><CardDescription>Finish a preloaded program or add another school-specific payer. Never reuse another location&apos;s provider identity.</CardDescription></CardHeader><CardContent><div className="mb-3 space-y-2"><Label>Program to configure</Label><Select value={setupProgramId} onValueChange={(value) => value && setSetupProgramId(value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="new">Add another program</SelectItem>{programs.map((program) => <SelectItem key={program.id} value={program.id}>{program.name}{program.programName ? ` · ${program.programName}` : ""}</SelectItem>)}</SelectContent></Select></div>{setupProgram ? <div className="mb-3 rounded-lg border bg-background/50 p-3 text-sm"><div className="flex items-center gap-2"><Badge variant={setupBlockers.length ? "outline" : "default"}>{setupBlockers.length ? "Setup required" : "Ready"}</Badge><span>{setupBlockers.length ? `${setupBlockers.length} item${setupBlockers.length === 1 ? "" : "s"} remaining` : "Provider and payment setup documented"}</span></div>{setupBlockers.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{setupBlockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : null}</div> : null}<form key={`${centerId}:${setupProgramId}`} className="space-y-3" onSubmit={submitProgramSetup}>
+          <div><Label htmlFor="agency-name">Agency payer</Label><Input id="agency-name" name="name" required placeholder="Indiana FSSA / local subsidy office" defaultValue={setupProgram?.name ?? ""} /></div>
+          <div><Label htmlFor="agency-program">Program</Label><Input id="agency-program" name="programName" placeholder="CCDF" defaultValue={setupProgram?.programName ?? ""} /></div>
+          <div className="grid grid-cols-2 gap-3"><div><Label htmlFor="agency-state">State</Label><Input id="agency-state" name="stateCode" maxLength={2} required defaultValue={setupProgram?.stateCode ?? centers.find((center) => center.id === centerId)?.state ?? ""} /></div><div><Label htmlFor="agency-provider">Provider #</Label><Input id="agency-provider" name="providerNumber" defaultValue={setupProgram?.providerNumber ?? ""} /></div></div>
+          <div><Label htmlFor="agency-vendor">Vendor/payee #</Label><Input id="agency-vendor" name="vendorNumber" defaultValue={setupProgram?.vendorNumber ?? ""} /></div>
+          <div><Label htmlFor="agency-method">Submission method</Label><select id="agency-method" name="submissionMethod" defaultValue={setupProgram?.submissionMethod ?? "agency_portal"} className="h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="agency_portal">Agency portal</option><option value="secure_email">Secure email</option><option value="edi">EDI/API</option><option value="paper">Paper/mail</option></select></div>
+          <div><Label htmlFor="agency-portal">Official portal or instructions URL</Label><Input id="agency-portal" name="portalUrl" type="url" defaultValue={setupProgram?.portalUrl ?? ""} /></div>
+          <div><Label htmlFor="agency-remittance-email">Agency remittance contact</Label><Input id="agency-remittance-email" name="remittanceEmail" type="email" defaultValue={setupProgram?.remittanceEmail ?? ""} /></div>
+          <div><Label htmlFor="agency-payment-setup">Verified payment setup</Label><Input id="agency-payment-setup" name="paymentInstructions" defaultValue={setupProgram?.paymentInstructions ?? ""} placeholder="Direct deposit active in agency payment vendor; verified 2026-08-__" /></div>
+          <Button type="submit" disabled={pending}>{setupProgram ? "Update agency setup" : "Save agency program"}</Button>
         </form></CardContent></Card>
 
         <Card><CardHeader><CardTitle as="h3">2. Record authorization</CardTitle><CardDescription>Bind one child, family, payer, coverage period, rate, and copay.</CardDescription></CardHeader><CardContent><form className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const ok = await post("createAuthorization", { agencyProgramId: programId, familyId, childId, authorizationNumber: form.get("authorizationNumber"), coverageStart: form.get("coverageStart"), coverageEnd: form.get("coverageEnd"), authorizedRateDollars: form.get("authorizedRateDollars"), familyCopayDollars: form.get("familyCopayDollars"), unitType: form.get("unitType") }); if (ok) event.currentTarget.reset(); }}>
-          <div><Label>Agency program</Label><Select value={programId} onValueChange={(value) => value && setProgramId(value)}><SelectTrigger><SelectValue placeholder="Choose agency" /></SelectTrigger><SelectContent>{programs.map((program) => <SelectItem key={program.id} value={program.id}>{program.name}{program.programName ? ` · ${program.programName}` : ""}</SelectItem>)}</SelectContent></Select></div>
+          <div><Label>Agency program</Label><Select value={programId} onValueChange={(value) => value && setProgramId(value)}><SelectTrigger><SelectValue placeholder="Choose a completed agency setup" /></SelectTrigger><SelectContent>{programs.map((program) => { const blocked = agencyProgramSetupBlockers(program).length > 0; return <SelectItem key={program.id} value={program.id} disabled={blocked}>{program.name}{program.programName ? ` · ${program.programName}` : ""}{blocked ? " · setup required" : ""}</SelectItem>; })}</SelectContent></Select></div>
           <div><Label>Family</Label><Select value={familyId} onValueChange={(value) => { setFamilyId(value ?? ""); setChildId(""); }}><SelectTrigger><SelectValue placeholder="Choose family" /></SelectTrigger><SelectContent>{data?.families.map((family) => <SelectItem key={family.id} value={family.id}>{family.name}</SelectItem>)}</SelectContent></Select></div>
           <div><Label>Child</Label><Select value={childId} onValueChange={(value) => value && setChildId(value)}><SelectTrigger><SelectValue placeholder="Choose child" /></SelectTrigger><SelectContent>{selectedFamily?.children.map((child) => <SelectItem key={child.id} value={child.id}>{child.fullName}</SelectItem>)}</SelectContent></Select></div>
           <div><Label htmlFor="auth-number">Authorization #</Label><Input id="auth-number" name="authorizationNumber" required /></div>
@@ -138,9 +194,9 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
       </div>
 
       <Card><CardHeader><CardTitle as="h3">Agency claim queue</CardTitle><CardDescription>Document readiness, manual portal submission, decisions, and remittances are tracked independently from parent billing.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Claim</TableHead><TableHead>Agency / child</TableHead><TableHead>Period</TableHead><TableHead>Status</TableHead><TableHead>Amount</TableHead><TableHead>Documents</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader><TableBody>
-        {claims.map((claim) => { const incomplete = claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)); return <TableRow key={claim.id}><TableCell className="font-medium">{claim.number}</TableCell><TableCell>{claim.agencyProgram.name}<div className="text-xs text-muted-foreground">{claim.authorization?.child.fullName ?? "No child"}</div></TableCell><TableCell>{dateOnly(claim.servicePeriodStart)} – {dateOnly(claim.servicePeriodEnd)}</TableCell><TableCell><Badge variant="outline">{claim.status.replaceAll("_", " ")}</Badge></TableCell><TableCell>{money(claim.claimedCents)}<div className="text-xs text-muted-foreground">Paid {money(claim.paidCents)}</div></TableCell><TableCell>{incomplete.length ? <div className="space-y-1">{claim.documents.map((document) => <button key={document.id} type="button" className="block text-left text-xs underline-offset-2 hover:underline" onClick={() => void post("updateDocument", { claimId: claim.id, documentId: document.id, status: document.status === "verified" ? "required" : "verified" })}>{document.status === "verified" ? "✓" : "○"} {document.name}</button>)}</div> : <span className="inline-flex items-center gap-1 text-sm text-emerald-700"><FileCheck2 className="size-4" /> Complete</span>}</TableCell><TableCell><div className="flex flex-wrap gap-2">
-          {claim.status === "draft" ? <Button size="sm" variant="outline" onClick={() => void post("submitClaim", { claimId: claim.id })}>Mark submitted</Button> : null}
-          {claim.status === "submitted" ? <Button size="sm" variant="outline" onClick={() => void post("recordDecision", { claimId: claim.id, decision: "approved", approvedDollars: claim.claimedCents / 100 })}><CheckCircle2 data-icon="inline-start" /> Approve</Button> : null}
+        {claims.map((claim) => { const incomplete = claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)); return <TableRow key={claim.id}><TableCell className="font-medium">{claim.number}</TableCell><TableCell>{claim.agencyProgram.name}<div className="text-xs text-muted-foreground">{claim.authorization?.child.fullName ?? "No child"}</div></TableCell><TableCell>{dateOnly(claim.servicePeriodStart)} – {dateOnly(claim.servicePeriodEnd)}</TableCell><TableCell><Badge variant="outline">{claim.status.replaceAll("_", " ")}</Badge></TableCell><TableCell>{money(claim.claimedCents)}<div className="text-xs text-muted-foreground">Paid {money(claim.paidCents)}</div></TableCell><TableCell>{incomplete.length ? <div className="space-y-1">{claim.documents.map((document) => <button key={document.id} type="button" className="block text-left text-xs underline-offset-2 hover:underline" onClick={() => toggleClaimDocument(claim.id, document)}>{document.status === "verified" ? "✓" : "○"} {document.name}</button>)}</div> : <span className="inline-flex items-center gap-1 text-sm text-emerald-700"><FileCheck2 className="size-4" /> Complete</span>}</TableCell><TableCell><div className="flex flex-wrap gap-2">
+          {claim.status === "draft" ? <Button size="sm" variant="outline" onClick={() => markClaimSubmitted(claim.id)}>Mark submitted</Button> : null}
+          {claim.status === "submitted" ? <Button size="sm" variant="outline" onClick={() => recordClaimApproval(claim)}><CheckCircle2 data-icon="inline-start" /> Record approval</Button> : null}
           {["approved", "partially_paid"].includes(claim.status) ? <Button size="sm" onClick={() => { const amount = window.prompt("Remittance amount", String(((claim.approvedCents ?? claim.claimedCents) - claim.paidCents) / 100)); const reference = amount ? window.prompt("ACH/check/portal reference") : null; if (amount && reference) void post("recordRemittance", { claimId: claim.id, amountDollars: amount, externalReference: reference, paidAt: today(), paymentMethod: "ach" }); }}><BadgeDollarSign data-icon="inline-start" /> Record payment</Button> : null}
         </div></TableCell></TableRow>; })}
         {!claims.length ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No agency claims for this school yet.</TableCell></TableRow> : null}

@@ -33,6 +33,26 @@ export function normalizeAgencyRequirements(value: unknown): AgencyRequirement[]
   });
 }
 
+export function agencyProgramSetupBlockers(input: {
+  providerNumber?: string | null;
+  vendorNumber?: string | null;
+  submissionMethod?: string | null;
+  portalUrl?: string | null;
+  paymentInstructions?: string | null;
+}) {
+  const blockers: string[] = [];
+  const submissionMethod = clean(input.submissionMethod);
+  if (!clean(input.providerNumber) && !clean(input.vendorNumber)) blockers.push("Add the school-specific provider or vendor number.");
+  if (!submissionMethod) blockers.push("Choose the agency submission method.");
+  if (submissionMethod === "agency_portal" && !clean(input.portalUrl)) blockers.push("Add the official agency portal URL.");
+  if (!clean(input.paymentInstructions)) blockers.push("Document the verified direct-deposit or payment-vendor setup.");
+  return blockers;
+}
+
+export function agencyProgramStatus(input: Parameters<typeof agencyProgramSetupBlockers>[0]) {
+  return agencyProgramSetupBlockers(input).length ? "setup_required" : "active";
+}
+
 export function claimAmountCents(input: { serviceUnits: number; rateCents: number }) {
   if (!Number.isFinite(input.serviceUnits) || input.serviceUnits <= 0) return 0;
   if (!Number.isInteger(input.rateCents) || input.rateCents <= 0) return 0;
@@ -52,11 +72,11 @@ export function claimSubmissionBlockers(input: {
   providerNumber?: string | null;
   vendorNumber?: string | null;
   submissionMethod?: string | null;
+  portalUrl?: string | null;
+  paymentInstructions?: string | null;
   documents: Array<{ name: string; status: string }>;
 }) {
-  const blockers: string[] = [];
-  if (!clean(input.providerNumber) && !clean(input.vendorNumber)) blockers.push("Add the agency provider or vendor number.");
-  if (!clean(input.submissionMethod)) blockers.push("Choose the agency submission method.");
+  const blockers = agencyProgramSetupBlockers(input);
   for (const document of input.documents) {
     if (document.status !== "received" && document.status !== "verified" && document.status !== "not_applicable") {
       blockers.push(`Complete required item: ${document.name}.`);

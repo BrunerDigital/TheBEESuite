@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
 import {
+  agencyProgramSetupBlockers,
+  agencyProgramStatus,
   claimAmountCents,
   claimSubmissionBlockers,
   nextRemittanceStatus,
@@ -101,8 +103,22 @@ async function getHandler(request: NextRequest) {
     if (claim.documents.some((document) => !["received", "verified", "not_applicable"].includes(document.status))) result.missingDocumentClaims += 1;
     return result;
   }, { claimedCents: 0, approvedCents: 0, paidCents: 0, outstandingCents: 0, needsSubmission: 0, missingDocumentClaims: 0 });
+  const programReadiness = programs.map((program) => {
+    const setupBlockers = agencyProgramSetupBlockers(program);
+    return { ...program, status: setupBlockers.length ? "setup_required" : "active", setupBlockers };
+  });
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const expirationCutoff = new Date(today);
+  expirationCutoff.setUTCDate(expirationCutoff.getUTCDate() + 31);
+  const readiness = {
+    readyPrograms: programReadiness.filter((program) => program.status === "active").length,
+    setupRequiredPrograms: programReadiness.filter((program) => program.status !== "active").length,
+    expiredAuthorizations: authorizations.filter((authorization) => authorization.status === "active" && authorization.coverageEnd < today).length,
+    expiringAuthorizations: authorizations.filter((authorization) => authorization.status === "active" && authorization.coverageEnd >= today && authorization.coverageEnd < expirationCutoff).length,
+  };
 
-  return NextResponse.json({ ok: true, programs, authorizations, claims, families, summary });
+  return NextResponse.json({ ok: true, programs: programReadiness, authorizations, claims, families, summary: { ...summary, ...readiness } });
 }
 
 async function postHandler(request: NextRequest) {
@@ -118,15 +134,58 @@ async function postHandler(request: NextRequest) {
     const stateCode = normalizeStateCode(body.stateCode);
     if (!name || !stateCode) return NextResponse.json({ ok: false, error: "Agency name and two-letter state are required." }, { status: 400 });
     const requirements = normalizeAgencyRequirements(body.requirements);
+    const setup = {
+      providerNumber: clean(body.providerNumber) || null,
+      vendorNumber: clean(body.vendorNumber) || null,
+      submissionMethod: clean(body.submissionMethod) || "agency_portal",
+      portalUrl: clean(body.portalUrl) || null,
+      paymentInstructions: clean(body.paymentInstructions) || null,
+    };
     const program = await prisma.agencyProgram.create({ data: {
       centerId, name, stateCode, programName: clean(body.programName) || null,
-      providerNumber: clean(body.providerNumber) || null, vendorNumber: clean(body.vendorNumber) || null,
-      submissionMethod: clean(body.submissionMethod) || "agency_portal", portalUrl: clean(body.portalUrl) || null,
-      remittanceEmail: clean(body.remittanceEmail) || null, paymentInstructions: clean(body.paymentInstructions) || null,
-      requirements, status: clean(body.providerNumber) || clean(body.vendorNumber) ? "active" : "setup_required",
+      ...setup, remittanceEmail: clean(body.remittanceEmail) || null,
+      requirements, status: agencyProgramStatus(setup),
     } });
     await writeAuditLog(auth.user, { centerId, action: "billing.agency_program.created", resource: "AgencyProgram", resourceId: program.id, metadata: { stateCode, name, requirementCount: requirements.length } });
     return NextResponse.json({ ok: true, program });
+  }
+
+  if (action === "updateProgram") {
+    const program = await prisma.agencyProgram.findUnique({ where: { id: clean(body.agencyProgramId) } });
+    if (!program || !centerAllowed(auth.user, program.centerId)) {
+      return NextResponse.json({ ok: false, error: "Agency program not found." }, { status: 404 });
+    }
+    const name = clean(body.name);
+    const stateCode = normalizeStateCode(body.stateCode);
+    if (!name || !stateCode) return NextResponse.json({ ok: false, error: "Agency name and two-letter state are required." }, { status: 400 });
+    const setup = {
+      providerNumber: clean(body.providerNumber) || null,
+      vendorNumber: clean(body.vendorNumber) || null,
+      submissionMethod: clean(body.submissionMethod) || "agency_portal",
+      portalUrl: clean(body.portalUrl) || null,
+      paymentInstructions: clean(body.paymentInstructions) || null,
+    };
+    const requirements = body.requirements === undefined ? program.requirements : normalizeAgencyRequirements(body.requirements);
+    const updated = await prisma.agencyProgram.update({ where: { id: program.id }, data: {
+      name, stateCode, programName: clean(body.programName) || null,
+      ...setup, remittanceEmail: clean(body.remittanceEmail) || null,
+      requirements: requirements ?? undefined, status: agencyProgramStatus(setup),
+    } });
+    const blockers = agencyProgramSetupBlockers(updated);
+    await writeAuditLog(auth.user, {
+      centerId: program.centerId,
+      action: "billing.agency_program.updated",
+      resource: "AgencyProgram",
+      resourceId: program.id,
+      metadata: {
+        status: updated.status,
+        hasProviderOrVendorNumber: Boolean(updated.providerNumber || updated.vendorNumber),
+        submissionMethod: updated.submissionMethod,
+        hasPortalUrl: Boolean(updated.portalUrl),
+        hasPaymentInstructions: Boolean(updated.paymentInstructions),
+      },
+    });
+    return NextResponse.json({ ok: true, program: updated, blockers });
   }
 
   if (action === "createAuthorization") {
@@ -139,6 +198,10 @@ async function postHandler(request: NextRequest) {
     ]);
     if (!program || !family || program.centerId !== family.centerId || !centerAllowed(auth.user, program.centerId) || !family.children.some((child) => child.id === childId)) {
       return NextResponse.json({ ok: false, error: "Agency, family, and child must belong to the same accessible school." }, { status: 403 });
+    }
+    const programBlockers = agencyProgramSetupBlockers(program);
+    if (programBlockers.length) {
+      return NextResponse.json({ ok: false, error: "Complete agency setup before adding child authorizations.", blockers: programBlockers }, { status: 409 });
     }
     const coverageStart = dateValue(body.coverageStart);
     const coverageEnd = dateValue(body.coverageEnd);
@@ -189,7 +252,12 @@ async function postHandler(request: NextRequest) {
     if (!new Set(["required", "requested", "received", "verified", "not_applicable"]).has(status)) return NextResponse.json({ ok: false, error: "Invalid document status." }, { status: 400 });
     const document = await prisma.subsidyClaimDocument.findFirst({ where: { id: clean(body.documentId), claimId: claim.id } });
     if (!document) return NextResponse.json({ ok: false, error: "Claim document not found." }, { status: 404 });
-    const updated = await prisma.subsidyClaimDocument.update({ where: { id: document.id }, data: { status, documentId: clean(body.linkedDocumentId) || document.documentId, notes: clean(body.notes) || document.notes } });
+    const linkedDocumentId = clean(body.linkedDocumentId) || document.documentId;
+    const notes = clean(body.notes) || document.notes;
+    if (status === "verified" && !linkedDocumentId && !notes) {
+      return NextResponse.json({ ok: false, error: "Add an evidence note or linked document before marking this item verified." }, { status: 400 });
+    }
+    const updated = await prisma.subsidyClaimDocument.update({ where: { id: document.id }, data: { status, documentId: linkedDocumentId, notes } });
     await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim_document.updated", resource: "SubsidyClaimDocument", resourceId: updated.id, metadata: { claimId: claim.id, status } });
     return NextResponse.json({ ok: true, document: updated });
   }
@@ -198,7 +266,9 @@ async function postHandler(request: NextRequest) {
     if (claim.status !== "draft" && claim.status !== "ready") return NextResponse.json({ ok: false, error: "Only draft or ready claims can be submitted." }, { status: 409 });
     const blockers = claimSubmissionBlockers({ ...claim.agencyProgram, documents: claim.documents });
     if (blockers.length) return NextResponse.json({ ok: false, error: "Claim is not ready for submission.", blockers }, { status: 409 });
-    const submitted = await prisma.subsidyClaim.update({ where: { id: claim.id }, data: { status: "submitted", submittedAt: new Date(), externalReference: clean(body.externalReference) || null } });
+    const externalReference = clean(body.externalReference);
+    if (!externalReference) return NextResponse.json({ ok: false, error: "Enter the confirmation reference returned by the external agency channel." }, { status: 400 });
+    const submitted = await prisma.subsidyClaim.update({ where: { id: claim.id }, data: { status: "submitted", submittedAt: new Date(), externalReference } });
     await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim.marked_submitted", resource: "SubsidyClaim", resourceId: claim.id, metadata: { submissionMethod: claim.agencyProgram.submissionMethod, externalReference: submitted.externalReference } });
     return NextResponse.json({ ok: true, claim: submitted, externalSubmissionPerformed: false });
   }
@@ -206,14 +276,20 @@ async function postHandler(request: NextRequest) {
   if (action === "recordDecision") {
     const decision = clean(body.decision);
     if (decision !== "approved" && decision !== "denied") return NextResponse.json({ ok: false, error: "Decision must be approved or denied." }, { status: 400 });
-    const approvedCents = decision === "approved" ? cents(body.approvedDollars) || claim.claimedCents : 0;
+    const approvedCents = decision === "approved" ? cents(body.approvedDollars) : 0;
+    if (decision === "approved" && approvedCents <= 0) return NextResponse.json({ ok: false, error: "Approved amount must be greater than zero." }, { status: 400 });
     if (approvedCents > claim.claimedCents) return NextResponse.json({ ok: false, error: "Approved amount cannot exceed the claim." }, { status: 400 });
-    const updated = await prisma.subsidyClaim.update({ where: { id: claim.id }, data: { status: decision, approvedCents, approvedAt: decision === "approved" ? new Date() : null, denialReason: decision === "denied" ? clean(body.denialReason) || "Agency denied claim" : null, externalReference: clean(body.externalReference) || claim.externalReference } });
+    const externalReference = clean(body.externalReference) || claim.externalReference;
+    if (!externalReference) return NextResponse.json({ ok: false, error: "Enter the agency decision or claim reference." }, { status: 400 });
+    const updated = await prisma.subsidyClaim.update({ where: { id: claim.id }, data: { status: decision, approvedCents, approvedAt: decision === "approved" ? new Date() : null, denialReason: decision === "denied" ? clean(body.denialReason) || "Agency denied claim" : null, externalReference } });
     await writeAuditLog(auth.user, { centerId: claim.centerId, action: `billing.subsidy_claim.${decision}`, resource: "SubsidyClaim", resourceId: claim.id, metadata: { approvedCents, externalReference: updated.externalReference } });
     return NextResponse.json({ ok: true, claim: updated });
   }
 
   if (action === "recordRemittance") {
+    if (!new Set(["approved", "partially_paid"]).has(claim.status)) {
+      return NextResponse.json({ ok: false, error: "Record an agency approval before posting a remittance." }, { status: 409 });
+    }
     const amountCents = cents(body.amountDollars);
     const reference = clean(body.externalReference);
     const paidAt = dateValue(body.paidAt);

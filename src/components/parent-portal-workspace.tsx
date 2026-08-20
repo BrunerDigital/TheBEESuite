@@ -51,6 +51,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ParentKioskCredentialPanel } from "@/components/parent-kiosk-credential-panel";
+import { CollapsiblePanel } from "@/components/workspace-preferences";
 import {
   Select,
   SelectContent,
@@ -2075,19 +2076,14 @@ function ParentPortalWorkspaceView({
           </section>
 
           <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-            <section
-              className="rounded-[1.5rem] border bg-card p-4 sm:p-6"
-              aria-labelledby="parent-attention-heading"
+            <CollapsiblePanel
+              id="parent-home-attention"
+              title="Needs Your Attention"
+              summary={homeAttentionCount ? `${homeAttentionCount} item${homeAttentionCount === 1 ? "" : "s"} to review` : "You’re all caught up"}
+              className="rounded-[1.5rem] bg-card"
+              contentClassName="divide-y px-4 pb-4 pt-0 sm:px-6 sm:pb-6"
+              defaultCollapsed={!homeAttentionCount}
             >
-              <div className="flex items-center justify-between gap-3">
-                <h2
-                  id="parent-attention-heading"
-                  className="text-xl font-semibold"
-                >
-                  Needs Your Attention
-                </h2>
-              </div>
-              <div className="mt-4 divide-y">
                 {documentsNeedingAction[0] ? (
                   <Link
                     href={workspaceHref("family", {
@@ -2168,19 +2164,16 @@ function ParentPortalWorkspaceView({
                     You’re all caught up.
                   </p>
                 ) : null}
-              </div>
-            </section>
+            </CollapsiblePanel>
 
-            <section
-              className="rounded-[1.5rem] border bg-card p-4 sm:p-6"
-              aria-labelledby="parent-announcements-heading"
+            <CollapsiblePanel
+              id="parent-home-announcements"
+              title={`Latest From ${centerName ?? "Your School"}`}
+              summary={announcements[0]?.title ?? "No new announcements"}
+              className="rounded-[1.5rem] bg-card"
+              contentClassName="px-4 pb-4 pt-0 sm:px-6 sm:pb-6"
+              defaultCollapsed
             >
-              <h2
-                id="parent-announcements-heading"
-                className="text-xl font-semibold"
-              >
-                Latest From {centerName ?? "Your School"}
-              </h2>
               {announcements[0] ? (
                 <div className="mt-5 hidden sm:block">
                   <BellRing
@@ -2219,20 +2212,17 @@ function ParentPortalWorkspaceView({
                   ) : null}
                 </details>
               ) : null}
-            </section>
+            </CollapsiblePanel>
 
-            <section
-              className="rounded-[1.5rem] border bg-card p-4 sm:p-6 lg:col-span-2 xl:col-span-1"
-              aria-labelledby="parent-account-heading"
+            <CollapsiblePanel
+              id="parent-home-account"
+              title={<>Account &amp; Payments</>}
+              accessibleLabel="Account & Payments"
+              summary={parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed ? "Balance review in progress" : `${money(balanceCents)} · ${openInvoices.length} open invoice${openInvoices.length === 1 ? "" : "s"}`}
+              className="rounded-[1.5rem] bg-card lg:col-span-2 xl:col-span-1"
+              contentClassName="px-4 pb-4 pt-0 sm:px-6 sm:pb-6"
+              defaultCollapsed={balanceCents <= 0}
             >
-              <div className="flex items-start justify-between gap-3">
-                <h2 id="parent-account-heading" className="text-xl font-semibold">
-                  Account &amp; Payments
-                </h2>
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <CreditCard className="size-5" aria-hidden="true" />
-                </span>
-              </div>
               {parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed ? (
                 <div className="mt-5 rounded-2xl border border-amber-400/35 bg-amber-400/10 p-4">
                   <p className="font-semibold">Balance review in progress</p>
@@ -2273,7 +2263,7 @@ function ParentPortalWorkspaceView({
                     ? `Latest activity ${formatDate(latestAccountLedgerEntry.effectiveAt)}`
                     : "No open invoices"}
               </p>
-            </section>
+            </CollapsiblePanel>
           </div>
 
           <section aria-labelledby="parent-quick-actions-heading">

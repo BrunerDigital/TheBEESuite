@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Textarea } from "@/components/ui/textarea";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { UserAvatar } from "@/components/user-avatar";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import {
@@ -1133,12 +1134,14 @@ export function TeacherMobileWorkspace({
         </Card>
       ) : null}
 
-      <Card id="teacher-roster" className="scroll-mt-28 shadow-none">
-        <CardHeader>
-          <CardTitle as="h2">Roster</CardTitle>
-          <CardDescription>{roster.length} {roster.length === 1 ? "child" : "children"} in your assigned classrooms</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
+      <CollapsibleCard
+        id="teacher-roster"
+        title="Roster"
+        description={`${roster.length} ${roster.length === 1 ? "child" : "children"} in your assigned classrooms`}
+        collapsedSummary={`${roster.length} ${roster.length === 1 ? "child" : "children"} · ${byClassroom.length} ${byClassroom.length === 1 ? "classroom" : "classrooms"}`}
+        className="scroll-mt-28 shadow-none"
+        contentClassName="grid gap-3 md:grid-cols-2"
+      >
           {byClassroom.map((classroom) => {
             const ratioSnapshot = classroom.id ? ratioByClassroomId.get(classroom.id) : null;
             const presentChildren = classroom.children.filter((child) => {
@@ -1315,16 +1318,10 @@ export function TeacherMobileWorkspace({
             </div>
             );
           })}
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-        <Card id="teacher-attendance" className="scroll-mt-28 shadow-none">
-          <CardHeader>
-            <CardTitle as="h2">Attendance</CardTitle>
-            <CardDescription>{selectedChild?.fullName ?? "Choose a child"}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <CollapsibleCard id="teacher-attendance" title="Attendance" description={selectedChild?.fullName ?? "Choose a child"} collapsedSummary={selectedChild ? `${selectedChild.fullName} · ${attendanceStatus}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
             <div className="space-y-1">
               <Label htmlFor="teacher-attendance-status">Status</Label>
               <Select value={attendanceStatus} onValueChange={(value) => value && setAttendanceStatus(value)}>
@@ -1352,15 +1349,9 @@ export function TeacherMobileWorkspace({
               <ClipboardCheck data-icon="inline-start" />
               Save Attendance
             </Button>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
 
-        <Card id="teacher-location" className="scroll-mt-28 shadow-none">
-          <CardHeader>
-            <CardTitle as="h2">Child location</CardTitle>
-            <CardDescription>{selectedChild ? `${selectedChild.fullName} · currently ${locationFor(selectedChild)}` : "Choose a child"}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <CollapsibleCard id="teacher-location" title="Child location" description={selectedChild ? `${selectedChild.fullName} · currently ${locationFor(selectedChild)}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
             <div className="space-y-1">
               <Label htmlFor="teacher-location-target">Move to</Label>
               <Select value={locationTarget} onValueChange={(value) => value && setLocationTarget(value)}>
@@ -1385,15 +1376,9 @@ export function TeacherMobileWorkspace({
               <MapPin data-icon="inline-start" />
               Update Location
             </Button>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
 
-        <Card id="teacher-photo" className="scroll-mt-28 shadow-none">
-          <CardHeader>
-            <CardTitle as="h2">Photo</CardTitle>
-            <CardDescription>{selectedChild?.fullName ?? "Choose a child"}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <CollapsibleCard id="teacher-photo" title="Photo" description={selectedChild?.fullName ?? "Choose a child"} collapsedSummary={selectedChild ? `${selectedChild.fullName} · ${selectedChild.photoVideoPermission ? "Sharing allowed" : "Permission required"}` : "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
             <div className="space-y-1">
               <Label htmlFor="photo-child">Child</Label>
               <Select value={selectedChild?.id ?? ""} onValueChange={(value) => { if (value) chooseChild(value); }}>
@@ -1436,19 +1421,16 @@ export function TeacherMobileWorkspace({
               <Camera data-icon="inline-start" />
               Share Photo
             </Button>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
 
-        <Card id="teacher-daily-report" className="scroll-mt-28 shadow-none lg:col-span-2">
-          <CardHeader>
-            <CardTitle as="h2">Daily Report</CardTitle>
-            <CardDescription>
-              {activeDailyReportChildren.length === 1
-                ? activeDailyReportChildren[0].fullName
-                : `${activeDailyReportChildren.length} children selected`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
+        <CollapsibleCard
+          id="teacher-daily-report"
+          title="Daily Report"
+          description={activeDailyReportChildren.length === 1 ? activeDailyReportChildren[0].fullName : `${activeDailyReportChildren.length} children selected`}
+          collapsedSummary={`${activeDailyReportChildren.length} selected · ${mealRows.length} meals · ${napRows.length} naps`}
+          className="scroll-mt-28 shadow-none lg:col-span-2"
+          contentClassName="space-y-5"
+        >
             <section id="teacher-quick-log" className="scroll-mt-28 rounded-xl border bg-background/40 p-3">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
@@ -1731,15 +1713,9 @@ export function TeacherMobileWorkspace({
               <BookOpen data-icon="inline-start" />
               {activeDailyReportChildIds.length > 1 ? `Save ${activeDailyReportChildIds.length} daily reports` : "Save daily report"}
             </Button>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
 
-        <Card id="teacher-incident" className="scroll-mt-28 shadow-none">
-          <CardHeader>
-            <CardTitle as="h2">Incident report</CardTitle>
-            <CardDescription>Send an objective record to the director for review.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <CollapsibleCard id="teacher-incident" title="Incident report" description="Send an objective record to the director for review." collapsedSummary={selectedChild?.fullName ?? "Choose a child"} className="scroll-mt-28 shadow-none" contentClassName="space-y-3" defaultCollapsed>
             <Input aria-label="Incident type" value={incidentType} onChange={(event) => setIncidentType(event.target.value)} placeholder="Incident type" />
             <Textarea id="teacher-incident-description" aria-label="Objective incident description" value={incidentDescription} onChange={(event) => setIncidentDescription(event.target.value)} placeholder="Describe what happened using observable facts" />
             <Textarea id="teacher-incident-action" aria-label="Action taken after incident" value={actionTaken} onChange={(event) => setActionTaken(event.target.value)} placeholder="Action taken" />
@@ -1747,8 +1723,7 @@ export function TeacherMobileWorkspace({
               <ShieldAlert data-icon="inline-start" />
               Send incident report
             </Button>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       </div>
     </div>
   );

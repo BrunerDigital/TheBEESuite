@@ -60,7 +60,7 @@ function field(row: CsvRow | undefined, ...names: string[]) {
 }
 
 function checked(value: string) {
-  return /^(checked|yes|true|1|x)$/i.test(value.trim());
+  return /^(checked|yes|y|true|1|x)$/i.test(value.trim());
 }
 
 function decodeCsvBuffer(buffer: Buffer) {
@@ -483,6 +483,12 @@ function recurringWeeklyLedgerCandidates(rows: CsvRow[]) {
   return result;
 }
 
+const FORMAL_TUITION_CHILD_ID_COLUMNS = ["Child ID", "Child Key", "Student ID"];
+const FORMAL_TUITION_AMOUNT_COLUMNS = ["Weekly Rate", "Tuition Rate", "Charge Amount", "Amount", "Rate"];
+const FORMAL_TUITION_CADENCE_COLUMNS = ["Frequency", "Cadence", "Billing Period", "Charge Frequency"];
+const FORMAL_TUITION_EFFECTIVE_DATE_COLUMNS = ["Effective Date", "Start Date", "Status Start Date"];
+const FORMAL_TUITION_DESCRIPTION_COLUMNS = ["Description", "Charge Description", "Tuition Plan", "Plan Name"];
+
 function formalWeeklyTuitionCandidates(rows: CsvRow[]) {
   const byChild = new Map<string, Array<{
     amountCents: number;
@@ -491,21 +497,36 @@ function formalWeeklyTuitionCandidates(rows: CsvRow[]) {
     description: string;
   }>>();
   for (const row of rows) {
-    const childId = field(row, "Child ID", "Child Key", "Student ID");
-    const amountCents = parseMoneyCents(field(row, "Weekly Rate", "Tuition Rate", "Charge Amount", "Amount", "Rate"));
-    const cadence = field(row, "Frequency", "Cadence", "Billing Period", "Charge Frequency");
+    const childId = field(row, ...FORMAL_TUITION_CHILD_ID_COLUMNS);
+    const amountCents = parseMoneyCents(field(row, ...FORMAL_TUITION_AMOUNT_COLUMNS));
+    const cadence = field(row, ...FORMAL_TUITION_CADENCE_COLUMNS);
     if (!childId || amountCents === null) continue;
     const candidate = {
       amountCents,
       cadence,
-      effectiveDate: field(row, "Effective Date", "Start Date", "Status Start Date"),
-      description: field(row, "Description", "Charge Description", "Tuition Plan", "Plan Name"),
+      effectiveDate: field(row, ...FORMAL_TUITION_EFFECTIVE_DATE_COLUMNS),
+      description: field(row, ...FORMAL_TUITION_DESCRIPTION_COLUMNS),
     };
     const existing = byChild.get(childId) ?? [];
-    if (!existing.some((item) => JSON.stringify(item) === JSON.stringify(candidate))) existing.push(candidate);
+    existing.push(candidate);
     byChild.set(childId, existing);
   }
   return byChild;
+}
+
+function isWeeklyCadence(value: string) {
+  return /^(weekly|week|every week|1 week)$/i.test(value.trim());
+}
+
+function isValidSourceDate(value: string) {
+  const source = value.trim();
+  const match = source.match(/^(?:(\d{4})-(\d{1,2})-(\d{1,2})|(\d{1,2})\/(\d{1,2})\/(\d{4}))$/);
+  if (!match) return false;
+  const year = Number(match[1] ?? match[6]);
+  const month = Number(match[2] ?? match[4]);
+  const day = Number(match[3] ?? match[5]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
 function statusOf(record: CsvRow) {
@@ -752,6 +773,7 @@ function sourceSummary(sources: SourceFile[]) {
 function markdownReport(input: {
   location: string;
   generatedAt: string;
+  preImportStatus: "BLOCKED" | "READY_FOR_PREVIEW_REVIEW";
   gates: Record<string, Gate>;
   metrics: Record<string, unknown>;
   sourceFiles: ReturnType<typeof sourceSummary>;
@@ -768,6 +790,8 @@ function markdownReport(input: {
     `# ${input.location} ProCare import preparation`,
     "",
     `Generated: ${input.generatedAt}`,
+    "",
+    `Pre-import status: **${input.preImportStatus}**`,
     "",
     "This package is preparation evidence only. It does not import records, change access, send invitations, create PINs, activate staff, reconcile balances, assign tuition, or authorize ProCare cutover.",
     "",
@@ -966,7 +990,7 @@ export async function prepareProcareLocationWorkflow(input: {
     const evidence = ledgerCandidates.get(accountId);
     const candidates = evidence?.candidates ?? [];
     const formalCandidates = formalTuitionCandidates.get(record["child id"]) ?? [];
-    const exactFormalCandidates = formalCandidates.filter((item) => /^weekly$/i.test(item.cadence) && item.amountCents > 0);
+    const exactFormalCandidates = formalCandidates.filter((item) => isWeeklyCadence(item.cadence) && item.amountCents > 0);
     const renderedNameKey = renderedChildNameKey(record["child name"] ?? "");
     const renderedCandidates = (enrolledNameCountsForTuition.get(renderedNameKey) === 1
       ? renderedTuitionByName.get(renderedNameKey) ?? []
@@ -992,7 +1016,7 @@ export async function prepareProcareLocationWorkflow(input: {
     let sourceEffectiveDate = "";
     let sourceDescription = "";
     let sourceKind = "";
-    if (tuition && exactFormalCandidates.length === 1 && formalCandidates.length === 1) {
+    if (tuition && exactFormalCandidates.length === 1 && formalCandidates.length === 1 && isValidSourceDate(exactFormalCandidates[0].effectiveDate) && clean(exactFormalCandidates[0].description)) {
       const exact = exactFormalCandidates[0];
       sourceAmountCents = String(exact.amountCents);
       sourceCadence = "weekly";
@@ -1001,6 +1025,12 @@ export async function prepareProcareLocationWorkflow(input: {
       sourceKind = "formal_child_contract";
       status = "exact_weekly_contract_requires_confirmation";
       evidenceNote = "One exact positive weekly tuition row is keyed to this stable Child ID; confirm the amount, account link, and effective week.";
+    } else if (tuition && exactFormalCandidates.length === 1 && formalCandidates.length === 1 && isValidSourceDate(exactFormalCandidates[0].effectiveDate)) {
+      status = "blocked_formal_tuition_description_missing";
+      evidenceNote = "The stable Child ID has one positive weekly tuition row and valid effective date, but its source description is missing. Correct the export before review.";
+    } else if (tuition && exactFormalCandidates.length === 1 && formalCandidates.length === 1) {
+      status = "blocked_formal_tuition_effective_date_missing_or_invalid";
+      evidenceNote = "The stable Child ID has one positive weekly tuition row, but its source effective date is missing or invalid. Correct the export before review.";
     } else if (tuition && formalCandidates.length > 0) {
       status = "blocked_conflicting_or_nonweekly_formal_tuition_rows";
       evidenceNote = "The stable Child ID has conflicting, nonweekly, nonpositive, or duplicate formal tuition rows. Resolve the source rather than selecting one automatically.";
@@ -1011,8 +1041,8 @@ export async function prepareProcareLocationWorkflow(input: {
       sourceEffectiveDate = exact["effective date"];
       sourceDescription = exact["source charge descriptions"];
       sourceKind = "rendered_contract_name_candidate";
-      status = "rendered_weekly_contract_requires_stable_id_confirmation";
-      evidenceNote = "A unique enrolled name matches one rendered weekly contract group. The reviewer must confirm the stable Child ID, Account ID, amount, and effective week.";
+      status = "blocked_rendered_contract_missing_stable_id_or_effective_date";
+      evidenceNote = "A unique enrolled name matches one rendered weekly contract group, but the source lacks a stable Child ID and valid effective date. Supply source-backed fields before review.";
     } else if (!tuition && !renderedContractBilling && candidates.length === 1 && !singleChildAccount) {
       status = "blocked_account_total_cannot_be_allocated_across_children";
       evidenceNote = "Recurring weekly statement history exists at the account level, but the account has multiple enrolled children and the source does not allocate the amount by Child ID.";
@@ -1020,8 +1050,8 @@ export async function prepareProcareLocationWorkflow(input: {
       status = "blocked_conflicting_recurring_statement_rates";
       evidenceNote = "More than one recurring weekly tuition amount appears in statement history; a child contract or billing schedule is required.";
     } else if (!tuition && !renderedContractBilling && candidate) {
-      status = "candidate_from_recurring_statement_history_requires_approval";
-      evidenceNote = "One positive tuition charge amount repeated at 5-9 day intervals at least three times for a single-child account. The effective week still requires confirmation.";
+      status = "blocked_recurring_statement_history_missing_child_contract_effective_date";
+      evidenceNote = "Recurring statement history supports a candidate amount, but it is not a child contract and lacks source-backed Child ID, description, and effective-date evidence.";
       sourceAmountCents = String(candidate.amountCents);
       sourceCadence = "weekly";
       sourceKind = "recurring_statement_history";
@@ -1179,10 +1209,14 @@ export async function prepareProcareLocationWorkflow(input: {
   }
 
   const staffRowsByEmployee = new Map<string, Array<{ source: string; row: CsvRow }>>();
+  let currentStaffRowsMissingEmployeeId = 0;
   for (const source of employeeSources) {
     for (const row of source.rows) {
       const employeeId = field(row, "Employee ID");
-      if (!employeeId) continue;
+      if (!employeeId) {
+        if (/^currently employed$/i.test(field(row, "Employment Status")) && !checked(field(row, "Is Hidden"))) currentStaffRowsMissingEmployeeId += 1;
+        continue;
+      }
       staffRowsByEmployee.set(employeeId, [...(staffRowsByEmployee.get(employeeId) ?? []), { source: source.filename, row }]);
     }
   }
@@ -1236,7 +1270,9 @@ export async function prepareProcareLocationWorkflow(input: {
   const activeRelationshipWarnings = enrolledRecords.filter((record) => Boolean(record["import warning"])).length;
   const activeNoGuardian = relationshipReview.filter((row) => row["child status"].toLowerCase() === "enrolled" && Number(row["guardian relationships"]) === 0).length;
   const activeAccountsMissingBalance = [...enrolledChildrenByAccount.keys()].filter((accountId) => !balance!.rows.some((row) => field(row, "Account ID") === accountId)).length;
-  const weeklyStatementCandidateChildren = weeklyTuitionReview.filter((row) => row.status === "candidate_from_recurring_statement_history_requires_approval").length;
+  const weeklyStatementCandidateChildren = weeklyTuitionReview.filter((row) => row.status === "blocked_recurring_statement_history_missing_child_contract_effective_date").length;
+  const formalWeeklyCoveredChildren = weeklyTuitionReview.filter((row) => row.status === "exact_weekly_contract_requires_confirmation").length;
+  const reviewableWeeklyTuitionChildren = weeklyTuitionReview.filter((row) => row.status === "exact_weekly_contract_requires_confirmation").length;
   const weeklyStatementEvidenceRows = (ledger?.rows ?? []).filter(isTuitionChargeLedgerRow).length;
   const enrolledRenderedNameCounts = new Map<string, number>();
   for (const record of enrolledRecords) {
@@ -1251,9 +1287,6 @@ export async function prepareProcareLocationWorkflow(input: {
     const key = renderedChildNameKey(record["child name"] ?? "");
     return Boolean(key) && enrolledRenderedNameCounts.get(key) === 1 && renderedBillingChildNames.has(key);
   }).length;
-  const renderedBillingCoverageComplete = Boolean(renderedContractBilling)
-    && renderedBillingReview.length > 0
-    && renderedBillingCoveredChildren === enrolledRecords.length;
   const parentPortalBlockedFamilies = parentPortalBillingReview.filter((row) => row.status === "blocked").length;
   const parentPortalReadyFamilies = parentPortalBillingReview.length - parentPortalBlockedFamilies;
   const activePortalSafeAccountIds = new Set(parentPortalBillingReview
@@ -1272,6 +1305,263 @@ export async function prepareProcareLocationWorkflow(input: {
   const crossAccountGuardianPersonIds = [...guardianAccountsByPerson]
     .filter(([, accounts]) => accounts.size > 1)
     .map(([personId]) => personId);
+  const balanceByAccount = new Map(currentBalanceRows.map((row) => [field(row, "Account ID"), row]));
+  const tuitionByChild = new Map(weeklyTuitionReview.map((row) => [row["child id"], row]));
+  const requiredFieldReconciliation: CsvRow[] = [];
+  const sourceRows = (source: SourceFile | null, column: string, value: string) => source
+    ? source.rows.flatMap((row, index) => field(row, column) === value ? [String(index + 2)] : []).join(" | ")
+    : "";
+  const sourceCellValues = (source: SourceFile | null, matchColumn: string, matchValue: string, valueColumns: string[]) => source
+    ? source.rows
+        .filter((row) => field(row, matchColumn) === matchValue)
+        .map((row) => field(row, ...valueColumns))
+        .filter(Boolean)
+        .join(" | ")
+    : "";
+  const sourceCellValuesByAliases = (source: SourceFile | null, matchColumns: string[], matchValue: string, valueColumns: string[]) => source
+    ? source.rows
+        .filter((row) => field(row, ...matchColumns) === matchValue)
+        .map((row) => field(row, ...valueColumns))
+        .filter(Boolean)
+        .join(" | ")
+    : "";
+  const sourceRowsByAliases = (source: SourceFile | null, matchColumns: string[], matchValue: string) => source
+    ? source.rows.flatMap((row, index) => field(row, ...matchColumns) === matchValue ? [String(index + 2)] : []).join(" | ")
+    : "";
+  const sourceCellEvidence = (source: SourceFile | null, matchColumn: string, matchValue: string, valueColumns: string[]) => source
+    ? source.rows
+        .filter((row) => field(row, matchColumn) === matchValue)
+        .flatMap((row) => valueColumns.flatMap((column) => {
+          const rawValue = field(row, column);
+          return rawValue ? [`${column}=${rawValue}`] : [];
+        }))
+        .join(" | ")
+    : "";
+  const requiredCell = (input: {
+    scope: string;
+    entity: string;
+    entityId: string;
+    destination: string;
+    source: string;
+    sourceColumn: string;
+    sourceRows: string;
+    value: string;
+    rawValue: string;
+    required?: boolean;
+    note?: string;
+  }) => {
+    const required = input.required !== false;
+    requiredFieldReconciliation.push({
+      Scope: input.scope,
+      "BEE Entity": input.entity,
+      "BEE Stable Entity ID": input.entityId,
+      "BEE Suite Field": input.destination,
+      "Source Report": input.source,
+      "Source Column Or Cell": input.sourceColumn,
+      "Source Row Number Or Stable Key": input.sourceRows,
+      "Source Cell Value": input.rawValue,
+      "BEE Normalized Value": input.value,
+      Requirement: required ? "included_in_migration_template" : "included_for_separate_module_or_activation_review",
+      "Reconciliation Status": input.rawValue ? "source_cell_present" : "source_cell_not_supplied",
+      "Reviewer Confirmation": "",
+      Notes: input.note ?? "",
+    });
+  };
+  for (const record of enrolledRecords) {
+    const childId = record["child id"];
+    const accountId = record["account id"];
+    const enrollmentRowNumbers = sourceRows(enrollment, "Child ID", childId) || `Child ID=${childId}`;
+    const balanceRow = balanceByAccount.get(accountId);
+    const tuitionRow = tuitionByChild.get(childId);
+    const relationshipJson = record["procare relationship records"] || "";
+    const childInfoJson = record["procare child info source records"] || "";
+    const counts = relationshipCounts(record);
+    const familySource = canonicalParentInfo ?? balance;
+    const selectedPayerId = record["guardian id"];
+    const selectedPayerSourceRows = sourceRows(familySource, "Person ID", selectedPayerId) || `Person ID=${selectedPayerId}`;
+    const matchingSchedules = renderedScheduleReview.filter((row) => (
+      renderedChildNameKey(row["source child name"] ?? "") === renderedChildNameKey(record["child name"] ?? "")
+      && evidenceKey(row["source classroom"] ?? "") === evidenceKey(record.classroom ?? "")
+    ));
+    const matchedSchedule = matchingSchedules.length === 1 ? matchingSchedules[0] : null;
+    const matchedScheduleValue = matchedSchedule
+      ? ["monday", "tuesday", "wednesday", "thursday", "friday"].map((day) => matchedSchedule[day]).filter(Boolean).join(" | ")
+      : "";
+    for (const [destination, sourceColumn, value, rawValue] of [
+      ["Family.externalId", "Account ID", accountId, sourceCellValues(familySource, "Person ID", selectedPayerId, ["Account ID"])],
+      ["Family.name", "Payer Full Name / Last Name", record["family name"], sourceCellValues(familySource, "Person ID", selectedPayerId, ["Full Name", "Payer Full Name", "Last Name"])],
+      ["Child.externalId", "Child ID", childId, sourceCellValues(enrollment, "Child ID", childId, ["Child ID"])],
+      ["Child.fullName", "Full Name", record["child name"], sourceCellValues(enrollment, "Child ID", childId, ["Full Name", "Child Name"])],
+      ["Child.dateOfBirth", "Date of Birth", record["date of birth"], sourceCellValues(enrollment, "Child ID", childId, ["Date of Birth", "DOB"])],
+      ["Child.enrollmentStatus", "Enrollment Status", record["child status"], sourceCellValues(enrollment, "Child ID", childId, ["Enrollment Status", "Child Status", "Status"])],
+      ["Child.enrollmentStartDate", "Status Start Date", record["start date"], sourceCellValues(enrollment, "Child ID", childId, ["Status Start Date", "Start Date"])],
+      ["Classroom.externalId", "Classroom ID", record["classroom id"], sourceCellValues(enrollment, "Child ID", childId, ["Classroom ID", "Room ID"])],
+      ["Classroom.name", "Primary Classroom", record.classroom, sourceCellValues(enrollment, "Child ID", childId, ["Primary Classroom", "Classroom"])],
+    ]) requiredCell({
+      scope: "roster_identity_enrollment",
+      entity: destination.startsWith("Family") ? "Family" : destination.startsWith("Classroom") ? "Classroom" : "Child",
+      entityId: destination.startsWith("Family") ? accountId : destination.startsWith("Classroom") ? record["classroom id"] : childId,
+      destination,
+      source: destination.startsWith("Family") ? parentInfoFilename : enrollment!.filename,
+      sourceColumn,
+      sourceRows: destination.startsWith("Family") ? selectedPayerSourceRows : enrollmentRowNumbers,
+      value,
+      rawValue,
+    });
+    for (const [destination, sourceColumn, value, rawValue] of [
+      ["Family.address", "Payer address columns", record.address, sourceCellEvidence(familySource, "Person ID", selectedPayerId, ["Address", "Address 1", "Address 2", "City", "State", "Zip", "Postal Code"])],
+      ["Child.gender", "Gender", record.gender, sourceCellValues(enrollment, "Child ID", childId, ["Gender"])],
+      ["Child.enrollmentEndDate", "Status End Date", record["end date"], sourceCellValues(enrollment, "Child ID", childId, ["Status End Date", "End Date"])],
+      ["Child.ageGroup", "Age Group / Program", record["age group"], sourceCellValues(enrollment, "Child ID", childId, ["Age Group", "Program"])],
+      ["Child.schedule", "Rendered classroom schedule cells", matchedScheduleValue, matchedScheduleValue],
+    ]) requiredCell({
+      scope: "additional_import_fields",
+      entity: destination.startsWith("Family") ? "Family" : "Child",
+      entityId: destination.startsWith("Family") ? accountId : childId,
+      destination,
+      source: destination === "Child.schedule" ? renderedClassroomSchedule?.filename ?? "" : destination.startsWith("Family") ? parentInfoFilename : enrollment!.filename,
+      sourceColumn,
+      sourceRows: destination === "Child.schedule"
+        ? `Child ID=${childId}; ${matchedSchedule ? "unique reviewed name and classroom match" : `${matchingSchedules.length} matching rendered rows; left unbound`}`
+        : destination.startsWith("Family") ? selectedPayerSourceRows : enrollmentRowNumbers,
+      value,
+      rawValue,
+      required: false,
+    });
+    requiredCell({
+      scope: "relationships_and_safety",
+      entity: "Child relationships",
+      entityId: childId,
+      destination: "Guardian[] relationship records",
+      source: relationships!.filename,
+      sourceColumn: "Person ID + Relationship Type + Lives With",
+      sourceRows: sourceRows(relationships, "Child ID", childId) || `Child ID=${childId}`,
+      value: counts.guardians > 0 ? relationshipJson : "",
+      rawValue: counts.guardians > 0 ? sourceCellEvidence(relationships, "Child ID", childId, ["Person ID", "Relationship Type", "Lives With"]) : "",
+      note: `${counts.guardians} guardian, ${counts.emergencyContacts} emergency-contact, and ${counts.authorizedPickups} authorized-pickup relationship(s) parsed.`,
+    });
+    requiredCell({
+      scope: "relationships_and_safety",
+      entity: "EmergencyContact and AuthorizedPickup",
+      entityId: childId,
+      destination: "EmergencyContact[] and AuthorizedPickup[] source cells",
+      source: relationships!.filename,
+      sourceColumn: "Person ID + Emergency + Authorized Pickup + relationship/contact fields",
+      sourceRows: sourceRows(relationships, "Child ID", childId) || `Child ID=${childId}`,
+      value: counts.emergencyContacts > 0 && counts.authorizedPickups > 0 ? relationshipJson : "",
+      rawValue: counts.emergencyContacts > 0 && counts.authorizedPickups > 0 ? sourceCellEvidence(relationships, "Child ID", childId, ["Person ID", "Emergency", "Authorized Pickup", "Relationship Type"]) : "",
+      note: "Both emergency-contact and authorized-pickup coverage are required; the same explicit source row may satisfy both.",
+    });
+    requiredCell({
+      scope: "relationships_and_safety",
+      entity: "Child",
+      entityId: childId,
+      destination: "Child safety / medical / allergy / custody source coverage",
+      source: childInfo?.filename ?? "",
+      sourceColumn: "Child ID + Category Description + Item Description + Item Is Active",
+      sourceRows: childInfo ? (sourceRows(childInfo, "Child ID", childId) || `Child ID=${childId}; zero applicable item rows`) : "",
+      value: childInfo ? (childInfoJson || "[]") : "",
+      rawValue: childInfo ? (sourceCellEvidence(childInfo, "Child ID", childId, ["Category Description", "Item Description", "Item Is Active"]) || "[]") : "",
+      note: "An empty item array is acceptable only when the complete Child Information Tracking export was supplied and reviewed.",
+    });
+    requiredCell({
+      scope: "opening_balance",
+      entity: "Family billing account",
+      entityId: accountId,
+      destination: "BillingAccount opening signed balance cents",
+      source: balance!.filename,
+      sourceColumn: "Balance",
+      sourceRows: sourceRows(balance, "Account ID", accountId) || `Account ID=${accountId}`,
+      value: balanceRow?.["BEE Balance Cents"] ?? "",
+      rawValue: field(balanceRow, "Balance"),
+    });
+    for (const [destination, sourceColumn, value, rawValue] of [
+      ["Tuition assignment amount cents", FORMAL_TUITION_AMOUNT_COLUMNS.join(" / "), tuitionRow?.["weekly tuition cents"] ?? "", sourceCellValuesByAliases(tuition, FORMAL_TUITION_CHILD_ID_COLUMNS, childId, FORMAL_TUITION_AMOUNT_COLUMNS)],
+      ["Tuition assignment cadence", FORMAL_TUITION_CADENCE_COLUMNS.join(" / "), tuitionRow?.["source cadence"] ?? "", sourceCellValuesByAliases(tuition, FORMAL_TUITION_CHILD_ID_COLUMNS, childId, FORMAL_TUITION_CADENCE_COLUMNS)],
+      ["Tuition assignment effective date", FORMAL_TUITION_EFFECTIVE_DATE_COLUMNS.join(" / "), tuitionRow?.["source effective date"] ?? "", sourceCellValuesByAliases(tuition, FORMAL_TUITION_CHILD_ID_COLUMNS, childId, FORMAL_TUITION_EFFECTIVE_DATE_COLUMNS)],
+      ["Tuition assignment description", FORMAL_TUITION_DESCRIPTION_COLUMNS.join(" / "), tuitionRow?.["source description"] ?? "", sourceCellValuesByAliases(tuition, FORMAL_TUITION_CHILD_ID_COLUMNS, childId, FORMAL_TUITION_DESCRIPTION_COLUMNS)],
+    ]) requiredCell({
+      scope: "weekly_tuition",
+      entity: "Child tuition assignment",
+      entityId: childId,
+      destination,
+      source: tuition?.filename ?? renderedContractBilling?.filename ?? ledger?.filename ?? "",
+      sourceColumn,
+      sourceRows: tuition ? (sourceRowsByAliases(tuition, FORMAL_TUITION_CHILD_ID_COLUMNS, childId) || `Child ID=${childId}`) : `Child ID=${childId}; ${tuitionRow?.["source kind"] ?? "no matched evidence"}`,
+      value,
+      rawValue,
+    });
+  }
+  for (const classroom of classroomReview.filter((row) => Number(row.enrolled) > 0)) {
+    const classroomId = classroom["classroom id"];
+    const setup = classroomSettings?.rows.find((row) => field(row, "Classroom ID") === classroomId);
+    for (const [destination, sourceColumn, value] of [
+      ["Classroom.capacity", "Capacity / Licensed Capacity / Max Capacity", field(setup, "Capacity", "Licensed Capacity", "Max Capacity")],
+      ["Classroom.ratioRule", "Ratio / Ratio Rule", field(setup, "Ratio", "Ratio Rule")],
+      ["Classroom.ageGroup", "Age Group / Program", field(setup, "Age Group", "Program")],
+    ]) requiredCell({
+      scope: "classroom_setup",
+      entity: "Classroom",
+      entityId: classroomId,
+      destination,
+      source: classroomSettings?.filename ?? "",
+      sourceColumn,
+      sourceRows: classroomSettings ? (sourceRows(classroomSettings, "Classroom ID", classroomId) || `Classroom ID=${classroomId}`) : "",
+      value,
+      rawValue: value,
+    });
+  }
+  for (const staff of staffReview) {
+    const employeeId = staff["employee id"];
+    const staffEvidenceRows = employeeSources.flatMap((source) => source.rows.flatMap((row, index) => (
+      field(row, "Employee ID") === employeeId ? [{ source: source.filename, row: String(index + 2), values: row }] : []
+    )));
+    const staffEvidence = (...columns: string[]) => {
+      const match = staffEvidenceRows.find((item) => field(item.values, ...columns));
+      return { source: match?.source ?? "", row: match?.row ?? "", value: field(match?.values, ...columns) };
+    };
+    for (const [destination, sourceColumn, value, evidenceColumns] of [
+      ["StaffProfile.externalId", "Employee ID", employeeId, ["Employee ID"]],
+      ["StaffProfile.fullName", "Full Name", staff["full name"], ["Full Name"]],
+      ["StaffProfile.employmentStatus", "Employment Status", staff["employment status"], ["Employment Status"]],
+      ["StaffProfile.classroom/work area externalId", "Work Area ID", staff["work area id"], ["Work Area ID"]],
+      ["StaffProfile.classroom/work area name", "Primary Work Area / Work Area Name", staff["work area"], ["Primary Work Area", "Work Area Name"]],
+    ] as Array<[string, string, string, string[]]>) {
+      const evidence = staffEvidence(...evidenceColumns);
+      requiredCell({
+      scope: "staff_source_evidence",
+      entity: "StaffProfile",
+      entityId: employeeId,
+      destination,
+      source: evidence.source,
+      sourceColumn,
+      sourceRows: evidence.row,
+      value,
+      rawValue: evidence.value,
+      note: "Staff identity/access creation remains a separate approval gate.",
+    });
+    }
+    for (const [destination, sourceColumn, value, evidenceColumns] of [
+      ["StaffProfile.email", "Email", staff.email, ["Email"]],
+      ["StaffProfile.phone", "Phone 1 / Phone 2 / Phone 3", staff.phone, ["Phone 1", "Phone 2", "Phone 3"]],
+    ] as Array<[string, string, string, string[]]>) {
+      const evidence = staffEvidence(...evidenceColumns);
+      requiredCell({
+      scope: "staff_activation",
+      entity: "StaffProfile",
+      entityId: employeeId,
+      destination,
+      source: evidence.source,
+      sourceColumn,
+      sourceRows: evidence.row,
+      value,
+      rawValue: evidence.value,
+      required: false,
+      note: "Required before staff login/invitation when that activation is approved, not for roster import.",
+    });
+    }
+  }
+  const missingSourceFieldCells = requiredFieldReconciliation.filter((row) => row["Reconciliation Status"] === "source_cell_not_supplied");
   const gates: Record<string, Gate> = {
     "Roster and relationships": {
       status: activeRelationshipWarnings || activeNoGuardian ? "blocked" : parentInfoMode === "canonical" ? "ready" : "review_required",
@@ -1322,9 +1612,9 @@ export async function prepareProcareLocationWorkflow(input: {
       ],
     },
     "Weekly tuition": {
-      status: tuition || renderedBillingCoverageComplete || weeklyStatementCandidateChildren === enrolledRecords.length ? "review_required" : "blocked",
+      status: enrolledRecords.length > 0 && reviewableWeeklyTuitionChildren === enrolledRecords.length ? "review_required" : "blocked",
       summary: tuition
-        ? `Detected ${tuition.filename}; rates still require child-level review and an explicit effective week.`
+        ? `Detected ${tuition.filename}; ${formalWeeklyCoveredChildren}/${enrolledRecords.length} enrolled children have exactly one positive weekly rate with source effective-date evidence.`
         : renderedContractBilling
           ? `Detected ${renderedContractBilling.filename} with ${renderedBillingReview.length} editable charge rows covering ${renderedBillingCoveredChildren}/${enrolledRecords.length} enrolled children by unique reviewed name evidence; stable Child IDs and effective dates still require confirmation.`
           : `${weeklyStatementCandidateChildren}/${enrolledRecords.length} enrolled children have a defensible recurring weekly statement-rate candidate; ${ledger?.rows.length ?? 0} ledger rows were supplied.`,
@@ -1335,6 +1625,7 @@ export async function prepareProcareLocationWorkflow(input: {
             ? `The rendered contract report preserves child name, classroom, charge description, amount, and cadence, but contains no stable Child ID. Reviewers must bind each accepted row to one source-backed Child ID or hold it; ${enrolledRecords.length - renderedBillingCoveredChildren} enrolled child row(s) still lack unique rendered name coverage.`
             : "A statement-derived candidate requires the same positive tuition amount at least three times at 5-9 day intervals, and can be assigned only when the account has exactly one enrolled child. Payments, credits, late fees, payroll rates, and point-in-time balances are excluded.",
         `${weeklyStatementEvidenceRows} supplied ledger rows qualify as positive tuition charges; ${weeklyStatementCandidateChildren} child-level weekly candidates were produced.`,
+        `${reviewableWeeklyTuitionChildren}/${enrolledRecords.length} enrolled children have one reviewable weekly tuition evidence path; every enrolled child must be covered before preview.`,
         "If statement evidence is incomplete or account-level amounts cover multiple children, provide a ProCare child contract/billing schedule export containing Child ID, charge description, amount, frequency/cadence, and effective dates.",
         "Employee ST Rate and OT Rate fields are payroll rates and are never treated as child tuition.",
         "No tuition plan, assignment, invoice, charge, payment, or refund is created by this workflow.",
@@ -1351,15 +1642,20 @@ export async function prepareProcareLocationWorkflow(input: {
       ],
     },
     Staff: {
-      status: "held",
-      summary: `${staffReview.length} currently employed visible staff rows are available for review only.`,
+      status: staffSource && staffReview.length > 0 && currentStaffRowsMissingEmployeeId === 0 ? "review_required" : "blocked",
+      summary: `${staffReview.length} currently employed visible staff rows are available for review only; ${currentStaffRowsMissingEmployeeId} current source row(s) lack Employee ID.`,
       details: [
         staffSource ? `Selected ${staffSource.filename} as the strongest employee roster source.` : "No employee roster source was detected.",
         `${staffMissingEmail} rows lack email, ${staffMissingPhone} lack phone, ${staffMissingWorkAreaId} lack Work Area ID, and ${staffUnknownWorkArea} are assigned to Unknown.`,
+        `${currentStaffRowsMissingEmployeeId} visible currently employed source row(s) were held because Employee ID is blank.`,
         "Staff profile creation, users, Auth identities, access grants, invitations, and classroom assignments remain held.",
       ],
     },
   };
+
+  const preImportStatus = Object.values(gates).some((gate) => gate.status === "blocked")
+    ? "BLOCKED" as const
+    : "READY_FOR_PREVIEW_REVIEW" as const;
 
   const metrics = {
     normalizedRecords: normalizedRecords.length,
@@ -1382,6 +1678,8 @@ export async function prepareProcareLocationWorkflow(input: {
     sourceLedgerRows: ledger?.rows.length ?? 0,
     weeklyStatementEvidenceRows,
     weeklyStatementCandidateChildren,
+    formalWeeklyCoveredChildren,
+    reviewableWeeklyTuitionChildren,
     parentPortalFamilyAccounts: parentPortalBillingReview.length,
     parentPortalReadyFamilies,
     parentPortalBlockedFamilies,
@@ -1407,6 +1705,9 @@ export async function prepareProcareLocationWorkflow(input: {
     staffMissingPhone,
     staffMissingWorkAreaId,
     staffUnknownWorkArea,
+    currentStaffRowsMissingEmployeeId,
+    beeFieldReconciliationRows: requiredFieldReconciliation.length,
+    missingSourceFieldCells: missingSourceFieldCells.length,
   };
 
   fs.mkdirSync(outputDirectory, { recursive: true });
@@ -1414,8 +1715,6 @@ export async function prepareProcareLocationWorkflow(input: {
   const readyCsv = `${preparedProcareCsv(readyRecords)}\r\n`;
   const resolutionCsv = resolutionRecords.length ? `${preparedProcareCsv(resolutionRecords)}\r\n` : "";
   const activePortalSafeCsv = `${preparedProcareCsv(activePortalSafeRecords)}\r\n`;
-  const balanceByAccount = new Map(currentBalanceRows.map((row) => [field(row, "Account ID"), row]));
-  const tuitionByChild = new Map(weeklyTuitionReview.map((row) => [row["child id"], row]));
   const migrationTemplateRows = enrolledRecords.map((record): CsvRow => {
     const accountId = record["account id"];
     const balanceRow = balanceByAccount.get(accountId);
@@ -1449,6 +1748,22 @@ export async function prepareProcareLocationWorkflow(input: {
     };
   });
   const migrationTemplateCsv = csvFromRows(migrationTemplateRows);
+  const fieldReconciliationHeaders = [
+    "Scope",
+    "BEE Entity",
+    "BEE Stable Entity ID",
+    "BEE Suite Field",
+    "Source Report",
+    "Source Column Or Cell",
+    "Source Row Number Or Stable Key",
+    "Source Cell Value",
+    "BEE Normalized Value",
+    "Requirement",
+    "Reconciliation Status",
+    "Reviewer Confirmation",
+    "Notes",
+  ];
+  const fieldReconciliationCsv = csvFromRows(requiredFieldReconciliation, fieldReconciliationHeaders);
   fs.writeFileSync(path.join(outputDirectory, "01-roster-reviewed-import.csv"), reviewedCsv, "utf8");
   fs.writeFileSync(path.join(outputDirectory, "02-roster-ready-reference.csv"), readyCsv, "utf8");
   fs.writeFileSync(path.join(outputDirectory, "03-roster-needs-resolution.csv"), resolutionCsv, "utf8");
@@ -1474,12 +1789,14 @@ export async function prepareProcareLocationWorkflow(input: {
   writeCsv(path.join(outputDirectory, "15-rendered-contract-billing-review.csv"), renderedBillingReview);
   writeCsv(path.join(outputDirectory, "16-rendered-classroom-schedule-review.csv"), renderedScheduleReview);
   fs.writeFileSync(path.join(outputDirectory, "17-bee-suite-migration-source-of-truth.csv"), migrationTemplateCsv, "utf8");
+  fs.writeFileSync(path.join(outputDirectory, "18-bee-field-reconciliation.csv"), fieldReconciliationCsv, "utf8");
 
   const manifest = {
     version: 4,
     location: input.location,
     generatedAt,
     preparationOnly: true,
+    preImportStatus,
     sourceDirectory,
     outputDirectory,
     sourceFiles: sourceSummary(sources),
@@ -1505,18 +1822,20 @@ export async function prepareProcareLocationWorkflow(input: {
       needsResolutionSha256: sha256(resolutionCsv),
       activePortalSafeImportSha256: sha256(activePortalSafeCsv),
       migrationSourceOfTruthTemplateSha256: sha256(migrationTemplateCsv),
+      beeFieldReconciliationSha256: sha256(fieldReconciliationCsv),
     },
   };
   fs.writeFileSync(path.join(outputDirectory, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   fs.writeFileSync(path.join(outputDirectory, "READINESS.md"), markdownReport({
     location: input.location,
     generatedAt,
+    preImportStatus,
     gates,
     metrics,
     sourceFiles: sourceSummary(sources),
   }), "utf8");
 
-  return { outputDirectory, metrics, gates, selectedSources: manifest.selectedSources };
+  return { outputDirectory, preImportStatus, metrics, gates, selectedSources: manifest.selectedSources };
 }
 
 function option(name: string) {

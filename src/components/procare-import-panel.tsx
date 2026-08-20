@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Download, Eye, LoaderCircle, Upload, X } from "lucide-react";
@@ -29,6 +29,18 @@ type ImportResponse = {
   nextRow?: number;
   totalRows?: number;
   summary?: ImportPreview & Record<string, number | string | unknown>;
+};
+
+type PriorImportBatch = {
+  id: string;
+  filename: string;
+  status: string;
+  createdAt: string;
+  rowCount: number;
+  importedRows: number;
+  unresolvedRows: number;
+  disposedRows: number;
+  hasRefinedSourceInventory: boolean;
 };
 
 function uploadImport(formData: FormData, onProgress: (percent: number, uploaded: boolean) => void) {
@@ -234,6 +246,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [lastImportSummary, setLastImportSummary] = useState<ImportPreview | null>(null);
   const [lastBatchId, setLastBatchId] = useState("");
+  const [continuationCenterId, setContinuationCenterId] = useState(centers[0]?.id ?? "");
+  const [priorImportBatches, setPriorImportBatches] = useState<PriorImportBatch[]>([]);
+  const [priorBatchesLoading, setPriorBatchesLoading] = useState(Boolean(centers[0]?.id));
+  const [priorBatchesError, setPriorBatchesError] = useState("");
+  const [selectedPriorBatchId, setSelectedPriorBatchId] = useState("");
+  const [priorBatchesRefresh, setPriorBatchesRefresh] = useState(0);
   const [resolutionCategory, setResolutionCategory] = useState("");
   const [resolutionReason, setResolutionReason] = useState("");
   const [resolutionEvidenceReference, setResolutionEvidenceReference] = useState("");
@@ -241,6 +259,30 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const fileRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
   const submitLockedRef = useRef(false);
+
+  useEffect(() => {
+    if (!continuationCenterId) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ report: "batch-history", centerId: continuationCenterId });
+    void fetch(`/api/imports/procare?${params.toString()}`, { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null) as { error?: string; batches?: PriorImportBatch[] } | null;
+        if (!response.ok) throw new Error(payload?.error || "Previous import history could not be loaded.");
+        const batches = payload?.batches ?? [];
+        setPriorImportBatches(batches);
+        setSelectedPriorBatchId((current) => batches.some((batch) => batch.id === current) ? current : batches[0]?.id ?? "");
+      })
+      .catch((loadError: unknown) => {
+        if (controller.signal.aborted) return;
+        setPriorImportBatches([]);
+        setSelectedPriorBatchId("");
+        setPriorBatchesError(loadError instanceof Error ? loadError.message : "Previous import history could not be loaded.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setPriorBatchesLoading(false);
+      });
+    return () => controller.abort();
+  }, [continuationCenterId, priorBatchesRefresh]);
 
   function clearPreview() {
     setPreview(null);
@@ -411,6 +453,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         setDuplicateReviewConfirmed(false);
         setSourceInventoryConfirmed(false);
         setLastBatchId(json?.batchId ?? "");
+        setPriorBatchesLoading(true);
+        setPriorBatchesError("");
+        setPriorBatchesRefresh((current) => current + 1);
         setProgressPhase("complete");
         setProgressPercent(100);
         setProgressMessage("Upload and import complete.");
@@ -500,6 +545,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     ? duplicateSourceRowsRemovedDetails.reduce((total, [, count]) => total + count, 0)
     : 0;
   const importCommitted = progressPhase === "complete" && Boolean(lastBatchId);
+  const selectedPriorBatch = priorImportBatches.find((batch) => batch.id === selectedPriorBatchId) ?? null;
   const needsSourceInventoryConfirmation = Boolean(preview);
   const sourceInventoryReady = !needsSourceInventoryConfirmation || sourceInventoryConfirmed || importCommitted;
   const hasReviewedImport = hasCompletedPreview || importCommitted;
@@ -654,6 +700,74 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             Every family relationship and balance must remain tied to stable source evidence. Names can help reviewers locate a record, but they never silently establish identity, household ownership, or financial responsibility. Exports from another provider require their own reviewed source adapter.
           </AlertDescription>
         </Alert>
+        <div className="space-y-4 rounded-xl border border-primary/25 bg-primary/5 p-4">
+          <div>
+            <div className="text-sm font-semibold">Continue an existing migration</div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              For a school that already imported previous-system data, start here. This flow keeps the prior import as source evidence and checks the school exactly as it exists in BEE Suite now. It does not upload, re-import, overwrite, invite, bill, or activate anything.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="procare-continuation-center">School</Label>
+              <Select value={continuationCenterId} onValueChange={(value) => {
+                if (!value) return;
+                setPriorBatchesLoading(true);
+                setPriorBatchesError("");
+                setPriorImportBatches([]);
+                setSelectedPriorBatchId("");
+                setContinuationCenterId(value);
+              }}>
+                <SelectTrigger id="procare-continuation-center"><SelectValue placeholder="Choose school" /></SelectTrigger>
+                <SelectContent>
+                  {centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="procare-prior-batch">Prior previous-system import</Label>
+              <Select value={selectedPriorBatchId} onValueChange={(value) => value && setSelectedPriorBatchId(value)} disabled={priorBatchesLoading || !priorImportBatches.length}>
+                <SelectTrigger id="procare-prior-batch"><SelectValue placeholder={priorBatchesLoading ? "Loading prior imports…" : "Choose prior import"} /></SelectTrigger>
+                <SelectContent>
+                  {priorImportBatches.map((batch) => (
+                    <SelectItem key={batch.id} value={batch.id}>
+                      {new Date(batch.createdAt).toLocaleDateString()} · {batch.filename} · {batch.status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {priorBatchesError ? <p className="text-xs text-destructive">{priorBatchesError}</p> : null}
+          {!priorBatchesLoading && continuationCenterId && !priorBatchesError && !priorImportBatches.length ? (
+            <p className="text-xs text-muted-foreground">No prior previous-system import batch was found for this school. Use the new migration flow below.</p>
+          ) : null}
+          {selectedPriorBatch ? (
+            <div className="space-y-3 rounded-lg border bg-background p-3">
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Badge variant="outline">{selectedPriorBatch.rowCount.toLocaleString()} source rows retained</Badge>
+                <Badge variant="outline">{selectedPriorBatch.importedRows.toLocaleString()} imported</Badge>
+                <Badge variant={selectedPriorBatch.unresolvedRows ? "destructive" : "outline"}>{selectedPriorBatch.unresolvedRows.toLocaleString()} unresolved</Badge>
+                <Badge variant="outline">{selectedPriorBatch.disposedRows.toLocaleString()} evidenced exclusions</Badge>
+                <Badge variant={selectedPriorBatch.hasRefinedSourceInventory ? "outline" : "secondary"}>{selectedPriorBatch.hasRefinedSourceInventory ? "Refined inventory attached" : "Legacy source inventory"}</Badge>
+              </div>
+              {!selectedPriorBatch.hasRefinedSourceInventory ? (
+                <p className="text-xs leading-5 text-muted-foreground">This older batch can still use current-state reconciliation. Its verification packet will identify source-inventory evidence that must be added or confirmed; existing BEE Suite records are not re-imported.</p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => downloadReconciliation(selectedPriorBatch.id)}>
+                  <Download data-icon="inline-start" /> Current-state reconciliation
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => downloadFleetVerification(selectedPriorBatch.id)}>
+                  <Download data-icon="inline-start" /> Continue verification
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => downloadBackup(selectedPriorBatch.id)}>
+                  <Download data-icon="inline-start" /> Source evidence backup
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </div>
         <div className="space-y-3 rounded-xl border bg-muted/20 p-4" aria-live="polite">
           <div className="flex items-center justify-between gap-3">
             <div>

@@ -171,6 +171,29 @@ test("relationship reconciliation counts all ProCare-owned external-ID rows acro
   assert.match(reconciliation, /prisma\.authorizedPickup\.count\(\{\s*where:\s*\{\s*OR:\s*procareRelationshipRowsAcrossSourceFamilies/);
 });
 
+test("previously imported schools can continue from current BEE Suite state without re-importing", () => {
+  const history = section(route, 'if (reportType === "batch-history")', "const batch = wantsLatest");
+  assert.match(history, /path:\s*\["centerIdsTouched"\],\s*array_contains:\s*\[requestedCenterId\]/);
+  assert.doesNotMatch(history, /rows:\s*\{ select:\s*\{ rawData:/);
+  assert.match(history, /importBatchCenterIds\(batch\)/);
+  assert.match(history, /touchedCenterIds\.length === 1/);
+  assert.match(history, /touchedCenterIds\.includes\(requestedCenterId\)/);
+  assert.match(history, /touchedCenterIds\.every\(\(centerId\) => canAccessCenter\(user, centerId\)\)/);
+  assert.match(history, /procareImportRow\.groupBy/);
+  assert.match(history, /by:\s*\["batchId",\s*"status"\]/);
+  assert.match(history, /unresolvedRows:\s*counts\.needs_resolution \?\? 0/);
+  assert.match(history, /disposedRows:\s*counts\.disposed \?\? 0/);
+  assert.match(history, /mode:\s*"continue_existing_migration"/);
+  assert.match(history, /No records are imported or changed/);
+  assert.doesNotMatch(history, /procareImportBatch\.create|procareImportRow\.create|family\.(create|update)|child\.(create|update)/);
+
+  assert.match(panel, /Continue an existing migration/);
+  assert.match(panel, /checks the school exactly as it exists in BEE Suite now/);
+  assert.match(panel, /report:\s*"batch-history"/);
+  assert.match(panel, /Current-state reconciliation/);
+  assert.match(panel, /existing BEE Suite records are not re-imported/);
+});
+
 test("ProCare exception exclusions are single-row and audited to the mapped school", () => {
   const patchHandler = section(route, "async function PATCHHandler", 'export const GET = withApiLogging');
 

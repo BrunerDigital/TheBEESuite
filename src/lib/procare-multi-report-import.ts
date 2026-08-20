@@ -39,6 +39,7 @@ type ProcareImportDiagnostic = {
     | "source_child_without_enrollment"
     | "enrollment_child_id_missing"
     | "parent_account_id_missing"
+    | "relationship_person_id_missing"
     | "relationship_child_id_missing"
     | "child_info_child_id_missing";
   severity: "warning" | "info";
@@ -203,7 +204,7 @@ function field(row: CsvRow | undefined, ...names: string[]) {
 }
 
 function checked(value: string) {
-  return /^(checked|yes|true|1|x)$/i.test(value.trim());
+  return /^(checked|yes|y|true|1|x)$/i.test(value.trim());
 }
 
 export function decodeProcareTabularBuffer(buffer: Buffer) {
@@ -535,6 +536,16 @@ function personType(row: CsvRow) {
   return field(row, "Person Type").toLowerCase();
 }
 
+function hasRelationshipPersonShape(row: CsvRow) {
+  const type = personType(row);
+  return type === "relationship"
+    || (type !== "child" && Boolean(field(row, "Relationship Type")));
+}
+
+function isRelationshipPerson(row: CsvRow) {
+  return Boolean(field(row, "Person ID")) && hasRelationshipPersonShape(row);
+}
+
 function numericSortValue(value: string) {
   const number = Number(value);
   return Number.isFinite(number) ? number : Number.MAX_SAFE_INTEGER;
@@ -765,7 +776,7 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
     const childId = field(relationship, "Child ID");
     if (childId) {
       relationshipSourceRowsByChild.set(childId, [...(relationshipSourceRowsByChild.get(childId) ?? []), relationship]);
-      if (personType(relationship) === "relationship") {
+      if (isRelationshipPerson(relationship)) {
         relationshipsByChild.set(childId, [...(relationshipsByChild.get(childId) ?? []), relationship]);
       }
     } else {
@@ -893,9 +904,19 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
     const activeAllergySourceRecords = allergySourceRecords.filter((row) => checked(field(row, "Item Is Active")));
     const allergyRecords = activeAllergySourceRecords.map((row) => field(row, "Item Description")).filter(Boolean);
     const relationshipRecords = related.map((row) => relationshipRecord(row, payerPersonIds, childPersonId));
+    const relationshipRowsMissingPersonId = retainedRelationshipSourceRows.filter((row) => (
+      hasRelationshipPersonShape(row) && !field(row, "Person ID")
+    ));
     const diagnostics = [
       ...additionalDiagnostics,
       ...(includeResolutionDiagnostics ? diagnosticForResolution(resolution, payers.length) : []),
+      ...(relationshipRowsMissingPersonId.length ? [{
+        code: "relationship_person_id_missing" as const,
+        severity: "warning" as const,
+        sourceRowCount: relationshipRowsMissingPersonId.length,
+        relationshipRowCount: relationshipRowsMissingPersonId.length,
+        message: `${relationshipRowsMissingPersonId.length} relationship source row(s) lack a stable ProCare Person ID and cannot be imported or matched by name/contact fallback.`,
+      }] : []),
     ];
     const childId = field(child, "Child ID");
     const coverage = {
@@ -1056,7 +1077,7 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
   }
 
   for (const relationship of relationshipsWithoutChild) {
-    const related = personType(relationship) === "relationship" ? [relationship] : [];
+    const related = isRelationshipPerson(relationship) ? [relationship] : [];
     const resolution = accountResolution({ child: {}, related, accountsByPerson, peopleByAccount });
     normalizedRows.push(buildNormalizedRow({
       rowType: "procare_multi_report_relationship_without_child_id",

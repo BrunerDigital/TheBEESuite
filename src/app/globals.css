@@ -9,6 +9,39 @@
   }
 }
 
+/* Compact workspace sections keep high-level status visible without forcing
+   operators to scroll through every table, chart, and form at once. */
+@layer utilities {
+  .dashboard-workspace [data-collapsible-card="true"],
+  .dashboard-workspace [data-collapsible-panel="true"] {
+    scroll-margin-top: 7rem;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  }
+
+  .dashboard-workspace [data-collapsible-card="true"][data-collapsed="true"],
+  .dashboard-workspace [data-collapsible-panel="true"][data-collapsed="true"] {
+    border-color: color-mix(in oklch, var(--border) 82%, var(--primary) 18%);
+    background: color-mix(in oklch, var(--card) 96%, var(--primary) 4%);
+    box-shadow: none;
+  }
+
+  .dashboard-workspace [data-collapsible-card="true"][data-collapsed="true"] [data-slot="card-header"] {
+    min-height: 3.5rem;
+  }
+
+  .dashboard-workspace [data-collapsible-card="true"] > div[hidden],
+  .dashboard-workspace [data-collapsible-panel="true"] > div[hidden] {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dashboard-workspace [data-collapsible-card="true"],
+    .dashboard-workspace [data-collapsible-panel="true"] {
+      transition: none;
+    }
+  }
+}
+
 /* BEE glass system
    Glass frames orientation and glanceable status. Dense records, forms, and
    financial/compliance content retain a more opaque surface for legibility. */

@@ -70,6 +70,7 @@ type CollapsibleCardProps = {
   eyebrow?: ReactNode;
   headerActions?: ReactNode;
   headerAfter?: ReactNode;
+  collapsedSummary?: ReactNode;
   children: ReactNode;
   className?: string;
   contentClassName?: string;
@@ -78,21 +79,7 @@ type CollapsibleCardProps = {
   defaultCollapsed?: boolean;
 };
 
-export function CollapsibleCard({
-  id,
-  title,
-  description,
-  eyebrow,
-  headerActions,
-  headerAfter,
-  children,
-  className,
-  contentClassName,
-  headerClassName,
-  titleClassName,
-  defaultCollapsed = false,
-}: CollapsibleCardProps) {
-  const contentId = useId();
+function usePersistedCollapsed(id: string, defaultCollapsed: boolean) {
   const key = storageKey("collapsed", id);
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
@@ -120,14 +107,38 @@ export function CollapsibleCard({
     });
   }
 
+  return { collapsed, toggleCollapsed };
+}
+
+export function CollapsibleCard({
+  id,
+  title,
+  description,
+  eyebrow,
+  headerActions,
+  headerAfter,
+  collapsedSummary,
+  children,
+  className,
+  contentClassName,
+  headerClassName,
+  titleClassName,
+  defaultCollapsed = false,
+}: CollapsibleCardProps) {
+  const contentId = useId();
+  const { collapsed, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
+
   return (
-    <Card className={className} data-collapsed={collapsed ? "true" : "false"}>
-      <CardHeader className={headerClassName}>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <Card id={id} className={className} data-collapsible-card="true" data-collapsed={collapsed ? "true" : "false"} size={collapsed ? "sm" : "default"}>
+      <CardHeader className={cn(collapsed && "py-0", headerClassName)}>
+        <div className={cn("flex gap-3", collapsed ? "items-center justify-between" : "flex-col lg:flex-row lg:items-start lg:justify-between")}>
           <div className="min-w-0">
-            {eyebrow ? <div className="mb-2 flex flex-wrap items-center gap-2">{eyebrow}</div> : null}
-            <CardTitle as="h2" className={titleClassName}>{title}</CardTitle>
-            {description ? <CardDescription className="mt-2 max-w-3xl">{description}</CardDescription> : null}
+            {!collapsed && eyebrow ? <div className="mb-2 flex flex-wrap items-center gap-2">{eyebrow}</div> : null}
+            <CardTitle as="h2" className={cn(collapsed && "text-sm", titleClassName)}>{title}</CardTitle>
+            {!collapsed && description ? <CardDescription className="mt-2 max-w-3xl">{description}</CardDescription> : null}
+            {collapsed && (collapsedSummary || description) ? (
+              <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">{collapsedSummary || description}</div>
+            ) : null}
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {headerActions}
@@ -151,12 +162,76 @@ export function CollapsibleCard({
             </Tooltip>
           </div>
         </div>
-        {headerAfter}
+        {!collapsed ? headerAfter : null}
       </CardHeader>
       <div id={contentId} hidden={collapsed}>
         <CardContent className={contentClassName}>{children}</CardContent>
       </div>
     </Card>
+  );
+}
+
+type CollapsiblePanelProps = {
+  id: string;
+  title: ReactNode;
+  accessibleLabel?: string;
+  summary?: ReactNode;
+  headerActions?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  contentClassName?: string;
+  defaultCollapsed?: boolean;
+};
+
+export function CollapsiblePanel({
+  id,
+  title,
+  accessibleLabel,
+  summary,
+  headerActions,
+  children,
+  className,
+  contentClassName,
+  defaultCollapsed = true,
+}: CollapsiblePanelProps) {
+  const contentId = useId();
+  const { collapsed, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
+
+  return (
+    <section
+      className={cn("min-w-0 overflow-hidden rounded-xl border bg-background/40", className)}
+      data-collapsible-panel="true"
+      data-collapsed={collapsed ? "true" : "false"}
+    >
+      <div className={cn("flex min-h-14 items-center gap-3 px-3", !collapsed && "border-b py-3")}>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-medium text-pretty">{title}</h3>
+          {summary ? <div className="mt-1 text-xs text-muted-foreground">{summary}</div> : null}
+        </div>
+        {headerActions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{headerActions}</div> : null}
+        <Tooltip>
+          <TooltipTrigger
+            render={(
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-expanded={!collapsed}
+                aria-controls={contentId}
+                aria-label={`${collapsed ? "Expand" : "Collapse"} ${accessibleLabel ?? (typeof title === "string" ? title : "section")}`}
+                onClick={toggleCollapsed}
+              />
+            )}
+          >
+            {collapsed ? <ChevronRight /> : <ChevronDown />}
+          </TooltipTrigger>
+          <TooltipContent>{collapsed ? "Expand" : "Collapse"}</TooltipContent>
+        </Tooltip>
+      </div>
+      <div id={contentId} hidden={collapsed}>
+        <div className={cn("p-3", contentClassName)}>{children}</div>
+      </div>
+    </section>
   );
 }
 

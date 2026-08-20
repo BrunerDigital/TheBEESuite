@@ -105,6 +105,7 @@ test("bulk enrollment updates stay school-scoped, audited, and invalidate dashbo
   assert.match(operationsRoute, /selectedCenterId\) => selectedCenterId !== classroom\.centerId/);
   assert.match(operationsRoute, /operations\.child_status\.bulk_updated/);
   assert.match(operationsRoute, /recurringTuitionDisabled/);
+  assert.match(operationsRoute, /prisma\.\$transaction\(children\.map/);
   assert.match(operationsRoute, /revalidatePath\("\/billing-invoices"\)/);
   assert.match(operationsRoute, /revalidatePath\("\/api\/dashboard\/accounts-receivable"\)/);
 });

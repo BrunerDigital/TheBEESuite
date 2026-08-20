@@ -382,18 +382,18 @@ async function POSTHandler(request: NextRequest) {
       ))
       .map((child) => ({ familyId: child.family.id, childId: child.id, centerId: child.family.centerId! }));
     const statusUpdatedAt = new Date();
-    const updatedCount = await prisma.$transaction(async (tx) => {
-      if (!isClosedEnrollmentStatus(change.value.enrollmentStatus)) {
-        const updated = await tx.child.updateMany({
-          where: { id: { in: change.value.childIds } },
-          data: {
-            enrollmentStatus: change.value.enrollmentStatus,
-            classroomId: change.value.classroomId,
-          },
-        });
-        return updated.count;
-      }
-      await Promise.all(children.map((child) => tx.child.update({
+    let updatedCount: number;
+    if (!isClosedEnrollmentStatus(change.value.enrollmentStatus)) {
+      const updated = await prisma.child.updateMany({
+        where: { id: { in: change.value.childIds } },
+        data: {
+          enrollmentStatus: change.value.enrollmentStatus,
+          classroomId: change.value.classroomId,
+        },
+      });
+      updatedCount = updated.count;
+    } else {
+      await prisma.$transaction(children.map((child) => prisma.child.update({
         where: { id: child.id },
         data: {
           enrollmentStatus: change.value.enrollmentStatus,
@@ -406,8 +406,8 @@ async function POSTHandler(request: NextRequest) {
           }) as Prisma.InputJsonObject,
         },
       })));
-      return children.length;
-    });
+      updatedCount = children.length;
+    }
     await Promise.all(centerIds.map((selectedCenterId) => writeAuditLog(user, {
       centerId: selectedCenterId,
       action: "operations.child_status.bulk_updated",

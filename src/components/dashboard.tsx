@@ -342,6 +342,8 @@ function ExecutiveLensDashboard({
           className="bg-card"
           title="Refund approval queue"
           description="Review director refund requests. Approval sends the refund; denial leaves the family ledger unchanged. Every decision requires a reason."
+          collapsedSummary={`${metrics.refundRequests.length} request${metrics.refundRequests.length === 1 ? "" : "s"}`}
+          defaultCollapsed={!metrics.refundRequests.length}
         >
           <RefundApprovalQueue requests={metrics.refundRequests} />
         </CollapsibleCard>
@@ -357,6 +359,8 @@ function ExecutiveLensDashboard({
           className="bg-card"
           title="All-location records"
           description="Open operational records for every school available to this executive account."
+          collapsedSummary="Accounts · families · classrooms · staff"
+          defaultCollapsed
           contentClassName="flex flex-wrap gap-2"
         >
           <Button variant="outline" nativeButton={false} render={<Link href="/billing-invoices" />}>Accounts and ledgers</Button>
@@ -376,6 +380,7 @@ function ExecutiveLensDashboard({
           className="bg-card"
           title="Accounts receivable by school"
           description="Family balances across every school visible to this executive login."
+          defaultCollapsed
         >
           <ExecutiveAccountsReceivablePanel summary={accountsReceivable} />
         </CollapsibleCard>
@@ -391,6 +396,8 @@ function ExecutiveLensDashboard({
           className="bg-card"
           title="Weekly FTE progress"
           description="Submitted schools, missing schools, and total FTE by week."
+          collapsedSummary={`${metrics.weeklyFteTrend.length} weeks available`}
+          defaultCollapsed
         >
           {metrics.weeklyFteTrend.length ? (
             <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
@@ -421,6 +428,8 @@ function ExecutiveLensDashboard({
           contentClassName="grid gap-3"
           title="Current-week FTE by school"
           description="Schools missing this week are highlighted for follow-up."
+          collapsedSummary={`${fteFollowUpSchools.length} schools · ${metrics.fteMissingSchools} missing`}
+          defaultCollapsed
         >
           <div className="grid max-h-[36rem] gap-3 overflow-auto pr-1">
           {fteFollowUpSchools.map((school) => (
@@ -459,6 +468,8 @@ function ExecutiveLensDashboard({
           className="bg-card"
           title="School FTE submissions"
           description="Submission-level FTE history from every visible school."
+          collapsedSummary={`${metrics.fteSubmissions.length} submissions`}
+          defaultCollapsed
           headerActions={(
             <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/fte-reports" />}>
               <ArrowUpRight data-icon="inline-start" />
@@ -542,6 +553,8 @@ function ExecutiveLensDashboard({
           className="bg-card"
           title="Payroll summaries"
           description="Payroll summaries sent by directors for executive review, including totals for each employee."
+          collapsedSummary={`${metrics.payrollSummaries.length} submissions`}
+          defaultCollapsed
         >
           {metrics.payrollSummaries.length ? (
             <div className="space-y-3">
@@ -633,6 +646,8 @@ function ExecutiveLensDashboard({
           contentClassName="grid gap-3"
           title="Occupancy comparison"
           description="Top schools by current child count against licensed capacity."
+          collapsedSummary={`${sortedByOccupancy.length} schools compared`}
+          defaultCollapsed
         >
           {sortedByOccupancy.map((school) => (
             <div key={school.id} className="grid gap-2">
@@ -656,6 +671,8 @@ function ExecutiveLensDashboard({
           contentClassName="grid gap-3"
           title="Revenue comparison"
           description="Invoice total snapshot by school."
+          collapsedSummary={`${sortedByRevenue.length} schools compared`}
+          defaultCollapsed
         >
           {sortedByRevenue.map((school) => (
             <div key={school.id} className="grid gap-2">
@@ -679,6 +696,8 @@ function ExecutiveLensDashboard({
           contentClassName="grid gap-3"
           title="Lead and tour pressure"
           description="Schools with the highest active inquiry load."
+          collapsedSummary={`${sortedByLeads.length} schools compared`}
+          defaultCollapsed
         >
           {sortedByLeads.map((school) => (
             <div key={school.id} className="rounded-xl border bg-background/50 p-3">
@@ -710,6 +729,8 @@ function ExecutiveLensDashboard({
           className="bg-card"
           title="Company trend snapshot"
           description="Enrollment funnel and revenue trend for visible schools."
+          collapsedSummary={`${trendData.length} months`}
+          defaultCollapsed
         >
           <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
             {trendData.map((point) => (
@@ -1535,6 +1556,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   </span>
                 )}
                 description="Review before acting"
+                defaultCollapsed
               >
               <p className="text-sm leading-6 text-muted-foreground">
                 {aiSummary}
@@ -1673,6 +1695,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           className="bg-card"
                           title="Enrollment and revenue snapshot"
                           description="Leads, tours, enrollments, and revenue index"
+                          collapsedSummary={`${dashboardAnalytics.length} months`}
+                          defaultCollapsed
                         >
                           {dashboardAnalytics.length ? (
                             <div className="flex h-64 items-end gap-4 rounded-xl border bg-background/40 p-4">
@@ -1731,6 +1755,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                           contentClassName="flex flex-col gap-4"
                           title="Capacity by classroom"
                           description="Open seats and ratio pulse"
+                          collapsedSummary={`${classroomSnapshots.length} classrooms`}
+                          defaultCollapsed
                         >
                           {classroomSnapshots.slice(0, 6).map((room) => (
                             <div key={room.name} className="flex flex-col gap-2">
@@ -1775,6 +1801,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                           contentClassName="grid gap-3 sm:grid-cols-2"
                           title="Enrollment pipeline"
                           description="Board-ready stages"
+                          collapsedSummary={`${dashboardPipeline.length} stages`}
+                          defaultCollapsed
                         >
                           {dashboardPipeline.slice(0, 8).map((stage) => (
                             <Link
@@ -1807,6 +1835,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                           contentClassName="flex flex-col gap-3"
                           title="Lead scoring and tours"
                           description="Enrollment inquiries and tour follow-up"
+                          collapsedSummary={`${dashboardLeads.length} active leads`}
+                          defaultCollapsed
                         >
                           {dashboardLeads.map((lead) => (
                             <Link
@@ -1860,6 +1890,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                         contentClassName="flex flex-col gap-3"
                         title="Action queue"
                         description="Notifications, reminders, and review items"
+                        collapsedSummary={`${actionQueue.length} item${actionQueue.length === 1 ? "" : "s"}`}
                       >
                         {actionQueue.slice(0, 8).map((item, index) => {
                           const href = typeof item === "string"
@@ -1899,6 +1930,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                         contentClassName="flex flex-col gap-4"
                         title="Parent messages"
                         description="Unread and priority conversations"
+                        collapsedSummary={`${parentMessages.length} conversation${parentMessages.length === 1 ? "" : "s"}`}
+                        defaultCollapsed
                       >
                         {parentMessages.map((message, index) => (
                           <Link
@@ -1981,6 +2014,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     eyebrow={<Badge variant="outline">{widget.category}</Badge>}
                     title={widget.title}
                     description={widget.description}
+                    collapsedSummary={summary ? `${summary.value} · ${summary.detail}` : widget.description}
+                    defaultCollapsed
                   >
                     {summary ? (
                       <>
@@ -2059,6 +2094,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           className="bg-card"
                   title="Enrollment funnel"
                   description="Inquiry to enrolled conversion snapshot"
+                  collapsedSummary={`${dashboardAnalytics.length} months`}
+                  defaultCollapsed
                 >
                   {dashboardAnalytics.length ? (
                     <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
@@ -2090,6 +2127,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           className="bg-card"
                   title="Open seats by age group"
                   description="Capacity planning for enrollment"
+                  collapsedSummary={`${totalOpenSeats} open seats`}
+                  defaultCollapsed
                 >
                   {openSeatsByAgeGroup.length ? (
                     <div className="grid min-w-0 gap-6 rounded-xl border bg-background/40 p-5 sm:grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)]">

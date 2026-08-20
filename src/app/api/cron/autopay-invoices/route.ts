@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processAutopayInvoices } from "@/lib/autopay-processing";
+import { processAutopayQueue } from "@/lib/autopay-queue";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 function authorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -27,13 +29,16 @@ async function GETHandler(request: NextRequest) {
   }
 
   const centerId = request.nextUrl.searchParams.get("centerId");
-  const result = await processAutopayInvoices({
-    dryRun: request.nextUrl.searchParams.get("dryRun") === "1",
-    asOf: parseDate(request.nextUrl.searchParams.get("asOf")),
-    limit: parseLimit(request.nextUrl.searchParams.get("limit")),
-    centerIds: centerId ? [centerId] : undefined,
-    invoiceId: request.nextUrl.searchParams.get("invoiceId"),
-    retryFailed: request.nextUrl.searchParams.get("retryFailed") === "1",
+  const result = await processAutopayQueue({
+    input: {
+      dryRun: request.nextUrl.searchParams.get("dryRun") === "1",
+      asOf: parseDate(request.nextUrl.searchParams.get("asOf")),
+      limit: parseLimit(request.nextUrl.searchParams.get("limit")),
+      centerIds: centerId ? [centerId] : undefined,
+      invoiceId: request.nextUrl.searchParams.get("invoiceId"),
+      retryFailed: request.nextUrl.searchParams.get("retryFailed") === "1",
+    },
+    processPage: processAutopayInvoices,
   });
 
   return NextResponse.json(result);

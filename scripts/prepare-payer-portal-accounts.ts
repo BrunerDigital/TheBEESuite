@@ -175,7 +175,7 @@ async function main() {
   }
 
   const existingUsers = await prisma.user.findMany({
-    where: { email: { in: [...new Set(payerGuardians.map((guardian) => normalizedEmail(guardian.email)).filter(validEmail))] } },
+    where: { email: { in: [...new Set(payerGuardians.map((guardian) => normalizedEmail(guardian.email)).filter(validEmail))], mode: "insensitive" } },
     select: {
       id: true,
       email: true,

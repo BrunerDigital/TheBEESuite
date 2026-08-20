@@ -74,6 +74,9 @@ test("payer portal preparation is explicit, audited, and cannot send invitations
   assert.match(source, /hasActiveParentLink/);
   assert.match(source, /linked app user has a different email/);
   assert.match(source, /linked to a non-parent app user/);
+  const provisioning = readFileSync(new URL("../src/lib/parent-portal-logins.ts", import.meta.url), "utf8");
+  assert.match(provisioning, /email:\s*\{ equals: email, mode: "insensitive" \}/);
+  assert.match(provisioning, /prisma\.user\.update/);
   assert.match(source, /prepareWithoutInvite:\s*!existingUser \|\| !existingAuthEmails\.has\(email\)/);
   assert.match(source, /--include-authorized-pickups/);
   assert.match(source, /--exclude-tx-tyler/);

@@ -182,8 +182,8 @@ export async function ensureParentPortalLoginForGuardian({
     return { ok: false, status: 409, reason: "guardian_email_multiple_families" };
   }
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
+  const existingUser = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
     select: { id: true, tenantId: true, role: true, isActive: true },
   });
   if (existingUser && existingUser.tenantId !== center.organization.tenantId) {
@@ -205,27 +205,32 @@ export async function ensureParentPortalLoginForGuardian({
   });
   const credentialCreated = !("alreadyExisted" in authUser && authUser.alreadyExisted);
 
-  const parentUser = await prisma.user.upsert({
-    where: { email },
-    update: {
-      name: guardian.fullName,
-      role: UserRole.PARENT_GUARDIAN,
-      isActive: true,
-      organizationId: center.organizationId,
-      mustResetPassword: prepareWithoutInvite,
-      sessionVersion: { increment: 1 },
-    },
-    create: {
-      tenantId: center.organization.tenantId,
-      organizationId: center.organizationId,
-      email,
-      name: guardian.fullName,
-      role: UserRole.PARENT_GUARDIAN,
-      isActive: true,
-      mustResetPassword: prepareWithoutInvite,
-    },
-    select: { id: true },
-  });
+  const parentUser = existingUser
+    ? await prisma.user.update({
+      where: { id: existingUser.id },
+      data: {
+        email,
+        name: guardian.fullName,
+        role: UserRole.PARENT_GUARDIAN,
+        isActive: true,
+        organizationId: center.organizationId,
+        mustResetPassword: prepareWithoutInvite,
+        sessionVersion: { increment: 1 },
+      },
+      select: { id: true },
+    })
+    : await prisma.user.create({
+      data: {
+        tenantId: center.organization.tenantId,
+        organizationId: center.organizationId,
+        email,
+        name: guardian.fullName,
+        role: UserRole.PARENT_GUARDIAN,
+        isActive: true,
+        mustResetPassword: prepareWithoutInvite,
+      },
+      select: { id: true },
+    });
 
   const linkableGuardians = matchingGuardians.filter((item) => !parentPortalAccessDisabled(item.customFields));
 

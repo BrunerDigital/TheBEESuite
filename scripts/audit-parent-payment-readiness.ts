@@ -1,5 +1,5 @@
 import "./load-env";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type User as SupabaseUser } from "@supabase/supabase-js";
 import { UserRole } from "@prisma/client";
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
@@ -22,18 +22,29 @@ function normalizedEmail(value: string | null | undefined) {
   return value?.trim().toLowerCase() ?? "";
 }
 
-async function loadSupabaseAuthEmails() {
+function activeAuthUser(user: SupabaseUser) {
+  return Boolean(
+    user.email_confirmed_at
+    && (!user.banned_until || new Date(user.banned_until) <= new Date()),
+  );
+}
+
+async function loadActiveSupabaseAuthEmails() {
   const { url, key } = getSupabaseAuthConfig("service");
   const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const emails = new Set<string>();
-  for (let page = 1; page <= 20; page += 1) {
+  let page = 1;
+  while (true) {
     const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
     if (error) throw error;
     for (const user of data.users) {
       const email = normalizedEmail(user.email);
-      if (email) emails.add(email);
+      if (email && activeAuthUser(user)) emails.add(email);
     }
-    if (data.users.length < 1000) break;
+    const nextPage = "nextPage" in data ? data.nextPage : null;
+    if (!nextPage) break;
+    if (nextPage <= page) throw new Error("Supabase Auth pagination did not advance.");
+    page = nextPage;
   }
   return emails;
 }
@@ -41,7 +52,7 @@ async function loadSupabaseAuthEmails() {
 async function main() {
   const centers = await prisma.center.findMany({
     where: { status: "active" },
-    select: { id: true, name: true, customFields: true },
+    select: { id: true, name: true, customFields: true, organization: { select: { tenantId: true } } },
     orderBy: { name: "asc" },
   });
   const paymentCenters = centers.filter((center) => {
@@ -52,6 +63,7 @@ async function main() {
   });
   const paymentCenterIds = paymentCenters.map((center) => center.id);
   const paymentCenterNameById = new Map(paymentCenters.map((center) => [center.id, center.name]));
+  const paymentCenterTenantById = new Map(paymentCenters.map((center) => [center.id, center.organization.tenantId]));
 
   const families = await prisma.family.findMany({
     where: {
@@ -69,7 +81,7 @@ async function main() {
           phone: true,
           sourceSystem: true,
           externalId: true,
-          user: { select: { email: true, role: true, isActive: true } },
+          user: { select: { email: true, tenantId: true, role: true, isActive: true } },
         },
       },
       billingAccount: {
@@ -112,7 +124,7 @@ async function main() {
       latestCreatedLedgerBalanceByAccountId.set(entry.billingAccountId, entry.balanceAfterCents);
     }
   }
-  const supabaseAuthEmails = await loadSupabaseAuthEmails();
+  const supabaseAuthEmails = await loadActiveSupabaseAuthEmails();
 
   const byCenter = new Map<string, {
     school: string;
@@ -173,6 +185,7 @@ async function main() {
       const hasActiveParentLink = family.guardians.some((guardian) => (
         guardian.user?.role === UserRole.PARENT_GUARDIAN
         && guardian.user.isActive
+        && guardian.user.tenantId === paymentCenterTenantById.get(centerId)
         && supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
       ));
       if (!hasActiveParentLink) {
@@ -193,7 +206,10 @@ async function main() {
           activeParentLinksMissingAuth: family.guardians.filter((guardian) => (
             guardian.user?.role === UserRole.PARENT_GUARDIAN
             && guardian.user.isActive
-            && !supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
+            && (
+              guardian.user.tenantId !== paymentCenterTenantById.get(centerId)
+              || !supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
+            )
           )).length,
         });
       }

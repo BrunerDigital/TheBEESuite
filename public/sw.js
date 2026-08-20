@@ -1,4 +1,4 @@
-const CACHE_NAME = "bee-suite-app-shell-v2";
+const CACHE_NAME = "bee-suite-app-shell-v3";
 const APP_SHELL_URLS = [
   "/app",
   "/brand/the-bee-suite/app-icon-yellow.png",
@@ -33,7 +33,26 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/app")));
+    event.respondWith(
+      (async () => {
+        try {
+          return await fetch(request);
+        } catch {
+          if (url.pathname === "/app" || url.pathname === "/app/") {
+            const appShell = await caches.match("/app");
+            if (appShell) return appShell;
+          }
+
+          return new Response("The BEE Suite is offline. Reconnect and reload this page.", {
+            status: 503,
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+          });
+        }
+      })(),
+    );
     return;
   }
 

@@ -201,6 +201,7 @@ export function PwaInstallManager() {
     if (!("serviceWorker" in navigator)) return;
     if (window.location.protocol !== "https:" && window.location.hostname !== "localhost") return;
     const reloadKey = "bee-suite-pwa-controllerchange-reload";
+    const reloadWindowMs = 60_000;
 
     navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" })
       .then((registration) => {
@@ -210,9 +211,9 @@ export function PwaInstallManager() {
 
     const handleControllerChange = () => {
       try {
-        const alreadyReloaded = sessionStorage.getItem(reloadKey);
-        if (alreadyReloaded === "1") return;
-        sessionStorage.setItem(reloadKey, "1");
+        const lastReloadAt = Number(sessionStorage.getItem(reloadKey) || "0");
+        if (Date.now() - lastReloadAt < reloadWindowMs) return;
+        sessionStorage.setItem(reloadKey, String(Date.now()));
         window.location.reload();
       } catch {
         window.location.reload();

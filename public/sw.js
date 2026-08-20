@@ -11,8 +11,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL_URLS))
-      .catch(() => undefined),
+      .then((cache) => cache.addAll(APP_SHELL_URLS)),
   );
 });
 

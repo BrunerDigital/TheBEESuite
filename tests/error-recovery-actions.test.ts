@@ -32,6 +32,8 @@ test("client asset failures and parent network failures receive one guarded full
 test("service worker never substitutes the app launcher for authenticated routes", () => {
   const serviceWorker = source("public/sw.js");
   assert.match(serviceWorker, /bee-suite-app-shell-v3/);
+  assert.match(serviceWorker, /cache\.addAll\(APP_SHELL_URLS\)/);
+  assert.doesNotMatch(serviceWorker, /cache\.addAll\(APP_SHELL_URLS\)[\s\S]{0,80}\.catch/);
   assert.match(serviceWorker, /url\.pathname === "\/app" \|\| url\.pathname === "\/app\/"/);
   assert.match(serviceWorker, /status: 503/);
   assert.doesNotMatch(serviceWorker, /fetch\(request\)\.catch\(\(\) => caches\.match\("\/app"\)\)/);

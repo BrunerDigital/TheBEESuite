@@ -10,6 +10,7 @@ import {
   defaultFteWeekEnd,
   isExecutiveFteManager,
   normalizeFteStatus,
+  scheduledDayBreakdownTotal,
   validateFtePeriod,
 } from "@/lib/fte-report-guardrails";
 import { normalizeFteCenterKey, parseFteImportCsv } from "@/lib/fte-report-import";
@@ -131,6 +132,13 @@ async function POSTHandler(request: NextRequest) {
     const preservesScheduledDayBreakdown = existingMetadata.fteCalculation === "scheduled_days_divided_by_five"
       && ["twoDayCount", "threeDayCount", "fourDayCount", "fiveDayCount"]
         .every((field) => metadataNumber(existingMetadata[field]) !== null);
+    if (preservesScheduledDayBreakdown && scheduledDayBreakdownTotal(existingScheduledDayCounts) > row.enrolledCount) {
+      errors.push({
+        rowNumber: row.rowNumber,
+        message: "Enrolled children cannot be lower than the preserved 2–5 day schedule total.",
+      });
+      continue;
+    }
     const fullTimeCount = preservesScheduledDayBreakdown ? existingScheduledDayCounts.fiveDayCount : row.fullTimeCount;
     const partTimeCount = preservesScheduledDayBreakdown
       ? existingScheduledDayCounts.twoDayCount + existingScheduledDayCounts.threeDayCount + existingScheduledDayCounts.fourDayCount

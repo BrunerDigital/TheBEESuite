@@ -10,7 +10,10 @@ import {
   setStripeCustomerDefaultPaymentMethod,
 } from "@/lib/integrations";
 import { beginCommunicationSmsDeliveryAttempt, finalizeCommunicationSmsDeliveryAttempt, nextIntegrationRetryAt } from "@/lib/integration-deliveries";
-import { paymentMethodSetupExpirationPatch } from "@/lib/payment-method-management";
+import {
+  paymentMethodSetupAutopayOutcome,
+  paymentMethodSetupExpirationPatch,
+} from "@/lib/payment-method-management";
 import { beeSuitePayoutSmsBody, payoutSmsRecipient, sendPayoutSmsSafely } from "@/lib/payout-sms";
 import { prisma } from "@/lib/prisma";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
@@ -1085,12 +1088,17 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
     : null;
   const paymentMethodDetails = paymentMethodLookup?.ok ? paymentMethodLookup.paymentMethod : null;
 
+  let autopayConsentPreserved = false;
   try {
     const outcome = await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       const billingAccount = await tx.billingAccount.findUnique({
         where: { id: billingAccountId },
-        select: { autopayPlaceholder: true, customFields: true },
+        select: {
+          autopayPlaceholder: true,
+          customFields: true,
+          family: { select: { guardians: { select: { userId: true } } } },
+        },
       });
       if (!billingAccount) return "missing" as const;
 
@@ -1102,18 +1110,16 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       const customerId = setupIntent?.setupIntent?.customerId || clean(session.customer) || clean(currentFields.stripeCustomerId);
       const previousPaymentMethodId = clean(currentFields.stripeDefaultPaymentMethodId);
       const paymentMethodId = setupPaymentMethodId || previousPaymentMethodId;
-      const replacedPaymentMethod = Boolean(paymentMethodId && paymentMethodId !== previousPaymentMethodId);
       const setupMode = clean(session.metadata?.autopaySetupMode);
-      const enableAutopayFromSetup = setupMode === "enable";
-      const disableAutopayFromSetup = setupMode === "disabled";
-      const replacementDisablesAutopay = replacedPaymentMethod && !enableAutopayFromSetup;
-      const autopayPatch = enableAutopayFromSetup || disableAutopayFromSetup || replacementDisablesAutopay
-        ? {
-            autopayEnabled: enableAutopayFromSetup,
-            autopayStatus: enableAutopayFromSetup ? "enabled" : "disabled",
-            autopayPlaceholder: enableAutopayFromSetup,
-          }
-        : null;
+      const replacedPaymentMethod = Boolean(paymentMethodId && paymentMethodId !== previousPaymentMethodId);
+      const autopayPatch = paymentMethodSetupAutopayOutcome({
+        autopayPlaceholder: billingAccount.autopayPlaceholder,
+        currentFields,
+        previousPaymentMethodId,
+        paymentMethodId,
+        linkedGuardianUserIds: billingAccount.family.guardians.map((guardian) => guardian.userId),
+        setupMode,
+      });
       await tx.billingAccount.update({
         where: { id: billingAccountId },
         data: {
@@ -1124,8 +1130,14 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
             ...(autopayPatch ? {
               autopayEnabled: autopayPatch.autopayEnabled,
               autopayStatus: autopayPatch.autopayStatus,
-              autopayPaymentMethodId: enableAutopayFromSetup ? paymentMethodId : null,
-              ...(replacementDisablesAutopay ? {
+              autopayPaymentMethodId: autopayPatch.autopayPaymentMethodId,
+              ...(autopayPatch.preservedExistingConsent ? {
+                autopayConsentMigratedAt: new Date().toISOString(),
+                autopayConsentMigrationReason: "stripe_connected_account_payment_method_reauthorized",
+                autopayDisabledAt: null,
+                autopayDisabledReason: null,
+              } : {}),
+              ...(autopayPatch.replacementDisabledAutopay ? {
                 autopayDisabledAt: new Date().toISOString(),
                 autopayDisabledReason: "saved_payment_method_replaced",
               } : {}),
@@ -1146,14 +1158,24 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
           },
         },
       });
-      return "applied" as const;
+      return autopayPatch?.preservedExistingConsent ? "preserved" as const : "applied" as const;
     });
     if (outcome === "stale") return NextResponse.json({ ok: true, staleSetupSessionIgnored: true });
+    autopayConsentPreserved = outcome === "preserved";
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) {
       return NextResponse.json({ ok: true, duplicate: true });
     }
     throw error;
+  }
+
+  if (autopayConsentPreserved) {
+    await writeBillingAccountSystemAudit(
+      billingAccountId,
+      event.id,
+      session.id,
+      "billing.autopay.consent_migrated_to_current_stripe_account",
+    );
   }
 
   return NextResponse.json({ ok: true });

@@ -13,7 +13,11 @@ import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
 import { canCreatePaymentMethodManagementSession, paymentMethodManagementSummary } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
-import { stripeConnectSavedMethodAccount, stripeConnectSavedMethodManagementAccount } from "@/lib/stripe-connect-migration";
+import {
+  stripeConnectSavedMethodAccount,
+  stripeConnectSavedMethodManagementAccount,
+  stripeConnectSavedMethodNeedsReauthorization,
+} from "@/lib/stripe-connect-migration";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
@@ -246,6 +250,11 @@ async function POSTHandler(request: NextRequest) {
   const tenantId = center?.organization.tenantId ?? billingAccount.family.children[0]?.classroom?.center?.organization.tenantId ?? user.tenantId;
   const connectedAccountId = readStripeConnectedAccountId(center?.customFields);
   const savedPaymentMethodConnectedAccountId = clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId);
+  const paymentMethodReauthorizationRequired = stripeConnectSavedMethodNeedsReauthorization({
+    activeAccountId: connectedAccountId,
+    savedMethodAccountId: savedPaymentMethodConnectedAccountId,
+    centerCustomFields: center?.customFields,
+  });
   const savedMethodChargeAccountId = stripeConnectSavedMethodAccount({
     activeAccountId: connectedAccountId,
     savedMethodAccountId: savedPaymentMethodConnectedAccountId,
@@ -436,7 +445,8 @@ async function POSTHandler(request: NextRequest) {
       stripeConnectedAccountId: connectedAccountId || "",
       stripeCustomerId: customerId,
       requestedByUserId: user.id,
-      autopaySetupMode: "preserve",
+      autopaySetupMode: paymentMethodReauthorizationRequired ? "preserve_existing" : "preserve",
+      paymentMethodReauthorization: paymentMethodReauthorizationRequired ? "true" : "false",
       preferredPaymentMethodCategory: paymentMethodCategory,
       bankAccountVerificationMethod: bankAccountVerificationMethod || "",
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",

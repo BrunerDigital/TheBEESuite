@@ -152,15 +152,16 @@ async function POSTHandler(request: NextRequest) {
   });
   const currentFields = jsonObject(billingAccount.customFields);
   const connectedAccountId = readStripeConnectedAccountId(center.customFields);
+  let paymentMethodReauthorizationRequired = false;
   if (payload.intent === "payment_method_reauthorization") {
     const migration = readStripeConnectMigration(center.customFields);
     const savedMethodAccountId = clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId);
-    const reauthorizationRequired = stripeConnectSavedMethodNeedsReauthorization({
+    paymentMethodReauthorizationRequired = stripeConnectSavedMethodNeedsReauthorization({
       activeAccountId: connectedAccountId,
       savedMethodAccountId,
       centerCustomFields: center.customFields,
     });
-    if (!migration.cutoverAt || !reauthorizationRequired || connectedAccountId !== migration.targetAccountId) {
+    if (!migration.cutoverAt || !paymentMethodReauthorizationRequired || connectedAccountId !== migration.targetAccountId) {
       return NextResponse.json({ ok: false, error: "This payment update is no longer needed or the school payment account changed. Please ask the school for a new link." }, { status: 409 });
     }
   }
@@ -219,7 +220,8 @@ async function POSTHandler(request: NextRequest) {
       stripeConnectedAccountId: connectedAccountId || "",
       stripeCustomerId: customerId,
       recipientEmail: payload.email,
-      autopaySetupMode: "preserve",
+      autopaySetupMode: paymentMethodReauthorizationRequired ? "preserve_existing" : "preserve",
+      paymentMethodReauthorization: paymentMethodReauthorizationRequired ? "true" : "false",
       preferredPaymentMethodCategory: paymentMethodCategory,
       bankAccountVerificationMethod: bankAccountVerificationMethod || "",
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",

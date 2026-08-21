@@ -318,6 +318,7 @@ type Props = {
   checkoutReadiness?: StripeCheckoutReadiness;
   paymentTransitionActive?: boolean;
   paymentMethodReauthorizationRequired?: boolean;
+  paymentMethodReauthorizationPreservesAutopay?: boolean;
   parentBalanceReviewRequired?: boolean;
   parentBalanceVisibilityConfirmed?: boolean;
   invoices: Invoice[];
@@ -698,6 +699,7 @@ function ParentPortalWorkspaceView({
   checkoutReadiness = fallbackCheckoutReadiness,
   paymentTransitionActive = false,
   paymentMethodReauthorizationRequired = false,
+  paymentMethodReauthorizationPreservesAutopay = false,
   parentBalanceReviewRequired = false,
   parentBalanceVisibilityConfirmed = false,
   invoices,
@@ -2526,7 +2528,11 @@ function ParentPortalWorkspaceView({
                 <AlertCircle className="size-4" />
                 <AlertTitle>Replace your saved payment method</AlertTitle>
                 <AlertDescription>
-                  Your school now uses a new payment account. Replace the saved card or connect a bank account below before saved-method payments or autopay can resume. No payment is charged while you update it.
+                  Your school now uses a new payment account. Replace the saved card or connect a bank account below. No payment is charged while you update it. {paymentMethodReauthorizationPreservesAutopay
+                    ? "Your existing autopay consent will resume on the replacement method after Stripe confirms it."
+                    : autopayStatus === "enabled"
+                      ? "After replacement, review and re-enable autopay."
+                      : "Autopay will remain off unless you enable it after replacement."}
                 </AlertDescription>
               </Alert>
             ) : null}
@@ -2754,7 +2760,11 @@ function ParentPortalWorkspaceView({
                 <AlertCircle className="size-4" />
                 <AlertTitle>Payment method update required</AlertTitle>
                 <AlertDescription>
-                  Your school now uses a new payment account. Replace your saved card or connect a bank account in Payment settings before saved-method payments or autopay can resume. One-time checkout remains available.
+                  Your school now uses a new payment account. Replace your saved card or connect a bank account in Payment settings before saved-method payments can resume. One-time checkout remains available. {paymentMethodReauthorizationPreservesAutopay
+                    ? "Your existing autopay consent will resume automatically after Stripe confirms the replacement."
+                    : autopayStatus === "enabled"
+                      ? "Review and re-enable autopay after replacement."
+                      : "Autopay remains off until you choose to enable it."}
                 </AlertDescription>
               </Alert>
             ) : paymentTransitionActive ? (
@@ -2784,7 +2794,9 @@ function ParentPortalWorkspaceView({
                     <div className="font-medium">Autopay</div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {paymentMethodReauthorizationRequired
-                        ? "Autopay is paused until the saved payment method is replaced for the school's current payment account."
+                        ? paymentMethodReauthorizationPreservesAutopay
+                          ? "Autopay is paused only until Stripe confirms the replacement method, then your existing consent resumes."
+                          : "Autopay is paused until the method is replaced; review and enable it afterward if desired."
                         : autopayStatus === "enabled"
                         ? "Enabled for eligible invoices using the saved family payment method."
                         : paymentMethodManagement?.hasSavedPaymentMethod

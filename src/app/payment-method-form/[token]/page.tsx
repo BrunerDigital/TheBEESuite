@@ -8,7 +8,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { InfoTip } from "@/components/ui/info-tip";
-import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
+import {
+  canPreserveAutopayConsentForPaymentMethodMigration,
+  paymentMethodManagementSummary,
+} from "@/lib/payment-method-management";
 import {
   paymentMethodRequestRecipientOptions,
   validatePaymentMethodRequestToken,
@@ -133,6 +136,12 @@ export default async function PaymentMethodFormPage({
     autopayPlaceholder: family.billingAccount?.autopayPlaceholder,
     customFields: family.billingAccount?.customFields,
   });
+  const reauthorizationPreservesAutopay = payload.intent === "payment_method_reauthorization"
+    && canPreserveAutopayConsentForPaymentMethodMigration({
+      autopayPlaceholder: family.billingAccount?.autopayPlaceholder,
+      customFields: family.billingAccount?.customFields,
+      linkedGuardianUserIds: family.guardians.map((guardian) => guardian.userId),
+    });
   const centerLabel = center.crmLocationId ?? center.name;
   const childNames = family.children.map((child) => child.fullName).join(", ");
   const paymentMethodStatus = firstQueryValue(search.paymentMethod) ?? null;
@@ -181,6 +190,7 @@ export default async function PaymentMethodFormPage({
           paymentStatus={paymentStatus}
           focus={focus}
           reauthorization={payload.intent === "payment_method_reauthorization"}
+          reauthorizationPreservesAutopay={reauthorizationPreservesAutopay}
           openInvoices={(payload.intent === "payment_method_reauthorization" ? [] : family.billingAccount?.invoices ?? []).map((invoice) => ({
             id: invoice.id,
             number: invoice.number,

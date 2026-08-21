@@ -10,6 +10,9 @@ test("FTE age buckets do not treat preschool as school age", () => {
 });
 
 test("FTE age buckets recognize pre-K classroom programs without overriding specific child ages", () => {
+  assert.equal(fteAgeBucket({ ageGroup: "Two Year Olds" }), "twos");
+  assert.equal(fteAgeBucket({ ageGroup: "Pre-Kindergarten" }), "preK");
+  assert.equal(fteAgeBucket({ ageGroup: "Prekindergarten" }), "preK");
   assert.equal(fteAgeBucket({ ageGroup: "Preschool", classroomName: "HONEY-BEES (C)-FOUR/FIVE'S" }), "preK");
   assert.equal(fteAgeBucket({ ageGroup: "Preschool", classroomName: "VPK Classroom" }), "preK");
   assert.equal(fteAgeBucket({ ageGroup: "Infant", classroomName: "FOUR/FIVE'S" }), "infants");

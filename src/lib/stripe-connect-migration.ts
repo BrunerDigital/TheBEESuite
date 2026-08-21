@@ -126,16 +126,39 @@ export function stripeConnectSavedMethodAccount(input: {
   const savedMethodAccountId = accountId(input.savedMethodAccountId);
   if (!savedMethodAccountId || savedMethodAccountId === activeAccountId) return activeAccountId;
 
+  return null;
+}
+
+export function stripeConnectSavedMethodNeedsReauthorization(input: {
+  activeAccountId?: string | null;
+  savedMethodAccountId?: string | null;
+  centerCustomFields: unknown;
+}) {
+  const activeAccountId = accountId(input.activeAccountId);
+  const savedMethodAccountId = accountId(input.savedMethodAccountId);
+  if (!activeAccountId || !savedMethodAccountId || savedMethodAccountId === activeAccountId) return false;
+
   const fields = record(input.centerCustomFields);
   const migration = readStripeConnectMigration(fields);
   const sourceIsRetained = fields.stripeConnectMigrationSourceAccountRetainedForReconciliation === true;
-  const isControlledSourceTransition =
+  return (
     Boolean(migration.cutoverAt) &&
     sourceIsRetained &&
     activeAccountId === migration.targetAccountId &&
-    savedMethodAccountId === migration.sourceAccountId;
+    savedMethodAccountId === migration.sourceAccountId
+  );
+}
 
-  return isControlledSourceTransition ? savedMethodAccountId : null;
+export function stripeConnectSavedMethodManagementAccount(input: {
+  activeAccountId?: string | null;
+  savedMethodAccountId?: string | null;
+  centerCustomFields: unknown;
+}) {
+  const activeAccountId = accountId(input.activeAccountId);
+  const savedMethodAccountId = accountId(input.savedMethodAccountId);
+  if (!savedMethodAccountId || savedMethodAccountId === activeAccountId) return activeAccountId;
+
+  return stripeConnectSavedMethodNeedsReauthorization(input) ? savedMethodAccountId : null;
 }
 
 export function maskStripeAccountId(value: string | null) {

@@ -125,6 +125,14 @@ test("parent portal rejects a requested unlinked family before choosing a defaul
   assert.match(page, /parentPortalTenantFamilyWhere\(parentPortalTenantCenterIds\)/);
 });
 
+test("parent portal resolves billing warnings through the current child's school when the family center is absent", () => {
+  const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  assert.match(page, /classroom: \{ select: \{ name: true, ageGroup: true, centerId: true \} \}/);
+  assert.match(page, /resolvedParentCenterId = family\?\.centerId \?\? family\?\.children\[0\]\?\.classroom\?\.centerId \?\? null/);
+  assert.match(page, /where: \{ id: resolvedParentCenterId \?\? "__none__" \}/);
+  assert.match(page, /stripeConnectSavedMethodNeedsReauthorization/);
+});
+
 test("parent portal data fanout stays within the production database pool", () => {
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const start = page.indexOf("const [billingAccount, latestLedgerEntry");

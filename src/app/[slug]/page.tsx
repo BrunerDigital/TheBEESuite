@@ -91,7 +91,7 @@ import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
 import { getParentPortalFamilyScope, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
-import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
+import { readStripeConnectMigration, stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
 import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
 import { canUseCorporateStripeVerification, readCorporateStripeVerificationTarget } from "@/lib/corporate-stripe-verification";
 import { buildParentPortalTodayState } from "@/lib/parent-portal-today";
@@ -105,6 +105,7 @@ import {
   getStripeSecretKey,
   getStripeWebhookSecret,
   isStripeParentProcessingRecoveryApproved,
+  readStripeConnectedAccountId,
 } from "@/lib/integrations";
 import { getKidCitySoftwareFeeUnitAmountCents, getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
 import { countCenterBillableUsers } from "@/lib/school-software-subscriptions";
@@ -2087,7 +2088,7 @@ async function renderLivePage(
               customFields: true,
               photoVideoPermission: true,
               fieldTripPermission: true,
-              classroom: { select: { name: true, ageGroup: true } },
+              classroom: { select: { name: true, ageGroup: true, centerId: true } },
               liveLocation: {
                 select: {
                   areaName: true,
@@ -2108,8 +2109,9 @@ async function renderLivePage(
 
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
-    const parentPortalCenter = family?.centerId
-      ? centers.find((center) => center.id === family.centerId) ?? null
+    const resolvedParentCenterId = family?.centerId ?? family?.children[0]?.classroom?.centerId ?? null;
+    const parentPortalCenter = resolvedParentCenterId
+      ? centers.find((center) => center.id === resolvedParentCenterId) ?? null
       : null;
     const parentServiceDay = centerServiceDayWindow(today, parentPortalCenter);
     const agencyOnlyLedgerWhere: Prisma.LedgerEntryWhereInput = {
@@ -2251,7 +2253,7 @@ async function renderLivePage(
       prisma.announcement.findMany({
         where: {
           OR: [
-            { centerId: family?.centerId ?? "__none__" },
+            { centerId: resolvedParentCenterId ?? "__none__" },
             { centerId: null },
           ],
           status: { in: ["active", "sent", "published"] },
@@ -2261,7 +2263,7 @@ async function renderLivePage(
         select: { id: true, title: true, body: true, sendAt: true },
       }),
       prisma.center.findUnique({
-        where: { id: family?.centerId ?? "__none__" },
+        where: { id: resolvedParentCenterId ?? "__none__" },
         select: {
           id: true,
           customFields: true,
@@ -2303,8 +2305,8 @@ async function renderLivePage(
         attachments: await signMessageAttachmentsFromMetadata(message.metadata),
       }))),
     ]);
-    const parentPortalCenterName = family?.centerId
-      ? centers.find((center) => center.id === family.centerId)
+    const parentPortalCenterName = resolvedParentCenterId
+      ? centers.find((center) => center.id === resolvedParentCenterId)
       : null;
     const kioskCredentials = user.role === UserRole.PARENT_GUARDIAN && family
       ? family.guardians
@@ -2456,6 +2458,12 @@ async function renderLivePage(
     });
     const parentCenterFields = jsonRecord(familyCenter?.customFields);
     const parentStripeMigration = readStripeConnectMigration(parentCenterFields);
+    const parentBillingAccountFields = jsonRecord(billingAccount?.customFields);
+    const paymentMethodReauthorizationRequired = stripeConnectSavedMethodNeedsReauthorization({
+      activeAccountId: readStripeConnectedAccountId(parentCenterFields),
+      savedMethodAccountId: stringField(parentBillingAccountFields.stripeDefaultPaymentMethodConnectedAccountId),
+      centerCustomFields: parentCenterFields,
+    });
     const paymentTransitionActive = Boolean(
       parentStripeMigration.targetAccountId &&
       parentCenterFields.stripeConnectMigrationPayoutReleaseStatus !== "released",
@@ -2506,6 +2514,7 @@ async function renderLivePage(
         invoices={parentInvoices}
         checkoutReadiness={parentCheckoutReadiness}
         paymentTransitionActive={paymentTransitionActive}
+        paymentMethodReauthorizationRequired={paymentMethodReauthorizationRequired}
         parentBalanceReviewRequired={parentBalanceReviewRequired}
         parentBalanceVisibilityConfirmed={parentBalanceVisibilityConfirmed}
         payments={billingAccount?.payments ?? []}

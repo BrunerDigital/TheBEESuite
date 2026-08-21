@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
 import { prisma } from "@/lib/prisma";
 import { paymentMethodRequestRecipientOptions } from "@/lib/payment-method-request-forms";
-import { readStripeConnectMigration, stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
+import { readStripeConnectMigration, stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
 import { readStripeConnectedAccountId } from "@/lib/integrations";
 
 loadEnvConfig(process.env.BEE_SUITE_ENV_DIR || process.cwd());
@@ -41,8 +41,12 @@ async function main() {
     const fields = record(family.billingAccount.customFields);
     const savedMethodId = clean(fields.stripeDefaultPaymentMethodId);
     const savedMethodAccountId = clean(fields.stripeDefaultPaymentMethodConnectedAccountId);
-    const chargeAccountId = stripeConnectSavedMethodAccount({ activeAccountId, savedMethodAccountId, centerCustomFields: center.customFields });
-    if (!savedMethodId || chargeAccountId !== migration.sourceAccountId) return [];
+    const requiresReauthorization = stripeConnectSavedMethodNeedsReauthorization({
+      activeAccountId,
+      savedMethodAccountId,
+      centerCustomFields: center.customFields,
+    });
+    if (!savedMethodId || !requiresReauthorization) return [];
     const recipients = paymentMethodRequestRecipientOptions({ billingEmail: family.billingEmail, guardians: family.guardians });
     const selectedRecipient = recipients[0] ?? null;
     return [{

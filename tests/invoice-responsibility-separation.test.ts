@@ -177,4 +177,6 @@ test("responsibility separation remains available while full invoice collection 
   assert.match(operationsRoute, /invoiceResponsibilitySeparation\(existingInvoice\.customFields\)/);
   assert.match(invoiceRoute, /A separated invoice cannot be voided because it has a linked agency receivable/);
   assert.match(invoiceRoute, /customFields: \{ tuitionPlanName: plan\.name \}/);
+  assert.match(invoiceRoute, /grossTuitionCents: items\.reduce\(\(total, item\) => total \+ item\.amountCents, 0\)/);
+  assert.match(invoiceRoute, /netTuitionCents: items\.reduce\(\(total, item\) => total \+ item\.amountCents, 0\)/);
 });

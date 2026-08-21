@@ -364,6 +364,12 @@ async function createBatchInvoices(user: CurrentBillingUser, body: Record<string
           ageGroup: isAll(ageGroup) ? null : ageGroup,
           enrollmentStatus: isAll(enrollmentStatus) ? null : enrollmentStatus,
           childIds,
+          ...(charge.chargeSource === "tuitionPlan" ? {
+            grossTuitionCents: items.reduce((total, item) => total + item.amountCents, 0),
+            netTuitionCents: items.reduce((total, item) => total + item.amountCents, 0),
+            tuitionCredits: [],
+            tuitionCreditsTotalCents: 0,
+          } : {}),
           dedupeKey,
         },
       });

@@ -150,9 +150,16 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(workspace, /Draft claim created and added to the agency claim queue below/);
 });
 
-test("agency queue keeps newly-created sibling claims inside the bounded response", () => {
+test("agency queue keeps new sibling claims visible and older actionable claims reachable", () => {
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
-  assert.match(route, /subsidyClaim\.findMany\([\s\S]*orderBy: \[\{ createdAt: "desc" \}, \{ dueDate: "asc" \}\][\s\S]*take: 250/);
+  const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
+  assert.match(route, /CLAIM_PAGE_SIZE = 100/);
+  assert.match(route, /subsidyClaim\.findMany\([\s\S]*orderBy: \[\{ createdAt: "desc" \}, \{ dueDate: "asc" \}\][\s\S]*skip: \(claimPage - 1\) \* CLAIM_PAGE_SIZE[\s\S]*take: CLAIM_PAGE_SIZE \+ 1/);
+  assert.match(route, /claimPagination: \{ page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage \}/);
+  assert.match(workspace, /claimPage=\$\{claimPage\}/);
+  assert.match(workspace, /Claim queue page \{claimPagination\.page\}/);
+  assert.match(workspace, /setClaimPage\(1\)/);
+  assert.match(workspace, /setClaimError\(""\); setClaimMessage\(""\); setData\(null\)/);
 });
 
 test("agency remittances re-read the claim inside a serializable transaction", () => {

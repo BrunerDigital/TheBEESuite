@@ -23,6 +23,7 @@ const CURRENT_ENROLLMENT_STATUSES = currentlyEnrolledStatusValues();
 const AUTHORIZATION_UNIT_TYPES = new Set(["weekly", "daily", "hourly", "monthly"]);
 const REMITTANCE_METHODS = new Set(["ach", "check", "agency_portal", "other"]);
 const UNIT_PRECISION = 1_000_000;
+const CLAIM_PAGE_SIZE = 100;
 
 class AgencyWorkflowError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -107,6 +108,8 @@ async function getHandler(request: NextRequest) {
   const auth = await currentBillingUser();
   if (!auth.ok) return auth.response;
   const requestedCenterId = clean(request.nextUrl.searchParams.get("centerId"));
+  const requestedClaimPage = Number.parseInt(clean(request.nextUrl.searchParams.get("claimPage")) || "1", 10);
+  const claimPage = Math.min(Math.max(Number.isFinite(requestedClaimPage) ? requestedClaimPage : 1, 1), 10_000);
   const centerIds = requestedCenterId
     ? centerAllowed(auth.user, requestedCenterId) ? [requestedCenterId] : []
     : auth.user.centerIds;
@@ -128,10 +131,9 @@ async function getHandler(request: NextRequest) {
     }),
     prisma.subsidyClaim.findMany({
       where: { centerId: { in: centerIds } },
-      // Keep newly-created drafts visible immediately. Due-date-first ordering could
-      // push a successful sibling claim outside the bounded queue response.
       orderBy: [{ createdAt: "desc" }, { dueDate: "asc" }],
-      take: 250,
+      skip: (claimPage - 1) * CLAIM_PAGE_SIZE,
+      take: CLAIM_PAGE_SIZE + 1,
       include: {
         agencyProgram: { select: { name: true, programName: true, providerNumber: true, vendorNumber: true, submissionMethod: true, portalUrl: true, paymentInstructions: true } },
         authorization: { include: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
@@ -167,6 +169,8 @@ async function getHandler(request: NextRequest) {
     }),
   ]);
 
+  const hasNextClaimPage = claims.length > CLAIM_PAGE_SIZE;
+  const visibleClaims = claims.slice(0, CLAIM_PAGE_SIZE);
   const summaryRow = summaryRows[0];
   const summary = {
     claimedCents: Number(summaryRow?.claimedCents ?? 0),
@@ -191,7 +195,15 @@ async function getHandler(request: NextRequest) {
     expiringAuthorizations: authorizations.filter((authorization) => authorization.status === "active" && authorization.coverageEnd >= today && authorization.coverageEnd < expirationCutoff).length,
   };
 
-  return NextResponse.json({ ok: true, programs: programReadiness, authorizations, claims, families, summary: { ...summary, ...readiness } });
+  return NextResponse.json({
+    ok: true,
+    programs: programReadiness,
+    authorizations,
+    claims: visibleClaims,
+    claimPagination: { page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage },
+    families,
+    summary: { ...summary, ...readiness },
+  });
 }
 
 async function postHandler(request: NextRequest) {

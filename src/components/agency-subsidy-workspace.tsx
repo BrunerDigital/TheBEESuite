@@ -38,11 +38,12 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const [claimError, setClaimError] = useState("");
   const [claimMessage, setClaimMessage] = useState("");
   const [claimPage, setClaimPage] = useState(1);
+  const [exportingClaims, setExportingClaims] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (requestedClaimPage = claimPage) => {
     if (!centerId) return;
     setPending(true); setError("");
-    const response = await fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(centerId)}&claimPage=${claimPage}`, { cache: "no-store" });
+    const response = await fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(centerId)}&claimPage=${requestedClaimPage}`, { cache: "no-store" });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) setError(body.error || "Agency billing workspace could not be loaded.");
     else setData(body);
@@ -62,7 +63,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
     return () => { active = false; };
   }, [centerId, claimPage]);
 
-  async function post(action: string, fields: Record<string, unknown>, callbacks: { onError?: (message: string) => void; onSuccess?: (body: Record<string, unknown>) => void } = {}) {
+  async function post(action: string, fields: Record<string, unknown>, callbacks: { onError?: (message: string) => void; onSuccess?: (body: Record<string, unknown>) => void; reloadClaimPage?: number } = {}) {
     setPending(true); setError(""); setMessage("");
     const response = await fetch("/api/billing/agency-claims", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, centerId, ...fields }) });
     const body = await response.json().catch(() => ({})) as Record<string, unknown>;
@@ -74,7 +75,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
     } else {
       setMessage("Agency billing record saved.");
       callbacks.onSuccess?.(body);
-      await load();
+      await load(callbacks.reloadClaimPage);
     }
     setPending(false);
     return response.ok;
@@ -176,17 +177,35 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
     if (paidAt?.trim()) void post("recordRemittance", { claimId: claim.id, amountDollars, externalReference, paidAt, paymentMethod });
   }
 
-  function exportClaims() {
+  async function exportClaims() {
+    const exportCenterId = centerId;
+    setExportingClaims(true); setError("");
+    const allClaims: Claim[] = [];
+    try {
+      for (let page = 1; page <= 10_000; page += 1) {
+        const response = await fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(exportCenterId)}&claimPage=${page}`, { cache: "no-store" });
+        const body = await response.json().catch(() => ({})) as Partial<Workspace> & { error?: string };
+        if (!response.ok || !Array.isArray(body.claims) || !body.claimPagination) throw new Error(body.error || "Agency claims could not be exported.");
+        allClaims.push(...body.claims);
+        if (!body.claimPagination.hasNext) break;
+        if (page === 10_000) throw new Error("The agency claim export is too large. Contact support for a full export.");
+      }
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : "Agency claims could not be exported.");
+      setExportingClaims(false);
+      return;
+    }
     const quote = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
     const rows = [
       ["Claim", "Agency", "Family", "Child", "Service start", "Service end", "Status", "Claimed", "Approved", "Paid", "Missing documents"],
-      ...claims.map((claim) => [claim.number, claim.agencyProgram.name, claim.authorization?.family.name ?? "", claim.authorization?.child.fullName ?? "", claim.servicePeriodStart.slice(0, 10), claim.servicePeriodEnd.slice(0, 10), claim.status, (claim.claimedCents / 100).toFixed(2), claim.approvedCents === null ? "" : (claim.approvedCents / 100).toFixed(2), (claim.paidCents / 100).toFixed(2), claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)).map((document) => document.name).join("; ")]),
+      ...allClaims.map((claim) => [claim.number, claim.agencyProgram.name, claim.authorization?.family.name ?? "", claim.authorization?.child.fullName ?? "", claim.servicePeriodStart.slice(0, 10), claim.servicePeriodEnd.slice(0, 10), claim.status, (claim.claimedCents / 100).toFixed(2), claim.approvedCents === null ? "" : (claim.approvedCents / 100).toFixed(2), (claim.paidCents / 100).toFixed(2), claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)).map((document) => document.name).join("; ")]),
     ];
     const blob = new Blob([rows.map((row) => row.map(quote).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
     const href = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
-    anchor.href = href; anchor.download = `agency-claims-${centerId}-${today()}.csv`; anchor.click();
+    anchor.href = href; anchor.download = `agency-claims-${exportCenterId}-${today()}.csv`; anchor.click();
     URL.revokeObjectURL(href);
+    setExportingClaims(false);
   }
 
   return (
@@ -199,7 +218,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
               <CardTitle as="h2">Subsidy claims and agency invoices</CardTitle>
               <CardDescription className="mt-2 max-w-3xl">Keep government or third-party claims separate from family balances. Configure each payer, verify authorizations and supporting documents, submit through the approved agency channel, and reconcile ACH, check, or portal remittances.</CardDescription>
             </div>
-            <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => window.print()}><Printer data-icon="inline-start" /> Print</Button><Button variant="outline" onClick={exportClaims} disabled={!claims.length}><Download data-icon="inline-start" /> Export CSV</Button><Button variant="outline" onClick={() => void load()} disabled={pending}><RefreshCw data-icon="inline-start" /> Refresh</Button></div>
+            <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => window.print()}><Printer data-icon="inline-start" /> Print</Button><Button variant="outline" onClick={() => void exportClaims()} disabled={!data || exportingClaims}><Download data-icon="inline-start" /> {exportingClaims ? "Exporting…" : "Export CSV"}</Button><Button variant="outline" onClick={() => void load()} disabled={pending}><RefreshCw data-icon="inline-start" /> Refresh</Button></div>
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -250,7 +269,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
           <div className="flex flex-wrap gap-2"><Button type="submit" disabled={pending || !programId || !familyId || !childId || (!editingAuthorization && !selectedChildIsCurrent)}>{editingAuthorization ? "Save correction" : "Save authorization"}</Button>{editingAuthorization ? <Button type="button" variant="outline" onClick={() => setEditingAuthorizationId("")}>Cancel edit</Button> : null}</div>
         </form></CardContent></Card>
 
-        <Card><CardHeader><CardTitle as="h3">3. Build agency claim</CardTitle><CardDescription>Create a separate agency invoice with its required-document checklist.</CardDescription></CardHeader><CardContent><form key={`${centerId}:${authorizationId}`} className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const formElement = event.currentTarget; const form = new FormData(formElement); setClaimError(""); setClaimMessage(""); const ok = await post("createClaim", { authorizationId, servicePeriodStart: form.get("servicePeriodStart"), servicePeriodEnd: form.get("servicePeriodEnd"), dueDate: form.get("dueDate"), serviceUnits: form.get("serviceUnits"), rateDollars: form.get("rateDollars"), attendanceDays: form.get("attendanceDays") }, { onError: setClaimError, onSuccess: () => { setClaimPage(1); setClaimMessage("Draft claim created and added to the agency claim queue below."); } }); if (ok) formElement.reset(); }}>
+        <Card><CardHeader><CardTitle as="h3">3. Build agency claim</CardTitle><CardDescription>Create a separate agency invoice with its required-document checklist.</CardDescription></CardHeader><CardContent><form key={`${centerId}:${authorizationId}`} className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const formElement = event.currentTarget; const form = new FormData(formElement); setClaimError(""); setClaimMessage(""); const ok = await post("createClaim", { authorizationId, servicePeriodStart: form.get("servicePeriodStart"), servicePeriodEnd: form.get("servicePeriodEnd"), dueDate: form.get("dueDate"), serviceUnits: form.get("serviceUnits"), rateDollars: form.get("rateDollars"), attendanceDays: form.get("attendanceDays") }, { onError: setClaimError, onSuccess: () => { setClaimPage(1); setClaimMessage("Draft claim created and added to the agency claim queue below."); }, reloadClaimPage: 1 }); if (ok) formElement.reset(); }}>
           <div><Label>Authorization</Label><Select value={authorizationId} onValueChange={(value) => { if (!value) return; setAuthorizationId(value); setClaimError(""); setClaimMessage(""); }}><SelectTrigger><SelectValue placeholder="Choose active authorization" /></SelectTrigger><SelectContent>{claimableAuthorizations.map((authorization) => <SelectItem key={authorization.id} value={authorization.id}>{authorization.child.fullName} · {authorization.agencyProgram.name} · {money(authorization.authorizedRateCents)}/{authorization.unitType} · {authorization.authorizationNumber}</SelectItem>)}</SelectContent></Select></div>
           {selectedClaimAuthorization ? <div id="claim-authorization-coverage" className="rounded-lg border bg-background/50 p-3 text-sm"><div className="font-medium">{selectedClaimAuthorization.child.fullName}</div><div className="mt-1 text-muted-foreground">Authorized {dateOnly(selectedClaimAuthorization.coverageStart)} – {dateOnly(selectedClaimAuthorization.coverageEnd)} · up to {money(selectedClaimAuthorization.authorizedRateCents)} / {selectedClaimAuthorization.unitType}</div></div> : null}
           <div className="grid grid-cols-2 gap-3"><div><Label>Service start</Label><Input name="servicePeriodStart" type="date" min={selectedClaimAuthorization?.coverageStart.slice(0, 10)} max={selectedClaimAuthorization?.coverageEnd.slice(0, 10)} aria-describedby={selectedClaimAuthorization ? "claim-authorization-coverage" : undefined} required /></div><div><Label>Service end</Label><Input name="servicePeriodEnd" type="date" min={selectedClaimAuthorization?.coverageStart.slice(0, 10)} max={selectedClaimAuthorization?.coverageEnd.slice(0, 10)} aria-describedby={selectedClaimAuthorization ? "claim-authorization-coverage" : undefined} required /></div></div>

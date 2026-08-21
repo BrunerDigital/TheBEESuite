@@ -160,6 +160,11 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   assert.match(workspace, /Claim queue page \{claimPagination\.page\}/);
   assert.match(workspace, /setClaimPage\(1\)/);
   assert.match(workspace, /setClaimError\(""\); setClaimMessage\(""\); setData\(null\)/);
+  assert.match(workspace, /reloadClaimPage: 1/);
+  assert.match(workspace, /load\(callbacks\.reloadClaimPage\)/);
+  assert.match(workspace, /for \(let page = 1; page <= 10_000; page \+= 1\)/);
+  assert.match(workspace, /allClaims\.push\(\.\.\.body\.claims\)/);
+  assert.doesNotMatch(workspace, /\.\.\.claims\.map\(\(claim\)/);
 });
 
 test("agency remittances re-read the claim inside a serializable transaction", () => {

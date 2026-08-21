@@ -3,9 +3,11 @@ import { test } from "node:test";
 import {
   canChargeSavedPaymentMethod,
   canCreatePaymentMethodManagementSession,
+  canPreserveAutopayConsentForPaymentMethodMigration,
   canRunAutopay,
   paymentMethodAutopayCategory,
   paymentMethodManagementSummary,
+  paymentMethodSetupAutopayOutcome,
   paymentMethodSetupExpirationPatch,
 } from "../src/lib/payment-method-management";
 
@@ -33,6 +35,77 @@ test("payment method summary identifies saved Stripe customer and autopay status
   assert.equal(summary.paymentMethodLabel, "Test Bank ending 6789");
   assert.equal(summary.lastUpdatedAt, "2026-06-04T15:00:00.000Z");
   assert.equal(paymentMethodAutopayCategory(summary), "ach");
+});
+
+test("Stripe account migration preserves exact consent from a still-linked guardian", () => {
+  const currentFields = {
+    autopayEnabled: true,
+    autopayEnabledByUserId: "user_123",
+    autopayPaymentMethodId: "pm_old",
+    stripeDefaultPaymentMethodId: "pm_old",
+  };
+  assert.equal(canPreserveAutopayConsentForPaymentMethodMigration({
+    customFields: currentFields,
+    linkedGuardianUserIds: ["user_123"],
+  }), true);
+  assert.deepEqual(paymentMethodSetupAutopayOutcome({
+    currentFields,
+    linkedGuardianUserIds: ["user_123"],
+    previousPaymentMethodId: "pm_old",
+    paymentMethodId: "pm_new",
+    setupMode: "preserve_existing",
+  }), {
+    autopayEnabled: true,
+    autopayStatus: "enabled",
+    autopayPlaceholder: true,
+    autopayPaymentMethodId: "pm_new",
+    preservedExistingConsent: true,
+    replacementDisabledAutopay: false,
+  });
+});
+
+test("ordinary saved-method replacement still disables autopay", () => {
+  const outcome = paymentMethodSetupAutopayOutcome({
+    currentFields: {
+      autopayEnabled: true,
+      autopayEnabledByUserId: "user_123",
+      autopayPaymentMethodId: "pm_old",
+    },
+    linkedGuardianUserIds: ["user_123"],
+    previousPaymentMethodId: "pm_old",
+    paymentMethodId: "pm_new",
+    setupMode: "preserve",
+  });
+  assert.equal(outcome?.autopayEnabled, false);
+  assert.equal(outcome?.replacementDisabledAutopay, true);
+});
+
+test("migration does not preserve consent without an exact method binding", () => {
+  const outcome = paymentMethodSetupAutopayOutcome({
+    currentFields: { autopayEnabled: true, autopayEnabledByUserId: "user_123" },
+    linkedGuardianUserIds: ["user_123"],
+    previousPaymentMethodId: "pm_old",
+    paymentMethodId: "pm_new",
+    setupMode: "preserve_existing",
+  });
+  assert.equal(outcome?.autopayEnabled, false);
+  assert.equal(outcome?.preservedExistingConsent, false);
+});
+
+test("migration does not preserve consent from an unlinked user", () => {
+  const outcome = paymentMethodSetupAutopayOutcome({
+    currentFields: {
+      autopayEnabled: true,
+      autopayEnabledByUserId: "user_old",
+      autopayPaymentMethodId: "pm_old",
+    },
+    linkedGuardianUserIds: ["user_current"],
+    previousPaymentMethodId: "pm_old",
+    paymentMethodId: "pm_new",
+    setupMode: "preserve_existing",
+  });
+  assert.equal(outcome?.autopayEnabled, false);
+  assert.equal(outcome?.preservedExistingConsent, false);
 });
 
 test("payment method summary labels saved cards without storing full numbers", () => {

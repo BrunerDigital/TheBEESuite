@@ -13,7 +13,7 @@ import {
   normalizeStateCode,
   subsidyClaimNumber,
 } from "@/lib/agency-subsidy-billing";
-import { currentlyEnrolledStatusValues, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
+import { currentlyEnrolledStatusValues, isCurrentlyEnrolledChildRecord } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 
@@ -123,7 +123,7 @@ async function getHandler(request: NextRequest) {
       include: {
         agencyProgram: { select: { name: true, programName: true } },
         family: { select: { name: true } },
-        child: { select: { fullName: true, enrollmentStatus: true } },
+        child: { select: { fullName: true, enrollmentStatus: true, classroomId: true } },
       },
     }),
     prisma.subsidyClaim.findMany({
@@ -149,7 +149,7 @@ async function getHandler(request: NextRequest) {
           ELSE 0
         END), 0)::bigint AS "outstandingCents",
         COUNT(*) FILTER (WHERE claim.status IN ('draft', 'ready'))::bigint AS "needsSubmission",
-        COUNT(*) FILTER (WHERE claim.status <> 'denied' AND EXISTS (
+        COUNT(*) FILTER (WHERE claim.status IN ('draft', 'ready', 'submitted') AND EXISTS (
           SELECT 1 FROM "SubsidyClaimDocument" document
           WHERE document."claimId" = claim.id
             AND document.status NOT IN ('received', 'verified', 'not_applicable')
@@ -159,9 +159,9 @@ async function getHandler(request: NextRequest) {
         AND claim.status <> 'void'
     `),
     prisma.family.findMany({
-      where: { centerId: { in: centerIds }, children: { some: { OR: [{ enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES } }, { subsidyAuthorizations: { some: {} } }] } } },
+      where: { centerId: { in: centerIds }, children: { some: { OR: [{ enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES }, classroomId: { not: null } }, { subsidyAuthorizations: { some: {} } }] } } },
       orderBy: { name: "asc" },
-      select: { id: true, centerId: true, name: true, children: { where: { OR: [{ enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES } }, { subsidyAuthorizations: { some: {} } }] }, select: { id: true, fullName: true, enrollmentStatus: true }, orderBy: { fullName: "asc" } } },
+      select: { id: true, centerId: true, name: true, children: { where: { OR: [{ enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES }, classroomId: { not: null } }, { subsidyAuthorizations: { some: {} } }] }, select: { id: true, fullName: true, enrollmentStatus: true, classroomId: true }, orderBy: { fullName: "asc" } } },
     }),
   ]);
 
@@ -265,14 +265,14 @@ async function postHandler(request: NextRequest) {
     const childId = clean(body.childId);
     const [program, family] = await Promise.all([
       prisma.agencyProgram.findUnique({ where: { id: agencyProgramId } }),
-      prisma.family.findUnique({ where: { id: familyId }, include: { children: { select: { id: true, enrollmentStatus: true } } } }),
+      prisma.family.findUnique({ where: { id: familyId }, include: { children: { select: { id: true, enrollmentStatus: true, classroomId: true } } } }),
     ]);
     const child = family?.children.find((item) => item.id === childId);
     if (!program || !family || program.centerId !== family.centerId || !centerAllowed(auth.user, program.centerId) || !child) {
       return NextResponse.json({ ok: false, error: "Agency, family, and child must belong to the same accessible school." }, { status: 403 });
     }
-    if (!isCurrentlyEnrolledStatus(child.enrollmentStatus)) {
-      return NextResponse.json({ ok: false, error: "Only a currently enrolled child can receive a new agency authorization." }, { status: 409 });
+    if (!isCurrentlyEnrolledChildRecord(child)) {
+      return NextResponse.json({ ok: false, error: "Only a currently enrolled child with an assigned classroom can receive a new agency authorization." }, { status: 409 });
     }
     const programBlockers = agencyProgramSetupBlockers(program);
     if (programBlockers.length) {
@@ -354,9 +354,9 @@ async function postHandler(request: NextRequest) {
   }
 
   if (action === "restoreAuthorization") {
-    const authorization = await prisma.subsidyAuthorization.findUnique({ where: { id: clean(body.authorizationId) }, include: { agencyProgram: true, child: { select: { enrollmentStatus: true } } } });
+    const authorization = await prisma.subsidyAuthorization.findUnique({ where: { id: clean(body.authorizationId) }, include: { agencyProgram: true, child: { select: { enrollmentStatus: true, classroomId: true } } } });
     if (!authorization || !centerAllowed(auth.user, authorization.centerId)) return NextResponse.json({ ok: false, error: "Authorization not found." }, { status: 404 });
-    if (!isCurrentlyEnrolledStatus(authorization.child.enrollmentStatus)) return NextResponse.json({ ok: false, error: "Only an authorization for a currently enrolled child can be restored." }, { status: 409 });
+    if (!isCurrentlyEnrolledChildRecord(authorization.child)) return NextResponse.json({ ok: false, error: "Only an authorization for a currently enrolled child with an assigned classroom can be restored." }, { status: 409 });
     const programBlockers = agencyProgramSetupBlockers(authorization.agencyProgram);
     if (programBlockers.length) return NextResponse.json({ ok: false, error: "Complete agency setup before restoring this authorization.", blockers: programBlockers }, { status: 409 });
     const updated = await prisma.subsidyAuthorization.update({ where: { id: authorization.id }, data: { status: "active" } });
@@ -372,10 +372,10 @@ async function postHandler(request: NextRequest) {
     let claim;
     try {
       claim = await prisma.$transaction(async (tx) => {
-        const authorization = await tx.subsidyAuthorization.findUnique({ where: { id: clean(body.authorizationId) }, include: { agencyProgram: true, child: { select: { fullName: true, enrollmentStatus: true } } } });
+        const authorization = await tx.subsidyAuthorization.findUnique({ where: { id: clean(body.authorizationId) }, include: { agencyProgram: true, child: { select: { fullName: true, enrollmentStatus: true, classroomId: true } } } });
         if (!authorization || !centerAllowed(auth.user, authorization.centerId)) throw new AgencyWorkflowError("Authorization not found.", 404);
         if (authorization.status !== "active") throw new AgencyWorkflowError("Only an active authorization can be used for a new claim.", 409);
-        if (!isCurrentlyEnrolledStatus(authorization.child.enrollmentStatus)) throw new AgencyWorkflowError("Only an authorization for a currently enrolled child can be used for a new claim.", 409);
+        if (!isCurrentlyEnrolledChildRecord(authorization.child)) throw new AgencyWorkflowError("Only an authorization for a currently enrolled child with an assigned classroom can be used for a new claim.", 409);
         const requestedRateCents = hasNumericInput(body.rateDollars) ? cents(body.rateDollars) : authorization.authorizedRateCents;
         if (requestedRateCents <= 0 || requestedRateCents > authorization.authorizedRateCents) throw new AgencyWorkflowError("The claim rate must be positive and cannot exceed the authorization rate.");
         const claimedCents = claimAmountCents({ serviceUnits: units, rateCents: requestedRateCents });

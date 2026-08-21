@@ -99,10 +99,10 @@ test("agency authorization entry resets and shows the selected child's saved rat
 test("authorization corrections fail closed and return useful duplicate guidance", () => {
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
-  assert.match(route, /Only a currently enrolled child can receive a new agency authorization/);
+  assert.match(route, /currently enrolled child with an assigned classroom can receive a new agency authorization/);
   assert.match(route, /subsidyAuthorizations: \{ some: \{\} \}/);
   assert.match(route, /currentlyEnrolledStatusValues/);
-  assert.match(route, /isCurrentlyEnrolledStatus/);
+  assert.match(route, /isCurrentlyEnrolledChildRecord/);
   assert.match(route, /action === "updateAuthorization"/);
   assert.match(route, /action === "restoreAuthorization"/);
   assert.match(route, /claims: \{ where: \{ status: \{ not: "void" \}/);
@@ -118,14 +118,14 @@ test("authorization corrections fail closed and return useful duplicate guidance
   assert.match(workspace, /Restore/);
   assert.match(workspace, /Authorized units/);
   assert.match(workspace, /former child[\s\S]*review or archive/);
-  assert.match(workspace, /authorization\.status === "active" && isCurrentlyEnrolledStatus\(authorization\.child\.enrollmentStatus\)/);
+  assert.match(workspace, /authorization\.status === "active" && isCurrentlyEnrolledChildRecord\(authorization\.child\)/);
 });
 
 test("agency claims enforce active authorizations, periods, units, and state transitions", () => {
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
   assert.match(route, /authorization\.status !== "active"/);
-  assert.match(route, /authorization\.child\.enrollmentStatus[\s\S]*currently enrolled child can be used for a new claim/);
+  assert.match(route, /isCurrentlyEnrolledChildRecord\(authorization\.child\)[\s\S]*assigned classroom can be used for a new claim/);
   assert.match(route, /servicePeriodStart: \{ lte: end \}[\s\S]*servicePeriodEnd: \{ gte: start \}/);
   assert.match(route, /exceed the authorization's total approved units/);
   assert.match(route, /unitsAtPrecision\(\(used\._sum\.serviceUnits \?\? 0\) \+ units\) > unitsAtPrecision\(authorization\.authorizedUnits\)/);
@@ -135,6 +135,7 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(route, /recordDecision"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*findUniqueOrThrow[\s\S]*claimSubmissionBlockers/);
   assert.match(route, /Complete every required claim document before recording agency approval/);
   assert.match(route, /updateDocument"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*status: \{ in: \["draft", "ready", "submitted"\] \}/);
+  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND EXISTS/);
   assert.match(route, /Documents cannot be changed after the agency decision is recorded/);
   assert.match(route, /Enter the agency denial reason or code/);
   assert.match(route, /action === "voidClaim"/);
@@ -160,7 +161,7 @@ test("agency dashboard totals use bounded database aggregates for the full non-v
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   assert.match(route, /\$queryRaw<AgencySummaryRow\[\]>/);
   assert.match(route, /SUM\(claim\."claimedCents"\)/);
-  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status <> 'denied' AND EXISTS/);
+  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND EXISTS/);
   assert.match(route, /claim\.status <> 'void'/);
   assert.doesNotMatch(route, /summaryClaims\.reduce/);
 });

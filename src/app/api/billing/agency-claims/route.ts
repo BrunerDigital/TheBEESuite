@@ -13,12 +13,13 @@ import {
   normalizeStateCode,
   subsidyClaimNumber,
 } from "@/lib/agency-subsidy-billing";
+import { currentlyEnrolledStatusValues, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 
 export const runtime = "nodejs";
 
-const CURRENT_ENROLLMENT_STATUSES = ["active", "enrolled", "currently_enrolled"];
+const CURRENT_ENROLLMENT_STATUSES = currentlyEnrolledStatusValues();
 const AUTHORIZATION_UNIT_TYPES = new Set(["weekly", "daily", "hourly", "monthly"]);
 const REMITTANCE_METHODS = new Set(["ach", "check", "agency_portal", "other"]);
 
@@ -119,7 +120,7 @@ async function getHandler(request: NextRequest) {
       },
     }),
     prisma.subsidyClaim.findMany({
-      where: { centerId: { in: centerIds } },
+      where: { centerId: { in: centerIds }, status: { not: "void" } },
       select: {
         claimedCents: true,
         approvedCents: true,
@@ -241,7 +242,7 @@ async function postHandler(request: NextRequest) {
     if (!program || !family || program.centerId !== family.centerId || !centerAllowed(auth.user, program.centerId) || !child) {
       return NextResponse.json({ ok: false, error: "Agency, family, and child must belong to the same accessible school." }, { status: 403 });
     }
-    if (!CURRENT_ENROLLMENT_STATUSES.includes(child.enrollmentStatus)) {
+    if (!isCurrentlyEnrolledStatus(child.enrollmentStatus)) {
       return NextResponse.json({ ok: false, error: "Only a currently enrolled child can receive a new agency authorization." }, { status: 409 });
     }
     const programBlockers = agencyProgramSetupBlockers(program);
@@ -280,32 +281,37 @@ async function postHandler(request: NextRequest) {
   }
 
   if (action === "updateAuthorization") {
-    const authorization = await prisma.subsidyAuthorization.findUnique({
-      where: { id: clean(body.authorizationId) },
-      include: { claims: { where: { status: { not: "void" } }, select: { id: true }, take: 1 } },
-    });
-    if (!authorization || !centerAllowed(auth.user, authorization.centerId)) return NextResponse.json({ ok: false, error: "Authorization not found." }, { status: 404 });
-    if (authorization.claims.length) return NextResponse.json({ ok: false, error: "Void every draft claim tied to this authorization before correcting its rate or dates. Submitted and paid claim history cannot be rewritten." }, { status: 409 });
     const coverageStart = dateValue(body.coverageStart);
     const coverageEnd = dateValue(body.coverageEnd);
     const authorizationNumber = clean(body.authorizationNumber);
     const authorizedRateCents = cents(body.authorizedRateDollars);
     const familyCopayCents = cents(body.familyCopayDollars);
-    const unitType = clean(body.unitType) || authorization.unitType;
     const authorizedUnits = hasNumericInput(body.authorizedUnits) ? numberValue(body.authorizedUnits) : null;
     if (!coverageStart || !coverageEnd || coverageEnd < coverageStart || !authorizationNumber || authorizedRateCents <= 0) return NextResponse.json({ ok: false, error: "Authorization number, valid coverage dates, and a positive agency rate are required." }, { status: 400 });
     if (familyCopayCents < 0) return NextResponse.json({ ok: false, error: "Family copay cannot be negative." }, { status: 400 });
-    if (!AUTHORIZATION_UNIT_TYPES.has(unitType)) return NextResponse.json({ ok: false, error: "Choose a supported authorization rate unit." }, { status: 400 });
     if (authorizedUnits !== null && authorizedUnits <= 0) return NextResponse.json({ ok: false, error: "Authorized units must be greater than zero when provided." }, { status: 400 });
-    let updated;
+    let correction;
     try {
-      updated = await prisma.subsidyAuthorization.update({ where: { id: authorization.id }, data: { authorizationNumber, coverageStart, coverageEnd, authorizedRateCents, familyCopayCents, unitType, authorizedUnits } });
+      correction = await prisma.$transaction(async (tx) => {
+        const authorization = await tx.subsidyAuthorization.findUnique({
+          where: { id: clean(body.authorizationId) },
+          include: { claims: { where: { status: { not: "void" } }, select: { id: true }, take: 1 } },
+        });
+        if (!authorization || !centerAllowed(auth.user, authorization.centerId)) throw new AgencyWorkflowError("Authorization not found.", 404);
+        if (authorization.claims.length) throw new AgencyWorkflowError("Void every draft claim tied to this authorization before correcting its rate or dates. Submitted and paid claim history cannot be rewritten.", 409);
+        const unitType = clean(body.unitType) || authorization.unitType;
+        if (!AUTHORIZATION_UNIT_TYPES.has(unitType)) throw new AgencyWorkflowError("Choose a supported authorization rate unit.");
+        const updated = await tx.subsidyAuthorization.update({ where: { id: authorization.id }, data: { authorizationNumber, coverageStart, coverageEnd, authorizedRateCents, familyCopayCents, unitType, authorizedUnits } });
+        return { authorization, updated, unitType };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
-      if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "Another authorization already uses that number for this child and agency." }, { status: 409 });
+      if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") return NextResponse.json({ ok: false, error: "This authorization or its claims changed at the same time. Refresh before trying the correction again." }, { status: 409 });
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return NextResponse.json({ ok: false, error: "Another authorization already uses that number for this child and agency." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: authorization.centerId, action: "billing.subsidy_authorization.updated", resource: "SubsidyAuthorization", resourceId: authorization.id, metadata: { previousRateCents: authorization.authorizedRateCents, authorizedRateCents, previousCoverageStart: dateInput(authorization.coverageStart), previousCoverageEnd: dateInput(authorization.coverageEnd), coverageStart: dateInput(coverageStart), coverageEnd: dateInput(coverageEnd), unitType, authorizedUnits } });
-    return NextResponse.json({ ok: true, authorization: updated });
+    await writeAuditLog(auth.user, { centerId: correction.authorization.centerId, action: "billing.subsidy_authorization.updated", resource: "SubsidyAuthorization", resourceId: correction.authorization.id, metadata: { previousRateCents: correction.authorization.authorizedRateCents, authorizedRateCents, previousCoverageStart: dateInput(correction.authorization.coverageStart), previousCoverageEnd: dateInput(correction.authorization.coverageEnd), coverageStart: dateInput(coverageStart), coverageEnd: dateInput(coverageEnd), unitType: correction.unitType, authorizedUnits } });
+    return NextResponse.json({ ok: true, authorization: correction.updated });
   }
 
   if (action === "archiveAuthorization") {
@@ -319,7 +325,7 @@ async function postHandler(request: NextRequest) {
   if (action === "restoreAuthorization") {
     const authorization = await prisma.subsidyAuthorization.findUnique({ where: { id: clean(body.authorizationId) }, include: { agencyProgram: true, child: { select: { enrollmentStatus: true } } } });
     if (!authorization || !centerAllowed(auth.user, authorization.centerId)) return NextResponse.json({ ok: false, error: "Authorization not found." }, { status: 404 });
-    if (!CURRENT_ENROLLMENT_STATUSES.includes(authorization.child.enrollmentStatus)) return NextResponse.json({ ok: false, error: "Only an authorization for a currently enrolled child can be restored." }, { status: 409 });
+    if (!isCurrentlyEnrolledStatus(authorization.child.enrollmentStatus)) return NextResponse.json({ ok: false, error: "Only an authorization for a currently enrolled child can be restored." }, { status: 409 });
     const programBlockers = agencyProgramSetupBlockers(authorization.agencyProgram);
     if (programBlockers.length) return NextResponse.json({ ok: false, error: "Complete agency setup before restoring this authorization.", blockers: programBlockers }, { status: 409 });
     const updated = await prisma.subsidyAuthorization.update({ where: { id: authorization.id }, data: { status: "active" } });

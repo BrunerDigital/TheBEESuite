@@ -100,6 +100,8 @@ test("authorization corrections fail closed and return useful duplicate guidance
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
   assert.match(route, /Only a currently enrolled child can receive a new agency authorization/);
+  assert.match(route, /currentlyEnrolledStatusValues/);
+  assert.match(route, /isCurrentlyEnrolledStatus/);
   assert.match(route, /action === "updateAuthorization"/);
   assert.match(route, /action === "restoreAuthorization"/);
   assert.match(route, /claims: \{ where: \{ status: \{ not: "void" \}/);
@@ -107,6 +109,7 @@ test("authorization corrections fail closed and return useful duplicate guidance
   assert.match(route, /Family copay cannot be negative/);
   assert.match(route, /date\.toISOString\(\)\.slice\(0, 10\) !== text/);
   assert.match(route, /AUTHORIZATION_UNIT_TYPES/);
+  assert.match(route, /updateAuthorization"\)[\s\S]*prisma\.\$transaction[\s\S]*TransactionIsolationLevel\.Serializable/);
   assert.match(workspace, /Edit authorization/);
   assert.match(workspace, /Save correction/);
   assert.match(workspace, /Restore/);
@@ -136,6 +139,12 @@ test("agency remittances re-read the claim inside a serializable transaction", (
   assert.match(route, /That remittance reference is already recorded or the claim changed/);
   assert.match(workspace, /Record remittance/);
   assert.match(workspace, /does not charge a family or change its balance/);
+});
+
+test("agency dashboard totals include the full non-void claim set", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  assert.match(route, /summaryClaims[\s\S]*status: \{ not: "void" \}/);
+  assert.match(route, /const summary = summaryClaims\.reduce/);
 });
 
 test("remittance status uses approved amount when available", () => {

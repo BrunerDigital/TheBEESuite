@@ -64,6 +64,23 @@ test("account review resolves only when every open invoice has an exact separati
     grossTuitionCents: 23_800,
     netTuitionCents: 12_000,
     tuitionCreditsTotalCents: 11_800,
+    tuitionCredits: [{ category: "agency_discount", amountCents: 11_800 }],
+  }), true);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "Weekly tuition",
+    grossTuitionCents: 20_000,
+    netTuitionCents: 18_000,
+    tuitionCreditsTotalCents: 2_000,
+    tuitionCredits: [{ category: "employee_discount", amountCents: 2_000 }],
+  }), false);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "CCDF Copay",
+    grossTuitionCents: 2_400,
+    netTuitionCents: 2_400,
+    tuitionCreditsTotalCents: 0,
+    tuitionAdditionalChargesTotalCents: 500,
   }), true);
   assert.equal(invoiceResponsibilityReviewExempt({
     chargeSource: "tuitionPlan",

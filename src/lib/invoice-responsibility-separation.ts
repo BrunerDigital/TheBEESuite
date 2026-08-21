@@ -133,10 +133,14 @@ function confirmedNetFamilyTuitionInvoice(fields: Record<string, unknown>) {
   const grossTuitionCents = cents(fields.grossTuitionCents);
   const netTuitionCents = cents(fields.netTuitionCents);
   const tuitionCreditsTotalCents = cents(fields.tuitionCreditsTotalCents);
-  const additionalChargesCents = cents(fields.tuitionAdditionalChargesTotalCents) ?? 0;
   if (grossTuitionCents === null || netTuitionCents === null || tuitionCreditsTotalCents === null) return false;
-  if (Math.max(0, grossTuitionCents + additionalChargesCents - tuitionCreditsTotalCents) !== netTuitionCents) return false;
+  if (Math.max(0, grossTuitionCents - tuitionCreditsTotalCents) !== netTuitionCents) return false;
 
-  return tuitionCreditsTotalCents > 0
+  const hasAgencyCredit = Array.isArray(fields.tuitionCredits) && fields.tuitionCredits.some((value) => {
+    const credit = record(value);
+    return text(credit.category) === "agency_discount" && (cents(credit.amountCents) ?? 0) > 0;
+  });
+
+  return hasAgencyCredit
     || FAMILY_ONLY_TUITION_MARKER.test(text(fields.tuitionPlanName));
 }

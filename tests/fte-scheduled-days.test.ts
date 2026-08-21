@@ -54,6 +54,7 @@ test("explicit schedule days take priority over the old full-time or part-time l
 test("FTE entry UI and API preserve legacy exports while saving the day breakdown", () => {
   const form = readFileSync("src/components/fte-report-form.tsx", "utf8");
   const route = readFileSync("src/app/api/fte-reports/route.ts", "utf8");
+  const bulkRoute = readFileSync("src/app/api/fte-reports/bulk/route.ts", "utf8");
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const explorer = readFileSync("src/components/fte-report-explorer.tsx", "utf8");
 
@@ -67,6 +68,8 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(route, /sourceMetadata: true/);
   assert.match(route, /twoDayCount: metadataNumber\(metadata\.twoDayCount\)/);
   assert.match(route, /twoDayCount: useScheduledDayBreakdown \? scheduledDayCounts\.twoDayCount : null/);
+  assert.match(bulkRoute, /select: \{ id: true, sourceMetadata: true \}/);
+  assert.match(bulkRoute, /sourceMetadata: \{\s*\.\.\.existingMetadata,/);
   assert.match(explorer, /twoDayCount: inputOptionalNumber\(report\.twoDayCount\)/);
   assert.match(explorer, /label="2 days\/week"/);
   assert.match(explorer, /label="5 days\/week"/);

@@ -21,6 +21,10 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function recordFromJson(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
 function roundAmount(value: number | null) {
   return value === null ? null : Math.max(0, Math.round(value * 100) / 100);
 }
@@ -110,8 +114,9 @@ async function POSTHandler(request: NextRequest) {
 
     const existing = await prisma.fteReport.findUnique({
       where: { centerId_weekStart: { centerId, weekStart } },
-      select: { id: true },
+      select: { id: true, sourceMetadata: true },
     });
+    const existingMetadata = recordFromJson(existing?.sourceMetadata);
     const calculatedFte = calculateFteCount(row.fullTimeCount, row.partTimeCount);
     const fteCount = row.fteCount ?? calculatedFte;
     const ageGroupCount = ageGroupTotal(row);
@@ -140,6 +145,7 @@ async function POSTHandler(request: NextRequest) {
       status: normalizeFteStatus({ requestedStatus: row.status || "corrected", role: user.role, isCorrection: Boolean(existing) }),
       source: "bulk_import_dashboard",
       sourceMetadata: {
+        ...existingMetadata,
         batchId,
         rowNumber: row.rowNumber,
         enteredBy: user.email,

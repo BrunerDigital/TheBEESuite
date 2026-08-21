@@ -51,6 +51,10 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(stripeWebhook, /migrationSessionIsCurrent/);
   assert.match(stripeWebhook, /where: currentlyEnrolledChildWhere\(\)/);
   assert.match(stripeWebhook, /currentChildCenters\.length === 1/);
+  assert.match(stripeWebhook, /from "Family"[\s\S]*for update/);
+  assert.match(stripeWebhook, /from "Child"[\s\S]*for update/);
+  assert.match(stripeWebhook, /from "Center"[\s\S]*for update/);
+  assert.match(stripeWebhook, /where: \{ familyId: lockedFamily\.id, \.\.\.currentlyEnrolledChildWhere\(\) \}/);
   assert.match(stripeWebhook, /familyCenter\.id === clean\(session\.metadata\?\.centerId\)/);
   assert.match(stripeWebhook, /connectedAccountId === activeFamilyAccountId/);
   assert.match(stripeWebhook, /stripeConnectSavedMethodNeedsReauthorization/);

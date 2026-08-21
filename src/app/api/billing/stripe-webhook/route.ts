@@ -1102,16 +1102,6 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
             select: {
               id: true,
               centerId: true,
-              children: {
-                where: currentlyEnrolledChildWhere(),
-                select: {
-                  classroom: {
-                    select: {
-                      center: { select: { id: true, customFields: true, organization: { select: { tenantId: true } } } },
-                    },
-                  },
-                },
-              },
             },
           },
         },
@@ -1128,18 +1118,45 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       const paymentMethodId = setupPaymentMethodId || previousPaymentMethodId;
       const requestedSetupMode = clean(session.metadata?.autopaySetupMode);
       const replacedPaymentMethod = Boolean(paymentMethodId && paymentMethodId !== previousPaymentMethodId);
+      const lockedFamilyRows = await tx.$queryRaw<Array<{ id: string; centerId: string | null }>>`
+        select "id", "centerId"
+        from "Family"
+        where "id" = ${billingAccount.family.id}
+        for update
+      `;
+      const lockedFamily = lockedFamilyRows[0];
+      if (!lockedFamily) throw new Error("Billing family changed while Stripe payment-method setup was completing.");
+      await tx.$queryRaw<Array<{ id: string }>>`
+        select "id"
+        from "Child"
+        where "familyId" = ${lockedFamily.id}
+        for update
+      `;
+      const currentChildren = await tx.child.findMany({
+        where: { familyId: lockedFamily.id, ...currentlyEnrolledChildWhere() },
+        select: { classroom: { select: { centerId: true } } },
+      });
       const currentChildCenters = Array.from(new Map(
-        billingAccount.family.children
-          .map((child) => child.classroom?.center)
-          .filter((center): center is NonNullable<typeof center> => Boolean(center))
-          .map((center) => [center.id, center]),
+        currentChildren
+          .map((child) => child.classroom?.centerId)
+          .filter((centerId): centerId is string => Boolean(centerId))
+          .map((centerId) => [centerId, centerId]),
       ).values());
-      const familyCenter = billingAccount.family.centerId
+      const resolvedFamilyCenterId = lockedFamily.centerId || (currentChildCenters.length === 1 ? currentChildCenters[0] : null);
+      if (resolvedFamilyCenterId) {
+        await tx.$queryRaw<Array<{ id: string }>>`
+          select "id"
+          from "Center"
+          where "id" = ${resolvedFamilyCenterId}
+          for update
+        `;
+      }
+      const familyCenter = resolvedFamilyCenterId
         ? await tx.center.findUnique({
-            where: { id: billingAccount.family.centerId },
+            where: { id: resolvedFamilyCenterId },
             select: { id: true, customFields: true, organization: { select: { tenantId: true } } },
           })
-        : currentChildCenters.length === 1 ? currentChildCenters[0] : null;
+        : null;
       const activeFamilyAccountId = readStripeConnectedAccountId(familyCenter?.customFields);
       const migrationSessionIsCurrent = Boolean(
         familyCenter

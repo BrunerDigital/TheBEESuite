@@ -149,7 +149,7 @@ async function POSTHandler(request: NextRequest) {
     where: { familyId: family.id },
     update: {},
     create: { familyId: family.id, balanceCents: 0 },
-    select: { id: true, customFields: true },
+    select: { id: true, autopayPlaceholder: true, customFields: true },
   });
   const currentFields = jsonObject(billingAccount.customFields);
   const connectedAccountId = readStripeConnectedAccountId(center.customFields);
@@ -168,6 +168,7 @@ async function POSTHandler(request: NextRequest) {
   }
   const recipientCanPreserveAutopay = paymentMethodReauthorizationRequired
     && canPreserveAutopayConsentForPaymentMethodMigration({
+      autopayPlaceholder: billingAccount.autopayPlaceholder,
       customFields: currentFields,
       linkedGuardianUserIds: recipient.userIds,
     });

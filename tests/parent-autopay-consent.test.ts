@@ -44,6 +44,7 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(paymentMethodRoute, /where: currentlyEnrolledChildWhere\(\)/);
   assert.match(paymentMethodRoute, /currentChildCenterIds\.length === 1/);
   assert.match(publicPaymentMethodRoute, /linkedGuardianUserIds: recipient\.userIds/);
+  assert.match(publicPaymentMethodRoute, /autopayPlaceholder: billingAccount\.autopayPlaceholder/);
   assert.match(publicPaymentMethodRoute, /autopaySetupMode: recipientCanPreserveAutopay \? "preserve_existing" : "preserve"/);
   assert.match(stripeWebhook, /paymentMethodSetupAutopayOutcome/);
   assert.match(stripeWebhook, /linkedGuardianUserIds/);

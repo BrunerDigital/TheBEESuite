@@ -10,11 +10,16 @@ import {
   setStripeCustomerDefaultPaymentMethod,
 } from "@/lib/integrations";
 import { beginCommunicationSmsDeliveryAttempt, finalizeCommunicationSmsDeliveryAttempt, nextIntegrationRetryAt } from "@/lib/integration-deliveries";
-import { paymentMethodSetupExpirationPatch } from "@/lib/payment-method-management";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
+import {
+  paymentMethodSetupAutopayOutcome,
+  paymentMethodSetupExpirationPatch,
+} from "@/lib/payment-method-management";
 import { beeSuitePayoutSmsBody, payoutSmsRecipient, sendPayoutSmsSafely } from "@/lib/payout-sms";
 import { prisma } from "@/lib/prisma";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
+import { stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
 import { stripeCustomerCustomFieldPatch } from "@/lib/stripe-customer-scope";
 import {
   isStripeWebhookAccountEvent,
@@ -1090,7 +1095,16 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       await recordStripeWebhookEvent(tx, event);
       const billingAccount = await tx.billingAccount.findUnique({
         where: { id: billingAccountId },
-        select: { autopayPlaceholder: true, customFields: true },
+        select: {
+          autopayPlaceholder: true,
+          customFields: true,
+          family: {
+            select: {
+              id: true,
+              centerId: true,
+            },
+          },
+        },
       });
       if (!billingAccount) return "missing" as const;
 
@@ -1102,20 +1116,91 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       const customerId = setupIntent?.setupIntent?.customerId || clean(session.customer) || clean(currentFields.stripeCustomerId);
       const previousPaymentMethodId = clean(currentFields.stripeDefaultPaymentMethodId);
       const paymentMethodId = setupPaymentMethodId || previousPaymentMethodId;
+      const requestedSetupMode = clean(session.metadata?.autopaySetupMode);
       const replacedPaymentMethod = Boolean(paymentMethodId && paymentMethodId !== previousPaymentMethodId);
-      const setupMode = clean(session.metadata?.autopaySetupMode);
-      const enableAutopayFromSetup = setupMode === "enable";
-      const disableAutopayFromSetup = setupMode === "disabled";
-      const replacementDisablesAutopay = replacedPaymentMethod && !enableAutopayFromSetup;
-      const autopayPatch = enableAutopayFromSetup || disableAutopayFromSetup || replacementDisablesAutopay
-        ? {
-            autopayEnabled: enableAutopayFromSetup,
-            autopayStatus: enableAutopayFromSetup ? "enabled" : "disabled",
-            autopayPlaceholder: enableAutopayFromSetup,
-          }
+      const lockedFamilyRows = await tx.$queryRaw<Array<{ id: string; centerId: string | null }>>`
+        select "id", "centerId"
+        from "Family"
+        where "id" = ${billingAccount.family.id}
+        for update
+      `;
+      const lockedFamily = lockedFamilyRows[0];
+      if (!lockedFamily) throw new Error("Billing family changed while Stripe payment-method setup was completing.");
+      await tx.$queryRaw<Array<{ id: string }>>`
+        select "id"
+        from "Child"
+        where "familyId" = ${lockedFamily.id}
+        for update
+      `;
+      const currentChildren = await tx.child.findMany({
+        where: { familyId: lockedFamily.id, ...currentlyEnrolledChildWhere() },
+        select: { classroom: { select: { centerId: true } } },
+      });
+      const currentChildCenters = Array.from(new Map(
+        currentChildren
+          .map((child) => child.classroom?.centerId)
+          .filter((centerId): centerId is string => Boolean(centerId))
+          .map((centerId) => [centerId, centerId]),
+      ).values());
+      const resolvedFamilyCenterId = lockedFamily.centerId || (currentChildCenters.length === 1 ? currentChildCenters[0] : null);
+      if (resolvedFamilyCenterId) {
+        await tx.$queryRaw<Array<{ id: string }>>`
+          select "id"
+          from "Center"
+          where "id" = ${resolvedFamilyCenterId}
+          for update
+        `;
+      }
+      const familyCenter = resolvedFamilyCenterId
+        ? await tx.center.findUnique({
+            where: { id: resolvedFamilyCenterId },
+            select: { id: true, customFields: true, organization: { select: { tenantId: true } } },
+          })
         : null;
-      await tx.billingAccount.update({
-        where: { id: billingAccountId },
+      const activeFamilyAccountId = readStripeConnectedAccountId(familyCenter?.customFields);
+      const migrationSessionIsCurrent = Boolean(
+        familyCenter
+        && familyCenter.id === clean(session.metadata?.centerId)
+        && connectedAccountId
+        && connectedAccountId === activeFamilyAccountId
+        && stripeConnectSavedMethodNeedsReauthorization({
+          activeAccountId: activeFamilyAccountId,
+          savedMethodAccountId: clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId),
+          centerCustomFields: familyCenter.customFields,
+        }),
+      );
+      const setupMode = requestedSetupMode === "preserve_existing" && !migrationSessionIsCurrent
+        ? "preserve"
+        : requestedSetupMode;
+      const lockedGuardianLinks = requestedSetupMode === "preserve_existing"
+        ? await tx.$queryRaw<Array<{ userId: string | null }>>`
+            select "userId"
+            from "Guardian"
+            where "familyId" = ${billingAccount.family.id}
+              and "userId" is not null
+            for update
+          `
+        : [];
+      const autopayPatch = paymentMethodSetupAutopayOutcome({
+        autopayPlaceholder: billingAccount.autopayPlaceholder,
+        currentFields,
+        previousPaymentMethodId,
+        paymentMethodId,
+        linkedGuardianUserIds: lockedGuardianLinks.map((guardian) => guardian.userId),
+        setupMode,
+      });
+      const auditTenantId = familyCenter?.organization.tenantId || clean(tenantId);
+      if (autopayPatch?.preservedExistingConsent && !auditTenantId) {
+        throw new Error("Autopay consent migration requires an authoritative tenant for its audit record.");
+      }
+      const billingAccountUpdate = await tx.billingAccount.updateMany({
+        where: {
+          id: billingAccountId,
+          autopayPlaceholder: billingAccount.autopayPlaceholder,
+          customFields: billingAccount.customFields === null
+            ? { equals: Prisma.DbNull }
+            : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+        },
         data: {
           ...(autopayPatch ? { autopayPlaceholder: autopayPatch.autopayPlaceholder } : {}),
           customFields: {
@@ -1124,8 +1209,14 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
             ...(autopayPatch ? {
               autopayEnabled: autopayPatch.autopayEnabled,
               autopayStatus: autopayPatch.autopayStatus,
-              autopayPaymentMethodId: enableAutopayFromSetup ? paymentMethodId : null,
-              ...(replacementDisablesAutopay ? {
+              autopayPaymentMethodId: autopayPatch.autopayPaymentMethodId,
+              ...(autopayPatch.preservedExistingConsent ? {
+                autopayConsentMigratedAt: new Date().toISOString(),
+                autopayConsentMigrationReason: "stripe_connected_account_payment_method_reauthorized",
+                autopayDisabledAt: null,
+                autopayDisabledReason: null,
+              } : {}),
+              ...(autopayPatch.replacementDisabledAutopay ? {
                 autopayDisabledAt: new Date().toISOString(),
                 autopayDisabledReason: "saved_payment_method_replaced",
               } : {}),
@@ -1146,7 +1237,28 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
           },
         },
       });
-      return "applied" as const;
+      if (billingAccountUpdate.count !== 1) {
+        throw new Error("Billing account consent changed while Stripe payment-method setup was completing.");
+      }
+      if (autopayPatch?.preservedExistingConsent) {
+        await tx.auditLog.create({
+          data: {
+            tenantId: auditTenantId,
+            centerId: familyCenter?.id ?? null,
+            action: "billing.autopay.consent_migrated_to_current_stripe_account",
+            resource: "BillingAccount",
+            resourceId: billingAccountId,
+            metadata: {
+              stripeEventId: event.id,
+              stripeSessionId: session.id,
+            },
+          },
+        });
+        if (familyCenter?.id) {
+          await tx.center.update({ where: { id: familyCenter.id }, data: { updatedAt: new Date() } });
+        }
+      }
+      return autopayPatch?.preservedExistingConsent ? "preserved" as const : "applied" as const;
     });
     if (outcome === "stale") return NextResponse.json({ ok: true, staleSetupSessionIgnored: true });
   } catch (error) {

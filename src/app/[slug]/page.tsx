@@ -156,7 +156,10 @@ import { resolveClassroomRatioRule } from "@/lib/classroom-ratios";
 import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { activeNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
-import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
+import {
+  canPreserveAutopayConsentForPaymentMethodMigration,
+  paymentMethodManagementSummary,
+} from "@/lib/payment-method-management";
 import { currentFamilyBillingMatch } from "@/lib/invoice-payment-actions";
 import {
   normalizeDirectorInvoiceStatus,
@@ -2464,6 +2467,12 @@ async function renderLivePage(
       savedMethodAccountId: stringField(parentBillingAccountFields.stripeDefaultPaymentMethodConnectedAccountId),
       centerCustomFields: parentCenterFields,
     });
+    const paymentMethodReauthorizationPreservesAutopay = paymentMethodReauthorizationRequired
+      && canPreserveAutopayConsentForPaymentMethodMigration({
+        autopayPlaceholder: billingAccount?.autopayPlaceholder,
+        customFields: parentBillingAccountFields,
+        linkedGuardianUserIds: [user.id],
+      });
     const paymentTransitionActive = Boolean(
       parentStripeMigration.targetAccountId &&
       parentCenterFields.stripeConnectMigrationPayoutReleaseStatus !== "released",
@@ -2515,6 +2524,7 @@ async function renderLivePage(
         checkoutReadiness={parentCheckoutReadiness}
         paymentTransitionActive={paymentTransitionActive}
         paymentMethodReauthorizationRequired={paymentMethodReauthorizationRequired}
+        paymentMethodReauthorizationPreservesAutopay={paymentMethodReauthorizationPreservesAutopay}
         parentBalanceReviewRequired={parentBalanceReviewRequired}
         parentBalanceVisibilityConfirmed={parentBalanceVisibilityConfirmed}
         payments={billingAccount?.payments ?? []}

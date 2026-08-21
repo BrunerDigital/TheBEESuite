@@ -7,6 +7,7 @@ import {
   type StripePaymentMethodCategory,
 } from "@/lib/integrations";
 import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
+import { canPreserveAutopayConsentForPaymentMethodMigration } from "@/lib/payment-method-management";
 import {
   buildPaymentMethodRequestCheckoutBranding,
   PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
@@ -133,11 +134,11 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const allowedEmails = new Set(paymentMethodRequestRecipientOptions({
+  const recipient = paymentMethodRequestRecipientOptions({
     billingEmail: family.billingEmail,
     guardians: family.guardians,
-  }).map((recipient) => recipient.email));
-  if (!allowedEmails.has(payload.email)) {
+  }).find((option) => option.email === payload.email);
+  if (!recipient) {
     return NextResponse.json(
       { ok: false, error: "This payment setup link is no longer connected to a saved family email." },
       { status: 403 },
@@ -148,22 +149,29 @@ async function POSTHandler(request: NextRequest) {
     where: { familyId: family.id },
     update: {},
     create: { familyId: family.id, balanceCents: 0 },
-    select: { id: true, customFields: true },
+    select: { id: true, autopayPlaceholder: true, customFields: true },
   });
   const currentFields = jsonObject(billingAccount.customFields);
   const connectedAccountId = readStripeConnectedAccountId(center.customFields);
+  let paymentMethodReauthorizationRequired = false;
   if (payload.intent === "payment_method_reauthorization") {
     const migration = readStripeConnectMigration(center.customFields);
     const savedMethodAccountId = clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId);
-    const reauthorizationRequired = stripeConnectSavedMethodNeedsReauthorization({
+    paymentMethodReauthorizationRequired = stripeConnectSavedMethodNeedsReauthorization({
       activeAccountId: connectedAccountId,
       savedMethodAccountId,
       centerCustomFields: center.customFields,
     });
-    if (!migration.cutoverAt || !reauthorizationRequired || connectedAccountId !== migration.targetAccountId) {
+    if (!migration.cutoverAt || !paymentMethodReauthorizationRequired || connectedAccountId !== migration.targetAccountId) {
       return NextResponse.json({ ok: false, error: "This payment update is no longer needed or the school payment account changed. Please ask the school for a new link." }, { status: 409 });
     }
   }
+  const recipientCanPreserveAutopay = paymentMethodReauthorizationRequired
+    && canPreserveAutopayConsentForPaymentMethodMigration({
+      autopayPlaceholder: billingAccount.autopayPlaceholder,
+      customFields: currentFields,
+      linkedGuardianUserIds: recipient.userIds,
+    });
   let customerId = stripeCustomerIdForAccount(currentFields, connectedAccountId);
   if (!customerId) {
     const customer = await createStripeCustomer({
@@ -219,7 +227,8 @@ async function POSTHandler(request: NextRequest) {
       stripeConnectedAccountId: connectedAccountId || "",
       stripeCustomerId: customerId,
       recipientEmail: payload.email,
-      autopaySetupMode: "preserve",
+      autopaySetupMode: recipientCanPreserveAutopay ? "preserve_existing" : "preserve",
+      paymentMethodReauthorization: paymentMethodReauthorizationRequired ? "true" : "false",
       preferredPaymentMethodCategory: paymentMethodCategory,
       bankAccountVerificationMethod: bankAccountVerificationMethod || "",
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",

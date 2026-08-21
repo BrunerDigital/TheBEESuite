@@ -126,6 +126,72 @@ export function canRunAutopay(
   return summary.autopayStatus === "enabled" && canChargeSavedPaymentMethod(summary);
 }
 
+export function canPreserveAutopayConsentForPaymentMethodMigration(input: {
+  autopayPlaceholder?: boolean | null;
+  customFields: unknown;
+  linkedGuardianUserIds: Array<string | null | undefined>;
+  previousPaymentMethodId?: string | null;
+}) {
+  const custom = fields(input.customFields);
+  const previousPaymentMethodId = clean(input.previousPaymentMethodId ?? custom.stripeDefaultPaymentMethodId);
+  const enabledByUserId = clean(custom.autopayEnabledByUserId);
+  return Boolean(
+    (custom.autopayEnabled === true || input.autopayPlaceholder === true)
+      && previousPaymentMethodId
+      && clean(custom.autopayPaymentMethodId) === previousPaymentMethodId
+      && enabledByUserId
+      && input.linkedGuardianUserIds.some((userId) => clean(userId) === enabledByUserId),
+  );
+}
+
+export function paymentMethodSetupAutopayOutcome(input: {
+  autopayPlaceholder?: boolean | null;
+  currentFields: unknown;
+  previousPaymentMethodId?: string | null;
+  paymentMethodId?: string | null;
+  linkedGuardianUserIds: Array<string | null | undefined>;
+  setupMode?: string | null;
+}) {
+  const previousPaymentMethodId = clean(input.previousPaymentMethodId);
+  const paymentMethodId = clean(input.paymentMethodId);
+  const setupMode = clean(input.setupMode);
+  const replacedPaymentMethod = Boolean(
+    paymentMethodId && paymentMethodId !== previousPaymentMethodId,
+  );
+  const explicitEnable = setupMode === "enable";
+  const explicitDisable = setupMode === "disabled";
+  const preserveExistingConsent = setupMode === "preserve_existing"
+    && replacedPaymentMethod
+    && canPreserveAutopayConsentForPaymentMethodMigration({
+      autopayPlaceholder: input.autopayPlaceholder,
+      customFields: input.currentFields,
+      linkedGuardianUserIds: input.linkedGuardianUserIds,
+      previousPaymentMethodId,
+    });
+
+  if (explicitEnable || preserveExistingConsent) {
+    return {
+      autopayEnabled: true,
+      autopayStatus: "enabled" as const,
+      autopayPlaceholder: true,
+      autopayPaymentMethodId: paymentMethodId,
+      preservedExistingConsent: preserveExistingConsent,
+      replacementDisabledAutopay: false,
+    };
+  }
+  if (explicitDisable || replacedPaymentMethod) {
+    return {
+      autopayEnabled: false,
+      autopayStatus: "disabled" as const,
+      autopayPlaceholder: false,
+      autopayPaymentMethodId: null,
+      preservedExistingConsent: false,
+      replacementDisabledAutopay: replacedPaymentMethod,
+    };
+  }
+  return null;
+}
+
 export function canCreatePaymentMethodManagementSession(input: {
   isLinkedGuardian: boolean;
   hasCenterAccess: boolean;

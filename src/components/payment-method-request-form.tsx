@@ -20,6 +20,7 @@ type Props = {
   paymentStatus?: string | null;
   focus?: "instant-bank" | null;
   reauthorization?: boolean;
+  reauthorizationPreservesAutopay?: boolean;
   openInvoices?: Array<{
     id: string;
     number: string;
@@ -40,6 +41,7 @@ export function PaymentMethodRequestForm({
   paymentStatus,
   focus,
   reauthorization = false,
+  reauthorizationPreservesAutopay = false,
   openInvoices = [],
 }: Props) {
   const [errorMessage, setErrorMessage] = useState("");
@@ -134,7 +136,11 @@ export function PaymentMethodRequestForm({
             <ShieldCheck className="size-4" />
             <AlertTitle>No payment will be charged</AlertTitle>
             <AlertDescription className="text-sky-100">
-              Your school updated its secure Stripe account. Save a replacement method below. Your current method and autopay choice remain in place until Stripe confirms the replacement.
+              Your school updated its secure Stripe account. Save a replacement method below. No payment is charged during setup. {reauthorizationPreservesAutopay
+                ? "Your existing autopay consent will resume on the replacement method after Stripe confirms it."
+                : autopayStatus === "enabled"
+                  ? "After the replacement is confirmed, sign in to review and re-enable autopay."
+                  : "Autopay will remain off unless you enable it later in the Parent Portal."}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -248,7 +254,7 @@ export function PaymentMethodRequestForm({
             variant={focus === "instant-bank" ? "default" : "outline"}
           >
             <Building2 data-icon="inline-start" />
-            Connect bank account
+            {reauthorization ? "Replace with bank account" : "Connect bank account"}
           </Button>
           <Button
             className={focus === "instant-bank" ? "order-2 h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" : "order-1 h-11"}
@@ -257,7 +263,7 @@ export function PaymentMethodRequestForm({
             variant={focus === "instant-bank" ? "outline" : "default"}
           >
             <CreditCard data-icon="inline-start" />
-            Save card
+            {reauthorization ? "Replace card" : "Save card"}
           </Button>
         </div>
 

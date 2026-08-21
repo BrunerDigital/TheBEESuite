@@ -7,15 +7,17 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
   const paymentMethodRoute = readFileSync("src/app/api/billing/payment-method-session/route.ts", "utf8");
   const publicPaymentMethodRoute = readFileSync("src/app/api/billing/payment-method-request/session/route.ts", "utf8");
   const webhook = readFileSync("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  const paymentMethodManagement = readFileSync("src/lib/payment-method-management.ts", "utf8");
 
   assert.doesNotMatch(assignmentRoute, /\n\s*autopayEnabled:/);
   assert.doesNotMatch(paymentMethodRoute, /enableAutopay:\s*"true"/);
   assert.doesNotMatch(publicPaymentMethodRoute, /enableAutopay:\s*"true"/);
   assert.match(paymentMethodRoute, /action === "enable_autopay"/);
   assert.match(paymentMethodRoute, /action === "disable_autopay"/);
-  assert.match(webhook, /const enableAutopayFromSetup = setupMode === "enable"/);
-  assert.match(webhook, /const disableAutopayFromSetup = setupMode === "disabled"/);
-  assert.match(webhook, /const autopayPatch = enableAutopayFromSetup \|\| disableAutopayFromSetup/);
+  assert.match(paymentMethodRoute, /parentInitiatedPaymentMethodReauthorization/);
+  assert.match(paymentMethodManagement, /const explicitEnable = setupMode === "enable"/);
+  assert.match(paymentMethodManagement, /const explicitDisable = setupMode === "disabled"/);
+  assert.match(webhook, /const autopayPatch = paymentMethodSetupAutopayOutcome/);
   assert.match(webhook, /autopayEnabled: autopayPatch.autopayEnabled,/);
 });
 

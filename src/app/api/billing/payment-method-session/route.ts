@@ -10,10 +10,19 @@ import {
   type StripePaymentMethodCategory,
 } from "@/lib/integrations";
 import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
-import { canCreatePaymentMethodManagementSession, paymentMethodManagementSummary } from "@/lib/payment-method-management";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
+import {
+  canCreatePaymentMethodManagementSession,
+  canPreserveAutopayConsentForPaymentMethodMigration,
+  paymentMethodManagementSummary,
+} from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
-import { stripeConnectSavedMethodAccount, stripeConnectSavedMethodManagementAccount } from "@/lib/stripe-connect-migration";
+import {
+  stripeConnectSavedMethodAccount,
+  stripeConnectSavedMethodManagementAccount,
+  stripeConnectSavedMethodNeedsReauthorization,
+} from "@/lib/stripe-connect-migration";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
@@ -112,6 +121,7 @@ async function POSTHandler(request: NextRequest) {
       include: {
         guardians: { select: { userId: true, email: true } },
         children: {
+          where: currentlyEnrolledChildWhere(),
           select: {
             classroom: {
               select: {
@@ -125,7 +135,6 @@ async function POSTHandler(request: NextRequest) {
               },
             },
           },
-          take: 1,
         },
       },
     },
@@ -144,6 +153,7 @@ async function POSTHandler(request: NextRequest) {
       include: {
         guardians: { select: { userId: true, email: true } },
         children: {
+          where: currentlyEnrolledChildWhere(),
           select: {
             classroom: {
               select: {
@@ -157,7 +167,6 @@ async function POSTHandler(request: NextRequest) {
               },
             },
           },
-          take: 1,
         },
       },
     });
@@ -165,7 +174,8 @@ async function POSTHandler(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Family not found." }, { status: 404 });
     }
 
-    const familyCenterId = family.centerId ?? family.children[0]?.classroom?.center?.id ?? null;
+    const currentChildCenterIds = Array.from(new Set(family.children.map((child) => child.classroom?.center?.id).filter((value): value is string => Boolean(value))));
+    const familyCenterId = family.centerId ?? (currentChildCenterIds.length === 1 ? currentChildCenterIds[0] : null);
     const isLinkedGuardian = family.guardians.some((guardian) => guardian.userId === user.id);
     const hasCenterAccess = canAccessAllCenters(user) || Boolean(familyCenterId && user.centerIds.includes(familyCenterId));
     const access = canCreatePaymentMethodManagementSession({ isLinkedGuardian, hasCenterAccess });
@@ -189,7 +199,8 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const currentFields = jsonObject(billingAccount.customFields);
-  const centerId = billingAccount.family.centerId ?? billingAccount.family.children[0]?.classroom?.center?.id ?? null;
+  const currentChildCenterIds = Array.from(new Set(billingAccount.family.children.map((child) => child.classroom?.center?.id).filter((value): value is string => Boolean(value))));
+  const centerId = billingAccount.family.centerId ?? (currentChildCenterIds.length === 1 ? currentChildCenterIds[0] : null);
   const isLinkedGuardian = billingAccount.family.guardians.some((guardian) => guardian.userId === user.id);
   const hasCenterAccess = canAccessAllCenters(user) || Boolean(centerId && user.centerIds.includes(centerId));
   const access = canCreatePaymentMethodManagementSession({ isLinkedGuardian, hasCenterAccess });
@@ -243,9 +254,22 @@ async function POSTHandler(request: NextRequest) {
         select: { id: true, name: true, customFields: true, organization: { select: { tenantId: true } } },
       })
     : null;
-  const tenantId = center?.organization.tenantId ?? billingAccount.family.children[0]?.classroom?.center?.organization.tenantId ?? user.tenantId;
+  const tenantId = center?.organization.tenantId ?? user.tenantId;
   const connectedAccountId = readStripeConnectedAccountId(center?.customFields);
   const savedPaymentMethodConnectedAccountId = clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId);
+  const paymentMethodReauthorizationRequired = stripeConnectSavedMethodNeedsReauthorization({
+    activeAccountId: connectedAccountId,
+    savedMethodAccountId: savedPaymentMethodConnectedAccountId,
+    centerCustomFields: center?.customFields,
+  });
+  const parentInitiatedPaymentMethodReauthorization = paymentMethodReauthorizationRequired
+    && parentFacing
+    && isLinkedGuardian
+    && canPreserveAutopayConsentForPaymentMethodMigration({
+      autopayPlaceholder: billingAccount.autopayPlaceholder,
+      customFields: currentFields,
+      linkedGuardianUserIds: [user.id],
+    });
   const savedMethodChargeAccountId = stripeConnectSavedMethodAccount({
     activeAccountId: connectedAccountId,
     savedMethodAccountId: savedPaymentMethodConnectedAccountId,
@@ -436,7 +460,8 @@ async function POSTHandler(request: NextRequest) {
       stripeConnectedAccountId: connectedAccountId || "",
       stripeCustomerId: customerId,
       requestedByUserId: user.id,
-      autopaySetupMode: "preserve",
+      autopaySetupMode: parentInitiatedPaymentMethodReauthorization ? "preserve_existing" : "preserve",
+      paymentMethodReauthorization: paymentMethodReauthorizationRequired ? "true" : "false",
       preferredPaymentMethodCategory: paymentMethodCategory,
       bankAccountVerificationMethod: bankAccountVerificationMethod || "",
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",

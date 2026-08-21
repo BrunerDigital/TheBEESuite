@@ -23,6 +23,7 @@ const CURRENT_ENROLLMENT_STATUSES = currentlyEnrolledStatusValues();
 const AUTHORIZATION_UNIT_TYPES = new Set(["weekly", "daily", "hourly", "monthly"]);
 const REMITTANCE_METHODS = new Set(["ach", "check", "agency_portal", "other"]);
 const UNIT_PRECISION = 1_000_000;
+const CLAIM_PAGE_SIZE = 100;
 
 class AgencyWorkflowError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -89,6 +90,62 @@ function recordValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function csvRow(values: unknown[]) {
+  return `${values.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")}\r\n`;
+}
+
+function exportClaimsCsv(centerIds: string[]) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        controller.enqueue(encoder.encode(csvRow(["Claim", "Agency", "Family", "Child", "Service start", "Service end", "Status", "Claimed", "Approved", "Paid", "Missing documents"])));
+        let cursorId: string | undefined;
+        while (true) {
+          const claims = await prisma.subsidyClaim.findMany({
+            where: { centerId: { in: centerIds } },
+            orderBy: { id: "asc" },
+            take: 250,
+            ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+            include: {
+              agencyProgram: { select: { name: true } },
+              authorization: { include: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
+              documents: { orderBy: { name: "asc" } },
+            },
+          });
+          if (!claims.length) break;
+          const chunk = claims.map((claim) => csvRow([
+            claim.number,
+            claim.agencyProgram.name,
+            claim.authorization?.family.name ?? "",
+            claim.authorization?.child.fullName ?? "",
+            dateInput(claim.servicePeriodStart),
+            dateInput(claim.servicePeriodEnd),
+            claim.status,
+            (claim.claimedCents / 100).toFixed(2),
+            claim.approvedCents === null ? "" : (claim.approvedCents / 100).toFixed(2),
+            (claim.paidCents / 100).toFixed(2),
+            claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)).map((document) => document.name).join("; "),
+          ])).join("");
+          controller.enqueue(encoder.encode(chunk));
+          cursorId = claims.at(-1)?.id;
+          if (claims.length < 250) break;
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": "attachment; filename=agency-claims.csv",
+      "Cache-Control": "private, no-store",
+    },
+  });
+}
+
 async function currentBillingUser(): Promise<
   | { ok: true; user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> }
   | { ok: false; response: NextResponse }
@@ -107,10 +164,16 @@ async function getHandler(request: NextRequest) {
   const auth = await currentBillingUser();
   if (!auth.ok) return auth.response;
   const requestedCenterId = clean(request.nextUrl.searchParams.get("centerId"));
+  const exportingClaims = request.nextUrl.searchParams.get("exportClaims") === "true";
+  const requestedClaimPage = Number.parseInt(clean(request.nextUrl.searchParams.get("claimPage")) || "1", 10);
+  const claimPage = Math.min(Math.max(Number.isFinite(requestedClaimPage) ? requestedClaimPage : 1, 1), 10_000);
+  const claimCursor = clean(request.nextUrl.searchParams.get("claimCursor"));
   const centerIds = requestedCenterId
     ? centerAllowed(auth.user, requestedCenterId) ? [requestedCenterId] : []
     : auth.user.centerIds;
   if (!centerIds.length) return NextResponse.json({ ok: false, error: "No accessible school selected." }, { status: 403 });
+  if (exportingClaims) return exportClaimsCsv(centerIds);
+  if (claimPage > 1 && !claimCursor) return NextResponse.json({ ok: false, error: "Refresh the claim queue before opening that page." }, { status: 400 });
 
   const [programs, authorizations, claims, summaryRows, families] = await Promise.all([
     prisma.agencyProgram.findMany({
@@ -128,8 +191,9 @@ async function getHandler(request: NextRequest) {
     }),
     prisma.subsidyClaim.findMany({
       where: { centerId: { in: centerIds } },
-      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-      take: 250,
+      orderBy: [{ createdAt: "desc" }, { dueDate: "asc" }, { id: "desc" }],
+      ...(claimCursor ? { cursor: { id: claimCursor }, skip: 1 } : {}),
+      take: CLAIM_PAGE_SIZE + 1,
       include: {
         agencyProgram: { select: { name: true, programName: true, providerNumber: true, vendorNumber: true, submissionMethod: true, portalUrl: true, paymentInstructions: true } },
         authorization: { include: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
@@ -165,6 +229,8 @@ async function getHandler(request: NextRequest) {
     }),
   ]);
 
+  const hasNextClaimPage = claims.length > CLAIM_PAGE_SIZE;
+  const visibleClaims = claims.slice(0, CLAIM_PAGE_SIZE);
   const summaryRow = summaryRows[0];
   const summary = {
     claimedCents: Number(summaryRow?.claimedCents ?? 0),
@@ -189,7 +255,15 @@ async function getHandler(request: NextRequest) {
     expiringAuthorizations: authorizations.filter((authorization) => authorization.status === "active" && authorization.coverageEnd >= today && authorization.coverageEnd < expirationCutoff).length,
   };
 
-  return NextResponse.json({ ok: true, programs: programReadiness, authorizations, claims, families, summary: { ...summary, ...readiness } });
+  return NextResponse.json({
+    ok: true,
+    programs: programReadiness,
+    authorizations,
+    claims: visibleClaims,
+    claimPagination: { page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage, nextCursor: hasNextClaimPage ? visibleClaims.at(-1)?.id ?? null : null },
+    families,
+    summary: { ...summary, ...readiness },
+  });
 }
 
 async function postHandler(request: NextRequest) {

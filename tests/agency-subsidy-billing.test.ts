@@ -144,6 +144,36 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(workspace, /Record denial/);
   assert.match(workspace, /Void draft/);
   assert.match(workspace, /name="serviceUnits"[\s\S]*step="0\.000001"/);
+  assert.match(workspace, /selectedClaimAuthorization\?\.coverageStart\.slice\(0, 10\)/);
+  assert.match(workspace, /selectedClaimAuthorization\?\.coverageEnd\.slice\(0, 10\)/);
+  assert.match(workspace, /onError: setClaimError/);
+  assert.match(workspace, /Draft claim created and added to the agency claim queue below/);
+});
+
+test("agency queue keeps new sibling claims visible and older actionable claims reachable", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
+  assert.match(route, /CLAIM_PAGE_SIZE = 100/);
+  assert.match(route, /subsidyClaim\.findMany\([\s\S]*orderBy: \[\{ createdAt: "desc" \}, \{ dueDate: "asc" \}, \{ id: "desc" \}\][\s\S]*cursor: \{ id: claimCursor \}, skip: 1[\s\S]*take: CLAIM_PAGE_SIZE \+ 1/);
+  assert.match(route, /claimPagination: \{ page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage, nextCursor:/);
+  assert.match(workspace, /claimPage=\$\{claimPage\}/);
+  assert.match(workspace, /Claim queue page \{claimPagination\.page\}/);
+  assert.match(workspace, /setClaimPage\(1\)/);
+  assert.match(workspace, /setClaimError\(""\); setClaimMessage\(""\); setData\(null\)/);
+  assert.match(workspace, /reloadClaimPage: 1/);
+  assert.match(workspace, /const reloadPage = callbacks\.reloadClaimPage \?\? claimPage;[\s\S]*await load\(reloadPage, reloadPage === 1 \? "" : claimCursorByPage\[reloadPage\] \?\? ""\)/);
+  assert.match(workspace, /exportClaims=true/);
+  assert.match(workspace, /response\.blob\(\)/);
+  assert.match(workspace, /const blob = await response\.blob\(\);\s+if \(centerIdRef\.current !== exportCenterId\) return;/);
+  assert.match(workspace, /centerIdRef\.current !== requestCenterId/);
+  assert.match(workspace, /setPending\(true\); setClaimCursorByPage/);
+  assert.match(workspace, /\.finally\(\(\) => \{ if \(active\) setPending\(false\); \}\)/);
+  assert.match(workspace, /<Label>Authorization<\/Label><Select value=\{authorizationId\} disabled=\{pending\}/);
+  assert.match(route, /new ReadableStream<Uint8Array>/);
+  assert.match(route, /orderBy: \{ id: "asc" \}/);
+  assert.match(route, /take: 250/);
+  assert.match(route, /cursor: \{ id: cursorId \}, skip: 1/);
+  assert.match(route, /if \(exportingClaims\) return exportClaimsCsv\(centerIds\)/);
 });
 
 test("agency remittances re-read the claim inside a serializable transaction", () => {

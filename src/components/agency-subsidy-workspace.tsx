@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { BadgeDollarSign, Building2, CheckCircle2, Download, FileCheck2, Printer, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ type Authorization = { id: string; centerId: string; agencyProgramId: string; fa
 type ClaimDocument = { id: string; name: string; status: string; notes: string | null };
 type Claim = { id: string; number: string; status: string; claimedCents: number; approvedCents: number | null; paidCents: number; servicePeriodStart: string; servicePeriodEnd: string; agencyProgram: { name: string }; authorization: { child: { fullName: string }; family: { name: string } } | null; documents: ClaimDocument[] };
 type Family = { id: string; centerId: string | null; name: string; children: Array<{ id: string; fullName: string; enrollmentStatus: string; classroomId: string | null }> };
-type Workspace = { programs: Program[]; authorizations: Authorization[]; claims: Claim[]; families: Family[]; summary: { claimedCents: number; approvedCents: number; paidCents: number; outstandingCents: number; needsSubmission: number; missingDocumentClaims: number; readyPrograms: number; setupRequiredPrograms: number; expiredAuthorizations: number; expiringAuthorizations: number } };
+type Workspace = { programs: Program[]; authorizations: Authorization[]; claims: Claim[]; claimPagination: { page: number; pageSize: number; hasNext: boolean; nextCursor: string | null }; families: Family[]; summary: { claimedCents: number; approvedCents: number; paidCents: number; outstandingCents: number; needsSubmission: number; missingDocumentClaims: number; readyPrograms: number; setupRequiredPrograms: number; expiredAuthorizations: number; expiringAuthorizations: number } };
 
 function money(cents: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100); }
 function dateOnly(value: string) { return value ? new Date(value).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"; }
@@ -35,36 +35,57 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const [childId, setChildId] = useState("");
   const [authorizationId, setAuthorizationId] = useState("");
   const [editingAuthorizationId, setEditingAuthorizationId] = useState("");
+  const [claimError, setClaimError] = useState("");
+  const [claimMessage, setClaimMessage] = useState("");
+  const [claimPage, setClaimPage] = useState(1);
+  const [claimCursorByPage, setClaimCursorByPage] = useState<Record<number, string>>({});
+  const [exportingClaims, setExportingClaims] = useState(false);
+  const centerIdRef = useRef(centerId);
+  const claimCursor = claimPage === 1 ? "" : claimCursorByPage[claimPage] ?? "";
 
-  const load = useCallback(async () => {
-    if (!centerId) return;
+  const load = useCallback(async (requestedClaimPage = claimPage, requestedClaimCursor = claimCursor) => {
+    const requestCenterId = centerId;
+    if (!requestCenterId) return;
     setPending(true); setError("");
-    const response = await fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(centerId)}`, { cache: "no-store" });
+    const response = await fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(requestCenterId)}&claimPage=${requestedClaimPage}${requestedClaimCursor ? `&claimCursor=${encodeURIComponent(requestedClaimCursor)}` : ""}`, { cache: "no-store" });
     const body = await response.json().catch(() => ({}));
+    if (centerIdRef.current !== requestCenterId) return;
     if (!response.ok) setError(body.error || "Agency billing workspace could not be loaded.");
     else setData(body);
     setPending(false);
-  }, [centerId]);
+  }, [centerId, claimCursor, claimPage]);
 
   useEffect(() => {
     let active = true;
-    fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(centerId)}`, { cache: "no-store" })
+    fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(centerId)}&claimPage=${claimPage}${claimCursor ? `&claimCursor=${encodeURIComponent(claimCursor)}` : ""}`, { cache: "no-store" })
       .then(async (response) => ({ response, body: await response.json().catch(() => ({})) }))
       .then(({ response, body }) => {
         if (!active) return;
         if (!response.ok) setError(body.error || "Agency billing workspace could not be loaded.");
         else setData(body);
       })
-      .catch(() => { if (active) setError("Agency billing workspace could not be loaded."); });
+      .catch(() => { if (active) setError("Agency billing workspace could not be loaded."); })
+      .finally(() => { if (active) setPending(false); });
     return () => { active = false; };
-  }, [centerId]);
+  }, [centerId, claimCursor, claimPage]);
 
-  async function post(action: string, fields: Record<string, unknown>) {
+  async function post(action: string, fields: Record<string, unknown>, callbacks: { onError?: (message: string) => void; onSuccess?: (body: Record<string, unknown>) => void; reloadClaimPage?: number } = {}) {
+    const requestCenterId = centerId;
     setPending(true); setError(""); setMessage("");
-    const response = await fetch("/api/billing/agency-claims", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, centerId, ...fields }) });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) setError([body.error, ...(body.blockers ?? [])].filter(Boolean).join(" "));
-    else { setMessage("Agency billing record saved."); await load(); }
+    const response = await fetch("/api/billing/agency-claims", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, centerId: requestCenterId, ...fields }) });
+    const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+    if (centerIdRef.current !== requestCenterId) return false;
+    if (!response.ok) {
+      const blockers = Array.isArray(body.blockers) ? body.blockers : [];
+      const responseError = [body.error, ...blockers].filter(Boolean).join(" ") || "Agency billing record could not be saved.";
+      setError(responseError);
+      callbacks.onError?.(responseError);
+    } else {
+      setMessage("Agency billing record saved.");
+      callbacks.onSuccess?.(body);
+      const reloadPage = callbacks.reloadClaimPage ?? claimPage;
+      await load(reloadPage, reloadPage === 1 ? "" : claimCursorByPage[reloadPage] ?? "");
+    }
     setPending(false);
     return response.ok;
   }
@@ -73,6 +94,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const programs = data?.programs ?? [];
   const authorizations = data?.authorizations ?? [];
   const claims = data?.claims ?? [];
+  const claimPagination = data?.claimPagination;
   const summary = data?.summary;
   const setupProgram = programs.find((program) => program.id === setupProgramId);
   const setupBlockers = setupProgram ? agencyProgramSetupBlockers(setupProgram) : [];
@@ -84,6 +106,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const editingAuthorization = selectedChildAuthorizations.find((authorization) => authorization.id === editingAuthorizationId) ?? null;
   const selectedChildIsCurrent = selectedChild ? isCurrentlyEnrolledChildRecord(selectedChild) : false;
   const claimableAuthorizations = authorizations.filter((authorization) => authorization.status === "active" && isCurrentlyEnrolledChildRecord(authorization.child));
+  const selectedClaimAuthorization = claimableAuthorizations.find((authorization) => authorization.id === authorizationId) ?? null;
 
   async function submitProgramSetup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -163,17 +186,28 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
     if (paidAt?.trim()) void post("recordRemittance", { claimId: claim.id, amountDollars, externalReference, paidAt, paymentMethod });
   }
 
-  function exportClaims() {
-    const quote = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-    const rows = [
-      ["Claim", "Agency", "Family", "Child", "Service start", "Service end", "Status", "Claimed", "Approved", "Paid", "Missing documents"],
-      ...claims.map((claim) => [claim.number, claim.agencyProgram.name, claim.authorization?.family.name ?? "", claim.authorization?.child.fullName ?? "", claim.servicePeriodStart.slice(0, 10), claim.servicePeriodEnd.slice(0, 10), claim.status, (claim.claimedCents / 100).toFixed(2), claim.approvedCents === null ? "" : (claim.approvedCents / 100).toFixed(2), (claim.paidCents / 100).toFixed(2), claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)).map((document) => document.name).join("; ")]),
-    ];
-    const blob = new Blob([rows.map((row) => row.map(quote).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
-    const href = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = href; anchor.download = `agency-claims-${centerId}-${today()}.csv`; anchor.click();
-    URL.revokeObjectURL(href);
+  async function exportClaims() {
+    const exportCenterId = centerId;
+    setExportingClaims(true); setError("");
+    try {
+      const response = await fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(exportCenterId)}&exportClaims=true`, { cache: "no-store" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error || "Agency claims could not be exported.");
+      }
+      if (centerIdRef.current !== exportCenterId) return;
+      const blob = await response.blob();
+      if (centerIdRef.current !== exportCenterId) return;
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href; anchor.download = `agency-claims-${exportCenterId}-${today()}.csv`; anchor.click();
+      URL.revokeObjectURL(href);
+    } catch (exportError) {
+      if (centerIdRef.current === exportCenterId) setError(exportError instanceof Error ? exportError.message : "Agency claims could not be exported.");
+      setExportingClaims(false);
+      return;
+    }
+    setExportingClaims(false);
   }
 
   return (
@@ -186,11 +220,11 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
               <CardTitle as="h2">Subsidy claims and agency invoices</CardTitle>
               <CardDescription className="mt-2 max-w-3xl">Keep government or third-party claims separate from family balances. Configure each payer, verify authorizations and supporting documents, submit through the approved agency channel, and reconcile ACH, check, or portal remittances.</CardDescription>
             </div>
-            <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => window.print()}><Printer data-icon="inline-start" /> Print</Button><Button variant="outline" onClick={exportClaims} disabled={!claims.length}><Download data-icon="inline-start" /> Export CSV</Button><Button variant="outline" onClick={() => void load()} disabled={pending}><RefreshCw data-icon="inline-start" /> Refresh</Button></div>
+            <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => window.print()}><Printer data-icon="inline-start" /> Print</Button><Button variant="outline" onClick={() => void exportClaims()} disabled={!data || exportingClaims}><Download data-icon="inline-start" /> {exportingClaims ? "Exporting…" : "Export CSV"}</Button><Button variant="outline" onClick={() => void load()} disabled={pending}><RefreshCw data-icon="inline-start" /> Refresh</Button></div>
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="max-w-md space-y-2"><Label>School</Label><Select value={centerId} onValueChange={(value) => { if (!value) return; setCenterId(value); setSetupProgramId("new"); setProgramId(""); setFamilyId(""); setChildId(""); setAuthorizationId(""); setEditingAuthorizationId(""); setData(null); setError(""); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>)}</SelectContent></Select></div>
+          <div className="max-w-md space-y-2"><Label>School</Label><Select value={centerId} onValueChange={(value) => { if (!value) return; centerIdRef.current = value; setCenterId(value); setPending(false); setExportingClaims(false); setSetupProgramId("new"); setProgramId(""); setFamilyId(""); setChildId(""); setAuthorizationId(""); setEditingAuthorizationId(""); setClaimPage(1); setClaimCursorByPage({}); setClaimError(""); setClaimMessage(""); setData(null); setError(""); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>)}</SelectContent></Select></div>
           {error ? <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
           {message ? <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200">{message}</p> : null}
           {summary ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -237,11 +271,14 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
           <div className="flex flex-wrap gap-2"><Button type="submit" disabled={pending || !programId || !familyId || !childId || (!editingAuthorization && !selectedChildIsCurrent)}>{editingAuthorization ? "Save correction" : "Save authorization"}</Button>{editingAuthorization ? <Button type="button" variant="outline" onClick={() => setEditingAuthorizationId("")}>Cancel edit</Button> : null}</div>
         </form></CardContent></Card>
 
-        <Card><CardHeader><CardTitle as="h3">3. Build agency claim</CardTitle><CardDescription>Create a separate agency invoice with its required-document checklist.</CardDescription></CardHeader><CardContent><form className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const ok = await post("createClaim", { authorizationId, servicePeriodStart: form.get("servicePeriodStart"), servicePeriodEnd: form.get("servicePeriodEnd"), dueDate: form.get("dueDate"), serviceUnits: form.get("serviceUnits"), rateDollars: form.get("rateDollars"), attendanceDays: form.get("attendanceDays") }); if (ok) event.currentTarget.reset(); }}>
-          <div><Label>Authorization</Label><Select value={authorizationId} onValueChange={(value) => value && setAuthorizationId(value)}><SelectTrigger><SelectValue placeholder="Choose active authorization" /></SelectTrigger><SelectContent>{claimableAuthorizations.map((authorization) => <SelectItem key={authorization.id} value={authorization.id}>{authorization.child.fullName} · {authorization.agencyProgram.name} · {money(authorization.authorizedRateCents)}/{authorization.unitType} · {authorization.authorizationNumber}</SelectItem>)}</SelectContent></Select></div>
-          <div className="grid grid-cols-2 gap-3"><div><Label>Service start</Label><Input name="servicePeriodStart" type="date" required /></div><div><Label>Service end</Label><Input name="servicePeriodEnd" type="date" required /></div></div>
+        <Card><CardHeader><CardTitle as="h3">3. Build agency claim</CardTitle><CardDescription>Create a separate agency invoice with its required-document checklist.</CardDescription></CardHeader><CardContent><form key={`${centerId}:${authorizationId}`} className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const formElement = event.currentTarget; const form = new FormData(formElement); setClaimError(""); setClaimMessage(""); const ok = await post("createClaim", { authorizationId, servicePeriodStart: form.get("servicePeriodStart"), servicePeriodEnd: form.get("servicePeriodEnd"), dueDate: form.get("dueDate"), serviceUnits: form.get("serviceUnits"), rateDollars: form.get("rateDollars"), attendanceDays: form.get("attendanceDays") }, { onError: setClaimError, onSuccess: () => { setClaimPage(1); setClaimCursorByPage({}); setClaimMessage("Draft claim created and added to the agency claim queue below."); }, reloadClaimPage: 1 }); if (ok) formElement.reset(); }}>
+          <div><Label>Authorization</Label><Select value={authorizationId} disabled={pending} onValueChange={(value) => { if (!value) return; setAuthorizationId(value); setClaimError(""); setClaimMessage(""); }}><SelectTrigger><SelectValue placeholder="Choose active authorization" /></SelectTrigger><SelectContent>{claimableAuthorizations.map((authorization) => <SelectItem key={authorization.id} value={authorization.id}>{authorization.child.fullName} · {authorization.agencyProgram.name} · {money(authorization.authorizedRateCents)}/{authorization.unitType} · {authorization.authorizationNumber}</SelectItem>)}</SelectContent></Select></div>
+          {selectedClaimAuthorization ? <div id="claim-authorization-coverage" className="rounded-lg border bg-background/50 p-3 text-sm"><div className="font-medium">{selectedClaimAuthorization.child.fullName}</div><div className="mt-1 text-muted-foreground">Authorized {dateOnly(selectedClaimAuthorization.coverageStart)} – {dateOnly(selectedClaimAuthorization.coverageEnd)} · up to {money(selectedClaimAuthorization.authorizedRateCents)} / {selectedClaimAuthorization.unitType}</div></div> : null}
+          <div className="grid grid-cols-2 gap-3"><div><Label>Service start</Label><Input name="servicePeriodStart" type="date" min={selectedClaimAuthorization?.coverageStart.slice(0, 10)} max={selectedClaimAuthorization?.coverageEnd.slice(0, 10)} aria-describedby={selectedClaimAuthorization ? "claim-authorization-coverage" : undefined} required /></div><div><Label>Service end</Label><Input name="servicePeriodEnd" type="date" min={selectedClaimAuthorization?.coverageStart.slice(0, 10)} max={selectedClaimAuthorization?.coverageEnd.slice(0, 10)} aria-describedby={selectedClaimAuthorization ? "claim-authorization-coverage" : undefined} required /></div></div>
           <div className="grid grid-cols-2 gap-3"><div><Label>Units</Label><Input name="serviceUnits" type="number" inputMode="decimal" min="0.000001" step="0.000001" required defaultValue="1" /></div><div><Label>Override rate</Label><Input name="rateDollars" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="Uses authorization" /></div></div>
           <div className="grid grid-cols-2 gap-3"><div><Label>Attendance days</Label><Input name="attendanceDays" type="number" min="0" /></div><div><Label>Claim due</Label><Input name="dueDate" type="date" /></div></div>
+          {claimError ? <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{claimError}</p> : null}
+          {claimMessage ? <p role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200">{claimMessage}</p> : null}
           <Button type="submit" disabled={pending || !authorizationId}>Create draft claim</Button>
         </form></CardContent></Card>
       </div>
@@ -253,7 +290,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
           {["approved", "partially_paid"].includes(claim.status) ? <Button size="sm" onClick={() => recordRemittance(claim)}><BadgeDollarSign data-icon="inline-start" /> Record remittance</Button> : null}
         </div></TableCell></TableRow>; })}
         {!claims.length ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No agency claims for this school yet.</TableCell></TableRow> : null}
-      </TableBody></Table></div></CardContent></Card>
+      </TableBody></Table></div>{claimPagination ? <div className="mt-4 flex items-center justify-between gap-3"><span className="text-sm text-muted-foreground">Claim queue page {claimPagination.page}</span><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={pending || claimPagination.page <= 1} onClick={() => { setPending(true); setClaimPage((page) => Math.max(page - 1, 1)); }}>Previous</Button><Button type="button" size="sm" variant="outline" disabled={pending || !claimPagination.hasNext || !claimPagination.nextCursor} onClick={() => { if (!claimPagination.nextCursor) return; setPending(true); setClaimCursorByPage((cursors) => ({ ...cursors, [claimPage + 1]: claimPagination.nextCursor as string })); setClaimPage((page) => page + 1); }}>Next</Button></div></div> : null}</CardContent></Card>
     </section>
   );
 }

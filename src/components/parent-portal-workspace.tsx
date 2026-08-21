@@ -951,36 +951,15 @@ function ParentPortalWorkspaceView({
     autopayStatusOverride ??
     paymentMethodManagement?.autopayStatus ??
     (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
-  const autopayCanEnable =
-    paymentMethodManagement?.hasStripeCustomer === true &&
-    paymentMethodManagement?.hasSavedPaymentMethod === true &&
-    !paymentMethodReauthorizationRequired;
-  const autopayLocalRequirements = useMemo(() => {
-    const requirements: string[] = [];
-    if (!autopayCanEnable) {
-      requirements.push(
-        paymentMethodReauthorizationRequired
-          ? "Replace the saved payment method for your school's current payment account before autopay can resume."
-          : "Save and verify one family payment method before enabling autopay.",
-      );
-    }
-    if (autopayStatus === "pending") {
-      requirements.push(
-        "Bank verification is pending. Complete verification for your payment method before enabling autopay.",
-      );
-    }
-    return requirements;
-  }, [autopayCanEnable, autopayStatus, paymentMethodReauthorizationRequired]);
   const autopayRequirements = useMemo(() => {
-    const values = [...autopayEnableRequirements, ...autopayLocalRequirements];
     const seen = new Set<string>();
-    return values.filter((requirement) => {
+    return autopayEnableRequirements.filter((requirement) => {
       const text = requirement.trim();
       if (!text || seen.has(text)) return false;
       seen.add(text);
       return true;
     });
-  }, [autopayEnableRequirements, autopayLocalRequirements]);
+  }, [autopayEnableRequirements]);
   const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
   const checkoutBlockedMessage =
     "Online payments are temporarily unavailable. Please contact your school if you need help.";
@@ -1590,10 +1569,6 @@ function ParentPortalWorkspaceView({
   function toggleAutopay(enabled: boolean) {
     if (!family) return;
     if (enabled === (autopayStatus === "enabled")) return;
-    if (enabled && !autopayCanEnable) {
-      setAutopayEnableRequirements(autopayLocalRequirements);
-      return;
-    }
     managePaymentMethod(enabled ? "enable_autopay" : "disable_autopay");
   }
 

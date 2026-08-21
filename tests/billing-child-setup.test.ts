@@ -34,6 +34,8 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(page, /classrooms: billingClassroomsByCenter\.get\(center\.id\) \?\? \[\]/);
   assert.match(page, /careScheduleType: childScheduleClassification\(\{ schedule: child\.schedule, customFields: child\.customFields \}\)/);
   assert.match(page, /scheduledDaysPerWeek: scheduledDaysPerWeek\(\{ schedule: child\.schedule, customFields: child\.customFields \}\)/);
+  assert.match(page, /customFields\.scheduledDaysPerWeek === "not_set"/);
+  assert.match(page, /customFields\.scheduledDaysPerWeek === "legacy_part_time"/);
 
   assert.match(operations, /const enrollmentContextOnly = clean\(body\.updateScope\) === "enrollment_context"/);
   assert.match(operations, /classroomFamilyGuard\(centerId, classroom\.centerId\)/);
@@ -48,6 +50,7 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(operations, /delete nextSchedule\.daysPerWeek/);
   assert.match(operations, /nextCustomFields\.scheduledDaysPerWeek = "not_set"/);
   assert.match(operations, /customFields\.scheduledDaysPerWeek = "not_set"/);
+  assert.match(operations, /nextCustomFields\.scheduledDaysPerWeek = "legacy_part_time"/);
   assert.match(operations, /customFields: \{ path: \["tuitionPlanId"\], equals: id \}/);
   assert.match(operations, /code: "TUITION_PLAN_ASSIGNED_CREATE_NEW"/);
 });

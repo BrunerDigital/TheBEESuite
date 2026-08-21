@@ -62,7 +62,7 @@ function collectTextValues(value: unknown, output: string[], depth = 0) {
 export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: unknown }) {
   const schedule = record(input.schedule);
   const customFields = record(input.customFields);
-  if (customFields.scheduledDaysPerWeek === "not_set") return null;
+  if (["not_set", "legacy_part_time"].includes(String(customFields.scheduledDaysPerWeek))) return null;
   const explicitCount = numericDayCount(
     schedule.daysPerWeek,
     schedule.scheduledDaysPerWeek,

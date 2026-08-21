@@ -603,6 +603,8 @@ function ageBucket(ageGroup: string) {
 function childScheduleClassification(input: { schedule: unknown; customFields: unknown }) {
   const schedule = recordFromJson(input.schedule);
   const customFields = recordFromJson(input.customFields);
+  if (customFields.scheduledDaysPerWeek === "not_set") return "unknown" as const;
+  if (customFields.scheduledDaysPerWeek === "legacy_part_time") return "part_time" as const;
   const scheduledDays = scheduledDaysPerWeek(input);
   if (scheduledDays === 5) return "full_time" as const;
   if (scheduledDays) return "part_time" as const;

@@ -987,6 +987,11 @@ async function POSTHandler(request: NextRequest) {
         customFields.careScheduleType = careScheduleType;
         customFields.fteScheduleType = careScheduleType;
       } else if (preserveLegacyPartTime) {
+        delete schedule.daysPerWeek;
+        delete schedule.scheduledDaysPerWeek;
+        customFields.scheduledDaysPerWeek = "legacy_part_time";
+        delete customFields.daysPerWeek;
+        delete customFields.fteDaysPerWeek;
         customFields.careScheduleType = "part_time";
         customFields.fteScheduleType = "part_time";
       } else if (legacyCareScheduleType === "full_time" || legacyCareScheduleType === "part_time") {
@@ -1030,6 +1035,9 @@ async function POSTHandler(request: NextRequest) {
           nextCustomFields.careScheduleType = careScheduleType;
           nextCustomFields.fteScheduleType = careScheduleType;
         } else if (preserveLegacyPartTime) {
+          nextCustomFields.scheduledDaysPerWeek = "legacy_part_time";
+          delete nextCustomFields.daysPerWeek;
+          delete nextCustomFields.fteDaysPerWeek;
           nextCustomFields.careScheduleType = "part_time";
           nextCustomFields.fteScheduleType = "part_time";
         } else {
@@ -1058,7 +1066,7 @@ async function POSTHandler(request: NextRequest) {
         if (scheduledDays) {
           nextSchedule.daysPerWeek = scheduledDays;
           delete nextSchedule.scheduledDaysPerWeek;
-        } else if (!preserveLegacyPartTime) {
+        } else {
           delete nextSchedule.daysPerWeek;
           delete nextSchedule.scheduledDaysPerWeek;
         }

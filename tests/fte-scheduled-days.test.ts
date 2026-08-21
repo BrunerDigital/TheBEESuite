@@ -76,6 +76,10 @@ test("explicit schedule days take priority over the old full-time or part-time l
     schedule: { days: ["Monday", "Wednesday", "Friday"], daysPerWeek: 3 },
     customFields: { scheduledDaysPerWeek: "not_set", fteDaysPerWeek: 3 },
   }), null);
+  assert.equal(scheduledDaysPerWeek({
+    schedule: { days: ["Monday", "Wednesday", "Friday"], daysPerWeek: 3 },
+    customFields: { scheduledDaysPerWeek: "legacy_part_time", careScheduleType: "part_time" },
+  }), null);
 });
 
 test("FTE entry UI and API preserve legacy exports while saving the day breakdown", () => {

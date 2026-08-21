@@ -14,6 +14,7 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(billing, /<Label htmlFor="billing-child-scheduled-days">Days per week<\/Label>/);
   assert.match(billing, /<SelectItem value="2">2 days\/week<\/SelectItem>/);
   assert.match(billing, /<SelectItem value="5">5 days\/week<\/SelectItem>/);
+  assert.match(billing, /<SelectItem value="legacy_part_time">Part-time \(exact days not set\)<\/SelectItem>/);
   assert.match(billing, /Rate name: \{child\.tuitionAssignment\?\.description/);
   assert.match(billing, /Tuition: \{child\.tuitionAssignment\?\.enabled/);
   assert.match(billing, /<Label htmlFor="billing-rate-name">Rate name<\/Label>[\s\S]*?<Input id="billing-rate-name"/);
@@ -41,6 +42,8 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(enrollmentStatus, /Choose a classroom before marking this child enrolled\. Billing and active rosters require a classroom assignment\./);
   assert.match(operations, /auditMetadata\.updateScope = "enrollment_context"/);
   assert.match(operations, /customFields\.scheduledDaysPerWeek = scheduledDays/);
+  assert.match(operations, /schedule\.daysPerWeek = scheduledDays/);
+  assert.match(operations, /preserveLegacyPartTime/);
   assert.match(operations, /customFields: \{ path: \["tuitionPlanId"\], equals: id \}/);
   assert.match(operations, /code: "TUITION_PLAN_ASSIGNED_CREATE_NEW"/);
 });

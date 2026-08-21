@@ -257,6 +257,11 @@ function scheduledDaysLabel(child: BillingWorkbenchFamily["children"][number]) {
     : careScheduleLabel(child.careScheduleType);
 }
 
+function scheduledDaysValue(child: BillingWorkbenchFamily["children"][number] | null | undefined) {
+  if (child?.scheduledDaysPerWeek) return String(child.scheduledDaysPerWeek);
+  return child?.careScheduleType === "part_time" ? "legacy_part_time" : "unknown";
+}
+
 function invoiceLineDescription(invoice: BillingWorkbenchOpenInvoice | null | undefined) {
   return invoice?.items?.[0]?.description || invoice?.number || "";
 }
@@ -393,7 +398,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [assignmentChildProgram, setAssignmentChildProgram] = useState(initialAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0]);
   const [assignmentChildClassroomId, setAssignmentChildClassroomId] = useState(initialAssignmentChild?.classroomId ?? "");
   const [assignmentChildScheduledDays, setAssignmentChildScheduledDays] = useState(
-    initialAssignmentChild?.scheduledDaysPerWeek ? String(initialAssignmentChild.scheduledDaysPerWeek) : "unknown",
+    scheduledDaysValue(initialAssignmentChild),
   );
   const [assignmentChildStartDate, setAssignmentChildStartDate] = useState(optionalDateInputValue(initialAssignmentChild?.startDate));
   const [assignmentCredits, setAssignmentCredits] = useState<Record<TuitionCreditCategory, string>>(
@@ -877,7 +882,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setAssignmentAdditionalCharges(tuitionAdditionalChargeInputs(assignment?.additionalCharges));
     setAssignmentChildProgram(child?.ageGroup ?? defaultAgeGroupOptions[0]);
     setAssignmentChildClassroomId(child?.classroomId ?? "");
-    setAssignmentChildScheduledDays(child?.scheduledDaysPerWeek ? String(child.scheduledDaysPerWeek) : "unknown");
+    setAssignmentChildScheduledDays(scheduledDaysValue(child));
     setAssignmentChildStartDate(optionalDateInputValue(child?.startDate));
     setTuitionPlanId(assignedPlan?.id ?? "");
     setPlanEditorId(assignedPlan?.id ?? "new");
@@ -2197,6 +2202,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     <SelectTrigger id="billing-child-scheduled-days"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="unknown">Not set</SelectItem>
+                      <SelectItem value="legacy_part_time">Part-time (exact days not set)</SelectItem>
                       <SelectItem value="2">2 days/week</SelectItem>
                       <SelectItem value="3">3 days/week</SelectItem>
                       <SelectItem value="4">4 days/week</SelectItem>

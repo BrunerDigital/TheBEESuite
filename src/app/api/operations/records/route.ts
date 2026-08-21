@@ -956,7 +956,7 @@ async function POSTHandler(request: NextRequest) {
     }
     const existingChild = id ? await prisma.child.findUnique({
       where: { id },
-      select: { familyId: true, dateOfBirth: true, customFields: true, enrollmentStatus: true, classroomId: true },
+      select: { familyId: true, dateOfBirth: true, customFields: true, schedule: true, enrollmentStatus: true, classroomId: true },
     }) : null;
     if (id) {
       const guard = scopedUpdateGuard({ entity: "Child", expectedScopeId: familyId, actualScopeId: existingChild?.familyId, scopeLabel: "family" });
@@ -973,20 +973,30 @@ async function POSTHandler(request: NextRequest) {
       });
       if (classroomError) return NextResponse.json({ ok: false, error: classroomError }, { status: 400 });
       const customFields = { ...jsonObject(existingChild.customFields) };
-      const scheduledDays = normalizeScheduledDaysPerWeek(body.scheduledDaysPerWeek ?? body.daysPerWeek);
+      const requestedScheduleDays = body.scheduledDaysPerWeek ?? body.daysPerWeek;
+      const scheduledDays = normalizeScheduledDaysPerWeek(requestedScheduleDays);
+      const preserveLegacyPartTime = clean(requestedScheduleDays) === "legacy_part_time";
       const legacyCareScheduleType = clean(body.careScheduleType).toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      const schedule = { ...jsonObject(existingChild.schedule) };
       if (scheduledDays) {
         const careScheduleType = scheduledDays === 5 ? "full_time" : "part_time";
+        schedule.daysPerWeek = scheduledDays;
+        delete schedule.scheduledDaysPerWeek;
         customFields.scheduledDaysPerWeek = scheduledDays;
         customFields.daysPerWeek = scheduledDays;
         customFields.careScheduleType = careScheduleType;
         customFields.fteScheduleType = careScheduleType;
+      } else if (preserveLegacyPartTime) {
+        customFields.careScheduleType = "part_time";
+        customFields.fteScheduleType = "part_time";
       } else if (legacyCareScheduleType === "full_time" || legacyCareScheduleType === "part_time") {
         delete customFields.scheduledDaysPerWeek;
         delete customFields.daysPerWeek;
         customFields.careScheduleType = legacyCareScheduleType;
         customFields.fteScheduleType = legacyCareScheduleType;
       } else {
+        delete schedule.daysPerWeek;
+        delete schedule.scheduledDaysPerWeek;
         delete customFields.scheduledDaysPerWeek;
         delete customFields.daysPerWeek;
         delete customFields.careScheduleType;
@@ -998,6 +1008,7 @@ async function POSTHandler(request: NextRequest) {
           classroomId,
           ageGroup,
           startDate: parseDate(body.startDate),
+          schedule: schedule as Prisma.InputJsonObject,
           customFields: customFields as Prisma.InputJsonObject,
         },
       });
@@ -1005,7 +1016,9 @@ async function POSTHandler(request: NextRequest) {
     } else {
       const existingCustomFields = jsonObject(existingChild?.customFields);
       const scheduleDaysProvided = "scheduledDaysPerWeek" in body || "daysPerWeek" in body;
-      const scheduledDays = normalizeScheduledDaysPerWeek(body.scheduledDaysPerWeek ?? body.daysPerWeek);
+      const requestedScheduleDays = body.scheduledDaysPerWeek ?? body.daysPerWeek;
+      const scheduledDays = normalizeScheduledDaysPerWeek(requestedScheduleDays);
+      const preserveLegacyPartTime = clean(requestedScheduleDays) === "legacy_part_time";
       const legacyCareScheduleType = clean(body.careScheduleType || body.fteScheduleType || body.fullTimePartTime).toLowerCase().replace(/[^a-z0-9]+/g, "_");
       const nextCustomFields = { ...existingCustomFields };
       if (scheduleDaysProvided) {
@@ -1015,6 +1028,9 @@ async function POSTHandler(request: NextRequest) {
           nextCustomFields.daysPerWeek = scheduledDays;
           nextCustomFields.careScheduleType = careScheduleType;
           nextCustomFields.fteScheduleType = careScheduleType;
+        } else if (preserveLegacyPartTime) {
+          nextCustomFields.careScheduleType = "part_time";
+          nextCustomFields.fteScheduleType = "part_time";
         } else {
           delete nextCustomFields.scheduledDaysPerWeek;
           delete nextCustomFields.daysPerWeek;
@@ -1030,6 +1046,13 @@ async function POSTHandler(request: NextRequest) {
         : undefined;
       const enrollmentStatus = clean(body.enrollmentStatus) || clean(body.status) || "enrolled";
       const customFields = baseCustomFields;
+      const scheduleNotes = clean(body.schedule);
+      const schedule = scheduleNotes || scheduledDays
+        ? {
+            ...(scheduleNotes ? { notes: scheduleNotes } : {}),
+            ...(scheduledDays ? { daysPerWeek: scheduledDays } : {}),
+          } as Prisma.InputJsonObject
+        : undefined;
       const classroomError = enrollmentClassroomValidationError({ enrollmentStatus, classroomId });
       if (classroomError) return NextResponse.json({ ok: false, error: classroomError }, { status: 400 });
       const data = {
@@ -1041,7 +1064,7 @@ async function POSTHandler(request: NextRequest) {
         ageGroup: clean(body.ageGroup) || clean(body.type) || "Preschool",
         enrollmentStatus,
         startDate: parseDate(body.startDate),
-        schedule: clean(body.schedule) ? { notes: clean(body.schedule) } : undefined,
+        schedule,
         photoVideoPermission: Boolean(body.photoVideoPermission),
         fieldTripPermission: Boolean(body.fieldTripPermission),
         napNotes: clean(body.napNotes) || null,

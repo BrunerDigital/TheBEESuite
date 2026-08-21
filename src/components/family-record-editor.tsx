@@ -229,7 +229,10 @@ function scheduleNotes(value: unknown) {
 function scheduledDaysValue(child: ChildRecord | null | undefined) {
   if (!child) return "unknown";
   const days = scheduledDaysPerWeek({ schedule: child.schedule, customFields: child.customFields });
-  return days ? String(days) : "unknown";
+  if (days) return String(days);
+  const fields = recordValue(child.customFields);
+  const legacyType = String(fields.careScheduleType || fields.fteScheduleType || "").toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  return legacyType === "part_time" ? "legacy_part_time" : "unknown";
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -1859,6 +1862,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 <SelectTrigger id="family-editor-child-scheduled-days"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="unknown">Not set</SelectItem>
+                  <SelectItem value="legacy_part_time">Part-time (exact days not set)</SelectItem>
                   <SelectItem value="2">2 days/week</SelectItem>
                   <SelectItem value="3">3 days/week</SelectItem>
                   <SelectItem value="4">4 days/week</SelectItem>

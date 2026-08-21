@@ -190,6 +190,10 @@ function isOverdue(dueDate: Date, asOf: Date) {
   return dueDate.toISOString().slice(0, 10) < asOf.toISOString().slice(0, 10);
 }
 
+function utcCalendarDayNumber(date: Date) {
+  return Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / 86_400_000);
+}
+
 export function buildOutstandingNonInvoiceChargesByAccount(
   entries: readonly ReceivableAgingLedgerEntry[],
 ) {
@@ -281,7 +285,7 @@ export function buildNetReceivableAging(
       const remainingInvoiceCents = invoice.totalCents - paidInvoiceCents;
       if (!remainingInvoiceCents) continue;
 
-      const daysPastDue = Math.floor((asOf.getTime() - invoice.dueDate.getTime()) / 86_400_000);
+      const daysPastDue = utcCalendarDayNumber(asOf) - utcCalendarDayNumber(invoice.dueDate);
       if (daysPastDue <= 0) report.currentCents += remainingInvoiceCents;
       else if (daysPastDue <= 30) report.oneToThirtyCents += remainingInvoiceCents;
       else if (daysPastDue <= 60) report.thirtyOneToSixtyCents += remainingInvoiceCents;

@@ -181,6 +181,35 @@ test("school account snapshot puts the supplied current families with balances o
   assert.equal(newFamily?.balanceCents, 0);
 });
 
+test("aging marks an invoice past due on the next calendar day", () => {
+  assert.deepEqual(buildNetReceivableAging(
+    [{ id: "calendar-day", balanceCents: 10_000 }],
+    [{ billingAccountId: "calendar-day", totalCents: 10_000, dueDate: new Date("2026-08-03T12:00:00.000Z") }],
+    new Date("2026-08-04T01:00:00.000Z"),
+  ), {
+    currentCents: 0,
+    oneToThirtyCents: 10_000,
+    thirtyOneToSixtyCents: 0,
+    sixtyOnePlusCents: 0,
+  });
+});
+
+test("an open invoice is not overdue until the calendar day after its due date", () => {
+  const dueToday = buildAccountsReceivableSnapshot([{
+    id: "monday-family",
+    name: "Monday Family",
+    centerId: "kokomo",
+    billingAccount: {
+      id: "billing-monday",
+      balanceCents: 10_000,
+      invoices: [{ id: "due-monday", dueDate: new Date("2026-08-03T12:00:00.000Z") }],
+    },
+  }], { kokomo: "Kid City USA - Kokomo" }, new Date("2026-08-03T23:30:00.000Z"));
+
+  assert.equal(dueToday.overdueAccountCount, 0);
+  assert.equal(dueToday.accounts[0]?.overdueInvoiceCount, 0);
+});
+
 test("director and executive account visibility remains limited to authorized centers", () => {
   assert.equal(canViewAccountBalances("CENTER_DIRECTOR"), true);
   assert.equal(canViewAccountBalances("ASSISTANT_DIRECTOR"), true);

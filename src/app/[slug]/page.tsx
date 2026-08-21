@@ -86,6 +86,7 @@ import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { invoiceBelongsToFteWeek } from "@/lib/fte-billing-period";
 import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } from "@/lib/fte-report-rollups";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
+import { scheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
@@ -334,10 +335,6 @@ function numberField(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function stringArrayField(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
 function tuitionAssignmentFromCustomFields(customFields: unknown) {
   const fields = recordFromJson(customFields);
   const planId = stringField(fields.tuitionPlanId);
@@ -534,6 +531,10 @@ function serializeFteReport(report: {
     enrolledCount: report.enrolledCount,
     fullTimeCount: report.fullTimeCount,
     partTimeCount: report.partTimeCount,
+    twoDayCount: numberField(metadata.twoDayCount),
+    threeDayCount: numberField(metadata.threeDayCount),
+    fourDayCount: numberField(metadata.fourDayCount),
+    fiveDayCount: numberField(metadata.fiveDayCount),
     fteCount: report.fteCount,
     licenseCapacity: numberField(metadata.licenseCapacity),
     occupancyPercent: numberField(metadata.occupancyPercent),
@@ -589,20 +590,14 @@ function ageBucket(ageGroup: string) {
 function childScheduleClassification(input: { schedule: unknown; customFields: unknown }) {
   const schedule = recordFromJson(input.schedule);
   const customFields = recordFromJson(input.customFields);
-  const days = [
-    ...stringArrayField(schedule.days),
-    ...stringArrayField(schedule.scheduleDays),
-    ...stringArrayField(customFields.days),
-    ...stringArrayField(customFields.scheduleDays),
-  ];
+  const scheduledDays = scheduledDaysPerWeek(input);
+  if (scheduledDays === 5) return "full_time" as const;
+  if (scheduledDays) return "part_time" as const;
   const explicit = String(customFields.careScheduleType || customFields.fteScheduleType || customFields.fullTimePartTime || "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_");
   if (["full_time", "fulltime", "full"].includes(explicit)) return "full_time" as const;
   if (["part_time", "parttime", "part"].includes(explicit)) return "part_time" as const;
-
-  if (days.length >= 5) return "full_time" as const;
-  if (days.length > 0 && days.length <= 3) return "part_time" as const;
 
   const text = JSON.stringify({ schedule, customFields }).toLowerCase();
   if (/\b(part|part-time|half|half-day|2 day|two day|3 day|three day|mwf)\b/.test(text)) return "part_time" as const;
@@ -662,7 +657,19 @@ async function buildFtePrefills(
         children: { some: currentlyEnrolledChildWhere() },
       },
     },
-    select: { balanceCents: true, family: { select: { centerId: true } } },
+    select: {
+      id: true,
+      balanceCents: true,
+      family: { select: { centerId: true } },
+      invoices: {
+        where: { status: PaymentStatus.OPEN },
+        select: { billingAccountId: true, totalCents: true, dueDate: true },
+      },
+      ledgerEntries: {
+        select: { id: true, billingAccountId: true, amountCents: true, invoiceId: true, effectiveAt: true, createdAt: true },
+        orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      },
+    },
   }), prisma.staffProfile.findMany({
     where: { centerId: centerIdFilter(centerIds), user: { isActive: true } },
     select: { centerId: true, customFields: true },
@@ -674,6 +681,10 @@ async function buildFtePrefills(
     enrolledCount: 0,
     fullTimeCount: 0,
     partTimeCount: 0,
+    twoDayCount: 0,
+    threeDayCount: 0,
+    fourDayCount: 0,
+    fiveDayCount: 0,
     unknownScheduleCount: 0,
     infants: 0,
     toddlers: 0,
@@ -691,7 +702,7 @@ async function buildFtePrefills(
     withdrawals: 0,
     preregisteredChildren: 0,
     generatedAt: new Date().toISOString(),
-    sourceLabel: "Live enrollment, billing, receivables, and staff records",
+    sourceLabel: "Live enrollment, billing, past-due receivables, and staff records",
   } satisfies FteReportPrefill]));
 
   for (const child of children) {
@@ -703,9 +714,11 @@ async function buildFtePrefills(
     if (isActive) {
       row.enrolledCount += 1;
       row[ageBucket(child.ageGroup)] += 1;
-      const classification = childScheduleClassification({ schedule: child.schedule, customFields: child.customFields });
-      if (classification === "full_time") row.fullTimeCount = (row.fullTimeCount ?? 0) + 1;
-      else if (classification === "part_time") row.partTimeCount = (row.partTimeCount ?? 0) + 1;
+      const scheduledDays = scheduledDaysPerWeek({ schedule: child.schedule, customFields: child.customFields });
+      if (scheduledDays === 2) row.twoDayCount += 1;
+      else if (scheduledDays === 3) row.threeDayCount += 1;
+      else if (scheduledDays === 4) row.fourDayCount += 1;
+      else if (scheduledDays === 5) row.fiveDayCount += 1;
       else row.unknownScheduleCount += 1;
     }
     if (child.startDate && child.startDate >= weekStart && child.startDate < weekEndExclusive) row.newStarts += 1;
@@ -713,9 +726,21 @@ async function buildFtePrefills(
     if (child.startDate && child.startDate >= weekEndExclusive) row.preregisteredChildren += 1;
   }
 
+  const nonInvoiceChargeCentsByAccountId = buildOutstandingNonInvoiceChargesByAccount(
+    accountBalances.flatMap((account) => account.ledgerEntries),
+  );
+  const receivableAsOf = new Date();
   for (const account of accountBalances) {
     const row = account.family.centerId ? byCenter.get(account.family.centerId) : null;
-    if (row) row.accountReceivableAmount += Math.max(account.balanceCents, 0) / 100;
+    if (!row) continue;
+    const aging = buildNetReceivableAging([{
+      id: account.id,
+      balanceCents: account.balanceCents,
+      nonInvoiceChargeCents: nonInvoiceChargeCentsByAccountId.get(account.id) ?? 0,
+    }], account.invoices, receivableAsOf);
+    row.accountReceivableAmount += (
+      aging.oneToThirtyCents + aging.thirtyOneToSixtyCents + aging.sixtyOnePlusCents
+    ) / 100;
   }
 
   for (const invoice of invoices) {
@@ -768,8 +793,10 @@ async function buildFtePrefills(
     totalBilledAmount: Math.round(row.totalBilledAmount * 100) / 100,
     payrollAmount: row.payrollAmount === null ? null : Math.round(row.payrollAmount * 100) / 100,
     payrollPercent: row.payrollAmount !== null && row.totalBilledAmount > 0 ? Math.round((row.payrollAmount / row.totalBilledAmount) * 10000) / 100 : null,
-    fullTimeCount: row.fullTimeCount || row.unknownScheduleCount ? row.fullTimeCount : null,
-    partTimeCount: row.partTimeCount || row.unknownScheduleCount ? row.partTimeCount : null,
+    fullTimeCount: row.fiveDayCount || row.unknownScheduleCount ? row.fiveDayCount : null,
+    partTimeCount: row.twoDayCount + row.threeDayCount + row.fourDayCount || row.unknownScheduleCount
+      ? row.twoDayCount + row.threeDayCount + row.fourDayCount
+      : null,
   }));
 }
 

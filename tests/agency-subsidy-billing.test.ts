@@ -144,6 +144,15 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(workspace, /Record denial/);
   assert.match(workspace, /Void draft/);
   assert.match(workspace, /name="serviceUnits"[\s\S]*step="0\.000001"/);
+  assert.match(workspace, /selectedClaimAuthorization\?\.coverageStart\.slice\(0, 10\)/);
+  assert.match(workspace, /selectedClaimAuthorization\?\.coverageEnd\.slice\(0, 10\)/);
+  assert.match(workspace, /onError: setClaimError/);
+  assert.match(workspace, /Draft claim created and added to the agency claim queue below/);
+});
+
+test("agency queue keeps newly-created sibling claims inside the bounded response", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  assert.match(route, /subsidyClaim\.findMany\([\s\S]*orderBy: \[\{ createdAt: "desc" \}, \{ dueDate: "asc" \}\][\s\S]*take: 250/);
 });
 
 test("agency remittances re-read the claim inside a serializable transaction", () => {

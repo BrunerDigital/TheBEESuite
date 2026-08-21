@@ -35,6 +35,8 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const [childId, setChildId] = useState("");
   const [authorizationId, setAuthorizationId] = useState("");
   const [editingAuthorizationId, setEditingAuthorizationId] = useState("");
+  const [claimError, setClaimError] = useState("");
+  const [claimMessage, setClaimMessage] = useState("");
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -59,12 +61,20 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
     return () => { active = false; };
   }, [centerId]);
 
-  async function post(action: string, fields: Record<string, unknown>) {
+  async function post(action: string, fields: Record<string, unknown>, callbacks: { onError?: (message: string) => void; onSuccess?: (body: Record<string, unknown>) => void } = {}) {
     setPending(true); setError(""); setMessage("");
     const response = await fetch("/api/billing/agency-claims", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, centerId, ...fields }) });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) setError([body.error, ...(body.blockers ?? [])].filter(Boolean).join(" "));
-    else { setMessage("Agency billing record saved."); await load(); }
+    const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+    if (!response.ok) {
+      const blockers = Array.isArray(body.blockers) ? body.blockers : [];
+      const responseError = [body.error, ...blockers].filter(Boolean).join(" ") || "Agency billing record could not be saved.";
+      setError(responseError);
+      callbacks.onError?.(responseError);
+    } else {
+      setMessage("Agency billing record saved.");
+      callbacks.onSuccess?.(body);
+      await load();
+    }
     setPending(false);
     return response.ok;
   }
@@ -84,6 +94,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const editingAuthorization = selectedChildAuthorizations.find((authorization) => authorization.id === editingAuthorizationId) ?? null;
   const selectedChildIsCurrent = selectedChild ? isCurrentlyEnrolledChildRecord(selectedChild) : false;
   const claimableAuthorizations = authorizations.filter((authorization) => authorization.status === "active" && isCurrentlyEnrolledChildRecord(authorization.child));
+  const selectedClaimAuthorization = claimableAuthorizations.find((authorization) => authorization.id === authorizationId) ?? null;
 
   async function submitProgramSetup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -237,11 +248,14 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
           <div className="flex flex-wrap gap-2"><Button type="submit" disabled={pending || !programId || !familyId || !childId || (!editingAuthorization && !selectedChildIsCurrent)}>{editingAuthorization ? "Save correction" : "Save authorization"}</Button>{editingAuthorization ? <Button type="button" variant="outline" onClick={() => setEditingAuthorizationId("")}>Cancel edit</Button> : null}</div>
         </form></CardContent></Card>
 
-        <Card><CardHeader><CardTitle as="h3">3. Build agency claim</CardTitle><CardDescription>Create a separate agency invoice with its required-document checklist.</CardDescription></CardHeader><CardContent><form className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const ok = await post("createClaim", { authorizationId, servicePeriodStart: form.get("servicePeriodStart"), servicePeriodEnd: form.get("servicePeriodEnd"), dueDate: form.get("dueDate"), serviceUnits: form.get("serviceUnits"), rateDollars: form.get("rateDollars"), attendanceDays: form.get("attendanceDays") }); if (ok) event.currentTarget.reset(); }}>
-          <div><Label>Authorization</Label><Select value={authorizationId} onValueChange={(value) => value && setAuthorizationId(value)}><SelectTrigger><SelectValue placeholder="Choose active authorization" /></SelectTrigger><SelectContent>{claimableAuthorizations.map((authorization) => <SelectItem key={authorization.id} value={authorization.id}>{authorization.child.fullName} · {authorization.agencyProgram.name} · {money(authorization.authorizedRateCents)}/{authorization.unitType} · {authorization.authorizationNumber}</SelectItem>)}</SelectContent></Select></div>
-          <div className="grid grid-cols-2 gap-3"><div><Label>Service start</Label><Input name="servicePeriodStart" type="date" required /></div><div><Label>Service end</Label><Input name="servicePeriodEnd" type="date" required /></div></div>
+        <Card><CardHeader><CardTitle as="h3">3. Build agency claim</CardTitle><CardDescription>Create a separate agency invoice with its required-document checklist.</CardDescription></CardHeader><CardContent><form key={`${centerId}:${authorizationId}`} className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const formElement = event.currentTarget; const form = new FormData(formElement); setClaimError(""); setClaimMessage(""); const ok = await post("createClaim", { authorizationId, servicePeriodStart: form.get("servicePeriodStart"), servicePeriodEnd: form.get("servicePeriodEnd"), dueDate: form.get("dueDate"), serviceUnits: form.get("serviceUnits"), rateDollars: form.get("rateDollars"), attendanceDays: form.get("attendanceDays") }, { onError: setClaimError, onSuccess: () => setClaimMessage("Draft claim created and added to the agency claim queue below.") }); if (ok) formElement.reset(); }}>
+          <div><Label>Authorization</Label><Select value={authorizationId} onValueChange={(value) => { if (!value) return; setAuthorizationId(value); setClaimError(""); setClaimMessage(""); }}><SelectTrigger><SelectValue placeholder="Choose active authorization" /></SelectTrigger><SelectContent>{claimableAuthorizations.map((authorization) => <SelectItem key={authorization.id} value={authorization.id}>{authorization.child.fullName} · {authorization.agencyProgram.name} · {money(authorization.authorizedRateCents)}/{authorization.unitType} · {authorization.authorizationNumber}</SelectItem>)}</SelectContent></Select></div>
+          {selectedClaimAuthorization ? <div id="claim-authorization-coverage" className="rounded-lg border bg-background/50 p-3 text-sm"><div className="font-medium">{selectedClaimAuthorization.child.fullName}</div><div className="mt-1 text-muted-foreground">Authorized {dateOnly(selectedClaimAuthorization.coverageStart)} – {dateOnly(selectedClaimAuthorization.coverageEnd)} · up to {money(selectedClaimAuthorization.authorizedRateCents)} / {selectedClaimAuthorization.unitType}</div></div> : null}
+          <div className="grid grid-cols-2 gap-3"><div><Label>Service start</Label><Input name="servicePeriodStart" type="date" min={selectedClaimAuthorization?.coverageStart.slice(0, 10)} max={selectedClaimAuthorization?.coverageEnd.slice(0, 10)} aria-describedby={selectedClaimAuthorization ? "claim-authorization-coverage" : undefined} required /></div><div><Label>Service end</Label><Input name="servicePeriodEnd" type="date" min={selectedClaimAuthorization?.coverageStart.slice(0, 10)} max={selectedClaimAuthorization?.coverageEnd.slice(0, 10)} aria-describedby={selectedClaimAuthorization ? "claim-authorization-coverage" : undefined} required /></div></div>
           <div className="grid grid-cols-2 gap-3"><div><Label>Units</Label><Input name="serviceUnits" type="number" inputMode="decimal" min="0.000001" step="0.000001" required defaultValue="1" /></div><div><Label>Override rate</Label><Input name="rateDollars" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="Uses authorization" /></div></div>
           <div className="grid grid-cols-2 gap-3"><div><Label>Attendance days</Label><Input name="attendanceDays" type="number" min="0" /></div><div><Label>Claim due</Label><Input name="dueDate" type="date" /></div></div>
+          {claimError ? <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{claimError}</p> : null}
+          {claimMessage ? <p role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200">{claimMessage}</p> : null}
           <Button type="submit" disabled={pending || !authorizationId}>Create draft claim</Button>
         </form></CardContent></Card>
       </div>

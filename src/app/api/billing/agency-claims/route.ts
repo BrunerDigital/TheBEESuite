@@ -128,7 +128,9 @@ async function getHandler(request: NextRequest) {
     }),
     prisma.subsidyClaim.findMany({
       where: { centerId: { in: centerIds } },
-      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+      // Keep newly-created drafts visible immediately. Due-date-first ordering could
+      // push a successful sibling claim outside the bounded queue response.
+      orderBy: [{ createdAt: "desc" }, { dueDate: "asc" }],
       take: 250,
       include: {
         agencyProgram: { select: { name: true, programName: true, providerNumber: true, vendorNumber: true, submissionMethod: true, portalUrl: true, paymentInstructions: true } },

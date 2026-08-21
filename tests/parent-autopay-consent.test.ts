@@ -45,6 +45,11 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(publicPaymentMethodRoute, /autopaySetupMode: recipientCanPreserveAutopay \? "preserve_existing" : "preserve"/);
   assert.match(stripeWebhook, /paymentMethodSetupAutopayOutcome/);
   assert.match(stripeWebhook, /linkedGuardianUserIds/);
+  assert.match(stripeWebhook, /migrationSessionIsCurrent/);
+  assert.match(stripeWebhook, /familyCenter\.id === clean\(session\.metadata\?\.centerId\)/);
+  assert.match(stripeWebhook, /connectedAccountId === activeFamilyAccountId/);
+  assert.match(stripeWebhook, /stripeConnectSavedMethodNeedsReauthorization/);
+  assert.match(stripeWebhook, /requestedSetupMode === "preserve_existing" && !migrationSessionIsCurrent/);
   assert.match(stripeWebhook, /billing\.autopay\.consent_migrated_to_current_stripe_account/);
   assert.match(stripeWebhook, /await tx\.auditLog\.create/);
   assert.match(stripeWebhook, /autopayDisabledReason: "saved_payment_method_replaced"/);

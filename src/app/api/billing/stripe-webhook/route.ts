@@ -18,6 +18,7 @@ import { beeSuitePayoutSmsBody, payoutSmsRecipient, sendPayoutSmsSafely } from "
 import { prisma } from "@/lib/prisma";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
+import { stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
 import { stripeCustomerCustomFieldPatch } from "@/lib/stripe-customer-scope";
 import {
   isStripeWebhookAccountEvent,
@@ -1105,7 +1106,7 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
                 select: {
                   classroom: {
                     select: {
-                      center: { select: { id: true, organization: { select: { tenantId: true } } } },
+                      center: { select: { id: true, customFields: true, organization: { select: { tenantId: true } } } },
                     },
                   },
                 },
@@ -1124,8 +1125,29 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       const customerId = setupIntent?.setupIntent?.customerId || clean(session.customer) || clean(currentFields.stripeCustomerId);
       const previousPaymentMethodId = clean(currentFields.stripeDefaultPaymentMethodId);
       const paymentMethodId = setupPaymentMethodId || previousPaymentMethodId;
-      const setupMode = clean(session.metadata?.autopaySetupMode);
+      const requestedSetupMode = clean(session.metadata?.autopaySetupMode);
       const replacedPaymentMethod = Boolean(paymentMethodId && paymentMethodId !== previousPaymentMethodId);
+      const familyCenter = billingAccount.family.centerId
+        ? await tx.center.findUnique({
+            where: { id: billingAccount.family.centerId },
+            select: { id: true, customFields: true, organization: { select: { tenantId: true } } },
+          })
+        : billingAccount.family.children[0]?.classroom?.center ?? null;
+      const activeFamilyAccountId = readStripeConnectedAccountId(familyCenter?.customFields);
+      const migrationSessionIsCurrent = Boolean(
+        familyCenter
+        && familyCenter.id === clean(session.metadata?.centerId)
+        && connectedAccountId
+        && connectedAccountId === activeFamilyAccountId
+        && stripeConnectSavedMethodNeedsReauthorization({
+          activeAccountId: activeFamilyAccountId,
+          savedMethodAccountId: clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId),
+          centerCustomFields: familyCenter.customFields,
+        }),
+      );
+      const setupMode = requestedSetupMode === "preserve_existing" && !migrationSessionIsCurrent
+        ? "preserve"
+        : requestedSetupMode;
       const autopayPatch = paymentMethodSetupAutopayOutcome({
         autopayPlaceholder: billingAccount.autopayPlaceholder,
         currentFields,
@@ -1134,12 +1156,6 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
         linkedGuardianUserIds: billingAccount.family.guardians.map((guardian) => guardian.userId),
         setupMode,
       });
-      const familyCenter = billingAccount.family.centerId
-        ? await tx.center.findUnique({
-            where: { id: billingAccount.family.centerId },
-            select: { id: true, organization: { select: { tenantId: true } } },
-          })
-        : billingAccount.family.children[0]?.classroom?.center ?? null;
       const auditTenantId = familyCenter?.organization.tenantId || clean(tenantId);
       if (autopayPatch?.preservedExistingConsent && !auditTenantId) {
         throw new Error("Autopay consent migration requires an authoritative tenant for its audit record.");

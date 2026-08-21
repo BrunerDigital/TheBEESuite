@@ -692,6 +692,7 @@ async function buildFtePrefills(
     preK: 0,
     schoolAge: 0,
     accountReceivableAmount: null as number | null,
+    accountReceivableReviewRequired: false as boolean,
     selfPayerBillAmount: 0,
     subsidyBillAmount: 0,
     totalBilledAmount: 0,
@@ -738,7 +739,10 @@ async function buildFtePrefills(
     ? buildOutstandingNonInvoiceChargesByAccount(receivableLedgerEntries)
     : new Map<string, number>();
   if (!receivableLedgerHistoryComplete) {
-    for (const row of byCenter.values()) row.sourceLabel += "; past-due AR requires ledger review";
+    for (const row of byCenter.values()) {
+      row.accountReceivableReviewRequired = true;
+      row.sourceLabel += "; past-due AR requires ledger review";
+    }
   }
   const receivableAsOf = new Date();
   for (const account of accountBalances) {

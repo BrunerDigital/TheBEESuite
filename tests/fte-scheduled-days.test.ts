@@ -70,6 +70,8 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(form, /4 days\/week/);
   assert.match(form, /four = 0\.8/);
   assert.match(form, /Past-due current-family AR/);
+  assert.match(form, /Past-due AR must be verified/);
+  assert.match(form, /accountReceivableReviewRequired && !form\.accountReceivableAmount\.trim\(\)/);
   assert.match(route, /fteCalculation: useScheduledDayBreakdown \? "scheduled_days_divided_by_five"/);
   assert.match(route, /fullTimeCount = useScheduledDayBreakdown \? scheduledDayCounts\.fiveDayCount/);
   assert.match(route, /existingScheduledDayBreakdown[\s\S]*useScheduledDayBreakdown/);

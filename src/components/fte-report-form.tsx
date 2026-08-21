@@ -85,6 +85,7 @@ export type FteReportPrefill = {
   preK: number;
   schoolAge: number;
   accountReceivableAmount: number | null;
+  accountReceivableReviewRequired: boolean;
   selfPayerBillAmount: number;
   subsidyBillAmount: number;
   totalBilledAmount: number;
@@ -372,6 +373,11 @@ export function FteReportForm({
   }
 
   function submit() {
+    if (selectedPrefill?.accountReceivableReviewRequired && !form.accountReceivableAmount.trim()) {
+      setStatusMessage("");
+      setErrorMessage("Past-due accounts receivable could not be safely prefilled. Enter a verified past-due AR amount before submitting.");
+      return;
+    }
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -540,6 +546,15 @@ export function FteReportForm({
               {selectedPrefill.unknownScheduleCount
                 ? ` ${selectedPrefill.unknownScheduleCount} child schedule(s) did not identify a 2–5 day weekly schedule, so verify the day counts before submitting.`
                 : " Verify the fields, enter payroll percentage if required, and submit."}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {selectedPrefill?.accountReceivableReviewRequired ? (
+          <Alert variant="destructive">
+            <AlertTitle>Past-due AR must be verified</AlertTitle>
+            <AlertDescription>
+              Ledger history exceeded the safe prefill limit. Enter the verified past-due current-family AR amount before submitting this report.
             </AlertDescription>
           </Alert>
         ) : null}

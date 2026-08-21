@@ -5,7 +5,7 @@ import {
   calculateScheduledDaysFte,
   scheduledDayBreakdownTotal,
 } from "../src/lib/fte-report-guardrails";
-import { scheduledDaysPerWeek } from "../src/lib/fte-scheduled-days";
+import { childScheduleClassification, normalizeScheduledDaysPerWeek, scheduledDaysPerWeek } from "../src/lib/fte-scheduled-days";
 
 test("scheduled-day FTE weights each child by days attended out of five", () => {
   const counts = {
@@ -18,6 +18,15 @@ test("scheduled-day FTE weights each child by days attended out of five", () => 
   assert.equal(scheduledDayBreakdownTotal(counts), 14);
   assert.equal(calculateScheduledDaysFte(counts), 10.8);
   assert.equal(calculateScheduledDaysFte({ ...counts, fourDayCount: 5 }), 11.6);
+});
+
+test("saved child schedules accept only the supported two-to-five day range", () => {
+  assert.equal(normalizeScheduledDaysPerWeek("2"), 2);
+  assert.equal(normalizeScheduledDaysPerWeek(4), 4);
+  assert.equal(normalizeScheduledDaysPerWeek("5"), 5);
+  assert.equal(normalizeScheduledDaysPerWeek("unknown"), null);
+  assert.equal(normalizeScheduledDaysPerWeek(1), null);
+  assert.equal(normalizeScheduledDaysPerWeek(6), null);
 });
 
 test("explicit schedule days take priority over the old full-time or part-time label", () => {
@@ -63,6 +72,17 @@ test("explicit schedule days take priority over the old full-time or part-time l
   assert.equal(scheduledDaysPerWeek({ schedule: { daysPerWeek: 1 }, customFields: { careScheduleType: "full_time" } }), null);
   assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "Monday only" }, customFields: { careScheduleType: "full_time" } }), null);
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "part_time" } }), null);
+  assert.equal(scheduledDaysPerWeek({
+    schedule: { days: ["Monday", "Wednesday", "Friday"], daysPerWeek: 3 },
+    customFields: { scheduledDaysPerWeek: "not_set", fteDaysPerWeek: 3 },
+  }), null);
+  assert.equal(scheduledDaysPerWeek({
+    schedule: { days: ["Monday", "Wednesday", "Friday"], daysPerWeek: 3 },
+    customFields: { scheduledDaysPerWeek: "legacy_part_time", careScheduleType: "part_time" },
+  }), null);
+  assert.equal(childScheduleClassification({ schedule: {}, customFields: { fullTimePartTime: "part_time" } }), "part_time");
+  assert.equal(childScheduleClassification({ schedule: { notes: "Part-time afternoons" }, customFields: {} }), "part_time");
+  assert.equal(childScheduleClassification({ schedule: { notes: "Part-time afternoons" }, customFields: { scheduledDaysPerWeek: "not_set" } }), "unknown");
 });
 
 test("FTE entry UI and API preserve legacy exports while saving the day breakdown", () => {

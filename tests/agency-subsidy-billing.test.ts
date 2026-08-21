@@ -100,6 +100,7 @@ test("authorization corrections fail closed and return useful duplicate guidance
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
   assert.match(route, /Only a currently enrolled child can receive a new agency authorization/);
+  assert.match(route, /subsidyAuthorizations: \{ some: \{\} \}/);
   assert.match(route, /currentlyEnrolledStatusValues/);
   assert.match(route, /isCurrentlyEnrolledStatus/);
   assert.match(route, /action === "updateAuthorization"/);
@@ -116,6 +117,8 @@ test("authorization corrections fail closed and return useful duplicate guidance
   assert.match(workspace, /Save correction/);
   assert.match(workspace, /Restore/);
   assert.match(workspace, /Authorized units/);
+  assert.match(workspace, /former child[\s\S]*review or archive/);
+  assert.match(workspace, /authorization\.status === "active" && isCurrentlyEnrolledStatus\(authorization\.child\.enrollmentStatus\)/);
 });
 
 test("agency claims enforce active authorizations, periods, units, and state transitions", () => {

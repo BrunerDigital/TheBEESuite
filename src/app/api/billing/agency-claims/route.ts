@@ -123,7 +123,7 @@ async function getHandler(request: NextRequest) {
       include: {
         agencyProgram: { select: { name: true, programName: true } },
         family: { select: { name: true } },
-        child: { select: { fullName: true } },
+        child: { select: { fullName: true, enrollmentStatus: true } },
       },
     }),
     prisma.subsidyClaim.findMany({
@@ -159,9 +159,9 @@ async function getHandler(request: NextRequest) {
         AND claim.status <> 'void'
     `),
     prisma.family.findMany({
-      where: { centerId: { in: centerIds }, children: { some: { enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES } } } },
+      where: { centerId: { in: centerIds }, children: { some: { OR: [{ enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES } }, { subsidyAuthorizations: { some: {} } }] } } },
       orderBy: { name: "asc" },
-      select: { id: true, centerId: true, name: true, children: { where: { enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES } }, select: { id: true, fullName: true, enrollmentStatus: true }, orderBy: { fullName: "asc" } } },
+      select: { id: true, centerId: true, name: true, children: { where: { OR: [{ enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES } }, { subsidyAuthorizations: { some: {} } }] }, select: { id: true, fullName: true, enrollmentStatus: true }, orderBy: { fullName: "asc" } } },
     }),
   ]);
 

@@ -355,7 +355,7 @@ async function processPayment(body: Record<string, unknown>) {
     ...billingAccount.invoices.flatMap((item) => [item.customFields, item.items.map((line) => line.description)]),
   ];
   const responsibilityReviewRequired = invoice
-    ? !invoiceResponsibilityReviewExempt(invoice.customFields) && paymentCollectionResponsibilityHoldRequired({
+    ? !invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents) && paymentCollectionResponsibilityHoldRequired({
         accountBalanceCents: billingAccount.balanceCents,
         agencyLedgerEntries: billingAccount.ledgerEntries,
         invoiceId: invoice.id,

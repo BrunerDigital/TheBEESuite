@@ -51,10 +51,68 @@ test("account review resolves only when every open invoice has an exact separati
   ]), true);
   assert.equal(invoiceResponsibilityReviewExempt({ checkoutPurpose: "product_purchase" }), true);
   assert.equal(invoiceResponsibilityReviewExempt({ chargeSource: "tuition" }), false);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "CCDF Copay",
+    grossTuitionCents: 1_900,
+    netTuitionCents: 1_900,
+    tuitionCreditsTotalCents: 0,
+  }, 1_900), true);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "Weekly tuition",
+    grossTuitionCents: 23_800,
+    netTuitionCents: 12_000,
+    tuitionCreditsTotalCents: 11_800,
+    tuitionCredits: [{ category: "agency_discount", amountCents: 11_800 }],
+  }, 12_000), true);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "Weekly tuition",
+    grossTuitionCents: 20_000,
+    netTuitionCents: 18_000,
+    tuitionCreditsTotalCents: 2_000,
+    tuitionCredits: [{ category: "employee_discount", amountCents: 2_000 }],
+  }, 18_000), false);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "CCDF Copay",
+    grossTuitionCents: 2_400,
+    netTuitionCents: 2_400,
+    tuitionCreditsTotalCents: 0,
+    tuitionAdditionalChargesTotalCents: 500,
+  }, 2_400), true);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "VPK subsidy weekly tuition",
+    grossTuitionCents: 13_000,
+    netTuitionCents: 13_000,
+    tuitionCreditsTotalCents: 0,
+  }, 13_000), false);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "CCDF Copay",
+    grossTuitionCents: 20_000,
+    netTuitionCents: 1_900,
+    tuitionCreditsTotalCents: 0,
+  }, 1_900), false);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "CCDF Copay",
+    grossTuitionCents: 1_900,
+    netTuitionCents: 1_900,
+    tuitionCreditsTotalCents: 0,
+  }, 2_500), false);
   assert.equal(allOpenInvoicesResponsibilitySeparated([
     { status: "OPEN", totalCents: 8_000, customFields: { checkoutPurpose: "product_purchase" } },
     { status: "OPEN", totalCents: 2_000, customFields: { responsibilitySeparation: separation } },
   ]), true);
+  assert.equal(allOpenInvoicesResponsibilitySeparated([
+    { status: "OPEN", totalCents: 1_900, customFields: { chargeSource: "tuitionPlan", tuitionPlanName: "CCDF Copay", grossTuitionCents: 1_900, netTuitionCents: 1_900, tuitionCreditsTotalCents: 0 } },
+  ]), true);
+  assert.equal(allOpenInvoicesResponsibilitySeparated([
+    { status: "OPEN", totalCents: 8_000, customFields: { checkoutPurpose: "product_purchase" } },
+  ]), false);
 });
 
 test("responsibility separation fails closed on mismatched totals and ambiguous account credit", () => {
@@ -131,4 +189,9 @@ test("responsibility separation remains available while full invoice collection 
   assert.match(aiRoute, /invoiceResponsibilitySeparation\(invoice\.customFields\)/);
   assert.match(operationsRoute, /invoiceResponsibilitySeparation\(existingInvoice\.customFields\)/);
   assert.match(invoiceRoute, /A separated invoice cannot be voided because it has a linked agency receivable/);
+  assert.match(invoiceRoute, /customFields: \{ tuitionPlanName: plan\.name \}/);
+  assert.match(invoiceRoute, /grossTuitionCents: items\.reduce\(\(total, item\) => total \+ item\.amountCents, 0\)/);
+  assert.match(invoiceRoute, /netTuitionCents: items\.reduce\(\(total, item\) => total \+ item\.amountCents, 0\)/);
+  assert.match(invoiceRoute, /charge\.chargeSource === "tuitionPlan" && !child/);
+  assert.match(invoiceRoute, /netTuitionCents: charge\.amountCents/);
 });

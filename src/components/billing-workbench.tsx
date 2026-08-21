@@ -357,15 +357,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [ageGroup, setAgeGroup] = useState("all");
   const [enrollmentStatus, setEnrollmentStatus] = useState("enrolled");
   const [adjustmentType, setAdjustmentType] = useState("credit");
-  const [agencyName, setAgencyName] = useState("");
-  const [agencyAuthorizationNumber, setAgencyAuthorizationNumber] = useState("");
-  const [agencyReference, setAgencyReference] = useState("");
-  const [agencyAmountDollars, setAgencyAmountDollars] = useState("");
-  const [agencyPaidAt, setAgencyPaidAt] = useState(todayDate());
-  const [agencyCoverageStart, setAgencyCoverageStart] = useState("");
-  const [agencyCoverageEnd, setAgencyCoverageEnd] = useState("");
-  const [agencyChildId, setAgencyChildId] = useState("none");
-  const [agencyNotes, setAgencyNotes] = useState("");
   const [checkAmountDollars, setCheckAmountDollars] = useState("");
   const [checkNumber, setCheckNumber] = useState("");
   const [checkPaidAt, setCheckPaidAt] = useState(todayDate());
@@ -824,7 +815,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setWeeklyRecoveryPreview(null);
     setFamilyId(nextFamily?.id ?? "");
     setChildId("none");
-    setAgencyChildId("none");
     setRefundPaymentIds([]);
     setRefundAmountDollars("");
     setInvoiceEditorId("");
@@ -837,7 +827,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const nextFamily = filteredFamilies.find((family) => family.id === value) ?? null;
     setFamilyId(value);
     setChildId("none");
-    setAgencyChildId("none");
     setRefundPaymentIds([]);
     setRefundAmountDollars("");
     setInvoiceEditorId("");
@@ -909,15 +898,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Billing action could not be completed.");
-        return;
-      }
-      if (payload.mode === "agencyPayment") {
-        const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
-        setStatusMessage(`Agency payment posted as a ${total} family balance credit.`);
-        setAgencyAmountDollars("");
-        setAgencyReference("");
-        setAgencyNotes("");
-        router.refresh();
         return;
       }
       if (payload.mode === "manualCheckPayment") {
@@ -1094,26 +1074,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       adjustmentType,
       amountDollars,
       description,
-    });
-  }
-
-  function submitAgencyPayment() {
-    if (!selectedFamily) return setErrorMessage("Choose a family before posting an agency payment.");
-    const childName = selectedChildren.find((child) => child.id === agencyChildId)?.fullName;
-    if (!confirmBillingAction("post an agency payment", childName)) return;
-    submit({
-      mode: "agencyPayment",
-      familyId: selectedFamily.id,
-      childId: agencyChildId === "none" ? undefined : agencyChildId,
-      agencyName,
-      authorizationNumber: agencyAuthorizationNumber,
-      externalReference: agencyReference,
-      amountDollars: agencyAmountDollars,
-      paidAt: agencyPaidAt,
-      coverageStart: agencyCoverageStart,
-      coverageEnd: agencyCoverageEnd,
-      description,
-      notes: agencyNotes,
     });
   }
 
@@ -1930,7 +1890,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <TabsTrigger value="check"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
             <TabsTrigger value="cash"><Banknote data-icon="inline-start" />Cash payment</TabsTrigger>
             <TabsTrigger value="refund"><RotateCcw data-icon="inline-start" />Refund</TabsTrigger>
-            <TabsTrigger value="agency"><BadgeDollarSign data-icon="inline-start" />Agency payment</TabsTrigger>
+            <TabsTrigger value="agency"><BadgeDollarSign data-icon="inline-start" />Agency claims</TabsTrigger>
             <TabsTrigger value="adjustment"><MinusCircle data-icon="inline-start" />Credit / adjustment</TabsTrigger>
           </TabsList>
 
@@ -2451,56 +2411,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </TabsContent>
 
           <TabsContent value="agency" className="space-y-4 rounded-lg border bg-background/35 p-4">
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-1">
-                <Label htmlFor="billing-agency-payer">Agency payer</Label>
-                <Input id="billing-agency-payer" value={agencyName} onChange={(event) => setAgencyName(event.target.value)} placeholder="ELC, DHS, scholarship fund" />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="billing-agency-authorization">Authorization #</Label>
-                <Input id="billing-agency-authorization" value={agencyAuthorizationNumber} onChange={(event) => setAgencyAuthorizationNumber(event.target.value)} placeholder="Optional authorization" />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="billing-agency-reference">Payment reference</Label>
-                <Input id="billing-agency-reference" value={agencyReference} onChange={(event) => setAgencyReference(event.target.value)} placeholder="EFT/check/reference" />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="billing-agency-amount">Amount</Label>
-                <Input id="billing-agency-amount" inputMode="decimal" value={agencyAmountDollars} onChange={(event) => setAgencyAmountDollars(event.target.value)} placeholder="250.00" />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="billing-agency-paid-date">Paid date</Label>
-                <Input id="billing-agency-paid-date" type="date" value={agencyPaidAt} onChange={(event) => setAgencyPaidAt(event.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="billing-agency-child">Child</Label>
-                <Select value={agencyChildId} onValueChange={(value) => value && setAgencyChildId(value)}>
-                  <SelectTrigger id="billing-agency-child"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Whole family</SelectItem>
-                    {selectedChildren.map((child) => (
-                      <SelectItem key={child.id} value={child.id}>{child.fullName}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="billing-agency-coverage-start">Coverage start</Label>
-                <Input id="billing-agency-coverage-start" type="date" value={agencyCoverageStart} onChange={(event) => setAgencyCoverageStart(event.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="billing-agency-coverage-end">Coverage end</Label>
-                <Input id="billing-agency-coverage-end" type="date" value={agencyCoverageEnd} onChange={(event) => setAgencyCoverageEnd(event.target.value)} />
-              </div>
-            </div>
-            <DescriptionField id="billing-agency-description" value={description} setValue={setDescription} />
-            <div className="space-y-1">
-              <Label htmlFor="billing-agency-notes">Agency notes</Label>
-              <Textarea id="billing-agency-notes" value={agencyNotes} onChange={(event) => setAgencyNotes(event.target.value)} placeholder="Eligibility period, copay notes, authorization limits, or office follow-up" />
-            </div>
-            <Button disabled={isPending || !selectedFamily || !agencyName || !agencyAmountDollars} onClick={submitAgencyPayment}>
-              <BadgeDollarSign data-icon="inline-start" />
-              Post Agency Payment
+            <div className="text-sm font-medium">Agency money stays separate from the family ledger</div>
+            <p className="text-sm text-muted-foreground">
+              Create each agency claim and record ACH, check, or portal remittance in the Agency Claim Queue. Claim remittances never credit a family balance or reduce what a parent owes.
+            </p>
+            <Button variant="outline" onClick={() => document.getElementById("agency-subsidy-billing")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+              Open Agency Claim Queue
             </Button>
           </TabsContent>
 

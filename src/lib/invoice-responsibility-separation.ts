@@ -108,19 +108,48 @@ export function allOpenInvoicesResponsibilitySeparated(invoices: Array<{
   customFields: unknown;
 }>) {
   const relevantInvoices = invoices.filter((invoice) => {
-    if (invoiceResponsibilityReviewExempt(invoice.customFields)) return false;
+    if (productResponsibilityReviewExempt(record(invoice.customFields))) return false;
     if (invoice.status === "OPEN" && invoice.totalCents > 0) return true;
     const separation = invoiceResponsibilitySeparation(invoice.customFields);
     if (invoice.status === "PAID" && separation) return true;
     return invoice.status === "VOID" && separation?.familyResponsibilityCents === 0;
   });
   return relevantInvoices.length > 0
-    && relevantInvoices.every((invoice) => invoiceResponsibilitySeparation(invoice.customFields) !== null);
+    && relevantInvoices.every((invoice) => (
+      invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents)
+      || invoiceResponsibilitySeparation(invoice.customFields) !== null
+    ));
 }
 
-export function invoiceResponsibilityReviewExempt(customFields: unknown) {
+export function invoiceResponsibilityReviewExempt(customFields: unknown, currentInvoiceTotalCents?: number) {
   const fields = record(customFields);
+  return productResponsibilityReviewExempt(fields)
+    || confirmedNetFamilyTuitionInvoice(fields, currentInvoiceTotalCents);
+}
+
+function productResponsibilityReviewExempt(fields: Record<string, unknown>) {
   return text(fields.checkoutPurpose) === "product_purchase"
     || text(fields.receiptKind) === "product"
     || text(fields.chargeSource) === "product";
+}
+
+const FAMILY_ONLY_TUITION_MARKER = /\b(?:co-?pay|parent responsibility|family responsibility)\b/i;
+
+function confirmedNetFamilyTuitionInvoice(fields: Record<string, unknown>, currentInvoiceTotalCents?: number) {
+  if (text(fields.chargeSource) !== "tuitionPlan") return false;
+  if (!Number.isInteger(currentInvoiceTotalCents) || (currentInvoiceTotalCents ?? -1) < 0) return false;
+  const grossTuitionCents = cents(fields.grossTuitionCents);
+  const netTuitionCents = cents(fields.netTuitionCents);
+  const tuitionCreditsTotalCents = cents(fields.tuitionCreditsTotalCents);
+  if (grossTuitionCents === null || netTuitionCents === null || tuitionCreditsTotalCents === null) return false;
+  if (Math.max(0, grossTuitionCents - tuitionCreditsTotalCents) !== netTuitionCents) return false;
+  if (netTuitionCents !== currentInvoiceTotalCents) return false;
+
+  const hasAgencyCredit = Array.isArray(fields.tuitionCredits) && fields.tuitionCredits.some((value) => {
+    const credit = record(value);
+    return text(credit.category) === "agency_discount" && (cents(credit.amountCents) ?? 0) > 0;
+  });
+
+  return hasAgencyCredit
+    || FAMILY_ONLY_TUITION_MARKER.test(text(fields.tuitionPlanName));
 }

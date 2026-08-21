@@ -149,7 +149,7 @@ async function getHandler(request: NextRequest) {
           ELSE 0
         END), 0)::bigint AS "outstandingCents",
         COUNT(*) FILTER (WHERE claim.status IN ('draft', 'ready'))::bigint AS "needsSubmission",
-        COUNT(*) FILTER (WHERE EXISTS (
+        COUNT(*) FILTER (WHERE claim.status <> 'denied' AND EXISTS (
           SELECT 1 FROM "SubsidyClaimDocument" document
           WHERE document."claimId" = claim.id
             AND document.status NOT IN ('received', 'verified', 'not_applicable')

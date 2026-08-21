@@ -156,7 +156,7 @@ test("agency dashboard totals use bounded database aggregates for the full non-v
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   assert.match(route, /\$queryRaw<AgencySummaryRow\[\]>/);
   assert.match(route, /SUM\(claim\."claimedCents"\)/);
-  assert.match(route, /COUNT\(\*\) FILTER \(WHERE EXISTS/);
+  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status <> 'denied' AND EXISTS/);
   assert.match(route, /claim\.status <> 'void'/);
   assert.doesNotMatch(route, /summaryClaims\.reduce/);
 });

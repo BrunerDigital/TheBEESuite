@@ -6,6 +6,7 @@ test("FTE age buckets do not treat preschool as school age", () => {
   assert.equal(fteAgeBucket({ ageGroup: "Preschool" }), "preschool");
   assert.equal(fteAgeBucket({ ageGroup: "School Age" }), "schoolAge");
   assert.equal(fteAgeBucket({ ageGroup: "School-Aged" }), "schoolAge");
+  assert.equal(fteAgeBucket({ ageGroup: "Schoolers" }), "schoolAge");
   assert.equal(fteAgeBucket({ ageGroup: "After School" }), "schoolAge");
 });
 

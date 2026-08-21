@@ -24,11 +24,17 @@ Confirm the requirements with the agency's current official provider materials o
 
 1. Add the agency program for the selected school. Do not reuse another school's provider or vendor number.
 2. Add each child's authorization with exact coverage dates, rate unit, authorized rate, units, and family copay.
+   - Use **Edit authorization** to correct an authorization before claims are created.
+   - Void an incorrect draft claim before correcting its authorization. Submitted, approved, and paid claim history is never rewritten.
+   - Archive an authorization that should no longer be available for new claims.
 3. Create the claim for a service period inside the authorization dates.
+   - The service period cannot overlap another open claim for the same authorization.
+   - The rate cannot exceed the authorization rate, and total claimed units cannot exceed authorized units when an authorization limit is recorded.
 4. Complete every claim document item. Attendance and authorization evidence are required by default and may be supplemented with state- or agency-specific items.
 5. Submit through the approved external channel. Then record the agency reference and mark the claim submitted in The BEE Suite.
 6. Record the agency decision. Store denials and the appeal reason; do not convert a denied agency amount to a family charge without a separate responsibility review and authorization.
 7. Record each remittance using the ACH, check, or portal reference. Partial payments stay open until the approved amount is reconciled.
+   - Recording a remittance in the agency workspace does not charge the family, change the family balance, or create a second manual agency payment.
 
 ## Stop and escalate
 

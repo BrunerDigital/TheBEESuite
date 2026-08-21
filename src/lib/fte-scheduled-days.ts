@@ -146,7 +146,19 @@ export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: u
 export function fteScheduledDaysPerWeek(input: { schedule: unknown; customFields: unknown }) {
   const scheduledDays = scheduledDaysPerWeek(input);
   if (scheduledDays) return scheduledDays;
-  return childScheduleClassification(input) === "unknown" ? 5 : null;
+  const schedule = record(input.schedule);
+  const customFields = record(input.customFields);
+  const hasScheduleEvidence = Object.keys(schedule).length > 0 || [
+    customFields.days,
+    customFields.scheduleDays,
+    customFields.weeklySchedule,
+    customFields.careSchedule,
+    customFields.attendanceSchedule,
+    customFields.daysPerWeek,
+    customFields.scheduledDaysPerWeek,
+    customFields.fteDaysPerWeek,
+  ].some((value) => value !== null && value !== undefined && value !== "");
+  return childScheduleClassification(input) === "unknown" && !hasScheduleEvidence ? 5 : null;
 }
 
 export function childScheduleClassification(input: { schedule: unknown; customFields: unknown }) {

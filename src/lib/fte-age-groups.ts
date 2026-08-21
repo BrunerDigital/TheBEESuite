@@ -14,10 +14,10 @@ export function fteAgeBucket(input: {
   if (ageGroup.includes("toddler")) return "toddlers";
   if (/\b(?:two|2)(?:s|\s*y\/?o)?\b/.test(ageGroup)) return "twos";
   if (/\b(?:pre[- ]?k|vpk)\b/.test(ageGroup)) return "preK";
-  if (ageGroup.includes("school age") || ageGroup.includes("after school")) return "schoolAge";
+  if (/\b(?:school[- ]?aged?|after[- ]?school)\b/.test(ageGroup)) return "schoolAge";
 
   const classroom = normalized(`${input.classroomName ?? ""} ${input.classroomAgeGroup ?? ""}`);
   if (/\b(?:pre[- ]?k|vpk|four\s*\/\s*five|4\s*\/\s*5)\b/.test(classroom)) return "preK";
-  if (classroom.includes("school age") || classroom.includes("after school")) return "schoolAge";
+  if (/\b(?:school[- ]?aged?|after[- ]?school)\b/.test(classroom)) return "schoolAge";
   return "preschool";
 }

@@ -91,6 +91,9 @@ test("FTE prefill defaults unlabeled schedules to full-time but preserves explic
   assert.equal(fteScheduledDaysPerWeek({ schedule: { notes: "FT" }, customFields: {} }), 5);
   assert.equal(fteScheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "full_time" } }), 5);
   assert.equal(fteScheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "part_time" } }), null);
+  assert.equal(fteScheduledDaysPerWeek({ schedule: { daysPerWeek: 1 }, customFields: {} }), null);
+  assert.equal(fteScheduledDaysPerWeek({ schedule: { days: ["Monday"] }, customFields: {} }), null);
+  assert.equal(fteScheduledDaysPerWeek({ schedule: { weekly: "Monday only" }, customFields: {} }), null);
 });
 
 test("FTE entry UI and API preserve legacy exports while saving the day breakdown", () => {

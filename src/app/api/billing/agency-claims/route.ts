@@ -372,9 +372,10 @@ async function postHandler(request: NextRequest) {
     let claim;
     try {
       claim = await prisma.$transaction(async (tx) => {
-        const authorization = await tx.subsidyAuthorization.findUnique({ where: { id: clean(body.authorizationId) }, include: { agencyProgram: true, child: { select: { fullName: true } } } });
+        const authorization = await tx.subsidyAuthorization.findUnique({ where: { id: clean(body.authorizationId) }, include: { agencyProgram: true, child: { select: { fullName: true, enrollmentStatus: true } } } });
         if (!authorization || !centerAllowed(auth.user, authorization.centerId)) throw new AgencyWorkflowError("Authorization not found.", 404);
         if (authorization.status !== "active") throw new AgencyWorkflowError("Only an active authorization can be used for a new claim.", 409);
+        if (!isCurrentlyEnrolledStatus(authorization.child.enrollmentStatus)) throw new AgencyWorkflowError("Only an authorization for a currently enrolled child can be used for a new claim.", 409);
         const requestedRateCents = hasNumericInput(body.rateDollars) ? cents(body.rateDollars) : authorization.authorizedRateCents;
         if (requestedRateCents <= 0 || requestedRateCents > authorization.authorizedRateCents) throw new AgencyWorkflowError("The claim rate must be positive and cannot exceed the authorization rate.");
         const claimedCents = claimAmountCents({ serviceUnits: units, rateCents: requestedRateCents });

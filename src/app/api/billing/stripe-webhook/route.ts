@@ -1088,7 +1088,6 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
     : null;
   const paymentMethodDetails = paymentMethodLookup?.ok ? paymentMethodLookup.paymentMethod : null;
 
-  let autopayConsentPreserved = false;
   try {
     const outcome = await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
@@ -1097,7 +1096,22 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
         select: {
           autopayPlaceholder: true,
           customFields: true,
-          family: { select: { guardians: { select: { userId: true } } } },
+          family: {
+            select: {
+              centerId: true,
+              guardians: { select: { userId: true } },
+              children: {
+                take: 1,
+                select: {
+                  classroom: {
+                    select: {
+                      center: { select: { id: true, organization: { select: { tenantId: true } } } },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       });
       if (!billingAccount) return "missing" as const;
@@ -1120,6 +1134,16 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
         linkedGuardianUserIds: billingAccount.family.guardians.map((guardian) => guardian.userId),
         setupMode,
       });
+      const familyCenter = billingAccount.family.centerId
+        ? await tx.center.findUnique({
+            where: { id: billingAccount.family.centerId },
+            select: { id: true, organization: { select: { tenantId: true } } },
+          })
+        : billingAccount.family.children[0]?.classroom?.center ?? null;
+      const auditTenantId = familyCenter?.organization.tenantId || clean(tenantId);
+      if (autopayPatch?.preservedExistingConsent && !auditTenantId) {
+        throw new Error("Autopay consent migration requires an authoritative tenant for its audit record.");
+      }
       await tx.billingAccount.update({
         where: { id: billingAccountId },
         data: {
@@ -1158,24 +1182,32 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
           },
         },
       });
+      if (autopayPatch?.preservedExistingConsent) {
+        await tx.auditLog.create({
+          data: {
+            tenantId: auditTenantId,
+            centerId: familyCenter?.id ?? null,
+            action: "billing.autopay.consent_migrated_to_current_stripe_account",
+            resource: "BillingAccount",
+            resourceId: billingAccountId,
+            metadata: {
+              stripeEventId: event.id,
+              stripeSessionId: session.id,
+            },
+          },
+        });
+        if (familyCenter?.id) {
+          await tx.center.update({ where: { id: familyCenter.id }, data: { updatedAt: new Date() } });
+        }
+      }
       return autopayPatch?.preservedExistingConsent ? "preserved" as const : "applied" as const;
     });
     if (outcome === "stale") return NextResponse.json({ ok: true, staleSetupSessionIgnored: true });
-    autopayConsentPreserved = outcome === "preserved";
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) {
       return NextResponse.json({ ok: true, duplicate: true });
     }
     throw error;
-  }
-
-  if (autopayConsentPreserved) {
-    await writeBillingAccountSystemAudit(
-      billingAccountId,
-      event.id,
-      session.id,
-      "billing.autopay.consent_migrated_to_current_stripe_account",
-    );
   }
 
   return NextResponse.json({ ok: true });

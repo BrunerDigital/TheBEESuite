@@ -255,6 +255,9 @@ async function POSTHandler(request: NextRequest) {
     savedMethodAccountId: savedPaymentMethodConnectedAccountId,
     centerCustomFields: center?.customFields,
   });
+  const parentInitiatedPaymentMethodReauthorization = paymentMethodReauthorizationRequired
+    && parentFacing
+    && isLinkedGuardian;
   const savedMethodChargeAccountId = stripeConnectSavedMethodAccount({
     activeAccountId: connectedAccountId,
     savedMethodAccountId: savedPaymentMethodConnectedAccountId,
@@ -445,7 +448,7 @@ async function POSTHandler(request: NextRequest) {
       stripeConnectedAccountId: connectedAccountId || "",
       stripeCustomerId: customerId,
       requestedByUserId: user.id,
-      autopaySetupMode: paymentMethodReauthorizationRequired ? "preserve_existing" : "preserve",
+      autopaySetupMode: parentInitiatedPaymentMethodReauthorization ? "preserve_existing" : "preserve",
       paymentMethodReauthorization: paymentMethodReauthorizationRequired ? "true" : "false",
       preferredPaymentMethodCategory: paymentMethodCategory,
       bankAccountVerificationMethod: bankAccountVerificationMethod || "",

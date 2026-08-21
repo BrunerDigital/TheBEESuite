@@ -57,7 +57,11 @@ import {
 } from "@/components/school-setup-command-center";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { modules } from "@/lib/demo-data";
-import { buildNetReceivableAging, buildOutstandingNonInvoiceChargesByAccount } from "@/lib/accounts-receivable";
+import {
+  buildNetReceivableAging,
+  buildOutstandingNonInvoiceChargesByAccount,
+  buildOutstandingNonInvoiceChargesFromAggregates,
+} from "@/lib/accounts-receivable";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
 import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
@@ -665,10 +669,6 @@ async function buildFtePrefills(
         where: { status: PaymentStatus.OPEN },
         select: { billingAccountId: true, totalCents: true, dueDate: true },
       },
-      ledgerEntries: {
-        select: { id: true, billingAccountId: true, amountCents: true, invoiceId: true, effectiveAt: true, createdAt: true },
-        orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-      },
     },
   }), prisma.staffProfile.findMany({
     where: { centerId: centerIdFilter(centerIds), user: { isActive: true } },
@@ -726,8 +726,30 @@ async function buildFtePrefills(
     if (child.startDate && child.startDate >= weekEndExclusive) row.preregisteredChildren += 1;
   }
 
-  const nonInvoiceChargeCentsByAccountId = buildOutstandingNonInvoiceChargesByAccount(
-    accountBalances.flatMap((account) => account.ledgerEntries),
+  const billingAccountIds = accountBalances.map((account) => account.id);
+  const [invoiceChargeTotals, nonInvoiceChargeTotals, creditTotals] = billingAccountIds.length
+    ? await Promise.all([
+        prisma.ledgerEntry.groupBy({
+          by: ["billingAccountId"],
+          where: { billingAccountId: { in: billingAccountIds }, invoiceId: { not: null }, amountCents: { gt: 0 } },
+          _sum: { amountCents: true },
+        }),
+        prisma.ledgerEntry.groupBy({
+          by: ["billingAccountId"],
+          where: { billingAccountId: { in: billingAccountIds }, invoiceId: null, amountCents: { gt: 0 } },
+          _sum: { amountCents: true },
+        }),
+        prisma.ledgerEntry.groupBy({
+          by: ["billingAccountId"],
+          where: { billingAccountId: { in: billingAccountIds }, amountCents: { lt: 0 } },
+          _sum: { amountCents: true },
+        }),
+      ])
+    : [[], [], []];
+  const nonInvoiceChargeCentsByAccountId = buildOutstandingNonInvoiceChargesFromAggregates(
+    invoiceChargeTotals,
+    nonInvoiceChargeTotals,
+    creditTotals,
   );
   const receivableAsOf = new Date();
   for (const account of accountBalances) {

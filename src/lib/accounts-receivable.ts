@@ -242,6 +242,37 @@ export function buildOutstandingNonInvoiceChargesByAccount(
   );
 }
 
+type ReceivableLedgerAggregate = {
+  billingAccountId: string;
+  _sum: { amountCents: number | null };
+};
+
+export function buildOutstandingNonInvoiceChargesFromAggregates(
+  invoiceCharges: readonly ReceivableLedgerAggregate[],
+  nonInvoiceCharges: readonly ReceivableLedgerAggregate[],
+  credits: readonly ReceivableLedgerAggregate[],
+) {
+  const totals = (rows: readonly ReceivableLedgerAggregate[]) => new Map(
+    rows.map((row) => [row.billingAccountId, row._sum.amountCents ?? 0]),
+  );
+  const invoiceChargeTotals = totals(invoiceCharges);
+  const nonInvoiceChargeTotals = totals(nonInvoiceCharges);
+  const creditTotals = totals(credits);
+  const accountIds = new Set([
+    ...invoiceChargeTotals.keys(),
+    ...nonInvoiceChargeTotals.keys(),
+    ...creditTotals.keys(),
+  ]);
+
+  return new Map([...accountIds].map((billingAccountId) => {
+    const invoiceChargeCents = Math.max(invoiceChargeTotals.get(billingAccountId) ?? 0, 0);
+    const nonInvoiceChargeCents = Math.max(nonInvoiceChargeTotals.get(billingAccountId) ?? 0, 0);
+    const creditCents = Math.abs(Math.min(creditTotals.get(billingAccountId) ?? 0, 0));
+    const creditAfterInvoicesCents = Math.max(creditCents - invoiceChargeCents, 0);
+    return [billingAccountId, Math.max(nonInvoiceChargeCents - creditAfterInvoicesCents, 0)];
+  }));
+}
+
 export function buildNetReceivableAging(
   accounts: readonly ReceivableAgingAccount[],
   invoices: readonly ReceivableAgingInvoice[],

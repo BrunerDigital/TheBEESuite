@@ -6,9 +6,11 @@ import { writeAuditLog } from "@/lib/audit";
 import {
   ageGroupTotal,
   calculateFteCount,
+  calculateScheduledDaysFte,
   defaultFteWeekEnd,
   isExecutiveFteManager,
   normalizeFteStatus,
+  scheduledDayBreakdownTotal,
   validateFtePeriod,
 } from "@/lib/fte-report-guardrails";
 import { normalizeFteCenterKey, parseFteImportCsv } from "@/lib/fte-report-import";
@@ -19,6 +21,14 @@ export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function recordFromJson(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function metadataNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.round(value)) : null;
 }
 
 function roundAmount(value: number | null) {
@@ -110,10 +120,33 @@ async function POSTHandler(request: NextRequest) {
 
     const existing = await prisma.fteReport.findUnique({
       where: { centerId_weekStart: { centerId, weekStart } },
-      select: { id: true },
+      select: { id: true, sourceMetadata: true },
     });
-    const calculatedFte = calculateFteCount(row.fullTimeCount, row.partTimeCount);
-    const fteCount = row.fteCount ?? calculatedFte;
+    const existingMetadata = recordFromJson(existing?.sourceMetadata);
+    const existingScheduledDayCounts = {
+      twoDayCount: metadataNumber(existingMetadata.twoDayCount) ?? 0,
+      threeDayCount: metadataNumber(existingMetadata.threeDayCount) ?? 0,
+      fourDayCount: metadataNumber(existingMetadata.fourDayCount) ?? 0,
+      fiveDayCount: metadataNumber(existingMetadata.fiveDayCount) ?? 0,
+    };
+    const preservesScheduledDayBreakdown = existingMetadata.fteCalculation === "scheduled_days_divided_by_five"
+      && ["twoDayCount", "threeDayCount", "fourDayCount", "fiveDayCount"]
+        .every((field) => metadataNumber(existingMetadata[field]) !== null);
+    if (preservesScheduledDayBreakdown && scheduledDayBreakdownTotal(existingScheduledDayCounts) !== row.enrolledCount) {
+      errors.push({
+        rowNumber: row.rowNumber,
+        message: "The preserved 2–5 day schedule counts must account for every enrolled child.",
+      });
+      continue;
+    }
+    const fullTimeCount = preservesScheduledDayBreakdown ? existingScheduledDayCounts.fiveDayCount : row.fullTimeCount;
+    const partTimeCount = preservesScheduledDayBreakdown
+      ? existingScheduledDayCounts.twoDayCount + existingScheduledDayCounts.threeDayCount + existingScheduledDayCounts.fourDayCount
+      : row.partTimeCount;
+    const calculatedFte = preservesScheduledDayBreakdown
+      ? calculateScheduledDaysFte(existingScheduledDayCounts)
+      : calculateFteCount(fullTimeCount, partTimeCount);
+    const fteCount = preservesScheduledDayBreakdown ? calculatedFte : row.fteCount ?? calculatedFte;
     const ageGroupCount = ageGroupTotal(row);
     const totalBilledAmount = row.totalBilledAmount ??
       (row.selfPayerBillAmount !== null || row.subsidyBillAmount !== null
@@ -127,8 +160,8 @@ async function POSTHandler(request: NextRequest) {
       weekStart,
       weekEnd,
       enrolledCount: row.enrolledCount,
-      fullTimeCount: row.fullTimeCount,
-      partTimeCount: row.partTimeCount,
+      fullTimeCount,
+      partTimeCount,
       fteCount,
       infants: row.infants,
       toddlers: row.toddlers,
@@ -140,6 +173,7 @@ async function POSTHandler(request: NextRequest) {
       status: normalizeFteStatus({ requestedStatus: row.status || "corrected", role: user.role, isCorrection: Boolean(existing) }),
       source: "bulk_import_dashboard",
       sourceMetadata: {
+        ...existingMetadata,
         batchId,
         rowNumber: row.rowNumber,
         enteredBy: user.email,

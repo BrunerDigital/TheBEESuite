@@ -11,7 +11,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { ageGroupTotal, calculateFteCount, dateInputString, defaultFteWeekEnd, startOfFteWeek } from "@/lib/fte-report-guardrails";
+import {
+  ageGroupTotal,
+  calculateScheduledDaysFte,
+  dateInputString,
+  defaultFteWeekEnd,
+  scheduledDayBreakdownTotal,
+  startOfFteWeek,
+} from "@/lib/fte-report-guardrails";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 
 export type FteReportCenterOption = {
@@ -35,6 +42,10 @@ export type FteReportRow = {
   enrolledCount: number;
   fullTimeCount: number;
   partTimeCount: number;
+  twoDayCount?: number | null;
+  threeDayCount?: number | null;
+  fourDayCount?: number | null;
+  fiveDayCount?: number | null;
   fteCount: number;
   licenseCapacity?: number | null;
   occupancyPercent?: number | null;
@@ -62,6 +73,10 @@ export type FteReportPrefill = {
   enrolledCount: number;
   fullTimeCount: number | null;
   partTimeCount: number | null;
+  twoDayCount: number;
+  threeDayCount: number;
+  fourDayCount: number;
+  fiveDayCount: number;
   unknownScheduleCount: number;
   infants: number;
   toddlers: number;
@@ -69,7 +84,8 @@ export type FteReportPrefill = {
   preschool: number;
   preK: number;
   schoolAge: number;
-  accountReceivableAmount: number;
+  accountReceivableAmount: number | null;
+  accountReceivableReviewRequired: boolean;
   selfPayerBillAmount: number;
   subsidyBillAmount: number;
   totalBilledAmount: number;
@@ -105,6 +121,11 @@ type FormState = {
   enrolledCount: string;
   fullTimeCount: string;
   partTimeCount: string;
+  twoDayCount: string;
+  threeDayCount: string;
+  fourDayCount: string;
+  fiveDayCount: string;
+  scheduledDayBreakdown: boolean;
   fteCount: string;
   licenseCapacity: string;
   occupancyPercent: string;
@@ -159,6 +180,11 @@ function emptyForm(centerId = "", prefill?: FteReportPrefill, center?: FteReport
     enrolledCount: prefill ? asInput(prefill.enrolledCount) : "",
     fullTimeCount: prefill?.fullTimeCount === null || prefill?.fullTimeCount === undefined ? "" : asInput(prefill.fullTimeCount),
     partTimeCount: prefill?.partTimeCount === null || prefill?.partTimeCount === undefined ? "" : asInput(prefill.partTimeCount),
+    twoDayCount: prefill ? asInput(prefill.twoDayCount) : "",
+    threeDayCount: prefill ? asInput(prefill.threeDayCount) : "",
+    fourDayCount: prefill ? asInput(prefill.fourDayCount) : "",
+    fiveDayCount: prefill ? asInput(prefill.fiveDayCount) : "",
+    scheduledDayBreakdown: Boolean(prefill),
     fteCount: "",
     licenseCapacity: asOptionalInput(prefill?.licensedCapacity ?? center?.licensedCapacity ?? null),
     occupancyPercent: "",
@@ -175,7 +201,7 @@ function emptyForm(centerId = "", prefill?: FteReportPrefill, center?: FteReport
     schoolAge: prefill ? asInput(prefill.schoolAge) : "",
     status: "submitted",
     notes: prefill?.unknownScheduleCount
-      ? `${prefill.unknownScheduleCount} enrolled child schedule(s) need full-time/part-time verification.`
+      ? `${prefill.unknownScheduleCount} enrolled child schedule(s) need a 2–5 day weekly schedule verification.`
       : "",
   };
 }
@@ -190,6 +216,11 @@ function asOptionalInput(value?: number | null) {
 
 function roundedNumber(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function countInputValue(value: string) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? Math.max(0, Math.round(number)) : 0;
 }
 
 function formatMoney(value?: number | null) {
@@ -219,11 +250,21 @@ export function FteReportForm({
   const [isPending, startTransition] = useTransition();
   const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
 
+  const scheduledDayCounts = useMemo(() => ({
+    twoDayCount: countInputValue(form.twoDayCount),
+    threeDayCount: countInputValue(form.threeDayCount),
+    fourDayCount: countInputValue(form.fourDayCount),
+    fiveDayCount: countInputValue(form.fiveDayCount),
+  }), [form.twoDayCount, form.threeDayCount, form.fourDayCount, form.fiveDayCount]);
+  const hasScheduledDayBreakdown = form.scheduledDayBreakdown;
   const calculatedFte = useMemo(() => {
-    const full = Number(form.fullTimeCount || 0);
-    const part = Number(form.partTimeCount || 0);
-    return Number.isFinite(full + part) ? calculateFteCount(full, part) : 0;
-  }, [form.fullTimeCount, form.partTimeCount]);
+    const values = Object.values(scheduledDayCounts);
+    return values.every(Number.isFinite) ? calculateScheduledDaysFte(scheduledDayCounts) : 0;
+  }, [scheduledDayCounts]);
+  const scheduledChildrenCount = useMemo(
+    () => scheduledDayBreakdownTotal(scheduledDayCounts),
+    [scheduledDayCounts],
+  );
   const calculatedTotalBilled = useMemo(() => {
     const selfPayer = Number(form.selfPayerBillAmount || 0);
     const subsidy = Number(form.subsidyBillAmount || 0);
@@ -255,6 +296,10 @@ export function FteReportForm({
 
   function setField(field: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function setScheduledDayField(field: "twoDayCount" | "threeDayCount" | "fourDayCount" | "fiveDayCount", value: string) {
+    setForm((current) => ({ ...current, [field]: value, scheduledDayBreakdown: true, fteCount: "" }));
   }
 
   function setWeekStart(value: string) {
@@ -302,6 +347,12 @@ export function FteReportForm({
       enrolledCount: asInput(report.enrolledCount),
       fullTimeCount: asInput(report.fullTimeCount),
       partTimeCount: asInput(report.partTimeCount),
+      twoDayCount: report.twoDayCount === null || report.twoDayCount === undefined ? "" : asInput(report.twoDayCount),
+      threeDayCount: report.threeDayCount === null || report.threeDayCount === undefined ? "" : asInput(report.threeDayCount),
+      fourDayCount: report.fourDayCount === null || report.fourDayCount === undefined ? "" : asInput(report.fourDayCount),
+      fiveDayCount: report.fiveDayCount === null || report.fiveDayCount === undefined ? "" : asInput(report.fiveDayCount),
+      scheduledDayBreakdown: [report.twoDayCount, report.threeDayCount, report.fourDayCount, report.fiveDayCount]
+        .some((value) => value !== null && value !== undefined),
       fteCount: report.fteCount ? String(report.fteCount) : "",
       licenseCapacity: asOptionalInput(report.licenseCapacity),
       occupancyPercent: asOptionalInput(report.occupancyPercent),
@@ -322,6 +373,18 @@ export function FteReportForm({
   }
 
   function submit() {
+    const reviewedAccountReceivable = Number(form.accountReceivableAmount);
+    if (selectedPrefill?.accountReceivableReviewRequired
+      && (!form.accountReceivableAmount.trim() || !Number.isFinite(reviewedAccountReceivable) || reviewedAccountReceivable < 0)) {
+      setStatusMessage("");
+      setErrorMessage("Past-due accounts receivable could not be safely prefilled. Enter a verified nonnegative AR amount before submitting.");
+      return;
+    }
+    if (hasScheduledDayBreakdown && scheduledChildrenCount !== Number(form.enrolledCount)) {
+      setStatusMessage("");
+      setErrorMessage("The 2–5 day schedule counts must account for every enrolled child before submitting.");
+      return;
+    }
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -331,8 +394,17 @@ export function FteReportForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          accountReceivableReviewRequired: selectedPrefill?.accountReceivableReviewRequired === true,
+          twoDayCount: hasScheduledDayBreakdown ? scheduledDayCounts.twoDayCount : "",
+          threeDayCount: hasScheduledDayBreakdown ? scheduledDayCounts.threeDayCount : "",
+          fourDayCount: hasScheduledDayBreakdown ? scheduledDayCounts.fourDayCount : "",
+          fiveDayCount: hasScheduledDayBreakdown ? scheduledDayCounts.fiveDayCount : "",
+          fullTimeCount: hasScheduledDayBreakdown ? scheduledDayCounts.fiveDayCount : form.fullTimeCount,
+          partTimeCount: hasScheduledDayBreakdown
+            ? scheduledDayCounts.twoDayCount + scheduledDayCounts.threeDayCount + scheduledDayCounts.fourDayCount
+            : form.partTimeCount,
           status: mode === "executive" ? form.status : undefined,
-          fteCount: form.fteCount || calculatedFte,
+          fteCount: form.fteCount || (hasScheduledDayBreakdown ? calculatedFte : ""),
           totalBilledAmount: form.totalBilledAmount || calculatedTotalBilled || "",
           licenseCapacity: form.licenseCapacity || selectedPrefill?.licensedCapacity || selectedCenter?.licensedCapacity || "",
           occupancyPercent: form.occupancyPercent || calculatedOccupancyPercent || "",
@@ -372,6 +444,7 @@ export function FteReportForm({
           <tbody>
             <tr><th>This week</th><td>{currentWeekReport ? "Submitted" : "Not submitted"}</td></tr>
             <tr><th>Calculated FTE</th><td>{calculatedFte.toLocaleString()}</td></tr>
+            <tr><th>Scheduled days</th><td>2-day: {scheduledDayCounts.twoDayCount}; 3-day: {scheduledDayCounts.threeDayCount}; 4-day: {scheduledDayCounts.fourDayCount}; 5-day: {scheduledDayCounts.fiveDayCount}</td></tr>
             <tr><th>Age group total</th><td>{ageGroupCount.toLocaleString()}</td></tr>
             <tr><th>Total billed</th><td>{formatMoney(Number(form.totalBilledAmount || calculatedTotalBilled || 0) || null)}</td></tr>
             <tr><th>Payroll amount</th><td>{formatMoney(Number(form.payrollAmount || 0) || null)}</td></tr>
@@ -479,8 +552,17 @@ export function FteReportForm({
               Enrollment, age groups, weekly billing, receivables, payroll estimates, and enrollment movement were prefilled from live school records for {selectedCenter?.name ?? "this school"}.
               Licensed capacity is {selectedPrefill.licensedCapacity ?? selectedCenter?.licensedCapacity ?? "not set"}.
               {selectedPrefill.unknownScheduleCount
-                ? ` ${selectedPrefill.unknownScheduleCount} child schedule(s) could not be classified as full-time or part-time, so verify those fields before submitting.`
+                ? ` ${selectedPrefill.unknownScheduleCount} child schedule(s) did not identify a 2–5 day weekly schedule, so verify the day counts before submitting.`
                 : " Verify the fields, enter payroll percentage if required, and submit."}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {selectedPrefill?.accountReceivableReviewRequired ? (
+          <Alert variant="destructive">
+            <AlertTitle>Past-due AR must be verified</AlertTitle>
+            <AlertDescription>
+              Ledger history exceeded the safe prefill limit. Enter the verified past-due current-family AR amount before submitting this report.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -517,18 +599,26 @@ export function FteReportForm({
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <div className="space-y-1">
             <Label htmlFor={`${fieldIdPrefix}-enrolled-count`}>Enrolled children</Label>
             <Input id={`${fieldIdPrefix}-enrolled-count`} value={form.enrolledCount} onChange={(event) => setField("enrolledCount", event.target.value)} inputMode="numeric" />
           </div>
           <div className="space-y-1">
-            <Label htmlFor={`${fieldIdPrefix}-full-time-count`}>Full-time children</Label>
-            <Input id={`${fieldIdPrefix}-full-time-count`} value={form.fullTimeCount} onChange={(event) => setField("fullTimeCount", event.target.value)} inputMode="numeric" />
+            <Label htmlFor={`${fieldIdPrefix}-two-day-count`}>2 days/week</Label>
+            <Input id={`${fieldIdPrefix}-two-day-count`} value={form.twoDayCount} onChange={(event) => setScheduledDayField("twoDayCount", event.target.value)} type="number" inputMode="numeric" min="0" step="1" />
           </div>
           <div className="space-y-1">
-            <Label htmlFor={`${fieldIdPrefix}-part-time-count`}>Part-time children</Label>
-            <Input id={`${fieldIdPrefix}-part-time-count`} value={form.partTimeCount} onChange={(event) => setField("partTimeCount", event.target.value)} inputMode="numeric" />
+            <Label htmlFor={`${fieldIdPrefix}-three-day-count`}>3 days/week</Label>
+            <Input id={`${fieldIdPrefix}-three-day-count`} value={form.threeDayCount} onChange={(event) => setScheduledDayField("threeDayCount", event.target.value)} type="number" inputMode="numeric" min="0" step="1" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`${fieldIdPrefix}-four-day-count`}>4 days/week</Label>
+            <Input id={`${fieldIdPrefix}-four-day-count`} value={form.fourDayCount} onChange={(event) => setScheduledDayField("fourDayCount", event.target.value)} type="number" inputMode="numeric" min="0" step="1" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`${fieldIdPrefix}-five-day-count`}>5 days/week</Label>
+            <Input id={`${fieldIdPrefix}-five-day-count`} value={form.fiveDayCount} onChange={(event) => setScheduledDayField("fiveDayCount", event.target.value)} type="number" inputMode="numeric" min="0" step="1" />
           </div>
           <div className="space-y-1">
             <Label htmlFor={`${fieldIdPrefix}-fte-count`}>FTE count</Label>
@@ -540,6 +630,9 @@ export function FteReportForm({
               placeholder={calculatedFte ? `Calculated ${calculatedFte}` : "Optional"}
             />
           </div>
+          <p className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-6">
+            {scheduledChildrenCount.toLocaleString()} children have a selected weekly day count. Each child contributes scheduled days ÷ 5: two days = 0.4, three = 0.6, four = 0.8, and five = 1.0 FTE.
+          </p>
           <div className="space-y-1">
             <Label htmlFor={`${fieldIdPrefix}-payroll-percent`}>Payroll %</Label>
             <Input
@@ -556,12 +649,12 @@ export function FteReportForm({
           <div>
             <div className="text-sm font-semibold">Legacy FTE report fields</div>
             <p className="text-xs text-muted-foreground">
-              These match the pre-Bee Suite report columns. Accounts receivable is prefilled from currently enrolled families only; past-family debt stays in historical billing review.
+              These match the pre-Bee Suite report columns. Accounts receivable includes only remaining past-due amounts for currently enrolled families; invoices due today or later and past-family debt are excluded.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">
-              <Label htmlFor={`${fieldIdPrefix}-accounts-receivable`}>Current-family accounts receivable</Label>
+              <Label htmlFor={`${fieldIdPrefix}-accounts-receivable`}>Past-due current-family AR</Label>
               <Input id={`${fieldIdPrefix}-accounts-receivable`} value={form.accountReceivableAmount} onChange={(event) => setField("accountReceivableAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
             </div>
             <div className="space-y-1">
@@ -628,7 +721,7 @@ export function FteReportForm({
               <Label htmlFor={`${fieldIdPrefix}-${field}`}>{label}</Label>
               <Input
                 id={`${fieldIdPrefix}-${field}`}
-                value={form[field as keyof FormState]}
+                value={String(form[field as keyof FormState])}
                 onChange={(event) => setField(field as keyof FormState, event.target.value)}
                 inputMode="numeric"
               />
@@ -677,7 +770,7 @@ export function FteReportForm({
             <Button variant="outline" onClick={applyPrefill}>Reset to school data</Button>
           ) : null}
           <span className="text-xs text-muted-foreground">
-            Prefilled values are editable. Calculated FTE uses full-time + half of part-time unless manually overridden. Directors can only submit for their assigned school.
+            Prefilled values are editable. Calculated FTE uses scheduled days ÷ 5 unless manually overridden. Directors can only submit for their assigned school.
           </span>
         </div>
 

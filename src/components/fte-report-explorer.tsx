@@ -46,6 +46,10 @@ type InlineCorrectionState = {
   enrolledCount: string;
   fullTimeCount: string;
   partTimeCount: string;
+  twoDayCount: string;
+  threeDayCount: string;
+  fourDayCount: string;
+  fiveDayCount: string;
   fteCount: string;
   licenseCapacity: string;
   occupancyPercent: string;
@@ -123,6 +127,10 @@ function correctionFromReport(report: FteReportRow): InlineCorrectionState {
     enrolledCount: inputNumber(report.enrolledCount),
     fullTimeCount: inputNumber(report.fullTimeCount),
     partTimeCount: inputNumber(report.partTimeCount),
+    twoDayCount: inputOptionalNumber(report.twoDayCount),
+    threeDayCount: inputOptionalNumber(report.threeDayCount),
+    fourDayCount: inputOptionalNumber(report.fourDayCount),
+    fiveDayCount: inputOptionalNumber(report.fiveDayCount),
     fteCount: report.fteCount ? String(report.fteCount) : "",
     licenseCapacity: inputOptionalNumber(report.licenseCapacity),
     occupancyPercent: inputOptionalNumber(report.occupancyPercent),
@@ -304,7 +312,14 @@ export function FteReportExplorer({ centers, reports }: Props) {
   }
 
   function setCorrectionField(field: keyof InlineCorrectionState, value: string) {
-    setCorrection((current) => current ? { ...current, [field]: value } : current);
+    setCorrection((current) => {
+      if (!current) return current;
+      const next = { ...current, [field]: value };
+      if (["twoDayCount", "threeDayCount", "fourDayCount", "fiveDayCount"].includes(field)) {
+        next.fteCount = "";
+      }
+      return next;
+    });
   }
 
   function saveCorrection() {
@@ -756,8 +771,19 @@ export function FteReportExplorer({ centers, reports }: Props) {
                             </div>
                             <div className="grid gap-3 md:grid-cols-4">
                               <InlineNumberField label="Enrolled" value={correction.enrolledCount} onChange={(value) => setCorrectionField("enrolledCount", value)} />
-                              <InlineNumberField label="Full-time" value={correction.fullTimeCount} onChange={(value) => setCorrectionField("fullTimeCount", value)} />
-                              <InlineNumberField label="Part-time" value={correction.partTimeCount} onChange={(value) => setCorrectionField("partTimeCount", value)} />
+                              {correction.twoDayCount || correction.threeDayCount || correction.fourDayCount || correction.fiveDayCount ? (
+                                <>
+                                  <InlineNumberField label="2 days/week" value={correction.twoDayCount} onChange={(value) => setCorrectionField("twoDayCount", value)} />
+                                  <InlineNumberField label="3 days/week" value={correction.threeDayCount} onChange={(value) => setCorrectionField("threeDayCount", value)} />
+                                  <InlineNumberField label="4 days/week" value={correction.fourDayCount} onChange={(value) => setCorrectionField("fourDayCount", value)} />
+                                  <InlineNumberField label="5 days/week" value={correction.fiveDayCount} onChange={(value) => setCorrectionField("fiveDayCount", value)} />
+                                </>
+                              ) : (
+                                <>
+                                  <InlineNumberField label="Full-time" value={correction.fullTimeCount} onChange={(value) => setCorrectionField("fullTimeCount", value)} />
+                                  <InlineNumberField label="Part-time" value={correction.partTimeCount} onChange={(value) => setCorrectionField("partTimeCount", value)} />
+                                </>
+                              )}
                               <InlineNumberField label="FTE" value={correction.fteCount} onChange={(value) => setCorrectionField("fteCount", value)} />
                             </div>
                             <div className="grid gap-3 md:grid-cols-4">

@@ -40,6 +40,21 @@ function numericDayCount(...values: unknown[]) {
   return null;
 }
 
+function collectTextValues(value: unknown, output: string[], depth = 0) {
+  if (depth > 4 || value === null || value === undefined) return;
+  if (typeof value === "string") {
+    if (value.trim()) output.push(value.trim());
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectTextValues(item, output, depth + 1);
+    return;
+  }
+  if (typeof value === "object") {
+    for (const item of Object.values(value as Record<string, unknown>)) collectTextValues(item, output, depth + 1);
+  }
+}
+
 export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: unknown }) {
   const schedule = record(input.schedule);
   const customFields = record(input.customFields);
@@ -65,7 +80,10 @@ export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: u
   }
   if (weekdays.size >= 2 && weekdays.size <= 5) return weekdays.size as 2 | 3 | 4 | 5;
 
-  const text = JSON.stringify({ schedule, customFields }).toLowerCase();
+  const textValues: string[] = [];
+  collectTextValues(schedule, textValues);
+  collectTextValues(customFields, textValues);
+  const text = textValues.join(" ").toLowerCase();
   const textWeekdays = new Set<string>();
   const rangePattern = new RegExp(`\\b(${weekdayTokenPattern})\\s*(?:[-–—]|through|to)\\s*(${weekdayTokenPattern})\\b`, "g");
   for (const match of text.matchAll(rangePattern)) {

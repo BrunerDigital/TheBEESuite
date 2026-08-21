@@ -39,6 +39,14 @@ test("explicit schedule days take priority over the old full-time or part-time l
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { scheduleNotes: "Tuesday and Thursday" } }), 2);
   assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "Tuesday-Thursday" }, customFields: {} }), 3);
   assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "Monday through Thursday" }, customFields: {} }), 4);
+  assert.equal(scheduledDaysPerWeek({
+    schedule: { monday: "8-5", tuesday: "", wednesday: "", thursday: "", friday: "" },
+    customFields: {},
+  }), null);
+  assert.equal(scheduledDaysPerWeek({
+    schedule: { monday: "8-5", tuesday: "8-5", wednesday: "", thursday: "", friday: "" },
+    customFields: {},
+  }), 2);
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "full_time" } }), 5);
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "part_time" } }), null);
 });

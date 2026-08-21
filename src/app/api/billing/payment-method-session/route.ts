@@ -10,7 +10,11 @@ import {
   type StripePaymentMethodCategory,
 } from "@/lib/integrations";
 import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
-import { canCreatePaymentMethodManagementSession, paymentMethodManagementSummary } from "@/lib/payment-method-management";
+import {
+  canCreatePaymentMethodManagementSession,
+  canPreserveAutopayConsentForPaymentMethodMigration,
+  paymentMethodManagementSummary,
+} from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import {
@@ -257,7 +261,12 @@ async function POSTHandler(request: NextRequest) {
   });
   const parentInitiatedPaymentMethodReauthorization = paymentMethodReauthorizationRequired
     && parentFacing
-    && isLinkedGuardian;
+    && isLinkedGuardian
+    && canPreserveAutopayConsentForPaymentMethodMigration({
+      autopayPlaceholder: billingAccount.autopayPlaceholder,
+      customFields: currentFields,
+      linkedGuardianUserIds: [user.id],
+    });
   const savedMethodChargeAccountId = stripeConnectSavedMethodAccount({
     activeAccountId: connectedAccountId,
     savedMethodAccountId: savedPaymentMethodConnectedAccountId,

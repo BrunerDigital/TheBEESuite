@@ -8,6 +8,7 @@ test("parents control autopay consent and directors can only run enabled autopay
   const invoiceAction = readFileSync("src/components/invoice-stored-payment-button.tsx", "utf8");
   const invoicePaymentActions = readFileSync("src/lib/invoice-payment-actions.ts", "utf8");
   const paymentMethodRoute = readFileSync("src/app/api/billing/payment-method-session/route.ts", "utf8");
+  const publicPaymentMethodRoute = readFileSync("src/app/api/billing/payment-method-request/session/route.ts", "utf8");
   const autopayRoute = readFileSync("src/app/api/billing/autopay/route.ts", "utf8");
   const autopayProcessor = readFileSync("src/lib/autopay-processing.ts", "utf8");
   const stripeWebhook = readFileSync("src/app/api/billing/stripe-webhook/route.ts", "utf8");
@@ -38,8 +39,10 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(autopayProcessor, /consentAllowsSavedMethod/);
   assert.match(autopayProcessor, /!consentedPaymentMethodId/);
   assert.match(paymentMethodRoute, /autopayPaymentMethodId: paymentMethod\.stripeDefaultPaymentMethodId/);
-  assert.match(paymentMethodRoute, /parentInitiatedPaymentMethodReauthorization = paymentMethodReauthorizationRequired[\s\S]*&& parentFacing[\s\S]*&& isLinkedGuardian/);
+  assert.match(paymentMethodRoute, /parentInitiatedPaymentMethodReauthorization = paymentMethodReauthorizationRequired[\s\S]*&& parentFacing[\s\S]*&& isLinkedGuardian[\s\S]*linkedGuardianUserIds: \[user\.id\]/);
   assert.match(paymentMethodRoute, /autopaySetupMode: parentInitiatedPaymentMethodReauthorization \? "preserve_existing" : "preserve"/);
+  assert.match(publicPaymentMethodRoute, /linkedGuardianUserIds: recipient\.userIds/);
+  assert.match(publicPaymentMethodRoute, /autopaySetupMode: recipientCanPreserveAutopay \? "preserve_existing" : "preserve"/);
   assert.match(stripeWebhook, /paymentMethodSetupAutopayOutcome/);
   assert.match(stripeWebhook, /linkedGuardianUserIds/);
   assert.match(stripeWebhook, /billing\.autopay\.consent_migrated_to_current_stripe_account/);

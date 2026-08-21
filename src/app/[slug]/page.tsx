@@ -2471,7 +2471,7 @@ async function renderLivePage(
       && canPreserveAutopayConsentForPaymentMethodMigration({
         autopayPlaceholder: billingAccount?.autopayPlaceholder,
         customFields: parentBillingAccountFields,
-        linkedGuardianUserIds: family?.guardians.map((guardian) => guardian.userId) ?? [],
+        linkedGuardianUserIds: [user.id],
       });
     const paymentTransitionActive = Boolean(
       parentStripeMigration.targetAccountId &&

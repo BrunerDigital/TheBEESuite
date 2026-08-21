@@ -140,7 +140,7 @@ export default async function PaymentMethodFormPage({
     && canPreserveAutopayConsentForPaymentMethodMigration({
       autopayPlaceholder: family.billingAccount?.autopayPlaceholder,
       customFields: family.billingAccount?.customFields,
-      linkedGuardianUserIds: family.guardians.map((guardian) => guardian.userId),
+      linkedGuardianUserIds: recipient.userIds,
     });
   const centerLabel = center.crmLocationId ?? center.name;
   const childNames = family.children.map((child) => child.fullName).join(", ");

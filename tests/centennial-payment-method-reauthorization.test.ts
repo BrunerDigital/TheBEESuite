@@ -7,7 +7,8 @@ const source = readFileSync("scripts/preview-centennial-payment-method-reauthori
 test("Centennial reauthorization preview is exact and read only", () => {
   assert.match(source, /cms3g2the000i6a7wdd8pa20s/);
   assert.match(source, /mode: "read_only_preview"/);
-  assert.match(source, /chargeAccountId !== migration\.sourceAccountId/);
+  assert.match(source, /stripeConnectSavedMethodNeedsReauthorization/);
+  assert.match(source, /!requiresReauthorization/);
   assert.match(source, /requiresReauthorization: true/);
   assert.match(source, /recipientEmailHash/);
   assert.doesNotMatch(source, /prisma\.[a-zA-Z]+\.(?:create|update|upsert|delete)/);

@@ -16,6 +16,8 @@ import {
   readStripeConnectMigration,
   stripeConnectMigrationTargetIsReady,
   stripeConnectSavedMethodAccount,
+  stripeConnectSavedMethodManagementAccount,
+  stripeConnectSavedMethodNeedsReauthorization,
 } from "../src/lib/stripe-connect-migration";
 import { buildStripeReauthorizationInvite } from "../src/lib/stripe-reauthorization-invite";
 import {
@@ -44,7 +46,7 @@ test("prepared migration never changes the active parent-payment account", () =>
   assert.equal(migration.targetPayoutsHeld, true);
 });
 
-test("saved methods remain chargeable only on the retained source after a verified cutover", () => {
+test("saved methods on a retained source require reauthorization and cannot be charged after cutover", () => {
   const cutover = {
     stripeConnectMigrationSourceAccountId: "acct_source",
     stripeConnectMigrationTargetAccountId: "acct_target",
@@ -55,6 +57,16 @@ test("saved methods remain chargeable only on the retained source after a verifi
     activeAccountId: "acct_target",
     savedMethodAccountId: "acct_source",
     centerCustomFields: cutover,
+  }), null);
+  assert.equal(stripeConnectSavedMethodNeedsReauthorization({
+    activeAccountId: "acct_target",
+    savedMethodAccountId: "acct_source",
+    centerCustomFields: cutover,
+  }), true);
+  assert.equal(stripeConnectSavedMethodManagementAccount({
+    activeAccountId: "acct_target",
+    savedMethodAccountId: "acct_source",
+    centerCustomFields: cutover,
   }), "acct_source");
   assert.equal(stripeConnectSavedMethodAccount({
     activeAccountId: "acct_target",
@@ -62,6 +74,21 @@ test("saved methods remain chargeable only on the retained source after a verifi
     centerCustomFields: cutover,
   }), "acct_target");
   assert.equal(stripeConnectSavedMethodAccount({
+    activeAccountId: "acct_target",
+    savedMethodAccountId: "acct_other",
+    centerCustomFields: cutover,
+  }), null);
+  assert.equal(stripeConnectSavedMethodNeedsReauthorization({
+    activeAccountId: "acct_target",
+    savedMethodAccountId: "acct_target",
+    centerCustomFields: cutover,
+  }), false);
+  assert.equal(stripeConnectSavedMethodNeedsReauthorization({
+    activeAccountId: "acct_target",
+    savedMethodAccountId: "acct_other",
+    centerCustomFields: cutover,
+  }), false);
+  assert.equal(stripeConnectSavedMethodManagementAccount({
     activeAccountId: "acct_target",
     savedMethodAccountId: "acct_other",
     centerCustomFields: cutover,

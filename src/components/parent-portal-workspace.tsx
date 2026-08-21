@@ -317,6 +317,7 @@ type Props = {
   } | null;
   checkoutReadiness?: StripeCheckoutReadiness;
   paymentTransitionActive?: boolean;
+  paymentMethodReauthorizationRequired?: boolean;
   parentBalanceReviewRequired?: boolean;
   parentBalanceVisibilityConfirmed?: boolean;
   invoices: Invoice[];
@@ -696,6 +697,7 @@ function ParentPortalWorkspaceView({
   billingAccount,
   checkoutReadiness = fallbackCheckoutReadiness,
   paymentTransitionActive = false,
+  paymentMethodReauthorizationRequired = false,
   parentBalanceReviewRequired = false,
   parentBalanceVisibilityConfirmed = false,
   invoices,
@@ -951,12 +953,15 @@ function ParentPortalWorkspaceView({
     (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
   const autopayCanEnable =
     paymentMethodManagement?.hasStripeCustomer === true &&
-    paymentMethodManagement?.hasSavedPaymentMethod === true;
+    paymentMethodManagement?.hasSavedPaymentMethod === true &&
+    !paymentMethodReauthorizationRequired;
   const autopayLocalRequirements = useMemo(() => {
     const requirements: string[] = [];
     if (!autopayCanEnable) {
       requirements.push(
-        "Save and verify one family payment method before enabling autopay.",
+        paymentMethodReauthorizationRequired
+          ? "Replace the saved payment method for your school's current payment account before autopay can resume."
+          : "Save and verify one family payment method before enabling autopay.",
       );
     }
     if (autopayStatus === "pending") {
@@ -965,7 +970,7 @@ function ParentPortalWorkspaceView({
       );
     }
     return requirements;
-  }, [autopayCanEnable, autopayStatus]);
+  }, [autopayCanEnable, autopayStatus, paymentMethodReauthorizationRequired]);
   const autopayRequirements = useMemo(() => {
     const values = [...autopayEnableRequirements, ...autopayLocalRequirements];
     const seen = new Set<string>();
@@ -2516,6 +2521,15 @@ function ParentPortalWorkspaceView({
                 <dd className="mt-1 font-medium capitalize">{autopayStatus}</dd>
               </div>
             </dl>
+            {paymentMethodReauthorizationRequired ? (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Replace your saved payment method</AlertTitle>
+                <AlertDescription>
+                  Your school now uses a new payment account. Replace the saved card or connect a bank account below before saved-method payments or autopay can resume. No payment is charged while you update it.
+                </AlertDescription>
+              </Alert>
+            ) : null}
             <div className="rounded-2xl border bg-background/40 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -2526,7 +2540,9 @@ function ParentPortalWorkspaceView({
                     </InfoTip>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {autopayStatus === "enabled"
+                    {paymentMethodReauthorizationRequired
+                      ? "The prior saved method is protected but cannot be charged on the school's current payment account."
+                      : autopayStatus === "enabled"
                       ? "Account credit is applied first, then the saved method pays eligible invoices."
                       : paymentMethodManagement?.hasSavedPaymentMethod
                         ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` · updated ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}`
@@ -2545,7 +2561,8 @@ function ParentPortalWorkspaceView({
                       isPending ||
                       paymentCheckoutMethod !== null ||
                       !family ||
-                      autopayStatus === "pending"
+                      autopayStatus === "pending" ||
+                      (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")
                     }
                     aria-label="Enable or disable autopay"
                   />
@@ -2556,7 +2573,7 @@ function ParentPortalWorkspaceView({
                 className="mt-3 w-full sm:w-auto"
                 type="button"
                 variant={autopayStatus === "enabled" ? "outline" : "default"}
-                disabled={isPending || paymentCheckoutMethod !== null || !family || autopayStatus === "pending"}
+                disabled={isPending || paymentCheckoutMethod !== null || !family || autopayStatus === "pending" || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
                 onClick={() => toggleAutopay(autopayStatus !== "enabled")}
               >
                 {isPending
@@ -2732,7 +2749,15 @@ function ParentPortalWorkspaceView({
             <CardTitle as="h2">Payment account</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {paymentTransitionActive ? (
+            {paymentMethodReauthorizationRequired ? (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Payment method update required</AlertTitle>
+                <AlertDescription>
+                  Your school now uses a new payment account. Replace your saved card or connect a bank account in Payment settings before saved-method payments or autopay can resume. One-time checkout remains available.
+                </AlertDescription>
+              </Alert>
+            ) : paymentTransitionActive ? (
               <Alert>
                 <AlertCircle className="size-4" />
                 <AlertTitle>School payment account update</AlertTitle>
@@ -2758,7 +2783,9 @@ function ParentPortalWorkspaceView({
                   <div className="min-w-0">
                     <div className="font-medium">Autopay</div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {autopayStatus === "enabled"
+                      {paymentMethodReauthorizationRequired
+                        ? "Autopay is paused until the saved payment method is replaced for the school's current payment account."
+                        : autopayStatus === "enabled"
                         ? "Enabled for eligible invoices using the saved family payment method."
                         : paymentMethodManagement?.hasSavedPaymentMethod
                           ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"} · autopay is off`
@@ -2768,7 +2795,7 @@ function ParentPortalWorkspaceView({
                   <Button
                     type="button"
                     variant={autopayStatus === "enabled" ? "outline" : "default"}
-                    disabled={isPending || paymentCheckoutMethod !== null || autopayStatus === "pending"}
+                    disabled={isPending || paymentCheckoutMethod !== null || autopayStatus === "pending" || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
                     onClick={() => toggleAutopay(autopayStatus !== "enabled")}
                   >
                     {isPending

@@ -567,7 +567,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       results.push({
         ...baseResult,
         status: "skipped",
-        reason: "The saved payment method is not linked to this school's active or retained transition account.",
+        reason: "The saved payment method belongs to the school's prior payout account. The family must replace it before autopay can resume.",
       });
       continue;
     }

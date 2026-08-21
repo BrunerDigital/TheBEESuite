@@ -107,6 +107,8 @@ test("authorization corrections fail closed and return useful duplicate guidance
   assert.match(route, /claims: \{ where: \{ status: \{ not: "void" \}/);
   assert.match(route, /This authorization already exists[\s\S]*Use Edit authorization/);
   assert.match(route, /Family copay cannot be negative/);
+  assert.match(route, /validCurrencyInput\(body\.familyCopayDollars, true\)/);
+  assert.match(route, /no more than two decimal places/);
   assert.match(route, /date\.toISOString\(\)\.slice\(0, 10\) !== text/);
   assert.match(route, /AUTHORIZATION_UNIT_TYPES/);
   assert.match(route, /updateAuthorization"\)[\s\S]*prisma\.\$transaction[\s\S]*TransactionIsolationLevel\.Serializable/);
@@ -126,6 +128,8 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(route, /claim\.status !== "submitted"/);
   assert.match(route, /Enter the agency denial reason or code/);
   assert.match(route, /action === "voidClaim"/);
+  assert.match(route, /updateMany\(\{ where: \{ id: claim\.id, status: \{ in: \["draft", "ready"\] \} \}/);
+  assert.match(route, /The claim changed before it could be voided/);
   assert.match(workspace, /Record denial/);
   assert.match(workspace, /Void draft/);
 });

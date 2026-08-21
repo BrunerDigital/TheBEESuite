@@ -55,6 +55,11 @@ function cents(value: unknown) {
   return Number.isFinite(amount) ? Math.round(amount) : 0;
 }
 
+function validCurrencyInput(value: unknown, allowBlank = false) {
+  const text = typeof value === "number" ? String(value) : clean(value).replace(/[$,]/g, "");
+  return (allowBlank && !text) || /^-?\d+(?:\.\d{1,2})?$/.test(text);
+}
+
 function numberValue(value: unknown) {
   const text = typeof value === "number" ? String(value) : clean(value);
   if (!/^-?\d+(?:\.\d+)?$/.test(text)) return 0;
@@ -259,6 +264,7 @@ async function postHandler(request: NextRequest) {
     if (!coverageStart || !coverageEnd || coverageEnd < coverageStart || !authorizationNumber || authorizedRateCents <= 0) {
       return NextResponse.json({ ok: false, error: "Authorization number, valid coverage dates, and a positive agency rate are required." }, { status: 400 });
     }
+    if (!validCurrencyInput(body.familyCopayDollars, true)) return NextResponse.json({ ok: false, error: "Enter the family copay as a valid dollar amount with no more than two decimal places." }, { status: 400 });
     if (familyCopayCents < 0) return NextResponse.json({ ok: false, error: "Family copay cannot be negative." }, { status: 400 });
     if (!AUTHORIZATION_UNIT_TYPES.has(unitType)) return NextResponse.json({ ok: false, error: "Choose a supported authorization rate unit." }, { status: 400 });
     if (authorizedUnits !== null && authorizedUnits <= 0) return NextResponse.json({ ok: false, error: "Authorized units must be greater than zero when provided." }, { status: 400 });
@@ -288,6 +294,7 @@ async function postHandler(request: NextRequest) {
     const familyCopayCents = cents(body.familyCopayDollars);
     const authorizedUnits = hasNumericInput(body.authorizedUnits) ? numberValue(body.authorizedUnits) : null;
     if (!coverageStart || !coverageEnd || coverageEnd < coverageStart || !authorizationNumber || authorizedRateCents <= 0) return NextResponse.json({ ok: false, error: "Authorization number, valid coverage dates, and a positive agency rate are required." }, { status: 400 });
+    if (!validCurrencyInput(body.familyCopayDollars, true)) return NextResponse.json({ ok: false, error: "Enter the family copay as a valid dollar amount with no more than two decimal places." }, { status: 400 });
     if (familyCopayCents < 0) return NextResponse.json({ ok: false, error: "Family copay cannot be negative." }, { status: 400 });
     if (authorizedUnits !== null && authorizedUnits <= 0) return NextResponse.json({ ok: false, error: "Authorized units must be greater than zero when provided." }, { status: 400 });
     let correction;
@@ -398,7 +405,9 @@ async function postHandler(request: NextRequest) {
     if (blockers.length) return NextResponse.json({ ok: false, error: "Claim is not ready for submission.", blockers }, { status: 409 });
     const externalReference = clean(body.externalReference);
     if (!externalReference) return NextResponse.json({ ok: false, error: "Enter the confirmation reference returned by the external agency channel." }, { status: 400 });
-    const submitted = await prisma.subsidyClaim.update({ where: { id: claim.id }, data: { status: "submitted", submittedAt: new Date(), externalReference } });
+    const transition = await prisma.subsidyClaim.updateMany({ where: { id: claim.id, status: { in: ["draft", "ready"] } }, data: { status: "submitted", submittedAt: new Date(), externalReference } });
+    if (transition.count !== 1) return NextResponse.json({ ok: false, error: "The claim changed before submission was recorded. Refresh before trying again." }, { status: 409 });
+    const submitted = await prisma.subsidyClaim.findUniqueOrThrow({ where: { id: claim.id } });
     await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim.marked_submitted", resource: "SubsidyClaim", resourceId: claim.id, metadata: { submissionMethod: claim.agencyProgram.submissionMethod, externalReference: submitted.externalReference } });
     return NextResponse.json({ ok: true, claim: submitted, externalSubmissionPerformed: false });
   }
@@ -414,7 +423,9 @@ async function postHandler(request: NextRequest) {
     if (!externalReference) return NextResponse.json({ ok: false, error: "Enter the agency decision or claim reference." }, { status: 400 });
     const denialReason = clean(body.denialReason);
     if (decision === "denied" && !denialReason) return NextResponse.json({ ok: false, error: "Enter the agency denial reason or code." }, { status: 400 });
-    const updated = await prisma.subsidyClaim.update({ where: { id: claim.id }, data: { status: decision, approvedCents, approvedAt: decision === "approved" ? new Date() : null, denialReason: decision === "denied" ? denialReason : null, externalReference } });
+    const transition = await prisma.subsidyClaim.updateMany({ where: { id: claim.id, status: "submitted" }, data: { status: decision, approvedCents, approvedAt: decision === "approved" ? new Date() : null, denialReason: decision === "denied" ? denialReason : null, externalReference } });
+    if (transition.count !== 1) return NextResponse.json({ ok: false, error: "The claim changed before the agency decision was recorded. Refresh before trying again." }, { status: 409 });
+    const updated = await prisma.subsidyClaim.findUniqueOrThrow({ where: { id: claim.id } });
     await writeAuditLog(auth.user, { centerId: claim.centerId, action: `billing.subsidy_claim.${decision}`, resource: "SubsidyClaim", resourceId: claim.id, metadata: { approvedCents, externalReference: updated.externalReference } });
     return NextResponse.json({ ok: true, claim: updated });
   }
@@ -423,7 +434,9 @@ async function postHandler(request: NextRequest) {
     if (!["draft", "ready"].includes(claim.status)) return NextResponse.json({ ok: false, error: "Only an unsubmitted draft claim can be voided here. Submitted decisions and payments must retain their history." }, { status: 409 });
     const reason = clean(body.reason);
     if (!reason) return NextResponse.json({ ok: false, error: "Enter a reason for voiding the draft claim." }, { status: 400 });
-    const updated = await prisma.subsidyClaim.update({ where: { id: claim.id }, data: { status: "void", customFields: { ...recordValue(claim.customFields), voidReason: reason, voidedAt: new Date().toISOString(), voidedById: auth.user.id } } });
+    const transition = await prisma.subsidyClaim.updateMany({ where: { id: claim.id, status: { in: ["draft", "ready"] } }, data: { status: "void", customFields: { ...recordValue(claim.customFields), voidReason: reason, voidedAt: new Date().toISOString(), voidedById: auth.user.id } } });
+    if (transition.count !== 1) return NextResponse.json({ ok: false, error: "The claim changed before it could be voided. Refresh before trying again." }, { status: 409 });
+    const updated = await prisma.subsidyClaim.findUniqueOrThrow({ where: { id: claim.id } });
     await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim.voided", resource: "SubsidyClaim", resourceId: claim.id, metadata: { reasonRecorded: true } });
     return NextResponse.json({ ok: true, claim: updated });
   }

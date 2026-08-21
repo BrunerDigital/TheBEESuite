@@ -128,6 +128,8 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(route, /\|\\\.\\d\+\)\$\/\.test\(text\)/);
   assert.match(route, /cannot exceed the authorization rate/);
   assert.match(route, /claim\.status !== "submitted"/);
+  assert.match(route, /recordDecision"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*findUniqueOrThrow[\s\S]*claimSubmissionBlockers/);
+  assert.match(route, /Complete every required claim document before recording agency approval/);
   assert.match(route, /updateDocument"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*status: \{ in: \["draft", "ready", "submitted"\] \}/);
   assert.match(route, /Documents cannot be changed after the agency decision is recorded/);
   assert.match(route, /Enter the agency denial reason or code/);
@@ -136,6 +138,7 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(route, /The claim changed before it could be voided/);
   assert.match(workspace, /Record denial/);
   assert.match(workspace, /Void draft/);
+  assert.match(workspace, /name="serviceUnits"[\s\S]*step="0\.000001"/);
 });
 
 test("agency remittances re-read the claim inside a serializable transaction", () => {

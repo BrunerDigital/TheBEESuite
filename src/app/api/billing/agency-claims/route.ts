@@ -457,9 +457,22 @@ async function postHandler(request: NextRequest) {
     if (!externalReference) return NextResponse.json({ ok: false, error: "Enter the agency decision or claim reference." }, { status: 400 });
     const denialReason = clean(body.denialReason);
     if (decision === "denied" && !denialReason) return NextResponse.json({ ok: false, error: "Enter the agency denial reason or code." }, { status: 400 });
-    const transition = await prisma.subsidyClaim.updateMany({ where: { id: claim.id, status: "submitted" }, data: { status: decision, approvedCents, approvedAt: decision === "approved" ? new Date() : null, denialReason: decision === "denied" ? denialReason : null, externalReference } });
-    if (transition.count !== 1) return NextResponse.json({ ok: false, error: "The claim changed before the agency decision was recorded. Refresh before trying again." }, { status: 409 });
-    const updated = await prisma.subsidyClaim.findUniqueOrThrow({ where: { id: claim.id } });
+    let updated;
+    try {
+      updated = await prisma.$transaction(async (tx) => {
+        const transition = await tx.subsidyClaim.updateMany({ where: { id: claim.id, status: "submitted" }, data: { updatedAt: new Date() } });
+        if (transition.count !== 1) throw new AgencyWorkflowError("The claim changed before the agency decision was recorded. Refresh before trying again.", 409);
+        const current = await tx.subsidyClaim.findUniqueOrThrow({ where: { id: claim.id }, include: { agencyProgram: true, documents: true } });
+        if (decision === "approved") {
+          const blockers = claimSubmissionBlockers({ ...current.agencyProgram, documents: current.documents });
+          if (blockers.length) throw new AgencyWorkflowError("Complete every required claim document before recording agency approval.", 409);
+        }
+        return tx.subsidyClaim.update({ where: { id: current.id }, data: { status: decision, approvedCents, approvedAt: decision === "approved" ? new Date() : null, denialReason: decision === "denied" ? denialReason : null, externalReference } });
+      });
+    } catch (error) {
+      if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      throw error;
+    }
     await writeAuditLog(auth.user, { centerId: claim.centerId, action: `billing.subsidy_claim.${decision}`, resource: "SubsidyClaim", resourceId: claim.id, metadata: { approvedCents, externalReference: updated.externalReference } });
     return NextResponse.json({ ok: true, claim: updated });
   }

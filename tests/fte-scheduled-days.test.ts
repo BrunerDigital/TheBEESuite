@@ -5,7 +5,7 @@ import {
   calculateScheduledDaysFte,
   scheduledDayBreakdownTotal,
 } from "../src/lib/fte-report-guardrails";
-import { normalizeScheduledDaysPerWeek, scheduledDaysPerWeek } from "../src/lib/fte-scheduled-days";
+import { childScheduleClassification, normalizeScheduledDaysPerWeek, scheduledDaysPerWeek } from "../src/lib/fte-scheduled-days";
 
 test("scheduled-day FTE weights each child by days attended out of five", () => {
   const counts = {
@@ -80,6 +80,9 @@ test("explicit schedule days take priority over the old full-time or part-time l
     schedule: { days: ["Monday", "Wednesday", "Friday"], daysPerWeek: 3 },
     customFields: { scheduledDaysPerWeek: "legacy_part_time", careScheduleType: "part_time" },
   }), null);
+  assert.equal(childScheduleClassification({ schedule: {}, customFields: { fullTimePartTime: "part_time" } }), "part_time");
+  assert.equal(childScheduleClassification({ schedule: { notes: "Part-time afternoons" }, customFields: {} }), "part_time");
+  assert.equal(childScheduleClassification({ schedule: { notes: "Part-time afternoons" }, customFields: { scheduledDaysPerWeek: "not_set" } }), "unknown");
 });
 
 test("FTE entry UI and API preserve legacy exports while saving the day breakdown", () => {

@@ -28,7 +28,7 @@ import {
   enrollmentClassroomValidationError,
   isCurrentlyEnrolledStatus,
 } from "@/lib/enrollment-status";
-import { scheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
+import { childScheduleClassification, scheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
 
 type ClassroomOption = { id: string; name: string; ageGroup: string };
 type CenterOption = { id: string; name: string; classrooms: ClassroomOption[] };
@@ -230,9 +230,8 @@ function scheduledDaysValue(child: ChildRecord | null | undefined) {
   if (!child) return "unknown";
   const days = scheduledDaysPerWeek({ schedule: child.schedule, customFields: child.customFields });
   if (days) return String(days);
-  const fields = recordValue(child.customFields);
-  const legacyType = String(fields.careScheduleType || fields.fteScheduleType || "").toLowerCase().replace(/[^a-z0-9]+/g, "_");
-  return legacyType === "part_time" ? "legacy_part_time" : "unknown";
+  const classification = childScheduleClassification({ schedule: child.schedule, customFields: child.customFields });
+  return classification === "part_time" ? "legacy_part_time" : "unknown";
 }
 
 function recordValue(value: unknown): Record<string, unknown> {

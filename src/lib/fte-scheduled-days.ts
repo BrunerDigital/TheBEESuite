@@ -141,3 +141,23 @@ export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: u
   if (["full_time", "fulltime", "full"].includes(explicitType)) return 5;
   return null;
 }
+
+export function childScheduleClassification(input: { schedule: unknown; customFields: unknown }) {
+  const schedule = record(input.schedule);
+  const customFields = record(input.customFields);
+  if (customFields.scheduledDaysPerWeek === "not_set") return "unknown" as const;
+  if (customFields.scheduledDaysPerWeek === "legacy_part_time") return "part_time" as const;
+  const scheduledDays = scheduledDaysPerWeek(input);
+  if (scheduledDays === 5) return "full_time" as const;
+  if (scheduledDays) return "part_time" as const;
+  const explicit = String(customFields.careScheduleType || customFields.fteScheduleType || customFields.fullTimePartTime || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_");
+  if (["full_time", "fulltime", "full"].includes(explicit)) return "full_time" as const;
+  if (["part_time", "parttime", "part"].includes(explicit)) return "part_time" as const;
+
+  const text = JSON.stringify({ schedule, customFields }).toLowerCase();
+  if (/\b(part|part-time|half|half-day|2 day|two day|3 day|three day|mwf)\b/.test(text)) return "part_time" as const;
+  if (/\b(full|full-time|5 day|five day|mon-fri|monday-friday|monday through friday)\b/.test(text)) return "full_time" as const;
+  return "unknown" as const;
+}

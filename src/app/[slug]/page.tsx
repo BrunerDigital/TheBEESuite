@@ -89,7 +89,7 @@ import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { invoiceBelongsToFteWeek } from "@/lib/fte-billing-period";
 import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } from "@/lib/fte-report-rollups";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
-import { scheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
+import { childScheduleClassification, scheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
@@ -598,26 +598,6 @@ function ageBucket(ageGroup: string) {
   if (value.includes("pre-k") || value.includes("prek") || value.includes("vpk")) return "preK" as const;
   if (value.includes("school") || value.includes("after")) return "schoolAge" as const;
   return "preschool" as const;
-}
-
-function childScheduleClassification(input: { schedule: unknown; customFields: unknown }) {
-  const schedule = recordFromJson(input.schedule);
-  const customFields = recordFromJson(input.customFields);
-  if (customFields.scheduledDaysPerWeek === "not_set") return "unknown" as const;
-  if (customFields.scheduledDaysPerWeek === "legacy_part_time") return "part_time" as const;
-  const scheduledDays = scheduledDaysPerWeek(input);
-  if (scheduledDays === 5) return "full_time" as const;
-  if (scheduledDays) return "part_time" as const;
-  const explicit = String(customFields.careScheduleType || customFields.fteScheduleType || customFields.fullTimePartTime || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_");
-  if (["full_time", "fulltime", "full"].includes(explicit)) return "full_time" as const;
-  if (["part_time", "parttime", "part"].includes(explicit)) return "part_time" as const;
-
-  const text = JSON.stringify({ schedule, customFields }).toLowerCase();
-  if (/\b(part|part-time|half|half-day|2 day|two day|3 day|three day|mwf)\b/.test(text)) return "part_time" as const;
-  if (/\b(full|full-time|5 day|five day|mon-fri|monday-friday|monday through friday)\b/.test(text)) return "full_time" as const;
-  return "unknown" as const;
 }
 
 async function buildFtePrefills(

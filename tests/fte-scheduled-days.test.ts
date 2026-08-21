@@ -36,7 +36,7 @@ test("explicit schedule days take priority over the old full-time or part-time l
   assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "Mon, Wed, Fri 8:30 AM - 3:30 PM" }, customFields: {} }), 3);
   assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "MWF 8:30 AM - 3:30 PM" }, customFields: {} }), 3);
   assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "M/W/F" }, customFields: {} }), 3);
-  assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { scheduleNotes: "Tuesday and Thursday" } }), 2);
+  assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { attendanceSchedule: "Tuesday and Thursday" } }), 2);
   assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "Tuesday-Thursday" }, customFields: {} }), 3);
   assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "Monday through Thursday" }, customFields: {} }), 4);
   assert.equal(scheduledDaysPerWeek({
@@ -46,6 +46,14 @@ test("explicit schedule days take priority over the old full-time or part-time l
   assert.equal(scheduledDaysPerWeek({
     schedule: { monday: "8-5", tuesday: "8-5", wednesday: "", thursday: "", friday: "" },
     customFields: {},
+  }), 2);
+  assert.equal(scheduledDaysPerWeek({
+    schedule: {},
+    customFields: { careScheduleType: "full_time", otherHelpfulInfo: "Pickup is Tuesday and Thursday" },
+  }), 5);
+  assert.equal(scheduledDaysPerWeek({
+    schedule: {},
+    customFields: { weeklySchedule: "Tuesday and Thursday", otherHelpfulInfo: "Monday reminder" },
   }), 2);
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "full_time" } }), 5);
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "part_time" } }), null);
@@ -79,4 +87,6 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(explorer, /next\.fteCount = ""/);
   assert.match(page, /aging\.oneToThirtyCents \+ aging\.thirtyOneToSixtyCents \+ aging\.sixtyOnePlusCents/);
   assert.match(page, /past-due receivables/);
+  assert.match(page, /take: fteReceivableLedgerLimit \+ 1/);
+  assert.match(page, /past-due AR requires ledger review/);
 });

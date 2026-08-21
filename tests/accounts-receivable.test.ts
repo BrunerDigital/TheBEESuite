@@ -7,7 +7,6 @@ import {
   buildAccountsReceivableSummary,
   buildNetReceivableAging,
   buildOutstandingNonInvoiceChargesByAccount,
-  buildOutstandingNonInvoiceChargesFromAggregates,
   canViewAccountBalances,
   isExecutiveAccountBalanceView,
   type AccountsReceivableFamilyRow,
@@ -144,29 +143,6 @@ test("payments reduce invoice charges before older ledger-only charges", () => {
     thirtyOneToSixtyCents: 0,
     sixtyOnePlusCents: 5_000,
   });
-});
-
-test("aggregated ledger totals preserve invoice-first payment allocation", () => {
-  const charges = buildOutstandingNonInvoiceChargesFromAggregates(
-    [
-      { billingAccountId: "partial", _sum: { amountCents: 10_000 } },
-      { billingAccountId: "paid-through", _sum: { amountCents: 10_000 } },
-    ],
-    [
-      { billingAccountId: "partial", _sum: { amountCents: 5_000 } },
-      { billingAccountId: "paid-through", _sum: { amountCents: 5_000 } },
-      { billingAccountId: "ledger-only", _sum: { amountCents: 3_000 } },
-    ],
-    [
-      { billingAccountId: "partial", _sum: { amountCents: -5_000 } },
-      { billingAccountId: "paid-through", _sum: { amountCents: -12_000 } },
-      { billingAccountId: "ledger-only", _sum: { amountCents: -1_000 } },
-    ],
-  );
-
-  assert.equal(charges.get("partial"), 5_000);
-  assert.equal(charges.get("paid-through"), 3_000);
-  assert.equal(charges.get("ledger-only"), 2_000);
 });
 
 test("school account snapshot puts the supplied current families with balances owed first", () => {

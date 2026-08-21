@@ -84,7 +84,7 @@ export type FteReportPrefill = {
   preschool: number;
   preK: number;
   schoolAge: number;
-  accountReceivableAmount: number;
+  accountReceivableAmount: number | null;
   selfPayerBillAmount: number;
   subsidyBillAmount: number;
   totalBilledAmount: number;

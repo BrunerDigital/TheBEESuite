@@ -82,7 +82,13 @@ export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: u
 
   const textValues: string[] = [];
   collectTextValues(schedule, textValues);
-  collectTextValues(customFields, textValues);
+  for (const value of [
+    customFields.days,
+    customFields.scheduleDays,
+    customFields.weeklySchedule,
+    customFields.careSchedule,
+    customFields.attendanceSchedule,
+  ]) collectTextValues(value, textValues);
   const text = textValues.join(" ").toLowerCase();
   const textWeekdays = new Set<string>();
   const rangePattern = new RegExp(`\\b(${weekdayTokenPattern})\\s*(?:[-–—]|through|to)\\s*(${weekdayTokenPattern})\\b`, "g");

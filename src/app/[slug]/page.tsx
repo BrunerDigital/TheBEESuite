@@ -60,7 +60,6 @@ import { modules } from "@/lib/demo-data";
 import {
   buildNetReceivableAging,
   buildOutstandingNonInvoiceChargesByAccount,
-  buildOutstandingNonInvoiceChargesFromAggregates,
 } from "@/lib/accounts-receivable";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
@@ -692,7 +691,7 @@ async function buildFtePrefills(
     preschool: 0,
     preK: 0,
     schoolAge: 0,
-    accountReceivableAmount: 0,
+    accountReceivableAmount: null as number | null,
     selfPayerBillAmount: 0,
     subsidyBillAmount: 0,
     totalBilledAmount: 0,
@@ -727,32 +726,23 @@ async function buildFtePrefills(
   }
 
   const billingAccountIds = accountBalances.map((account) => account.id);
-  const [invoiceChargeTotals, nonInvoiceChargeTotals, creditTotals] = billingAccountIds.length
-    ? await Promise.all([
-        prisma.ledgerEntry.groupBy({
-          by: ["billingAccountId"],
-          where: { billingAccountId: { in: billingAccountIds }, invoiceId: { not: null }, amountCents: { gt: 0 } },
-          _sum: { amountCents: true },
-        }),
-        prisma.ledgerEntry.groupBy({
-          by: ["billingAccountId"],
-          where: { billingAccountId: { in: billingAccountIds }, invoiceId: null, amountCents: { gt: 0 } },
-          _sum: { amountCents: true },
-        }),
-        prisma.ledgerEntry.groupBy({
-          by: ["billingAccountId"],
-          where: { billingAccountId: { in: billingAccountIds }, amountCents: { lt: 0 } },
-          _sum: { amountCents: true },
-        }),
-      ])
-    : [[], [], []];
-  const nonInvoiceChargeCentsByAccountId = buildOutstandingNonInvoiceChargesFromAggregates(
-    invoiceChargeTotals,
-    nonInvoiceChargeTotals,
-    creditTotals,
-  );
+  const fteReceivableLedgerLimit = 20_000;
+  const receivableLedgerEntries = billingAccountIds.length ? await prisma.ledgerEntry.findMany({
+    where: { billingAccountId: { in: billingAccountIds } },
+    select: { id: true, billingAccountId: true, amountCents: true, invoiceId: true, effectiveAt: true, createdAt: true },
+    orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    take: fteReceivableLedgerLimit + 1,
+  }) : [];
+  const receivableLedgerHistoryComplete = receivableLedgerEntries.length <= fteReceivableLedgerLimit;
+  const nonInvoiceChargeCentsByAccountId = receivableLedgerHistoryComplete
+    ? buildOutstandingNonInvoiceChargesByAccount(receivableLedgerEntries)
+    : new Map<string, number>();
+  if (!receivableLedgerHistoryComplete) {
+    for (const row of byCenter.values()) row.sourceLabel += "; past-due AR requires ledger review";
+  }
   const receivableAsOf = new Date();
   for (const account of accountBalances) {
+    if (!receivableLedgerHistoryComplete) break;
     const row = account.family.centerId ? byCenter.get(account.family.centerId) : null;
     if (!row) continue;
     const aging = buildNetReceivableAging([{
@@ -760,7 +750,7 @@ async function buildFtePrefills(
       balanceCents: account.balanceCents,
       nonInvoiceChargeCents: nonInvoiceChargeCentsByAccountId.get(account.id) ?? 0,
     }], account.invoices, receivableAsOf);
-    row.accountReceivableAmount += (
+    row.accountReceivableAmount = (row.accountReceivableAmount ?? 0) + (
       aging.oneToThirtyCents + aging.thirtyOneToSixtyCents + aging.sixtyOnePlusCents
     ) / 100;
   }
@@ -809,7 +799,7 @@ async function buildFtePrefills(
 
   return Array.from(byCenter.values()).map((row) => ({
     ...row,
-    accountReceivableAmount: Math.round(row.accountReceivableAmount * 100) / 100,
+    accountReceivableAmount: row.accountReceivableAmount === null ? null : Math.round(row.accountReceivableAmount * 100) / 100,
     selfPayerBillAmount: Math.round(row.selfPayerBillAmount * 100) / 100,
     subsidyBillAmount: Math.round(row.subsidyBillAmount * 100) / 100,
     totalBilledAmount: Math.round(row.totalBilledAmount * 100) / 100,

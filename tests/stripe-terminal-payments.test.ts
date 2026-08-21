@@ -161,10 +161,13 @@ test("Terminal API and workbench enforce school scope and describe the web USB b
   const route = readFileSync("src/app/api/billing/terminal-payment/route.ts", "utf8");
   const component = readFileSync("src/components/stripe-terminal-payment.tsx", "utf8");
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
+  const dashboard = readFileSync("src/app/[slug]/page.tsx", "utf8");
   assert.match(route, /canAccessCenter\(user, centerId\)/);
   assert.match(route, /reader\.reader\.locationId !== locationId/);
   assert.match(route, /billingAccount\.family\.centerId !== context\.center\.id/);
   assert.match(route, /parentPresent !== true/);
   assert.match(component, /direct USB data connection is available only through Stripe&apos;s Android mobile-reader SDK/);
-  assert.match(workbench, /In-Person Card Reader/);
+  assert.match(component, /In-Person Card Reader/);
+  assert.match(workbench, /selectedCenter\?\.hardwareTerminalConfigured/);
+  assert.match(dashboard, /hardwareTerminalConfigured:[\s\S]*stripeTerminalLocationId/);
 });

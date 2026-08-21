@@ -1555,7 +1555,9 @@ function ParentPortalWorkspaceView({
           setAutopayEnableRequirements([]);
         }
         const message = json?.error || "Payment method management is not configured yet.";
-        setAutopayError(message);
+        if (action === "enable_autopay" || action === "disable_autopay") {
+          setAutopayError(message);
+        }
         return showError(message);
       }
       if (json?.url) {

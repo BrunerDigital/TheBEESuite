@@ -63,7 +63,7 @@ const terminalFamily = {
     openInvoices: [{ id: "preview-invoice", number: "INV-10482", status: "OPEN", dueDate: "2026-08-14T00:00:00.000Z", totalCents: 24500, items: [{ id: "preview-item", description: "Weekly tuition", amountCents: 24500, productId: null }] }],
     recentPayments: [],
   },
-  children: family.children.map((child) => ({ id: child.id, fullName: child.fullName, ageGroup: child.ageGroup, enrollmentStatus: child.enrollmentStatus, classroomId: child.classroomId ?? null, startDate: child.startDate ?? null, careScheduleType: "full_time" as const, tuitionAssignment: child.tuitionAssignment ? { ...child.tuitionAssignment, grossAmountCents: child.tuitionAssignment.amountCents, additionalCharges: [], additionalChargesTotalCents: 0, credits: [], creditsTotalCents: 0, netAmountCents: child.tuitionAssignment.amountCents } : null })),
+  children: family.children.map((child) => ({ id: child.id, fullName: child.fullName, ageGroup: child.ageGroup, enrollmentStatus: child.enrollmentStatus, classroomId: child.classroomId ?? null, startDate: child.startDate ?? null, careScheduleType: "full_time" as const, scheduledDaysPerWeek: 5 as const, tuitionAssignment: child.tuitionAssignment ? { ...child.tuitionAssignment, grossAmountCents: child.tuitionAssignment.amountCents, additionalCharges: [], additionalChargesTotalCents: 0, credits: [], creditsTotalCents: 0, netAmountCents: child.tuitionAssignment.amountCents } : null })),
 };
 
 const terminalCenter = {

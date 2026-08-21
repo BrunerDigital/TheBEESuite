@@ -92,6 +92,7 @@ export type BillingWorkbenchFamily = {
     classroomId: string | null;
     startDate: Date | string | null;
     careScheduleType: "full_time" | "part_time" | "unknown";
+    scheduledDaysPerWeek: 2 | 3 | 4 | 5 | null;
     tuitionAssignment?: {
       enabled: boolean;
       tuitionPlanId: string | null;
@@ -251,6 +252,18 @@ function careScheduleLabel(value: BillingWorkbenchFamily["children"][number]["ca
   return "Not set";
 }
 
+function scheduledDaysLabel(child: BillingWorkbenchFamily["children"][number]) {
+  return child.scheduledDaysPerWeek
+    ? `${child.scheduledDaysPerWeek} days/week`
+    : careScheduleLabel(child.careScheduleType);
+}
+
+function scheduledDaysValue(child: BillingWorkbenchFamily["children"][number] | null | undefined) {
+  if (child?.scheduledDaysPerWeek) return String(child.scheduledDaysPerWeek);
+  if (child?.careScheduleType === "full_time") return "5";
+  return child?.careScheduleType === "part_time" ? "legacy_part_time" : "unknown";
+}
+
 function invoiceLineDescription(invoice: BillingWorkbenchOpenInvoice | null | undefined) {
   return invoice?.items?.[0]?.description || invoice?.number || "";
 }
@@ -386,7 +399,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [assignmentDescription, setAssignmentDescription] = useState(initialAssignment?.description ?? initialAssignment?.tuitionPlanName ?? "");
   const [assignmentChildProgram, setAssignmentChildProgram] = useState(initialAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0]);
   const [assignmentChildClassroomId, setAssignmentChildClassroomId] = useState(initialAssignmentChild?.classroomId ?? "");
-  const [assignmentChildCareScheduleType, setAssignmentChildCareScheduleType] = useState(initialAssignmentChild?.careScheduleType ?? "unknown");
+  const [assignmentChildScheduledDays, setAssignmentChildScheduledDays] = useState(
+    scheduledDaysValue(initialAssignmentChild),
+  );
   const [assignmentChildStartDate, setAssignmentChildStartDate] = useState(optionalDateInputValue(initialAssignmentChild?.startDate));
   const [assignmentCredits, setAssignmentCredits] = useState<Record<TuitionCreditCategory, string>>(
     tuitionCreditInputs(initialAssignment?.credits ?? []),
@@ -869,7 +884,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setAssignmentAdditionalCharges(tuitionAdditionalChargeInputs(assignment?.additionalCharges));
     setAssignmentChildProgram(child?.ageGroup ?? defaultAgeGroupOptions[0]);
     setAssignmentChildClassroomId(child?.classroomId ?? "");
-    setAssignmentChildCareScheduleType(child?.careScheduleType ?? "unknown");
+    setAssignmentChildScheduledDays(scheduledDaysValue(child));
     setAssignmentChildStartDate(optionalDateInputValue(child?.startDate));
     setTuitionPlanId(assignedPlan?.id ?? "");
     setPlanEditorId(assignedPlan?.id ?? "new");
@@ -1264,7 +1279,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           familyId: selectedFamily.id,
           ageGroup: assignmentChildProgram,
           classroomId: assignmentChildClassroomId,
-          careScheduleType: assignmentChildCareScheduleType,
+          scheduledDaysPerWeek: assignmentChildScheduledDays,
           startDate: assignmentChildStartDate,
         }),
       });
@@ -2146,7 +2161,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
                       <span>Program: {child.ageGroup || "Not set"}</span>
                       <span>Classroom: {classroom?.name ?? "Not assigned"}</span>
-                      <span>Care schedule: {careScheduleLabel(child.careScheduleType)}</span>
+                      <span>Schedule: {scheduledDaysLabel(child)}</span>
                       <span>Rate name: {child.tuitionAssignment?.description || child.tuitionAssignment?.tuitionPlanName || "Not assigned"}</span>
                       <span>Tuition: {child.tuitionAssignment?.enabled && typeof child.tuitionAssignment.amountCents === "number" ? `${money(child.tuitionAssignment.amountCents)}/${tuitionCadenceUnit(child.tuitionAssignment.cadence)}` : "Not assigned"}</span>
                       {child.tuitionAssignment?.additionalChargesTotalCents ? <span>Additional lines: {money(child.tuitionAssignment.additionalChargesTotalCents)}</span> : null}
@@ -2184,15 +2199,16 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="billing-child-care-schedule">Care schedule</Label>
-                  <Select value={assignmentChildCareScheduleType} onValueChange={(value) => {
-                    if (value === "full_time" || value === "part_time" || value === "unknown") setAssignmentChildCareScheduleType(value);
-                  }}>
-                    <SelectTrigger id="billing-child-care-schedule"><SelectValue /></SelectTrigger>
+                  <Label htmlFor="billing-child-scheduled-days">Days per week</Label>
+                  <Select value={assignmentChildScheduledDays} onValueChange={(value) => value && setAssignmentChildScheduledDays(value)}>
+                    <SelectTrigger id="billing-child-scheduled-days"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="unknown">Not set</SelectItem>
-                      <SelectItem value="full_time">Full-time</SelectItem>
-                      <SelectItem value="part_time">Part-time</SelectItem>
+                      <SelectItem value="legacy_part_time">Part-time (exact days not set)</SelectItem>
+                      <SelectItem value="2">2 days/week</SelectItem>
+                      <SelectItem value="3">3 days/week</SelectItem>
+                      <SelectItem value="4">4 days/week</SelectItem>
+                      <SelectItem value="5">5 days/week</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

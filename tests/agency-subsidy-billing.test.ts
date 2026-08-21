@@ -149,10 +149,13 @@ test("agency remittances re-read the claim inside a serializable transaction", (
   assert.match(workspace, /does not charge a family or change its balance/);
 });
 
-test("agency dashboard totals include the full non-void claim set", () => {
+test("agency dashboard totals use bounded database aggregates for the full non-void claim set", () => {
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
-  assert.match(route, /summaryClaims[\s\S]*status: \{ not: "void" \}/);
-  assert.match(route, /const summary = summaryClaims\.reduce/);
+  assert.match(route, /\$queryRaw<AgencySummaryRow\[\]>/);
+  assert.match(route, /SUM\(claim\."claimedCents"\)/);
+  assert.match(route, /COUNT\(\*\) FILTER \(WHERE EXISTS/);
+  assert.match(route, /claim\.status <> 'void'/);
+  assert.doesNotMatch(route, /summaryClaims\.reduce/);
 });
 
 test("remittance status uses approved amount when available", () => {

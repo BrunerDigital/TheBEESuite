@@ -30,6 +30,15 @@ class AgencyWorkflowError extends Error {
   }
 }
 
+type AgencySummaryRow = {
+  claimedCents: bigint;
+  approvedCents: bigint;
+  paidCents: bigint;
+  outstandingCents: bigint;
+  needsSubmission: bigint;
+  missingDocumentClaims: bigint;
+};
+
 function prismaConflict(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code);
 }
@@ -103,7 +112,7 @@ async function getHandler(request: NextRequest) {
     : auth.user.centerIds;
   if (!centerIds.length) return NextResponse.json({ ok: false, error: "No accessible school selected." }, { status: 403 });
 
-  const [programs, authorizations, claims, summaryClaims, families] = await Promise.all([
+  const [programs, authorizations, claims, summaryRows, families] = await Promise.all([
     prisma.agencyProgram.findMany({
       where: { centerId: { in: centerIds } },
       orderBy: [{ stateCode: "asc" }, { name: "asc" }],
@@ -129,16 +138,26 @@ async function getHandler(request: NextRequest) {
         remittances: { orderBy: { paidAt: "desc" } },
       },
     }),
-    prisma.subsidyClaim.findMany({
-      where: { centerId: { in: centerIds }, status: { not: "void" } },
-      select: {
-        claimedCents: true,
-        approvedCents: true,
-        paidCents: true,
-        status: true,
-        documents: { select: { status: true } },
-      },
-    }),
+    prisma.$queryRaw<AgencySummaryRow[]>(Prisma.sql`
+      SELECT
+        COALESCE(SUM(claim."claimedCents"), 0)::bigint AS "claimedCents",
+        COALESCE(SUM(COALESCE(claim."approvedCents", 0)), 0)::bigint AS "approvedCents",
+        COALESCE(SUM(claim."paidCents"), 0)::bigint AS "paidCents",
+        COALESCE(SUM(CASE
+          WHEN claim.status IN ('submitted', 'approved', 'partially_paid')
+          THEN GREATEST(COALESCE(claim."approvedCents", claim."claimedCents") - claim."paidCents", 0)
+          ELSE 0
+        END), 0)::bigint AS "outstandingCents",
+        COUNT(*) FILTER (WHERE claim.status IN ('draft', 'ready'))::bigint AS "needsSubmission",
+        COUNT(*) FILTER (WHERE EXISTS (
+          SELECT 1 FROM "SubsidyClaimDocument" document
+          WHERE document."claimId" = claim.id
+            AND document.status NOT IN ('received', 'verified', 'not_applicable')
+        ))::bigint AS "missingDocumentClaims"
+      FROM "SubsidyClaim" claim
+      WHERE claim."centerId" IN (${Prisma.join(centerIds)})
+        AND claim.status <> 'void'
+    `),
     prisma.family.findMany({
       where: { centerId: { in: centerIds }, children: { some: { enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES } } } },
       orderBy: { name: "asc" },
@@ -146,15 +165,15 @@ async function getHandler(request: NextRequest) {
     }),
   ]);
 
-  const summary = summaryClaims.reduce((result, claim) => {
-    result.claimedCents += claim.claimedCents;
-    result.approvedCents += claim.approvedCents ?? 0;
-    result.paidCents += claim.paidCents;
-    if (["draft", "ready"].includes(claim.status)) result.needsSubmission += 1;
-    if (["submitted", "approved", "partially_paid"].includes(claim.status)) result.outstandingCents += Math.max((claim.approvedCents ?? claim.claimedCents) - claim.paidCents, 0);
-    if (claim.documents.some((document) => !["received", "verified", "not_applicable"].includes(document.status))) result.missingDocumentClaims += 1;
-    return result;
-  }, { claimedCents: 0, approvedCents: 0, paidCents: 0, outstandingCents: 0, needsSubmission: 0, missingDocumentClaims: 0 });
+  const summaryRow = summaryRows[0];
+  const summary = {
+    claimedCents: Number(summaryRow?.claimedCents ?? 0),
+    approvedCents: Number(summaryRow?.approvedCents ?? 0),
+    paidCents: Number(summaryRow?.paidCents ?? 0),
+    outstandingCents: Number(summaryRow?.outstandingCents ?? 0),
+    needsSubmission: Number(summaryRow?.needsSubmission ?? 0),
+    missingDocumentClaims: Number(summaryRow?.missingDocumentClaims ?? 0),
+  };
   const programReadiness = programs.map((program) => {
     const setupBlockers = agencyProgramSetupBlockers(program);
     return { ...program, status: setupBlockers.length ? "setup_required" : "active", setupBlockers };

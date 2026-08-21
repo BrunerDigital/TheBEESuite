@@ -157,6 +157,9 @@ export function fteScheduledDaysPerWeek(input: { schedule: unknown; customFields
     customFields.daysPerWeek,
     customFields.scheduledDaysPerWeek,
     customFields.fteDaysPerWeek,
+    customFields.careScheduleType,
+    customFields.fteScheduleType,
+    customFields.fullTimePartTime,
   ].some((value) => value !== null && value !== undefined && value !== "");
   return childScheduleClassification(input) === "unknown" && !hasScheduleEvidence ? 5 : null;
 }

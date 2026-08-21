@@ -122,5 +122,21 @@ export function invoiceResponsibilityReviewExempt(customFields: unknown) {
   const fields = record(customFields);
   return text(fields.checkoutPurpose) === "product_purchase"
     || text(fields.receiptKind) === "product"
-    || text(fields.chargeSource) === "product";
+    || text(fields.chargeSource) === "product"
+    || confirmedNetFamilyTuitionInvoice(fields);
+}
+
+const FAMILY_ONLY_TUITION_MARKER = /\b(?:co-?pay|parent responsibility|family responsibility)\b/i;
+
+function confirmedNetFamilyTuitionInvoice(fields: Record<string, unknown>) {
+  if (text(fields.chargeSource) !== "tuitionPlan") return false;
+  const grossTuitionCents = cents(fields.grossTuitionCents);
+  const netTuitionCents = cents(fields.netTuitionCents);
+  const tuitionCreditsTotalCents = cents(fields.tuitionCreditsTotalCents);
+  const additionalChargesCents = cents(fields.tuitionAdditionalChargesTotalCents) ?? 0;
+  if (grossTuitionCents === null || netTuitionCents === null || tuitionCreditsTotalCents === null) return false;
+  if (Math.max(0, grossTuitionCents + additionalChargesCents - tuitionCreditsTotalCents) !== netTuitionCents) return false;
+
+  return tuitionCreditsTotalCents > 0
+    || FAMILY_ONLY_TUITION_MARKER.test(text(fields.tuitionPlanName));
 }

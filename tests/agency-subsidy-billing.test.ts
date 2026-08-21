@@ -148,6 +148,9 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(workspace, /selectedClaimAuthorization\?\.coverageEnd\.slice\(0, 10\)/);
   assert.match(workspace, /onError: setClaimError/);
   assert.match(workspace, /Draft claim created and added to the agency claim queue below/);
+  assert.match(workspace, /createdClaim\.authorization\?\.child\.fullName/);
+  assert.match(workspace, /claims: \[createdClaim, \.\.\.current\.claims\.filter/);
+  assert.match(route, /authorization: \{ include: \{ child: \{ select: \{ fullName: true \} \}, family: \{ select: \{ name: true \} \} \} \}/);
 });
 
 test("agency queue keeps new sibling claims visible and older actionable claims reachable", () => {

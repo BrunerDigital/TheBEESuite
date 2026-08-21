@@ -468,7 +468,13 @@ async function postHandler(request: NextRequest) {
           servicePeriodStart: start, servicePeriodEnd: end, dueDate: dateValue(body.dueDate), claimedCents, createdById: auth.user.id,
           lines: { create: [{ childId: authorization.childId, description: clean(body.description) || `${authorization.child.fullName} subsidy care`, serviceUnits: units, unitType: authorization.unitType, rateCents: requestedRateCents, amountCents: claimedCents, attendanceDays: numberValue(body.attendanceDays) || null }] },
           documents: { create: requirements.map((requirement) => ({ name: requirement.label, type: requirement.type })) },
-        }, include: { lines: true, documents: true } });
+        }, include: {
+          agencyProgram: { select: { name: true } },
+          authorization: { include: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
+          lines: true,
+          documents: { orderBy: { name: "asc" } },
+          remittances: { orderBy: { paidAt: "desc" } },
+        } });
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });

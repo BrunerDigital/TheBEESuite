@@ -51,6 +51,34 @@ test("account review resolves only when every open invoice has an exact separati
   ]), true);
   assert.equal(invoiceResponsibilityReviewExempt({ checkoutPurpose: "product_purchase" }), true);
   assert.equal(invoiceResponsibilityReviewExempt({ chargeSource: "tuition" }), false);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "CCDF Copay",
+    grossTuitionCents: 1_900,
+    netTuitionCents: 1_900,
+    tuitionCreditsTotalCents: 0,
+  }), true);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "Weekly tuition",
+    grossTuitionCents: 23_800,
+    netTuitionCents: 12_000,
+    tuitionCreditsTotalCents: 11_800,
+  }), true);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "VPK subsidy weekly tuition",
+    grossTuitionCents: 13_000,
+    netTuitionCents: 13_000,
+    tuitionCreditsTotalCents: 0,
+  }), false);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "CCDF Copay",
+    grossTuitionCents: 20_000,
+    netTuitionCents: 1_900,
+    tuitionCreditsTotalCents: 0,
+  }), false);
   assert.equal(allOpenInvoicesResponsibilitySeparated([
     { status: "OPEN", totalCents: 8_000, customFields: { checkoutPurpose: "product_purchase" } },
     { status: "OPEN", totalCents: 2_000, customFields: { responsibilitySeparation: separation } },

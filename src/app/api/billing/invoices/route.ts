@@ -5,9 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
 import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
 import {
-  agencyPaymentDescription,
   billingDedupeKey,
-  normalizeAgencyPaymentMetadata,
   normalizeBatchTarget,
   normalizeBillingPeriod,
   normalizeRecurringBillingPeriod,
@@ -456,119 +454,13 @@ async function createLedgerAdjustment(user: CurrentBillingUser, body: Record<str
 async function createAgencyPayment(user: CurrentBillingUser, body: Record<string, unknown>) {
   const familyAccess = await assertFamilyAccess(user, clean(body.familyId));
   if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
-
-  const amountCents = amountCentsFromBody(body);
-  if (amountCents <= 0) return NextResponse.json({ ok: false, error: "Agency payment amount is required." }, { status: 400 });
-
-  const childId = clean(body.childId);
-  const child = childId ? familyAccess.family.children.find((item) => item.id === childId) : null;
-  if (childId && !child) {
-    return NextResponse.json({ ok: false, error: "Child is not linked to this family." }, { status: 403 });
-  }
-
-  const metadata = normalizeAgencyPaymentMetadata({
-    agencyName: body.agencyName,
-    authorizationNumber: body.authorizationNumber,
-    externalReference: body.externalReference,
-    coverageStart: body.coverageStart,
-    coverageEnd: body.coverageEnd,
-    notes: body.notes,
-  });
-  if (!metadata.agencyName) {
-    return NextResponse.json({ ok: false, error: "Agency name is required." }, { status: 400 });
-  }
-
-  const paidAt = parseDate(body.paidAt);
-  const ledgerAmountCents = -amountCents;
-  const description = clean(body.description) || agencyPaymentDescription({
-    agencyName: metadata.agencyName,
-    childName: child?.fullName,
-    coverageStart: metadata.coverageStart,
-    coverageEnd: metadata.coverageEnd,
-  });
-
-  const result = await prisma.$transaction(async (tx) => {
-    const account = await tx.billingAccount.upsert({
-      where: { familyId: familyAccess.family.id },
-      update: {},
-      create: { familyId: familyAccess.family.id, balanceCents: 0 },
-    });
-    const payment = await tx.payment.create({
-      data: {
-        billingAccountId: account.id,
-        amountCents,
-        status: PaymentStatus.PAID,
-        provider: "subsidy_agency",
-        externalIdPlaceholder: metadata.externalReference || `agency:${randomUUID()}`,
-        paidAt,
-        customFields: {
-          paymentType: "subsidy_agency",
-          agencyName: metadata.agencyName,
-          authorizationNumber: metadata.authorizationNumber || null,
-          externalReference: metadata.externalReference || null,
-          coverageStart: metadata.coverageStart || null,
-          coverageEnd: metadata.coverageEnd || null,
-          childId: child?.id ?? null,
-          childName: child?.fullName ?? null,
-          familyId: familyAccess.family.id,
-          centerId: familyAccess.centerId,
-          notes: metadata.notes || null,
-          enteredBy: user.email,
-        },
-      },
-    });
-    const updatedAccount = await tx.billingAccount.update({
-      where: { id: account.id },
-      data: { balanceCents: { increment: ledgerAmountCents } },
-    });
-    const entry = await tx.ledgerEntry.create({
-      data: {
-        billingAccountId: account.id,
-        paymentId: payment.id,
-        type: "agency_payment",
-        description,
-        amountCents: ledgerAmountCents,
-        balanceAfterCents: updatedAccount.balanceCents,
-        effectiveAt: paidAt,
-        sourceSystem: "subsidy_agency",
-        externalId: `agency:${payment.id}`,
-        metadata: {
-          paymentType: "subsidy_agency",
-          agencyName: metadata.agencyName,
-          authorizationNumber: metadata.authorizationNumber || null,
-          externalReference: metadata.externalReference || null,
-          coverageStart: metadata.coverageStart || null,
-          coverageEnd: metadata.coverageEnd || null,
-          childId: child?.id ?? null,
-          childName: child?.fullName ?? null,
-          familyId: familyAccess.family.id,
-          centerId: familyAccess.centerId,
-          notes: metadata.notes || null,
-          enteredBy: user.email,
-        },
-      },
-    });
-    return { payment, entry };
-  });
-
-  await writeAuditLog(user, {
-    centerId: familyAccess.centerId,
-    action: "billing.agency_payment.created",
-    resource: "Payment",
-    resourceId: result.payment.id,
-    metadata: {
-      familyId: familyAccess.family.id,
-      childId: child?.id ?? null,
-      amountCents,
-      agencyName: metadata.agencyName,
-      authorizationNumber: metadata.authorizationNumber || null,
-      externalReference: metadata.externalReference || null,
-      coverageStart: metadata.coverageStart || null,
-      coverageEnd: metadata.coverageEnd || null,
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "Direct agency credits to family ledgers are retired. Create the agency claim and record its remittance in the Agency Claim Queue; that workflow does not change the family balance.",
     },
-  });
-
-  return NextResponse.json({ ok: true, created: 1, skipped: 0, totalCents: amountCents, payment: result.payment, entry: result.entry });
+    { status: 409 },
+  );
 }
 
 async function manualFamilyPaymentExceedsVisibleBalance(familyId: string, amountCents: number) {

@@ -389,17 +389,27 @@ async function postHandler(request: NextRequest) {
   if (!claim || !centerAllowed(auth.user, claim.centerId)) return NextResponse.json({ ok: false, error: "Claim not found." }, { status: 404 });
 
   if (action === "updateDocument") {
-    if (!["draft", "ready", "submitted"].includes(claim.status)) return NextResponse.json({ ok: false, error: "Documents cannot be changed after the agency decision is recorded." }, { status: 409 });
     const status = clean(body.status);
     if (!new Set(["required", "requested", "received", "verified", "not_applicable"]).has(status)) return NextResponse.json({ ok: false, error: "Invalid document status." }, { status: 400 });
-    const document = await prisma.subsidyClaimDocument.findFirst({ where: { id: clean(body.documentId), claimId: claim.id } });
-    if (!document) return NextResponse.json({ ok: false, error: "Claim document not found." }, { status: 404 });
-    const linkedDocumentId = clean(body.linkedDocumentId) || document.documentId;
-    const notes = clean(body.notes) || document.notes;
-    if (status === "verified" && !linkedDocumentId && !notes) {
-      return NextResponse.json({ ok: false, error: "Add an evidence note or linked document before marking this item verified." }, { status: 400 });
+    let updated;
+    try {
+      updated = await prisma.$transaction(async (tx) => {
+        const transition = await tx.subsidyClaim.updateMany({
+          where: { id: claim.id, status: { in: ["draft", "ready", "submitted"] } },
+          data: { updatedAt: new Date() },
+        });
+        if (transition.count !== 1) throw new AgencyWorkflowError("Documents cannot be changed after the agency decision is recorded.", 409);
+        const document = await tx.subsidyClaimDocument.findFirst({ where: { id: clean(body.documentId), claimId: claim.id } });
+        if (!document) throw new AgencyWorkflowError("Claim document not found.", 404);
+        const linkedDocumentId = clean(body.linkedDocumentId) || document.documentId;
+        const notes = clean(body.notes) || document.notes;
+        if (status === "verified" && !linkedDocumentId && !notes) throw new AgencyWorkflowError("Add an evidence note or linked document before marking this item verified.");
+        return tx.subsidyClaimDocument.update({ where: { id: document.id }, data: { status, documentId: linkedDocumentId, notes } });
+      });
+    } catch (error) {
+      if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      throw error;
     }
-    const updated = await prisma.subsidyClaimDocument.update({ where: { id: document.id }, data: { status, documentId: linkedDocumentId, notes } });
     await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim_document.updated", resource: "SubsidyClaimDocument", resourceId: updated.id, metadata: { claimId: claim.id, status } });
     return NextResponse.json({ ok: true, document: updated });
   }

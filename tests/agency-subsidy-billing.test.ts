@@ -128,6 +128,8 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(route, /\|\\\.\\d\+\)\$\/\.test\(text\)/);
   assert.match(route, /cannot exceed the authorization rate/);
   assert.match(route, /claim\.status !== "submitted"/);
+  assert.match(route, /updateDocument"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*status: \{ in: \["draft", "ready", "submitted"\] \}/);
+  assert.match(route, /Documents cannot be changed after the agency decision is recorded/);
   assert.match(route, /Enter the agency denial reason or code/);
   assert.match(route, /action === "voidClaim"/);
   assert.match(route, /updateMany\(\{ where: \{ id: claim\.id, status: \{ in: \["draft", "ready"\] \} \}/);

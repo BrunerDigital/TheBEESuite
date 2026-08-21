@@ -87,13 +87,83 @@ test("agency approvals preserve dollar units when posted", () => {
 
 test("agency authorization entry resets and shows the selected child's saved rate", () => {
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
-  assert.match(workspace, /key=\{`\$\{centerId\}:\$\{programId\}:\$\{familyId\}:\$\{childId\}`\}/);
+  assert.match(workspace, /key=\{`\$\{centerId\}:\$\{programId\}:\$\{familyId\}:\$\{childId\}:\$\{editingAuthorizationId\}`\}/);
   assert.match(workspace, /authorization\.childId === childId/);
   assert.match(workspace, /authorization\.agencyProgramId === programId/);
   assert.match(workspace, /Saved authorization\{selectedChildAuthorizations\.length === 1/);
   assert.match(workspace, /money\(authorization\.authorizedRateCents\).*authorization\.unitType/);
   assert.match(workspace, /authorization\.agencyProgram\.name.*money\(authorization\.authorizedRateCents\)/);
-  assert.match(workspace, /Switching children clears the new-authorization fields/);
+  assert.match(workspace, /Switching children clears the entry fields/);
+});
+
+test("authorization corrections fail closed and return useful duplicate guidance", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
+  assert.match(route, /currently enrolled child with an assigned classroom can receive a new agency authorization/);
+  assert.match(route, /subsidyAuthorizations: \{ some: \{\} \}/);
+  assert.match(route, /currentlyEnrolledStatusValues/);
+  assert.match(route, /isCurrentlyEnrolledChildRecord/);
+  assert.match(route, /action === "updateAuthorization"/);
+  assert.match(route, /action === "restoreAuthorization"/);
+  assert.match(route, /claims: \{ where: \{ status: \{ not: "void" \}/);
+  assert.match(route, /This authorization already exists[\s\S]*Use Edit authorization/);
+  assert.match(route, /Family copay cannot be negative/);
+  assert.match(route, /validCurrencyInput\(body\.familyCopayDollars, true\)/);
+  assert.match(route, /no more than two decimal places/);
+  assert.match(route, /date\.toISOString\(\)\.slice\(0, 10\) !== text/);
+  assert.match(route, /AUTHORIZATION_UNIT_TYPES/);
+  assert.match(route, /updateAuthorization"\)[\s\S]*prisma\.\$transaction[\s\S]*TransactionIsolationLevel\.Serializable/);
+  assert.match(workspace, /Edit authorization/);
+  assert.match(workspace, /Save correction/);
+  assert.match(workspace, /Restore/);
+  assert.match(workspace, /Authorized units/);
+  assert.match(workspace, /former child[\s\S]*review or archive/);
+  assert.match(workspace, /authorization\.status === "active" && isCurrentlyEnrolledChildRecord\(authorization\.child\)/);
+});
+
+test("agency claims enforce active authorizations, periods, units, and state transitions", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
+  assert.match(route, /authorization\.status !== "active"/);
+  assert.match(route, /isCurrentlyEnrolledChildRecord\(authorization\.child\)[\s\S]*assigned classroom can be used for a new claim/);
+  assert.match(route, /servicePeriodStart: \{ lte: end \}[\s\S]*servicePeriodEnd: \{ gte: start \}/);
+  assert.match(route, /exceed the authorization's total approved units/);
+  assert.match(route, /unitsAtPrecision\(\(used\._sum\.serviceUnits \?\? 0\) \+ units\) > unitsAtPrecision\(authorization\.authorizedUnits\)/);
+  assert.match(route, /\|\\\.\\d\+\)\$\/\.test\(text\)/);
+  assert.match(route, /cannot exceed the authorization rate/);
+  assert.match(route, /claim\.status !== "submitted"/);
+  assert.match(route, /recordDecision"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*findUniqueOrThrow[\s\S]*claimSubmissionBlockers/);
+  assert.match(route, /Complete every required claim document before recording agency approval/);
+  assert.match(route, /updateDocument"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*status: \{ in: \["draft", "ready", "submitted"\] \}/);
+  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND EXISTS/);
+  assert.match(route, /Documents cannot be changed after the agency decision is recorded/);
+  assert.match(route, /Enter the agency denial reason or code/);
+  assert.match(route, /action === "voidClaim"/);
+  assert.match(route, /updateMany\(\{ where: \{ id: claim\.id, status: \{ in: \["draft", "ready"\] \} \}/);
+  assert.match(route, /The claim changed before it could be voided/);
+  assert.match(workspace, /Record denial/);
+  assert.match(workspace, /Void draft/);
+  assert.match(workspace, /name="serviceUnits"[\s\S]*step="0\.000001"/);
+});
+
+test("agency remittances re-read the claim inside a serializable transaction", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
+  assert.match(route, /const current = await tx\.subsidyClaim\.findUnique/);
+  assert.match(route, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(route, /REMITTANCE_METHODS/);
+  assert.match(route, /That remittance reference is already recorded or the claim changed/);
+  assert.match(workspace, /Record remittance/);
+  assert.match(workspace, /does not charge a family or change its balance/);
+});
+
+test("agency dashboard totals use bounded database aggregates for the full non-void claim set", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  assert.match(route, /\$queryRaw<AgencySummaryRow\[\]>/);
+  assert.match(route, /SUM\(claim\."claimedCents"\)/);
+  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND EXISTS/);
+  assert.match(route, /claim\.status <> 'void'/);
+  assert.doesNotMatch(route, /summaryClaims\.reduce/);
 });
 
 test("remittance status uses approved amount when available", () => {

@@ -64,7 +64,8 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
         if (!response.ok) setError(body.error || "Agency billing workspace could not be loaded.");
         else setData(body);
       })
-      .catch(() => { if (active) setError("Agency billing workspace could not be loaded."); });
+      .catch(() => { if (active) setError("Agency billing workspace could not be loaded."); })
+      .finally(() => { if (active) setPending(false); });
     return () => { active = false; };
   }, [centerId, claimCursor, claimPage]);
 

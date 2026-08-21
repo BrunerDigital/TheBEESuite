@@ -167,6 +167,7 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   assert.match(workspace, /const blob = await response\.blob\(\);\s+if \(centerIdRef\.current !== exportCenterId\) return;/);
   assert.match(workspace, /centerIdRef\.current !== requestCenterId/);
   assert.match(workspace, /setPending\(true\); setClaimCursorByPage/);
+  assert.match(workspace, /\.finally\(\(\) => \{ if \(active\) setPending\(false\); \}\)/);
   assert.match(route, /new ReadableStream<Uint8Array>/);
   assert.match(route, /orderBy: \{ id: "asc" \}/);
   assert.match(route, /take: 250/);

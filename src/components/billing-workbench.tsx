@@ -120,6 +120,7 @@ export type BillingWorkbenchCenter = {
   classrooms: Array<{ id: string; name: string; ageGroup: string }>;
   dashboardOptions?: DashboardOptions;
   isMissHoneysLearningCenter?: boolean;
+  hardwareTerminalConfigured?: boolean;
   checkoutReadiness?: Pick<
     StripeCheckoutReadiness,
     "accountId" | "label" | "canAcceptParentPayments" | "blockingReason" | "stripeConfigured" | "webhookConfigured"
@@ -587,7 +588,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function paymentMethodLabel(method: DirectorPaymentMethod) {
     if (method === "autopay") return "Process invoice with autopay";
-    if (method === "card_checkout") return "Open debit or credit card payment";
+    if (method === "card_checkout") return "Open Digital Terminal on this device";
     if (method === "instant_bank_checkout") return "Open Link payment";
     return "Open bank account payment";
   }
@@ -1698,7 +1699,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   Process invoice with autopay
                 </Button>
               ) : null}
-              {selectedCenter && selectedFamily && selectedBillingAccount ? (
+              {selectedCenter?.hardwareTerminalConfigured && selectedFamily && selectedBillingAccount ? (
                 <StripeTerminalPayment
                   centerId={selectedCenter.id}
                   billingAccountId={selectedBillingAccount.id}
@@ -1714,7 +1715,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 onClick={() => openPaymentReview("card_checkout")}
               >
                 <CreditCard data-icon="inline-start" />
-                Debit or credit card
+                Digital Terminal
               </Button>
               <Button
                 disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
@@ -1736,7 +1737,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
               Payment options
               <InfoTip label="Payment action help" side="right">
-                Use In-Person Card Reader when the parent is at the school. Secure payment forms keep full card and bank details out of The BEE Suite.
+                Use Digital Terminal to open a secure card screen on this device for a parent who is present. A certified hardware reader appears only after that school has registered one.
               </InfoTip>
             </div>
           </div>

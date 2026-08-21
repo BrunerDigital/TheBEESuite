@@ -220,7 +220,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   function openCardCheckout() {
     if (paymentActionReason) return setError(paymentActionReason);
     const confirmed = window.confirm(
-      `Open a secure card payment form for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
+      `Open the Digital Terminal on this device for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
     );
     if (!confirmed) return;
 
@@ -273,7 +273,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
           variant="outline"
         >
           <CreditCard data-icon="inline-start" />
-          Debit or credit card
+          Digital Terminal
         </Button>
         {invoice.responsibilityReviewRequired ? (
           <Button

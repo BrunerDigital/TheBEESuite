@@ -3821,6 +3821,8 @@ async function renderLivePage(
               classrooms: billingClassroomsByCenter.get(center.id) ?? [],
               isMissHoneysLearningCenter: isMissHoneysBrandText(center.name),
               dashboardOptions: dashboardOptionsFromCustomFields(center.customFields),
+              hardwareTerminalConfigured: typeof recordFromJson(center.customFields).stripeTerminalLocationId === "string"
+                && String(recordFromJson(center.customFields).stripeTerminalLocationId).trim().length > 0,
               checkoutReadiness: stripeCheckoutReadiness({
                 customFields: center.customFields,
                 stripeConfigured: billingStripeConfigured,

@@ -12,6 +12,9 @@ test("director billing copy describes payment actions without implementation not
 
   assert.match(workbench, /Family billing/);
   assert.match(workbench, /Send a secure payment link/);
+  assert.match(workbench, /Digital Terminal/);
+  assert.match(workbench, /selectedCenter\?\.hardwareTerminalConfigured/);
+  assert.match(workbench, /secure card screen on this device/);
   assert.match(workbench, /Process invoice with autopay/);
   assert.match(workbench, /Account credit is applied first/);
   assert.doesNotMatch(workbench, /Hosted handoffs and saved-method charges are created server-side/);
@@ -30,6 +33,7 @@ test("billing action labels name the real action and hide internal identifiers",
 
   assert.match(invoiceActions, /Process authorized autopay/);
   assert.match(invoiceActions, /Pay with Link/);
+  assert.match(invoiceActions, /Digital Terminal/);
   assert.match(autopayActions, /Process all reviewed balances/);
   assert.match(autopayActions, /Account credit is applied first/);
   assert.match(autopayActions, /result\.reason \?\? "—"/);

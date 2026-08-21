@@ -14,6 +14,8 @@ const weekdayAliases = new Map([
   ["fri", "friday"],
   ["friday", "friday"],
 ]);
+const weekdayOrder = ["monday", "tuesday", "wednesday", "thursday", "friday"];
+const weekdayTokenPattern = "mon(?:day)?|tue(?:s|sday)?|wed(?:s|nesday)?|thu(?:r|rs|rsday)?|fri(?:day)?";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -64,9 +66,23 @@ export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: u
   if (weekdays.size >= 2 && weekdays.size <= 5) return weekdays.size as 2 | 3 | 4 | 5;
 
   const text = JSON.stringify({ schedule, customFields }).toLowerCase();
-  if (/\b(?:mon(?:day)?\s*[-–—]\s*fri(?:day)?|monday\s+(?:through|to)\s+friday)\b/.test(text)) return 5;
   const textWeekdays = new Set<string>();
-  for (const match of text.matchAll(/\b(?:mon(?:day)?|tue(?:s|sday)?|wed(?:s|nesday)?|thu(?:r|rs|rsday)?|fri(?:day)?)\b/g)) {
+  const rangePattern = new RegExp(`\\b(${weekdayTokenPattern})\\s*(?:[-–—]|through|to)\\s*(${weekdayTokenPattern})\\b`, "g");
+  for (const match of text.matchAll(rangePattern)) {
+    const start = normalizedWeekday(match[1]);
+    const end = normalizedWeekday(match[2]);
+    const startIndex = start ? weekdayOrder.indexOf(start) : -1;
+    const endIndex = end ? weekdayOrder.indexOf(end) : -1;
+    if (startIndex < 0 || endIndex < startIndex) continue;
+    for (const day of weekdayOrder.slice(startIndex, endIndex + 1)) textWeekdays.add(day);
+  }
+  if (/\bm\s*\/?\s*w\s*\/?\s*f\b/.test(text)) {
+    textWeekdays.add("monday");
+    textWeekdays.add("wednesday");
+    textWeekdays.add("friday");
+  }
+  const weekdayPattern = new RegExp(`\\b(?:${weekdayTokenPattern})\\b`, "g");
+  for (const match of text.matchAll(weekdayPattern)) {
     const normalized = normalizedWeekday(match[0]);
     if (normalized) textWeekdays.add(normalized);
   }

@@ -193,6 +193,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
       }
       if (centerIdRef.current !== exportCenterId) return;
       const blob = await response.blob();
+      if (centerIdRef.current !== exportCenterId) return;
       const href = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = href; anchor.download = `agency-claims-${exportCenterId}-${today()}.csv`; anchor.click();

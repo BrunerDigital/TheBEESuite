@@ -164,6 +164,7 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   assert.match(workspace, /load\(callbacks\.reloadClaimPage\)/);
   assert.match(workspace, /exportClaims=true/);
   assert.match(workspace, /response\.blob\(\)/);
+  assert.match(workspace, /const blob = await response\.blob\(\);\s+if \(centerIdRef\.current !== exportCenterId\) return;/);
   assert.match(workspace, /centerIdRef\.current !== requestCenterId/);
   assert.match(route, /new ReadableStream<Uint8Array>/);
   assert.match(route, /orderBy: \{ id: "asc" \}/);

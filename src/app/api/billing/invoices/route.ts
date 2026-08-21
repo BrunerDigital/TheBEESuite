@@ -144,6 +144,7 @@ async function resolveCharge(body: Record<string, unknown>, centerId: string): P
         amountCents: plan.amountCents,
         ageGroup: plan.ageGroup,
         cadence: plan.cadence,
+        customFields: { tuitionPlanName: plan.name },
       },
     };
   }

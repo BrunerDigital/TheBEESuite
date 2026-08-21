@@ -13,7 +13,7 @@ import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
 import { canCreatePaymentMethodManagementSession, paymentMethodManagementSummary } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
-import { stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
+import { stripeConnectSavedMethodAccount, stripeConnectSavedMethodManagementAccount } from "@/lib/stripe-connect-migration";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
@@ -335,8 +335,13 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: true, status: "enabled" });
   }
 
-  const portalConnectedAccountId = action === "portal" && savedMethodChargeAccountId
-    ? savedMethodChargeAccountId
+  const savedMethodManagementAccountId = stripeConnectSavedMethodManagementAccount({
+    activeAccountId: connectedAccountId,
+    savedMethodAccountId: savedPaymentMethodConnectedAccountId,
+    centerCustomFields: center?.customFields,
+  });
+  const portalConnectedAccountId = action === "portal" && savedMethodManagementAccountId
+    ? savedMethodManagementAccountId
     : connectedAccountId;
   const existingCustomerId = stripeCustomerIdForAccount(currentFields, portalConnectedAccountId);
   if (action === "portal") {

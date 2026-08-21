@@ -333,7 +333,7 @@ async function POSTHandler(request: NextRequest) {
     : activeConnectedAccountId;
   if (method === "saved_method" && savedPaymentMethodConnectedAccountId && !connectedAccountId) {
     return NextResponse.json(
-      { ok: false, error: "The saved payment method is not linked to this school's active or retained transition account." },
+      { ok: false, error: "This saved payment method belongs to the school's prior payout account. Replace it before making a saved-method payment." },
       { status: 409 },
     );
   }

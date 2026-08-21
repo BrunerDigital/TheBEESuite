@@ -22,7 +22,7 @@ import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
-import { readStripeConnectMigration, stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
+import { readStripeConnectMigration, stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -155,12 +155,12 @@ async function POSTHandler(request: NextRequest) {
   if (payload.intent === "payment_method_reauthorization") {
     const migration = readStripeConnectMigration(center.customFields);
     const savedMethodAccountId = clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId);
-    const retainedSourceAccountId = stripeConnectSavedMethodAccount({
+    const reauthorizationRequired = stripeConnectSavedMethodNeedsReauthorization({
       activeAccountId: connectedAccountId,
       savedMethodAccountId,
       centerCustomFields: center.customFields,
     });
-    if (!migration.cutoverAt || retainedSourceAccountId !== migration.sourceAccountId || connectedAccountId !== migration.targetAccountId) {
+    if (!migration.cutoverAt || !reauthorizationRequired || connectedAccountId !== migration.targetAccountId) {
       return NextResponse.json({ ok: false, error: "This payment update is no longer needed or the school payment account changed. Please ask the school for a new link." }, { status: 409 });
     }
   }

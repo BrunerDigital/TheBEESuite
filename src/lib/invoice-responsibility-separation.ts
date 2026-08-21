@@ -108,6 +108,7 @@ export function allOpenInvoicesResponsibilitySeparated(invoices: Array<{
   customFields: unknown;
 }>) {
   const relevantInvoices = invoices.filter((invoice) => {
+    if (productResponsibilityReviewExempt(record(invoice.customFields))) return false;
     if (invoice.status === "OPEN" && invoice.totalCents > 0) return true;
     const separation = invoiceResponsibilitySeparation(invoice.customFields);
     if (invoice.status === "PAID" && separation) return true;
@@ -122,10 +123,14 @@ export function allOpenInvoicesResponsibilitySeparated(invoices: Array<{
 
 export function invoiceResponsibilityReviewExempt(customFields: unknown, currentInvoiceTotalCents?: number) {
   const fields = record(customFields);
+  return productResponsibilityReviewExempt(fields)
+    || confirmedNetFamilyTuitionInvoice(fields, currentInvoiceTotalCents);
+}
+
+function productResponsibilityReviewExempt(fields: Record<string, unknown>) {
   return text(fields.checkoutPurpose) === "product_purchase"
     || text(fields.receiptKind) === "product"
-    || text(fields.chargeSource) === "product"
-    || confirmedNetFamilyTuitionInvoice(fields, currentInvoiceTotalCents);
+    || text(fields.chargeSource) === "product";
 }
 
 const FAMILY_ONLY_TUITION_MARKER = /\b(?:co-?pay|parent responsibility|family responsibility)\b/i;

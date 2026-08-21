@@ -110,6 +110,9 @@ test("account review resolves only when every open invoice has an exact separati
   assert.equal(allOpenInvoicesResponsibilitySeparated([
     { status: "OPEN", totalCents: 1_900, customFields: { chargeSource: "tuitionPlan", tuitionPlanName: "CCDF Copay", grossTuitionCents: 1_900, netTuitionCents: 1_900, tuitionCreditsTotalCents: 0 } },
   ]), true);
+  assert.equal(allOpenInvoicesResponsibilitySeparated([
+    { status: "OPEN", totalCents: 8_000, customFields: { checkoutPurpose: "product_purchase" } },
+  ]), false);
 });
 
 test("responsibility separation fails closed on mismatched totals and ambiguous account credit", () => {
@@ -189,4 +192,6 @@ test("responsibility separation remains available while full invoice collection 
   assert.match(invoiceRoute, /customFields: \{ tuitionPlanName: plan\.name \}/);
   assert.match(invoiceRoute, /grossTuitionCents: items\.reduce\(\(total, item\) => total \+ item\.amountCents, 0\)/);
   assert.match(invoiceRoute, /netTuitionCents: items\.reduce\(\(total, item\) => total \+ item\.amountCents, 0\)/);
+  assert.match(invoiceRoute, /charge\.chargeSource === "tuitionPlan" && !child/);
+  assert.match(invoiceRoute, /netTuitionCents: charge\.amountCents/);
 });

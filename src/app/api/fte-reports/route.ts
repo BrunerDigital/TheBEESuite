@@ -5,11 +5,13 @@ import { writeAuditLog } from "@/lib/audit";
 import {
   ageGroupTotal,
   calculateFteCount,
+  calculateScheduledDaysFte,
   defaultFteWeekEnd,
   isExecutiveFteManager,
   isFteCenterInVisibleScope,
   normalizeFteStatus,
   resolveFteCenterId,
+  scheduledDayBreakdownTotal,
   validateFtePeriod,
 } from "@/lib/fte-report-guardrails";
 import { appendRowToGoogleSheet, spreadsheetIdFromUrl, type GoogleSheetValue } from "@/lib/google-sheets";
@@ -370,8 +372,18 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "You do not have access to this report." }, { status: 403 });
   }
 
-  const fullTimeCount = intValue(body.fullTimeCount);
-  const partTimeCount = intValue(body.partTimeCount);
+  const scheduledDayBreakdownProvided = ["twoDayCount", "threeDayCount", "fourDayCount", "fiveDayCount"]
+    .some((field) => body[field] !== "" && body[field] !== undefined && body[field] !== null);
+  const scheduledDayCounts = {
+    twoDayCount: intValue(body.twoDayCount),
+    threeDayCount: intValue(body.threeDayCount),
+    fourDayCount: intValue(body.fourDayCount),
+    fiveDayCount: intValue(body.fiveDayCount),
+  };
+  const fullTimeCount = scheduledDayBreakdownProvided ? scheduledDayCounts.fiveDayCount : intValue(body.fullTimeCount);
+  const partTimeCount = scheduledDayBreakdownProvided
+    ? scheduledDayCounts.twoDayCount + scheduledDayCounts.threeDayCount + scheduledDayCounts.fourDayCount
+    : intValue(body.partTimeCount);
   const accountReceivableAmount = nullableFloatValue(body.accountReceivableAmount);
   const selfPayerBillAmount = nullableFloatValue(body.selfPayerBillAmount);
   const subsidyBillAmount = nullableFloatValue(body.subsidyBillAmount);
@@ -387,7 +399,9 @@ async function POSTHandler(request: NextRequest) {
   const withdrawals = nullableIntValue(body.withdrawals) ?? 0;
   const preregisteredChildren = nullableIntValue(body.preregisteredChildren) ?? 0;
   const locationData = clean(body.locationData) || center.ownerGroup?.name || center.ownerGroup?.ownerType || "";
-  const calculatedFte = calculateFteCount(fullTimeCount, partTimeCount);
+  const calculatedFte = scheduledDayBreakdownProvided
+    ? calculateScheduledDaysFte(scheduledDayCounts)
+    : calculateFteCount(fullTimeCount, partTimeCount);
   const fteCount = body.fteCount === "" || body.fteCount === undefined || body.fteCount === null
     ? calculatedFte
     : floatValue(body.fteCount);
@@ -416,6 +430,13 @@ async function POSTHandler(request: NextRequest) {
   const preK = intValue(body.preK);
   const schoolAge = intValue(body.schoolAge);
   const enrolledCount = intValue(body.enrolledCount);
+  const scheduledChildrenCount = scheduledDayBreakdownTotal(scheduledDayCounts);
+  if (scheduledDayBreakdownProvided && scheduledChildrenCount > enrolledCount) {
+    return NextResponse.json(
+      { ok: false, error: "The 2–5 day schedule counts cannot exceed enrolled children." },
+      { status: 400 },
+    );
+  }
   const ageGroupCount = ageGroupTotal({
     infants,
     toddlers,
@@ -448,6 +469,12 @@ async function POSTHandler(request: NextRequest) {
       enteredRole: user.role,
       app: "the_bee_suite",
       calculatedFte,
+      fteCalculation: scheduledDayBreakdownProvided ? "scheduled_days_divided_by_five" : "legacy_full_time_plus_half_part_time",
+      twoDayCount: scheduledDayBreakdownProvided ? scheduledDayCounts.twoDayCount : null,
+      threeDayCount: scheduledDayBreakdownProvided ? scheduledDayCounts.threeDayCount : null,
+      fourDayCount: scheduledDayBreakdownProvided ? scheduledDayCounts.fourDayCount : null,
+      fiveDayCount: scheduledDayBreakdownProvided ? scheduledDayCounts.fiveDayCount : null,
+      scheduledChildrenCount: scheduledDayBreakdownProvided ? scheduledChildrenCount : null,
       ageGroupCount,
       locationData,
       accountReceivableAmount,

@@ -24,6 +24,27 @@ export function calculateFteCount(fullTimeCount: number, partTimeCount: number) 
   return Math.max(0, Math.round((fullTimeCount + partTimeCount * 0.5) * 100) / 100);
 }
 
+export type FteScheduledDayCounts = {
+  twoDayCount: number;
+  threeDayCount: number;
+  fourDayCount: number;
+  fiveDayCount: number;
+};
+
+export function scheduledDayBreakdownTotal(counts: FteScheduledDayCounts) {
+  return counts.twoDayCount + counts.threeDayCount + counts.fourDayCount + counts.fiveDayCount;
+}
+
+export function calculateScheduledDaysFte(counts: FteScheduledDayCounts) {
+  const weightedDays = (
+    Math.max(0, counts.twoDayCount) * 2
+    + Math.max(0, counts.threeDayCount) * 3
+    + Math.max(0, counts.fourDayCount) * 4
+    + Math.max(0, counts.fiveDayCount) * 5
+  );
+  return Math.round((weightedDays / 5) * 100) / 100;
+}
+
 export function ageGroupTotal(input: {
   infants?: number;
   toddlers?: number;

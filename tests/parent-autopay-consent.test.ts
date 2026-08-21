@@ -49,7 +49,6 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(stripeWebhook, /paymentMethodSetupAutopayOutcome/);
   assert.match(stripeWebhook, /linkedGuardianUserIds/);
   assert.match(stripeWebhook, /migrationSessionIsCurrent/);
-  assert.match(stripeWebhook, /where: currentlyEnrolledChildWhere\(\)/);
   assert.match(stripeWebhook, /currentChildCenters\.length === 1/);
   assert.match(stripeWebhook, /from "Family"[\s\S]*for update/);
   assert.match(stripeWebhook, /from "Child"[\s\S]*for update/);

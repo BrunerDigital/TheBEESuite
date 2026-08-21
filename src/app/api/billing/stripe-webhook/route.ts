@@ -1160,8 +1160,14 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       if (autopayPatch?.preservedExistingConsent && !auditTenantId) {
         throw new Error("Autopay consent migration requires an authoritative tenant for its audit record.");
       }
-      await tx.billingAccount.update({
-        where: { id: billingAccountId },
+      const billingAccountUpdate = await tx.billingAccount.updateMany({
+        where: {
+          id: billingAccountId,
+          autopayPlaceholder: billingAccount.autopayPlaceholder,
+          customFields: billingAccount.customFields === null
+            ? { equals: Prisma.DbNull }
+            : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+        },
         data: {
           ...(autopayPatch ? { autopayPlaceholder: autopayPatch.autopayPlaceholder } : {}),
           customFields: {
@@ -1198,6 +1204,9 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
           },
         },
       });
+      if (billingAccountUpdate.count !== 1) {
+        throw new Error("Billing account consent changed while Stripe payment-method setup was completing.");
+      }
       if (autopayPatch?.preservedExistingConsent) {
         await tx.auditLog.create({
           data: {

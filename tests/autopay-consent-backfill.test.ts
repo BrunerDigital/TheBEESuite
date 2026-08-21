@@ -12,6 +12,9 @@ test("autopay consent backfill is dry-run-first and fingerprint guarded", () => 
   assert.match(source, /stripeDefaultPaymentMethodId/);
   assert.match(source, /enabled_by_user_not_linked_guardian/);
   assert.match(source, /billing\.autopay\.payment_method_consent_backfilled/);
+  assert.match(source, /currentlyEnrolledChildWhere/);
+  assert.match(source, /centerId: null/);
+  assert.match(source, /childCenterIds\.length === 1/);
   assert.match(source, /cardCharges: 0/);
   assert.match(source, /externalMessages: 0/);
   assert.match(source, /stripeMutations: 0/);

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
 import { Prisma } from "@prisma/client";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { readStripeConnectedAccountId } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
@@ -65,20 +66,40 @@ async function buildPlan(db: Pick<Prisma.TransactionClient, "center" | "family" 
       organization: { select: { tenantId: true } },
     },
   });
+  const centerIds = centers.map((center) => center.id);
   const families = centers.length ? await db.family.findMany({
-    where: { centerId: { in: centers.map((center) => center.id) } },
+    where: {
+      OR: [
+        { centerId: { in: centerIds } },
+        {
+          centerId: null,
+          children: {
+            some: {
+              ...currentlyEnrolledChildWhere(),
+              classroom: { centerId: { in: centerIds } },
+            },
+          },
+        },
+      ],
+    },
     select: {
       centerId: true,
       guardians: { select: { userId: true } },
       billingAccount: { select: { id: true, autopayPlaceholder: true, customFields: true } },
+      children: {
+        where: currentlyEnrolledChildWhere(),
+        select: { classroom: { select: { centerId: true } } },
+      },
     },
   }) : [];
   const familiesByCenter = new Map<string, typeof families>();
   for (const family of families) {
-    if (!family.centerId) continue;
-    const rows = familiesByCenter.get(family.centerId) ?? [];
+    const childCenterIds = Array.from(new Set(family.children.map((child) => child.classroom?.centerId).filter((value): value is string => Boolean(value))));
+    const resolvedCenterId = family.centerId || (childCenterIds.length === 1 ? childCenterIds[0] : null);
+    if (!resolvedCenterId) continue;
+    const rows = familiesByCenter.get(resolvedCenterId) ?? [];
     rows.push(family);
-    familiesByCenter.set(family.centerId, rows);
+    familiesByCenter.set(resolvedCenterId, rows);
   }
   const accounts = centers.flatMap((center) => (familiesByCenter.get(center.id) ?? []).flatMap((family) => {
     if (!family.billingAccount) return [];

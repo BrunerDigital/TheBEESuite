@@ -71,6 +71,11 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(parentPortal, /activeView === "payments"[\s\S]*Enable autopay/);
   assert.match(parentPortal, /Autopay could not be updated/);
   assert.match(parentPortal, /action === "enable_autopay" \|\| action === "disable_autopay"/);
+  assert.doesNotMatch(parentPortal, /if \(enabled && !autopayCanEnable\)/);
+  assert.match(paymentMethodRoute, /action === "enable_autopay"[\s\S]*paymentMethodManagementSummary/);
+  assert.match(paymentMethodRoute, /missing_stripe_customer/);
+  assert.match(paymentMethodRoute, /missing_saved_payment_method/);
+  assert.match(paymentMethodRoute, /wrong_payout_account/);
   assert.ok((parentPortal.match(/onClick=\{\(\) => toggleAutopay\(autopayStatus !== "enabled"\)\}/g) ?? []).length >= 2);
   assert.match(invoiceAction, /accountCategory === "past"[\s\S]*method\.paymentMethodLabel[\s\S]*reason \?/);
 });

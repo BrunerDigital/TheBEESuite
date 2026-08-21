@@ -326,7 +326,7 @@ async function POSTHandler(request: NextRequest) {
   const weekEnd = parseDate(body.weekEnd) || (weekStart ? defaultFteWeekEnd(weekStart) : null);
 
   const existingById = id
-    ? await prisma.fteReport.findUnique({ where: { id }, select: { id: true, centerId: true, status: true } })
+    ? await prisma.fteReport.findUnique({ where: { id }, select: { id: true, centerId: true, status: true, sourceMetadata: true } })
     : null;
   if (id && !existingById) return NextResponse.json({ ok: false, error: "FTE report not found." }, { status: 404 });
 
@@ -372,16 +372,44 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "You do not have access to this report." }, { status: 403 });
   }
 
+  const existingByWeek = weekStart && !id
+    ? await prisma.fteReport.findUnique({
+        where: { centerId_weekStart: { centerId, weekStart } },
+        select: { id: true, centerId: true, status: true, sourceMetadata: true },
+      })
+    : null;
+  const reportToUpdate = existingById ?? existingByWeek;
+  if (reportToUpdate?.status === "approved" && !isExecutiveFteManager(user.role)) {
+    return NextResponse.json(
+      { ok: false, error: "Approved FTE reports require executive correction before they can be changed." },
+      { status: 403 },
+    );
+  }
+  const selectedStatus = normalizeFteStatus({
+    requestedStatus: body.status,
+    role: user.role,
+    isCorrection: Boolean(reportToUpdate),
+  });
   const scheduledDayBreakdownProvided = ["twoDayCount", "threeDayCount", "fourDayCount", "fiveDayCount"]
     .some((field) => body[field] !== "" && body[field] !== undefined && body[field] !== null);
-  const scheduledDayCounts = {
+  const existingMetadata = recordFromJson(reportToUpdate?.sourceMetadata);
+  const existingScheduledDayBreakdown = existingMetadata.fteCalculation === "scheduled_days_divided_by_five"
+    || ["twoDayCount", "threeDayCount", "fourDayCount", "fiveDayCount"]
+      .every((field) => metadataNumber(existingMetadata[field]) !== null);
+  const useScheduledDayBreakdown = scheduledDayBreakdownProvided || existingScheduledDayBreakdown;
+  const scheduledDayCounts = scheduledDayBreakdownProvided ? {
     twoDayCount: intValue(body.twoDayCount),
     threeDayCount: intValue(body.threeDayCount),
     fourDayCount: intValue(body.fourDayCount),
     fiveDayCount: intValue(body.fiveDayCount),
+  } : {
+    twoDayCount: intValue(existingMetadata.twoDayCount),
+    threeDayCount: intValue(existingMetadata.threeDayCount),
+    fourDayCount: intValue(existingMetadata.fourDayCount),
+    fiveDayCount: intValue(existingMetadata.fiveDayCount),
   };
-  const fullTimeCount = scheduledDayBreakdownProvided ? scheduledDayCounts.fiveDayCount : intValue(body.fullTimeCount);
-  const partTimeCount = scheduledDayBreakdownProvided
+  const fullTimeCount = useScheduledDayBreakdown ? scheduledDayCounts.fiveDayCount : intValue(body.fullTimeCount);
+  const partTimeCount = useScheduledDayBreakdown
     ? scheduledDayCounts.twoDayCount + scheduledDayCounts.threeDayCount + scheduledDayCounts.fourDayCount
     : intValue(body.partTimeCount);
   const accountReceivableAmount = nullableFloatValue(body.accountReceivableAmount);
@@ -399,30 +427,12 @@ async function POSTHandler(request: NextRequest) {
   const withdrawals = nullableIntValue(body.withdrawals) ?? 0;
   const preregisteredChildren = nullableIntValue(body.preregisteredChildren) ?? 0;
   const locationData = clean(body.locationData) || center.ownerGroup?.name || center.ownerGroup?.ownerType || "";
-  const calculatedFte = scheduledDayBreakdownProvided
+  const calculatedFte = useScheduledDayBreakdown
     ? calculateScheduledDaysFte(scheduledDayCounts)
     : calculateFteCount(fullTimeCount, partTimeCount);
   const fteCount = body.fteCount === "" || body.fteCount === undefined || body.fteCount === null
     ? calculatedFte
     : floatValue(body.fteCount);
-  const existingByWeek = weekStart && !id
-    ? await prisma.fteReport.findUnique({
-        where: { centerId_weekStart: { centerId, weekStart } },
-        select: { id: true, centerId: true, status: true },
-      })
-    : null;
-  const reportToUpdate = existingById ?? existingByWeek;
-  if (reportToUpdate?.status === "approved" && !isExecutiveFteManager(user.role)) {
-    return NextResponse.json(
-      { ok: false, error: "Approved FTE reports require executive correction before they can be changed." },
-      { status: 403 },
-    );
-  }
-  const selectedStatus = normalizeFteStatus({
-    requestedStatus: body.status,
-    role: user.role,
-    isCorrection: Boolean(reportToUpdate),
-  });
   const infants = intValue(body.infants);
   const toddlers = intValue(body.toddlers);
   const twos = intValue(body.twos);
@@ -431,7 +441,7 @@ async function POSTHandler(request: NextRequest) {
   const schoolAge = intValue(body.schoolAge);
   const enrolledCount = intValue(body.enrolledCount);
   const scheduledChildrenCount = scheduledDayBreakdownTotal(scheduledDayCounts);
-  if (scheduledDayBreakdownProvided && scheduledChildrenCount > enrolledCount) {
+  if (useScheduledDayBreakdown && scheduledChildrenCount > enrolledCount) {
     return NextResponse.json(
       { ok: false, error: "The 2–5 day schedule counts cannot exceed enrolled children." },
       { status: 400 },
@@ -469,12 +479,12 @@ async function POSTHandler(request: NextRequest) {
       enteredRole: user.role,
       app: "the_bee_suite",
       calculatedFte,
-      fteCalculation: scheduledDayBreakdownProvided ? "scheduled_days_divided_by_five" : "legacy_full_time_plus_half_part_time",
-      twoDayCount: scheduledDayBreakdownProvided ? scheduledDayCounts.twoDayCount : null,
-      threeDayCount: scheduledDayBreakdownProvided ? scheduledDayCounts.threeDayCount : null,
-      fourDayCount: scheduledDayBreakdownProvided ? scheduledDayCounts.fourDayCount : null,
-      fiveDayCount: scheduledDayBreakdownProvided ? scheduledDayCounts.fiveDayCount : null,
-      scheduledChildrenCount: scheduledDayBreakdownProvided ? scheduledChildrenCount : null,
+      fteCalculation: useScheduledDayBreakdown ? "scheduled_days_divided_by_five" : "legacy_full_time_plus_half_part_time",
+      twoDayCount: useScheduledDayBreakdown ? scheduledDayCounts.twoDayCount : null,
+      threeDayCount: useScheduledDayBreakdown ? scheduledDayCounts.threeDayCount : null,
+      fourDayCount: useScheduledDayBreakdown ? scheduledDayCounts.fourDayCount : null,
+      fiveDayCount: useScheduledDayBreakdown ? scheduledDayCounts.fiveDayCount : null,
+      scheduledChildrenCount: useScheduledDayBreakdown ? scheduledChildrenCount : null,
       ageGroupCount,
       locationData,
       accountReceivableAmount,

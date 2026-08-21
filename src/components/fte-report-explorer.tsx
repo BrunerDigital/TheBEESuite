@@ -46,6 +46,10 @@ type InlineCorrectionState = {
   enrolledCount: string;
   fullTimeCount: string;
   partTimeCount: string;
+  twoDayCount: string;
+  threeDayCount: string;
+  fourDayCount: string;
+  fiveDayCount: string;
   fteCount: string;
   licenseCapacity: string;
   occupancyPercent: string;
@@ -123,6 +127,10 @@ function correctionFromReport(report: FteReportRow): InlineCorrectionState {
     enrolledCount: inputNumber(report.enrolledCount),
     fullTimeCount: inputNumber(report.fullTimeCount),
     partTimeCount: inputNumber(report.partTimeCount),
+    twoDayCount: inputOptionalNumber(report.twoDayCount),
+    threeDayCount: inputOptionalNumber(report.threeDayCount),
+    fourDayCount: inputOptionalNumber(report.fourDayCount),
+    fiveDayCount: inputOptionalNumber(report.fiveDayCount),
     fteCount: report.fteCount ? String(report.fteCount) : "",
     licenseCapacity: inputOptionalNumber(report.licenseCapacity),
     occupancyPercent: inputOptionalNumber(report.occupancyPercent),

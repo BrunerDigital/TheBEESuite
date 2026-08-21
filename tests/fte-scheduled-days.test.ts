@@ -30,6 +30,9 @@ test("explicit schedule days take priority over the old full-time or part-time l
     customFields: {},
   }), 5);
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { daysPerWeek: 2 } }), 2);
+  assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "Mon-Fri 8:00 AM - 4:30 PM" }, customFields: {} }), 5);
+  assert.equal(scheduledDaysPerWeek({ schedule: { days: ["monday-friday"] }, customFields: {} }), 5);
+  assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "Monday through Friday" }, customFields: {} }), 5);
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "full_time" } }), 5);
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "part_time" } }), null);
 });
@@ -38,13 +41,17 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   const form = readFileSync("src/components/fte-report-form.tsx", "utf8");
   const route = readFileSync("src/app/api/fte-reports/route.ts", "utf8");
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const explorer = readFileSync("src/components/fte-report-explorer.tsx", "utf8");
 
   assert.match(form, /2 days\/week/);
   assert.match(form, /4 days\/week/);
   assert.match(form, /four = 0\.8/);
   assert.match(form, /Past-due current-family AR/);
-  assert.match(route, /fteCalculation: scheduledDayBreakdownProvided \? "scheduled_days_divided_by_five"/);
-  assert.match(route, /fullTimeCount = scheduledDayBreakdownProvided \? scheduledDayCounts\.fiveDayCount/);
+  assert.match(route, /fteCalculation: useScheduledDayBreakdown \? "scheduled_days_divided_by_five"/);
+  assert.match(route, /fullTimeCount = useScheduledDayBreakdown \? scheduledDayCounts\.fiveDayCount/);
+  assert.match(route, /existingScheduledDayBreakdown[\s\S]*useScheduledDayBreakdown/);
+  assert.match(route, /sourceMetadata: true/);
+  assert.match(explorer, /twoDayCount: inputOptionalNumber\(report\.twoDayCount\)/);
   assert.match(page, /aging\.oneToThirtyCents \+ aging\.thirtyOneToSixtyCents \+ aging\.sixtyOnePlusCents/);
   assert.match(page, /past-due receivables/);
 });

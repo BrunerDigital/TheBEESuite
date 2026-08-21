@@ -64,6 +64,7 @@ export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: u
   if (weekdays.size >= 2 && weekdays.size <= 5) return weekdays.size as 2 | 3 | 4 | 5;
 
   const text = JSON.stringify({ schedule, customFields }).toLowerCase();
+  if (/\b(?:mon(?:day)?\s*[-–—]\s*fri(?:day)?|monday\s+(?:through|to)\s+friday)\b/.test(text)) return 5;
   const textMatch = text.match(/\b([2-5])\s*[- ]?days?(?:\s+per\s+week)?\b/);
   if (textMatch) return Number(textMatch[1]) as 2 | 3 | 4 | 5;
   if (/\b(two|three|four|five)\s*[- ]?days?(?:\s+per\s+week)?\b/.test(text)) {

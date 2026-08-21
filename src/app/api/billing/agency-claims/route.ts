@@ -108,6 +108,7 @@ async function getHandler(request: NextRequest) {
   const auth = await currentBillingUser();
   if (!auth.ok) return auth.response;
   const requestedCenterId = clean(request.nextUrl.searchParams.get("centerId"));
+  const exportingClaims = request.nextUrl.searchParams.get("exportClaims") === "true";
   const requestedClaimPage = Number.parseInt(clean(request.nextUrl.searchParams.get("claimPage")) || "1", 10);
   const claimPage = Math.min(Math.max(Number.isFinite(requestedClaimPage) ? requestedClaimPage : 1, 1), 10_000);
   const centerIds = requestedCenterId
@@ -132,8 +133,8 @@ async function getHandler(request: NextRequest) {
     prisma.subsidyClaim.findMany({
       where: { centerId: { in: centerIds } },
       orderBy: [{ createdAt: "desc" }, { dueDate: "asc" }],
-      skip: (claimPage - 1) * CLAIM_PAGE_SIZE,
-      take: CLAIM_PAGE_SIZE + 1,
+      skip: exportingClaims ? undefined : (claimPage - 1) * CLAIM_PAGE_SIZE,
+      take: exportingClaims ? undefined : CLAIM_PAGE_SIZE + 1,
       include: {
         agencyProgram: { select: { name: true, programName: true, providerNumber: true, vendorNumber: true, submissionMethod: true, portalUrl: true, paymentInstructions: true } },
         authorization: { include: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
@@ -169,8 +170,8 @@ async function getHandler(request: NextRequest) {
     }),
   ]);
 
-  const hasNextClaimPage = claims.length > CLAIM_PAGE_SIZE;
-  const visibleClaims = claims.slice(0, CLAIM_PAGE_SIZE);
+  const hasNextClaimPage = !exportingClaims && claims.length > CLAIM_PAGE_SIZE;
+  const visibleClaims = exportingClaims ? claims : claims.slice(0, CLAIM_PAGE_SIZE);
   const summaryRow = summaryRows[0];
   const summary = {
     claimedCents: Number(summaryRow?.claimedCents ?? 0),
@@ -200,7 +201,7 @@ async function getHandler(request: NextRequest) {
     programs: programReadiness,
     authorizations,
     claims: visibleClaims,
-    claimPagination: { page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage },
+    claimPagination: { page: exportingClaims ? 1 : claimPage, pageSize: exportingClaims ? claims.length : CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage },
     families,
     summary: { ...summary, ...readiness },
   });

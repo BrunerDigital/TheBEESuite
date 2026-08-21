@@ -154,16 +154,16 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
   assert.match(route, /CLAIM_PAGE_SIZE = 100/);
-  assert.match(route, /subsidyClaim\.findMany\([\s\S]*orderBy: \[\{ createdAt: "desc" \}, \{ dueDate: "asc" \}\][\s\S]*skip: \(claimPage - 1\) \* CLAIM_PAGE_SIZE[\s\S]*take: CLAIM_PAGE_SIZE \+ 1/);
-  assert.match(route, /claimPagination: \{ page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage \}/);
+  assert.match(route, /subsidyClaim\.findMany\([\s\S]*orderBy: \[\{ createdAt: "desc" \}, \{ dueDate: "asc" \}\][\s\S]*skip: exportingClaims \? undefined : \(claimPage - 1\) \* CLAIM_PAGE_SIZE[\s\S]*take: exportingClaims \? undefined : CLAIM_PAGE_SIZE \+ 1/);
+  assert.match(route, /claimPagination: \{ page: exportingClaims \? 1 : claimPage, pageSize: exportingClaims \? claims\.length : CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage \}/);
   assert.match(workspace, /claimPage=\$\{claimPage\}/);
   assert.match(workspace, /Claim queue page \{claimPagination\.page\}/);
   assert.match(workspace, /setClaimPage\(1\)/);
   assert.match(workspace, /setClaimError\(""\); setClaimMessage\(""\); setData\(null\)/);
   assert.match(workspace, /reloadClaimPage: 1/);
   assert.match(workspace, /load\(callbacks\.reloadClaimPage\)/);
-  assert.match(workspace, /for \(let page = 1; page <= 10_000; page \+= 1\)/);
-  assert.match(workspace, /allClaims\.push\(\.\.\.body\.claims\)/);
+  assert.match(workspace, /exportClaims=true/);
+  assert.match(workspace, /allClaims = body\.claims/);
   assert.doesNotMatch(workspace, /\.\.\.claims\.map\(\(claim\)/);
 });
 

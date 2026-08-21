@@ -180,16 +180,12 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   async function exportClaims() {
     const exportCenterId = centerId;
     setExportingClaims(true); setError("");
-    const allClaims: Claim[] = [];
+    let allClaims: Claim[] = [];
     try {
-      for (let page = 1; page <= 10_000; page += 1) {
-        const response = await fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(exportCenterId)}&claimPage=${page}`, { cache: "no-store" });
-        const body = await response.json().catch(() => ({})) as Partial<Workspace> & { error?: string };
-        if (!response.ok || !Array.isArray(body.claims) || !body.claimPagination) throw new Error(body.error || "Agency claims could not be exported.");
-        allClaims.push(...body.claims);
-        if (!body.claimPagination.hasNext) break;
-        if (page === 10_000) throw new Error("The agency claim export is too large. Contact support for a full export.");
-      }
+      const response = await fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(exportCenterId)}&exportClaims=true`, { cache: "no-store" });
+      const body = await response.json().catch(() => ({})) as Partial<Workspace> & { error?: string };
+      if (!response.ok || !Array.isArray(body.claims)) throw new Error(body.error || "Agency claims could not be exported.");
+      allClaims = body.claims;
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : "Agency claims could not be exported.");
       setExportingClaims(false);

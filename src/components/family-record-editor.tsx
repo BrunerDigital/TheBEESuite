@@ -231,6 +231,7 @@ function scheduledDaysValue(child: ChildRecord | null | undefined) {
   const days = scheduledDaysPerWeek({ schedule: child.schedule, customFields: child.customFields });
   if (days) return String(days);
   const classification = childScheduleClassification({ schedule: child.schedule, customFields: child.customFields });
+  if (classification === "full_time") return "5";
   return classification === "part_time" ? "legacy_part_time" : "unknown";
 }
 

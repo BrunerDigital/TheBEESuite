@@ -20,6 +20,7 @@ test("the child profile captures the same exact days-per-week schedule used by b
   assert.match(editor, /<SelectItem value="2">2 days\/week<\/SelectItem>/);
   assert.match(editor, /<SelectItem value="5">5 days\/week<\/SelectItem>/);
   assert.match(editor, /<SelectItem value="legacy_part_time">Part-time \(exact days not set\)<\/SelectItem>/);
+  assert.match(editor, /classification === "full_time"\) return "5"/);
   assert.match(editor, /scheduledDaysPerWeek: childScheduledDays/);
   assert.match(editor, /Used for child scheduling and FTE calculations\./);
 });

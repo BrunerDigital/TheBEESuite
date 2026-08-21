@@ -259,6 +259,7 @@ function scheduledDaysLabel(child: BillingWorkbenchFamily["children"][number]) {
 
 function scheduledDaysValue(child: BillingWorkbenchFamily["children"][number] | null | undefined) {
   if (child?.scheduledDaysPerWeek) return String(child.scheduledDaysPerWeek);
+  if (child?.careScheduleType === "full_time") return "5";
   return child?.careScheduleType === "part_time" ? "legacy_part_time" : "unknown";
 }
 

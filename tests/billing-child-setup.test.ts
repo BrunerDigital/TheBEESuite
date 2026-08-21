@@ -15,6 +15,7 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(billing, /<SelectItem value="2">2 days\/week<\/SelectItem>/);
   assert.match(billing, /<SelectItem value="5">5 days\/week<\/SelectItem>/);
   assert.match(billing, /<SelectItem value="legacy_part_time">Part-time \(exact days not set\)<\/SelectItem>/);
+  assert.match(billing, /child\?\.careScheduleType === "full_time"\) return "5"/);
   assert.match(billing, /Rate name: \{child\.tuitionAssignment\?\.description/);
   assert.match(billing, /Tuition: \{child\.tuitionAssignment\?\.enabled/);
   assert.match(billing, /<Label htmlFor="billing-rate-name">Rate name<\/Label>[\s\S]*?<Input id="billing-rate-name"/);

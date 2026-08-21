@@ -287,9 +287,8 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         ) : null}
       </div>
       <div className="max-w-48 text-xs text-muted-foreground">
-        {invoice.billingAccount.family.accountCategory === "past"
-          ? reason ?? ""
-          : method.paymentMethodLabel ?? reason ?? ""}
+        {method.paymentMethodLabel ?? ""}
+        {reason ? <span className={method.paymentMethodLabel ? "mt-1 block" : ""}>{reason}</span> : null}
       </div>
       {invoice.responsibilitySeparation ? (
         <div className="max-w-72 text-xs text-muted-foreground">

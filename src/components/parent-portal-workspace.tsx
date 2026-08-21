@@ -791,6 +791,7 @@ function ParentPortalWorkspaceView({
   const [showPasswords, setShowPasswords] = useState(false);
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [autopayConfirmation, setAutopayConfirmation] = useState("");
+  const [autopayError, setAutopayError] = useState("");
   const [autopayStatusOverride, setAutopayStatusOverride] = useState<
     "enabled" | "disabled" | null
   >(null);
@@ -1522,6 +1523,7 @@ function ParentPortalWorkspaceView({
       return;
     startTransition(async () => {
       setAutopayConfirmation("");
+      setAutopayError("");
       setAutopayEnableRequirements([]);
       const response = await parentPortalRequest("/api/billing/payment-method-session", {
         method: "POST",
@@ -1552,9 +1554,9 @@ function ParentPortalWorkspaceView({
         } else {
           setAutopayEnableRequirements([]);
         }
-        return showError(
-          json?.error || "Payment method management is not configured yet.",
-        );
+        const message = json?.error || "Payment method management is not configured yet.";
+        setAutopayError(message);
+        return showError(message);
       }
       if (json?.url) {
         window.location.href = json.url;
@@ -1572,6 +1574,7 @@ function ParentPortalWorkspaceView({
         );
       }
       setAutopayConfirmation(confirmation);
+      setAutopayError("");
       showStatus(confirmation);
       router.refresh();
     });
@@ -2547,6 +2550,26 @@ function ParentPortalWorkspaceView({
                   <span className="text-xs font-medium text-muted-foreground">{autopayStatus === "enabled" ? "On" : "Off"}</span>
                 </div>
               </div>
+              <Button
+                className="mt-3 w-full sm:w-auto"
+                type="button"
+                variant={autopayStatus === "enabled" ? "outline" : "default"}
+                disabled={isPending || paymentCheckoutMethod !== null || !family || autopayStatus === "pending"}
+                onClick={() => toggleAutopay(autopayStatus !== "enabled")}
+              >
+                {isPending
+                  ? "Updating…"
+                  : autopayStatus === "enabled"
+                    ? "Disable autopay"
+                    : "Enable autopay"}
+              </Button>
+              {autopayError ? (
+                <Alert className="mt-3" variant="destructive" role="alert">
+                  <AlertCircle className="size-4" />
+                  <AlertTitle>Autopay could not be updated</AlertTitle>
+                  <AlertDescription>{autopayError}</AlertDescription>
+                </Alert>
+              ) : null}
               {autopayConfirmation ? (
                 <Alert className="mt-4 border-emerald-500/30 bg-emerald-500/10">
                   <CheckCircle2 />
@@ -2726,6 +2749,57 @@ function ParentPortalWorkspaceView({
                   Contact your school for another way to pay or try again later.
                 </AlertDescription>
               </Alert>
+            ) : null}
+            {billingAccount ? (
+              <div className="rounded-xl border bg-background/40 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium">Autopay</div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {autopayStatus === "enabled"
+                        ? "Enabled for eligible invoices using the saved family payment method."
+                        : paymentMethodManagement?.hasSavedPaymentMethod
+                          ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"} · autopay is off`
+                          : "Save a payment method before enabling autopay."}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={autopayStatus === "enabled" ? "outline" : "default"}
+                    disabled={isPending || paymentCheckoutMethod !== null || autopayStatus === "pending"}
+                    onClick={() => toggleAutopay(autopayStatus !== "enabled")}
+                  >
+                    {isPending
+                      ? "Updating…"
+                      : autopayStatus === "enabled"
+                        ? "Disable autopay"
+                        : "Enable autopay"}
+                  </Button>
+                </div>
+                {autopayError ? (
+                  <Alert className="mt-3" variant="destructive" role="alert">
+                    <AlertCircle className="size-4" />
+                    <AlertTitle>Autopay could not be updated</AlertTitle>
+                    <AlertDescription>{autopayError}</AlertDescription>
+                  </Alert>
+                ) : null}
+                {autopayConfirmation ? (
+                  <Alert className="mt-3 border-emerald-500/30 bg-emerald-500/10" role="status">
+                    <CheckCircle2 className="size-4" />
+                    <AlertTitle>Autopay status confirmed</AlertTitle>
+                    <AlertDescription>{autopayConfirmation}</AlertDescription>
+                  </Alert>
+                ) : null}
+                {autopayRequirements.length ? (
+                  <Alert className="mt-3">
+                    <AlertCircle className="size-4" />
+                    <AlertTitle>Autopay requirements</AlertTitle>
+                    <AlertDescription className="space-y-1">
+                      {autopayRequirements.map((requirement) => <p key={requirement}>{requirement}</p>)}
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+              </div>
             ) : null}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl border bg-background/40 p-3 sm:p-4">

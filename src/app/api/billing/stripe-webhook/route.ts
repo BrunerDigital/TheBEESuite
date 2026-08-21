@@ -10,6 +10,7 @@ import {
   setStripeCustomerDefaultPaymentMethod,
 } from "@/lib/integrations";
 import { beginCommunicationSmsDeliveryAttempt, finalizeCommunicationSmsDeliveryAttempt, nextIntegrationRetryAt } from "@/lib/integration-deliveries";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import {
   paymentMethodSetupAutopayOutcome,
   paymentMethodSetupExpirationPatch,
@@ -1102,7 +1103,7 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
               centerId: true,
               guardians: { select: { userId: true } },
               children: {
-                take: 1,
+                where: currentlyEnrolledChildWhere(),
                 select: {
                   classroom: {
                     select: {
@@ -1127,12 +1128,18 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       const paymentMethodId = setupPaymentMethodId || previousPaymentMethodId;
       const requestedSetupMode = clean(session.metadata?.autopaySetupMode);
       const replacedPaymentMethod = Boolean(paymentMethodId && paymentMethodId !== previousPaymentMethodId);
+      const currentChildCenters = Array.from(new Map(
+        billingAccount.family.children
+          .map((child) => child.classroom?.center)
+          .filter((center): center is NonNullable<typeof center> => Boolean(center))
+          .map((center) => [center.id, center]),
+      ).values());
       const familyCenter = billingAccount.family.centerId
         ? await tx.center.findUnique({
             where: { id: billingAccount.family.centerId },
             select: { id: true, customFields: true, organization: { select: { tenantId: true } } },
           })
-        : billingAccount.family.children[0]?.classroom?.center ?? null;
+        : currentChildCenters.length === 1 ? currentChildCenters[0] : null;
       const activeFamilyAccountId = readStripeConnectedAccountId(familyCenter?.customFields);
       const migrationSessionIsCurrent = Boolean(
         familyCenter

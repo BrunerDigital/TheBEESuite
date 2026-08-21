@@ -41,11 +41,15 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(paymentMethodRoute, /autopayPaymentMethodId: paymentMethod\.stripeDefaultPaymentMethodId/);
   assert.match(paymentMethodRoute, /parentInitiatedPaymentMethodReauthorization = paymentMethodReauthorizationRequired[\s\S]*&& parentFacing[\s\S]*&& isLinkedGuardian[\s\S]*linkedGuardianUserIds: \[user\.id\]/);
   assert.match(paymentMethodRoute, /autopaySetupMode: parentInitiatedPaymentMethodReauthorization \? "preserve_existing" : "preserve"/);
+  assert.match(paymentMethodRoute, /where: currentlyEnrolledChildWhere\(\)/);
+  assert.match(paymentMethodRoute, /currentChildCenterIds\.length === 1/);
   assert.match(publicPaymentMethodRoute, /linkedGuardianUserIds: recipient\.userIds/);
   assert.match(publicPaymentMethodRoute, /autopaySetupMode: recipientCanPreserveAutopay \? "preserve_existing" : "preserve"/);
   assert.match(stripeWebhook, /paymentMethodSetupAutopayOutcome/);
   assert.match(stripeWebhook, /linkedGuardianUserIds/);
   assert.match(stripeWebhook, /migrationSessionIsCurrent/);
+  assert.match(stripeWebhook, /where: currentlyEnrolledChildWhere\(\)/);
+  assert.match(stripeWebhook, /currentChildCenters\.length === 1/);
   assert.match(stripeWebhook, /familyCenter\.id === clean\(session\.metadata\?\.centerId\)/);
   assert.match(stripeWebhook, /connectedAccountId === activeFamilyAccountId/);
   assert.match(stripeWebhook, /stripeConnectSavedMethodNeedsReauthorization/);

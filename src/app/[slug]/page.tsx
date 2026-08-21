@@ -89,7 +89,8 @@ import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { invoiceBelongsToFteWeek } from "@/lib/fte-billing-period";
 import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } from "@/lib/fte-report-rollups";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
-import { childScheduleClassification, scheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
+import { fteAgeBucket } from "@/lib/fte-age-groups";
+import { childScheduleClassification, fteScheduledDaysPerWeek, scheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
@@ -590,16 +591,6 @@ function activeEnrollmentStatus(value: string) {
   return isCurrentlyEnrolledStatus(value);
 }
 
-function ageBucket(ageGroup: string) {
-  const value = ageGroup.toLowerCase();
-  if (value.includes("infant")) return "infants" as const;
-  if (value.includes("toddler")) return "toddlers" as const;
-  if (value.includes("two") || value.includes("2")) return "twos" as const;
-  if (value.includes("pre-k") || value.includes("prek") || value.includes("vpk")) return "preK" as const;
-  if (value.includes("school") || value.includes("after")) return "schoolAge" as const;
-  return "preschool" as const;
-}
-
 async function buildFtePrefills(
   centers: Array<{ id: string; licensedCapacity: number }>,
 ): Promise<FteReportPrefill[]> {
@@ -626,7 +617,7 @@ async function buildFtePrefills(
       schedule: true,
       customFields: true,
       family: { select: { centerId: true } },
-      classroom: { select: { centerId: true } },
+      classroom: { select: { centerId: true, name: true, ageGroup: true } },
     },
   }), prisma.invoice.findMany({
     where: {
@@ -705,8 +696,8 @@ async function buildFtePrefills(
     const isActive = activeEnrollmentStatus(child.enrollmentStatus);
     if (isActive) {
       row.enrolledCount += 1;
-      row[ageBucket(child.ageGroup)] += 1;
-      const scheduledDays = scheduledDaysPerWeek({ schedule: child.schedule, customFields: child.customFields });
+      row[fteAgeBucket({ ageGroup: child.ageGroup, classroomName: child.classroom?.name, classroomAgeGroup: child.classroom?.ageGroup })] += 1;
+      const scheduledDays = fteScheduledDaysPerWeek({ schedule: child.schedule, customFields: child.customFields });
       if (scheduledDays === 2) row.twoDayCount += 1;
       else if (scheduledDays === 3) row.threeDayCount += 1;
       else if (scheduledDays === 4) row.fourDayCount += 1;

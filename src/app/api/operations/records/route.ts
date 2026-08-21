@@ -997,8 +997,9 @@ async function POSTHandler(request: NextRequest) {
       } else {
         delete schedule.daysPerWeek;
         delete schedule.scheduledDaysPerWeek;
-        delete customFields.scheduledDaysPerWeek;
+        customFields.scheduledDaysPerWeek = "not_set";
         delete customFields.daysPerWeek;
+        delete customFields.fteDaysPerWeek;
         delete customFields.careScheduleType;
         delete customFields.fteScheduleType;
       }
@@ -1032,8 +1033,9 @@ async function POSTHandler(request: NextRequest) {
           nextCustomFields.careScheduleType = "part_time";
           nextCustomFields.fteScheduleType = "part_time";
         } else {
-          delete nextCustomFields.scheduledDaysPerWeek;
+          nextCustomFields.scheduledDaysPerWeek = "not_set";
           delete nextCustomFields.daysPerWeek;
+          delete nextCustomFields.fteDaysPerWeek;
           delete nextCustomFields.careScheduleType;
           delete nextCustomFields.fteScheduleType;
         }

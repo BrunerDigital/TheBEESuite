@@ -46,6 +46,8 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(operations, /preserveLegacyPartTime/);
   assert.match(operations, /nextSchedule = \{ \.\.\.jsonObject\(existingChild\?\.schedule\) \}/);
   assert.match(operations, /delete nextSchedule\.daysPerWeek/);
+  assert.match(operations, /nextCustomFields\.scheduledDaysPerWeek = "not_set"/);
+  assert.match(operations, /customFields\.scheduledDaysPerWeek = "not_set"/);
   assert.match(operations, /customFields: \{ path: \["tuitionPlanId"\], equals: id \}/);
   assert.match(operations, /code: "TUITION_PLAN_ASSIGNED_CREATE_NEW"/);
 });

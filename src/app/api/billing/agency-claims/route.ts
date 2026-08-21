@@ -22,6 +22,7 @@ export const runtime = "nodejs";
 const CURRENT_ENROLLMENT_STATUSES = currentlyEnrolledStatusValues();
 const AUTHORIZATION_UNIT_TYPES = new Set(["weekly", "daily", "hourly", "monthly"]);
 const REMITTANCE_METHODS = new Set(["ach", "check", "agency_portal", "other"]);
+const UNIT_PRECISION = 1_000_000;
 
 class AgencyWorkflowError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -50,21 +51,25 @@ function dateValue(value: unknown) {
 
 function cents(value: unknown) {
   const text = typeof value === "number" ? String(value) : clean(value).replace(/[$,]/g, "");
-  if (!/^-?\d+(?:\.\d{1,2})?$/.test(text)) return 0;
+  if (!/^-?(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(text)) return 0;
   const amount = Number(text) * 100;
   return Number.isFinite(amount) ? Math.round(amount) : 0;
 }
 
 function validCurrencyInput(value: unknown, allowBlank = false) {
   const text = typeof value === "number" ? String(value) : clean(value).replace(/[$,]/g, "");
-  return (allowBlank && !text) || /^-?\d+(?:\.\d{1,2})?$/.test(text);
+  return (allowBlank && !text) || /^-?(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(text);
 }
 
 function numberValue(value: unknown) {
   const text = typeof value === "number" ? String(value) : clean(value);
-  if (!/^-?\d+(?:\.\d+)?$/.test(text)) return 0;
+  if (!/^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(text)) return 0;
   const amount = Number(text);
   return Number.isFinite(amount) ? amount : 0;
+}
+
+function unitsAtPrecision(value: number) {
+  return Math.round(value * UNIT_PRECISION);
 }
 
 function hasNumericInput(value: unknown) {
@@ -359,7 +364,7 @@ async function postHandler(request: NextRequest) {
         if (overlap) throw new AgencyWorkflowError(`Claim ${overlap.number} already covers some or all of this service period. Void or correct that claim before creating another.`, 409);
         if (authorization.authorizedUnits !== null) {
           const used = await tx.subsidyClaimLine.aggregate({ where: { claim: { authorizationId: authorization.id, status: { notIn: ["void", "denied"] } } }, _sum: { serviceUnits: true } });
-          if ((used._sum.serviceUnits ?? 0) + units > authorization.authorizedUnits) throw new AgencyWorkflowError("This claim would exceed the authorization's total approved units.", 409);
+          if (unitsAtPrecision((used._sum.serviceUnits ?? 0) + units) > unitsAtPrecision(authorization.authorizedUnits)) throw new AgencyWorkflowError("This claim would exceed the authorization's total approved units.", 409);
         }
         const requirements = [...normalizeAgencyRequirements(authorization.agencyProgram.requirements), ...normalizeAgencyRequirements(authorization.requiredDocuments)]
           .filter((item, index, all) => item.required && all.findIndex((candidate) => candidate.key === item.key) === index);

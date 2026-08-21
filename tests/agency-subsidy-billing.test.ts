@@ -124,6 +124,8 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(route, /authorization\.status !== "active"/);
   assert.match(route, /servicePeriodStart: \{ lte: end \}[\s\S]*servicePeriodEnd: \{ gte: start \}/);
   assert.match(route, /exceed the authorization's total approved units/);
+  assert.match(route, /unitsAtPrecision\(\(used\._sum\.serviceUnits \?\? 0\) \+ units\) > unitsAtPrecision\(authorization\.authorizedUnits\)/);
+  assert.match(route, /\|\\\.\\d\+\)\$\/\.test\(text\)/);
   assert.match(route, /cannot exceed the authorization rate/);
   assert.match(route, /claim\.status !== "submitted"/);
   assert.match(route, /Enter the agency denial reason or code/);

@@ -1163,7 +1163,7 @@ async function separateInvoiceResponsibility(user: CurrentBillingUser, body: Rec
       agencyName,
     });
     if (validationError) throw new Error(`RESPONSIBILITY_SPLIT_BLOCKED:${validationError}`);
-    if (invoiceResponsibilityReviewExempt(invoice.customFields)) {
+    if (invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents)) {
       throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:Product purchases do not use agency tuition responsibility.");
     }
     if (!hasSubsidyResponsibilityEvidence(

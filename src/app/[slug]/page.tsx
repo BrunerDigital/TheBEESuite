@@ -3856,7 +3856,7 @@ async function renderLivePage(
             status: invoice.status,
             dueDate: invoice.dueDate,
             totalCents: invoice.totalCents,
-            responsibilityReviewRequired: !invoiceResponsibilityReviewExempt(invoice.customFields) && parentBalanceNeedsResponsibilityReview({
+            responsibilityReviewRequired: !invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents) && parentBalanceNeedsResponsibilityReview({
               accountBalanceCents: invoice.billingAccount.balanceCents,
               agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
               invoiceId: invoice.id,

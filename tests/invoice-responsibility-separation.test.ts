@@ -57,7 +57,7 @@ test("account review resolves only when every open invoice has an exact separati
     grossTuitionCents: 1_900,
     netTuitionCents: 1_900,
     tuitionCreditsTotalCents: 0,
-  }), true);
+  }, 1_900), true);
   assert.equal(invoiceResponsibilityReviewExempt({
     chargeSource: "tuitionPlan",
     tuitionPlanName: "Weekly tuition",
@@ -65,7 +65,7 @@ test("account review resolves only when every open invoice has an exact separati
     netTuitionCents: 12_000,
     tuitionCreditsTotalCents: 11_800,
     tuitionCredits: [{ category: "agency_discount", amountCents: 11_800 }],
-  }), true);
+  }, 12_000), true);
   assert.equal(invoiceResponsibilityReviewExempt({
     chargeSource: "tuitionPlan",
     tuitionPlanName: "Weekly tuition",
@@ -73,7 +73,7 @@ test("account review resolves only when every open invoice has an exact separati
     netTuitionCents: 18_000,
     tuitionCreditsTotalCents: 2_000,
     tuitionCredits: [{ category: "employee_discount", amountCents: 2_000 }],
-  }), false);
+  }, 18_000), false);
   assert.equal(invoiceResponsibilityReviewExempt({
     chargeSource: "tuitionPlan",
     tuitionPlanName: "CCDF Copay",
@@ -81,24 +81,34 @@ test("account review resolves only when every open invoice has an exact separati
     netTuitionCents: 2_400,
     tuitionCreditsTotalCents: 0,
     tuitionAdditionalChargesTotalCents: 500,
-  }), true);
+  }, 2_400), true);
   assert.equal(invoiceResponsibilityReviewExempt({
     chargeSource: "tuitionPlan",
     tuitionPlanName: "VPK subsidy weekly tuition",
     grossTuitionCents: 13_000,
     netTuitionCents: 13_000,
     tuitionCreditsTotalCents: 0,
-  }), false);
+  }, 13_000), false);
   assert.equal(invoiceResponsibilityReviewExempt({
     chargeSource: "tuitionPlan",
     tuitionPlanName: "CCDF Copay",
     grossTuitionCents: 20_000,
     netTuitionCents: 1_900,
     tuitionCreditsTotalCents: 0,
-  }), false);
+  }, 1_900), false);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "CCDF Copay",
+    grossTuitionCents: 1_900,
+    netTuitionCents: 1_900,
+    tuitionCreditsTotalCents: 0,
+  }, 2_500), false);
   assert.equal(allOpenInvoicesResponsibilitySeparated([
     { status: "OPEN", totalCents: 8_000, customFields: { checkoutPurpose: "product_purchase" } },
     { status: "OPEN", totalCents: 2_000, customFields: { responsibilitySeparation: separation } },
+  ]), true);
+  assert.equal(allOpenInvoicesResponsibilitySeparated([
+    { status: "OPEN", totalCents: 1_900, customFields: { chargeSource: "tuitionPlan", tuitionPlanName: "CCDF Copay", grossTuitionCents: 1_900, netTuitionCents: 1_900, tuitionCreditsTotalCents: 0 } },
   ]), true);
 });
 

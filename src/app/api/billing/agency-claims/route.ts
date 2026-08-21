@@ -167,11 +167,13 @@ async function getHandler(request: NextRequest) {
   const exportingClaims = request.nextUrl.searchParams.get("exportClaims") === "true";
   const requestedClaimPage = Number.parseInt(clean(request.nextUrl.searchParams.get("claimPage")) || "1", 10);
   const claimPage = Math.min(Math.max(Number.isFinite(requestedClaimPage) ? requestedClaimPage : 1, 1), 10_000);
+  const claimCursor = clean(request.nextUrl.searchParams.get("claimCursor"));
   const centerIds = requestedCenterId
     ? centerAllowed(auth.user, requestedCenterId) ? [requestedCenterId] : []
     : auth.user.centerIds;
   if (!centerIds.length) return NextResponse.json({ ok: false, error: "No accessible school selected." }, { status: 403 });
   if (exportingClaims) return exportClaimsCsv(centerIds);
+  if (claimPage > 1 && !claimCursor) return NextResponse.json({ ok: false, error: "Refresh the claim queue before opening that page." }, { status: 400 });
 
   const [programs, authorizations, claims, summaryRows, families] = await Promise.all([
     prisma.agencyProgram.findMany({
@@ -189,8 +191,8 @@ async function getHandler(request: NextRequest) {
     }),
     prisma.subsidyClaim.findMany({
       where: { centerId: { in: centerIds } },
-      orderBy: [{ createdAt: "desc" }, { dueDate: "asc" }],
-      skip: (claimPage - 1) * CLAIM_PAGE_SIZE,
+      orderBy: [{ createdAt: "desc" }, { dueDate: "asc" }, { id: "desc" }],
+      ...(claimCursor ? { cursor: { id: claimCursor }, skip: 1 } : {}),
       take: CLAIM_PAGE_SIZE + 1,
       include: {
         agencyProgram: { select: { name: true, programName: true, providerNumber: true, vendorNumber: true, submissionMethod: true, portalUrl: true, paymentInstructions: true } },
@@ -258,7 +260,7 @@ async function getHandler(request: NextRequest) {
     programs: programReadiness,
     authorizations,
     claims: visibleClaims,
-    claimPagination: { page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage },
+    claimPagination: { page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage, nextCursor: hasNextClaimPage ? visibleClaims.at(-1)?.id ?? null : null },
     families,
     summary: { ...summary, ...readiness },
   });

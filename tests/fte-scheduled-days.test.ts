@@ -70,6 +70,8 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(route, /twoDayCount: useScheduledDayBreakdown \? scheduledDayCounts\.twoDayCount : null/);
   assert.match(bulkRoute, /select: \{ id: true, sourceMetadata: true \}/);
   assert.match(bulkRoute, /sourceMetadata: \{\s*\.\.\.existingMetadata,/);
+  assert.match(bulkRoute, /preservesScheduledDayBreakdown\s*\?\s*calculateScheduledDaysFte\(existingScheduledDayCounts\)/);
+  assert.match(bulkRoute, /const fteCount = preservesScheduledDayBreakdown \? calculatedFte/);
   assert.match(explorer, /twoDayCount: inputOptionalNumber\(report\.twoDayCount\)/);
   assert.match(explorer, /label="2 days\/week"/);
   assert.match(explorer, /label="5 days\/week"/);

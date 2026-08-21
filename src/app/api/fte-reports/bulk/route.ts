@@ -6,6 +6,7 @@ import { writeAuditLog } from "@/lib/audit";
 import {
   ageGroupTotal,
   calculateFteCount,
+  calculateScheduledDaysFte,
   defaultFteWeekEnd,
   isExecutiveFteManager,
   normalizeFteStatus,
@@ -23,6 +24,10 @@ function clean(value: unknown) {
 
 function recordFromJson(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function metadataNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.round(value)) : null;
 }
 
 function roundAmount(value: number | null) {
@@ -117,8 +122,23 @@ async function POSTHandler(request: NextRequest) {
       select: { id: true, sourceMetadata: true },
     });
     const existingMetadata = recordFromJson(existing?.sourceMetadata);
-    const calculatedFte = calculateFteCount(row.fullTimeCount, row.partTimeCount);
-    const fteCount = row.fteCount ?? calculatedFte;
+    const existingScheduledDayCounts = {
+      twoDayCount: metadataNumber(existingMetadata.twoDayCount) ?? 0,
+      threeDayCount: metadataNumber(existingMetadata.threeDayCount) ?? 0,
+      fourDayCount: metadataNumber(existingMetadata.fourDayCount) ?? 0,
+      fiveDayCount: metadataNumber(existingMetadata.fiveDayCount) ?? 0,
+    };
+    const preservesScheduledDayBreakdown = existingMetadata.fteCalculation === "scheduled_days_divided_by_five"
+      && ["twoDayCount", "threeDayCount", "fourDayCount", "fiveDayCount"]
+        .every((field) => metadataNumber(existingMetadata[field]) !== null);
+    const fullTimeCount = preservesScheduledDayBreakdown ? existingScheduledDayCounts.fiveDayCount : row.fullTimeCount;
+    const partTimeCount = preservesScheduledDayBreakdown
+      ? existingScheduledDayCounts.twoDayCount + existingScheduledDayCounts.threeDayCount + existingScheduledDayCounts.fourDayCount
+      : row.partTimeCount;
+    const calculatedFte = preservesScheduledDayBreakdown
+      ? calculateScheduledDaysFte(existingScheduledDayCounts)
+      : calculateFteCount(fullTimeCount, partTimeCount);
+    const fteCount = preservesScheduledDayBreakdown ? calculatedFte : row.fteCount ?? calculatedFte;
     const ageGroupCount = ageGroupTotal(row);
     const totalBilledAmount = row.totalBilledAmount ??
       (row.selfPayerBillAmount !== null || row.subsidyBillAmount !== null
@@ -132,8 +152,8 @@ async function POSTHandler(request: NextRequest) {
       weekStart,
       weekEnd,
       enrolledCount: row.enrolledCount,
-      fullTimeCount: row.fullTimeCount,
-      partTimeCount: row.partTimeCount,
+      fullTimeCount,
+      partTimeCount,
       fteCount,
       infants: row.infants,
       toddlers: row.toddlers,

@@ -49,6 +49,7 @@ import {
 import { canSaveTuitionPlanAmount, normalizeBillingCadence, tuitionPlanRecordChanged } from "@/lib/billing-workflows";
 
 import { withApiLogging } from "@/lib/request-response-logging";
+import { normalizeScheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -971,12 +972,23 @@ async function POSTHandler(request: NextRequest) {
         classroomId,
       });
       if (classroomError) return NextResponse.json({ ok: false, error: classroomError }, { status: 400 });
-      const careScheduleType = clean(body.careScheduleType).toLowerCase().replace(/[^a-z0-9]+/g, "_");
       const customFields = { ...jsonObject(existingChild.customFields) };
-      if (careScheduleType === "full_time" || careScheduleType === "part_time") {
+      const scheduledDays = normalizeScheduledDaysPerWeek(body.scheduledDaysPerWeek ?? body.daysPerWeek);
+      const legacyCareScheduleType = clean(body.careScheduleType).toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      if (scheduledDays) {
+        const careScheduleType = scheduledDays === 5 ? "full_time" : "part_time";
+        customFields.scheduledDaysPerWeek = scheduledDays;
+        customFields.daysPerWeek = scheduledDays;
         customFields.careScheduleType = careScheduleType;
         customFields.fteScheduleType = careScheduleType;
+      } else if (legacyCareScheduleType === "full_time" || legacyCareScheduleType === "part_time") {
+        delete customFields.scheduledDaysPerWeek;
+        delete customFields.daysPerWeek;
+        customFields.careScheduleType = legacyCareScheduleType;
+        customFields.fteScheduleType = legacyCareScheduleType;
       } else {
+        delete customFields.scheduledDaysPerWeek;
+        delete customFields.daysPerWeek;
         delete customFields.careScheduleType;
         delete customFields.fteScheduleType;
       }
@@ -991,13 +1003,31 @@ async function POSTHandler(request: NextRequest) {
       });
       auditMetadata.updateScope = "enrollment_context";
     } else {
-      const careScheduleType = clean(body.careScheduleType || body.fteScheduleType || body.fullTimePartTime).toLowerCase().replace(/[^a-z0-9]+/g, "_");
       const existingCustomFields = jsonObject(existingChild?.customFields);
-      const baseCustomFields = ["full_time", "part_time"].includes(careScheduleType)
-        ? { ...existingCustomFields, careScheduleType, fteScheduleType: careScheduleType } as Prisma.InputJsonObject
-        : Object.keys(existingCustomFields).length
-          ? existingCustomFields as Prisma.InputJsonObject
-          : undefined;
+      const scheduleDaysProvided = "scheduledDaysPerWeek" in body || "daysPerWeek" in body;
+      const scheduledDays = normalizeScheduledDaysPerWeek(body.scheduledDaysPerWeek ?? body.daysPerWeek);
+      const legacyCareScheduleType = clean(body.careScheduleType || body.fteScheduleType || body.fullTimePartTime).toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      const nextCustomFields = { ...existingCustomFields };
+      if (scheduleDaysProvided) {
+        if (scheduledDays) {
+          const careScheduleType = scheduledDays === 5 ? "full_time" : "part_time";
+          nextCustomFields.scheduledDaysPerWeek = scheduledDays;
+          nextCustomFields.daysPerWeek = scheduledDays;
+          nextCustomFields.careScheduleType = careScheduleType;
+          nextCustomFields.fteScheduleType = careScheduleType;
+        } else {
+          delete nextCustomFields.scheduledDaysPerWeek;
+          delete nextCustomFields.daysPerWeek;
+          delete nextCustomFields.careScheduleType;
+          delete nextCustomFields.fteScheduleType;
+        }
+      } else if (legacyCareScheduleType === "full_time" || legacyCareScheduleType === "part_time") {
+        nextCustomFields.careScheduleType = legacyCareScheduleType;
+        nextCustomFields.fteScheduleType = legacyCareScheduleType;
+      }
+      const baseCustomFields = Object.keys(nextCustomFields).length
+        ? nextCustomFields as Prisma.InputJsonObject
+        : undefined;
       const enrollmentStatus = clean(body.enrollmentStatus) || clean(body.status) || "enrolled";
       const customFields = baseCustomFields;
       const classroomError = enrollmentClassroomValidationError({ enrollmentStatus, classroomId });

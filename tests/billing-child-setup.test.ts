@@ -10,7 +10,10 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
 
   assert.match(billing, /Program: \{child\.ageGroup \|\| "Not set"\}/);
   assert.match(billing, /Classroom: \{classroom\?\.name \?\? "Not assigned"\}/);
-  assert.match(billing, /Care schedule: \{careScheduleLabel\(child\.careScheduleType\)\}/);
+  assert.match(billing, /Schedule: \{scheduledDaysLabel\(child\)\}/);
+  assert.match(billing, /<Label htmlFor="billing-child-scheduled-days">Days per week<\/Label>/);
+  assert.match(billing, /<SelectItem value="2">2 days\/week<\/SelectItem>/);
+  assert.match(billing, /<SelectItem value="5">5 days\/week<\/SelectItem>/);
   assert.match(billing, /Rate name: \{child\.tuitionAssignment\?\.description/);
   assert.match(billing, /Tuition: \{child\.tuitionAssignment\?\.enabled/);
   assert.match(billing, /<Label htmlFor="billing-rate-name">Rate name<\/Label>[\s\S]*?<Input id="billing-rate-name"/);
@@ -20,6 +23,7 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(billing, /save tuition to update the family ledger/);
   assert.match(billing, /Set this child’s program, classroom, care schedule, and start date/);
   assert.match(billing, /updateScope: "enrollment_context"/);
+  assert.match(billing, /scheduledDaysPerWeek: assignmentChildScheduledDays/);
   assert.match(billing, /Save child setup/);
   assert.match(billing, /Tuition and ledger amounts were not changed/);
   assert.match(billing, /json\?\.code === "TUITION_PLAN_ASSIGNED_CREATE_NEW"/);
@@ -28,6 +32,7 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(page, /prisma\.classroom\.findMany\(\{[\s\S]*?where: \{ centerId: scopedCenterIds \}/);
   assert.match(page, /classrooms: billingClassroomsByCenter\.get\(center\.id\) \?\? \[\]/);
   assert.match(page, /careScheduleType: childScheduleClassification\(\{ schedule: child\.schedule, customFields: child\.customFields \}\)/);
+  assert.match(page, /scheduledDaysPerWeek: scheduledDaysPerWeek\(\{ schedule: child\.schedule, customFields: child\.customFields \}\)/);
 
   assert.match(operations, /const enrollmentContextOnly = clean\(body\.updateScope\) === "enrollment_context"/);
   assert.match(operations, /classroomFamilyGuard\(centerId, classroom\.centerId\)/);
@@ -35,6 +40,7 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(operations, /enrollmentClassroomValidationError/);
   assert.match(enrollmentStatus, /Choose a classroom before marking this child enrolled\. Billing and active rosters require a classroom assignment\./);
   assert.match(operations, /auditMetadata\.updateScope = "enrollment_context"/);
+  assert.match(operations, /customFields\.scheduledDaysPerWeek = scheduledDays/);
   assert.match(operations, /customFields: \{ path: \["tuitionPlanId"\], equals: id \}/);
   assert.match(operations, /code: "TUITION_PLAN_ASSIGNED_CREATE_NEW"/);
 });

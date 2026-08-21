@@ -28,6 +28,7 @@ import {
   enrollmentClassroomValidationError,
   isCurrentlyEnrolledStatus,
 } from "@/lib/enrollment-status";
+import { scheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
 
 type ClassroomOption = { id: string; name: string; ageGroup: string };
 type CenterOption = { id: string; name: string; classrooms: ClassroomOption[] };
@@ -59,6 +60,7 @@ type ChildRecord = {
   startDate?: Date | string | null;
   classroomId?: string | null;
   schedule?: unknown;
+  customFields?: unknown;
   photoVideoPermission?: boolean;
   fieldTripPermission?: boolean;
   napNotes?: string | null;
@@ -222,6 +224,12 @@ function scheduleNotes(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "";
   const notes = (value as { notes?: unknown }).notes;
   return typeof notes === "string" ? notes : "";
+}
+
+function scheduledDaysValue(child: ChildRecord | null | undefined) {
+  if (!child) return "unknown";
+  const days = scheduledDaysPerWeek({ schedule: child.schedule, customFields: child.customFields });
+  return days ? String(days) : "unknown";
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -486,6 +494,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
   const [enrollmentStatus, setEnrollmentStatus] = useState(initialChild?.enrollmentStatus ?? "enrolled");
   const [startDate, setStartDate] = useState(toDateInput(initialChild?.startDate));
   const [classroomId, setClassroomId] = useState(initialChild?.classroomId ?? "none");
+  const [childScheduledDays, setChildScheduledDays] = useState(scheduledDaysValue(initialChild));
   const [childScheduleNotes, setChildScheduleNotes] = useState(scheduleNotes(initialChild?.schedule));
   const [napNotes, setNapNotes] = useState(initialChild?.napNotes ?? "");
   const [feedingNotes, setFeedingNotes] = useState(initialChild?.feedingNotes ?? "");
@@ -689,6 +698,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     setEnrollmentStatus(child?.enrollmentStatus ?? "enrolled");
     setStartDate(toDateInput(child?.startDate));
     setClassroomId(child?.classroomId ?? "none");
+    setChildScheduledDays(scheduledDaysValue(child));
     setChildScheduleNotes(scheduleNotes(child?.schedule));
     setNapNotes(child?.napNotes ?? "");
     setFeedingNotes(child?.feedingNotes ?? "");
@@ -1812,7 +1822,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               <Label htmlFor="family-editor-child-start-date">Start date</Label>
               <Input id="family-editor-child-start-date" value={startDate} onChange={(event) => setStartDate(event.target.value)} type="date" />
             </div>
-            <div className="space-y-1 md:col-span-2">
+            <div className="space-y-1">
               <Label htmlFor="family-editor-child-classroom">Classroom</Label>
               <Select value={classroomId} onValueChange={(value) => value && setClassroomId(value)}>
                 <SelectTrigger
@@ -1842,6 +1852,20 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                     ? "Current enrollment is visible in Billing and active rosters after this classroom assignment is saved."
                     : "Choose a classroom or leave this child unassigned.")}
               </p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="family-editor-child-scheduled-days">Days per week</Label>
+              <Select value={childScheduledDays} onValueChange={(value) => value && setChildScheduledDays(value)}>
+                <SelectTrigger id="family-editor-child-scheduled-days"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unknown">Not set</SelectItem>
+                  <SelectItem value="2">2 days/week</SelectItem>
+                  <SelectItem value="3">3 days/week</SelectItem>
+                  <SelectItem value="4">4 days/week</SelectItem>
+                  <SelectItem value="5">5 days/week</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Used for child scheduling and FTE calculations.</p>
             </div>
             <label htmlFor="family-editor-child-photo-permission" className="flex min-h-11 cursor-pointer touch-manipulation items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
               <input id="family-editor-child-photo-permission" className="size-5 shrink-0" type="checkbox" checked={photoVideoPermission} onChange={(event) => setPhotoVideoPermission(event.target.checked)} />
@@ -1887,6 +1911,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               enrollmentStatus,
               startDate,
               classroomId: classroomId === "none" ? undefined : classroomId,
+              scheduledDaysPerWeek: childScheduledDays,
               schedule: childScheduleNotes,
               photoVideoPermission,
               fieldTripPermission,

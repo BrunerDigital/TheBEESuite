@@ -475,6 +475,13 @@ function firstSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function sortFamiliesByName<T extends { id: string; name: string }>(families: readonly T[]) {
+  return [...families].sort((left, right) => (
+    left.name.localeCompare(right.name, "en-US", { sensitivity: "base", numeric: true })
+    || left.id.localeCompare(right.id)
+  ));
+}
+
 const PARENT_LEDGER_PAGE_SIZE = 50;
 
 function boundedPage(value: string | string[] | undefined) {
@@ -1772,13 +1779,13 @@ async function renderLivePage(
     const [families, allFamilies, total, allFamilyTotal, withCustodyNotes, children, guardians, closedFamilies, enrollmentStatusRows, intakeCenters, requestNotes, parentUsers] = await Promise.all([
       prisma.family.findMany({
         where: currentFamilyWhere,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ name: "asc" }, { id: "asc" }],
         take: SCHOOL_DASHBOARD_LIST_LIMIT,
         include: familyInclude,
       }),
       prisma.family.findMany({
         where: familyWhere,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ name: "asc" }, { id: "asc" }],
         take: SCHOOL_DASHBOARD_LIST_LIMIT,
         include: familyInclude,
       }),
@@ -1828,12 +1835,12 @@ async function renderLivePage(
           include: familyInclude,
         })
       : null;
-    const allFamiliesWithRequested = requestedFamily
+    const allFamiliesWithRequested = sortFamiliesByName(requestedFamily
       ? [requestedFamily, ...allFamilies.filter((family) => family.id !== requestedFamily.id)]
-      : allFamilies;
-    const familiesWithRequested = requestedFamily && requestedFamily.children.some((child) => isCurrentlyEnrolledChildRecord(child))
+      : allFamilies);
+    const familiesWithRequested = sortFamiliesByName(requestedFamily && requestedFamily.children.some((child) => isCurrentlyEnrolledChildRecord(child))
       ? [requestedFamily, ...families.filter((family) => family.id !== requestedFamily.id)]
-      : families;
+      : families);
     const guardianChangeRequests = requestNotes.flatMap((note) => {
       const parsed = parseGuardianChangeRequestNote(note.body);
       if (!parsed || !note.family) return [];
@@ -2850,7 +2857,7 @@ async function renderLivePage(
       }),
       prisma.family.findMany({
         where: familyScopeWhere,
-        orderBy: { name: "asc" },
+        orderBy: [{ name: "asc" }, { id: "asc" }],
         take: 500,
         select: {
           id: true,
@@ -2996,7 +3003,7 @@ async function renderLivePage(
     const demoMode = showDemoFallbackData && messages.length === 0;
     const visibleMessages = demoMode ? executiveParentMessageDemoRows : signedMessages;
     const centerLabelById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
-    const familyOptions = families.map((family) => ({
+    const familyOptions = sortFamiliesByName(families.map((family) => ({
       id: family.id,
       name: userViewText(family.name),
       billingEmail: family.billingEmail,
@@ -3010,7 +3017,7 @@ async function renderLivePage(
           .filter((guardian) => guardian.preferredCommunication === "sms")
           .map((guardian) => guardian.phone),
       ).length,
-    }));
+    })));
     const templateOptions = templates.length
       ? templates.map((template) => {
           const canonicalTemplate = canonicalizeSystemMessageTemplate(template);
@@ -3820,6 +3827,7 @@ async function renderLivePage(
                 classroomId: child.classroomId,
                 startDate: child.startDate,
                 careScheduleType: childScheduleClassification({ schedule: child.schedule, customFields: child.customFields }),
+                scheduledDaysPerWeek: scheduledDaysPerWeek({ schedule: child.schedule, customFields: child.customFields }),
                 tuitionAssignment: tuitionAssignmentFromCustomFields(child.customFields),
               })),
             })),

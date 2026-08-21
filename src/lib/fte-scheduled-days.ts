@@ -40,6 +40,10 @@ function numericDayCount(...values: unknown[]) {
   return null;
 }
 
+export function normalizeScheduledDaysPerWeek(value: unknown) {
+  return numericDayCount(value);
+}
+
 function collectTextValues(value: unknown, output: string[], depth = 0) {
   if (depth > 4 || value === null || value === undefined) return;
   if (typeof value === "string") {

@@ -1100,8 +1100,8 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
           customFields: true,
           family: {
             select: {
+              id: true,
               centerId: true,
-              guardians: { select: { userId: true } },
               children: {
                 where: currentlyEnrolledChildWhere(),
                 select: {
@@ -1155,12 +1155,21 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       const setupMode = requestedSetupMode === "preserve_existing" && !migrationSessionIsCurrent
         ? "preserve"
         : requestedSetupMode;
+      const lockedGuardianLinks = requestedSetupMode === "preserve_existing"
+        ? await tx.$queryRaw<Array<{ userId: string | null }>>`
+            select "userId"
+            from "Guardian"
+            where "familyId" = ${billingAccount.family.id}
+              and "userId" is not null
+            for update
+          `
+        : [];
       const autopayPatch = paymentMethodSetupAutopayOutcome({
         autopayPlaceholder: billingAccount.autopayPlaceholder,
         currentFields,
         previousPaymentMethodId,
         paymentMethodId,
-        linkedGuardianUserIds: billingAccount.family.guardians.map((guardian) => guardian.userId),
+        linkedGuardianUserIds: lockedGuardianLinks.map((guardian) => guardian.userId),
         setupMode,
       });
       const auditTenantId = familyCenter?.organization.tenantId || clean(tenantId);

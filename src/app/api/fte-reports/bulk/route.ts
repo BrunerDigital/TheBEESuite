@@ -132,10 +132,10 @@ async function POSTHandler(request: NextRequest) {
     const preservesScheduledDayBreakdown = existingMetadata.fteCalculation === "scheduled_days_divided_by_five"
       && ["twoDayCount", "threeDayCount", "fourDayCount", "fiveDayCount"]
         .every((field) => metadataNumber(existingMetadata[field]) !== null);
-    if (preservesScheduledDayBreakdown && scheduledDayBreakdownTotal(existingScheduledDayCounts) > row.enrolledCount) {
+    if (preservesScheduledDayBreakdown && scheduledDayBreakdownTotal(existingScheduledDayCounts) !== row.enrolledCount) {
       errors.push({
         rowNumber: row.rowNumber,
-        message: "Enrolled children cannot be lower than the preserved 2–5 day schedule total.",
+        message: "The preserved 2–5 day schedule counts must account for every enrolled child.",
       });
       continue;
     }

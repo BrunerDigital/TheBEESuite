@@ -1047,11 +1047,22 @@ async function POSTHandler(request: NextRequest) {
       const enrollmentStatus = clean(body.enrollmentStatus) || clean(body.status) || "enrolled";
       const customFields = baseCustomFields;
       const scheduleNotes = clean(body.schedule);
-      const schedule = scheduleNotes || scheduledDays
-        ? {
-            ...(scheduleNotes ? { notes: scheduleNotes } : {}),
-            ...(scheduledDays ? { daysPerWeek: scheduledDays } : {}),
-          } as Prisma.InputJsonObject
+      const nextSchedule = { ...jsonObject(existingChild?.schedule) };
+      if ("schedule" in body) {
+        if (scheduleNotes) nextSchedule.notes = scheduleNotes;
+        else delete nextSchedule.notes;
+      }
+      if (scheduleDaysProvided) {
+        if (scheduledDays) {
+          nextSchedule.daysPerWeek = scheduledDays;
+          delete nextSchedule.scheduledDaysPerWeek;
+        } else if (!preserveLegacyPartTime) {
+          delete nextSchedule.daysPerWeek;
+          delete nextSchedule.scheduledDaysPerWeek;
+        }
+      }
+      const schedule = existingChild || "schedule" in body || scheduleDaysProvided
+        ? nextSchedule as Prisma.InputJsonObject
         : undefined;
       const classroomError = enrollmentClassroomValidationError({ enrollmentStatus, classroomId });
       if (classroomError) return NextResponse.json({ ok: false, error: classroomError }, { status: 400 });

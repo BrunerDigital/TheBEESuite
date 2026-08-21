@@ -154,8 +154,8 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
   assert.match(route, /CLAIM_PAGE_SIZE = 100/);
-  assert.match(route, /subsidyClaim\.findMany\([\s\S]*orderBy: \[\{ createdAt: "desc" \}, \{ dueDate: "asc" \}\][\s\S]*skip: exportingClaims \? undefined : \(claimPage - 1\) \* CLAIM_PAGE_SIZE[\s\S]*take: exportingClaims \? undefined : CLAIM_PAGE_SIZE \+ 1/);
-  assert.match(route, /claimPagination: \{ page: exportingClaims \? 1 : claimPage, pageSize: exportingClaims \? claims\.length : CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage \}/);
+  assert.match(route, /subsidyClaim\.findMany\([\s\S]*orderBy: \[\{ createdAt: "desc" \}, \{ dueDate: "asc" \}\][\s\S]*skip: \(claimPage - 1\) \* CLAIM_PAGE_SIZE[\s\S]*take: CLAIM_PAGE_SIZE \+ 1/);
+  assert.match(route, /claimPagination: \{ page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage \}/);
   assert.match(workspace, /claimPage=\$\{claimPage\}/);
   assert.match(workspace, /Claim queue page \{claimPagination\.page\}/);
   assert.match(workspace, /setClaimPage\(1\)/);
@@ -163,8 +163,13 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   assert.match(workspace, /reloadClaimPage: 1/);
   assert.match(workspace, /load\(callbacks\.reloadClaimPage\)/);
   assert.match(workspace, /exportClaims=true/);
-  assert.match(workspace, /allClaims = body\.claims/);
-  assert.doesNotMatch(workspace, /\.\.\.claims\.map\(\(claim\)/);
+  assert.match(workspace, /response\.blob\(\)/);
+  assert.match(workspace, /centerIdRef\.current !== requestCenterId/);
+  assert.match(route, /new ReadableStream<Uint8Array>/);
+  assert.match(route, /orderBy: \{ id: "asc" \}/);
+  assert.match(route, /take: 250/);
+  assert.match(route, /cursor: \{ id: cursorId \}, skip: 1/);
+  assert.match(route, /if \(exportingClaims\) return exportClaimsCsv\(centerIds\)/);
 });
 
 test("agency remittances re-read the claim inside a serializable transaction", () => {

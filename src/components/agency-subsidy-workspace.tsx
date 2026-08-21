@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { BadgeDollarSign, Building2, CheckCircle2, Download, FileCheck2, Printer, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,12 +39,15 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const [claimMessage, setClaimMessage] = useState("");
   const [claimPage, setClaimPage] = useState(1);
   const [exportingClaims, setExportingClaims] = useState(false);
+  const centerIdRef = useRef(centerId);
 
   const load = useCallback(async (requestedClaimPage = claimPage) => {
-    if (!centerId) return;
+    const requestCenterId = centerId;
+    if (!requestCenterId) return;
     setPending(true); setError("");
-    const response = await fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(centerId)}&claimPage=${requestedClaimPage}`, { cache: "no-store" });
+    const response = await fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(requestCenterId)}&claimPage=${requestedClaimPage}`, { cache: "no-store" });
     const body = await response.json().catch(() => ({}));
+    if (centerIdRef.current !== requestCenterId) return;
     if (!response.ok) setError(body.error || "Agency billing workspace could not be loaded.");
     else setData(body);
     setPending(false);
@@ -64,9 +67,11 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   }, [centerId, claimPage]);
 
   async function post(action: string, fields: Record<string, unknown>, callbacks: { onError?: (message: string) => void; onSuccess?: (body: Record<string, unknown>) => void; reloadClaimPage?: number } = {}) {
+    const requestCenterId = centerId;
     setPending(true); setError(""); setMessage("");
-    const response = await fetch("/api/billing/agency-claims", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, centerId, ...fields }) });
+    const response = await fetch("/api/billing/agency-claims", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, centerId: requestCenterId, ...fields }) });
     const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+    if (centerIdRef.current !== requestCenterId) return false;
     if (!response.ok) {
       const blockers = Array.isArray(body.blockers) ? body.blockers : [];
       const responseError = [body.error, ...blockers].filter(Boolean).join(" ") || "Agency billing record could not be saved.";
@@ -180,27 +185,23 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   async function exportClaims() {
     const exportCenterId = centerId;
     setExportingClaims(true); setError("");
-    let allClaims: Claim[] = [];
     try {
       const response = await fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(exportCenterId)}&exportClaims=true`, { cache: "no-store" });
-      const body = await response.json().catch(() => ({})) as Partial<Workspace> & { error?: string };
-      if (!response.ok || !Array.isArray(body.claims)) throw new Error(body.error || "Agency claims could not be exported.");
-      allClaims = body.claims;
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error || "Agency claims could not be exported.");
+      }
+      if (centerIdRef.current !== exportCenterId) return;
+      const blob = await response.blob();
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href; anchor.download = `agency-claims-${exportCenterId}-${today()}.csv`; anchor.click();
+      URL.revokeObjectURL(href);
     } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : "Agency claims could not be exported.");
+      if (centerIdRef.current === exportCenterId) setError(exportError instanceof Error ? exportError.message : "Agency claims could not be exported.");
       setExportingClaims(false);
       return;
     }
-    const quote = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-    const rows = [
-      ["Claim", "Agency", "Family", "Child", "Service start", "Service end", "Status", "Claimed", "Approved", "Paid", "Missing documents"],
-      ...allClaims.map((claim) => [claim.number, claim.agencyProgram.name, claim.authorization?.family.name ?? "", claim.authorization?.child.fullName ?? "", claim.servicePeriodStart.slice(0, 10), claim.servicePeriodEnd.slice(0, 10), claim.status, (claim.claimedCents / 100).toFixed(2), claim.approvedCents === null ? "" : (claim.approvedCents / 100).toFixed(2), (claim.paidCents / 100).toFixed(2), claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)).map((document) => document.name).join("; ")]),
-    ];
-    const blob = new Blob([rows.map((row) => row.map(quote).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
-    const href = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = href; anchor.download = `agency-claims-${exportCenterId}-${today()}.csv`; anchor.click();
-    URL.revokeObjectURL(href);
     setExportingClaims(false);
   }
 
@@ -218,7 +219,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="max-w-md space-y-2"><Label>School</Label><Select value={centerId} onValueChange={(value) => { if (!value) return; setCenterId(value); setSetupProgramId("new"); setProgramId(""); setFamilyId(""); setChildId(""); setAuthorizationId(""); setEditingAuthorizationId(""); setClaimPage(1); setClaimError(""); setClaimMessage(""); setData(null); setError(""); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>)}</SelectContent></Select></div>
+          <div className="max-w-md space-y-2"><Label>School</Label><Select value={centerId} onValueChange={(value) => { if (!value) return; centerIdRef.current = value; setCenterId(value); setPending(false); setExportingClaims(false); setSetupProgramId("new"); setProgramId(""); setFamilyId(""); setChildId(""); setAuthorizationId(""); setEditingAuthorizationId(""); setClaimPage(1); setClaimError(""); setClaimMessage(""); setData(null); setError(""); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>)}</SelectContent></Select></div>
           {error ? <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
           {message ? <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200">{message}</p> : null}
           {summary ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

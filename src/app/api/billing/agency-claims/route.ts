@@ -90,6 +90,62 @@ function recordValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function csvRow(values: unknown[]) {
+  return `${values.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")}\r\n`;
+}
+
+function exportClaimsCsv(centerIds: string[]) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        controller.enqueue(encoder.encode(csvRow(["Claim", "Agency", "Family", "Child", "Service start", "Service end", "Status", "Claimed", "Approved", "Paid", "Missing documents"])));
+        let cursorId: string | undefined;
+        while (true) {
+          const claims = await prisma.subsidyClaim.findMany({
+            where: { centerId: { in: centerIds } },
+            orderBy: { id: "asc" },
+            take: 250,
+            ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+            include: {
+              agencyProgram: { select: { name: true } },
+              authorization: { include: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
+              documents: { orderBy: { name: "asc" } },
+            },
+          });
+          if (!claims.length) break;
+          const chunk = claims.map((claim) => csvRow([
+            claim.number,
+            claim.agencyProgram.name,
+            claim.authorization?.family.name ?? "",
+            claim.authorization?.child.fullName ?? "",
+            dateInput(claim.servicePeriodStart),
+            dateInput(claim.servicePeriodEnd),
+            claim.status,
+            (claim.claimedCents / 100).toFixed(2),
+            claim.approvedCents === null ? "" : (claim.approvedCents / 100).toFixed(2),
+            (claim.paidCents / 100).toFixed(2),
+            claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)).map((document) => document.name).join("; "),
+          ])).join("");
+          controller.enqueue(encoder.encode(chunk));
+          cursorId = claims.at(-1)?.id;
+          if (claims.length < 250) break;
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": "attachment; filename=agency-claims.csv",
+      "Cache-Control": "private, no-store",
+    },
+  });
+}
+
 async function currentBillingUser(): Promise<
   | { ok: true; user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> }
   | { ok: false; response: NextResponse }
@@ -115,6 +171,7 @@ async function getHandler(request: NextRequest) {
     ? centerAllowed(auth.user, requestedCenterId) ? [requestedCenterId] : []
     : auth.user.centerIds;
   if (!centerIds.length) return NextResponse.json({ ok: false, error: "No accessible school selected." }, { status: 403 });
+  if (exportingClaims) return exportClaimsCsv(centerIds);
 
   const [programs, authorizations, claims, summaryRows, families] = await Promise.all([
     prisma.agencyProgram.findMany({
@@ -133,8 +190,8 @@ async function getHandler(request: NextRequest) {
     prisma.subsidyClaim.findMany({
       where: { centerId: { in: centerIds } },
       orderBy: [{ createdAt: "desc" }, { dueDate: "asc" }],
-      skip: exportingClaims ? undefined : (claimPage - 1) * CLAIM_PAGE_SIZE,
-      take: exportingClaims ? undefined : CLAIM_PAGE_SIZE + 1,
+      skip: (claimPage - 1) * CLAIM_PAGE_SIZE,
+      take: CLAIM_PAGE_SIZE + 1,
       include: {
         agencyProgram: { select: { name: true, programName: true, providerNumber: true, vendorNumber: true, submissionMethod: true, portalUrl: true, paymentInstructions: true } },
         authorization: { include: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
@@ -170,8 +227,8 @@ async function getHandler(request: NextRequest) {
     }),
   ]);
 
-  const hasNextClaimPage = !exportingClaims && claims.length > CLAIM_PAGE_SIZE;
-  const visibleClaims = exportingClaims ? claims : claims.slice(0, CLAIM_PAGE_SIZE);
+  const hasNextClaimPage = claims.length > CLAIM_PAGE_SIZE;
+  const visibleClaims = claims.slice(0, CLAIM_PAGE_SIZE);
   const summaryRow = summaryRows[0];
   const summary = {
     claimedCents: Number(summaryRow?.claimedCents ?? 0),
@@ -201,7 +258,7 @@ async function getHandler(request: NextRequest) {
     programs: programReadiness,
     authorizations,
     claims: visibleClaims,
-    claimPagination: { page: exportingClaims ? 1 : claimPage, pageSize: exportingClaims ? claims.length : CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage },
+    claimPagination: { page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage },
     families,
     summary: { ...summary, ...readiness },
   });

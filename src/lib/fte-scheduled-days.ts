@@ -65,6 +65,12 @@ export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: u
 
   const text = JSON.stringify({ schedule, customFields }).toLowerCase();
   if (/\b(?:mon(?:day)?\s*[-–—]\s*fri(?:day)?|monday\s+(?:through|to)\s+friday)\b/.test(text)) return 5;
+  const textWeekdays = new Set<string>();
+  for (const match of text.matchAll(/\b(?:mon(?:day)?|tue(?:s|sday)?|wed(?:s|nesday)?|thu(?:r|rs|rsday)?|fri(?:day)?)\b/g)) {
+    const normalized = normalizedWeekday(match[0]);
+    if (normalized) textWeekdays.add(normalized);
+  }
+  if (textWeekdays.size >= 2 && textWeekdays.size <= 5) return textWeekdays.size as 2 | 3 | 4 | 5;
   const textMatch = text.match(/\b([2-5])\s*[- ]?days?(?:\s+per\s+week)?\b/);
   if (textMatch) return Number(textMatch[1]) as 2 | 3 | 4 | 5;
   if (/\b(two|three|four|five)\s*[- ]?days?(?:\s+per\s+week)?\b/.test(text)) {

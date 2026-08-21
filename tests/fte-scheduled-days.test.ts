@@ -33,6 +33,8 @@ test("explicit schedule days take priority over the old full-time or part-time l
   assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "Mon-Fri 8:00 AM - 4:30 PM" }, customFields: {} }), 5);
   assert.equal(scheduledDaysPerWeek({ schedule: { days: ["monday-friday"] }, customFields: {} }), 5);
   assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "Monday through Friday" }, customFields: {} }), 5);
+  assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "Mon, Wed, Fri 8:30 AM - 3:30 PM" }, customFields: {} }), 3);
+  assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { scheduleNotes: "Tuesday and Thursday" } }), 2);
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "full_time" } }), 5);
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "part_time" } }), null);
 });
@@ -52,6 +54,9 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(route, /existingScheduledDayBreakdown[\s\S]*useScheduledDayBreakdown/);
   assert.match(route, /sourceMetadata: true/);
   assert.match(explorer, /twoDayCount: inputOptionalNumber\(report\.twoDayCount\)/);
+  assert.match(explorer, /label="2 days\/week"/);
+  assert.match(explorer, /label="5 days\/week"/);
+  assert.match(explorer, /next\.fteCount = ""/);
   assert.match(page, /aging\.oneToThirtyCents \+ aging\.thirtyOneToSixtyCents \+ aging\.sixtyOnePlusCents/);
   assert.match(page, /past-due receivables/);
 });

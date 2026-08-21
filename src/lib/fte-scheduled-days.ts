@@ -134,12 +134,19 @@ export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: u
     if (/\bfour\s*[- ]?days?\b/.test(text)) return 4;
     if (/\bfive\s*[- ]?days?\b/.test(text)) return 5;
   }
+  if (/\b(?:ft|full[\s_-]*time)\b/.test(text)) return 5;
 
   const explicitType = String(customFields.careScheduleType || customFields.fteScheduleType || customFields.fullTimePartTime || "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_");
   if (["full_time", "fulltime", "full"].includes(explicitType)) return 5;
   return null;
+}
+
+export function fteScheduledDaysPerWeek(input: { schedule: unknown; customFields: unknown }) {
+  const scheduledDays = scheduledDaysPerWeek(input);
+  if (scheduledDays) return scheduledDays;
+  return childScheduleClassification(input) === "unknown" ? 5 : null;
 }
 
 export function childScheduleClassification(input: { schedule: unknown; customFields: unknown }) {

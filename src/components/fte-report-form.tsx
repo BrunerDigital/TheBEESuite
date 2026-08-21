@@ -201,7 +201,7 @@ function emptyForm(centerId = "", prefill?: FteReportPrefill, center?: FteReport
     schoolAge: prefill ? asInput(prefill.schoolAge) : "",
     status: "submitted",
     notes: prefill?.unknownScheduleCount
-      ? `${prefill.unknownScheduleCount} enrolled child schedule(s) need a 2–5 day weekly schedule verification.`
+      ? `${prefill.unknownScheduleCount} explicitly part-time child schedule(s) need a 2–4 day weekly schedule verification.`
       : "",
   };
 }
@@ -552,7 +552,7 @@ export function FteReportForm({
               Enrollment, age groups, weekly billing, receivables, payroll estimates, and enrollment movement were prefilled from live school records for {selectedCenter?.name ?? "this school"}.
               Licensed capacity is {selectedPrefill.licensedCapacity ?? selectedCenter?.licensedCapacity ?? "not set"}.
               {selectedPrefill.unknownScheduleCount
-                ? ` ${selectedPrefill.unknownScheduleCount} child schedule(s) did not identify a 2–5 day weekly schedule, so verify the day counts before submitting.`
+                ? ` ${selectedPrefill.unknownScheduleCount} explicitly part-time child schedule(s) need an exact 2–4 day weekly schedule, so verify the day counts before submitting.`
                 : " Verify the fields, enter payroll percentage if required, and submit."}
             </AlertDescription>
           </Alert>

@@ -35,7 +35,7 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(page, /classrooms: billingClassroomsByCenter\.get\(center\.id\) \?\? \[\]/);
   assert.match(page, /careScheduleType: childScheduleClassification\(\{ schedule: child\.schedule, customFields: child\.customFields \}\)/);
   assert.match(page, /scheduledDaysPerWeek: scheduledDaysPerWeek\(\{ schedule: child\.schedule, customFields: child\.customFields \}\)/);
-  assert.match(page, /import \{ childScheduleClassification, scheduledDaysPerWeek \} from "@\/lib\/fte-scheduled-days"/);
+  assert.match(page, /import \{ childScheduleClassification, fteScheduledDaysPerWeek, scheduledDaysPerWeek \} from "@\/lib\/fte-scheduled-days"/);
 
   assert.match(operations, /const enrollmentContextOnly = clean\(body\.updateScope\) === "enrollment_context"/);
   assert.match(operations, /classroomFamilyGuard\(centerId, classroom\.centerId\)/);

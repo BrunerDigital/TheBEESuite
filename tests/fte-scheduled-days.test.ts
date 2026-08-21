@@ -56,6 +56,12 @@ test("explicit schedule days take priority over the old full-time or part-time l
     customFields: { weeklySchedule: "Tuesday and Thursday", otherHelpfulInfo: "Monday reminder" },
   }), 2);
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "full_time" } }), 5);
+  assert.equal(scheduledDaysPerWeek({
+    schedule: { monday: "8-5", tuesday: "", wednesday: "", thursday: "", friday: "" },
+    customFields: { careScheduleType: "full_time" },
+  }), null);
+  assert.equal(scheduledDaysPerWeek({ schedule: { daysPerWeek: 1 }, customFields: { careScheduleType: "full_time" } }), null);
+  assert.equal(scheduledDaysPerWeek({ schedule: { weekly: "Monday only" }, customFields: { careScheduleType: "full_time" } }), null);
   assert.equal(scheduledDaysPerWeek({ schedule: {}, customFields: { careScheduleType: "part_time" } }), null);
 });
 
@@ -71,13 +77,16 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(form, /four = 0\.8/);
   assert.match(form, /Past-due current-family AR/);
   assert.match(form, /Past-due AR must be verified/);
-  assert.match(form, /accountReceivableReviewRequired && !form\.accountReceivableAmount\.trim\(\)/);
+  assert.match(form, /accountReceivableReviewRequired[\s\S]*Number\.isFinite\(reviewedAccountReceivable\)/);
+  assert.match(form, /scheduledChildrenCount !== Number\(form\.enrolledCount\)/);
   assert.match(route, /fteCalculation: useScheduledDayBreakdown \? "scheduled_days_divided_by_five"/);
   assert.match(route, /fullTimeCount = useScheduledDayBreakdown \? scheduledDayCounts\.fiveDayCount/);
   assert.match(route, /existingScheduledDayBreakdown[\s\S]*useScheduledDayBreakdown/);
   assert.match(route, /sourceMetadata: true/);
   assert.match(route, /twoDayCount: metadataNumber\(metadata\.twoDayCount\)/);
   assert.match(route, /twoDayCount: useScheduledDayBreakdown \? scheduledDayCounts\.twoDayCount : null/);
+  assert.match(route, /scheduledChildrenCount !== enrolledCount/);
+  assert.match(route, /accountReceivableReviewRequired === true && !accountReceivableValueProvided/);
   assert.match(bulkRoute, /select: \{ id: true, sourceMetadata: true \}/);
   assert.match(bulkRoute, /sourceMetadata: \{\s*\.\.\.existingMetadata,/);
   assert.match(bulkRoute, /preservesScheduledDayBreakdown\s*\?\s*calculateScheduledDaysFte\(existingScheduledDayCounts\)/);

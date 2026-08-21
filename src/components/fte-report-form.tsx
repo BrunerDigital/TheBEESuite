@@ -373,9 +373,16 @@ export function FteReportForm({
   }
 
   function submit() {
-    if (selectedPrefill?.accountReceivableReviewRequired && !form.accountReceivableAmount.trim()) {
+    const reviewedAccountReceivable = Number(form.accountReceivableAmount);
+    if (selectedPrefill?.accountReceivableReviewRequired
+      && (!form.accountReceivableAmount.trim() || !Number.isFinite(reviewedAccountReceivable) || reviewedAccountReceivable < 0)) {
       setStatusMessage("");
-      setErrorMessage("Past-due accounts receivable could not be safely prefilled. Enter a verified past-due AR amount before submitting.");
+      setErrorMessage("Past-due accounts receivable could not be safely prefilled. Enter a verified nonnegative AR amount before submitting.");
+      return;
+    }
+    if (hasScheduledDayBreakdown && scheduledChildrenCount !== Number(form.enrolledCount)) {
+      setStatusMessage("");
+      setErrorMessage("The 2–5 day schedule counts must account for every enrolled child before submitting.");
       return;
     }
     startTransition(async () => {
@@ -387,6 +394,7 @@ export function FteReportForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          accountReceivableReviewRequired: selectedPrefill?.accountReceivableReviewRequired === true,
           twoDayCount: hasScheduledDayBreakdown ? scheduledDayCounts.twoDayCount : "",
           threeDayCount: hasScheduledDayBreakdown ? scheduledDayCounts.threeDayCount : "",
           fourDayCount: hasScheduledDayBreakdown ? scheduledDayCounts.fourDayCount : "",

@@ -416,6 +416,22 @@ async function POSTHandler(request: NextRequest) {
   const partTimeCount = useScheduledDayBreakdown
     ? scheduledDayCounts.twoDayCount + scheduledDayCounts.threeDayCount + scheduledDayCounts.fourDayCount
     : intValue(body.partTimeCount);
+  const accountReceivableValueProvided = body.accountReceivableAmount !== ""
+    && body.accountReceivableAmount !== undefined
+    && body.accountReceivableAmount !== null;
+  const accountReceivableNumber = Number(body.accountReceivableAmount);
+  if (accountReceivableValueProvided && (!Number.isFinite(accountReceivableNumber) || accountReceivableNumber < 0)) {
+    return NextResponse.json(
+      { ok: false, error: "Past-due accounts receivable must be a nonnegative number." },
+      { status: 400 },
+    );
+  }
+  if (body.accountReceivableReviewRequired === true && !accountReceivableValueProvided) {
+    return NextResponse.json(
+      { ok: false, error: "Enter a verified past-due accounts receivable amount before submitting." },
+      { status: 400 },
+    );
+  }
   const accountReceivableAmount = nullableFloatValue(body.accountReceivableAmount);
   const selfPayerBillAmount = nullableFloatValue(body.selfPayerBillAmount);
   const subsidyBillAmount = nullableFloatValue(body.subsidyBillAmount);
@@ -445,9 +461,9 @@ async function POSTHandler(request: NextRequest) {
   const schoolAge = intValue(body.schoolAge);
   const enrolledCount = intValue(body.enrolledCount);
   const scheduledChildrenCount = scheduledDayBreakdownTotal(scheduledDayCounts);
-  if (useScheduledDayBreakdown && scheduledChildrenCount > enrolledCount) {
+  if (useScheduledDayBreakdown && scheduledChildrenCount !== enrolledCount) {
     return NextResponse.json(
-      { ok: false, error: "The 2–5 day schedule counts cannot exceed enrolled children." },
+      { ok: false, error: "The 2–5 day schedule counts must account for every enrolled child." },
       { status: 400 },
     );
   }

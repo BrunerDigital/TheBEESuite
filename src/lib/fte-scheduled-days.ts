@@ -66,6 +66,14 @@ export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: u
     customFields.fteDaysPerWeek,
   );
   if (explicitCount) return explicitCount;
+  const hasUnsupportedExplicitCount = [
+    schedule.daysPerWeek,
+    schedule.scheduledDaysPerWeek,
+    customFields.daysPerWeek,
+    customFields.scheduledDaysPerWeek,
+    customFields.fteDaysPerWeek,
+  ].some((value) => Number(value) === 1);
+  if (hasUnsupportedExplicitCount) return null;
 
   const weekdays = new Set<string>();
   for (const value of [schedule.days, schedule.scheduleDays, customFields.days, customFields.scheduleDays]) {
@@ -79,6 +87,7 @@ export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: u
     if (activeDayValue(schedule[day]) || activeDayValue(customFields[day])) weekdays.add(day);
   }
   if (weekdays.size >= 2 && weekdays.size <= 5) return weekdays.size as 2 | 3 | 4 | 5;
+  if (weekdays.size === 1) return null;
 
   const textValues: string[] = [];
   collectTextValues(schedule, textValues);
@@ -111,6 +120,7 @@ export function scheduledDaysPerWeek(input: { schedule: unknown; customFields: u
     if (normalized) textWeekdays.add(normalized);
   }
   if (textWeekdays.size >= 2 && textWeekdays.size <= 5) return textWeekdays.size as 2 | 3 | 4 | 5;
+  if (textWeekdays.size === 1 || /\b(?:1|one)\s*[- ]?days?(?:\s+per\s+week)?\b/.test(text)) return null;
   const textMatch = text.match(/\b([2-5])\s*[- ]?days?(?:\s+per\s+week)?\b/);
   if (textMatch) return Number(textMatch[1]) as 2 | 3 | 4 | 5;
   if (/\b(two|three|four|five)\s*[- ]?days?(?:\s+per\s+week)?\b/.test(text)) {

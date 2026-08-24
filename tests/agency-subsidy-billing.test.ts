@@ -137,7 +137,7 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(route, /recordDecision"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*findUniqueOrThrow[\s\S]*claimSubmissionBlockers/);
   assert.match(route, /Complete every required claim document before recording agency approval/);
   assert.match(route, /updateDocument"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*status: \{ in: \["draft", "ready", "submitted"\] \}/);
-  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND EXISTS/);
+  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND \(/);
   assert.match(route, /Documents cannot be changed after the agency decision is recorded/);
   assert.match(route, /Enter the agency denial reason or code/);
   assert.match(route, /action === "voidClaim"/);
@@ -187,6 +187,7 @@ test("agency remittances re-read the claim inside a serializable transaction", (
   assert.match(route, /const current = await tx\.subsidyClaim\.findUnique/);
   assert.match(route, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
   assert.match(route, /REMITTANCE_METHODS/);
+  assert.match(route, /entryAuthorizationNumber && entryAgencyName[\s\S]*entryAuthorizationNumber === authorizationNumber && entryAgencyName === agencyName/);
   assert.match(route, /That remittance reference is already recorded or the claim changed/);
   assert.match(workspace, /Record remittance/);
   assert.match(workspace, /reconciles matching agency receivables while leaving the parent-visible family responsibility unchanged/);
@@ -202,6 +203,7 @@ test("agency requirements fail closed when current required items are missing", 
   }), ["Add current required item: Attendance detail."]);
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   assert.match(route, /action === "syncRequirements"/);
+  assert.match(route, /action === "syncRequirements"[\s\S]*subsidyClaim\.updateMany[\s\S]*subsidyClaimDocument\.createMany/);
   assert.match(route, /billing\.subsidy_claim\.requirements_synced/);
 });
 
@@ -232,7 +234,8 @@ test("agency dashboard totals use bounded database aggregates for the full non-v
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   assert.match(route, /\$queryRaw<AgencySummaryRow\[\]>/);
   assert.match(route, /SUM\(claim\."claimedCents"\)/);
-  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND EXISTS/);
+  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND \(/);
+  assert.match(route, /jsonb_array_elements[\s\S]*current_requirement[\s\S]*NOT EXISTS/);
   assert.match(route, /claim\.status <> 'void'/);
   assert.doesNotMatch(route, /summaryClaims\.reduce/);
 });

@@ -226,12 +226,33 @@ async function getHandler(request: NextRequest) {
           ELSE 0
         END), 0)::bigint AS "outstandingCents",
         COUNT(*) FILTER (WHERE claim.status IN ('draft', 'ready'))::bigint AS "needsSubmission",
-        COUNT(*) FILTER (WHERE claim.status IN ('draft', 'ready', 'submitted') AND EXISTS (
-          SELECT 1 FROM "SubsidyClaimDocument" document
-          WHERE document."claimId" = claim.id
-            AND document.status NOT IN ('received', 'verified', 'not_applicable')
+        COUNT(*) FILTER (WHERE claim.status IN ('draft', 'ready', 'submitted') AND (
+          EXISTS (
+            SELECT 1 FROM "SubsidyClaimDocument" document
+            WHERE document."claimId" = claim.id
+              AND document.status NOT IN ('received', 'verified', 'not_applicable')
+          ) OR EXISTS (
+            SELECT 1
+            FROM (
+              SELECT requirement
+              FROM jsonb_array_elements(CASE WHEN jsonb_typeof(program.requirements) = 'array' THEN program.requirements ELSE '[]'::jsonb END) requirement
+              UNION ALL
+              SELECT requirement
+              FROM jsonb_array_elements(CASE WHEN jsonb_typeof(authorization."requiredDocuments") = 'array' THEN authorization."requiredDocuments" ELSE '[]'::jsonb END) requirement
+            ) current_requirement
+            WHERE COALESCE(current_requirement.requirement->>'label', '') <> ''
+              AND COALESCE(current_requirement.requirement->>'required', 'true') <> 'false'
+              AND NOT EXISTS (
+                SELECT 1 FROM "SubsidyClaimDocument" current_document
+                WHERE current_document."claimId" = claim.id
+                  AND LOWER(TRIM(current_document.name)) = LOWER(TRIM(current_requirement.requirement->>'label'))
+                  AND LOWER(TRIM(current_document.type)) = LOWER(TRIM(COALESCE(NULLIF(current_requirement.requirement->>'type', ''), 'supporting_document')))
+              )
+          )
         ))::bigint AS "missingDocumentClaims"
       FROM "SubsidyClaim" claim
+      JOIN "AgencyProgram" program ON program.id = claim."agencyProgramId"
+      LEFT JOIN "SubsidyAuthorization" authorization ON authorization.id = claim."authorizationId"
       WHERE claim."centerId" IN (${Prisma.join(centerIds)})
         AND claim.status <> 'void'
     `),
@@ -522,11 +543,29 @@ async function postHandler(request: NextRequest) {
   if (!claim || !centerAllowed(auth.user, claim.centerId)) return NextResponse.json({ ok: false, error: "Claim not found." }, { status: 404 });
 
   if (action === "syncRequirements") {
-    if (!new Set(["draft", "ready", "submitted"]).has(claim.status)) return NextResponse.json({ ok: false, error: "Requirements cannot be changed after the agency decision is recorded." }, { status: 409 });
-    const requirements = claimRequirements(claim);
-    const existing = new Set(claim.documents.map((document) => `${document.name.trim().toLowerCase()}|${document.type.trim().toLowerCase()}`));
-    const missing = requirements.filter((requirement) => !existing.has(`${requirement.label.trim().toLowerCase()}|${requirement.type.trim().toLowerCase()}`));
-    if (missing.length) await prisma.subsidyClaimDocument.createMany({ data: missing.map((requirement) => ({ claimId: claim.id, name: requirement.label, type: requirement.type })) });
+    let missing: ReturnType<typeof claimRequirements> = [];
+    try {
+      missing = await prisma.$transaction(async (tx) => {
+        const transition = await tx.subsidyClaim.updateMany({
+          where: { id: claim.id, status: { in: ["draft", "ready", "submitted"] } },
+          data: { updatedAt: new Date() },
+        });
+        if (transition.count !== 1) throw new AgencyWorkflowError("Requirements cannot be changed after the agency decision is recorded.", 409);
+        const current = await tx.subsidyClaim.findUniqueOrThrow({
+          where: { id: claim.id },
+          include: { agencyProgram: true, authorization: true, documents: true },
+        });
+        const requirements = claimRequirements(current);
+        const existing = new Set(current.documents.map((document) => `${document.name.trim().toLowerCase()}|${document.type.trim().toLowerCase()}`));
+        const missingRequirements = requirements.filter((requirement) => !existing.has(`${requirement.label.trim().toLowerCase()}|${requirement.type.trim().toLowerCase()}`));
+        if (missingRequirements.length) await tx.subsidyClaimDocument.createMany({ data: missingRequirements.map((requirement) => ({ claimId: current.id, name: requirement.label, type: requirement.type })) });
+        return missingRequirements;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The claim changed while requirements were synchronized. Refresh and try again." }, { status: 409 });
+      throw error;
+    }
     await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim.requirements_synced", resource: "SubsidyClaim", resourceId: claim.id, metadata: { addedCount: missing.length, requirementLabels: missing.map((item) => item.label) } });
     return NextResponse.json({ ok: true, addedCount: missing.length });
   }
@@ -642,9 +681,15 @@ async function postHandler(request: NextRequest) {
           });
           const matchingOutstandingCents = agencyEntries.reduce((total, entry) => {
             const metadata = recordValue(entry.metadata);
-            const matchesAuthorization = authorizationNumber && clean(metadata.authorizationNumber) === authorizationNumber;
-            const matchesAgency = clean(metadata.agencyName).toLowerCase() === current.agencyProgram.name.trim().toLowerCase();
-            return matchesAuthorization || matchesAgency ? total + entry.amountCents : total;
+            const entryAuthorizationNumber = clean(metadata.authorizationNumber);
+            const entryAgencyName = clean(metadata.agencyName).toLowerCase();
+            const agencyName = current.agencyProgram.name.trim().toLowerCase();
+            const matches = entryAuthorizationNumber && entryAgencyName
+              ? entryAuthorizationNumber === authorizationNumber && entryAgencyName === agencyName
+              : entryAuthorizationNumber
+                ? entryAuthorizationNumber === authorizationNumber
+                : entryAgencyName === agencyName;
+            return matches ? total + entry.amountCents : total;
           }, 0);
           ledgerAppliedCents = Math.min(amountCents, Math.max(0, matchingOutstandingCents));
           if (ledgerAppliedCents > 0) {

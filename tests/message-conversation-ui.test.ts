@@ -8,6 +8,19 @@ const messagesPage = readFileSync("src/components/live-ops-pages.tsx", "utf8");
 const routePage = readFileSync("src/app/[slug]/page.tsx", "utf8");
 const parentPortal = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
 const conversationStyles = readFileSync("src/components/message-conversation.module.css", "utf8");
+const familyIntake = readFileSync("src/components/family-student-intake-form.tsx", "utf8");
+
+test("conversation timestamps use the school time zone during server and client rendering", () => {
+  assert.match(inbox, /useSchoolTimeZone/);
+  assert.match(inbox, /zonedDateKey\(date, timeZone\)[\s\S]*zonedDateKey\(now, timeZone\)/);
+  assert.match(inbox, /Intl\.DateTimeFormat\("en-US"[\s\S]*timeZone/);
+});
+
+test("family intake contact and PIN controls preserve native input events", () => {
+  assert.match(familyIntake, /name="guardianEmail"[\s\S]*onInput=.*setGuardianEmail/);
+  assert.match(familyIntake, /name="guardianPhone"[\s\S]*onInput=.*setGuardianPhone/);
+  assert.match(familyIntake, /name="checkInPin"[\s\S]*onInput=.*setCheckInPin/);
+});
 
 test("director messaging uses a searchable, accessible conversation inbox", () => {
   assert.match(inbox, /aria-label="Family conversation list"/);

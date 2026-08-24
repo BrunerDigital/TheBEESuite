@@ -312,6 +312,7 @@ export function FteReportForm({
     const refreshedCenter = centers.find((center) => center.id === requested.centerId);
     setForm((current) => {
       if (current.centerId !== requested.centerId) return current;
+      if (current.weekStart !== defaultWeekStart()) return current;
       const refreshed = emptyForm(requested.centerId, refreshedPrefill, refreshedCenter);
       return {
         ...refreshed,

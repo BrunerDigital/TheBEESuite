@@ -116,6 +116,7 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(form, /startLiveDataRefresh\(\(\) => router\.refresh\(\)\)/);
   assert.match(form, /const isHistoricalReportingWeek = form\.weekStart !== defaultWeekStart\(\)/);
   assert.match(form, /if \(isHistoricalReportingWeek\) return/);
+  assert.match(form, /if \(current\.weekStart !== defaultWeekStart\(\)\) return current/);
   assert.match(form, /disabled=\{isRefreshingLiveData \|\| isHistoricalReportingWeek\}/);
   assert.match(form, /locationData: current\.locationData/);
   assert.doesNotMatch(form, /refreshLiveSchoolData\(\)[\s\S]{0,200}window\.location\.reload/);

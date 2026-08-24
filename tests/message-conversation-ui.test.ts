@@ -22,6 +22,9 @@ test("conversation timestamps use the school time zone during server and client 
   assert.match(routePage, /message\.sender\?\.role === UserRole\.TEACHER/);
   assert.match(routePage, /message\.assignedTo\?\.role === UserRole\.TEACHER/);
   assert.match(routePage, /typeof message\.staffCenterId === "string"/);
+  assert.match(routePage, /const projectedThreads: MessageThread\[\] = \[\]/);
+  assert.match(routePage, /new Date\(message\.createdAt\)\.toISOString\(\)/);
+  assert.doesNotMatch(routePage, /new Map<string, MessageThread>/);
   assert.match(inbox, /thread\.timeZone \|\| defaultTimeZone/);
   assert.match(inbox, /selectedThread\?\.timeZone \|\| defaultTimeZone/);
   assert.match(inbox, /zonedDateKey\(date, timeZone\)[\s\S]*zonedDateKey\(now, timeZone\)/);

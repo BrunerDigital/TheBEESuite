@@ -713,7 +713,7 @@ async function buildFtePrefills(
   const fteReceivableLedgerLimit = 20_000;
   const receivableLedgerEntries = billingAccountIds.length ? await prisma.ledgerEntry.findMany({
     where: { billingAccountId: { in: billingAccountIds } },
-    select: { id: true, billingAccountId: true, amountCents: true, invoiceId: true, effectiveAt: true, createdAt: true },
+    select: { id: true, billingAccountId: true, amountCents: true, invoiceId: true, type: true, sourceSystem: true, effectiveAt: true, createdAt: true },
     orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
     take: fteReceivableLedgerLimit + 1,
   }) : [];
@@ -3480,6 +3480,7 @@ async function renderLivePage(
           createdAt: true,
           invoiceId: true,
           paymentId: true,
+          sourceSystem: true,
         },
       }),
       prisma.billingAccount.findMany({

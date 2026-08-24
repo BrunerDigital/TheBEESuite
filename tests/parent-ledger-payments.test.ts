@@ -100,15 +100,18 @@ test("a changed ProCare balance invalidates prior family-responsibility confirma
   assert.match(source, /customFields: mergeCustomFields\(existingBillingFields, importedBillingFields\)/);
 });
 
-test("director billing routes agency remittances away from family ledgers", () => {
+test("director billing routes agency remittances through the guarded claim workflow", () => {
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
   const invoiceRoute = readFileSync("src/app/api/billing/invoices/route.ts", "utf8");
+  const agencyRoute = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const operations = readFileSync("src/components/live-ops-pages.tsx", "utf8");
 
   assert.match(workbench, /Open Agency Claim Queue/);
   assert.doesNotMatch(workbench, /Post Agency Payment/);
   assert.match(invoiceRoute, /Direct agency credits to family ledgers are retired/);
   assert.doesNotMatch(invoiceRoute.slice(invoiceRoute.indexOf("async function createAgencyPayment"), invoiceRoute.indexOf("async function manualFamilyPaymentExceedsVisibleBalance")), /ledgerEntry\.create/);
+  assert.match(agencyRoute, /type: "agency_payment"/);
+  assert.match(agencyRoute, /externalId: `agency-remittance:\$\{remittance\.id\}`/);
   assert.match(operations, /Agency payments/);
 });
 

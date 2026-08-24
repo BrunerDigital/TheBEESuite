@@ -1364,12 +1364,16 @@ model SubsidyRemittance {
   externalReference String
   notes             String?
   enteredById       String
+  reversedAt        DateTime?
+  reversedById      String?
+  reversalReason    String?
   createdAt         DateTime @default(now())
 
   claim SubsidyClaim @relation(fields: [claimId], references: [id])
 
   @@unique([claimId, externalReference])
   @@index([claimId, paidAt])
+  @@index([claimId, reversedAt])
 }
 
 model Invoice {

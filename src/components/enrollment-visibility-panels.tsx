@@ -399,7 +399,7 @@ export function FamilyProfilesEnrollmentPanel({
   const visibleFamilyCount = currentFamilyCount;
   const hasVisibleGuardians = visibleFamilies.some((family) => family.guardians.length);
   const allGuardianDirectoryRows = useMemo(
-    () => visibleFamilies
+    () => allFamilies
       .flatMap((family) => family.guardians.map((guardian) => ({
         ...guardian,
         familyId: family.id,
@@ -412,7 +412,7 @@ export function FamilyProfilesEnrollmentPanel({
         || left.fullName.localeCompare(right.fullName)
         || left.familyName.localeCompare(right.familyName)
       )),
-    [visibleFamilies],
+    [allFamilies],
   );
   const guardianDirectoryRows = useMemo(() => {
     const query = guardianDirectorySearch.trim().toLocaleLowerCase();
@@ -425,7 +425,7 @@ export function FamilyProfilesEnrollmentPanel({
       guardian.phone,
     ].some((value) => value?.toLocaleLowerCase().includes(query)));
   }, [allGuardianDirectoryRows, guardianDirectorySearch]);
-  const familiesWithoutGuardians = visibleFamilies.filter((family) => family.guardians.length === 0).length;
+  const familiesWithoutGuardians = allFamilies.filter((family) => family.guardians.length === 0).length;
   const contactsWithoutEmailOrPhone = allGuardianDirectoryRows.filter((guardian) => !guardian.email && !guardian.phone).length;
   const billingGuardians = allGuardianDirectoryRows.filter((guardian) => guardian.isBillingContact);
   const billingGuardiansMissingEmail = billingGuardians.filter((guardian) => !guardian.email).length;

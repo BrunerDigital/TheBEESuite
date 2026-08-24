@@ -3,7 +3,6 @@ type FamilyRecord = {
 };
 
 export function familiesForCompleteRecordEditing<T extends FamilyRecord>({
-  currentFamilies,
   allFamilies,
   requestedFamilyId,
 }: {
@@ -12,19 +11,16 @@ export function familiesForCompleteRecordEditing<T extends FamilyRecord>({
   requestedFamilyId?: string | null;
 }) {
   const completeFamilyById = new Map(allFamilies.map((family) => [family.id, family]));
-  const completeCurrentFamilies = currentFamilies.map(
-    (family) => completeFamilyById.get(family.id) ?? family,
-  );
   const requestedFamily = requestedFamilyId
     ? completeFamilyById.get(requestedFamilyId) ?? null
     : null;
 
   if (!requestedFamily) {
-    return completeCurrentFamilies;
+    return [...allFamilies];
   }
 
   return [
     requestedFamily,
-    ...completeCurrentFamilies.filter((family) => family.id !== requestedFamily.id),
+    ...allFamilies.filter((family) => family.id !== requestedFamily.id),
   ];
 }

@@ -73,3 +73,43 @@ test("a requested past family opens first without dropping current families", ()
     ["child-current", "child-past"],
   );
 });
+
+test("childless and non-current households remain selectable for complete record editing", () => {
+  const currentFamilies: TestFamily[] = [
+    {
+      id: "family-current",
+      children: [{ id: "child-current", status: "enrolled" }],
+    },
+  ];
+  const allFamilies: TestFamily[] = [
+    {
+      id: "family-childless",
+      children: [],
+    },
+    {
+      id: "family-current",
+      children: [
+        { id: "child-current", status: "enrolled" },
+        { id: "child-past", status: "withdrawn" },
+      ],
+    },
+    {
+      id: "family-past-only",
+      children: [{ id: "child-past-only", status: "withdrawn" }],
+    },
+  ];
+
+  const result = familiesForCompleteRecordEditing({
+    currentFamilies,
+    allFamilies,
+  });
+
+  assert.deepEqual(
+    result.map((family) => family.id),
+    ["family-childless", "family-current", "family-past-only"],
+  );
+  assert.deepEqual(
+    result[1]?.children.map((child) => child.id),
+    ["child-current", "child-past"],
+  );
+});

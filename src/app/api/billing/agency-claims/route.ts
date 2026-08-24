@@ -234,11 +234,21 @@ async function getHandler(request: NextRequest) {
           ) OR EXISTS (
             SELECT 1
             FROM (
-              SELECT requirement
-              FROM jsonb_array_elements(CASE WHEN jsonb_typeof(program.requirements) = 'array' THEN program.requirements ELSE '[]'::jsonb END) requirement
-              UNION ALL
-              SELECT requirement
-              FROM jsonb_array_elements(CASE WHEN jsonb_typeof(authorization."requiredDocuments") = 'array' THEN authorization."requiredDocuments" ELSE '[]'::jsonb END) requirement
+              SELECT DISTINCT ON (requirement_key) requirement
+              FROM (
+                SELECT requirement, 0 AS source_order, ordinal
+                FROM jsonb_array_elements(CASE WHEN jsonb_typeof(program.requirements) = 'array' THEN program.requirements ELSE '[]'::jsonb END) WITH ORDINALITY AS program_requirement(requirement, ordinal)
+                UNION ALL
+                SELECT requirement, 1 AS source_order, ordinal
+                FROM jsonb_array_elements(CASE WHEN jsonb_typeof(authorization."requiredDocuments") = 'array' THEN authorization."requiredDocuments" ELSE '[]'::jsonb END) WITH ORDINALITY AS authorization_requirement(requirement, ordinal)
+              ) raw_requirement
+              CROSS JOIN LATERAL (
+                SELECT REGEXP_REPLACE(
+                  LOWER(COALESCE(NULLIF(raw_requirement.requirement->>'key', ''), COALESCE(NULLIF(raw_requirement.requirement->>'type', ''), 'supporting_document') || ':' || COALESCE(raw_requirement.requirement->>'label', ''))),
+                  '[^a-z0-9:_-]+', '-', 'g'
+                ) AS requirement_key
+              ) normalized_requirement
+              ORDER BY requirement_key, source_order, ordinal
             ) current_requirement
             WHERE COALESCE(current_requirement.requirement->>'label', '') <> ''
               AND COALESCE(current_requirement.requirement->>'required', 'true') <> 'false'
@@ -266,11 +276,11 @@ async function getHandler(request: NextRequest) {
   const hasNextClaimPage = claims.length > CLAIM_PAGE_SIZE;
   const visibleClaims = claims.slice(0, CLAIM_PAGE_SIZE).map((claim) => ({
     ...claim,
-    requirementBlockers: claimSubmissionBlockers({
+    requirementBlockers: ["draft", "ready", "submitted"].includes(claim.status) ? claimSubmissionBlockers({
       ...claim.agencyProgram,
       documents: claim.documents,
       requirements: claimRequirements(claim),
-    }).filter((blocker) => blocker.startsWith("Add current required item:")),
+    }).filter((blocker) => blocker.startsWith("Add current required item:")) : [],
   }));
   const summaryRow = summaryRows[0];
   const summary = {
@@ -597,15 +607,26 @@ async function postHandler(request: NextRequest) {
   }
 
   if (action === "submitClaim") {
-    if (claim.status !== "draft" && claim.status !== "ready") return NextResponse.json({ ok: false, error: "Only draft or ready claims can be submitted." }, { status: 409 });
-    const blockers = claimSubmissionBlockers({ ...claim.agencyProgram, documents: claim.documents, requirements: claimRequirements(claim) });
-    if (blockers.length) return NextResponse.json({ ok: false, error: "Claim is not ready for submission.", blockers }, { status: 409 });
     const externalReference = clean(body.externalReference);
     if (!externalReference) return NextResponse.json({ ok: false, error: "Enter the confirmation reference returned by the external agency channel." }, { status: 400 });
-    const transition = await prisma.subsidyClaim.updateMany({ where: { id: claim.id, status: { in: ["draft", "ready"] } }, data: { status: "submitted", submittedAt: new Date(), externalReference } });
-    if (transition.count !== 1) return NextResponse.json({ ok: false, error: "The claim changed before submission was recorded. Refresh before trying again." }, { status: 409 });
-    const submitted = await prisma.subsidyClaim.findUniqueOrThrow({ where: { id: claim.id } });
-    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim.marked_submitted", resource: "SubsidyClaim", resourceId: claim.id, metadata: { submissionMethod: claim.agencyProgram.submissionMethod, externalReference: submitted.externalReference } });
+    let result;
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        const transition = await tx.subsidyClaim.updateMany({ where: { id: claim.id, status: { in: ["draft", "ready"] } }, data: { updatedAt: new Date() } });
+        if (transition.count !== 1) throw new AgencyWorkflowError("Only a current draft or ready claim can be submitted.", 409);
+        const current = await tx.subsidyClaim.findUniqueOrThrow({ where: { id: claim.id }, include: { agencyProgram: true, authorization: true, documents: true } });
+        const blockers = claimSubmissionBlockers({ ...current.agencyProgram, documents: current.documents, requirements: claimRequirements(current) });
+        if (blockers.length) throw new AgencyWorkflowError(`Claim is not ready for submission. ${blockers.join(" ")}`, 409);
+        const submitted = await tx.subsidyClaim.update({ where: { id: current.id }, data: { status: "submitted", submittedAt: new Date(), externalReference } });
+        return { submitted, submissionMethod: current.agencyProgram.submissionMethod };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The claim or its requirements changed before submission was recorded. Refresh and try again." }, { status: 409 });
+      throw error;
+    }
+    const { submitted, submissionMethod } = result;
+    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim.marked_submitted", resource: "SubsidyClaim", resourceId: claim.id, metadata: { submissionMethod, externalReference: submitted.externalReference } });
     return NextResponse.json({ ok: true, claim: submitted, externalSubmissionPerformed: false });
   }
 

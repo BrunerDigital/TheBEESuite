@@ -46,9 +46,9 @@ function pngDimensions(filePath: string) {
   };
 }
 
-test("social and paid campaign pack covers six concepts and six platform formats", () => {
+test("social and paid campaign pack covers seventeen concepts and six platform formats", () => {
   assert.equal(manifest.releaseVersion, "current");
-  assert.equal(manifest.concepts.length, 6);
+  assert.equal(manifest.concepts.length, 17);
 
   const expectedDimensions = new Map([
     ["square", "1080x1080"],
@@ -104,7 +104,7 @@ test("Google copy fields fit responsive display limits and clean files are expli
   }
 });
 
-test("creative sources stay on the approved current screenshot and SOP sets", () => {
+test("creative sources stay on approved current screenshots and brand assets", () => {
   const sourcePaths = manifest.concepts.flatMap((concept) =>
     concept.sourceAssets.map((asset) => asset.path),
   );
@@ -112,17 +112,14 @@ test("creative sources stay on the approved current screenshot and SOP sets", ()
   assert.ok(
     sourcePaths.some((source) => source.includes("screenshots/current/")),
   );
-  assert.ok(
-    sourcePaths.some((source) =>
-      source.includes("sop-graphics/current/"),
-    ),
-  );
-  assert.ok(
-    sourcePaths.some((source) => source.includes("explainers/current/")),
-  );
   assert.equal(sourcePaths.some((source) => source.includes("2026-07-07")), false);
 
   for (const source of sourcePaths) {
+    assert.ok(
+      source.includes("screenshots/current/") ||
+        source === "public/brand/the-bee-suite/mr-bee-profile.png",
+      source,
+    );
     assert.equal(existsSync(source), true, source);
   }
 });

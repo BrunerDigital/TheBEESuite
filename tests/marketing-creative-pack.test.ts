@@ -16,6 +16,7 @@ const manifest = JSON.parse(
   releaseVersion: string;
   concepts: Array<{
     id: string;
+    landingPage: string;
     copy: {
       platformCopy: {
         google: {
@@ -46,9 +47,9 @@ function pngDimensions(filePath: string) {
   };
 }
 
-test("social and paid campaign pack covers six concepts and six platform formats", () => {
+test("social and paid campaign pack covers seventeen concepts and six platform formats", () => {
   assert.equal(manifest.releaseVersion, "current");
-  assert.equal(manifest.concepts.length, 6);
+  assert.equal(manifest.concepts.length, 17);
 
   const expectedDimensions = new Map([
     ["square", "1080x1080"],
@@ -104,7 +105,7 @@ test("Google copy fields fit responsive display limits and clean files are expli
   }
 });
 
-test("creative sources stay on the approved current screenshot and SOP sets", () => {
+test("creative sources stay on approved current screenshots and brand assets", () => {
   const sourcePaths = manifest.concepts.flatMap((concept) =>
     concept.sourceAssets.map((asset) => asset.path),
   );
@@ -112,17 +113,14 @@ test("creative sources stay on the approved current screenshot and SOP sets", ()
   assert.ok(
     sourcePaths.some((source) => source.includes("screenshots/current/")),
   );
-  assert.ok(
-    sourcePaths.some((source) =>
-      source.includes("sop-graphics/current/"),
-    ),
-  );
-  assert.ok(
-    sourcePaths.some((source) => source.includes("explainers/current/")),
-  );
   assert.equal(sourcePaths.some((source) => source.includes("2026-07-07")), false);
 
   for (const source of sourcePaths) {
+    assert.ok(
+      source.includes("screenshots/current/") ||
+        source === "public/brand/the-bee-suite/mr-bee-profile.png",
+      source,
+    );
     assert.equal(existsSync(source), true, source);
   }
 });
@@ -141,4 +139,32 @@ test("campaign copy avoids unsupported claims and the review library is complete
       assert.match(review, new RegExp(creative.file.replaceAll(".", "\\.")));
     }
   }
+});
+
+test("campaign destinations and calculator navigation match their promised actions", () => {
+  const calculator = manifest.concepts.find(
+    (concept) => concept.id === "model-fragmentation-cost",
+  );
+  assert.ok(calculator);
+  assert.equal(
+    calculator.landingPage,
+    "https://thebeesuite.io/brand/the-bee-suite/marketing/current/savings-calculator.html",
+  );
+  const story = manifest.concepts.find(
+    (concept) => concept.id === "share-your-bee-suite-story",
+  );
+  assert.ok(story);
+  assert.equal(
+    story.landingPage,
+    "mailto:support@thebeesuite.io?subject=My%20BEE%20Suite%20story",
+  );
+
+  const calculatorPage = readFileSync(
+    path.join(releaseDir, "savings-calculator.html"),
+    "utf8",
+  );
+  assert.match(calculatorPage, /class="brand" href="\/"/);
+  assert.match(calculatorPage, /class="back" href="\/">← Product site<\/a>/);
+  assert.match(calculatorPage, /const current = \(.+\) \* locations;/);
+  assert.match(calculatorPage, /const modeled = \(.+\) \* locations;/);
 });

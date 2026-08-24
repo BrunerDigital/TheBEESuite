@@ -197,11 +197,11 @@ const guides: ResourceGuide[] = [
     icon: ClipboardCheck,
     steps: [
       "Confirm the correct school and director role. Stop immediately if another school's records are visible.",
-      "Confirm the source package covers accounts, children, enrollment, relationships, pickups and custody, child safety, classrooms, schedules, tuition, balances, agency responsibility when applicable, and current staff.",
-      "Compare each current child from family through classroom, schedule, safety, tuition, and balance using stable source identifiers. Do not resolve ambiguous ownership from names, email, phone, or memory.",
-      "Review allergies, medical information, medications, emergency contacts, authorized pickups, and custody restrictions as separate safety checks. A blank field is not proof that none exists.",
-      "Verify tuition amount, cadence, description, and effective date per child; reconcile each dated opening balance and keep agency responsibility separate from the parent's family balance.",
-      "Spot-check at least 10 representative family chains and give every exception an evidence reference, owner, due date, decision, reviewer, and exact retest.",
+      "Make sure your current review packet is marked Ready for Director Review and matches your school and export date.",
+      "Check each current child's family, classroom, schedule, safety information, tuition, and balance. Mark anything missing or unclear instead of guessing.",
+      "Review allergies, medical information, medications, emergency contacts, authorized pickups, and custody restrictions separately. A blank field is not proof that none exists.",
+      "Check each child's tuition amount, billing schedule, description, and start date. Check each family's dated opening balance and keep agency responsibility separate from the parent's family balance.",
+      "Spot-check at least 10 current families. Record every correction, who owns it, and the result after it is fixed and checked again.",
       "Keep parent invitations, staff access, kiosk/PIN, attendance, billing, payments, messaging, and previous-system retirement held until each receives its own approval.",
     ],
     visual: [

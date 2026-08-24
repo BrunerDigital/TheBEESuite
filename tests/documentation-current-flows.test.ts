@@ -223,13 +223,14 @@ test("director clean-start documentation is evidence-backed and keeps launch gat
   const guide = readFileSync("docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md", "utf8");
   const transition = readFileSync("docs/sops/SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md", "utf8");
 
-  assert.match(guide, /`raw\/` contains the original source evidence/);
-  assert.match(guide, /`MISSING SOURCE` means `NOT VERIFIED`/);
-  assert.match(guide, /stable Account, Person, Child, Classroom, and Employee IDs/);
-  assert.match(guide, /allergies, medical conditions, medications, emergency contacts, authorized pickups, and custody restrictions are separate checks/i);
-  assert.match(guide, /family responsibility from agency\/subsidy responsibility/i);
-  assert.match(guide, /Review at least 10 representative current families/);
-  assert.match(guide, /parent invitations, staff access, kiosk\/PIN activation, attendance, tuition generation, payment collection, messaging, or ProCare retirement/);
+  assert.match(guide, /You are not expected to repair import files or guess which record is right/);
+  assert.match(guide, /READY FOR DIRECTOR REVIEW/);
+  assert.match(guide, /A blank field means "not yet confirmed," not "none/);
+  assert.match(guide, /allergies and severity/);
+  assert.match(guide, /parent responsibility is separated from agency\/subsidy responsibility/i);
+  assert.match(guide, /Review at least 10 current families/);
+  assert.match(guide, /does not turn on invitations, access, kiosk PINs, attendance, billing, payments, messages, or ProCare cutover/);
+  assert.match(guide, /Director Sign-Off Checklist/);
   assert.match(transition, /DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE/);
 });
 

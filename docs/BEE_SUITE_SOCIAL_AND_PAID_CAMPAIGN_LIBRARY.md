@@ -387,7 +387,7 @@ The real cost of disconnected tools is not just another subscription. It is the 
 **Campaign ID:** `model-fragmentation-cost`
 **Audience:** Childcare owners, finance leaders, and multi-location operators
 **Goal:** Drive engagement with a transparent cost-comparison tool
-**Landing page:** https://thebeesuite.io
+**Landing page:** https://thebeesuite.io/brand/the-bee-suite/marketing/current/savings-calculator.html
 
 ### Organic social caption
 

@@ -16,6 +16,7 @@ const manifest = JSON.parse(
   releaseVersion: string;
   concepts: Array<{
     id: string;
+    landingPage: string;
     copy: {
       platformCopy: {
         google: {
@@ -138,4 +139,22 @@ test("campaign copy avoids unsupported claims and the review library is complete
       assert.match(review, new RegExp(creative.file.replaceAll(".", "\\.")));
     }
   }
+});
+
+test("campaign destinations and calculator navigation match their promised actions", () => {
+  const calculator = manifest.concepts.find(
+    (concept) => concept.id === "model-fragmentation-cost",
+  );
+  assert.ok(calculator);
+  assert.equal(
+    calculator.landingPage,
+    "https://thebeesuite.io/brand/the-bee-suite/marketing/current/savings-calculator.html",
+  );
+
+  const calculatorPage = readFileSync(
+    path.join(releaseDir, "savings-calculator.html"),
+    "utf8",
+  );
+  assert.match(calculatorPage, /class="brand" href="\/"/);
+  assert.match(calculatorPage, /class="back" href="\/">← Product site<\/a>/);
 });

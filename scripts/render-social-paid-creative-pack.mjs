@@ -1492,6 +1492,7 @@ function googleCleanCreativeHtml(concept, format, assetData) {
     })
     .join("");
   const allDesktop = sourceAssets.length === 2 && sourceAssets.every((asset) => asset.kind.includes("desktop"));
+  const allPhones = sourceAssets.length === 3 && sourceAssets.every((asset) => asset.kind === "phone");
   const isSquare = format.width === format.height;
   return `<!doctype html>
 <html>
@@ -1605,6 +1606,9 @@ function googleCleanCreativeHtml(concept, format, assetData) {
     .count-3 .device-1 { left: ${isSquare ? 5 : 6}%; bottom: ${isSquare ? 17 : 16}%; width: ${isSquare ? 72 : 58}%; transform: rotate(-4deg); }
     .count-3 .device-2 { right: ${isSquare ? 13 : 16}%; top: ${isSquare ? 9 : 8}%; width: ${isSquare ? 34 : 25}%; transform: rotate(4deg); }
     .count-3 .device-3 { right: ${isSquare ? 4 : 4}%; bottom: ${isSquare ? 8 : 9}%; width: ${isSquare ? 19 : 13}%; transform: rotate(6deg); }
+    .three-phones .device-1 { left: ${isSquare ? 8 : 18}%; top: ${isSquare ? 25 : 10}%; width: ${isSquare ? 22 : 16}%; transform: rotate(-5deg); }
+    .three-phones .device-2 { left: ${isSquare ? 39 : 42}%; top: ${isSquare ? 15 : 6}%; width: ${isSquare ? 22 : 16}%; transform: rotate(0deg); }
+    .three-phones .device-3 { right: ${isSquare ? 8 : 18}%; top: ${isSquare ? 25 : 10}%; width: ${isSquare ? 22 : 16}%; transform: rotate(5deg); }
     .count-2:not(.two-desktops) .desktop { left: ${isSquare ? 7 : 7}%; bottom: ${isSquare ? 18 : 16}%; width: ${isSquare ? 72 : 62}%; transform: rotate(-3deg); }
     .count-2:not(.two-desktops) .tablet { left: ${isSquare ? 15 : 15}%; top: ${isSquare ? 8 : 7}%; width: ${isSquare ? 43 : 31}%; transform: rotate(-3deg); }
     .count-2:not(.two-desktops) .phone { right: ${isSquare ? 10 : 10}%; bottom: ${isSquare ? 10 : 9}%; width: ${isSquare ? 25 : 17}%; transform: rotate(5deg); }
@@ -1626,7 +1630,7 @@ function googleCleanCreativeHtml(concept, format, assetData) {
   </style>
 </head>
 <body>
-  <main class="count-${sourceAssets.length} ${allDesktop ? "two-desktops" : ""}" data-layout-item="true">
+  <main class="count-${sourceAssets.length} ${allDesktop ? "two-desktops" : ""} ${allPhones ? "three-phones" : ""}" data-layout-item="true">
     <div class="glow" aria-hidden="true"></div>
     ${devices}
   </main>
@@ -1743,6 +1747,9 @@ function manifest() {
     landingPage: "https://thebeesuite.io",
     concepts: concepts.map((concept) => ({
       id: concept.id,
+      landingPage: concept.id === "model-fragmentation-cost"
+        ? "https://thebeesuite.io/brand/the-bee-suite/marketing/current/savings-calculator.html"
+        : "https://thebeesuite.io",
       audience: concept.audience,
       goal: concept.goal,
       copy: {
@@ -1810,7 +1817,7 @@ function copyMarkdown() {
 **Campaign ID:** \`${concept.id}\`
 **Audience:** ${concept.audience}
 **Goal:** ${concept.goal}
-**Landing page:** https://thebeesuite.io
+**Landing page:** ${concept.id === "model-fragmentation-cost" ? "https://thebeesuite.io/brand/the-bee-suite/marketing/current/savings-calculator.html" : "https://thebeesuite.io"}
 
 ### Organic social caption
 
@@ -2010,8 +2017,8 @@ function savingsCalculatorHtml() {
 <body>
   <main>
     <nav>
-      <a class="brand" href="index.html"><span class="mark">⬡</span><span>The BEE Suite</span></a>
-      <a class="back" href="index.html">← Creative library</a>
+      <a class="brand" href="/"><span class="mark">⬡</span><span>The BEE Suite</span></a>
+      <a class="back" href="/">← Product site</a>
     </nav>
     <header>
       <span class="eyebrow">Interactive planning model</span>

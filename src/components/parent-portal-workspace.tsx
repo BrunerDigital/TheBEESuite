@@ -3760,7 +3760,9 @@ function ParentPortalWorkspaceView({
                   name="message-attachments"
                   type="file"
                   multiple
-                  className="sr-only"
+                  aria-label="Attach photos or files"
+                  className="absolute overflow-hidden whitespace-nowrap border-0 p-0"
+                  style={{ width: 1, height: 1, clip: "rect(0 0 0 0)", clipPath: "inset(50%)" }}
                   accept="image/*,.pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
                   onChange={(event) => addMessageAttachments(event.target.files)}
                 />

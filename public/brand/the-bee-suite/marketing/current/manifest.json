@@ -1259,7 +1259,7 @@
     },
     {
       "id": "share-your-bee-suite-story",
-      "landingPage": "https://thebeesuite.io",
+      "landingPage": "mailto:support@thebeesuite.io?subject=My%20BEE%20Suite%20story",
       "audience": "Current BEE Suite operators and implementation partners",
       "goal": "Collect reviewable customer-story material for future testimonial creative",
       "copy": {

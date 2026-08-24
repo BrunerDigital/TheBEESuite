@@ -540,7 +540,7 @@ Mr. BEE can help summarize a center, explain trends, draft replies and announcem
 **Campaign ID:** `share-your-bee-suite-story`
 **Audience:** Current BEE Suite operators and implementation partners
 **Goal:** Collect reviewable customer-story material for future testimonial creative
-**Landing page:** https://thebeesuite.io
+**Landing page:** mailto:support@thebeesuite.io?subject=My%20BEE%20Suite%20story
 
 ### Organic social caption
 

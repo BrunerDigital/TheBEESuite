@@ -46,10 +46,10 @@ The campaign pillars are:
 Use the five expansion concepts to add variety without turning the feed into a generic feature catalog:
 
 - `connected-vs-fragmented`: open with a recognizable handoff problem, then show the connected model.
-- `model-fragmentation-cost`: send readers to `public/brand/the-bee-suite/marketing/current/savings-calculator.html` and describe it as a planning model, never a guaranteed savings claim.
+- `model-fragmentation-cost`: send readers to `https://thebeesuite.io/brand/the-bee-suite/marketing/current/savings-calculator.html` and describe it as a planning model, never a guaranteed savings claim.
 - `six-connected-workflows`: spotlight one card in the caption while the visual communicates the broader system.
 - `meet-mr-bee`: focus on summarizing, drafting, explaining, and prioritizing; always retain the human-review requirement.
-- `share-your-bee-suite-story`: use as a customer-story invitation until an approved quote, speaker name, role, organization, and usage permission are documented. Replace it with an attributed testimonial only after that review.
+- `share-your-bee-suite-story`: invite operators to email `support@thebeesuite.io` with the subject “My BEE Suite story” until an approved quote, speaker name, role, organization, and usage permission are documented. Replace it with an attributed testimonial only after that review.
 
 Rotate one expansion concept into each week after the initial 30-day foundation. Comparison and feature content can run in feed placements; the savings model works best as a link post; Mr. BEE is suited to a short screen-led demo; the customer-story card works best as a direct community prompt.
 

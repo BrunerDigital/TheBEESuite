@@ -150,6 +150,14 @@ test("campaign destinations and calculator navigation match their promised actio
     calculator.landingPage,
     "https://thebeesuite.io/brand/the-bee-suite/marketing/current/savings-calculator.html",
   );
+  const story = manifest.concepts.find(
+    (concept) => concept.id === "share-your-bee-suite-story",
+  );
+  assert.ok(story);
+  assert.equal(
+    story.landingPage,
+    "mailto:support@thebeesuite.io?subject=My%20BEE%20Suite%20story",
+  );
 
   const calculatorPage = readFileSync(
     path.join(releaseDir, "savings-calculator.html"),
@@ -157,4 +165,6 @@ test("campaign destinations and calculator navigation match their promised actio
   );
   assert.match(calculatorPage, /class="brand" href="\/"/);
   assert.match(calculatorPage, /class="back" href="\/">← Product site<\/a>/);
+  assert.match(calculatorPage, /const current = \(.+\) \* locations;/);
+  assert.match(calculatorPage, /const modeled = \(.+\) \* locations;/);
 });

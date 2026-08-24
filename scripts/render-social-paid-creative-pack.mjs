@@ -1749,7 +1749,9 @@ function manifest() {
       id: concept.id,
       landingPage: concept.id === "model-fragmentation-cost"
         ? "https://thebeesuite.io/brand/the-bee-suite/marketing/current/savings-calculator.html"
-        : "https://thebeesuite.io",
+        : concept.id === "share-your-bee-suite-story"
+          ? "mailto:support@thebeesuite.io?subject=My%20BEE%20Suite%20story"
+          : "https://thebeesuite.io",
       audience: concept.audience,
       goal: concept.goal,
       copy: {
@@ -1817,7 +1819,7 @@ function copyMarkdown() {
 **Campaign ID:** \`${concept.id}\`
 **Audience:** ${concept.audience}
 **Goal:** ${concept.goal}
-**Landing page:** ${concept.id === "model-fragmentation-cost" ? "https://thebeesuite.io/brand/the-bee-suite/marketing/current/savings-calculator.html" : "https://thebeesuite.io"}
+**Landing page:** ${concept.id === "model-fragmentation-cost" ? "https://thebeesuite.io/brand/the-bee-suite/marketing/current/savings-calculator.html" : concept.id === "share-your-bee-suite-story" ? "mailto:support@thebeesuite.io?subject=My%20BEE%20Suite%20story" : "https://thebeesuite.io"}
 
 ### Organic social caption
 
@@ -2035,15 +2037,15 @@ function savingsCalculatorHtml() {
           <fieldset>
             <legend>Current fragmented model</legend>
             <div class="fields">
-              <label>Monthly software total ($)<input id="current-software" type="number" min="0" step="25" value="1600" /></label>
-              <label>Admin reconciliation hours / week<input id="current-hours" type="number" min="0" step="0.5" value="18" /></label>
+              <label>Monthly software per location ($)<input id="current-software" type="number" min="0" step="25" value="1600" /></label>
+              <label>Admin hours / week per location<input id="current-hours" type="number" min="0" step="0.5" value="18" /></label>
             </div>
           </fieldset>
           <fieldset>
             <legend>Modeled connected scenario</legend>
             <div class="fields">
-              <label>Monthly software total ($)<input id="modeled-software" type="number" min="0" step="25" value="1100" /></label>
-              <label>Admin reconciliation hours / week<input id="modeled-hours" type="number" min="0" step="0.5" value="8" /></label>
+              <label>Monthly software per location ($)<input id="modeled-software" type="number" min="0" step="25" value="1100" /></label>
+              <label>Admin hours / week per location<input id="modeled-hours" type="number" min="0" step="0.5" value="8" /></label>
             </div>
           </fieldset>
           <fieldset>
@@ -2053,7 +2055,7 @@ function savingsCalculatorHtml() {
               <label>Locations in this scenario<input id="locations" type="number" min="1" step="1" value="3" /></label>
             </div>
           </fieldset>
-          <p class="fine-print">This browser-only model does not send or store the values you enter. Location count is shown as context; software and labor inputs should already represent the combined totals for those locations.</p>
+          <p class="fine-print">This browser-only model does not send or store the values you enter. Software and weekly labor inputs are per-location estimates and are multiplied by the location count.</p>
         </form>
       </section>
       <aside class="panel results" aria-live="polite">
@@ -2071,15 +2073,16 @@ function savingsCalculatorHtml() {
     const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
     function calculate() {
       const hourly = value("hourly-cost");
-      const current = value("current-software") * 12 + value("current-hours") * hourly * 52;
-      const modeled = value("modeled-software") * 12 + value("modeled-hours") * hourly * 52;
+      const locations = Math.max(1, Math.round(value("locations")));
+      const current = (value("current-software") * 12 + value("current-hours") * hourly * 52) * locations;
+      const modeled = (value("modeled-software") * 12 + value("modeled-hours") * hourly * 52) * locations;
       const difference = current - modeled;
       document.getElementById("current-total").textContent = money.format(current);
       document.getElementById("modeled-total").textContent = money.format(modeled);
       document.getElementById("difference").textContent = money.format(Math.abs(difference));
       document.getElementById("difference-label").textContent = difference >= 0 ? "Modeled annual difference" : "Modeled annual increase";
       document.getElementById("difference-card").classList.toggle("negative", difference < 0);
-      document.getElementById("location-output").textContent = String(Math.max(1, Math.round(value("locations"))));
+      document.getElementById("location-output").textContent = String(locations);
     }
     ids.forEach((id) => document.getElementById(id).addEventListener("input", calculate));
     calculate();

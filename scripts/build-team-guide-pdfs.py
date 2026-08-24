@@ -189,8 +189,10 @@ def build_pdf(md: Path, pdf: Path) -> None:
             continue
         if not line.strip(): i += 1; continue
         if line.startswith("# "): story.append(Paragraph(esc(line[2:]), h1))
-        elif line.startswith("## "): story.append(Paragraph(esc(line[3:]), h2))
-        elif line.startswith("### "): story.append(Paragraph(esc(line[4:]), h3))
+        elif line.startswith("## "):
+            story.extend([CondPageBreak(0.9 * inch), Paragraph(esc(line[3:]), h2)])
+        elif line.startswith("### "):
+            story.extend([CondPageBreak(0.6 * inch), Paragraph(esc(line[4:]), h3)])
         elif line.startswith(">"):
             q = []
             while i < len(lines) and (lines[i].startswith(">") or not lines[i].strip()):

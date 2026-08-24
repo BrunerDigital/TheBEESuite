@@ -225,14 +225,16 @@ test("director clean-start documentation is evidence-backed and keeps launch gat
 
   assert.match(guide, /You are not expected to repair import files or guess which record is right/);
   assert.match(guide, /READY_FOR_DIRECTOR_REVIEW/);
-  assert.match(guide, /copy the source-file path shown in your review packet/);
+  assert.match(guide, /exact source-file path already entered in the review workbook/);
+  assert.match(guide, /Fleet Verification Packet shows source filenames but does not show this full repository path/);
   assert.match(guide, /docs\/procare-exports\/<YOUR SCHOOL>\/raw\//);
   assert.match(guide, /A blank field means "not yet confirmed," not "none/);
   assert.match(guide, /allergies and severity/);
   assert.match(guide, /parent responsibility is separated from agency\/subsidy responsibility/i);
   assert.match(guide, /Review at least 10 current families/);
   assert.match(guide, /Step 6 - Compare The School Totals/);
-  assert.match(guide, /Current family accounts with an opening balance/);
+  assert.match(guide, /Signed opening-balance total/);
+  assert.match(guide, /Do not compare a current-only total with an all-record total/);
   assert.match(guide, /does not turn on invitations, access, kiosk PINs, attendance, billing, payments, messages, or ProCare cutover/);
   assert.match(guide, /Director Sign-Off Checklist/);
   assert.match(transition, /DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE/);

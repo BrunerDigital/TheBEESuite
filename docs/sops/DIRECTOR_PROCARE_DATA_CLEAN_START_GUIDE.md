@@ -15,7 +15,7 @@
 Ask your BEE Suite implementation contact for these items:
 
 - [ ] Your school's current Fleet Verification Packet marked `READY_FOR_DIRECTOR_REVIEW`.
-- [ ] Your school's current review workbook or exception list.
+- [ ] Your school's current review workbook, including the current-enrollment count and exact source-file paths prepared by BEE Suite support.
 - [ ] The date of the ProCare exports used for the review.
 - [ ] The name of the person who will receive your corrections.
 
@@ -41,7 +41,7 @@ Use one of these four answers for every section:
 
 Never guess. A blank field means "not yet confirmed," not "none."
 
-For every section you review, copy the source-file path shown in your review packet into the review workbook. It should begin with `docs/procare-exports/<YOUR SCHOOL>/raw/`. You do not need to find or open that repository folder yourself; copy the exact path provided, and ask support if the path is missing.
+For every section you review, use the exact source-file path already entered in the review workbook by BEE Suite support. It should begin with `docs/procare-exports/<YOUR SCHOOL>/raw/`. The Fleet Verification Packet shows source filenames but does not show this full repository path. You do not need to find or open the repository folder yourself. Stop and ask support to complete the workbook when a full path is missing.
 
 ## Step 1 - Confirm You Are Reviewing The Correct School
 
@@ -165,15 +165,16 @@ Do not create staff logins, invitations, access permissions, or PINs during this
 
 ## Step 6 - Compare The School Totals
 
-Use the totals in the review packet and compare them with the current totals in The BEE Suite. Record the results in the review workbook.
+Use the totals named below and compare them with the matching totals in The BEE Suite. Do not compare a current-only total with an all-record total. Record the results in the review workbook.
 
-| Total to compare | Review packet | The BEE Suite | Difference | Result |
-| --- | --- | --- | --- | --- |
-| Current families |  |  |  |  |
-| Currently enrolled children |  |  |  |  |
-| Active classrooms |  |  |  |  |
-| Current staff |  |  |  |  |
-| Current family accounts with an opening balance |  |  |  |  |
+| Total to compare | Where to find the source total | Source total | The BEE Suite | Difference | Result |
+| --- | --- | --- | --- | --- | --- |
+| All imported families | Fleet Verification Packet |  |  |  |  |
+| All imported child IDs | Fleet Verification Packet |  |  |  |  |
+| All imported classroom IDs | Fleet Verification Packet |  |  |  |  |
+| All imported employee IDs | Fleet Verification Packet |  |  |  |  |
+| Signed opening-balance total | Fleet Verification Packet |  |  |  |  |
+| Currently enrolled children | Review workbook |  |  |  |  |
 
 If any totals differ, mark the line `NEEDS FIXING` and identify which records are missing, extra, duplicated, or in the wrong status. Do not mark the school `DATA CORRECT` until every difference is corrected and checked again, or formally recorded as `NOT USED` with an approved reason.
 
@@ -210,7 +211,7 @@ For every item marked `NEEDS FIXING` or `MISSING INFORMATION`, record:
 - what The BEE Suite currently shows;
 - what the school record shows;
 - where the correct answer came from;
-- the exact source-file path copied from the review packet;
+- the exact source-file path supplied in the review workbook;
 - who is responsible for the correction; and
 - whether the item affects safety, family privacy, tuition, balances, staff, or launch readiness.
 
@@ -233,11 +234,12 @@ Do not resolve unclear identity, family relationships, safety information, tuiti
 - [ ] Tuition amount, billing schedule, description, and start date are correct for each child.
 - [ ] Opening balances use the same date and separate parent responsibility from agency responsibility.
 - [ ] Current staff and classroom assignments are correct.
-- [ ] Family, current-child, classroom, staff, and opening-balance account totals match the review packet.
+- [ ] Imported family, child, classroom, employee, and signed opening-balance totals match the Fleet Verification Packet.
+- [ ] The currently enrolled child total matches the review workbook.
 - [ ] I completed at least 10 family spot checks, or all families when fewer than 10.
 - [ ] Every correction has an owner and has been reviewed again after the change.
 - [ ] The original exports and review evidence remain available.
-- [ ] Every reviewed section includes the exact source-file path copied from the review packet.
+- [ ] Every reviewed section includes the exact source-file path supplied in the review workbook.
 - [ ] I understand that invitations, staff access, kiosk/PINs, attendance, billing, payments, messaging, and ProCare cutover still require separate approval.
 
 **School:** _______________________________________________

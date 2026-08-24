@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useMemo, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Printer, RefreshCw, Save } from "lucide-react";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -245,6 +246,7 @@ export function FteReportForm({
   allowCenterSelect = false,
   mode = allowCenterSelect ? "executive" : "director",
 }: Props) {
+  const router = useRouter();
   const timeZone = useSchoolTimeZone();
   const fieldIdPrefix = useId();
   const defaultCenterId = centers[0]?.id ?? "";
@@ -254,6 +256,7 @@ export function FteReportForm({
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const [isRefreshingLiveData, startLiveDataRefresh] = useTransition();
+  const liveDataRefresh = useRef<{ centerId: string; generatedAt: string | null } | null>(null);
   const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
 
   const scheduledDayCounts = useMemo(() => ({
@@ -299,6 +302,29 @@ export function FteReportForm({
   const currentWeekReport = reports.find((report) => (
     report.centerId === form.centerId && dateInput(report.weekStart) === form.weekStart
   ));
+
+  useEffect(() => {
+    const requested = liveDataRefresh.current;
+    if (!requested) return;
+    const refreshedPrefill = defaultValuesForCenter(requested.centerId, prefills);
+    if (!refreshedPrefill || refreshedPrefill.generatedAt === requested.generatedAt) return;
+    const refreshedCenter = centers.find((center) => center.id === requested.centerId);
+    setForm((current) => {
+      if (current.centerId !== requested.centerId) return current;
+      const refreshed = emptyForm(requested.centerId, refreshedPrefill, refreshedCenter);
+      return {
+        ...refreshed,
+        id: current.id,
+        weekStart: current.weekStart,
+        weekEnd: current.weekEnd,
+        fteCount: "",
+        status: current.status,
+        notes: current.notes,
+      };
+    });
+    liveDataRefresh.current = null;
+    setStatusMessage(`Live school data refreshed for ${refreshedCenter?.name ?? "the selected school"}.`);
+  }, [centers, prefills]);
 
   function setField(field: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -436,7 +462,11 @@ export function FteReportForm({
   }
 
   function refreshLiveSchoolData() {
-    startLiveDataRefresh(() => window.location.reload());
+    liveDataRefresh.current = {
+      centerId: form.centerId,
+      generatedAt: selectedPrefill?.generatedAt ?? null,
+    };
+    startLiveDataRefresh(() => router.refresh());
   }
 
   return (

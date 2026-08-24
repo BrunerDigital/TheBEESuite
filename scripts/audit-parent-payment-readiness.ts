@@ -7,6 +7,7 @@ import {
   parentVisibleBillingBalanceCents,
 } from "@/lib/parent-billing-visibility";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
+import { parentPortalAccessDisabled } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getSupabaseAuthConfig } from "@/lib/supabase-auth";
@@ -40,10 +41,8 @@ async function loadActiveSupabaseAuthEmails() {
       const email = normalizedEmail(user.email);
       if (email && activeAuthUser(user)) emails.add(email);
     }
-    const nextPage = "nextPage" in data ? data.nextPage : null;
-    if (!nextPage) break;
-    if (nextPage <= page) throw new Error("Supabase Auth pagination did not advance.");
-    page = nextPage;
+    if (data.users.length < 1000) break;
+    page += 1;
   }
   return emails;
 }
@@ -80,6 +79,7 @@ async function main() {
           phone: true,
           sourceSystem: true,
           externalId: true,
+          customFields: true,
           user: { select: { email: true, tenantId: true, role: true, isActive: true } },
         },
       },
@@ -162,6 +162,7 @@ async function main() {
     const hasActiveParentLink = family.guardians.some((guardian) => (
       guardian.user?.role === UserRole.PARENT_GUARDIAN
       && guardian.user.isActive
+      && !parentPortalAccessDisabled(guardian.customFields)
       && guardian.user.tenantId === paymentCenterTenantById.get(centerId)
       && supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
     ));

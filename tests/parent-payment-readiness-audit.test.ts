@@ -17,7 +17,10 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /loadActiveSupabaseAuthEmails/);
   assert.match(source, /activeAuthUser/);
   assert.match(source, /paymentCenterTenantById/);
-  assert.match(source, /nextPage/);
+  assert.match(source, /parentPortalAccessDisabled\(guardian\.customFields\)/);
+  assert.match(source, /data\.users\.length < 1000/);
+  assert.match(source, /page \+= 1/);
+  assert.doesNotMatch(source, /nextPage/);
   assert.doesNotMatch(source, /page <= 20/);
   assert.match(source, /activeParentLinksMissingAuth/);
   assert.match(source, /center\.positiveBalancesWithoutOpenInvoice > 0/);

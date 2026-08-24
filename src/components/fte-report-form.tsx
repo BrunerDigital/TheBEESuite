@@ -302,6 +302,7 @@ export function FteReportForm({
   const currentWeekReport = reports.find((report) => (
     report.centerId === form.centerId && dateInput(report.weekStart) === form.weekStart
   ));
+  const isHistoricalReportEdit = Boolean(form.id && form.weekStart !== defaultWeekStart());
 
   useEffect(() => {
     const requested = liveDataRefresh.current;
@@ -319,6 +320,7 @@ export function FteReportForm({
         weekEnd: current.weekEnd,
         fteCount: "",
         status: current.status,
+        locationData: current.locationData,
         notes: current.notes,
       };
     });
@@ -462,6 +464,7 @@ export function FteReportForm({
   }
 
   function refreshLiveSchoolData() {
+    if (isHistoricalReportEdit) return;
     liveDataRefresh.current = {
       centerId: form.centerId,
       generatedAt: selectedPrefill?.generatedAt ?? null,
@@ -606,12 +609,16 @@ export function FteReportForm({
                 variant="outline"
                 size="sm"
                 className="mt-3"
-                disabled={isRefreshingLiveData}
+                disabled={isRefreshingLiveData || isHistoricalReportEdit}
                 onClick={refreshLiveSchoolData}
+                title={isHistoricalReportEdit ? "Live data refresh is available only for the current reporting week." : undefined}
               >
                 <RefreshCw className={isRefreshingLiveData ? "animate-spin" : ""} data-icon="inline-start" />
                 {isRefreshingLiveData ? "Refreshing live data…" : "Refresh live school data"}
               </Button>
+              {isHistoricalReportEdit ? (
+                <span className="mt-2 block">Live data refresh is disabled while editing a historical report.</span>
+              ) : null}
             </AlertDescription>
           </Alert>
         ) : null}

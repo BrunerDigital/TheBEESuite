@@ -110,6 +110,7 @@ test("billing workflow helpers normalize billing periods and batch targets", () 
 
 test("billing workflow helpers normalize weekly recurring periods and weekdays", () => {
   assert.equal(normalizeBillingCadence("Weekly"), "weekly");
+  assert.equal(normalizeBillingCadence("every 2 weeks"), "biweekly");
   assert.equal(normalizeBillingCadence("monthly"), "monthly");
   assert.equal(isoWeekBillingPeriod(new Date("2026-06-04T12:00:00.000Z")), "2026-W23");
   assert.equal(normalizeRecurringBillingPeriod("2026-W7", new Date("2026-06-04T12:00:00.000Z"), "weekly"), "2026-W07");
@@ -126,6 +127,8 @@ test("billing workflow helpers normalize weekly recurring periods and weekdays",
   assert.equal(recurringDueDateForPeriod("2026-W26", 5, "weekly").toISOString(), "2026-06-26T12:00:00.000Z");
   assert.equal(weeklyTuitionChargeDateForPeriod("2026-W26").toISOString(), "2026-06-18T12:00:00.000Z");
   assert.equal(recurringDueDateForPeriod("2026-06", 15, "monthly").toISOString(), "2026-06-15T12:00:00.000Z");
+  assert.equal(tuitionInvoiceWeekCount("biweekly"), 2);
+  assert.equal(tuitionInvoiceWeekCount("four_week"), 4);
 });
 
 test("billing dedupe keys are stable across child ordering", () => {
@@ -199,6 +202,21 @@ test("recurring tuition eligibility waits for start period and billing day", () 
     billingDay: 15,
     currentDay: 15,
   }), false);
+});
+
+test("biweekly recurring tuition creates invoices only every two weeks from the start week", () => {
+  const base = {
+    enabled: true,
+    planId: "plan_1",
+    amountCents: 25000,
+    startsPeriod: "2026-W26",
+    billingDay: 4,
+    currentDay: 4,
+    cadence: "biweekly",
+  };
+  assert.equal(shouldCreateRecurringTuitionInvoice({ ...base, billingPeriod: "2026-W26" }), true);
+  assert.equal(shouldCreateRecurringTuitionInvoice({ ...base, billingPeriod: "2026-W27" }), false);
+  assert.equal(shouldCreateRecurringTuitionInvoice({ ...base, billingPeriod: "2026-W28" }), true);
 });
 
 test("four-week tuition bills four weeks ahead only on its anchored cycle", () => {

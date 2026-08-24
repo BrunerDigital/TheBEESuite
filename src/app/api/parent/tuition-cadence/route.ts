@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser, isParentGuardian } from "@/lib/auth";
 import {
+  BIWEEKLY_TUITION_AUTOBILL_CADENCE,
   firstUncoveredTuitionBillingPeriod,
   FOUR_WEEK_TUITION_AUTOBILL_CADENCE,
   normalizeBillingCadence,
@@ -27,7 +28,9 @@ async function POSTHandler(request: NextRequest) {
   const childId = typeof body.childId === "string" ? body.childId.trim() : "";
   const familyId = typeof body.familyId === "string" ? body.familyId.trim() : "";
   const requestedCadence = normalizeBillingCadence(body.billingCadence);
-  const cadence = requestedCadence === FOUR_WEEK_TUITION_AUTOBILL_CADENCE
+  const cadence = requestedCadence === BIWEEKLY_TUITION_AUTOBILL_CADENCE
+    ? BIWEEKLY_TUITION_AUTOBILL_CADENCE
+    : requestedCadence === FOUR_WEEK_TUITION_AUTOBILL_CADENCE
     ? FOUR_WEEK_TUITION_AUTOBILL_CADENCE
     : requestedCadence === WEEKLY_TUITION_AUTOBILL_CADENCE
       ? WEEKLY_TUITION_AUTOBILL_CADENCE

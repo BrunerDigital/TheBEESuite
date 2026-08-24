@@ -86,17 +86,20 @@ type ChildRecord = {
 
 function tuitionCadenceLabel(cadence: string | null | undefined) {
   if (cadence === "monthly") return "monthly";
+  if (cadence === "biweekly") return "every two weeks";
   if (cadence === "four_week") return "every four weeks";
   return "weekly";
 }
 
 function tuitionCadenceUnit(cadence: string | null | undefined) {
   if (cadence === "monthly") return "month";
+  if (cadence === "biweekly") return "2 weeks";
   if (cadence === "four_week") return "4 weeks";
   return "week";
 }
 
 function tuitionCadenceAmountCents(amountCents: number, cadence: string | null | undefined) {
+  if (cadence === "biweekly") return amountCents * 2;
   return cadence === "four_week" ? amountCents * 4 : amountCents;
 }
 

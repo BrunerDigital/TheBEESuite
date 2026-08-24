@@ -19,8 +19,31 @@ test("director monthly tuition setup preserves cadence and a school-selected bil
   assert.match(workbench, /Monthly · 1 month at a time/);
   assert.match(workbench, /Monthly invoice day/);
   assert.match(workbench, /Start month/);
-  assert.match(scheduler, /\["weekly", "four_week", "monthly"\]/);
+  assert.match(scheduler, /\["weekly", "biweekly", "four_week", "monthly"\]/);
   assert.match(scheduler, /normalizeRecurringBillingDay\(entry\.fields\.tuitionBillingDay, cadence\)/);
+});
+
+test("director tuition setup offers a two-week invoice cycle", () => {
+  const assignmentRoute = readFileSync("src/app/api/billing/tuition-assignments/route.ts", "utf8");
+  const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
+  const scheduler = readFileSync("src/app/api/cron/tuition-billing/route.ts", "utf8");
+
+  assert.match(assignmentRoute, /requestedCadence === BIWEEKLY_TUITION_AUTOBILL_CADENCE/);
+  assert.match(workbench, /Biweekly · 2 weeks ahead/);
+  assert.match(workbench, /Biweekly billing creates one invoice equal to two net weekly rates every two weeks/);
+  assert.match(scheduler, /invoiceWeekCount > 1 \? ` \(\$\{invoiceWeekCount\} weeks ahead\)`/);
+});
+
+test("parent billing controls preserve a school-selected biweekly cycle", () => {
+  const parentRoute = readFileSync("src/app/api/parent/tuition-cadence/route.ts", "utf8");
+  const parentWorkspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
+  const billingPage = readFileSync("src/app/[slug]/page.tsx", "utf8");
+
+  assert.match(parentRoute, /requestedCadence === BIWEEKLY_TUITION_AUTOBILL_CADENCE/);
+  assert.match(parentWorkspace, /child\.tuitionAssignment\?\.cadence === "biweekly"/);
+  assert.match(parentWorkspace, /<SelectItem value="biweekly">/);
+  assert.match(billingPage, /const weekBased = isWeekBasedTuitionCadence\(cadence\)/);
+  assert.match(billingPage, /currentDay,[\s\S]*?cadence,/);
 });
 
 test("monthly setup copy keeps invoice creation separate from charging and autopay", () => {

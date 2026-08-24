@@ -2,19 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   PHOTO_PERMISSION_REVIEW_WARNING,
+  PHOTO_DIRECTOR_REVIEW_WARNING,
   buildParentPhotoNotifications,
   resolveTeacherMediaShareState,
   shouldNotifyGuardianOfSharedPhoto,
 } from "@/lib/teacher-media";
 
-test("teacher photo sharing goes straight to parents when permission is enabled", () => {
+test("teacher photo sharing waits for director approval when permission is enabled", () => {
   assert.deepEqual(resolveTeacherMediaShareState({
     requestedParentShare: true,
     photoVideoPermission: true,
   }), {
-    sharedWithParents: true,
-    status: "shared",
-    warning: undefined,
+    sharedWithParents: false,
+    status: "director_review",
+    warning: PHOTO_DIRECTOR_REVIEW_WARNING,
   });
 });
 

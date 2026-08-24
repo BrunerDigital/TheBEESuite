@@ -871,9 +871,11 @@ function ParentPortalWorkspaceView({
     }
     const billingCadence =
       tuitionCadenceDrafts[child.id] ??
-      (child.tuitionAssignment?.cadence === "four_week"
-        ? "four_week"
-        : "weekly");
+      (child.tuitionAssignment?.cadence === "biweekly"
+        ? "biweekly"
+        : child.tuitionAssignment?.cadence === "four_week"
+          ? "four_week"
+          : "weekly");
     startTransition(async () => {
       setStatus("");
       setError("");
@@ -890,7 +892,9 @@ function ParentPortalWorkspaceView({
       setStatus(
         billingCadence === "four_week"
           ? `${child.fullName}'s tuition will be invoiced every four weeks for the four weeks ahead.`
-          : `${child.fullName}'s tuition will be invoiced one week at a time.`,
+          : billingCadence === "biweekly"
+            ? `${child.fullName}'s tuition will be invoiced every two weeks for the two weeks ahead.`
+            : `${child.fullName}'s tuition will be invoiced one week at a time.`,
       );
       router.refresh();
     });
@@ -2881,9 +2885,11 @@ function ParentPortalWorkspaceView({
                     .map((child) => {
                       const cadence =
                         tuitionCadenceDrafts[child.id] ??
-                        (child.tuitionAssignment?.cadence === "four_week"
-                          ? "four_week"
-                          : "weekly");
+                        (child.tuitionAssignment?.cadence === "biweekly"
+                          ? "biweekly"
+                          : child.tuitionAssignment?.cadence === "four_week"
+                            ? "four_week"
+                            : "weekly");
                       const weeklyAmount =
                         child.tuitionAssignment?.amountCents ?? 0;
                       return (
@@ -2919,6 +2925,9 @@ function ParentPortalWorkspaceView({
                               <SelectContent>
                                 <SelectItem value="weekly">
                                   Weekly · {money(weeklyAmount)}
+                                </SelectItem>
+                                <SelectItem value="biweekly">
+                                  Every 2 weeks · {money(weeklyAmount * 2)}
                                 </SelectItem>
                                 <SelectItem value="four_week">
                                   Every 4 weeks · {money(weeklyAmount * 4)}

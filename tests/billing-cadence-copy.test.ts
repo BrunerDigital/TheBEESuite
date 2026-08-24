@@ -7,6 +7,8 @@ test("family billing copy follows each child's recurring cadence", () => {
   const familyEditor = readFileSync(new URL("../src/components/family-record-editor.tsx", import.meta.url), "utf8");
 
   assert.match(familyEditor, /if \(cadence === "monthly"\) return "monthly"/);
+  assert.match(familyEditor, /if \(cadence === "biweekly"\) return "every two weeks"/);
+  assert.match(familyEditor, /if \(cadence === "biweekly"\) return amountCents \* 2/);
   assert.match(familyEditor, /if \(cadence === "monthly"\) return "month"/);
   assert.match(familyEditor, /cadence === "four_week" \? amountCents \* 4 : amountCents/);
   assert.match(familyEditor, /Recurring tuition by child/);

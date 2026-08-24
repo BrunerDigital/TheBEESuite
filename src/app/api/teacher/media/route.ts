@@ -8,7 +8,7 @@ import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { validateDailyReportMediaLink, validateMediaUploadInput } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { createChildMediaSignedUrl, uploadChildMediaBuffer } from "@/lib/supabase-storage";
-import { buildParentPhotoNotifications, resolveTeacherMediaShareState } from "@/lib/teacher-media";
+import { resolveTeacherMediaShareState } from "@/lib/teacher-media";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -155,22 +155,7 @@ async function POSTHandler(request: NextRequest) {
   });
   const responseMedia = storageKey ? { ...media, url: await createChildMediaSignedUrl(storageKey).catch(() => media.url) } : media;
 
-  if (shareState.sharedWithParents) {
-    const parentNotifications = buildParentPhotoNotifications({
-      mediaId: media.id,
-      childName: child.fullName,
-      caption: media.caption,
-      guardians: child.family.guardians,
-    });
-    if (parentNotifications.length) {
-      await prisma.notification.createMany({
-        data: parentNotifications,
-        skipDuplicates: true,
-      });
-    }
-  }
-
-  if (sharedWithParents && !child.photoVideoPermission && centerId) {
+  if (sharedWithParents && centerId) {
     const directors = await getCenterLeadershipUsers({
       centerId,
       excludeUserId: user.id,
@@ -181,8 +166,10 @@ async function POSTHandler(request: NextRequest) {
         prisma.notification.create({
           data: {
             userId: director.id,
-            title: "Photo needs parent permission review",
-            body: `${child.fullName}'s photo is held until photo/video permission is confirmed.`,
+            title: child.photoVideoPermission ? "Photo ready for director approval" : "Photo needs parent permission review",
+            body: child.photoVideoPermission
+              ? `${child.fullName}'s photo is ready for approval before it is shared with parents.`
+              : `${child.fullName}'s photo is held until photo/video permission is confirmed.`,
             type: "parent_media",
             priority: "high",
           },

@@ -121,25 +121,37 @@ function exportClaimsCsv(centerIds: string[]) {
             take: 250,
             ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
             include: {
-              agencyProgram: { select: { name: true } },
+              agencyProgram: { select: { name: true, requirements: true } },
               authorization: { include: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
               documents: { orderBy: { name: "asc" } },
             },
           });
           if (!claims.length) break;
-          const chunk = claims.map((claim) => csvRow([
-            claim.number,
-            claim.agencyProgram.name,
-            claim.authorization?.family.name ?? "",
-            claim.authorization?.child.fullName ?? "",
-            dateInput(claim.servicePeriodStart),
-            dateInput(claim.servicePeriodEnd),
-            claim.status,
-            (claim.claimedCents / 100).toFixed(2),
-            claim.approvedCents === null ? "" : (claim.approvedCents / 100).toFixed(2),
-            (claim.paidCents / 100).toFixed(2),
-            claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)).map((document) => document.name).join("; "),
-          ])).join("");
+          const chunk = claims.map((claim) => {
+            const missingDocuments = claim.documents
+              .filter((document) => !["received", "verified", "not_applicable"].includes(document.status))
+              .map((document) => document.name);
+            if (["draft", "ready", "submitted"].includes(claim.status)) {
+              const documentKeys = new Set(claim.documents.map((document) => `${document.name.trim().toLowerCase()}|${document.type.trim().toLowerCase()}`));
+              for (const requirement of claimRequirements(claim)) {
+                const key = `${requirement.label.trim().toLowerCase()}|${requirement.type.trim().toLowerCase()}`;
+                if (!documentKeys.has(key)) missingDocuments.push(requirement.label);
+              }
+            }
+            return csvRow([
+              claim.number,
+              claim.agencyProgram.name,
+              claim.authorization?.family.name ?? "",
+              claim.authorization?.child.fullName ?? "",
+              dateInput(claim.servicePeriodStart),
+              dateInput(claim.servicePeriodEnd),
+              claim.status,
+              (claim.claimedCents / 100).toFixed(2),
+              claim.approvedCents === null ? "" : (claim.approvedCents / 100).toFixed(2),
+              (claim.paidCents / 100).toFixed(2),
+              [...new Set(missingDocuments)].join("; "),
+            ]);
+          }).join("");
           controller.enqueue(encoder.encode(chunk));
           cursorId = claims.at(-1)?.id;
           if (claims.length < 250) break;

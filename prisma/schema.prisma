@@ -1371,7 +1371,7 @@ model SubsidyRemittance {
 
   claim SubsidyClaim @relation(fields: [claimId], references: [id])
 
-  @@unique([claimId, externalReference])
+  @@index([claimId, externalReference])
   @@index([claimId, paidAt])
   @@index([claimId, reversedAt])
 }

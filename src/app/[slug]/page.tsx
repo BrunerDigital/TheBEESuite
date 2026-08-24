@@ -604,10 +604,7 @@ async function buildFtePrefills(
 
   const [children, invoices, accountBalances, staffProfiles] = await Promise.all([prisma.child.findMany({
     where: {
-      OR: [
-        { family: { is: { centerId: centerIdFilter(centerIds) } } },
-        { classroom: { is: { centerId: centerIdFilter(centerIds) } } },
-      ],
+      family: { is: { centerId: centerIdFilter(centerIds) } },
     },
     select: {
       id: true,
@@ -692,8 +689,9 @@ async function buildFtePrefills(
   } satisfies FteReportPrefill]));
 
   for (const child of children) {
-    const centerId = child.classroom?.centerId ?? child.family.centerId;
+    const centerId = child.family.centerId;
     if (!centerId) continue;
+    if (child.classroom?.centerId && child.classroom.centerId !== centerId) continue;
     const row = byCenter.get(centerId);
     if (!row) continue;
     const isActive = activeEnrollmentStatus(child.enrollmentStatus);

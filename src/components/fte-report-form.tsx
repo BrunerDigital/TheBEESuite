@@ -310,6 +310,11 @@ export function FteReportForm({
     const refreshedPrefill = defaultValuesForCenter(requested.centerId, prefills);
     if (!refreshedPrefill || refreshedPrefill.generatedAt === requested.generatedAt) return;
     const refreshedCenter = centers.find((center) => center.id === requested.centerId);
+    if (form.centerId !== requested.centerId || form.weekStart !== defaultWeekStart()) {
+      liveDataRefresh.current = null;
+      setStatusMessage("Live data refresh was canceled because the school or reporting week changed.");
+      return;
+    }
     setForm((current) => {
       if (current.centerId !== requested.centerId) return current;
       if (current.weekStart !== defaultWeekStart()) return current;
@@ -327,7 +332,7 @@ export function FteReportForm({
     });
     liveDataRefresh.current = null;
     setStatusMessage(`Live school data refreshed for ${refreshedCenter?.name ?? "the selected school"}.`);
-  }, [centers, prefills]);
+  }, [centers, form.centerId, form.weekStart, prefills]);
 
   function setField(field: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [field]: value }));

@@ -117,6 +117,7 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(form, /const isHistoricalReportingWeek = form\.weekStart !== defaultWeekStart\(\)/);
   assert.match(form, /if \(isHistoricalReportingWeek\) return/);
   assert.match(form, /if \(current\.weekStart !== defaultWeekStart\(\)\) return current/);
+  assert.match(form, /refresh was canceled because the school or reporting week changed/);
   assert.match(form, /disabled=\{isRefreshingLiveData \|\| isHistoricalReportingWeek\}/);
   assert.match(form, /locationData: current\.locationData/);
   assert.doesNotMatch(form, /refreshLiveSchoolData\(\)[\s\S]{0,200}window\.location\.reload/);
@@ -142,6 +143,7 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(page, /aging\.oneToThirtyCents \+ aging\.thirtyOneToSixtyCents \+ aging\.sixtyOnePlusCents/);
   assert.match(page, /past-due receivables/);
   assert.match(page, /missingScheduleChildren\.push/);
+  assert.match(page, /child\.classroom\?\.centerId && child\.classroom\.centerId !== centerId/);
   assert.match(page, /take: fteReceivableLedgerLimit \+ 1/);
   assert.match(page, /past-due AR requires ledger review/);
 });

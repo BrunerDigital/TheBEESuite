@@ -1,6 +1,6 @@
 # The BEE Suite School Data Import and Parent Launch Email Kit
 
-**Updated:** August 11, 2026
+**Updated:** August 24, 2026
 
 **Purpose:** Ready-to-send emails that guide a school from ProCare export through BEE Suite import, school setup, payment readiness, and parent portal launch.
 

@@ -232,3 +232,15 @@ test("director clean-start documentation is evidence-backed and keeps launch gat
   assert.match(guide, /parent invitations, staff access, kiosk\/PIN activation, attendance, tuition generation, payment collection, messaging, or ProCare retirement/);
   assert.match(transition, /DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE/);
 });
+
+test("director clean-start guide is bundled in both current PDF packets", () => {
+  const teamBuilder = readFileSync("scripts/build-team-guide-pdfs.py", "utf8");
+  const transitionBuilder = readFileSync("scripts/build-school-transition-email-packet.py", "utf8");
+  const manifest = readFileSync("docs/SCHOOL_TRANSITION_EMAIL_ATTACHMENT_MANIFEST.md", "utf8");
+
+  assert.match(teamBuilder, /Path\("docs\/sops\/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE\.md"\)/);
+  assert.match(teamBuilder, /PUBLICATION_DATE = "August 24, 2026"/);
+  assert.match(transitionBuilder, /"DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE\.pdf": "02_DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE\.pdf"/);
+  assert.match(manifest, /Attach the six numbered PDFs/);
+  assert.match(manifest, /02_DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE\.pdf/);
+});

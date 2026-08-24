@@ -19,13 +19,14 @@ from reportlab.platypus import CondPageBreak, Paragraph, SimpleDocTemplate, Spac
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output" / "pdf" / "TEAM_SHARE_GUIDES_CURRENT"
-PUBLICATION_DATE = "August 11, 2026"
+PUBLICATION_DATE = "August 24, 2026"
 
 FILES = [
     Path("docs/BEE_SUITE_COMPLETE_GUIDE.md"),
     Path("docs/sops/SCHOOL_SYSTEM_OPERATING_MANUAL.md"),
     Path("docs/sops/EXECUTIVE_ADMIN_SOP.md"),
     Path("docs/sops/DIRECTOR_SOP.md"),
+    Path("docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md"),
     Path("docs/sops/BILLING_ADMIN_SOP.md"),
     Path("docs/sops/TEACHER_SOP.md"),
     Path("docs/sops/PARENT_PORTAL_SOP.md"),
@@ -95,7 +96,7 @@ def build_pdf(md: Path, pdf: Path) -> None:
     h2 = ParagraphStyle("H2", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=14, leading=18, textColor=colors.HexColor("#A16207"), spaceBefore=8, spaceAfter=5)
     h3 = ParagraphStyle("H3", parent=styles["Heading3"], fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=colors.HexColor("#374151"), spaceBefore=6, spaceAfter=3)
     caption = ParagraphStyle("Caption", parent=body, fontName="Helvetica-Oblique", fontSize=8, leading=10, textColor=colors.HexColor("#6B7280"), alignment=TA_CENTER, spaceAfter=4)
-    quote = ParagraphStyle("Quote", parent=body, backColor=colors.HexColor("#FFF7D6"), borderColor=colors.HexColor("#E0A800"), borderWidth=0.7, borderPadding=8, leftIndent=8, rightIndent=8, spaceBefore=5, spaceAfter=8)
+    quote = ParagraphStyle("Quote", parent=body, backColor=colors.HexColor("#FFF7D6"), borderColor=colors.HexColor("#E0A800"), borderWidth=0.7, borderPadding=8, leftIndent=8, rightIndent=8, spaceBefore=12, spaceAfter=8)
     bullet = ParagraphStyle("Bullet", parent=body, leading=11.7, spaceAfter=2.5, leftIndent=16, firstLineIndent=-9, bulletIndent=6)
     code = ParagraphStyle("Code", parent=body, fontName="Courier", fontSize=7.5, leading=10, backColor=colors.HexColor("#F3F4F6"), borderPadding=6)
     story = []
@@ -223,6 +224,13 @@ def main() -> None:
         dest.write_text(bundle_markdown_images(refreshed, src), encoding="utf-8")
         build_pdf(dest, OUT / "pdf" / (dest.stem + ".pdf"))
     readme = f"""# The BEE Suite Team Share Guides\n\nPrepared {PUBLICATION_DATE}. This stable `CURRENT` folder replaces prior date-stamped packets and contains the canonical Markdown and PDF editions of the core product, role, onboarding, payment, kiosk, migration, and support guides.\n\n## Recommended send order\n\n1. Start with `BEE_SUITE_COMPLETE_GUIDE.pdf` or `SCHOOL_SYSTEM_OPERATING_MANUAL.pdf`.\n2. Send each person only the SOP for their role.\n3. Send parent guides only after family links and invitation readiness are approved.\n4. Send payment guidance only after the named school's billing and payment gates are approved.\n5. Use the migration email sequence for a controlled school launch; ProCare remains the source of truth until signed cutover.\n\n## Important status\n\nSetup, parent invitations, kiosk/PIN, billing, parent payments, ProCare retirement, mobile stores, and wider-wave approval are independent gates. `HELD OFF` is not `PASS`. These guides do not replace a dated school/module GO decision.\n\n## Current visuals\n\nThe packet uses the same deep navy, warm white, and BEE gold system as the current web app. Teacher guides use iPad and desktop screens. Director and executive guides use desktop screens. Parent guides use iPhone, iPad, and desktop screens, with iPhone shown most often.\n\n## Privacy of bundled visuals\n\nThe bundled visuals use seeded demo records and contain no real child, family, employee, billing, or authentication data. Do not replace them with production screenshots unless those screenshots are separately reviewed and approved for the intended audience.\n"""
+    readme = readme.replace(
+        "2. Send each person only the SOP for their role.\n",
+        "2. Directors completing a ProCare transition use `DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.pdf` after the Fleet Verification Packet reaches `READY_FOR_DIRECTOR_REVIEW`.\n3. Send each person only the SOP for their role.\n",
+    ).replace(
+        "3. Send parent guides only after family links and invitation readiness are approved.\n4. Send payment guidance only after the named school's billing and payment gates are approved.\n5. Use the migration email sequence",
+        "4. Send parent guides only after family links and invitation readiness are approved.\n5. Send payment guidance only after the named school's billing and payment gates are approved.\n6. Use the migration email sequence",
+    )
     (OUT / "README.md").write_text(readme, encoding="utf-8")
     build_pdf(OUT / "README.md", OUT / "TEAM_SHARE_GUIDES_INDEX.pdf")
 

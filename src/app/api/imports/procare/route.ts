@@ -23,6 +23,7 @@ import {
   procareValue as value,
   type ProcareFieldMapping,
 } from "@/lib/procare-import-fields";
+import { buildProcareMigrationReviewRow, finalizeProcareMigrationReview, summarizeProcareMigrationReview } from "@/lib/procare-migration-review";
 import { prisma } from "@/lib/prisma";
 import { withoutConfirmedFamilyResponsibility } from "@/lib/parent-billing-visibility";
 import { buildCenterAliasMap, resolveImportCenter, type CenterAliasMap } from "@/lib/import-center-mapping";
@@ -849,6 +850,7 @@ async function previewImportRows({
     relationshipSummary?: string;
     message?: string;
   }> = [];
+  const migrationReviewRows: NonNullable<ReturnType<typeof buildProcareMigrationReviewRow>>[] = [];
 
   // Standard ProCare exports carry stable family, child, and guardian IDs. Load
   // those exact identities once so a large director review does not make the
@@ -971,6 +973,8 @@ async function previewImportRows({
     const previewEnrollmentStatusValue = value(rawData, ["child status", "status", "enrollment status", "student status"]);
     const previewEnrollmentEndDate = value(rawData, ["end date", "withdrawal date", "termination date"]);
     const previewEnrollmentStatus = normalizeProcareEnrollmentStatusWithEndDate(previewEnrollmentStatusValue, previewEnrollmentEndDate);
+    const migrationReviewRow = buildProcareMigrationReviewRow(rawData, rowNumber);
+    if (migrationReviewRow) migrationReviewRows.push(migrationReviewRow);
     if (childName && previewEnrollmentStatusValue && previewEnrollmentStatus === "enrolled" && !classroomName) {
       const message = "An enrolled child is missing a classroom assignment.";
       warnings.push({ rowNumber, message });
@@ -1127,6 +1131,7 @@ async function previewImportRows({
   warnings.sort((a, b) => a.rowNumber - b.rowNumber);
   rowResults.sort((a, b) => a.rowNumber - b.rowNumber);
   duplicateMatches.sort((a, b) => a.rowNumber - b.rowNumber || a.entity.localeCompare(b.entity));
+  const finalizedMigrationReviewRows = finalizeProcareMigrationReview(migrationReviewRows);
 
   return {
     center: autoMap ? "Auto-mapped from source data" : defaultCenter.crmLocationId ?? defaultCenter.name,
@@ -1175,6 +1180,10 @@ async function previewImportRows({
     duplicateMatchDetails: duplicateMatches.slice(0, 50),
     warnings: warnings.slice(0, 25),
     rowResults: rowResults.slice(0, 500),
+    migrationReview: {
+      ...summarizeProcareMigrationReview(finalizedMigrationReviewRows),
+      rows: finalizedMigrationReviewRows.slice(0, 500),
+    },
   };
 }
 

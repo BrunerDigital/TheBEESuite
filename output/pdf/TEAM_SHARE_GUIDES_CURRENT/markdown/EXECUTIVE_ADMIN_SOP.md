@@ -1,6 +1,6 @@
 # Executive Admin SOP - The BEE Suite
 
-Last updated: August 11, 2026
+Last updated: August 24, 2026
 
 Audience: school owners, corporate users, franchise/brand admins, regional managers, and platform operators.
 

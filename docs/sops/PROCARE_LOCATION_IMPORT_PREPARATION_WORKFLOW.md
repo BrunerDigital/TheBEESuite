@@ -2,6 +2,8 @@
 
 Use this workflow before any school-scoped ProCare roster, balance, tuition, classroom, or staff import. Preparation is evidence only and never authorizes a production mutation.
 
+Directors use `DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` after preparation and import reconciliation. The private canonical location package is `docs/procare-exports/<LOCATION>/`: preserve `raw/` byte-for-byte, use `review/` only as derived evidence, and retain archives as recoverable source artifacts.
+
 ## Boundaries
 
 - Preserve the original exports byte-for-byte and record SHA-256 fingerprints.

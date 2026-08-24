@@ -1,6 +1,6 @@
 # Billing Admin SOP - The BEE Suite
 
-Last updated: August 11, 2026
+Last updated: August 24, 2026
 
 Audience: billing admins, school directors handling billing, accounting users, and launch support.
 

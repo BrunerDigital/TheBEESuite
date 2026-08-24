@@ -48,6 +48,7 @@ This note documents how The BEE Suite maps the ProCare data areas visible in the
 
 ## Remaining Validation Needed
 
+- Run the director review in `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` against the named school's private canonical package under `docs/procare-exports/<LOCATION>/`.
 - Obtain unencrypted CSV exports from ProCare.
 - Run each school through the Fleet Verification Packet and require `READY_FOR_DIRECTOR_REVIEW` before director validation.
 - Confirm exact ProCare column names for schedules, immunizations, tuition contracts, subsidy/agency payments, and employee certifications.

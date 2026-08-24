@@ -112,7 +112,7 @@ async function buildPlan() {
     for (const guardian of guardians) {
       const matching = await prisma.guardian.findMany({
         where: { email: { equals: email(guardian.email), mode: "insensitive" }, family: { centerId: { in: tenantCenterIds.get(center.organization.tenantId) ?? [] } } },
-        select: { familyId: true, customFields: true },
+        select: { familyId: true, userId: true, customFields: true },
       });
       const normalized = email(guardian.email);
       const appUser = await prisma.user.findFirst({ where: { email: { equals: normalized, mode: "insensitive" } }, select: { id: true, tenantId: true, role: true } });
@@ -120,7 +120,9 @@ async function buildPlan() {
       if (auth.allEmails.has(normalized) && !auth.activeEmails.has(normalized)) { block("inactive_auth_identity"); continue; }
       if (appUser && (appUser.tenantId !== center.organization.tenantId || appUser.role !== UserRole.PARENT_GUARDIAN)) { block("app_user_scope_conflict"); continue; }
       if (appUser && guardian.user?.id !== appUser.id) { block("app_user_not_linked_to_guardian"); continue; }
-      if (matching.length && matching.every((item) => item.familyId === family.id && !parentPortalAccessDisabled(item.customFields))) { selected = guardian; break; }
+      if (matching.length && matching.every((item) => item.familyId === family.id
+        && !parentPortalAccessDisabled(item.customFields)
+        && (item.userId === null || item.userId === appUser?.id))) { selected = guardian; break; }
     }
     if (!selected) { block("email_family_scope_ambiguous"); continue; }
     rows.push({ guardianId: selected.id, familyId: family.id, centerId: center.id, email: email(selected.email), school: center.name });

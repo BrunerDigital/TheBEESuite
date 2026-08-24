@@ -2839,12 +2839,14 @@ async function renderLivePage(
               name: true,
               email: true,
               role: true,
+              staffProfile: { select: { centerId: true } },
             },
           },
           assignedTo: {
             select: {
               name: true,
               email: true,
+              staffProfile: { select: { centerId: true } },
             },
           },
         },
@@ -2980,16 +2982,21 @@ async function renderLivePage(
 
     const signedMessages = await Promise.all(messages.map(async (message) => ({
       ...message,
+      staffCenterId: message.threadKey?.startsWith("staff:")
+        ? message.senderId === user.id
+          ? message.assignedTo?.staffProfile?.centerId ?? null
+          : message.sender?.staffProfile?.centerId ?? message.assignedTo?.staffProfile?.centerId ?? null
+        : null,
       subject: message.subject ? userViewText(message.subject) : null,
       body: userViewText(message.body),
       family: message.family
         ? { ...message.family, name: userViewText(message.family.name) }
         : null,
       sender: message.sender
-        ? { ...message.sender, name: userViewText(message.sender.name) }
+        ? { name: userViewText(message.sender.name), email: message.sender.email, role: message.sender.role }
         : null,
       assignedTo: message.assignedTo
-        ? { ...message.assignedTo, name: userViewText(message.assignedTo.name) }
+        ? { name: userViewText(message.assignedTo.name), email: message.assignedTo.email }
         : null,
       attachments: await signMessageAttachmentsFromMetadata(message.metadata),
       replyHref: messageReplyHref(message),
@@ -3055,7 +3062,9 @@ async function renderLivePage(
       const internalCenterId = message.threadKey?.startsWith("internal:")
         ? message.threadKey.slice("internal:".length)
         : null;
-      const messageCenterId = message.family?.centerId ?? (internalCenterId && centerTimeZoneById.has(internalCenterId) ? internalCenterId : null);
+      const staffCenterId = "staffCenterId" in message && typeof message.staffCenterId === "string" ? message.staffCenterId : null;
+      const threadCenterId = internalCenterId && centerTimeZoneById.has(internalCenterId) ? internalCenterId : staffCenterId;
+      const messageCenterId = message.family?.centerId ?? (threadCenterId && centerTimeZoneById.has(threadCenterId) ? threadCenterId : null);
       const existing = map.get(key) ?? {
         key,
         familyId: message.familyId,

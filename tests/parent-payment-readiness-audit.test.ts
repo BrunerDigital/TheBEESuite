@@ -18,6 +18,7 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /activeAuthUser/);
   assert.match(source, /paymentCenterTenantById/);
   assert.match(source, /parentPortalAccessDisabled\(guardian\.customFields\)/);
+  assert.match(source, /guardian\.user\.email === normalizedEmail\(guardian\.user\.email\)/);
   assert.match(source, /data\.users\.length < 1000/);
   assert.match(source, /page \+= 1/);
   assert.doesNotMatch(source, /nextPage/);

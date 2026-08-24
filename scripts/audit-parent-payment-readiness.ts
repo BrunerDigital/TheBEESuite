@@ -164,6 +164,7 @@ async function main() {
       && guardian.user.isActive
       && !parentPortalAccessDisabled(guardian.customFields)
       && guardian.user.tenantId === paymentCenterTenantById.get(centerId)
+      && guardian.user.email === normalizedEmail(guardian.user.email)
       && supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
     ));
     if (!hasActiveParentLink) {

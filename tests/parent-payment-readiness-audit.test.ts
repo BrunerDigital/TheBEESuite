@@ -11,6 +11,7 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /parentVisibleBillingBalanceCents/);
   assert.match(source, /positiveBalancesWithoutActiveParentLink/);
   assert.match(source, /currentFamiliesWithoutBillingAccounts/);
+  assert.match(source, /currentFamiliesWithoutActiveParentLink/);
   assert.match(source, /latestCreatedLedgerBalanceMismatches/);
   assert.match(source, /loadActiveSupabaseAuthEmails/);
   assert.match(source, /activeAuthUser/);

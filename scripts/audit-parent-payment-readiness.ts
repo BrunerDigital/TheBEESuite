@@ -129,6 +129,7 @@ async function main() {
   const byCenter = new Map<string, {
     school: string;
     currentFamilies: number;
+    familiesWithoutActiveParentLink: number;
     missingBillingAccounts: number;
     positiveParentBalances: number;
     positiveBalancesWithoutActiveParentLink: number;
@@ -137,6 +138,7 @@ async function main() {
     latestCreatedLedgerBalanceMismatches: number;
   }>();
   let missingBillingAccounts = 0;
+  let currentFamiliesWithoutActiveParentLink = 0;
   let positiveParentBalances = 0;
   let positiveBalancesWithoutActiveParentLink = 0;
   let positiveBalancesWithoutOpenInvoice = 0;
@@ -149,6 +151,7 @@ async function main() {
     const center = byCenter.get(centerId) ?? {
       school: paymentCenterNameById.get(centerId) ?? centerId,
       currentFamilies: 0,
+      familiesWithoutActiveParentLink: 0,
       missingBillingAccounts: 0,
       positiveParentBalances: 0,
       positiveBalancesWithoutActiveParentLink: 0,
@@ -157,6 +160,16 @@ async function main() {
       latestCreatedLedgerBalanceMismatches: 0,
     };
     center.currentFamilies += 1;
+    const hasActiveParentLink = family.guardians.some((guardian) => (
+      guardian.user?.role === UserRole.PARENT_GUARDIAN
+      && guardian.user.isActive
+      && guardian.user.tenantId === paymentCenterTenantById.get(centerId)
+      && supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
+    ));
+    if (!hasActiveParentLink) {
+      currentFamiliesWithoutActiveParentLink += 1;
+      center.familiesWithoutActiveParentLink += 1;
+    }
     const account = family.billingAccount;
     if (!account) {
       missingBillingAccounts += 1;
@@ -182,12 +195,6 @@ async function main() {
     if (parentBalanceCents > 0) {
       positiveParentBalances += 1;
       center.positiveParentBalances += 1;
-      const hasActiveParentLink = family.guardians.some((guardian) => (
-        guardian.user?.role === UserRole.PARENT_GUARDIAN
-        && guardian.user.isActive
-        && guardian.user.tenantId === paymentCenterTenantById.get(centerId)
-        && supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
-      ));
       if (!hasActiveParentLink) {
         positiveBalancesWithoutActiveParentLink += 1;
         center.positiveBalancesWithoutActiveParentLink += 1;
@@ -226,6 +233,8 @@ async function main() {
     currentFamiliesAtPaymentEnabledSchools: families.length,
     currentFamiliesWithBillingAccounts: families.length - missingBillingAccounts,
     currentFamiliesWithoutBillingAccounts: missingBillingAccounts,
+    currentFamiliesWithActiveParentLink: families.length - currentFamiliesWithoutActiveParentLink,
+    currentFamiliesWithoutActiveParentLink,
     positiveParentBalances,
     positiveBalancesWithActiveParentLink: positiveParentBalances - positiveBalancesWithoutActiveParentLink,
     positiveBalancesWithoutActiveParentLink,
@@ -235,6 +244,7 @@ async function main() {
     positiveBalanceAccessExceptionProfiles,
     schoolExceptions: [...byCenter.values()].filter((center) => (
       center.missingBillingAccounts > 0
+      || center.familiesWithoutActiveParentLink > 0
       || center.positiveBalancesWithoutActiveParentLink > 0
       || center.positiveBalancesWithoutOpenInvoice > 0
       || center.orderedLedgerBalanceMismatches > 0

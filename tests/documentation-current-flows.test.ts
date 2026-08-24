@@ -231,6 +231,8 @@ test("director clean-start documentation is evidence-backed and keeps launch gat
   assert.match(guide, /allergies and severity/);
   assert.match(guide, /parent responsibility is separated from agency\/subsidy responsibility/i);
   assert.match(guide, /Review at least 10 current families/);
+  assert.match(guide, /Step 6 - Compare The School Totals/);
+  assert.match(guide, /Current family accounts with an opening balance/);
   assert.match(guide, /does not turn on invitations, access, kiosk PINs, attendance, billing, payments, messages, or ProCare cutover/);
   assert.match(guide, /Director Sign-Off Checklist/);
   assert.match(transition, /DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE/);

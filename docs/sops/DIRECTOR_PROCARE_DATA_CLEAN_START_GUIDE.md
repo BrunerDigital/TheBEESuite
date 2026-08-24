@@ -163,7 +163,21 @@ Former employees may remain in history but must not appear as current staff. Rep
 
 Do not create staff logins, invitations, access permissions, or PINs during this review.
 
-## Step 6 - Perform A Family Spot Check
+## Step 6 - Compare The School Totals
+
+Use the totals in the review packet and compare them with the current totals in The BEE Suite. Record the results in the review workbook.
+
+| Total to compare | Review packet | The BEE Suite | Difference | Result |
+| --- | --- | --- | --- | --- |
+| Current families |  |  |  |  |
+| Currently enrolled children |  |  |  |  |
+| Active classrooms |  |  |  |  |
+| Current staff |  |  |  |  |
+| Current family accounts with an opening balance |  |  |  |  |
+
+If any totals differ, mark the line `NEEDS FIXING` and identify which records are missing, extra, duplicated, or in the wrong status. Do not mark the school `DATA CORRECT` until every difference is corrected and checked again, or formally recorded as `NOT USED` with an approved reason.
+
+## Step 7 - Perform A Family Spot Check
 
 Review at least 10 current families from beginning to end. If the school has fewer than 10, review all current families.
 
@@ -186,7 +200,7 @@ For each sample, follow this order:
 
 The spot check is an extra safeguard. It does not replace checking the full roster and totals.
 
-## Step 7 - Record Corrections And Review Them Again
+## Step 8 - Record Corrections And Review Them Again
 
 For every item marked `NEEDS FIXING` or `MISSING INFORMATION`, record:
 
@@ -219,6 +233,7 @@ Do not resolve unclear identity, family relationships, safety information, tuiti
 - [ ] Tuition amount, billing schedule, description, and start date are correct for each child.
 - [ ] Opening balances use the same date and separate parent responsibility from agency responsibility.
 - [ ] Current staff and classroom assignments are correct.
+- [ ] Family, current-child, classroom, staff, and opening-balance account totals match the review packet.
 - [ ] I completed at least 10 family spot checks, or all families when fewer than 10.
 - [ ] Every correction has an owner and has been reviewed again after the change.
 - [ ] The original exports and review evidence remain available.

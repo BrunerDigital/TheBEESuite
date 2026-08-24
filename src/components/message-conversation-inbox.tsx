@@ -22,6 +22,7 @@ export type MessageConversationThread = {
   familyId: string | null;
   familyName: string;
   centerLabel: string | null;
+  timeZone: string | null;
   assignedTo: { name: string; email: string } | null;
   unread: number;
   priority: number;
@@ -115,7 +116,7 @@ export function MessageConversationInbox({
   initialSearchQuery?: string | null;
   composer: ConversationComposerProps;
 }) {
-  const timeZone = useSchoolTimeZone();
+  const defaultTimeZone = useSchoolTimeZone();
   const [query, setQuery] = useState(initialSearchQuery ?? "");
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
   const [selectedThreadKey, setSelectedThreadKey] = useState(() => {
@@ -152,6 +153,7 @@ export function MessageConversationInbox({
   const selectedThread = filteredThreads.find((thread) => thread.key === selectedThreadKey)
     ?? filteredThreads[0]
     ?? (deferredQuery ? null : threads[0] ?? null);
+  const selectedThreadTimeZone = selectedThread?.timeZone || defaultTimeZone;
   const latestMessage = selectedThread?.messages.at(-1) ?? null;
   const replyTarget = selectedThread?.familyId && latestMessage
     ? {
@@ -194,6 +196,7 @@ export function MessageConversationInbox({
             {filteredThreads.map((thread) => {
               const lastMessage = thread.messages.at(-1);
               const isSelected = selectedThread?.key === thread.key;
+              const timeZone = thread.timeZone || defaultTimeZone;
               return (
                 <button
                   key={thread.key}
@@ -269,7 +272,7 @@ export function MessageConversationInbox({
                       >
                         <div className={`mb-1 flex flex-wrap items-center gap-x-2 text-[0.68rem] ${message.isFromFamily ? "text-muted-foreground" : "text-white/65"}`}>
                           <span className="font-medium">{message.isFromFamily ? message.sender?.name ?? "Parent" : message.sender?.name ?? "School"}</span>
-                          <span>{formatConversationTime(message.createdAt, timeZone)}</span>
+                          <span>{formatConversationTime(message.createdAt, selectedThreadTimeZone)}</span>
                           <span className="capitalize">{message.channel.replaceAll("_", " ")}</span>
                         </div>
                         {message.subject ? <div className="mb-1 text-sm font-semibold">{message.subject}</div> : null}

@@ -12,6 +12,10 @@ const familyIntake = readFileSync("src/components/family-student-intake-form.tsx
 
 test("conversation timestamps use the school time zone during server and client rendering", () => {
   assert.match(inbox, /useSchoolTimeZone/);
+  assert.match(routePage, /centerTimeZoneById/);
+  assert.match(routePage, /timeZone: message\.family\?\.centerId/);
+  assert.match(inbox, /thread\.timeZone \|\| defaultTimeZone/);
+  assert.match(inbox, /selectedThread\?\.timeZone \|\| defaultTimeZone/);
   assert.match(inbox, /zonedDateKey\(date, timeZone\)[\s\S]*zonedDateKey\(now, timeZone\)/);
   assert.match(inbox, /Intl\.DateTimeFormat\("en-US"[\s\S]*timeZone/);
 });

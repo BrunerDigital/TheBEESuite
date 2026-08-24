@@ -2997,6 +2997,7 @@ async function renderLivePage(
     const demoMode = showDemoFallbackData && messages.length === 0;
     const visibleMessages = demoMode ? executiveParentMessageDemoRows : signedMessages;
     const centerLabelById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
+    const centerTimeZoneById = new Map(centers.map((center) => [center.id, center.timezone]));
     const familyOptions = sortFamiliesByName(families.map((family) => ({
       id: family.id,
       name: userViewText(family.name),
@@ -3031,6 +3032,7 @@ async function renderLivePage(
       familyId: string | null;
       familyName: string;
       centerLabel: string | null;
+      timeZone: string | null;
       assignedTo: { name: string; email: string } | null;
       unread: number;
       priority: number;
@@ -3055,6 +3057,7 @@ async function renderLivePage(
         familyId: message.familyId,
         familyName: message.family?.name ?? "Internal thread",
         centerLabel: message.family?.centerId ? centerLabelById.get(message.family.centerId) ?? null : null,
+        timeZone: message.family?.centerId ? centerTimeZoneById.get(message.family.centerId) ?? null : null,
         assignedTo: message.assignedTo ?? null,
         unread: 0,
         priority: 0,

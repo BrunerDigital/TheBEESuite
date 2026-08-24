@@ -2809,9 +2809,12 @@ async function renderLivePage(
         ? { children: { some: { AND: [{ classroomId: teacherStaffProfile.classroomId }, currentlyEnrolledChildWhere()] } } }
         : { id: "__no_teacher_classroom__" }
       : { ...visibleFamilyWhere(visibleCenterIds), children: { some: currentlyEnrolledChildWhere() } };
+    const messageFamilyScopeWhere: Prisma.FamilyWhereInput = teacherMessageScope
+      ? familyScopeWhere
+      : visibleFamilyWhere(visibleCenterIds);
     const messageWhere = buildVisibleMessageWhere({
       userId: user.id,
-      familyScopeWhere,
+      familyScopeWhere: messageFamilyScopeWhere,
       allCenters,
       teacherMessageScope,
       tenantId: user.tenantId,

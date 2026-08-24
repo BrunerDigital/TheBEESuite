@@ -34,10 +34,10 @@ Use one of these four answers for every section:
 
 | Mark | What it means | What to do |
 | --- | --- | --- |
-| `CORRECT` | The BEE Suite matches the school record. | Check the item and continue. |
-| `NEEDS FIXING` | You found a specific difference. | Write down the family, child, or staff member and the correction needed. |
-| `MISSING INFORMATION` | The answer cannot be proven from the packet or current school record. | Stop that item and request the missing information. |
-| `NOT USED` | The item truly does not apply to this school or family. | Add a short reason. |
+| `VERIFIED` | The BEE Suite matches the school record. | Check the item and continue. |
+| `NEEDS CORRECTION` | You found a specific difference. | Write down the family, child, or staff member and the correction needed. |
+| `MISSING SOURCE` | The answer cannot be proven from the packet or current school record. | Stop that item and request the missing information. |
+| `NOT APPLICABLE` | The item truly does not apply to this school or family. | Add a short reason. |
 
 Never guess. A blank field means "not yet confirmed," not "none."
 
@@ -72,7 +72,7 @@ For each active classroom, check:
 - [ ] assigned teachers; and
 - [ ] current children.
 
-Mark duplicate rooms, placeholder rooms, `Unknown` rooms, or zero-capacity rooms as `NEEDS FIXING` unless your current school record proves they are intentional.
+Mark duplicate rooms, placeholder rooms, `Unknown` rooms, or zero-capacity rooms as `NEEDS CORRECTION` unless your current school record proves they are intentional.
 
 ### Children
 
@@ -176,7 +176,7 @@ Use the totals named below and compare them with the matching totals in The BEE 
 | Signed opening-balance total | Fleet Verification Packet |  |  |  |  |
 | Currently enrolled children | Review workbook |  |  |  |  |
 
-If any totals differ, mark the line `NEEDS FIXING` and identify which records are missing, extra, duplicated, or in the wrong status. Do not mark the school `DATA CORRECT` until every difference is corrected and checked again, or formally recorded as `NOT USED` with an approved reason.
+If any totals differ, mark the line `NEEDS CORRECTION` and identify which records are missing, extra, duplicated, or in the wrong status. Do not mark the school `DATA CORRECT` until every difference is corrected and checked again, or formally recorded as `NOT APPLICABLE` with an approved reason.
 
 ## Step 7 - Perform A Family Spot Check
 
@@ -203,7 +203,7 @@ The spot check is an extra safeguard. It does not replace checking the full rost
 
 ## Step 8 - Record Corrections And Review Them Again
 
-For every item marked `NEEDS FIXING` or `MISSING INFORMATION`, record:
+For every item marked `NEEDS CORRECTION` or `MISSING SOURCE`, record:
 
 - school name;
 - family, child, classroom, or employee name;
@@ -219,7 +219,7 @@ After support reports that the item is corrected:
 
 1. Open the record again.
 2. Compare it with the same school evidence.
-3. Mark the retest `CORRECT` or return it for another correction.
+3. Mark the retest `VERIFIED` or return it for another correction.
 4. Add your name and the retest date.
 
 Do not resolve unclear identity, family relationships, safety information, tuition, balances, or staff assignments by making your best guess.

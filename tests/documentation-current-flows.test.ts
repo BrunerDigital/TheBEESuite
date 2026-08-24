@@ -229,6 +229,10 @@ test("director clean-start documentation is evidence-backed and keeps launch gat
   assert.match(guide, /Fleet Verification Packet shows source filenames but does not show this full repository path/);
   assert.match(guide, /docs\/procare-exports\/<YOUR SCHOOL>\/raw\//);
   assert.match(guide, /A blank field means "not yet confirmed," not "none/);
+  assert.match(guide, /`VERIFIED`/);
+  assert.match(guide, /`NEEDS CORRECTION`/);
+  assert.match(guide, /`MISSING SOURCE`/);
+  assert.match(guide, /`NOT APPLICABLE`/);
   assert.match(guide, /allergies and severity/);
   assert.match(guide, /parent responsibility is separated from agency\/subsidy responsibility/i);
   assert.match(guide, /Review at least 10 current families/);

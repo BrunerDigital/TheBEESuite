@@ -2997,7 +2997,7 @@ async function renderLivePage(
     const demoMode = showDemoFallbackData && messages.length === 0;
     const visibleMessages = demoMode ? executiveParentMessageDemoRows : signedMessages;
     const centerLabelById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
-    const centerTimeZoneById = new Map(centers.map((center) => [center.id, center.timezone]));
+    const centerTimeZoneById = new Map(centers.map((center) => [center.id, readCenterLocationTimeZone(center)]));
     const familyOptions = sortFamiliesByName(families.map((family) => ({
       id: family.id,
       name: userViewText(family.name),

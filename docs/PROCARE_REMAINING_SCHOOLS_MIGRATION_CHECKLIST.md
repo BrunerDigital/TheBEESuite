@@ -42,7 +42,6 @@ npm.cmd run procare:preflight-location -- --location "<school>" --source-dir "<s
 
 ## 4. School and corporate review before preview
 
-- [ ] Director follows `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` and records the exact canonical `docs/procare-exports/<LOCATION>/raw/` source path for every applicable domain.
 - [ ] Director checks every exception plus at least 10 representative families, or all families when fewer than 10.
 - [ ] Director confirms child status, classroom, schedules, guardians, emergency contacts, authorized pickups, custody/medical/allergy facts, and staff roster.
 - [ ] Corporate/accounting confirms one signed opening balance per active account, credits, tuition amount/cadence/effective week, discounts, fees, and subsidy responsibility.
@@ -61,6 +60,7 @@ npm.cmd run procare:preflight-location -- --location "<school>" --source-dir "<s
 - [ ] Commit only the unchanged approved source through the guarded importer; retain the batch ID and backup.
 - [ ] Download the automated source-to-target reconciliation and Fleet Verification Packet.
 - [ ] Require `READY_FOR_DIRECTOR_REVIEW`; `completed_with_errors`, disposed/excluded/error rows, unavailable measures, or mismatches keep the school blocked.
+- [ ] After `READY_FOR_DIRECTOR_REVIEW`, the director follows `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` and records the exact canonical `docs/procare-exports/<LOCATION>/raw/` source path for every applicable domain.
 - [ ] Reconcile families, children, guardians, emergency contacts, pickups, classrooms, staff evidence, signed balances, opening credits, and opening-balance invoices.
 - [ ] Reconcile tuition assignments in a separate preview before enabling recurring billing. Do not generate invoices or collect payment as part of data import.
 

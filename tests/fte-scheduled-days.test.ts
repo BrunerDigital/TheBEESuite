@@ -148,6 +148,7 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(page, /past-due receivables/);
   assert.match(page, /missingScheduleChildren\.push/);
   assert.match(page, /child\.classroom\?\.centerId && child\.classroom\.centerId !== centerId/);
+  assert.match(page, /child\.family\.centerId \?\? child\.classroom\?\.centerId/);
   assert.match(page, /take: fteReceivableLedgerLimit \+ 1/);
   assert.match(page, /past-due AR requires ledger review/);
 });

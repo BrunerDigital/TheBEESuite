@@ -55,10 +55,8 @@ async function loadSupabaseAuthInventory() {
       allEmails.add(normalized);
       if (activeAuthUser(user)) activeEmails.add(normalized);
     }
-    const nextPage = "nextPage" in data ? data.nextPage : null;
-    if (!nextPage) break;
-    if (nextPage <= page) throw new Error("Supabase Auth pagination did not advance.");
-    page = nextPage;
+    if (data.users.length < 1000) break;
+    page += 1;
   }
   return { activeEmails, allEmails };
 }
@@ -84,7 +82,7 @@ async function buildPlan() {
       sourceSystem: true,
       externalId: true,
       children: { where: currentlyEnrolledChildWhere(), select: { sourceSystem: true, externalId: true } },
-      guardians: { select: { id: true, familyId: true, email: true, isBillingContact: true, sourceSystem: true, externalId: true, customFields: true, user: { select: { email: true, role: true, isActive: true, tenantId: true } } } },
+      guardians: { select: { id: true, familyId: true, email: true, isBillingContact: true, sourceSystem: true, externalId: true, customFields: true, user: { select: { id: true, email: true, role: true, isActive: true, tenantId: true } } } },
       billingAccount: { select: { balanceCents: true, ledgerEntries: { where: { OR: [{ type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } }, { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM }] }, select: { type: true, sourceSystem: true, amountCents: true } } } },
     },
     orderBy: { id: "asc" },
@@ -117,10 +115,11 @@ async function buildPlan() {
         select: { familyId: true, customFields: true },
       });
       const normalized = email(guardian.email);
-      const appUser = await prisma.user.findFirst({ where: { email: { equals: normalized, mode: "insensitive" } }, select: { tenantId: true, role: true } });
+      const appUser = await prisma.user.findFirst({ where: { email: { equals: normalized, mode: "insensitive" } }, select: { id: true, tenantId: true, role: true } });
       if (auth.allEmails.has(normalized) && !appUser) { block("auth_identity_without_app_user"); continue; }
       if (auth.allEmails.has(normalized) && !auth.activeEmails.has(normalized)) { block("inactive_auth_identity"); continue; }
       if (appUser && (appUser.tenantId !== center.organization.tenantId || appUser.role !== UserRole.PARENT_GUARDIAN)) { block("app_user_scope_conflict"); continue; }
+      if (appUser && guardian.user?.id !== appUser.id) { block("app_user_not_linked_to_guardian"); continue; }
       if (matching.length && matching.every((item) => item.familyId === family.id && !parentPortalAccessDisabled(item.customFields))) { selected = guardian; break; }
     }
     if (!selected) { block("email_family_scope_ambiguous"); continue; }

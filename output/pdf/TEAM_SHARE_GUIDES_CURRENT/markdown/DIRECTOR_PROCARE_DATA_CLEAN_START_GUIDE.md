@@ -19,14 +19,14 @@
 Ask your BEE Suite implementation contact for these items:
 
 - [ ] Your school's current Fleet Verification Packet marked `READY_FOR_DIRECTOR_REVIEW`.
-- [ ] Your school's current review workbook, including the current-enrollment count and exact source-file paths prepared by BEE Suite support.
-- [ ] The date of the ProCare exports used for the review.
+- [ ] Your school's current review workbook, including the source export/as-of date, current-enrollment count, and exact source-file paths prepared by BEE Suite support.
+- [ ] The Fleet Verification Packet source filenames match the filenames listed in the review workbook.
 - [ ] The name of the person who will receive your corrections.
 
 **Stop and ask for help if:**
 
 - the packet is missing or is not marked `READY_FOR_DIRECTOR_REVIEW`;
-- the packet names a different school or different export date;
+- the packet names a different school or its source filenames do not match the review workbook;
 - The BEE Suite opens to the wrong school; or
 - you cannot find the source information needed to confirm an answer.
 
@@ -52,9 +52,9 @@ For every section you review, use the exact source-file path already entered in 
 1. Go to `https://thebeesuite.io/directors` and sign in.
 2. Check the school name at the top of the page.
 3. Confirm the review packet shows the same school.
-4. Write down the school name, your name, review date, ProCare export date, and planned BEE Suite start date if one has been assigned.
+4. Copy the ProCare source export/as-of date from the review workbook. Also write down the school name, your name, review date, and planned BEE Suite start date if one has been assigned.
 
-**Pass this step when:** the school name and review dates agree.
+**Pass this step when:** the school name agrees, the packet source filenames match the review workbook, and the workbook includes the source export/as-of date.
 
 **Stop when:** you see another school, the packet is outdated, or records from more than one location appear together.
 
@@ -140,13 +140,17 @@ In The BEE Suite, open `Billing & Payments`. Select the correct school, then the
 
 Tuition belongs to the individual child. Do not copy one sibling's rate to another unless the signed child-level record confirms every detail is the same. Do not edit a shared tuition plan to correct only one child; report the child-specific correction instead.
 
-### Opening balance - check every current family
+### Opening balance - check current families and every nonzero balance
+
+Review every current family. Also review every imported former or withdrawn family when The BEE Suite or the source record shows an amount owed or a credit.
 
 - [ ] balance amount matches the dated school record;
 - [ ] the "as of" date is the same in both places;
 - [ ] charges, payments, credits, refunds, and adjustments explain the balance;
 - [ ] parent responsibility is separated from agency/subsidy responsibility; and
 - [ ] a credit is shown as a credit, not an amount owed.
+
+Do not skip a former family just because no child is currently enrolled. Its balance or credit must still belong to the correct family and match the dated source record.
 
 Never add a general adjustment simply to make two totals match. Report the difference so it can be researched.
 
@@ -237,6 +241,7 @@ Do not resolve unclear identity, family relationships, safety information, tuiti
 - [ ] Allergies, medical needs, medications, and action plans are correct or confirmed as none.
 - [ ] Tuition amount, billing schedule, description, and start date are correct for each child.
 - [ ] Opening balances use the same date and separate parent responsibility from agency responsibility.
+- [ ] Every imported former or withdrawn family with an amount owed or a credit has been checked individually.
 - [ ] Current staff and classroom assignments are correct.
 - [ ] Imported family, child, classroom, employee, and signed opening-balance totals match the Fleet Verification Packet.
 - [ ] The currently enrolled child total matches the review workbook.

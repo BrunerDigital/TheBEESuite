@@ -239,6 +239,8 @@ test("director clean-start documentation is evidence-backed and keeps launch gat
   assert.match(guide, /Step 6 - Compare The School Totals/);
   assert.match(guide, /Signed opening-balance total/);
   assert.match(guide, /Do not compare a current-only total with an all-record total/);
+  assert.match(guide, /source export\/as-of date/);
+  assert.match(guide, /every imported former or withdrawn family/);
   assert.match(guide, /does not turn on invitations, access, kiosk PINs, attendance, billing, payments, messages, or ProCare cutover/);
   assert.match(guide, /Director Sign-Off Checklist/);
   assert.match(transition, /DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE/);

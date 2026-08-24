@@ -2144,6 +2144,7 @@ async function POSTHandler(request: NextRequest) {
   if (entity === "child" || entity === "childMerge") {
     revalidatePath("/family-detail");
     revalidatePath("/billing-invoices");
+    revalidatePath("/fte-reports");
     revalidatePath("/dashboard");
     revalidatePath("/api/dashboard/accounts-receivable");
   }

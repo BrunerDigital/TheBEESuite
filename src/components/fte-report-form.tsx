@@ -1,7 +1,8 @@
 "use client";
 
-import { useId, useMemo, useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, Printer, Save } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, CheckCircle2, Printer, RefreshCw, Save } from "lucide-react";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,11 @@ export type FteReportPrefill = {
   fourDayCount: number;
   fiveDayCount: number;
   unknownScheduleCount: number;
+  missingScheduleChildren: Array<{
+    id: string;
+    fullName: string;
+    classroomName: string | null;
+  }>;
   infants: number;
   toddlers: number;
   twos: number;
@@ -240,6 +246,7 @@ export function FteReportForm({
   allowCenterSelect = false,
   mode = allowCenterSelect ? "executive" : "director",
 }: Props) {
+  const router = useRouter();
   const timeZone = useSchoolTimeZone();
   const fieldIdPrefix = useId();
   const defaultCenterId = centers[0]?.id ?? "";
@@ -248,6 +255,8 @@ export function FteReportForm({
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [isRefreshingLiveData, startLiveDataRefresh] = useTransition();
+  const liveDataRefresh = useRef<{ centerId: string; generatedAt: string | null; formSnapshot: string } | null>(null);
   const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
 
   const scheduledDayCounts = useMemo(() => ({
@@ -280,6 +289,7 @@ export function FteReportForm({
   }), [form.infants, form.toddlers, form.twos, form.preschool, form.preK, form.schoolAge]);
   const selectedCenter = centers.find((center) => center.id === form.centerId);
   const selectedPrefill = defaultValuesForCenter(form.centerId, prefills);
+  const formSnapshot = JSON.stringify(form);
   const calculatedOccupancyPercent = useMemo(() => {
     const enrolled = Number(form.enrolledCount || 0);
     const capacity = Number(form.licenseCapacity || selectedPrefill?.licensedCapacity || selectedCenter?.licensedCapacity || 0);
@@ -293,6 +303,39 @@ export function FteReportForm({
   const currentWeekReport = reports.find((report) => (
     report.centerId === form.centerId && dateInput(report.weekStart) === form.weekStart
   ));
+  const isHistoricalReportingWeek = form.weekStart !== defaultWeekStart();
+
+  useEffect(() => {
+    const requested = liveDataRefresh.current;
+    if (!requested) return;
+    const refreshedPrefill = defaultValuesForCenter(requested.centerId, prefills);
+    if (!refreshedPrefill || refreshedPrefill.generatedAt === requested.generatedAt) return;
+    const refreshedCenter = centers.find((center) => center.id === requested.centerId);
+    if (form.centerId !== requested.centerId
+      || form.weekStart !== defaultWeekStart()
+      || formSnapshot !== requested.formSnapshot) {
+      liveDataRefresh.current = null;
+      setStatusMessage("Live data refresh was canceled because the form changed while refreshing.");
+      return;
+    }
+    setForm((current) => {
+      if (current.centerId !== requested.centerId) return current;
+      if (current.weekStart !== defaultWeekStart()) return current;
+      const refreshed = emptyForm(requested.centerId, refreshedPrefill, refreshedCenter);
+      return {
+        ...refreshed,
+        id: current.id,
+        weekStart: current.weekStart,
+        weekEnd: current.weekEnd,
+        fteCount: "",
+        status: current.status,
+        locationData: current.locationData,
+        notes: current.notes,
+      };
+    });
+    liveDataRefresh.current = null;
+    setStatusMessage(`Live school data refreshed for ${refreshedCenter?.name ?? "the selected school"}.`);
+  }, [centers, form.centerId, form.weekStart, formSnapshot, prefills]);
 
   function setField(field: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -373,6 +416,11 @@ export function FteReportForm({
   }
 
   function submit() {
+    if (isRefreshingLiveData) {
+      setStatusMessage("");
+      setErrorMessage("Wait for the live school data refresh to finish before submitting.");
+      return;
+    }
     const reviewedAccountReceivable = Number(form.accountReceivableAmount);
     if (selectedPrefill?.accountReceivableReviewRequired
       && (!form.accountReceivableAmount.trim() || !Number.isFinite(reviewedAccountReceivable) || reviewedAccountReceivable < 0)) {
@@ -427,6 +475,16 @@ export function FteReportForm({
       setForm(emptyForm(nextCenterId, defaultValuesForCenter(nextCenterId, prefills), centers.find((center) => center.id === nextCenterId)));
       window.setTimeout(() => window.location.reload(), 750);
     });
+  }
+
+  function refreshLiveSchoolData() {
+    if (isHistoricalReportingWeek) return;
+    liveDataRefresh.current = {
+      centerId: form.centerId,
+      generatedAt: selectedPrefill?.generatedAt ?? null,
+      formSnapshot,
+    };
+    startLiveDataRefresh(() => router.refresh());
   }
 
   return (
@@ -554,6 +612,28 @@ export function FteReportForm({
               {selectedPrefill.unknownScheduleCount
                 ? ` ${selectedPrefill.unknownScheduleCount} child schedule(s) need an exact 2–5 day weekly schedule, so verify the day counts before submitting.`
                 : " Verify the fields, enter payroll percentage if required, and submit."}
+              {selectedPrefill.missingScheduleChildren.length ? (
+                <span className="mt-2 block">
+                  Missing weekly day counts: {selectedPrefill.missingScheduleChildren
+                    .map((child) => `${child.fullName}${child.classroomName ? ` (${child.classroomName})` : ""}`)
+                    .join(", ")}.
+                </span>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                disabled={isRefreshingLiveData || isHistoricalReportingWeek}
+                onClick={refreshLiveSchoolData}
+                title={isHistoricalReportingWeek ? "Live data refresh is available only for the current reporting week." : undefined}
+              >
+                <RefreshCw className={isRefreshingLiveData ? "animate-spin" : ""} data-icon="inline-start" />
+                {isRefreshingLiveData ? "Refreshing live data…" : "Refresh live school data"}
+              </Button>
+              {isHistoricalReportingWeek ? (
+                <span className="mt-2 block">Live data refresh is disabled while editing a historical report.</span>
+              ) : null}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -751,7 +831,7 @@ export function FteReportForm({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button aria-busy={isPending} disabled={isPending || !form.centerId || !form.weekStart} onClick={submit}>
+          <Button aria-busy={isPending} disabled={isPending || isRefreshingLiveData || !form.centerId || !form.weekStart} onClick={submit}>
             <Save data-icon="inline-start" />
             {isPending ? "Saving FTE report..." : form.id ? "Save FTE Correction" : "Submit FTE Report"}
           </Button>

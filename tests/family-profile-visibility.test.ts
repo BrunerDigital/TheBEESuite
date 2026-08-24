@@ -113,3 +113,28 @@ test("childless and non-current households remain selectable for complete record
     ["child-current", "child-past"],
   );
 });
+
+test("a capped complete-family query does not drop current families", () => {
+  const currentFamilies: TestFamily[] = [
+    {
+      id: "family-current-outside-complete-limit",
+      children: [{ id: "child-current", status: "enrolled" }],
+    },
+  ];
+  const allFamilies: TestFamily[] = [
+    {
+      id: "family-childless-inside-complete-limit",
+      children: [],
+    },
+  ];
+
+  const result = familiesForCompleteRecordEditing({
+    currentFamilies,
+    allFamilies,
+  });
+
+  assert.deepEqual(
+    result.map((family) => family.id),
+    ["family-childless-inside-complete-limit", "family-current-outside-complete-limit"],
+  );
+});

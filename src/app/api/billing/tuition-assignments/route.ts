@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { canManageBilling, canAccessCenter, getCurrentUser } from "@/lib/auth";
 import {
+  BIWEEKLY_TUITION_AUTOBILL_CADENCE,
   defaultRecurringBillingPeriod,
   FOUR_WEEK_TUITION_AUTOBILL_CADENCE,
   isVoucherFundedTuitionAmount,
@@ -103,7 +104,9 @@ async function POSTHandler(request: NextRequest) {
   const requestedCadence = clean(body.billingCadence)
     ? normalizeBillingCadence(body.billingCadence)
     : planCadence;
-  const cadence = requestedCadence === FOUR_WEEK_TUITION_AUTOBILL_CADENCE
+  const cadence = requestedCadence === BIWEEKLY_TUITION_AUTOBILL_CADENCE
+    ? BIWEEKLY_TUITION_AUTOBILL_CADENCE
+    : requestedCadence === FOUR_WEEK_TUITION_AUTOBILL_CADENCE
     ? FOUR_WEEK_TUITION_AUTOBILL_CADENCE
     : requestedCadence === "monthly"
       ? "monthly"

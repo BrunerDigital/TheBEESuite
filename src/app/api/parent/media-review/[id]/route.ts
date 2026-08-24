@@ -74,12 +74,15 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
   }
 
+  if (action === "approve" && !media.child.photoVideoPermission) {
+    return NextResponse.json({
+      ok: false,
+      error: "Photo/video permission must be confirmed on the child record before this photo can be shared.",
+    }, { status: 409 });
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
     if (action === "approve") {
-      await tx.child.update({
-        where: { id: media.childId },
-        data: { photoVideoPermission: true },
-      });
       return tx.childMedia.update({
         where: { id },
         data: {
@@ -139,7 +142,7 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
       classroomId: media.classroomId,
       previousStatus: media.status,
       newStatus: updated.status,
-      photoVideoPermissionEnabled: action === "approve",
+      photoVideoPermissionConfirmed: media.child.photoVideoPermission,
       note: note || null,
     },
   });

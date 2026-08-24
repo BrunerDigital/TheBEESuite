@@ -3,6 +3,8 @@ import { normalizeParentNotificationPreferences } from "@/lib/portal-guardrails"
 
 export const PHOTO_PERMISSION_REVIEW_WARNING =
   "Photo saved for director review. It is not visible to parents because photo/video permission is not enabled for this child.";
+export const PHOTO_DIRECTOR_REVIEW_WARNING =
+  "Photo saved for director approval. It is not visible to parents until approved.";
 
 export type GuardianPhotoNotificationTarget = {
   userId?: string | null;
@@ -24,9 +26,9 @@ export function resolveTeacherMediaShareState(input: {
 
   if (input.photoVideoPermission) {
     return {
-      sharedWithParents: true,
-      status: "shared",
-      warning: undefined,
+      sharedWithParents: false,
+      status: "director_review",
+      warning: PHOTO_DIRECTOR_REVIEW_WARNING,
     };
   }
 

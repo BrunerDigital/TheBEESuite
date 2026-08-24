@@ -185,11 +185,11 @@ function currentWeeklyPeriod(date = new Date()) {
 }
 
 function currentPeriodForCadence(cadence: string) {
-  return cadence === "weekly" || cadence === "four_week" ? currentWeeklyPeriod() : currentBillingPeriod();
+  return cadence === "weekly" || cadence === "biweekly" || cadence === "four_week" ? currentWeeklyPeriod() : currentBillingPeriod();
 }
 
 function periodMatchesCadence(value: string, cadence: string) {
-  return cadence === "weekly" || cadence === "four_week" ? /^\d{4}-W\d{2}$/i.test(value) : /^\d{4}-\d{2}$/.test(value);
+  return cadence === "weekly" || cadence === "biweekly" || cadence === "four_week" ? /^\d{4}-W\d{2}$/i.test(value) : /^\d{4}-\d{2}$/.test(value);
 }
 
 function tuitionRateCadence(cadence: string | null | undefined) {
@@ -391,7 +391,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [assignmentChildId, setAssignmentChildId] = useState(initialAssignmentChild?.id ?? "");
   const [assignmentEnabled, setAssignmentEnabled] = useState(initialAssignment?.enabled === false ? "false" : "true");
   const [assignmentCadence, setAssignmentCadence] = useState(
-    initialAssignment?.cadence === "monthly" ? "monthly" : initialAssignment?.cadence === "four_week" ? "four_week" : "weekly",
+    initialAssignment?.cadence === "monthly" ? "monthly" : initialAssignment?.cadence === "biweekly" ? "biweekly" : initialAssignment?.cadence === "four_week" ? "four_week" : "weekly",
   );
   const [assignmentBillingDay, setAssignmentBillingDay] = useState(String(initialAssignment?.billingDay ?? 1));
   const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
@@ -870,7 +870,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
     setAssignmentChildId(child?.id ?? "");
     setAssignmentEnabled(assignment?.enabled === false ? "false" : "true");
-    const nextCadence = assignment?.cadence === "monthly" ? "monthly" : assignment?.cadence === "four_week" ? "four_week" : "weekly";
+    const nextCadence = assignment?.cadence === "monthly" ? "monthly" : assignment?.cadence === "biweekly" ? "biweekly" : assignment?.cadence === "four_week" ? "four_week" : "weekly";
     setAssignmentCadence(nextCadence);
     setAssignmentBillingDay(String(assignment?.billingDay ?? 1));
     setAssignmentTuitionPlanId(assignedPlan?.id ?? "");
@@ -1332,7 +1332,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           : assignmentEnabled === "true"
           ? effectiveAssignmentCadence === "monthly"
             ? `Recurring tuition enabled for ${selectedAssignmentChild.fullName} at ${money(effectiveAssignmentNetCents)} per month. Monthly invoice creation is scheduled for day ${effectiveAssignmentBillingDay}.`
-            : `Recurring tuition enabled for ${selectedAssignmentChild.fullName} at ${money(effectiveAssignmentNetCents)} net per week. ${effectiveAssignmentCadence === "four_week" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 4)} and cover four weeks ahead.` : "Thursday invoice creation is scheduled for the following week."}`
+            : `Recurring tuition enabled for ${selectedAssignmentChild.fullName} at ${money(effectiveAssignmentNetCents)} net per week. ${effectiveAssignmentCadence === "four_week" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 4)} and cover four weeks ahead.` : effectiveAssignmentCadence === "biweekly" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 2)} and cover two weeks ahead.` : "Thursday invoice creation is scheduled for the following week."}`
           : `Recurring tuition disabled for ${selectedAssignmentChild.fullName}.`,
       );
     });
@@ -2275,6 +2275,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     ) : (
                       <>
                         <SelectItem value="weekly">Weekly · 1 week ahead</SelectItem>
+                        <SelectItem value="biweekly">Biweekly · 2 weeks ahead</SelectItem>
                         <SelectItem value="four_week">Every 4 weeks · 4 weeks ahead</SelectItem>
                       </>
                     )}
@@ -2389,8 +2390,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <DisplayValue label={`Gross ${effectiveRateCadence} tuition`} value={money(effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents)} />
                 <DisplayValue label={`${effectiveRateCadence === "monthly" ? "Monthly" : "Weekly"} credits`} value={`−${money(effectiveAssignmentCreditsTotalCents)}`} />
                 <DisplayValue
-                  label={effectiveAssignmentCadence === "four_week" ? "Every-4-weeks invoice" : `Net ${effectiveRateCadence} invoice`}
-                  value={money(Math.max(0, effectiveAssignmentNetCents) * (effectiveAssignmentCadence === "four_week" ? 4 : 1))}
+                  label={effectiveAssignmentCadence === "four_week" ? "Every-4-weeks invoice" : effectiveAssignmentCadence === "biweekly" ? "Biweekly invoice" : `Net ${effectiveRateCadence} invoice`}
+                  value={money(Math.max(0, effectiveAssignmentNetCents) * (effectiveAssignmentCadence === "four_week" ? 4 : effectiveAssignmentCadence === "biweekly" ? 2 : 1))}
                   detail={effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents && !assignmentIsVoucherFunded
                     ? "Credits must be less than gross tuition"
                     : "Amount added to the family ledger"}
@@ -2423,7 +2424,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Weekly billing creates one week-ahead invoices. Every-4-weeks billing creates one invoice equal to four net weekly rates. Monthly billing creates one invoice for the saved monthly rate on the selected day (1–28). The opening balance remains unchanged; enter an opening balance only when the family already owes money. This does not enable family autopay. Explicit $0.00 CCDF or voucher-funded assignments never create a family invoice or autopay attempt.
+              Weekly billing creates one week-ahead invoices. Biweekly billing creates one invoice equal to two net weekly rates every two weeks. Every-4-weeks billing creates one invoice equal to four net weekly rates. Monthly billing creates one invoice for the saved monthly rate on the selected day (1–28). The opening balance remains unchanged; enter an opening balance only when the family already owes money. This does not enable family autopay. Explicit $0.00 CCDF or voucher-funded assignments never create a family invoice or autopay attempt.
             </p>
           </TabsContent>
 

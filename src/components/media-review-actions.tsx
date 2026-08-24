@@ -22,7 +22,7 @@ export function MediaReviewActions({ mediaId, childName }: Props) {
   function review(action: "approve" | "reject") {
     if (action === "approve") {
       const confirmed = window.confirm(
-        `Approve this photo for ${childName}? This will mark photo/video permission as verified for this child and share the photo with parents.`,
+        `Approve this photo for ${childName}? This will share the photo with linked parents. Photo/video permission must already be confirmed on the child record.`,
       );
       if (!confirmed) return;
     }

@@ -5788,7 +5788,7 @@ async function renderLivePage(
 
     const [media, pending, sharedThirtyDays, rejectedThirtyDays, restrictedChildren] = await Promise.all([
       prisma.childMedia.findMany({
-        where: scopedMediaWhere({ status: "permission_review", sharedWithParents: false }),
+        where: scopedMediaWhere({ status: { in: ["director_review", "permission_review"] }, sharedWithParents: false }),
         orderBy: { createdAt: "desc" },
         take: 50,
         include: {
@@ -5811,7 +5811,7 @@ async function renderLivePage(
           uploadedBy: { select: { name: true, email: true, role: true } },
         },
       }),
-      prisma.childMedia.count({ where: scopedMediaWhere({ status: "permission_review", sharedWithParents: false }) }),
+      prisma.childMedia.count({ where: scopedMediaWhere({ status: { in: ["director_review", "permission_review"] }, sharedWithParents: false }) }),
       prisma.childMedia.count({ where: scopedMediaWhere({ status: "shared", sharedWithParents: true, createdAt: { gte: thirtyDaysAgo } }) }),
       prisma.childMedia.count({ where: scopedMediaWhere({ status: "rejected", createdAt: { gte: thirtyDaysAgo } }) }),
       prisma.child.count({

@@ -221,6 +221,11 @@ export function confirmBeeSuiteMigrationSourceOfTruth(input: {
       ...roster,
       balance: (row.openingBalanceCents / 100).toFixed(2),
       "confirmed opening balance cents": String(row.openingBalanceCents),
+      "confirmed weekly tuition cents": String(row.weeklyTuitionCents),
+      "confirmed tuition cadence": "weekly",
+      "tuition effective week": row.tuitionEffectiveWeek,
+      "source tuition evidence": row.sourceTuitionKind,
+      "tuition migration status": "confirmed_evidence_only_activation_held",
       "migration confirmation source child id": row.sourceChildId,
     };
   });

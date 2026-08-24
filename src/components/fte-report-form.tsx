@@ -256,7 +256,7 @@ export function FteReportForm({
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const [isRefreshingLiveData, startLiveDataRefresh] = useTransition();
-  const liveDataRefresh = useRef<{ centerId: string; generatedAt: string | null } | null>(null);
+  const liveDataRefresh = useRef<{ centerId: string; generatedAt: string | null; formSnapshot: string } | null>(null);
   const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
 
   const scheduledDayCounts = useMemo(() => ({
@@ -289,6 +289,7 @@ export function FteReportForm({
   }), [form.infants, form.toddlers, form.twos, form.preschool, form.preK, form.schoolAge]);
   const selectedCenter = centers.find((center) => center.id === form.centerId);
   const selectedPrefill = defaultValuesForCenter(form.centerId, prefills);
+  const formSnapshot = JSON.stringify(form);
   const calculatedOccupancyPercent = useMemo(() => {
     const enrolled = Number(form.enrolledCount || 0);
     const capacity = Number(form.licenseCapacity || selectedPrefill?.licensedCapacity || selectedCenter?.licensedCapacity || 0);
@@ -310,9 +311,11 @@ export function FteReportForm({
     const refreshedPrefill = defaultValuesForCenter(requested.centerId, prefills);
     if (!refreshedPrefill || refreshedPrefill.generatedAt === requested.generatedAt) return;
     const refreshedCenter = centers.find((center) => center.id === requested.centerId);
-    if (form.centerId !== requested.centerId || form.weekStart !== defaultWeekStart()) {
+    if (form.centerId !== requested.centerId
+      || form.weekStart !== defaultWeekStart()
+      || formSnapshot !== requested.formSnapshot) {
       liveDataRefresh.current = null;
-      setStatusMessage("Live data refresh was canceled because the school or reporting week changed.");
+      setStatusMessage("Live data refresh was canceled because the form changed while refreshing.");
       return;
     }
     setForm((current) => {
@@ -332,7 +335,7 @@ export function FteReportForm({
     });
     liveDataRefresh.current = null;
     setStatusMessage(`Live school data refreshed for ${refreshedCenter?.name ?? "the selected school"}.`);
-  }, [centers, form.centerId, form.weekStart, prefills]);
+  }, [centers, form.centerId, form.weekStart, formSnapshot, prefills]);
 
   function setField(field: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -479,6 +482,7 @@ export function FteReportForm({
     liveDataRefresh.current = {
       centerId: form.centerId,
       generatedAt: selectedPrefill?.generatedAt ?? null,
+      formSnapshot,
     };
     startLiveDataRefresh(() => router.refresh());
   }

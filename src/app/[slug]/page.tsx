@@ -3060,7 +3060,8 @@ async function renderLivePage(
         replyHref?: string | null;
       }>;
     };
-    const threadMap = visibleMessages.reduce((map, message) => {
+    const projectedThreads: MessageThread[] = [];
+    for (const message of visibleMessages) {
       const key = message.threadKey ?? (message.familyId ? `family:${message.familyId}` : `internal:${message.id}`);
       const internalCenterId = message.threadKey?.startsWith("internal:")
         ? message.threadKey.slice("internal:".length)
@@ -3068,7 +3069,8 @@ async function renderLivePage(
       const staffCenterId = "staffCenterId" in message && typeof message.staffCenterId === "string" ? message.staffCenterId : null;
       const threadCenterId = internalCenterId && centerTimeZoneById.has(internalCenterId) ? internalCenterId : staffCenterId;
       const messageCenterId = message.family?.centerId ?? (threadCenterId && centerTimeZoneById.has(threadCenterId) ? threadCenterId : null);
-      const existing = map.get(key) ?? {
+      const messageCreatedAt = new Date(message.createdAt).toISOString();
+      const existing = projectedThreads.find((thread) => thread.key === key) ?? {
         key,
         familyId: message.familyId,
         familyName: message.family?.name ?? "Internal thread",
@@ -3077,14 +3079,15 @@ async function renderLivePage(
         assignedTo: message.assignedTo ?? null,
         unread: 0,
         priority: 0,
-        lastMessageAt: message.createdAt,
+        lastMessageAt: messageCreatedAt,
         messages: [],
       };
+      if (!projectedThreads.some((thread) => thread.key === key)) projectedThreads.push(existing);
       existing.assignedTo = existing.assignedTo ?? message.assignedTo ?? null;
       existing.unread += message.readAt ? 0 : 1;
       existing.priority += ["high", "urgent"].includes(message.priority) ? 1 : 0;
-      if (new Date(message.createdAt).getTime() > new Date(existing.lastMessageAt).getTime()) {
-        existing.lastMessageAt = message.createdAt;
+      if (new Date(messageCreatedAt).getTime() > new Date(existing.lastMessageAt).getTime()) {
+        existing.lastMessageAt = messageCreatedAt;
       }
       existing.messages.push({
         id: message.id,
@@ -3092,15 +3095,14 @@ async function renderLivePage(
         body: message.body,
         channel: message.channel,
         priority: message.priority,
-        createdAt: message.createdAt,
+        createdAt: messageCreatedAt,
         sender: message.sender,
         isFromFamily: message.sender?.role === UserRole.PARENT_GUARDIAN || message.sender?.role === UserRole.AUTHORIZED_PICKUP,
         attachments: message.attachments,
         replyHref: message.replyHref,
       });
-      return map;
-    }, new Map<string, MessageThread>());
-    const threads = Array.from(threadMap.values())
+    }
+    const threads = projectedThreads
       .map((thread) => ({
         ...thread,
         messages: thread.messages

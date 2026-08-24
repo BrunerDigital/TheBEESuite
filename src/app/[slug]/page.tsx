@@ -3052,12 +3052,16 @@ async function renderLivePage(
     };
     const threadMap = visibleMessages.reduce((map, message) => {
       const key = message.threadKey ?? (message.familyId ? `family:${message.familyId}` : `internal:${message.id}`);
+      const internalCenterId = message.threadKey?.startsWith("internal:")
+        ? message.threadKey.slice("internal:".length)
+        : null;
+      const messageCenterId = message.family?.centerId ?? (internalCenterId && centerTimeZoneById.has(internalCenterId) ? internalCenterId : null);
       const existing = map.get(key) ?? {
         key,
         familyId: message.familyId,
         familyName: message.family?.name ?? "Internal thread",
-        centerLabel: message.family?.centerId ? centerLabelById.get(message.family.centerId) ?? null : null,
-        timeZone: message.family?.centerId ? centerTimeZoneById.get(message.family.centerId) ?? null : null,
+        centerLabel: messageCenterId ? centerLabelById.get(messageCenterId) ?? null : null,
+        timeZone: messageCenterId ? centerTimeZoneById.get(messageCenterId) ?? null : null,
         assignedTo: message.assignedTo ?? null,
         unread: 0,
         priority: 0,

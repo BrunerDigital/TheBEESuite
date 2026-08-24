@@ -14,7 +14,9 @@ test("conversation timestamps use the school time zone during server and client 
   assert.match(inbox, /useSchoolTimeZone/);
   assert.match(routePage, /centerTimeZoneById/);
   assert.match(routePage, /centerTimeZoneById = new Map\(centers\.map\(\(center\) => \[center\.id, readCenterLocationTimeZone\(center\)\]\)\)/);
-  assert.match(routePage, /timeZone: message\.family\?\.centerId/);
+  assert.match(routePage, /timeZone: messageCenterId \? centerTimeZoneById\.get\(messageCenterId\)/);
+  assert.match(routePage, /message\.threadKey\?\.startsWith\("internal:"\)/);
+  assert.match(routePage, /centerTimeZoneById\.has\(internalCenterId\)/);
   assert.match(inbox, /thread\.timeZone \|\| defaultTimeZone/);
   assert.match(inbox, /selectedThread\?\.timeZone \|\| defaultTimeZone/);
   assert.match(inbox, /zonedDateKey\(date, timeZone\)[\s\S]*zonedDateKey\(now, timeZone\)/);

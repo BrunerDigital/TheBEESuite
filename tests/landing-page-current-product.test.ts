@@ -143,6 +143,7 @@ test("landing page follows the modern ink, white, and honey visual system in bot
     "dark:bg-[#071018]",
     "dark:bg-[#0a151f]",
     "dark:bg-[#0d1b26]",
+    "[&>span:first-child]:text-amber-700 dark:[&>span:first-child]:text-amber-300",
     "PublicThemeToggle",
     "tracking-[-0.065em]",
   ]) {

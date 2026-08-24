@@ -96,7 +96,14 @@ export default function Home() {
 
         <header className="relative z-40 border-b border-slate-900/10 bg-[#fbf7ec]/88 backdrop-blur-xl dark:border-white/10 dark:bg-[#071018]/88">
           <div className="mx-auto flex min-h-18 max-w-[1480px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-10 xl:px-14">
-            <BrandLogo href="/" compact size="sm" priority className="min-h-11 touch-manipulation" />
+            <BrandLogo
+              href="/"
+              compact
+              size="sm"
+              priority
+              className="min-h-11 touch-manipulation"
+              textClassName="[&>span:first-child]:text-amber-700 dark:[&>span:first-child]:text-amber-300"
+            />
 
             <nav aria-label="Primary navigation" className="flex items-center gap-2 sm:gap-3">
               <div className="mr-3 hidden items-center gap-1 lg:flex xl:gap-2">

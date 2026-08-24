@@ -413,6 +413,11 @@ export function FteReportForm({
   }
 
   function submit() {
+    if (isRefreshingLiveData) {
+      setStatusMessage("");
+      setErrorMessage("Wait for the live school data refresh to finish before submitting.");
+      return;
+    }
     const reviewedAccountReceivable = Number(form.accountReceivableAmount);
     if (selectedPrefill?.accountReceivableReviewRequired
       && (!form.accountReceivableAmount.trim() || !Number.isFinite(reviewedAccountReceivable) || reviewedAccountReceivable < 0)) {
@@ -822,7 +827,7 @@ export function FteReportForm({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button aria-busy={isPending} disabled={isPending || !form.centerId || !form.weekStart} onClick={submit}>
+          <Button aria-busy={isPending} disabled={isPending || isRefreshingLiveData || !form.centerId || !form.weekStart} onClick={submit}>
             <Save data-icon="inline-start" />
             {isPending ? "Saving FTE report..." : form.id ? "Save FTE Correction" : "Submit FTE Report"}
           </Button>

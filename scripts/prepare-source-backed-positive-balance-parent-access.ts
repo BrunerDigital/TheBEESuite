@@ -1,12 +1,13 @@
 import "./load-env";
 import { createHash } from "node:crypto";
+import { createClient, type User as SupabaseUser } from "@supabase/supabase-js";
 import { UserRole } from "@prisma/client";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { ensureParentPortalLoginForGuardian, parentPortalAccessDisabled } from "@/lib/parent-portal-logins";
 import { parentVisibleBillingBalanceCents, AGENCY_LEDGER_ENTRY_TYPES, AGENCY_LEDGER_SOURCE_SYSTEM } from "@/lib/parent-billing-visibility";
 import { prisma } from "@/lib/prisma";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
-import { isSupabaseAuthCompatibleEmail } from "@/lib/supabase-auth";
+import { getSupabaseAuthConfig, isSupabaseAuthCompatibleEmail } from "@/lib/supabase-auth";
 
 const APPLY = process.argv.includes("--apply");
 const ACKNOWLEDGE = process.argv.includes("--acknowledge-source-backed-parent-access");
@@ -35,7 +36,35 @@ function fingerprint(rows: Array<{ guardianId: string; familyId: string; centerI
     .digest("hex");
 }
 
+function activeAuthUser(user: SupabaseUser) {
+  return Boolean(user.email_confirmed_at && (!user.banned_until || new Date(user.banned_until) <= new Date()));
+}
+
+async function loadSupabaseAuthInventory() {
+  const { url, key } = getSupabaseAuthConfig("service");
+  const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const allEmails = new Set<string>();
+  const activeEmails = new Set<string>();
+  let page = 1;
+  while (true) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    for (const user of data.users) {
+      const normalized = email(user.email);
+      if (!normalized) continue;
+      allEmails.add(normalized);
+      if (activeAuthUser(user)) activeEmails.add(normalized);
+    }
+    const nextPage = "nextPage" in data ? data.nextPage : null;
+    if (!nextPage) break;
+    if (nextPage <= page) throw new Error("Supabase Auth pagination did not advance.");
+    page = nextPage;
+  }
+  return { activeEmails, allEmails };
+}
+
 async function buildPlan() {
+  const auth = await loadSupabaseAuthInventory();
   const centers = await prisma.center.findMany({
     where: { status: "active" },
     select: { id: true, name: true, customFields: true, organization: { select: { tenantId: true } } },
@@ -55,7 +84,7 @@ async function buildPlan() {
       sourceSystem: true,
       externalId: true,
       children: { where: currentlyEnrolledChildWhere(), select: { sourceSystem: true, externalId: true } },
-      guardians: { select: { id: true, familyId: true, email: true, isBillingContact: true, sourceSystem: true, externalId: true, customFields: true, user: { select: { role: true, isActive: true, tenantId: true } } } },
+      guardians: { select: { id: true, familyId: true, email: true, isBillingContact: true, sourceSystem: true, externalId: true, customFields: true, user: { select: { email: true, role: true, isActive: true, tenantId: true } } } },
       billingAccount: { select: { balanceCents: true, ledgerEntries: { where: { OR: [{ type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } }, { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM }] }, select: { type: true, sourceSystem: true, amountCents: true } } } },
     },
     orderBy: { id: "asc" },
@@ -69,7 +98,10 @@ async function buildPlan() {
   for (const family of candidateFamilies) {
     const center = family.centerId ? centerById.get(family.centerId) : null;
     if (!center || !family.billingAccount) continue;
-    if (family.guardians.some((guardian) => guardian.user?.role === UserRole.PARENT_GUARDIAN && guardian.user.isActive && guardian.user.tenantId === center.organization.tenantId)) continue;
+    if (family.guardians.some((guardian) => guardian.user?.role === UserRole.PARENT_GUARDIAN
+      && guardian.user.isActive
+      && guardian.user.tenantId === center.organization.tenantId
+      && auth.activeEmails.has(email(guardian.user.email)))) continue;
     if (clean(family.sourceSystem).toLowerCase() !== "procare" || !clean(family.externalId)) { block("family_source_identity_missing"); continue; }
     if (!family.children.length || family.children.some((child) => clean(child.sourceSystem).toLowerCase() !== "procare" || !clean(child.externalId))) { block("child_source_identity_missing"); continue; }
     const guardians = family.guardians.filter((guardian) => guardian.isBillingContact
@@ -84,6 +116,10 @@ async function buildPlan() {
         where: { email: { equals: email(guardian.email), mode: "insensitive" }, family: { centerId: { in: tenantCenterIds.get(center.organization.tenantId) ?? [] } } },
         select: { familyId: true, customFields: true },
       });
+      const normalized = email(guardian.email);
+      const appUser = await prisma.user.findFirst({ where: { email: { equals: normalized, mode: "insensitive" } }, select: { tenantId: true, role: true } });
+      if (auth.allEmails.has(normalized) && !appUser) { block("auth_identity_without_app_user"); continue; }
+      if (appUser && (appUser.tenantId !== center.organization.tenantId || appUser.role !== UserRole.PARENT_GUARDIAN)) { block("app_user_scope_conflict"); continue; }
       if (matching.length && matching.every((item) => item.familyId === family.id && !parentPortalAccessDisabled(item.customFields))) { selected = guardian; break; }
     }
     if (!selected) { block("email_family_scope_ambiguous"); continue; }

@@ -410,7 +410,7 @@ export default async function DashboardPage() {
       : Promise.resolve([]),
     prisma.childMedia.count({
       where: {
-        status: "permission_review",
+        status: { in: ["director_review", "permission_review"] },
         sharedWithParents: false,
         child: { family: { centerId: scopedCenterFilter } },
       },

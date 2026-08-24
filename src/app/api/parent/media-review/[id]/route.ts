@@ -84,11 +84,11 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
 
   const updated = await prisma.$transaction(async (tx) => {
     if (action === "approve") {
-      const currentChild = await tx.child.findUnique({
-        where: { id: media.childId },
-        select: { photoVideoPermission: true },
+      const permissionLock = await tx.child.updateMany({
+        where: { id: media.childId, photoVideoPermission: true },
+        data: { photoVideoPermission: true },
       });
-      if (!currentChild?.photoVideoPermission) return null;
+      if (permissionLock.count !== 1) return null;
       return tx.childMedia.update({
         where: { id },
         data: {

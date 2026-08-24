@@ -497,6 +497,12 @@ function GuideSection({ guide }: { guide: ResourceGuide }) {
             </div>
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-300">{guide.summary}</p>
+          {guide.id === "director-data-clean-start" ? (
+            <Button className="mt-4" nativeButton={false} render={<Link href="/resources/director-data-clean-start" />}>
+              Open the shareable director guide
+              <ArrowRight data-icon="inline-end" />
+            </Button>
+          ) : null}
         </div>
       </div>
 

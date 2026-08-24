@@ -77,6 +77,19 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
   assert.doesNotMatch(resources, /warning banners and developer controls excluded/);
 });
 
+test("director clean-start guide has a stable public route with steps, FAQs, and stop conditions", () => {
+  const resources = readFileSync("src/app/resources/page.tsx", "utf8");
+  const guide = readFileSync("src/app/resources/director-data-clean-start/page.tsx", "utf8");
+
+  assert.match(resources, /href="\/resources\/director-data-clean-start"/);
+  assert.match(guide, /Director School Data Clean-Start Guide/);
+  assert.match(guide, /READY_FOR_DIRECTOR_REVIEW/);
+  assert.match(guide, /Stop condition:/);
+  assert.match(guide, /Frequently asked questions/);
+  assert.match(guide, /A blank field is not proof/);
+  assert.match(guide, /does not activate invitations, access, kiosk\/PIN, attendance, billing, payments, messaging, or ProCare cutover/);
+});
+
 test("all canonical instruction graphics referenced by public resources exist", () => {
   const resources = readFileSync("src/app/resources/page.tsx", "utf8");
   const paths = [...resources.matchAll(/graphicSrc: "([^"]+)"/g)].map(

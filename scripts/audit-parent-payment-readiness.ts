@@ -6,11 +6,11 @@ import {
   AGENCY_LEDGER_SOURCE_SYSTEM,
   parentVisibleBillingBalanceCents,
 } from "@/lib/parent-billing-visibility";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
+import { parentPortalAccessDisabled } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getSupabaseAuthConfig } from "@/lib/supabase-auth";
-
-const CURRENT_ENROLLMENT_STATUSES = ["enrolled", "active", "current"];
 
 function jsonObject(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -41,10 +41,8 @@ async function loadActiveSupabaseAuthEmails() {
       const email = normalizedEmail(user.email);
       if (email && activeAuthUser(user)) emails.add(email);
     }
-    const nextPage = "nextPage" in data ? data.nextPage : null;
-    if (!nextPage) break;
-    if (nextPage <= page) throw new Error("Supabase Auth pagination did not advance.");
-    page = nextPage;
+    if (data.users.length < 1000) break;
+    page += 1;
   }
   return emails;
 }
@@ -68,7 +66,7 @@ async function main() {
   const families = await prisma.family.findMany({
     where: {
       centerId: { in: paymentCenterIds },
-      children: { some: { enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES, mode: "insensitive" } } },
+      children: { some: currentlyEnrolledChildWhere() },
     },
     select: {
       id: true,
@@ -81,6 +79,7 @@ async function main() {
           phone: true,
           sourceSystem: true,
           externalId: true,
+          customFields: true,
           user: { select: { email: true, tenantId: true, role: true, isActive: true } },
         },
       },
@@ -129,6 +128,7 @@ async function main() {
   const byCenter = new Map<string, {
     school: string;
     currentFamilies: number;
+    familiesWithoutActiveParentLink: number;
     missingBillingAccounts: number;
     positiveParentBalances: number;
     positiveBalancesWithoutActiveParentLink: number;
@@ -137,6 +137,7 @@ async function main() {
     latestCreatedLedgerBalanceMismatches: number;
   }>();
   let missingBillingAccounts = 0;
+  let currentFamiliesWithoutActiveParentLink = 0;
   let positiveParentBalances = 0;
   let positiveBalancesWithoutActiveParentLink = 0;
   let positiveBalancesWithoutOpenInvoice = 0;
@@ -149,6 +150,7 @@ async function main() {
     const center = byCenter.get(centerId) ?? {
       school: paymentCenterNameById.get(centerId) ?? centerId,
       currentFamilies: 0,
+      familiesWithoutActiveParentLink: 0,
       missingBillingAccounts: 0,
       positiveParentBalances: 0,
       positiveBalancesWithoutActiveParentLink: 0,
@@ -157,6 +159,18 @@ async function main() {
       latestCreatedLedgerBalanceMismatches: 0,
     };
     center.currentFamilies += 1;
+    const hasActiveParentLink = family.guardians.some((guardian) => (
+      guardian.user?.role === UserRole.PARENT_GUARDIAN
+      && guardian.user.isActive
+      && !parentPortalAccessDisabled(guardian.customFields)
+      && guardian.user.tenantId === paymentCenterTenantById.get(centerId)
+      && guardian.user.email === normalizedEmail(guardian.user.email)
+      && supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
+    ));
+    if (!hasActiveParentLink) {
+      currentFamiliesWithoutActiveParentLink += 1;
+      center.familiesWithoutActiveParentLink += 1;
+    }
     const account = family.billingAccount;
     if (!account) {
       missingBillingAccounts += 1;
@@ -182,12 +196,6 @@ async function main() {
     if (parentBalanceCents > 0) {
       positiveParentBalances += 1;
       center.positiveParentBalances += 1;
-      const hasActiveParentLink = family.guardians.some((guardian) => (
-        guardian.user?.role === UserRole.PARENT_GUARDIAN
-        && guardian.user.isActive
-        && guardian.user.tenantId === paymentCenterTenantById.get(centerId)
-        && supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
-      ));
       if (!hasActiveParentLink) {
         positiveBalancesWithoutActiveParentLink += 1;
         center.positiveBalancesWithoutActiveParentLink += 1;
@@ -226,6 +234,8 @@ async function main() {
     currentFamiliesAtPaymentEnabledSchools: families.length,
     currentFamiliesWithBillingAccounts: families.length - missingBillingAccounts,
     currentFamiliesWithoutBillingAccounts: missingBillingAccounts,
+    currentFamiliesWithActiveParentLink: families.length - currentFamiliesWithoutActiveParentLink,
+    currentFamiliesWithoutActiveParentLink,
     positiveParentBalances,
     positiveBalancesWithActiveParentLink: positiveParentBalances - positiveBalancesWithoutActiveParentLink,
     positiveBalancesWithoutActiveParentLink,
@@ -235,6 +245,7 @@ async function main() {
     positiveBalanceAccessExceptionProfiles,
     schoolExceptions: [...byCenter.values()].filter((center) => (
       center.missingBillingAccounts > 0
+      || center.familiesWithoutActiveParentLink > 0
       || center.positiveBalancesWithoutActiveParentLink > 0
       || center.positiveBalancesWithoutOpenInvoice > 0
       || center.orderedLedgerBalanceMismatches > 0

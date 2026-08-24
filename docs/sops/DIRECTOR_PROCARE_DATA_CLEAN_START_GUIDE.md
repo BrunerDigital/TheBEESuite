@@ -87,6 +87,8 @@ Only after all applicable data domains are verified, exceptions and approvals ar
 
 ## 4. Start The School Review
 
+Prerequisite: do not begin this director review until the exact school package has completed the Fleet Verification Gate and its current Fleet Verification Packet is `READY_FOR_DIRECTOR_REVIEW`. If it is `NOT_VERIFIED`, `BLOCKED`, missing, or tied to different source files, stop and return it for machine verification. Machine readiness permits this human review; it does not approve import, launch, billing, invitations, access, payments, retirement, or cutover.
+
 1. Sign in at `https://thebeesuite.io/directors`.
 2. Confirm the header shows the intended school and role. Stop immediately for wrong-school visibility.
 3. Record school, director, export date, review date, target start date, and source-package location.

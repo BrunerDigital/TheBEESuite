@@ -5177,7 +5177,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
             <MetricTile label="Active assignments" value={data.recurringScheduler.activeAssignments} detail="children with recurring tuition enabled" />
             <MetricTile label="Due today" value={data.recurringScheduler.dueToday} detail="ready for the next scheduler pass" />
             <MetricTile label="Monthly plans" value={data.recurringScheduler.monthlyAssignments} detail={data.recurringScheduler.currentMonthlyPeriod} />
-            <MetricTile label="Weekly plans" value={data.recurringScheduler.weeklyAssignments} detail={data.recurringScheduler.currentWeeklyPeriod} />
+            <MetricTile label="Week-based plans" value={data.recurringScheduler.weeklyAssignments} detail={data.recurringScheduler.currentWeeklyPeriod} />
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
             Invoice schedule: {data.recurringScheduler.cronSchedule}. Eligible invoices are created automatically.

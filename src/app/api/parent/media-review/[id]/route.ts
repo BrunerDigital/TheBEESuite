@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
@@ -83,6 +84,11 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
 
   const updated = await prisma.$transaction(async (tx) => {
     if (action === "approve") {
+      const currentChild = await tx.child.findUnique({
+        where: { id: media.childId },
+        select: { photoVideoPermission: true },
+      });
+      if (!currentChild?.photoVideoPermission) return null;
       return tx.childMedia.update({
         where: { id },
         data: {
@@ -99,7 +105,14 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
         sharedWithParents: false,
       },
     });
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+  if (!updated) {
+    return NextResponse.json({
+      ok: false,
+      error: "Photo/video permission changed before approval. Review the child record and try again.",
+    }, { status: 409 });
+  }
 
   if (action === "approve") {
     const parentNotifications = buildParentPhotoNotifications({

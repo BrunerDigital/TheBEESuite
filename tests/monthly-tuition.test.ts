@@ -34,6 +34,18 @@ test("director tuition setup offers a two-week invoice cycle", () => {
   assert.match(scheduler, /invoiceWeekCount > 1 \? ` \(\$\{invoiceWeekCount\} weeks ahead\)`/);
 });
 
+test("parent billing controls preserve a school-selected biweekly cycle", () => {
+  const parentRoute = readFileSync("src/app/api/parent/tuition-cadence/route.ts", "utf8");
+  const parentWorkspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
+  const billingPage = readFileSync("src/app/[slug]/page.tsx", "utf8");
+
+  assert.match(parentRoute, /requestedCadence === BIWEEKLY_TUITION_AUTOBILL_CADENCE/);
+  assert.match(parentWorkspace, /child\.tuitionAssignment\?\.cadence === "biweekly"/);
+  assert.match(parentWorkspace, /<SelectItem value="biweekly">/);
+  assert.match(billingPage, /const weekBased = isWeekBasedTuitionCadence\(cadence\)/);
+  assert.match(billingPage, /currentDay,[\s\S]*?cadence,/);
+});
+
 test("monthly setup copy keeps invoice creation separate from charging and autopay", () => {
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
   assert.match(workbench, /Monthly billing creates one invoice/);

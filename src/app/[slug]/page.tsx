@@ -144,6 +144,7 @@ import {
   normalizeBillingCadence,
   defaultRecurringBillingPeriod,
   isoWeekBillingPeriod,
+  isWeekBasedTuitionCadence,
   normalizeRecurringBillingDay,
   normalizeRecurringBillingPeriod,
   shouldCreateRecurringTuitionInvoice,
@@ -3710,11 +3711,12 @@ async function renderLivePage(
           const assignment = tuitionAssignmentFromCustomFields(child.customFields);
           if (!assignment.enabled) continue;
           const cadence = normalizeBillingCadence(assignment.cadence);
-          const billingPeriod = cadence === "weekly" ? currentWeeklyPeriod : currentMonthlyPeriod;
+          const weekBased = isWeekBasedTuitionCadence(cadence);
+          const billingPeriod = weekBased ? currentWeeklyPeriod : currentMonthlyPeriod;
           const billingDay = normalizeRecurringBillingDay(assignment.billingDay, cadence);
-          const currentDay = cadence === "weekly" ? utcBillingWeekday(schedulerDate) : schedulerDate.getUTCDate();
+          const currentDay = weekBased ? utcBillingWeekday(schedulerDate) : schedulerDate.getUTCDate();
           summary.activeAssignments += 1;
-          if (cadence === "weekly") summary.weeklyAssignments += 1;
+          if (weekBased) summary.weeklyAssignments += 1;
           else summary.monthlyAssignments += 1;
           if (shouldCreateRecurringTuitionInvoice({
             enabled: assignment.enabled,
@@ -3724,6 +3726,7 @@ async function renderLivePage(
             billingPeriod,
             billingDay,
             currentDay,
+            cadence,
           })) {
             summary.dueToday += 1;
           }

@@ -41,6 +41,8 @@ test("director approval shares a held photo and alerts linked parents", () => {
   assert.match(mediaReviewRoute, /buildParentPhotoNotifications\(\{/);
   assert.match(mediaReviewRoute, /skipDuplicates: true/);
   assert.match(mediaReviewRoute, /action === "approve" && !media\.child\.photoVideoPermission/);
+  assert.match(mediaReviewRoute, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(mediaReviewRoute, /currentChild\?\.photoVideoPermission/);
   assert.doesNotMatch(mediaReviewRoute, /tx\.child\.update/);
 });
 

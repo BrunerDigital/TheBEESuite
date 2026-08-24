@@ -88,8 +88,6 @@ async function buildPlan() {
     orderBy: { id: "asc" },
   });
   const candidateFamilies = families.filter((family) => family.billingAccount && parentVisibleBillingBalanceCents({ accountBalanceCents: family.billingAccount.balanceCents, agencyLedgerEntries: family.billingAccount.ledgerEntries }) > 0);
-  const tenantCenterIds = new Map<string, string[]>();
-  for (const center of centers) tenantCenterIds.set(center.organization.tenantId, [...(tenantCenterIds.get(center.organization.tenantId) ?? []), center.id]);
   const rows: Array<{ guardianId: string; familyId: string; centerId: string; email: string; school: string }> = [];
   const blocked: Record<string, number> = {};
   const block = (reason: string) => { blocked[reason] = (blocked[reason] ?? 0) + 1; };
@@ -111,7 +109,7 @@ async function buildPlan() {
     let selected = null as typeof guardians[number] | null;
     for (const guardian of guardians) {
       const matching = await prisma.guardian.findMany({
-        where: { email: { equals: email(guardian.email), mode: "insensitive" }, family: { centerId: { in: tenantCenterIds.get(center.organization.tenantId) ?? [] } } },
+        where: { email: { equals: email(guardian.email), mode: "insensitive" } },
         select: { familyId: true, userId: true, customFields: true },
       });
       const normalized = email(guardian.email);
@@ -120,6 +118,7 @@ async function buildPlan() {
       if (auth.allEmails.has(normalized) && !auth.activeEmails.has(normalized)) { block("inactive_auth_identity"); continue; }
       if (appUser && (appUser.tenantId !== center.organization.tenantId || appUser.role !== UserRole.PARENT_GUARDIAN)) { block("app_user_scope_conflict"); continue; }
       if (appUser && guardian.user?.id !== appUser.id) { block("app_user_not_linked_to_guardian"); continue; }
+      if (auth.allEmails.has(normalized) && appUser && guardian.user?.isActive === false) { block("inactive_app_user_with_existing_auth"); continue; }
       if (matching.length && matching.every((item) => item.familyId === family.id
         && !parentPortalAccessDisabled(item.customFields)
         && (item.userId === null || item.userId === appUser?.id))) { selected = guardian; break; }

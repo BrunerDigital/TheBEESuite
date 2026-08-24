@@ -13,8 +13,10 @@ test("positive-balance access preparation requires exact source and family evide
   assert.match(source, /inactive_auth_identity/);
   assert.match(source, /app_user_scope_conflict/);
   assert.match(source, /app_user_not_linked_to_guardian/);
+  assert.match(source, /inactive_app_user_with_existing_auth/);
   assert.match(source, /userId: true/);
   assert.match(source, /item\.userId === null \|\| item\.userId === appUser\?\.id/);
+  assert.doesNotMatch(source, /tenantCenterIds/);
   assert.match(source, /auth\.activeEmails\.has/);
   assert.match(source, /data\.users\.length < 1000/);
   assert.match(source, /page \+= 1/);

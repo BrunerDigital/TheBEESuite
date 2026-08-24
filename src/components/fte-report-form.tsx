@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, Printer, Save } from "lucide-react";
+import { AlertCircle, CheckCircle2, Printer, RefreshCw, Save } from "lucide-react";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -78,6 +78,11 @@ export type FteReportPrefill = {
   fourDayCount: number;
   fiveDayCount: number;
   unknownScheduleCount: number;
+  missingScheduleChildren: Array<{
+    id: string;
+    fullName: string;
+    classroomName: string | null;
+  }>;
   infants: number;
   toddlers: number;
   twos: number;
@@ -248,6 +253,7 @@ export function FteReportForm({
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [isRefreshingLiveData, startLiveDataRefresh] = useTransition();
   const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
 
   const scheduledDayCounts = useMemo(() => ({
@@ -429,6 +435,10 @@ export function FteReportForm({
     });
   }
 
+  function refreshLiveSchoolData() {
+    startLiveDataRefresh(() => window.location.reload());
+  }
+
   return (
     <Card>
       <ReportPrintStyles />
@@ -554,6 +564,24 @@ export function FteReportForm({
               {selectedPrefill.unknownScheduleCount
                 ? ` ${selectedPrefill.unknownScheduleCount} child schedule(s) need an exact 2–5 day weekly schedule, so verify the day counts before submitting.`
                 : " Verify the fields, enter payroll percentage if required, and submit."}
+              {selectedPrefill.missingScheduleChildren.length ? (
+                <span className="mt-2 block">
+                  Missing weekly day counts: {selectedPrefill.missingScheduleChildren
+                    .map((child) => `${child.fullName}${child.classroomName ? ` (${child.classroomName})` : ""}`)
+                    .join(", ")}.
+                </span>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                disabled={isRefreshingLiveData}
+                onClick={refreshLiveSchoolData}
+              >
+                <RefreshCw className={isRefreshingLiveData ? "animate-spin" : ""} data-icon="inline-start" />
+                {isRefreshingLiveData ? "Refreshing live data…" : "Refresh live school data"}
+              </Button>
             </AlertDescription>
           </Alert>
         ) : null}

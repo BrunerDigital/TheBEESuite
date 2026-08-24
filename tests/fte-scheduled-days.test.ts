@@ -110,6 +110,8 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(form, /four = 0\.8/);
   assert.match(form, /Past-due current-family AR/);
   assert.match(form, /Past-due AR must be verified/);
+  assert.match(form, /Missing weekly day counts:/);
+  assert.match(form, /Refresh live school data/);
   assert.match(form, /accountReceivableReviewRequired[\s\S]*Number\.isFinite\(reviewedAccountReceivable\)/);
   assert.match(form, /scheduledChildrenCount !== Number\(form\.enrolledCount\)/);
   assert.match(route, /fteCalculation: useScheduledDayBreakdown \? "scheduled_days_divided_by_five"/);
@@ -131,6 +133,7 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(explorer, /next\.fteCount = ""/);
   assert.match(page, /aging\.oneToThirtyCents \+ aging\.thirtyOneToSixtyCents \+ aging\.sixtyOnePlusCents/);
   assert.match(page, /past-due receivables/);
+  assert.match(page, /missingScheduleChildren\.push/);
   assert.match(page, /take: fteReceivableLedgerLimit \+ 1/);
   assert.match(page, /past-due AR requires ledger review/);
 });

@@ -44,6 +44,7 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(enrollmentStatus, /Choose a classroom before marking this child enrolled\. Billing and active rosters require a classroom assignment\./);
   assert.match(operations, /auditMetadata\.updateScope = "enrollment_context"/);
   assert.match(operations, /customFields\.scheduledDaysPerWeek = scheduledDays/);
+  assert.match(operations, /revalidatePath\("\/fte-reports"\)/);
   assert.match(operations, /schedule\.daysPerWeek = scheduledDays/);
   assert.match(operations, /preserveLegacyPartTime/);
   assert.match(operations, /nextSchedule = \{ \.\.\.jsonObject\(existingChild\?\.schedule\) \}/);

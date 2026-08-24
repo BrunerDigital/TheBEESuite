@@ -610,6 +610,8 @@ async function buildFtePrefills(
       ],
     },
     select: {
+      id: true,
+      fullName: true,
       ageGroup: true,
       enrollmentStatus: true,
       startDate: true,
@@ -668,6 +670,7 @@ async function buildFtePrefills(
     fourDayCount: 0,
     fiveDayCount: 0,
     unknownScheduleCount: 0,
+    missingScheduleChildren: [] as FteReportPrefill["missingScheduleChildren"],
     infants: 0,
     toddlers: 0,
     twos: 0,
@@ -702,7 +705,14 @@ async function buildFtePrefills(
       else if (scheduledDays === 3) row.threeDayCount += 1;
       else if (scheduledDays === 4) row.fourDayCount += 1;
       else if (scheduledDays === 5) row.fiveDayCount += 1;
-      else row.unknownScheduleCount += 1;
+      else {
+        row.unknownScheduleCount += 1;
+        row.missingScheduleChildren.push({
+          id: child.id,
+          fullName: child.fullName,
+          classroomName: child.classroom?.name ?? null,
+        });
+      }
     }
     if (child.startDate && child.startDate >= weekStart && child.startDate < weekEndExclusive) row.newStarts += 1;
     if (!isActive && child.updatedAt >= weekStart && child.updatedAt < weekEndExclusive) row.withdrawals += 1;
@@ -786,6 +796,7 @@ async function buildFtePrefills(
 
   return Array.from(byCenter.values()).map((row) => ({
     ...row,
+    missingScheduleChildren: row.missingScheduleChildren.sort((left, right) => left.fullName.localeCompare(right.fullName)),
     accountReceivableAmount: row.accountReceivableAmount === null ? null : Math.round(row.accountReceivableAmount * 100) / 100,
     selfPayerBillAmount: Math.round(row.selfPayerBillAmount * 100) / 100,
     subsidyBillAmount: Math.round(row.subsidyBillAmount * 100) / 100,

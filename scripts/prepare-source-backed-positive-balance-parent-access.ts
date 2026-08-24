@@ -113,7 +113,9 @@ async function buildPlan() {
         select: { familyId: true, userId: true, customFields: true },
       });
       const normalized = email(guardian.email);
-      const appUser = await prisma.user.findFirst({ where: { email: { equals: normalized, mode: "insensitive" } }, select: { id: true, tenantId: true, role: true } });
+      const appUsers = await prisma.user.findMany({ where: { email: { equals: normalized, mode: "insensitive" } }, select: { id: true, tenantId: true, role: true } });
+      if (appUsers.length > 1) { block("case_insensitive_app_user_collision"); continue; }
+      const appUser = appUsers[0];
       if (auth.allEmails.has(normalized) && !appUser) { block("auth_identity_without_app_user"); continue; }
       if (auth.allEmails.has(normalized) && !auth.activeEmails.has(normalized)) { block("inactive_auth_identity"); continue; }
       if (appUser && (appUser.tenantId !== center.organization.tenantId || appUser.role !== UserRole.PARENT_GUARDIAN)) { block("app_user_scope_conflict"); continue; }

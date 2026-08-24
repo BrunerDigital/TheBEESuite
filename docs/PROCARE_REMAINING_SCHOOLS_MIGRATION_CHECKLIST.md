@@ -60,6 +60,7 @@ npm.cmd run procare:preflight-location -- --location "<school>" --source-dir "<s
 - [ ] Commit only the unchanged approved source through the guarded importer; retain the batch ID and backup.
 - [ ] Download the automated source-to-target reconciliation and Fleet Verification Packet.
 - [ ] Require `READY_FOR_DIRECTOR_REVIEW`; `completed_with_errors`, disposed/excluded/error rows, unavailable measures, or mismatches keep the school blocked.
+- [ ] After `READY_FOR_DIRECTOR_REVIEW`, the director follows `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` and records the exact canonical `docs/procare-exports/<LOCATION>/raw/` source path for every applicable domain.
 - [ ] Reconcile families, children, guardians, emergency contacts, pickups, classrooms, staff evidence, signed balances, opening credits, and opening-balance invoices.
 - [ ] Reconcile tuition assignments in a separate preview before enabling recurring billing. Do not generate invoices or collect payment as part of data import.
 
@@ -88,4 +89,4 @@ npm.cmd run procare:preflight-location -- --location "<school>" --source-dir "<s
 - [ ] Owners, dates, support coverage, rollback coverage, and module activation decisions are complete per school.
 - [ ] The production release and health checks are current before the first cutover; each changed flow is verified after release.
 
-Related controls: `PROCARE_FLEET_VERIFICATION_GATE.md`, `PROCARE_LOCATION_MIGRATION_RUNBOOK.md`, and `PROCARE_MIGRATION_EVIDENCE_PACKET_TEMPLATE.md`.
+Related controls: `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md`, `PROCARE_FLEET_VERIFICATION_GATE.md`, `PROCARE_LOCATION_MIGRATION_RUNBOOK.md`, and `PROCARE_MIGRATION_EVIDENCE_PACKET_TEMPLATE.md`.

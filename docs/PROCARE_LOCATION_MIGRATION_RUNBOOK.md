@@ -1,12 +1,14 @@
 # ProCare Location Migration Runbook
 
-Last updated: July 24, 2026
+Last updated: August 24, 2026
 
 Purpose: move one school location at a time from ProCare to The BEE Suite as the operational source of truth for families, children, guardians, classrooms, staff, attendance, documents, billing setup, FTE, communications, and reporting.
 
 This runbook is per location. Do not cut over a group of schools until every location in the group has its own completed evidence packet and signoff.
 
 Use `PROCARE_FLEET_VERIFICATION_GATE.md` as the mandatory machine-verification gate for every remaining Kid City USA location.
+
+Use `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` as the mandatory director review after machine verification and before a school-specific cutover decision.
 
 ## Source Of Truth Rules
 

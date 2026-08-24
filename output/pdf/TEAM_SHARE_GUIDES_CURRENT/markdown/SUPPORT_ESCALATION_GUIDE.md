@@ -1,6 +1,6 @@
 # Support Escalation Guide
 
-Last updated: August 11, 2026
+Last updated: August 24, 2026
 
 > CURRENT GUIDE
 >

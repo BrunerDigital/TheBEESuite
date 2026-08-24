@@ -2,6 +2,8 @@
 
 Use this gate for every Kid City USA school before requesting director review or a ProCare source-of-truth cutover decision. It is evidence-only: it does not activate billing, payments, invitations, parent access, PINs, attendance, staff identities, or cutover.
 
+After this machine gate reaches `READY_FOR_DIRECTOR_REVIEW`, use `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` for the required human review. Machine readiness never substitutes for director validation.
+
 ## Required school verification sources
 
 The exact reviewed package must provide stable source evidence for all eight required domains:

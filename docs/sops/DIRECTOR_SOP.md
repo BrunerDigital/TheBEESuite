@@ -1,6 +1,6 @@
 # Director SOP - The BEE Suite
 
-Last updated: August 11, 2026
+Last updated: August 24, 2026
 
 Audience: center directors, assistant directors, and school operators responsible for daily use of The BEE Suite.
 
@@ -16,7 +16,7 @@ Use the desktop view for family, billing, staffing, and exception-review work.
 
 ![Director billing and invoice workspace on desktop](../../public/brand/the-bee-suite/screenshots/current/director-desktop-billing-light.png)
 
-Use `SCHOOL_SYSTEM_OPERATING_MANUAL.md` for the full launch map and `BILLING_ADMIN_SOP.md` for deeper billing/payment procedures.
+Use `SCHOOL_SYSTEM_OPERATING_MANUAL.md` for the full launch map, `DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` for source-backed migration data validation, and `BILLING_ADMIN_SOP.md` for deeper billing/payment procedures.
 
 ## Purpose
 

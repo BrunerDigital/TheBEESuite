@@ -10,6 +10,7 @@ test("positive-balance access preparation requires exact source and family evide
   assert.match(source, /source_backed_billing_guardian_missing/);
   assert.match(source, /email_family_scope_ambiguous/);
   assert.match(source, /auth_identity_without_app_user/);
+  assert.match(source, /inactive_auth_identity/);
   assert.match(source, /app_user_scope_conflict/);
   assert.match(source, /auth\.activeEmails\.has/);
   assert.match(source, /nextPage/);

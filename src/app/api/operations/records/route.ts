@@ -11,6 +11,7 @@ import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard } from "@/lib/operations-guardrails";
 import { normalizeCampaignDraft } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
+import { parseCalendarDateOrTimestamp } from "@/lib/date-guardrails";
 import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib/staff-scheduling";
 import { hasStaffCompensationPayload, normalizeStaffCompensationPayload, staffCompensationCustomFields } from "@/lib/staff-compensation";
 import {
@@ -109,10 +110,7 @@ function intValue(value: unknown, fallback = 0) {
 }
 
 function parseDate(value: unknown) {
-  const text = clean(value);
-  if (!text) return null;
-  const date = new Date(text);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return parseCalendarDateOrTimestamp(value);
 }
 
 function dollarsToCents(value: unknown) {

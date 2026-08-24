@@ -255,12 +255,12 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
             </div>
             <div className="space-y-1">
               <Label htmlFor={controlId("guardian-email")}>Email</Label>
-              <Input id={controlId("guardian-email")} value={guardianEmail} onChange={(event) => setGuardianEmail(event.target.value)} type="email" placeholder="parent@example.com" {...accessibilityFor("guardianEmail")} />
+              <Input id={controlId("guardian-email")} name="guardianEmail" value={guardianEmail} onInput={(event) => setGuardianEmail(event.currentTarget.value)} type="email" autoComplete="email" placeholder="parent@example.com" {...accessibilityFor("guardianEmail")} />
               {errorFor("guardianEmail")}
             </div>
             <div className="space-y-1">
               <Label htmlFor={controlId("guardian-phone")}>Phone</Label>
-              <Input id={controlId("guardian-phone")} value={guardianPhone} onChange={(event) => setGuardianPhone(event.target.value)} type="tel" placeholder="(555) 555-1212" {...accessibilityFor("guardianPhone")} />
+              <Input id={controlId("guardian-phone")} name="guardianPhone" value={guardianPhone} onInput={(event) => setGuardianPhone(event.currentTarget.value)} type="tel" autoComplete="tel" placeholder="(555) 555-1212" {...accessibilityFor("guardianPhone")} />
               {errorFor("guardianPhone")}
             </div>
             <div className="space-y-1">
@@ -282,7 +282,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
             </div>
             <div className="space-y-1">
               <Label htmlFor={controlId("check-in-pin")}>4 digit kiosk PIN</Label>
-              <Input id={controlId("check-in-pin")} value={checkInPin} onChange={(event) => setCheckInPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Defaults to last 4 of phone" inputMode="numeric" {...accessibilityFor("checkInPin")} />
+              <Input id={controlId("check-in-pin")} name="checkInPin" value={checkInPin} onInput={(event) => setCheckInPin(event.currentTarget.value.replace(/\D/g, "").slice(0, 4))} placeholder="Defaults to last 4 of phone" inputMode="numeric" autoComplete="off" {...accessibilityFor("checkInPin")} />
               {errorFor("checkInPin")}
             </div>
             <div className="space-y-1 md:col-span-2">

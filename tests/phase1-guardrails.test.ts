@@ -40,7 +40,7 @@ import {
   hasDatabaseConfig,
   hasSupabaseAuthConfig,
 } from "../src/lib/readiness-guardrails";
-import { parseOperationalDate } from "../src/lib/date-guardrails";
+import { parseCalendarDateOrTimestamp, parseOperationalDate } from "../src/lib/date-guardrails";
 import {
   buildParentPortalInvitationHtml,
   buildParentPortalInvitationText,
@@ -79,6 +79,16 @@ test("password reset gate remains mandatory for staff roles but optional for par
   assert.equal(requiresPasswordResetGate({ role: UserRole.PARENT_GUARDIAN, mustResetPassword: true }), false);
   assert.equal(requiresPasswordResetGate({ role: UserRole.CENTER_DIRECTOR, mustResetPassword: true }), true);
   assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: false }), false);
+});
+
+test("calendar dates remain on the selected day while exact timestamps are preserved", () => {
+  assert.equal(parseCalendarDateOrTimestamp("2026-08-24")?.toISOString(), "2026-08-24T12:00:00.000Z");
+  assert.equal(parseCalendarDateOrTimestamp("2026-08-24T14:30:00-04:00")?.toISOString(), "2026-08-24T18:30:00.000Z");
+  assert.equal(parseCalendarDateOrTimestamp("not-a-date"), null);
+
+  const operationalDate = parseOperationalDate("2026-08-24", "Start date");
+  assert.equal(operationalDate.ok, true);
+  if (operationalDate.ok) assert.equal(operationalDate.date.toISOString(), "2026-08-24T12:00:00.000Z");
 });
 
 test("web app login routes parent accounts into the parent portal", () => {

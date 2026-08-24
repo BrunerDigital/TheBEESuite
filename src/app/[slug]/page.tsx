@@ -2839,12 +2839,15 @@ async function renderLivePage(
               name: true,
               email: true,
               role: true,
+              staffProfile: { select: { centerId: true } },
             },
           },
           assignedTo: {
             select: {
               name: true,
               email: true,
+              role: true,
+              staffProfile: { select: { centerId: true } },
             },
           },
         },
@@ -2980,16 +2983,23 @@ async function renderLivePage(
 
     const signedMessages = await Promise.all(messages.map(async (message) => ({
       ...message,
+      staffCenterId: message.threadKey?.startsWith("staff:")
+        ? message.sender?.role === UserRole.TEACHER
+          ? message.sender.staffProfile?.centerId ?? null
+          : message.assignedTo?.role === UserRole.TEACHER
+            ? message.assignedTo.staffProfile?.centerId ?? null
+            : null
+        : null,
       subject: message.subject ? userViewText(message.subject) : null,
       body: userViewText(message.body),
       family: message.family
         ? { ...message.family, name: userViewText(message.family.name) }
         : null,
       sender: message.sender
-        ? { ...message.sender, name: userViewText(message.sender.name) }
+        ? { name: userViewText(message.sender.name), email: message.sender.email, role: message.sender.role }
         : null,
       assignedTo: message.assignedTo
-        ? { ...message.assignedTo, name: userViewText(message.assignedTo.name) }
+        ? { name: userViewText(message.assignedTo.name), email: message.assignedTo.email }
         : null,
       attachments: await signMessageAttachmentsFromMetadata(message.metadata),
       replyHref: messageReplyHref(message),
@@ -2997,6 +3007,7 @@ async function renderLivePage(
     const demoMode = showDemoFallbackData && messages.length === 0;
     const visibleMessages = demoMode ? executiveParentMessageDemoRows : signedMessages;
     const centerLabelById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
+    const centerTimeZoneById = new Map(centers.map((center) => [center.id, readCenterLocationTimeZone(center)]));
     const familyOptions = sortFamiliesByName(families.map((family) => ({
       id: family.id,
       name: userViewText(family.name),
@@ -3031,6 +3042,7 @@ async function renderLivePage(
       familyId: string | null;
       familyName: string;
       centerLabel: string | null;
+      timeZone: string | null;
       assignedTo: { name: string; email: string } | null;
       unread: number;
       priority: number;
@@ -3050,11 +3062,18 @@ async function renderLivePage(
     };
     const threadMap = visibleMessages.reduce((map, message) => {
       const key = message.threadKey ?? (message.familyId ? `family:${message.familyId}` : `internal:${message.id}`);
+      const internalCenterId = message.threadKey?.startsWith("internal:")
+        ? message.threadKey.slice("internal:".length)
+        : null;
+      const staffCenterId = "staffCenterId" in message && typeof message.staffCenterId === "string" ? message.staffCenterId : null;
+      const threadCenterId = internalCenterId && centerTimeZoneById.has(internalCenterId) ? internalCenterId : staffCenterId;
+      const messageCenterId = message.family?.centerId ?? (threadCenterId && centerTimeZoneById.has(threadCenterId) ? threadCenterId : null);
       const existing = map.get(key) ?? {
         key,
         familyId: message.familyId,
         familyName: message.family?.name ?? "Internal thread",
-        centerLabel: message.family?.centerId ? centerLabelById.get(message.family.centerId) ?? null : null,
+        centerLabel: messageCenterId ? centerLabelById.get(messageCenterId) ?? null : null,
+        timeZone: messageCenterId ? centerTimeZoneById.get(messageCenterId) ?? null : null,
         assignedTo: message.assignedTo ?? null,
         unread: 0,
         priority: 0,

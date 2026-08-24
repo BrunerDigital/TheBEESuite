@@ -14,14 +14,14 @@
 
 Ask your BEE Suite implementation contact for these items:
 
-- [ ] Your school's current Fleet Verification Packet marked `READY FOR DIRECTOR REVIEW`.
+- [ ] Your school's current Fleet Verification Packet marked `READY_FOR_DIRECTOR_REVIEW`.
 - [ ] Your school's current review workbook or exception list.
 - [ ] The date of the ProCare exports used for the review.
 - [ ] The name of the person who will receive your corrections.
 
 **Stop and ask for help if:**
 
-- the packet is missing or is not marked `READY FOR DIRECTOR REVIEW`;
+- the packet is missing or is not marked `READY_FOR_DIRECTOR_REVIEW`;
 - the packet names a different school or different export date;
 - The BEE Suite opens to the wrong school; or
 - you cannot find the source information needed to confirm an answer.
@@ -40,6 +40,8 @@ Use one of these four answers for every section:
 | `NOT USED` | The item truly does not apply to this school or family. | Add a short reason. |
 
 Never guess. A blank field means "not yet confirmed," not "none."
+
+For every section you review, copy the source-file path shown in your review packet into the review workbook. It should begin with `docs/procare-exports/<YOUR SCHOOL>/raw/`. You do not need to find or open that repository folder yourself; copy the exact path provided, and ask support if the path is missing.
 
 ## Step 1 - Confirm You Are Reviewing The Correct School
 
@@ -194,6 +196,7 @@ For every item marked `NEEDS FIXING` or `MISSING INFORMATION`, record:
 - what The BEE Suite currently shows;
 - what the school record shows;
 - where the correct answer came from;
+- the exact source-file path copied from the review packet;
 - who is responsible for the correction; and
 - whether the item affects safety, family privacy, tuition, balances, staff, or launch readiness.
 
@@ -219,6 +222,7 @@ Do not resolve unclear identity, family relationships, safety information, tuiti
 - [ ] I completed at least 10 family spot checks, or all families when fewer than 10.
 - [ ] Every correction has an owner and has been reviewed again after the change.
 - [ ] The original exports and review evidence remain available.
+- [ ] Every reviewed section includes the exact source-file path copied from the review packet.
 - [ ] I understand that invitations, staff access, kiosk/PINs, attendance, billing, payments, messaging, and ProCare cutover still require separate approval.
 
 **School:** _______________________________________________

@@ -224,7 +224,9 @@ test("director clean-start documentation is evidence-backed and keeps launch gat
   const transition = readFileSync("docs/sops/SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md", "utf8");
 
   assert.match(guide, /You are not expected to repair import files or guess which record is right/);
-  assert.match(guide, /READY FOR DIRECTOR REVIEW/);
+  assert.match(guide, /READY_FOR_DIRECTOR_REVIEW/);
+  assert.match(guide, /copy the source-file path shown in your review packet/);
+  assert.match(guide, /docs\/procare-exports\/<YOUR SCHOOL>\/raw\//);
   assert.match(guide, /A blank field means "not yet confirmed," not "none/);
   assert.match(guide, /allergies and severity/);
   assert.match(guide, /parent responsibility is separated from agency\/subsidy responsibility/i);

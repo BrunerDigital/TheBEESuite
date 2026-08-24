@@ -197,7 +197,7 @@ const guides: ResourceGuide[] = [
     icon: ClipboardCheck,
     steps: [
       "Confirm the correct school and director role. Stop immediately if another school's records are visible.",
-      "Make sure your current review packet is marked Ready for Director Review and matches your school and export date.",
+      "Make sure your current review packet is marked READY_FOR_DIRECTOR_REVIEW and matches your school and export date.",
       "Check each current child's family, classroom, schedule, safety information, tuition, and balance. Mark anything missing or unclear instead of guessing.",
       "Review allergies, medical information, medications, emergency contacts, authorized pickups, and custody restrictions separately. A blank field is not proof that none exists.",
       "Check each child's tuition amount, billing schedule, description, and start date. Check each family's dated opening balance and keep agency responsibility separate from the parent's family balance.",

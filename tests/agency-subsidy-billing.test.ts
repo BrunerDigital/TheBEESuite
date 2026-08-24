@@ -236,6 +236,8 @@ test("agency dashboard totals use bounded database aggregates for the full non-v
   assert.match(route, /SUM\(claim\."claimedCents"\)/);
   assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND \(/);
   assert.match(route, /jsonb_array_elements[\s\S]*current_requirement[\s\S]*NOT EXISTS/);
+  assert.match(route, /LEFT JOIN "SubsidyAuthorization" subsidy_authorization/);
+  assert.doesNotMatch(route, /LEFT JOIN "SubsidyAuthorization" authorization/);
   assert.match(route, /claim\.status <> 'void'/);
   assert.doesNotMatch(route, /summaryClaims\.reduce/);
 });

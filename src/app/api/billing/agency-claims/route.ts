@@ -252,7 +252,7 @@ async function getHandler(request: NextRequest) {
                 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(program.requirements) = 'array' THEN program.requirements ELSE '[]'::jsonb END) WITH ORDINALITY AS program_requirement(requirement, ordinal)
                 UNION ALL
                 SELECT requirement, 1 AS source_order, ordinal
-                FROM jsonb_array_elements(CASE WHEN jsonb_typeof(authorization."requiredDocuments") = 'array' THEN authorization."requiredDocuments" ELSE '[]'::jsonb END) WITH ORDINALITY AS authorization_requirement(requirement, ordinal)
+                FROM jsonb_array_elements(CASE WHEN jsonb_typeof(subsidy_authorization."requiredDocuments") = 'array' THEN subsidy_authorization."requiredDocuments" ELSE '[]'::jsonb END) WITH ORDINALITY AS authorization_requirement(requirement, ordinal)
               ) raw_requirement
               CROSS JOIN LATERAL (
                 SELECT REGEXP_REPLACE(
@@ -274,7 +274,7 @@ async function getHandler(request: NextRequest) {
         ))::bigint AS "missingDocumentClaims"
       FROM "SubsidyClaim" claim
       JOIN "AgencyProgram" program ON program.id = claim."agencyProgramId"
-      LEFT JOIN "SubsidyAuthorization" authorization ON authorization.id = claim."authorizationId"
+      LEFT JOIN "SubsidyAuthorization" subsidy_authorization ON subsidy_authorization.id = claim."authorizationId"
       WHERE claim."centerId" IN (${Prisma.join(centerIds)})
         AND claim.status <> 'void'
     `),

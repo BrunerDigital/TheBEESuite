@@ -1,5 +1,9 @@
 # ProCare Export Validation — July 24, 2026
 
+> HISTORICAL SNAPSHOT
+>
+> These results remain the July 24 file-only findings. They are not the current inventory or a present readiness decision. Use `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md`, the named school's current private package under `docs/procare-exports/<LOCATION>/`, and a freshly generated Fleet Verification Packet for current review.
+
 ## Safety boundary
 
 - This validation was local and file-only. It did not connect to the database, create an import batch, modify a family, or activate a school.

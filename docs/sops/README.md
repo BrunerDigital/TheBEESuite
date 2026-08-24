@@ -1,6 +1,6 @@
 # The BEE Suite Role SOP Library
 
-Last updated: August 11, 2026
+Last updated: August 24, 2026
 
 Use these SOPs when training a school team or sending role-specific instructions before a launch, parent portal rollout, billing rollout, or kiosk rollout.
 
@@ -47,6 +47,7 @@ When the UI, permissions, labels, routes, or workflow guardrails change, update 
 ## Role Guides
 
 - `docs/sops/SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md` - school-specific owner payout setup, director data validation, staff and parent readiness, billing cutover, independent launch gates, and GO/NO-GO sign-off.
+- `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` - director FAQs, canonical export handling, report-to-domain evidence map, sequential school-data reconciliation, stop conditions, and data-ready sign-off.
 - `docs/sops/SCHOOL_SYSTEM_OPERATING_MANUAL.md` - full system breakdown, launch sequence, key functions, role handoff, and visual training assets.
 - `docs/sops/EXECUTIVE_ADMIN_SOP.md` - executive setup, multi-location oversight, FTE review, payment readiness, integrations, permissions, and support access.
 - `docs/sops/DIRECTOR_SOP.md` - director daily operations, families, classrooms, billing oversight, parent portal launch, documents, communications, and escalation.

@@ -2,6 +2,8 @@
 
 Use one copy per school and one row per import batch. Do not include child, family, staff, medical, custody, or payment details in this document. Link only to the approved secure evidence location.
 
+Complete the human-review evidence using `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md`. Link to the secure exception register and record only counts, decisions, reviewers, and evidence locations here.
+
 ProCare remains the operational source of truth until every blocker below is complete and written cutover approval is recorded. A completed import is not cutover approval.
 
 ## School and ownership

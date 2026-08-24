@@ -42,6 +42,7 @@ npm.cmd run procare:preflight-location -- --location "<school>" --source-dir "<s
 
 ## 4. School and corporate review before preview
 
+- [ ] Director follows `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` and records the exact canonical `docs/procare-exports/<LOCATION>/raw/` source path for every applicable domain.
 - [ ] Director checks every exception plus at least 10 representative families, or all families when fewer than 10.
 - [ ] Director confirms child status, classroom, schedules, guardians, emergency contacts, authorized pickups, custody/medical/allergy facts, and staff roster.
 - [ ] Corporate/accounting confirms one signed opening balance per active account, credits, tuition amount/cadence/effective week, discounts, fees, and subsidy responsibility.
@@ -88,4 +89,4 @@ npm.cmd run procare:preflight-location -- --location "<school>" --source-dir "<s
 - [ ] Owners, dates, support coverage, rollback coverage, and module activation decisions are complete per school.
 - [ ] The production release and health checks are current before the first cutover; each changed flow is verified after release.
 
-Related controls: `PROCARE_FLEET_VERIFICATION_GATE.md`, `PROCARE_LOCATION_MIGRATION_RUNBOOK.md`, and `PROCARE_MIGRATION_EVIDENCE_PACKET_TEMPLATE.md`.
+Related controls: `docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md`, `PROCARE_FLEET_VERIFICATION_GATE.md`, `PROCARE_LOCATION_MIGRATION_RUNBOOK.md`, and `PROCARE_MIGRATION_EVIDENCE_PACKET_TEMPLATE.md`.

@@ -1,6 +1,6 @@
 # School Transition Setup And Cutover SOP - The BEE Suite
 
-**Updated:** August 11, 2026
+**Updated:** August 24, 2026
 **Audience:** owners, directors, billing owners, and BEE Suite implementation support  
 **Purpose:** move one school from ProCare to The BEE Suite without duplicating tuition, skipping safety validation, or treating technical setup as launch approval.
 
@@ -31,6 +31,8 @@ Do not use a corporate-wide approval as a substitute for the named school's appr
 
 The director or approved ProCare administrator must confirm that the export package belongs to the correct location and contains the records the school relies on.
 
+Use `DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` as the required director procedure. The private source packages live under `docs/procare-exports/<LOCATION>/`; `raw/` is immutable source evidence and `review/` contains derived working files.
+
 1. Confirm the export date, school name, and ProCare location.
 2. Confirm the required family, child, relationship, classroom, staff, balance, tuition, and safety reports were included.
 3. Confirm the BEE Suite implementation team accepted the package or documented any missing reports.
@@ -38,6 +40,7 @@ The director or approved ProCare administrator must confirm that the export pack
 5. Compare aggregate family, child, classroom, staff, balance, and enrollment counts with ProCare.
 6. Review all records with custody, pickup, allergy, medical, or other safety restrictions.
 7. Spot-check at least 10 representative families across different classrooms and billing situations.
+8. Record each domain as `VERIFIED`, `NEEDS CORRECTION`, `MISSING SOURCE`, or `NOT APPLICABLE`, with the exact raw source path, counts, reviewer, and exception owner.
 
 For every spot-check, verify:
 

@@ -1,12 +1,14 @@
 # The BEE Suite School System Operating Manual
 
-Last updated: August 11, 2026
+Last updated: August 24, 2026
 
 Audience: owners, executives, school directors, billing admins, training leads, and launch support.
 
 ## Purpose
 
 This manual breaks down the key functions a school needs in order to use The BEE Suite as its operating system. It also points each user type to the SOP or step-by-step guide written for their role.
+
+For a school entering from ProCare, directors must complete `DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md` before data readiness can be approved. Data readiness remains separate from access, invitations, kiosk, attendance, billing, payments, messaging, and cutover.
 
 The BEE Suite supports school operations, but it does not replace professional judgment for legal, licensing, medical, custody, payment, payroll, tax, or accounting decisions. Sensitive records must stay role-scoped and human-reviewed.
 

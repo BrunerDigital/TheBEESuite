@@ -8,6 +8,7 @@ const currentGuides = [
   "docs/BEE_SUITE_SCHOOL_TRANSITION_ANNOUNCEMENT_EMAIL.md",
   "docs/SUPPORT_ESCALATION_GUIDE.md",
   "docs/sops/SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md",
+  "docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md",
   "docs/sops/SCHOOL_SYSTEM_OPERATING_MANUAL.md",
   "docs/sops/EXECUTIVE_ADMIN_SOP.md",
   "docs/sops/DIRECTOR_SOP.md",
@@ -19,10 +20,10 @@ const currentGuides = [
   "docs/sops/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md",
 ];
 
-test("current guides reflect the August 11 copy review and exclude superseded workflow copy", () => {
+test("current guides carry an approved August 2026 revision and exclude superseded workflow copy", () => {
   for (const path of currentGuides) {
     const content = readFileSync(path, "utf8");
-    assert.match(content, /August 11, 2026/, path);
+    assert.match(content, /August (?:11|24), 2026/, path);
     assert.doesNotMatch(content, /creates? (?:a |the )?Friday invoice/i, path);
     assert.doesNotMatch(content, /bank payment is the preferred payment method/i, path);
     assert.doesNotMatch(content, /create your password.*setup link/i, path);
@@ -66,6 +67,9 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
   assert.match(resources, /Friday at 12 PM Eastern/);
   assert.match(resources, /HELD OFF gate is not a PASS/);
   assert.match(resources, /previous system as the source of record/);
+  assert.match(resources, /id: "director-data-clean-start"/);
+  assert.match(resources, /A blank field is not proof that none exists/);
+  assert.match(resources, /keep agency responsibility separate from the parent's family balance/);
   assert.match(resources, /object-contain/);
   assert.match(resources, /Tap a screen to open the full view/);
   assert.doesNotMatch(resources, /Section link/);
@@ -167,7 +171,7 @@ test("public guide sources do not point at versioned visual directories or publi
   assert.doesNotMatch(publicGuideSources, /first-login password/i);
 });
 
-test("role SOPs cover the August 11 UI and workflow baseline", () => {
+test("role SOPs cover the current August UI and workflow baseline", () => {
   const director = readFileSync("docs/sops/DIRECTOR_SOP.md", "utf8");
   const billing = readFileSync("docs/sops/BILLING_ADMIN_SOP.md", "utf8");
   const parent = readFileSync("docs/sops/PARENT_PORTAL_SOP.md", "utf8");
@@ -177,7 +181,7 @@ test("role SOPs cover the August 11 UI and workflow baseline", () => {
   const inviteUi = readFileSync("src/components/parent-portal-invite-button.tsx", "utf8");
 
   for (const [name, content] of Object.entries({ director, billing, parent, teacher, executive, manual })) {
-    assert.match(content, /August 11, 2026/, name);
+    assert.match(content, /August (?:11|24), 2026/, name);
   }
 
   assert.match(director, /Add Family, Parent \+ Child/);
@@ -213,4 +217,18 @@ test("role SOPs cover the August 11 UI and workflow baseline", () => {
 
   const parentFacing = [billing, parent, readFileSync("docs/sops/PARENT_ACH_PAYMENT_GUIDE.md", "utf8")].join("\n");
   assert.doesNotMatch(parentFacing, /card processing recovery|card recovery/i);
+});
+
+test("director clean-start documentation is evidence-backed and keeps launch gates independent", () => {
+  const guide = readFileSync("docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md", "utf8");
+  const transition = readFileSync("docs/sops/SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md", "utf8");
+
+  assert.match(guide, /`raw\/` contains the original source evidence/);
+  assert.match(guide, /`MISSING SOURCE` means `NOT VERIFIED`/);
+  assert.match(guide, /stable Account, Person, Child, Classroom, and Employee IDs/);
+  assert.match(guide, /allergies, medical conditions, medications, emergency contacts, authorized pickups, and custody restrictions are separate checks/i);
+  assert.match(guide, /family responsibility from agency\/subsidy responsibility/i);
+  assert.match(guide, /Review at least 10 representative current families/);
+  assert.match(guide, /parent invitations, staff access, kiosk\/PIN activation, attendance, tuition generation, payment collection, messaging, or ProCare retirement/);
+  assert.match(transition, /DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE/);
 });

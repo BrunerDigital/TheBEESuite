@@ -19,6 +19,8 @@ test("conversation timestamps use the school time zone during server and client 
   assert.match(routePage, /centerTimeZoneById\.has\(internalCenterId\)/);
   assert.match(routePage, /staffProfile: \{ select: \{ centerId: true \} \}/);
   assert.match(routePage, /staffCenterId: message\.threadKey\?\.startsWith\("staff:"\)/);
+  assert.match(routePage, /message\.sender\?\.role === UserRole\.TEACHER/);
+  assert.match(routePage, /message\.assignedTo\?\.role === UserRole\.TEACHER/);
   assert.match(routePage, /typeof message\.staffCenterId === "string"/);
   assert.match(inbox, /thread\.timeZone \|\| defaultTimeZone/);
   assert.match(inbox, /selectedThread\?\.timeZone \|\| defaultTimeZone/);

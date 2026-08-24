@@ -2846,6 +2846,7 @@ async function renderLivePage(
             select: {
               name: true,
               email: true,
+              role: true,
               staffProfile: { select: { centerId: true } },
             },
           },
@@ -2983,9 +2984,11 @@ async function renderLivePage(
     const signedMessages = await Promise.all(messages.map(async (message) => ({
       ...message,
       staffCenterId: message.threadKey?.startsWith("staff:")
-        ? message.senderId === user.id
-          ? message.assignedTo?.staffProfile?.centerId ?? null
-          : message.sender?.staffProfile?.centerId ?? message.assignedTo?.staffProfile?.centerId ?? null
+        ? message.sender?.role === UserRole.TEACHER
+          ? message.sender.staffProfile?.centerId ?? null
+          : message.assignedTo?.role === UserRole.TEACHER
+            ? message.assignedTo.staffProfile?.centerId ?? null
+            : null
         : null,
       subject: message.subject ? userViewText(message.subject) : null,
       body: userViewText(message.body),

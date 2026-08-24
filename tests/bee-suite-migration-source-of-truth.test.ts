@@ -92,6 +92,11 @@ test("BEE migration confirmation binds siblings to one family balance and child-
   assert.equal(result.totals.weeklyTuitionCents, 25_000);
   const roster = parseCsvBuffer(fs.readFileSync(path.join(output, "confirmed", "confirmed-roster-import.csv")), "confirmed roster");
   assert.deepEqual(roster.rows.map((row) => row.balance), ["125.00", "125.00"]);
+  assert.deepEqual(roster.rows.map((row) => [row["confirmed weekly tuition cents"], row["confirmed tuition cadence"], row["tuition effective week"]]), [
+    ["15000", "weekly", "2026-W34"],
+    ["10000", "weekly", "2026-W34"],
+  ]);
+  assert.ok(roster.rows.every((row) => row["tuition migration status"] === "confirmed_evidence_only_activation_held"));
 });
 
 test("BEE migration confirmation rejects source-field edits and balance drift", async () => {

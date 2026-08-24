@@ -184,6 +184,28 @@ type ImportPreview = {
     relationshipSummary?: string;
     message?: string;
   }>;
+  migrationReview?: {
+    currentFamilyAccounts: number;
+    historicalFamilyAccounts: number;
+    relationshipsReadyChildren: number;
+    weeklyTuitionReadyChildren: number;
+    currentChildren: number;
+    includedCurrentBalanceCents: number;
+    excludedHistoricalBalanceCents: number;
+    blockedRows: number;
+    rows: Array<{
+      rowNumber: number;
+      childScope: "current" | "historical" | "needs_review";
+      familyScope: "current" | "historical" | "needs_review";
+      relationshipCount: number;
+      relationshipsReady: boolean;
+      openingBalanceCents: number | null;
+      openingBalanceStatus: "included_current_outstanding" | "excluded_historical" | "needs_review";
+      weeklyTuitionCents: number | null;
+      weeklyTuitionReady: boolean;
+      blockers: string[];
+    }>;
+  };
 };
 
 function previewRecordLabel(row: NonNullable<ImportPreview["rowResults"]>[number]) {
@@ -206,6 +228,11 @@ function formatFileSize(bytes: number) {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${bytes} B`;
+}
+
+function formatCents(value: number | null | undefined) {
+  if (value === null || value === undefined) return "Not supplied";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value / 100);
 }
 
 function sumCounts(...counts: Array<number | null | undefined>): number {
@@ -568,6 +595,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const reviewRowsShown = reviewRows.length;
   const readyReviewRows = reviewRows.filter((row) => row.status === "ready").length;
   const warningReviewRows = reviewRows.filter((row) => row.status === "warning").length;
+  const migrationReviewByRow = new Map((preview?.migrationReview?.rows ?? []).map((row) => [row.rowNumber, row]));
   const unknownHeaders = preview?.headerAnalysis?.filter((header) => (
     !header.recognized
     && !fieldMapping[header.source]
@@ -593,7 +621,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     {
       label: "Balances and tuition",
       detail: "Confirm one opening family balance and the weekly rate for every enrolled child.",
-      complete: (hasReviewedImport && sourceInventoryReady && sumCounts(preview?.balanceRows, preview?.invoiceRows, preview?.ledgerRows) > 0) || importCommitted,
+      complete: (hasReviewedImport && sourceInventoryReady && Boolean(preview?.migrationReview?.currentChildren) && !preview?.migrationReview?.blockedRows) || importCommitted,
     },
     {
       label: "Exceptions",
@@ -628,7 +656,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const setupClassroomCount = setupSummary ? bestCount(setupSummary.classroomsReferenced, setupSummary.createdClassrooms) : 0;
   const setupBillingRows = setupSummary ? sumCounts(setupSummary.balanceRows, setupSummary.invoiceRows, setupSummary.ledgerRows) : 0;
   const setupAttendanceRows = setupSummary ? sumCounts(setupSummary.attendanceRows, setupSummary.checkLogRows) : 0;
-  const setupOpenIssueRows = setupSummary ? sumCounts(setupSummary.unresolved, setupSummary.warningRows) : 0;
+  const setupOpenIssueRows = setupSummary ? sumCounts(setupSummary.unresolved, setupSummary.warningRows, setupSummary.migrationReview?.blockedRows) : 0;
   const setupSourceCount = setupSummary?.datasetCoverage?.sourceInventory?.filter((source) => source.reportKind !== "ignored").length ?? 0;
   const setupReadinessStages: Array<{ title: string; detail: string; status: SetupReadinessStatus; href?: string }> = setupSummary ? [
     {
@@ -824,6 +852,39 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                   {duplicateScanSummary} Showing {reviewRowsShown.toLocaleString()} mapped row(s) in this table{preview.rows > reviewRowsShown ? `, capped from ${preview.rows.toLocaleString()} total rows for browser performance` : ""}.
                   {preview.sourceSha256 ? ` Source SHA-256: ${preview.sourceSha256}` : ""}
                 </div>
+                {preview.migrationReview ? (
+                  <div className="grid gap-2 px-5 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-lg border bg-background/60 p-3">
+                      <div className="text-xs text-muted-foreground">Current family opening balances</div>
+                      <div className="mt-1 font-semibold">{formatCents(preview.migrationReview.includedCurrentBalanceCents)}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{preview.migrationReview.currentFamilyAccounts.toLocaleString()} current account(s)</div>
+                    </div>
+                    <div className="rounded-lg border bg-background/60 p-3">
+                      <div className="text-xs text-muted-foreground">Historical balances excluded</div>
+                      <div className="mt-1 font-semibold">{formatCents(preview.migrationReview.excludedHistoricalBalanceCents)}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">Withdrawn, closed, or hidden accounts stay outside school outstanding.</div>
+                    </div>
+                    <div className="rounded-lg border bg-background/60 p-3">
+                      <div className="text-xs text-muted-foreground">Relationships confirmed</div>
+                      <div className="mt-1 font-semibold">{preview.migrationReview.relationshipsReadyChildren.toLocaleString()} / {preview.migrationReview.currentChildren.toLocaleString()} current children</div>
+                      <div className="mt-1 text-xs text-muted-foreground">Stable Person ID evidence required.</div>
+                    </div>
+                    <div className="rounded-lg border bg-background/60 p-3">
+                      <div className="text-xs text-muted-foreground">Weekly tuition ready</div>
+                      <div className="mt-1 font-semibold">{preview.migrationReview.weeklyTuitionReadyChildren.toLocaleString()} / {preview.migrationReview.currentChildren.toLocaleString()} current children</div>
+                      <div className="mt-1 text-xs text-muted-foreground">Amount, weekly cadence, description, and effective date required.</div>
+                    </div>
+                  </div>
+                ) : null}
+                {preview.migrationReview?.blockedRows ? (
+                  <Alert className="mx-5 w-auto" variant="destructive">
+                    <AlertCircle className="size-4" />
+                    <AlertTitle>{preview.migrationReview.blockedRows.toLocaleString()} migration row(s) need correction</AlertTitle>
+                    <AlertDescription>
+                      Use the correction column below. Correct source-owned facts in the prior system and re-export; use the reviewed migration template for permitted confirmations. Re-uploading reruns every check. Historical balances remain preserved for old-account review and are never added to current school outstanding.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
                 <div className="min-h-0 max-h-[48vh] overflow-auto border-y">
                   <Table>
                     <TableHeader className="sticky top-0 z-10 bg-popover">
@@ -833,12 +894,17 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                         <TableHead>Center</TableHead>
                         <TableHead>Action</TableHead>
                         <TableHead>Record</TableHead>
+                        <TableHead>Family scope</TableHead>
                         <TableHead>Relationships</TableHead>
-                        <TableHead>Message</TableHead>
+                        <TableHead>Opening balance</TableHead>
+                        <TableHead>Weekly tuition</TableHead>
+                        <TableHead>Correction needed</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {reviewRows.map((row) => (
+                      {reviewRows.map((row) => {
+                        const migrationRow = migrationReviewByRow.get(row.rowNumber);
+                        return (
                         <TableRow key={row.rowNumber}>
                           <TableCell>{row.rowNumber}</TableCell>
                           <TableCell>
@@ -849,13 +915,25 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                           <TableCell className="max-w-48 whitespace-normal">{row.center}</TableCell>
                           <TableCell className="max-w-52 whitespace-normal">{row.action}</TableCell>
                           <TableCell className="max-w-64 whitespace-normal font-medium">{previewRecordLabel(row)}</TableCell>
-                          <TableCell className="max-w-52 whitespace-normal">{row.relationshipSummary ?? ""}</TableCell>
-                          <TableCell className="max-w-72 whitespace-normal text-muted-foreground">{row.message ?? ""}</TableCell>
+                          <TableCell className="max-w-40 whitespace-normal">
+                            {migrationRow ? <><Badge variant={migrationRow.familyScope === "current" ? "default" : migrationRow.familyScope === "historical" ? "outline" : "destructive"}>{migrationRow.familyScope}</Badge>{migrationRow.familyScope === "current" && migrationRow.childScope === "historical" ? <div className="mt-1 text-xs text-muted-foreground">Child is historical; another child keeps this family current.</div> : null}</> : ""}
+                          </TableCell>
+                          <TableCell className="max-w-52 whitespace-normal">
+                            {migrationRow ? `${migrationRow.relationshipCount} source-backed link(s)${migrationRow.relationshipsReady ? " · ready" : " · missing"}` : row.relationshipSummary ?? ""}
+                          </TableCell>
+                          <TableCell className="max-w-52 whitespace-normal">
+                            {migrationRow ? <>{formatCents(migrationRow.openingBalanceCents)}<div className="text-xs text-muted-foreground">{migrationRow.openingBalanceStatus === "included_current_outstanding" ? "Included in current outstanding" : migrationRow.openingBalanceStatus === "excluded_historical" ? "Excluded from current outstanding" : "Needs review"}</div></> : ""}
+                          </TableCell>
+                          <TableCell className="max-w-44 whitespace-normal">
+                            {migrationRow ? <>{formatCents(migrationRow.weeklyTuitionCents)}<div className="text-xs text-muted-foreground">{migrationRow.weeklyTuitionReady ? "Evidence complete" : "Evidence incomplete"}</div></> : ""}
+                          </TableCell>
+                          <TableCell className="max-w-80 whitespace-normal text-muted-foreground">{migrationRow?.blockers.join(" ") || row.message || "No correction required."}</TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                       {!reviewRows.length ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-muted-foreground">No mapped rows were returned for this preview.</TableCell>
+                          <TableCell colSpan={10} className="text-muted-foreground">No mapped rows were returned for this preview.</TableCell>
                         </TableRow>
                       ) : null}
                     </TableBody>

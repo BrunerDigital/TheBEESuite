@@ -34,7 +34,8 @@ Confirm the requirements with the agency's current official provider materials o
 5. Submit through the approved external channel. Then record the agency reference and mark the claim submitted in The BEE Suite.
 6. Record the agency decision. Store denials and the appeal reason; do not convert a denied agency amount to a family charge without a separate responsibility review and authorization.
 7. Record each remittance using the ACH, check, or portal reference. Partial payments stay open until the approved amount is reconciled.
-   - Recording a remittance in the agency workspace does not charge the family, change the family balance, or create a second manual agency payment.
+   - Recording a remittance in the agency workspace never charges the family. It reconciles a matching agency receivable when one exists while preserving the parent-visible family responsibility.
+   - If a remittance was entered incorrectly, reverse it from the claim history with a correction reason, then enter the corrected remittance. Never delete or overwrite the original payment evidence.
 
 ## Stop and escalate
 

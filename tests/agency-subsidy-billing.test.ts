@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  activeRemittanceTotalCents,
+  AGENCY_SUBMISSION_METHODS,
   agencyProgramSetupBlockers,
   agencyProgramStatus,
   claimAmountCents,
@@ -81,7 +83,7 @@ test("agency readiness compares authorization expiration by UTC calendar day", (
 
 test("agency approvals preserve dollar units when posted", () => {
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
-  assert.match(workspace, /decision: "approved", approvedDollars, externalReference/);
+  assert.match(workspace, /decision: "approved", approvedDollars: form\.get\("approvedDollars"\), externalReference: form\.get\("externalReference"\)/);
   assert.doesNotMatch(workspace, /approvedDollars: approvedAmount/);
 });
 
@@ -135,7 +137,7 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(route, /recordDecision"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*findUniqueOrThrow[\s\S]*claimSubmissionBlockers/);
   assert.match(route, /Complete every required claim document before recording agency approval/);
   assert.match(route, /updateDocument"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*status: \{ in: \["draft", "ready", "submitted"\] \}/);
-  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND EXISTS/);
+  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND \(/);
   assert.match(route, /Documents cannot be changed after the agency decision is recorded/);
   assert.match(route, /Enter the agency denial reason or code/);
   assert.match(route, /action === "voidClaim"/);
@@ -185,16 +187,55 @@ test("agency remittances re-read the claim inside a serializable transaction", (
   assert.match(route, /const current = await tx\.subsidyClaim\.findUnique/);
   assert.match(route, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
   assert.match(route, /REMITTANCE_METHODS/);
+  assert.match(route, /entryAuthorizationNumber && entryAgencyName[\s\S]*entryAuthorizationNumber === authorizationNumber && entryAgencyName === agencyName/);
   assert.match(route, /That remittance reference is already recorded or the claim changed/);
   assert.match(workspace, /Record remittance/);
-  assert.match(workspace, /does not charge a family or change its balance/);
+  assert.match(workspace, /reconciles matching agency receivables while leaving the parent-visible family responsibility unchanged/);
+});
+
+test("agency requirements fail closed when current required items are missing", () => {
+  assert.deepEqual(claimSubmissionBlockers({
+    providerNumber: "P-1",
+    submissionMethod: "secure_email",
+    paymentInstructions: "ACH verified",
+    requirements: [{ key: "attendance", label: "Attendance detail", type: "attendance", required: true }],
+    documents: [],
+  }), ["Add current required item: Attendance detail."]);
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  assert.match(route, /action === "syncRequirements"/);
+  assert.match(route, /action === "syncRequirements"[\s\S]*subsidyClaim\.updateMany[\s\S]*subsidyClaimDocument\.createMany/);
+  assert.match(route, /billing\.subsidy_claim\.requirements_synced/);
+});
+
+test("agency authorization creation and restoration revalidate serializably", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  assert.match(route, /action === "createAuthorization"[\s\S]*prisma\.\$transaction[\s\S]*isCurrentlyEnrolledChildRecord/);
+  assert.match(route, /action === "restoreAuthorization"[\s\S]*prisma\.\$transaction[\s\S]*isCurrentlyEnrolledChildRecord/);
+  assert.deepEqual(AGENCY_SUBMISSION_METHODS, ["agency_portal", "secure_email", "edi", "paper"]);
+  assert.match(route, /SUBMISSION_METHODS\.has\(setup\.submissionMethod\)/);
+});
+
+test("agency remittance reversals preserve history and recalculate paid totals", () => {
+  assert.equal(activeRemittanceTotalCents([
+    { amountCents: 10000, reversedAt: null },
+    { amountCents: 2500, reversedAt: "2026-08-24T12:00:00.000Z" },
+  ]), 10000);
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
+  assert.match(route, /action === "reverseRemittance"/);
+  assert.match(route, /agency-remittance-reversal:/);
+  assert.match(route, /billing\.subsidy_remittance\.reversed/);
+  assert.match(route, /type: "agency_payment"/);
+  assert.match(workspace, /Reverse remittance/);
+  assert.doesNotMatch(workspace, /window\.prompt/);
 });
 
 test("agency dashboard totals use bounded database aggregates for the full non-void claim set", () => {
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   assert.match(route, /\$queryRaw<AgencySummaryRow\[\]>/);
   assert.match(route, /SUM\(claim\."claimedCents"\)/);
-  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND EXISTS/);
+  assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND \(/);
+  assert.match(route, /jsonb_array_elements[\s\S]*current_requirement[\s\S]*NOT EXISTS/);
   assert.match(route, /claim\.status <> 'void'/);
   assert.doesNotMatch(route, /summaryClaims\.reduce/);
 });

@@ -125,6 +125,15 @@ test("settled ledger-only charges do not displace later invoice aging", () => {
   });
 });
 
+test("agency remittances settle only agency receivables", () => {
+  const charges = buildOutstandingNonInvoiceChargesByAccount([
+    { ...ledgerEntry("invoice", "mixed-payers", 2_000, "invoice-1", "2026-05-01T00:00:00.000Z"), type: "invoice", sourceSystem: "bee_suite" },
+    { ...ledgerEntry("agency", "mixed-payers", 10_000, null, "2026-05-01T00:00:01.000Z"), type: "agency_receivable", sourceSystem: "subsidy_agency" },
+    { ...ledgerEntry("agency-payment", "mixed-payers", -10_000, null, "2026-05-02T00:00:00.000Z"), type: "agency_payment", sourceSystem: "subsidy_agency" },
+  ]);
+  assert.equal(charges.get("mixed-payers"), 0);
+});
+
 test("payments reduce invoice charges before older ledger-only charges", () => {
   const charges = buildOutstandingNonInvoiceChargesByAccount([
     ledgerEntry("payment", "mixed", -5_000, null, "2026-06-01T00:00:00.000Z", "2026-06-01T00:00:03.000Z"),

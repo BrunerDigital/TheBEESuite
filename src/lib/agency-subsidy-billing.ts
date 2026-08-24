@@ -2,6 +2,8 @@ export const SUBSIDY_CLAIM_STATUSES = [
   "draft", "ready", "submitted", "approved", "partially_paid", "paid", "denied", "void",
 ] as const;
 
+export const AGENCY_SUBMISSION_METHODS = ["agency_portal", "secure_email", "edi", "paper"] as const;
+
 export type AgencyRequirement = {
   key: string;
   label: string;
@@ -75,14 +77,29 @@ export function claimSubmissionBlockers(input: {
   portalUrl?: string | null;
   paymentInstructions?: string | null;
   documents: Array<{ name: string; status: string }>;
+  requirements?: AgencyRequirement[];
 }) {
   const blockers = agencyProgramSetupBlockers(input);
+  const documentsByRequirement = new Set(input.documents.map((document) => (
+    `${clean(document.name).toLowerCase()}|${clean((document as { type?: string }).type).toLowerCase()}`
+  )));
+  for (const requirement of input.requirements ?? []) {
+    if (!requirement.required) continue;
+    const key = `${clean(requirement.label).toLowerCase()}|${clean(requirement.type).toLowerCase()}`;
+    if (!documentsByRequirement.has(key)) blockers.push(`Add current required item: ${requirement.label}.`);
+  }
   for (const document of input.documents) {
     if (document.status !== "received" && document.status !== "verified" && document.status !== "not_applicable") {
       blockers.push(`Complete required item: ${document.name}.`);
     }
   }
   return blockers;
+}
+
+export function activeRemittanceTotalCents(remittances: Array<{ amountCents: number; reversedAt?: Date | string | null }>) {
+  return remittances.reduce((total, remittance) => (
+    remittance.reversedAt ? total : total + Math.max(0, Math.round(remittance.amountCents))
+  ), 0);
 }
 
 export function nextRemittanceStatus(input: { claimedCents: number; approvedCents?: number | null; paidCents: number }) {

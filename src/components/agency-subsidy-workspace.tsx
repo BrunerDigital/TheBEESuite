@@ -5,6 +5,7 @@ import { BadgeDollarSign, Building2, CheckCircle2, Download, FileCheck2, Printer
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,7 +16,9 @@ import { isCurrentlyEnrolledChildRecord, isCurrentlyEnrolledStatus } from "@/lib
 type Program = { id: string; centerId: string; name: string; programName: string | null; stateCode: string; status: string; providerNumber: string | null; vendorNumber: string | null; submissionMethod: string; portalUrl: string | null; remittanceEmail: string | null; paymentInstructions: string | null; setupBlockers: string[] };
 type Authorization = { id: string; centerId: string; agencyProgramId: string; familyId: string; childId: string; authorizationNumber: string; coverageStart: string; coverageEnd: string; authorizedRateCents: number; familyCopayCents: number; unitType: string; authorizedUnits: number | null; status: string; agencyProgram: { name: string; programName: string | null }; family: { name: string }; child: { fullName: string; enrollmentStatus: string; classroomId: string | null } };
 type ClaimDocument = { id: string; name: string; status: string; notes: string | null };
-type Claim = { id: string; number: string; status: string; claimedCents: number; approvedCents: number | null; paidCents: number; servicePeriodStart: string; servicePeriodEnd: string; agencyProgram: { name: string }; authorization: { child: { fullName: string }; family: { name: string } } | null; documents: ClaimDocument[] };
+type ClaimRemittance = { id: string; amountCents: number; paidAt: string; paymentMethod: string; externalReference: string; notes: string | null; reversedAt: string | null; reversalReason: string | null };
+type Claim = { id: string; number: string; status: string; claimedCents: number; approvedCents: number | null; paidCents: number; servicePeriodStart: string; servicePeriodEnd: string; agencyProgram: { name: string }; authorization: { child: { fullName: string }; family: { name: string } } | null; documents: ClaimDocument[]; remittances: ClaimRemittance[]; requirementBlockers?: string[] };
+type ClaimAction = { kind: "document" | "submit" | "approve" | "deny" | "void" | "remit" | "reverse"; claim: Claim; document?: ClaimDocument; remittance?: ClaimRemittance };
 type Family = { id: string; centerId: string | null; name: string; children: Array<{ id: string; fullName: string; enrollmentStatus: string; classroomId: string | null }> };
 type Workspace = { programs: Program[]; authorizations: Authorization[]; claims: Claim[]; claimPagination: { page: number; pageSize: number; hasNext: boolean; nextCursor: string | null }; families: Family[]; summary: { claimedCents: number; approvedCents: number; paidCents: number; outstandingCents: number; needsSubmission: number; missingDocumentClaims: number; readyPrograms: number; setupRequiredPrograms: number; expiredAuthorizations: number; expiringAuthorizations: number } };
 
@@ -40,6 +43,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const [claimPage, setClaimPage] = useState(1);
   const [claimCursorByPage, setClaimCursorByPage] = useState<Record<number, string>>({});
   const [exportingClaims, setExportingClaims] = useState(false);
+  const [claimAction, setClaimAction] = useState<ClaimAction | null>(null);
   const centerIdRef = useRef(centerId);
   const claimCursor = claimPage === 1 ? "" : claimCursorByPage[claimPage] ?? "";
 
@@ -137,53 +141,29 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
     }
   }
 
-  function toggleClaimDocument(claimId: string, document: ClaimDocument) {
+  function toggleClaimDocument(claim: Claim, document: ClaimDocument) {
     if (document.status === "verified") {
-      void post("updateDocument", { claimId, documentId: document.id, status: "required" });
+      void post("updateDocument", { claimId: claim.id, documentId: document.id, status: "required" });
       return;
     }
-    const notes = window.prompt(`Evidence note for ${document.name}`, document.notes ?? "");
-    if (notes?.trim()) void post("updateDocument", { claimId, documentId: document.id, status: "verified", notes });
+    setClaimAction({ kind: "document", claim, document });
   }
 
-  function markClaimSubmitted(claimId: string) {
-    const externalReference = window.prompt("Enter the confirmation reference returned by the agency portal or submission channel");
-    if (externalReference?.trim()) void post("submitClaim", { claimId, externalReference });
-  }
-
-  function recordClaimApproval(claim: Claim) {
-    const approvedDollars = window.prompt("Agency-approved amount", String(claim.claimedCents / 100));
-    if (approvedDollars === null) return;
-    const approvedAmount = Number.parseFloat(approvedDollars.replace(/[$,]/g, ""));
-    if (!Number.isFinite(approvedAmount) || approvedAmount <= 0) {
-      setError("Approved amount must be greater than zero.");
-      return;
-    }
-    const externalReference = window.prompt("Agency decision or claim reference");
-    if (externalReference?.trim()) void post("recordDecision", { claimId: claim.id, decision: "approved", approvedDollars, externalReference });
-  }
-
-  function recordClaimDenial(claim: Claim) {
-    const denialReason = window.prompt("Agency denial reason or code");
-    if (!denialReason?.trim()) return;
-    const externalReference = window.prompt("Agency decision or claim reference");
-    if (externalReference?.trim()) void post("recordDecision", { claimId: claim.id, decision: "denied", denialReason, externalReference });
-  }
-
-  function voidDraftClaim(claim: Claim) {
-    const reason = window.prompt("Reason for voiding this unsubmitted draft");
-    if (reason?.trim()) void post("voidClaim", { claimId: claim.id, reason });
-  }
-
-  function recordRemittance(claim: Claim) {
-    const amountDollars = window.prompt("Remittance amount", String(((claim.approvedCents ?? claim.claimedCents) - claim.paidCents) / 100));
-    if (!amountDollars) return;
-    const externalReference = window.prompt("ACH, check, or agency portal reference");
-    if (!externalReference?.trim()) return;
-    const paymentMethod = window.prompt("Remittance method: ach, check, agency_portal, or other", "ach");
-    if (!paymentMethod?.trim()) return;
-    const paidAt = window.prompt("Paid date (YYYY-MM-DD)", today());
-    if (paidAt?.trim()) void post("recordRemittance", { claimId: claim.id, amountDollars, externalReference, paidAt, paymentMethod });
+  async function submitClaimAction(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!claimAction) return;
+    const form = new FormData(event.currentTarget);
+    const common = { claimId: claimAction.claim.id };
+    let action = "";
+    let fields: Record<string, unknown> = common;
+    if (claimAction.kind === "document") { action = "updateDocument"; fields = { ...common, documentId: claimAction.document?.id, status: "verified", notes: form.get("notes") }; }
+    if (claimAction.kind === "submit") { action = "submitClaim"; fields = { ...common, externalReference: form.get("externalReference") }; }
+    if (claimAction.kind === "approve") { action = "recordDecision"; fields = { ...common, decision: "approved", approvedDollars: form.get("approvedDollars"), externalReference: form.get("externalReference") }; }
+    if (claimAction.kind === "deny") { action = "recordDecision"; fields = { ...common, decision: "denied", denialReason: form.get("reason"), externalReference: form.get("externalReference") }; }
+    if (claimAction.kind === "void") { action = "voidClaim"; fields = { ...common, reason: form.get("reason") }; }
+    if (claimAction.kind === "remit") { action = "recordRemittance"; fields = { ...common, amountDollars: form.get("amountDollars"), externalReference: form.get("externalReference"), paidAt: form.get("paidAt"), paymentMethod: form.get("paymentMethod"), notes: form.get("notes") }; }
+    if (claimAction.kind === "reverse") { action = "reverseRemittance"; fields = { ...common, remittanceId: claimAction.remittance?.id, reason: form.get("reason") }; }
+    if (action && await post(action, fields)) setClaimAction(null);
   }
 
   async function exportClaims() {
@@ -283,14 +263,36 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
         </form></CardContent></Card>
       </div>
 
-      <Card><CardHeader><CardTitle as="h3">Agency claim queue</CardTitle><CardDescription>Document readiness, manual portal submission, decisions, and remittances are tracked independently from parent billing. Recording a remittance here does not charge a family or change its balance.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Claim</TableHead><TableHead>Agency / child</TableHead><TableHead>Period</TableHead><TableHead>Status</TableHead><TableHead>Amount</TableHead><TableHead>Documents</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader><TableBody>
-        {claims.map((claim) => { const incomplete = claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)); const documentsEditable = ["draft", "ready", "submitted"].includes(claim.status); return <TableRow key={claim.id}><TableCell className="font-medium">{claim.number}</TableCell><TableCell>{claim.agencyProgram.name}<div className="text-xs text-muted-foreground">{claim.authorization?.child.fullName ?? "No child"}</div></TableCell><TableCell>{dateOnly(claim.servicePeriodStart)} – {dateOnly(claim.servicePeriodEnd)}</TableCell><TableCell><Badge variant="outline">{claim.status.replaceAll("_", " ")}</Badge></TableCell><TableCell>{money(claim.claimedCents)}<div className="text-xs text-muted-foreground">Paid {money(claim.paidCents)}</div></TableCell><TableCell>{incomplete.length ? <div className="space-y-1">{claim.documents.map((document) => <button key={document.id} type="button" disabled={!documentsEditable} className="block text-left text-xs underline-offset-2 enabled:hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground" onClick={() => toggleClaimDocument(claim.id, document)}>{document.status === "verified" ? "✓" : "○"} {document.name}</button>)}</div> : <span className="inline-flex items-center gap-1 text-sm text-emerald-700"><FileCheck2 className="size-4" /> Complete</span>}</TableCell><TableCell><div className="flex flex-wrap gap-2">
-          {["draft", "ready"].includes(claim.status) ? <><Button size="sm" variant="outline" onClick={() => markClaimSubmitted(claim.id)}>Mark submitted</Button><Button size="sm" variant="outline" onClick={() => voidDraftClaim(claim)}>Void draft</Button></> : null}
-          {claim.status === "submitted" ? <><Button size="sm" variant="outline" onClick={() => recordClaimApproval(claim)}><CheckCircle2 data-icon="inline-start" /> Record approval</Button><Button size="sm" variant="outline" onClick={() => recordClaimDenial(claim)}>Record denial</Button></> : null}
-          {["approved", "partially_paid"].includes(claim.status) ? <Button size="sm" onClick={() => recordRemittance(claim)}><BadgeDollarSign data-icon="inline-start" /> Record remittance</Button> : null}
+      <Card><CardHeader><CardTitle as="h3">Agency claim queue</CardTitle><CardDescription>Document readiness, manual portal submission, decisions, and remittances are tracked independently from parent billing. A recorded remittance reconciles matching agency receivables while leaving the parent-visible family responsibility unchanged.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Claim</TableHead><TableHead>Agency / child</TableHead><TableHead>Period</TableHead><TableHead>Status</TableHead><TableHead>Amount</TableHead><TableHead>Documents</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader><TableBody>
+        {claims.map((claim) => { const incomplete = claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)); const documentsEditable = ["draft", "ready", "submitted"].includes(claim.status); return <TableRow key={claim.id}><TableCell className="font-medium">{claim.number}</TableCell><TableCell>{claim.agencyProgram.name}<div className="text-xs text-muted-foreground">{claim.authorization?.child.fullName ?? "No child"}</div></TableCell><TableCell>{dateOnly(claim.servicePeriodStart)} – {dateOnly(claim.servicePeriodEnd)}</TableCell><TableCell><Badge variant="outline">{claim.status.replaceAll("_", " ")}</Badge></TableCell><TableCell>{money(claim.claimedCents)}<div className="text-xs text-muted-foreground">Paid {money(claim.paidCents)}</div>{claim.remittances?.length ? <div className="mt-2 space-y-1">{claim.remittances.map((remittance) => <div key={remittance.id} className="text-xs text-muted-foreground"><span className={remittance.reversedAt ? "line-through" : ""}>{dateOnly(remittance.paidAt)} · {money(remittance.amountCents)} · {remittance.externalReference}</span>{remittance.reversedAt ? <span> · reversed</span> : <button type="button" className="ml-2 underline" onClick={() => setClaimAction({ kind: "reverse", claim, remittance })}>Reverse</button>}</div>)}</div> : null}</TableCell><TableCell>{claim.requirementBlockers?.length ? <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 p-2 text-xs"><div>Requirements changed.</div><Button className="mt-2" size="sm" variant="outline" onClick={() => void post("syncRequirements", { claimId: claim.id })}>Sync required items</Button></div> : null}{incomplete.length ? <div className="space-y-1">{claim.documents.map((document) => <button key={document.id} type="button" disabled={!documentsEditable} className="block text-left text-xs underline-offset-2 enabled:hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground" onClick={() => toggleClaimDocument(claim, document)}>{document.status === "verified" ? "✓" : "○"} {document.name}</button>)}</div> : <span className="inline-flex items-center gap-1 text-sm text-emerald-700"><FileCheck2 className="size-4" /> Complete</span>}</TableCell><TableCell><div className="flex flex-wrap gap-2">
+          {["draft", "ready"].includes(claim.status) ? <><Button size="sm" variant="outline" onClick={() => setClaimAction({ kind: "submit", claim })}>Mark submitted</Button><Button size="sm" variant="outline" onClick={() => setClaimAction({ kind: "void", claim })}>Void draft</Button></> : null}
+          {claim.status === "submitted" ? <><Button size="sm" variant="outline" onClick={() => setClaimAction({ kind: "approve", claim })}><CheckCircle2 data-icon="inline-start" /> Record approval</Button><Button size="sm" variant="outline" onClick={() => setClaimAction({ kind: "deny", claim })}>Record denial</Button></> : null}
+          {["approved", "partially_paid"].includes(claim.status) ? <Button size="sm" onClick={() => setClaimAction({ kind: "remit", claim })}><BadgeDollarSign data-icon="inline-start" /> Record remittance</Button> : null}
         </div></TableCell></TableRow>; })}
         {!claims.length ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No agency claims for this school yet.</TableCell></TableRow> : null}
       </TableBody></Table></div>{claimPagination ? <div className="mt-4 flex items-center justify-between gap-3"><span className="text-sm text-muted-foreground">Claim queue page {claimPagination.page}</span><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={pending || claimPagination.page <= 1} onClick={() => { setPending(true); setClaimPage((page) => Math.max(page - 1, 1)); }}>Previous</Button><Button type="button" size="sm" variant="outline" disabled={pending || !claimPagination.hasNext || !claimPagination.nextCursor} onClick={() => { if (!claimPagination.nextCursor) return; setPending(true); setClaimCursorByPage((cursors) => ({ ...cursors, [claimPage + 1]: claimPagination.nextCursor as string })); setClaimPage((page) => page + 1); }}>Next</Button></div></div> : null}</CardContent></Card>
+
+      <Dialog open={Boolean(claimAction)} onOpenChange={(open) => { if (!open && !pending) setClaimAction(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{claimAction?.kind === "document" ? `Verify ${claimAction.document?.name ?? "claim evidence"}` : claimAction?.kind === "submit" ? "Record external submission" : claimAction?.kind === "approve" ? "Record agency approval" : claimAction?.kind === "deny" ? "Record agency denial" : claimAction?.kind === "void" ? "Void draft claim" : claimAction?.kind === "reverse" ? "Reverse remittance" : "Record agency remittance"}</DialogTitle>
+            <DialogDescription>{claimAction?.claim.number}. Review the values before saving; every change is audit logged.</DialogDescription>
+          </DialogHeader>
+          {claimAction ? <form className="space-y-4" onSubmit={submitClaimAction}>
+            {claimAction.kind === "document" ? <div><Label htmlFor="claim-action-notes">Evidence note</Label><Input id="claim-action-notes" name="notes" required defaultValue={claimAction.document?.notes ?? ""} placeholder="Document name, date, or verified source" /></div> : null}
+            {["submit", "approve", "deny", "remit"].includes(claimAction.kind) ? <div><Label htmlFor="claim-action-reference">External reference</Label><Input id="claim-action-reference" name="externalReference" required placeholder="Portal confirmation, decision, ACH, or check reference" /></div> : null}
+            {claimAction.kind === "approve" ? <div><Label htmlFor="claim-action-approved">Approved amount</Label><Input id="claim-action-approved" name="approvedDollars" type="number" inputMode="decimal" min="0.01" max={(claimAction.claim.claimedCents / 100).toFixed(2)} step="0.01" required defaultValue={(claimAction.claim.claimedCents / 100).toFixed(2)} /></div> : null}
+            {["deny", "void", "reverse"].includes(claimAction.kind) ? <div><Label htmlFor="claim-action-reason">{claimAction.kind === "deny" ? "Denial reason or code" : claimAction.kind === "reverse" ? "Correction reason" : "Void reason"}</Label><Input id="claim-action-reason" name="reason" required /></div> : null}
+            {claimAction.kind === "remit" ? <>
+              <div><Label htmlFor="claim-action-amount">Remittance amount</Label><Input id="claim-action-amount" name="amountDollars" type="number" inputMode="decimal" min="0.01" max={((claimAction.claim.approvedCents ?? claimAction.claim.claimedCents) - claimAction.claim.paidCents) / 100} step="0.01" required defaultValue={(((claimAction.claim.approvedCents ?? claimAction.claim.claimedCents) - claimAction.claim.paidCents) / 100).toFixed(2)} /></div>
+              <div className="grid grid-cols-2 gap-3"><div><Label htmlFor="claim-action-paid-at">Paid date</Label><Input id="claim-action-paid-at" name="paidAt" type="date" required defaultValue={today()} /></div><div><Label htmlFor="claim-action-method">Method</Label><select id="claim-action-method" name="paymentMethod" defaultValue="ach" className="h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="ach">ACH</option><option value="check">Check</option><option value="agency_portal">Agency portal</option><option value="other">Other</option></select></div></div>
+              <div><Label htmlFor="claim-action-remittance-notes">Notes</Label><Input id="claim-action-remittance-notes" name="notes" placeholder="Optional remittance detail" /></div>
+            </> : null}
+            {claimAction.kind === "reverse" ? <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">This preserves the original remittance, marks it reversed, restores any linked agency receivable, and recalculates the claim. Re-enter the corrected remittance afterward.</p> : null}
+            <DialogFooter><Button type="button" variant="outline" onClick={() => setClaimAction(null)} disabled={pending}>Cancel</Button><Button type="submit" disabled={pending}>{pending ? "Saving…" : claimAction.kind === "reverse" ? "Reverse remittance" : "Review complete — save"}</Button></DialogFooter>
+          </form> : null}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

@@ -113,6 +113,8 @@ type ReceivableAgingLedgerEntry = {
   billingAccountId: string;
   amountCents: number;
   invoiceId?: string | null;
+  type?: string | null;
+  sourceSystem?: string | null;
   effectiveAt: Date | string;
   createdAt: Date | string;
 };
@@ -198,8 +200,9 @@ export function buildOutstandingNonInvoiceChargesByAccount(
   entries: readonly ReceivableAgingLedgerEntry[],
 ) {
   const states = new Map<string, {
-    unappliedCreditCents: number;
-    charges: Array<{ remainingCents: number; invoiceLinked: boolean }>;
+    unappliedFamilyCreditCents: number;
+    unappliedAgencyCreditCents: number;
+    charges: Array<{ remainingCents: number; invoiceLinked: boolean; agencyOnly: boolean }>;
   }>();
   const orderedEntries = [...entries].sort((left, right) => (
     new Date(left.effectiveAt).getTime() - new Date(right.effectiveAt).getTime()
@@ -208,17 +211,23 @@ export function buildOutstandingNonInvoiceChargesByAccount(
   ));
 
   for (const entry of orderedEntries) {
-    const state = states.get(entry.billingAccountId) ?? { unappliedCreditCents: 0, charges: [] };
+    const state = states.get(entry.billingAccountId) ?? { unappliedFamilyCreditCents: 0, unappliedAgencyCreditCents: 0, charges: [] };
+    const agencyOnly = entry.sourceSystem?.trim().toLowerCase() === "subsidy_agency"
+      || entry.type?.trim().toLowerCase().startsWith("agency_") === true
+      || entry.type?.trim().toLowerCase().startsWith("subsidy_") === true;
     if (entry.amountCents > 0) {
-      const creditAppliedCents = Math.min(state.unappliedCreditCents, entry.amountCents);
-      state.unappliedCreditCents -= creditAppliedCents;
+      const availableCredit = agencyOnly ? state.unappliedAgencyCreditCents : state.unappliedFamilyCreditCents;
+      const creditAppliedCents = Math.min(availableCredit, entry.amountCents);
+      if (agencyOnly) state.unappliedAgencyCreditCents -= creditAppliedCents;
+      else state.unappliedFamilyCreditCents -= creditAppliedCents;
       const remainingCents = entry.amountCents - creditAppliedCents;
-      if (remainingCents) state.charges.push({ remainingCents, invoiceLinked: Boolean(entry.invoiceId) });
+      if (remainingCents) state.charges.push({ remainingCents, invoiceLinked: Boolean(entry.invoiceId), agencyOnly });
     } else if (entry.amountCents < 0) {
       let creditCents = Math.abs(entry.amountCents);
-      const chargesByPaymentPriority = [
-        ...state.charges.filter((charge) => charge.invoiceLinked),
-        ...state.charges.filter((charge) => !charge.invoiceLinked),
+      const eligibleCharges = state.charges.filter((charge) => charge.agencyOnly === agencyOnly);
+      const chargesByPaymentPriority = agencyOnly ? eligibleCharges : [
+        ...eligibleCharges.filter((charge) => charge.invoiceLinked),
+        ...eligibleCharges.filter((charge) => !charge.invoiceLinked),
       ];
       for (const charge of chargesByPaymentPriority) {
         if (!creditCents) break;
@@ -226,7 +235,8 @@ export function buildOutstandingNonInvoiceChargesByAccount(
         charge.remainingCents -= appliedCents;
         creditCents -= appliedCents;
       }
-      state.unappliedCreditCents += creditCents;
+      if (agencyOnly) state.unappliedAgencyCreditCents += creditCents;
+      else state.unappliedFamilyCreditCents += creditCents;
     }
     states.set(entry.billingAccountId, state);
   }

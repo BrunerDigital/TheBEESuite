@@ -8,6 +8,7 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /livePaymentsEnabled === true/);
   assert.match(source, /tuitionBillingEnabled === true/);
   assert.match(source, /stripeSchoolBillingApproval/);
+  assert.match(source, /currentlyEnrolledChildWhere/);
   assert.match(source, /parentVisibleBillingBalanceCents/);
   assert.match(source, /positiveBalancesWithoutActiveParentLink/);
   assert.match(source, /currentFamiliesWithoutBillingAccounts/);

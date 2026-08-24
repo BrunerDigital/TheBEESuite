@@ -10,6 +10,7 @@ test("missing billing-account repair is preview-first, exact, audited, and finan
   assert.match(source, /TransactionIsolationLevel\.Serializable/);
   assert.match(source, /billingAccount: null/);
   assert.match(source, /stripeSchoolBillingApproval/);
+  assert.match(source, /currentlyEnrolledChildWhere/);
   assert.match(source, /balanceCents: 0/);
   assert.match(source, /autopayPlaceholder: false/);
   assert.match(source, /billing\.current_family\.account_prepared/);

@@ -1,14 +1,13 @@
 import "./load-env";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 
 const APPLY = process.argv.includes("--apply");
 const ACKNOWLEDGE = process.argv.includes("--acknowledge-zero-balance-account-creation");
 const FINGERPRINT_PREFIX = "--confirm-fingerprint=";
-const CURRENT_ENROLLMENT_STATUSES = ["enrolled", "active", "current"];
-
 function fields(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -41,7 +40,7 @@ async function buildPlan(db: Pick<Prisma.TransactionClient, "center" | "family">
     where: {
       centerId: { in: eligible.map((center) => center.id) },
       billingAccount: null,
-      children: { some: { enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES, mode: "insensitive" } } },
+      children: { some: currentlyEnrolledChildWhere() },
     },
     select: { id: true, centerId: true },
     orderBy: { id: "asc" },

@@ -6,11 +6,10 @@ import {
   AGENCY_LEDGER_SOURCE_SYSTEM,
   parentVisibleBillingBalanceCents,
 } from "@/lib/parent-billing-visibility";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getSupabaseAuthConfig } from "@/lib/supabase-auth";
-
-const CURRENT_ENROLLMENT_STATUSES = ["enrolled", "active", "current"];
 
 function jsonObject(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -68,7 +67,7 @@ async function main() {
   const families = await prisma.family.findMany({
     where: {
       centerId: { in: paymentCenterIds },
-      children: { some: { enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES, mode: "insensitive" } } },
+      children: { some: currentlyEnrolledChildWhere() },
     },
     select: {
       id: true,

@@ -171,6 +171,25 @@ export function computeIntegrationDeliveryState({
   return { status: "pending", nextAttemptAt: nextIntegrationRetryAt(attempts, now), deliveredAt: null };
 }
 
+export function computeCommunicationSmsDeliveryState({
+  result,
+  attempts,
+  maxAttempts = 5,
+  statusCallbackUrl,
+  now = new Date(),
+}: {
+  result: IntegrationAttemptResult & { id?: string | null };
+  attempts: number;
+  maxAttempts?: number;
+  statusCallbackUrl?: string | null;
+  now?: Date;
+}): DeliveryState {
+  if (result.ok && result.id && statusCallbackUrl) {
+    return { status: "accepted", nextAttemptAt: null, deliveredAt: null };
+  }
+  return computeIntegrationDeliveryState({ result, attempts, maxAttempts, now });
+}
+
 export async function recordIntegrationDeliveryAttempt({
   tenantId,
   centerId,
@@ -226,10 +245,11 @@ export async function recordCommunicationSmsDeliveryAttempt({
     ? result
     : { ...result, skipped: true };
   const attempts = deliveryResult.skipped ? 0 : 1;
-  const state = computeIntegrationDeliveryState({
+  const state = computeCommunicationSmsDeliveryState({
     result: deliveryResult,
     attempts,
     maxAttempts,
+    statusCallbackUrl,
   });
 
   return prisma.integrationDelivery.create({
@@ -565,7 +585,7 @@ export async function retryPendingIntegrationDeliveries({
     }
 
     const nextAttempts = claim.attempts;
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...asRecord(delivery.payload),
       tenantId: delivery.tenantId,
     };
@@ -611,6 +631,17 @@ export async function retryPendingIntegrationDeliveries({
           maxAttempts: delivery.maxAttempts,
         });
     if (delivery.provider === "sendgrid" && result.ok) {
+      state.status = "accepted";
+      state.deliveredAt = null;
+    }
+    if (
+      delivery.provider === "twilio"
+      && result.ok
+      && "id" in result
+      && result.id
+      && typeof payload.statusCallbackUrl === "string"
+      && payload.statusCallbackUrl
+    ) {
       state.status = "accepted";
       state.deliveredAt = null;
     }

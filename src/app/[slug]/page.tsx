@@ -2541,6 +2541,7 @@ async function renderLivePage(
       const batchChildNames = childIds
         .map((childId) => invoiceChildNames.get(childId))
         .filter((value): value is string => Boolean(value));
+      const singularChildId = stringField(invoiceFields.childId);
       return {
         id: invoice.id,
         number: invoice.number,
@@ -2548,7 +2549,7 @@ async function renderLivePage(
         dueDate: invoice.dueDate,
         familyDocumentAmountCents: document?.amountCents ?? null,
         childName: stringField(invoiceFields.childName)
-          || invoiceChildNames.get(stringField(invoiceFields.childId))
+          || (singularChildId ? invoiceChildNames.get(singularChildId) : null)
           || (batchChildNames.length ? batchChildNames.join(", ") : null)
           || null,
         servicePeriodStart,

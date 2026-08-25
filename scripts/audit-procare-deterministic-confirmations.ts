@@ -2,7 +2,7 @@ import "./load-env";
 import { prisma } from "@/lib/prisma";
 import { evaluateProcareInvitationBatchReadiness } from "@/lib/parent-invitation-readiness";
 
-const SCHOOL_NAMES = [
+const SCHOOL_LOCATION_IDS = [
   "Kid City USA - TX | Corpus Christi",
   "Miss Honey's Learning Center - CO | Centennial",
   "Kid City USA - CO | Longmont",
@@ -64,8 +64,8 @@ async function main() {
     },
   });
 
-  const selected = centers.filter((center) => SCHOOL_NAMES.includes(
-    center.name as (typeof SCHOOL_NAMES)[number],
+  const selected = centers.filter((center) => [center.locationId, center.crmLocationId].some(
+    (locationId) => SCHOOL_LOCATION_IDS.includes(locationId as (typeof SCHOOL_LOCATION_IDS)[number]),
   ));
 
   const report = selected.map((center) => {

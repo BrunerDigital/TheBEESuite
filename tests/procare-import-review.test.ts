@@ -119,6 +119,8 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(panel, /same selected files; they are still selected/);
   assert.match(panel, /secure browser-source limit/);
   assert.match(panel, /secure browser-request limit/);
+  assert.match(panel, /batchId: "x"\.repeat\(64\)/);
+  assert.match(panel, /Run the file-only preflight outside the browser and retain its review packet/);
   assert.match(panel, /Do not remove required reports to make the package fit/);
   assert.match(route, /MAX_PROCARE_SOURCE_BYTES/);
   assert.match(panel, /chunkSize", "20"/);

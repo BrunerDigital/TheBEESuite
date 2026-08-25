@@ -432,7 +432,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             formData.set("chunkSize", "20");
             if (resumeBatchId) formData.set("batchId", resumeBatchId);
           }
-          const multipartBytes = await procareMultipartSizeBytes(formData);
+          const multipartBytes = await procareMultipartSizeBytes(formData, {
+            // Reserve the next request's resumable identifier before the first chunk writes.
+            batchId: "x".repeat(64),
+          });
           if (multipartBytes > MAX_PROCARE_MULTIPART_BYTES) {
             throw new Error(`The complete reviewed request is larger than the ${MAX_PROCARE_MULTIPART_LABEL} secure browser-request limit after confirmation details were added. Run the file-only preflight and retain the review packet.`);
           }
@@ -1220,8 +1223,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 <AlertTitle>Prepare a smaller secure browser package</AlertTitle>
                 <AlertDescription>
                   {selectedFileCountTooLarge
-                    ? `This selection contains more than ${MAX_PROCARE_SOURCE_FILES.toLocaleString()} files.`
-                    : `This selection is larger than ${MAX_PROCARE_SOURCE_LABEL}.`} Create one ZIP containing this school&apos;s unchanged reports, or run the file-only preflight outside the browser. Do not remove required reports to make the package fit.
+                    ? `This selection contains more than ${MAX_PROCARE_SOURCE_FILES.toLocaleString()} files. Run the file-only preflight outside the browser and retain its review packet.`
+                    : `This selection is larger than ${MAX_PROCARE_SOURCE_LABEL}. Create one ZIP containing this school&apos;s unchanged reports, or run the file-only preflight outside the browser.`} Do not remove required reports to make the package fit.
                 </AlertDescription>
               </Alert>
             ) : null}

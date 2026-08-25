@@ -39,3 +39,11 @@ test("ProCare commit sizing includes variable review metadata in the multipart b
   assert.ok(bytes > formData.get("reviewWarningRowNumbers")!.toString().length);
   assert.ok(bytes < MAX_PROCARE_MULTIPART_BYTES);
 });
+
+test("ProCare commit sizing reserves the resumable batch identifier before the first write", async () => {
+  const formData = new FormData();
+  formData.set("csv", "a,b\n1,2");
+  const initial = await procareMultipartSizeBytes(formData);
+  const reserved = await procareMultipartSizeBytes(formData, { batchId: "x".repeat(64) });
+  assert.ok(reserved > initial);
+});

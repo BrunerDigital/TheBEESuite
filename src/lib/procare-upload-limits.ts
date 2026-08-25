@@ -19,6 +19,11 @@ export function procareSourceFitsBrowserUpload(files: ArrayLike<{ size: number }
     && procareSourceSizeBytes(files) <= MAX_PROCARE_SOURCE_BYTES;
 }
 
-export async function procareMultipartSizeBytes(formData: FormData) {
-  return (await new Response(formData).blob()).size;
+export async function procareMultipartSizeBytes(formData: FormData, reservedFields: Record<string, string> = {}) {
+  const measured = new FormData();
+  for (const [key, value] of formData.entries()) measured.append(key, value);
+  for (const [key, value] of Object.entries(reservedFields)) {
+    if (!measured.has(key)) measured.set(key, value);
+  }
+  return (await new Response(measured).blob()).size;
 }

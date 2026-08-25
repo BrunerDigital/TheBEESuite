@@ -2233,7 +2233,15 @@ async function renderLivePage(
         where: { billingAccount: { familyId } },
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
         take: 20,
-        select: { id: true, number: true, status: true, dueDate: true, totalCents: true, customFields: true },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          dueDate: true,
+          totalCents: true,
+          customFields: true,
+          items: { orderBy: { id: "asc" }, select: { description: true, amountCents: true } },
+        },
       }),
       prisma.dailyReport.findMany({
         where: { childId: { in: childIds.length ? childIds : ["__none__"] } },
@@ -2477,8 +2485,32 @@ async function renderLivePage(
         feeDisclosureVersion: summary.feeDisclosureVersion,
       });
     }
+    const parentInvoiceDocuments = new Map(invoices.map((invoice) => {
+      const separated = responsibilitySeparatedBillingAmounts({
+        invoiceTotalCents: invoice.totalCents,
+        customFields: invoice.customFields,
+      });
+      const familyOnly = invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents);
+      const amountCents = separated?.familyResponsibilityCents ?? (familyOnly ? invoice.totalCents : null);
+      return [invoice.id, {
+        amountCents,
+        items: separated
+          ? [{ description: "Family responsibility", amountCents: separated.familyResponsibilityCents }]
+          : familyOnly ? invoice.items : [],
+      }] as const;
+    }));
     const parentInvoices = invoices.map((invoice) => {
       const invoiceFields = asRecord(invoice.customFields);
+      const document = parentInvoiceDocuments.get(invoice.id);
+      const billingPeriod = stringField(invoiceFields.coverageStartsPeriod) || stringField(invoiceFields.billingPeriod);
+      const invoiceWeekCount = Math.max(1, Number(invoiceFields.invoiceWeekCount) || 1);
+      const servicePeriodStart = billingPeriod && /^\d{4}-\d{2}-\d{2}$/.test(billingPeriod) ? billingPeriod : null;
+      const servicePeriodEnd = servicePeriodStart
+        ? new Date(`${servicePeriodStart}T00:00:00.000Z`).toISOString()
+        : null;
+      const servicePeriodEndLabel = servicePeriodEnd
+        ? new Date(new Date(servicePeriodEnd).getTime() + (invoiceWeekCount * 7 - 1) * 86_400_000).toISOString().slice(0, 10)
+        : null;
       const productCheckoutAvailable = stringField(invoiceFields.checkoutPurpose) === "product_purchase"
         || stringField(invoiceFields.receiptKind) === "product"
         || stringField(invoiceFields.chargeSource) === "product";
@@ -2487,6 +2519,13 @@ async function renderLivePage(
         number: invoice.number,
         status: invoice.status,
         dueDate: invoice.dueDate,
+        familyDocumentAmountCents: document?.amountCents ?? null,
+        childName: stringField(invoiceFields.childName)
+          || family?.children.find((child) => child.id === stringField(invoiceFields.childId))?.fullName
+          || null,
+        servicePeriodStart,
+        servicePeriodEnd: servicePeriodEndLabel,
+        items: document?.items ?? [],
         purposeLabel: invoicePurposeLabel(invoiceFields),
         productCheckoutAvailable,
         pendingPayment: pendingPaymentByInvoiceId.get(invoice.id) ?? null,
@@ -2581,6 +2620,7 @@ async function renderLivePage(
         incidents={incidents}
         messages={signedMessages}
         centerName={parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
+        centerEin={parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
         documents={signedDocuments}
         media={signedMedia}
         announcements={announcements}

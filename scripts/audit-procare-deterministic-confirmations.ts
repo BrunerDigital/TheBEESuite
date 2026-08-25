@@ -44,9 +44,17 @@ async function main() {
     },
   });
 
-  const selected = centers.filter((center) => [center.locationId, center.crmLocationId].some(
-    (locationId) => SCHOOL_LOCATION_IDS.includes(locationId as (typeof SCHOOL_LOCATION_IDS)[number]),
-  ));
+  const selected = SCHOOL_LOCATION_IDS.map((targetLocationId) => {
+    const matches = centers.filter((center) => (
+      center.locationId === targetLocationId || center.crmLocationId === targetLocationId
+    ));
+    if (matches.length !== 1) {
+      throw new Error(
+        `Expected exactly one Center for ${targetLocationId}; found ${matches.length}. Audit stopped.`,
+      );
+    }
+    return matches[0];
+  });
   const selectedCenterIds = selected.map((center) => center.id);
   const batches = await prisma.procareImportBatch.findMany({
     where: {

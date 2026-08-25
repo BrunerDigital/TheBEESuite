@@ -1,10 +1,20 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   allocateExactStripeFees,
   retainedProcessingFeeCents,
   schoolFeeCorrectionCents,
 } from "../src/lib/stripe-school-fee-reconciliation";
+
+const reconciliationScript = readFileSync("scripts/reconcile-stripe-school-processing-fees.ts", "utf8");
+
+test("itemized fractional fee components may be unmapped only when their exact transaction has a verified school allocation", () => {
+  assert.match(reconciliationScript, /mappedBalanceTransactionIds/);
+  assert.match(reconciliationScript, /uncoveredBalanceTransactionIds/);
+  assert.match(reconciliationScript, /have no verified school allocation row/);
+  assert.doesNotMatch(reconciliationScript, /unmappedRows\.length\) throw/);
+});
 
 test("exact Stripe fee allocation preserves each balance transaction total", () => {
   const allocation = allocateExactStripeFees([

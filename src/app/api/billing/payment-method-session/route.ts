@@ -222,6 +222,7 @@ async function POSTHandler(request: NextRequest) {
           autopayDisabledAt: new Date().toISOString(),
           autopayDisabledByUserId: user.id,
           autopayPaymentMethodId: null,
+          ...(currentFields.stripeBankVerificationPending === true ? { stripePendingAutopayOutcome: null } : {}),
         },
       },
     });

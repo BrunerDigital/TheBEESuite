@@ -1240,10 +1240,12 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
               stripePendingAutopayOutcome: autopayPatch,
               stripePendingAutopayAuditTenantId: auditTenantId,
               stripePendingAutopayAuditCenterId: familyCenter?.id ?? null,
+              stripeBankVerificationPending: true,
             } : {
               stripePendingAutopayOutcome: null,
               stripePendingAutopayAuditTenantId: null,
               stripePendingAutopayAuditCenterId: null,
+              stripeBankVerificationPending: false,
             }),
             stripeDefaultPaymentMethodId: paymentMethodId || null,
             stripeDefaultPaymentMethodConnectedAccountId: connectedAccountId || null,
@@ -1317,9 +1319,9 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
       if (!billingAccount) return;
       const currentFields = jsonObject(billingAccount.customFields);
       if (clean(currentFields.stripeSetupIntentId) !== setupIntent.id) return;
-      if (clean(currentFields.paymentMethodManagementStatus) !== "pending_bank_verification") return;
+      if (currentFields.stripeBankVerificationPending !== true) return;
       const pendingOutcome = jsonObject(currentFields.stripePendingAutopayOutcome);
-      if (!Object.keys(pendingOutcome).length) return;
+      const hasPendingOutcome = Object.keys(pendingOutcome).length > 0;
       const preservedExistingConsent = pendingOutcome.preservedExistingConsent === true;
       const update = await tx.billingAccount.updateMany({
         where: {
@@ -1330,12 +1332,14 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
             : { equals: billingAccount.customFields as Prisma.InputJsonValue },
         },
         data: {
-          autopayPlaceholder: pendingOutcome.autopayPlaceholder === true,
+          ...(hasPendingOutcome ? { autopayPlaceholder: pendingOutcome.autopayPlaceholder === true } : {}),
           customFields: {
             ...currentFields,
-            autopayEnabled: pendingOutcome.autopayEnabled === true,
-            autopayStatus: clean(pendingOutcome.autopayStatus) || "disabled",
-            autopayPaymentMethodId: clean(pendingOutcome.autopayPaymentMethodId) || null,
+            ...(hasPendingOutcome ? {
+              autopayEnabled: pendingOutcome.autopayEnabled === true,
+              autopayStatus: clean(pendingOutcome.autopayStatus) || "disabled",
+              autopayPaymentMethodId: clean(pendingOutcome.autopayPaymentMethodId) || null,
+            } : {}),
             ...(preservedExistingConsent ? {
               autopayConsentMigratedAt: new Date().toISOString(),
               autopayConsentMigrationReason: "stripe_connected_account_payment_method_reauthorized",
@@ -1349,6 +1353,7 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
             stripePendingAutopayOutcome: null,
             stripePendingAutopayAuditTenantId: null,
             stripePendingAutopayAuditCenterId: null,
+            stripeBankVerificationPending: false,
           },
         },
       });
@@ -1366,6 +1371,48 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
           },
         });
       }
+    });
+  } catch (error) {
+    if (isDuplicateWebhookEvent(error)) return NextResponse.json({ ok: true, duplicate: true });
+    throw error;
+  }
+  return NextResponse.json({ ok: true });
+}
+
+async function handlePaymentMethodSetupIntentFailed(event: StripeWebhookEvent, setupIntent: StripeSetupIntentObject) {
+  const billingAccountId = clean(setupIntent.metadata?.billingAccountId);
+  if (!billingAccountId) return NextResponse.json({ ok: true, ignored: true, reason: "billing_account_metadata_missing" });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event);
+      const billingAccount = await tx.billingAccount.findUnique({ where: { id: billingAccountId }, select: { customFields: true } });
+      if (!billingAccount) return;
+      const currentFields = jsonObject(billingAccount.customFields);
+      if (clean(currentFields.stripeSetupIntentId) !== setupIntent.id || currentFields.stripeBankVerificationPending !== true) return;
+      await tx.billingAccount.update({
+        where: { id: billingAccountId },
+        data: {
+          autopayPlaceholder: false,
+          customFields: {
+            ...currentFields,
+            autopayEnabled: false,
+            autopayStatus: "disabled",
+            autopayPaymentMethodId: null,
+            stripeDefaultPaymentMethodId: null,
+            stripePaymentMethodType: null,
+            stripePaymentMethodLast4: null,
+            stripePaymentMethodBrand: null,
+            stripePaymentMethodBankName: null,
+            stripeSetupIntentStatus: "setup_failed",
+            paymentMethodManagementStatus: "bank_verification_failed",
+            stripePendingAutopayOutcome: null,
+            stripePendingAutopayAuditTenantId: null,
+            stripePendingAutopayAuditCenterId: null,
+            stripeBankVerificationPending: false,
+            stripeEventId: event.id,
+          },
+        },
+      });
     });
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) return NextResponse.json({ ok: true, duplicate: true });
@@ -2197,6 +2244,10 @@ async function dispatchAuthenticatedEvent(
 
   if (event.type === "setup_intent.succeeded") {
     return handlePaymentMethodSetupIntentSucceeded(event, event.data.object as StripeSetupIntentObject);
+  }
+
+  if (event.type === "setup_intent.setup_failed") {
+    return handlePaymentMethodSetupIntentFailed(event, event.data.object as StripeSetupIntentObject);
   }
 
   if (event.type === "charge.refunded") {

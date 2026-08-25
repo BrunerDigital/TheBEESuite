@@ -1315,6 +1315,17 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
   if (!paymentMethodId) {
     return NextResponse.json({ ok: false, error: "Verified setup intent is missing a payment method." }, { status: 400 });
   }
+  const paymentMethodLookup = await retrieveStripePaymentMethod(paymentMethodId, {
+    tenantId: clean(setupIntent.metadata?.tenantId) || null,
+    connectedAccountId: clean(setupIntent.metadata?.stripeConnectedAccountId) || clean(event.account) || null,
+  });
+  if (!paymentMethodLookup.ok || !paymentMethodLookup.paymentMethod) {
+    return NextResponse.json(
+      { ok: false, error: paymentMethodLookup.error || "Verified payment method details could not be retrieved." },
+      { status: paymentMethodLookup.configured ? 502 : 503 },
+    );
+  }
+  const paymentMethodDetails = paymentMethodLookup.paymentMethod;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -1356,10 +1367,10 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
             stripeSetupIntentStatus: "succeeded",
             stripeDefaultPaymentMethodId: clean(currentFields.stripePendingPaymentMethodId) || paymentMethodId,
             stripeDefaultPaymentMethodConnectedAccountId: clean(currentFields.stripePendingPaymentMethodConnectedAccountId) || null,
-            stripePaymentMethodType: clean(currentFields.stripePendingPaymentMethodType) || null,
-            stripePaymentMethodLast4: clean(currentFields.stripePendingPaymentMethodLast4) || null,
-            stripePaymentMethodBrand: clean(currentFields.stripePendingPaymentMethodBrand) || null,
-            stripePaymentMethodBankName: clean(currentFields.stripePendingPaymentMethodBankName) || null,
+            stripePaymentMethodType: paymentMethodDetails.type || clean(currentFields.stripePendingPaymentMethodType) || null,
+            stripePaymentMethodLast4: paymentMethodDetails.last4 || clean(currentFields.stripePendingPaymentMethodLast4) || null,
+            stripePaymentMethodBrand: paymentMethodDetails.brand || clean(currentFields.stripePendingPaymentMethodBrand) || null,
+            stripePaymentMethodBankName: paymentMethodDetails.bankName || clean(currentFields.stripePendingPaymentMethodBankName) || null,
             stripePendingPaymentMethodId: null,
             stripePendingPaymentMethodConnectedAccountId: null,
             stripePendingPaymentMethodType: null,

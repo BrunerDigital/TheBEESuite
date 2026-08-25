@@ -1200,6 +1200,7 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
         setupMode,
       });
       const setupSucceeded = setupIntent?.setupIntent?.status === "succeeded";
+      const setupPending = !setupSucceeded && !["canceled", "setup_failed"].includes(setupIntent?.setupIntent?.status || "");
       const appliedAutopayPatch = setupSucceeded ? autopayPatch : null;
       const auditTenantId = familyCenter?.organization.tenantId || clean(tenantId);
       if (autopayPatch?.preservedExistingConsent && !auditTenantId) {
@@ -1233,7 +1234,7 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
                 autopayDisabledReason: "saved_payment_method_replaced",
               } : {}),
             } : {}),
-            ...(!setupSucceeded ? {
+            ...(setupPending ? {
               autopayEnabled: false,
               autopayStatus: "pending",
               autopayPaymentMethodId: null,
@@ -1253,12 +1254,12 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
             stripePaymentMethodLast4: setupSucceeded ? (paymentMethodDetails?.last4 ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodLast4) || null)) : (clean(currentFields.stripePaymentMethodLast4) || null),
             stripePaymentMethodBrand: setupSucceeded ? (paymentMethodDetails?.brand ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodBrand) || null)) : (clean(currentFields.stripePaymentMethodBrand) || null),
             stripePaymentMethodBankName: setupSucceeded ? (paymentMethodDetails?.bankName ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodBankName) || null)) : (clean(currentFields.stripePaymentMethodBankName) || null),
-            stripePendingPaymentMethodId: setupSucceeded ? null : (paymentMethodId || null),
-            stripePendingPaymentMethodConnectedAccountId: setupSucceeded ? null : (connectedAccountId || null),
-            stripePendingPaymentMethodType: setupSucceeded ? null : (paymentMethodDetails?.type || null),
-            stripePendingPaymentMethodLast4: setupSucceeded ? null : (paymentMethodDetails?.last4 || null),
-            stripePendingPaymentMethodBrand: setupSucceeded ? null : (paymentMethodDetails?.brand || null),
-            stripePendingPaymentMethodBankName: setupSucceeded ? null : (paymentMethodDetails?.bankName || null),
+            stripePendingPaymentMethodId: setupPending ? (paymentMethodId || null) : null,
+            stripePendingPaymentMethodConnectedAccountId: setupPending ? (connectedAccountId || null) : null,
+            stripePendingPaymentMethodType: setupPending ? (paymentMethodDetails?.type || null) : null,
+            stripePendingPaymentMethodLast4: setupPending ? (paymentMethodDetails?.last4 || null) : null,
+            stripePendingPaymentMethodBrand: setupPending ? (paymentMethodDetails?.brand || null) : null,
+            stripePendingPaymentMethodBankName: setupPending ? (paymentMethodDetails?.bankName || null) : null,
             stripeSetupIntentId: setupIntentId || null,
             stripeSetupIntentStatus: setupIntent?.setupIntent?.status || null,
             stripeSetupCheckoutSessionId: session.id,
@@ -1267,7 +1268,7 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
             stripePaymentMethodSavedAt: setupSucceeded ? new Date().toISOString() : null,
             paymentMethodManagementStatus: setupSucceeded
               ? (paymentMethodId ? "payment_method_saved" : "setup_completed_missing_payment_method")
-              : "pending_bank_verification",
+              : (setupPending ? "pending_bank_verification" : "bank_verification_failed"),
           },
         },
       });
@@ -1407,8 +1408,13 @@ async function handlePaymentMethodSetupIntentFailed(event: StripeWebhookEvent, s
       if (!billingAccount) return;
       const currentFields = jsonObject(billingAccount.customFields);
       if (clean(currentFields.stripeSetupIntentId) !== setupIntent.id || currentFields.stripeBankVerificationPending !== true) return;
-      await tx.billingAccount.update({
-        where: { id: billingAccountId },
+      const update = await tx.billingAccount.updateMany({
+        where: {
+          id: billingAccountId,
+          customFields: billingAccount.customFields === null
+            ? { equals: Prisma.DbNull }
+            : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+        },
         data: {
           autopayPlaceholder: false,
           customFields: {
@@ -1432,6 +1438,7 @@ async function handlePaymentMethodSetupIntentFailed(event: StripeWebhookEvent, s
           },
         },
       });
+      if (update.count !== 1) throw new Error("Billing account changed while failed bank verification was being recorded.");
     });
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) return NextResponse.json({ ok: true, duplicate: true });

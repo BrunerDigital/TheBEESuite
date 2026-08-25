@@ -2503,12 +2503,15 @@ async function renderLivePage(
     const parentInvoices = invoices.map((invoice) => {
       const invoiceFields = asRecord(invoice.customFields);
       const document = parentInvoiceDocuments.get(invoice.id);
+      const productCheckoutAvailable = stringField(invoiceFields.checkoutPurpose) === "product_purchase"
+        || stringField(invoiceFields.receiptKind) === "product"
+        || stringField(invoiceFields.chargeSource) === "product";
       const billingPeriod = stringField(invoiceFields.coverageStartsPeriod) || stringField(invoiceFields.billingPeriod);
       const invoiceWeekCount = Math.max(1, Number(invoiceFields.invoiceWeekCount) || 1);
       const billingCadence = stringField(invoiceFields.billingCadence) || stringField(invoiceFields.tuitionPlanCadence) || "weekly";
       const weeklyPeriod = /^\d{4}-W\d{2}$/i.test(billingPeriod || "");
       const monthlyPeriod = /^\d{4}-\d{2}$/.test(billingPeriod || "");
-      const servicePeriodStart = weeklyPeriod && billingPeriod
+      const servicePeriodStart = productCheckoutAvailable ? null : weeklyPeriod && billingPeriod
         ? recurringDueDateForPeriod(billingPeriod, 1, billingCadence).toISOString().slice(0, 10)
         : monthlyPeriod && billingPeriod
           ? `${billingPeriod}-01`
@@ -2518,9 +2521,12 @@ async function renderLivePage(
           ? new Date(Date.UTC(Number(servicePeriodStart.slice(0, 4)), Number(servicePeriodStart.slice(5, 7)), 0)).toISOString().slice(0, 10)
           : new Date(new Date(`${servicePeriodStart}T00:00:00.000Z`).getTime() + (invoiceWeekCount * 7 - 1) * 86_400_000).toISOString().slice(0, 10)
         : null;
-      const productCheckoutAvailable = stringField(invoiceFields.checkoutPurpose) === "product_purchase"
-        || stringField(invoiceFields.receiptKind) === "product"
-        || stringField(invoiceFields.chargeSource) === "product";
+      const childIds = Array.isArray(invoiceFields.childIds)
+        ? invoiceFields.childIds.filter((value): value is string => typeof value === "string")
+        : [];
+      const batchChildNames = childIds
+        .map((childId) => family?.children.find((child) => child.id === childId)?.fullName)
+        .filter((value): value is string => Boolean(value));
       return {
         id: invoice.id,
         number: invoice.number,
@@ -2529,6 +2535,7 @@ async function renderLivePage(
         familyDocumentAmountCents: document?.amountCents ?? null,
         childName: stringField(invoiceFields.childName)
           || family?.children.find((child) => child.id === stringField(invoiceFields.childId))?.fullName
+          || (batchChildNames.length ? batchChildNames.join(", ") : null)
           || null,
         servicePeriodStart,
         servicePeriodEnd: servicePeriodEndLabel,

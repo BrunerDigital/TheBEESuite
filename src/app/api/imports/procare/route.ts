@@ -59,6 +59,11 @@ import {
 } from "@/lib/procare-guardian-merge";
 import { enrollmentClassroomValidationError, isClosedEnrollmentStatus } from "@/lib/enrollment-status";
 import { invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
+import {
+  MAX_PROCARE_SOURCE_FILES,
+  MAX_PROCARE_UPLOAD_BYTES,
+  MAX_PROCARE_UPLOAD_LABEL,
+} from "@/lib/procare-upload-limits";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -1197,9 +1202,6 @@ const STANDARD_MULTI_REPORT_HINT_GROUPS = [
   ["relationship type", "authorized pickup"],
   ["category description", "item description"],
 ] as const;
-const MAX_PROCARE_SOURCE_FILES = 500;
-const MAX_PROCARE_UPLOAD_BYTES = 100 * 1024 * 1024;
-
 function normalizedImportHeader(value: string) {
   return value.replace(/^\ufeff/, "").trim().toLowerCase().replace(/#/g, " number ").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -1425,7 +1427,7 @@ async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
   }
   const uploadedBytes = uploadedFiles.reduce((total, file) => total + file.size, 0);
   if (uploadedBytes > MAX_PROCARE_UPLOAD_BYTES) {
-    throw new Error("The selected sources are larger than 100 MB. Split the handoff into reviewed batches.");
+    throw new Error(`The selected sources are larger than the ${MAX_PROCARE_UPLOAD_LABEL} secure browser-upload limit. Create one ZIP containing this school's unchanged reports, or run the file-only preflight outside the browser.`);
   }
   if (!uploadedFiles.length) {
     return { text: pastedCsv, filename: "pasted-procare-import.csv", sourceType: "csv_text", datasetCoverage: null };

@@ -114,6 +114,9 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(panel, /warningRowNumbers \?\? \[\]\)\.join\(","\)/);
   assert.match(panel, /duplicateReviewRowNumbers \?\? \[\]\)\.join\(","\)/);
   assert.match(panel, /same selected files; they are still selected/);
+  assert.match(panel, /secure browser-upload limit/);
+  assert.match(panel, /Do not remove required reports to make the package fit/);
+  assert.match(route, /MAX_PROCARE_UPLOAD_BYTES/);
   assert.match(panel, /chunkSize", "20"/);
   assert.match(panel, /Continuing the resumable import from row/);
   assert.match(panel, /Continuing automatically/);

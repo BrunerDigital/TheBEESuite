@@ -51,6 +51,7 @@ npm.cmd run procare:preflight-location -- --location "<school>" --source-dir "<s
 ## 5. Guarded application preview
 
 - [ ] Select exactly one school and upload the exact reviewed packet.
+- [ ] Keep browser submissions at or below 4 MB so the complete multipart request stays below the hosting limit. ZIP the school's unchanged reports when needed; if the complete ZIP is still larger, use the file-only preflight and retain its review packet. Never remove a required report merely to reduce size.
 - [ ] Confirm center ID, detected source inventory, SHA-256, review fingerprint, total counts, duplicate groups, warnings, and field correlations.
 - [ ] Stop for any wrong-school mapping, source hash change, ignored source, unresolved row, duplicate ambiguity, missing relationship, missing weekly rate, or incomplete required domain.
 - [ ] Obtain explicit import approval. Import approval remains separate from every activation and cutover gate.

@@ -15,6 +15,12 @@ import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  MAX_PROCARE_SOURCE_FILES,
+  MAX_PROCARE_UPLOAD_BYTES,
+  MAX_PROCARE_UPLOAD_LABEL,
+  procareSourceSizeBytes,
+} from "@/lib/procare-upload-limits";
 
 type CenterOption = {
   id: string;
@@ -369,6 +375,17 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
 
   function submit(dryRun: boolean) {
     if (submitLockedRef.current) return;
+    const sourceBytes = selectedFiles.length
+      ? procareSourceSizeBytes(selectedFiles)
+      : new Blob([csv]).size;
+    if (selectedFiles.length > MAX_PROCARE_SOURCE_FILES) {
+      setError(`Choose no more than ${MAX_PROCARE_SOURCE_FILES.toLocaleString()} files in one reviewed school package.`);
+      return;
+    }
+    if (sourceBytes > MAX_PROCARE_UPLOAD_BYTES) {
+      setError(`This source is larger than the ${MAX_PROCARE_UPLOAD_LABEL} secure browser-upload limit. Create one ZIP containing this school's unchanged reports, or run the file-only preflight outside the browser.`);
+      return;
+    }
     if (!dryRun && (
       !preview?.sourceSha256
       || !preview.reviewFingerprint
@@ -541,7 +558,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const busy = isPending || importWorking;
   const duplicateScanSummary = `Complete duplicate analysis ran in ${preview?.duplicateReviewChunks ?? 1} relationship-preserving review chunk(s) and found ${preview?.duplicateMatches ?? 0} possible match groups across ${duplicateReviewRows} review row(s).`;
   const pastedCsvPresent = Boolean(csv.trim());
-  const selectedFilesTotalBytes = selectedFiles.reduce((total, file) => total + file.size, 0);
+  const selectedFilesTotalBytes = procareSourceSizeBytes(selectedFiles);
+  const pastedCsvTotalBytes = pastedCsvPresent ? new Blob([csv]).size : 0;
+  const selectedSourceTooLarge = (selectedFiles.length ? selectedFilesTotalBytes : pastedCsvTotalBytes) > MAX_PROCARE_UPLOAD_BYTES;
+  const selectedFileCountTooLarge = selectedFiles.length > MAX_PROCARE_SOURCE_FILES;
   const hasMixedSources = pastedCsvPresent && selectedFiles.length > 0;
   const hasImportSource = pastedCsvPresent || selectedFiles.length > 0;
   const noCentersAvailable = !centers.length;
@@ -553,7 +573,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     && Array.isArray(preview.warningRowNumbers)
     && Array.isArray(preview.duplicateReviewRowNumbers),
   );
-  const canPreview = !busy && Boolean(centerId) && hasImportSource && !hasMixedSources && !noCentersAvailable;
+  const canPreview = !busy && Boolean(centerId) && hasImportSource && !hasMixedSources && !noCentersAvailable && !selectedSourceTooLarge && !selectedFileCountTooLarge;
   const requiredCorrelationSections = preview?.correlationReview?.filter((section) => section.required) ?? [];
   const missingCorrelationSections = requiredCorrelationSections.filter((section) => !correlationConfirmations.includes(section.id));
   const sourceInventory = preview?.datasetCoverage?.sourceInventory ?? [];
@@ -1183,8 +1203,19 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               </div>
             ) : null}
             <p className="text-xs leading-5 text-muted-foreground">
-              Choose one folder containing any number or combination of the supported previous-system reports, choose individual files, or choose a ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Do not submit exports from another provider through this importer. Each reviewed batch may contain up to 500 files and 100 MB.
+              Choose one folder containing any combination of the supported previous-system reports, choose individual files, or choose one ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Do not submit exports from another provider through this importer. Browser review supports up to {MAX_PROCARE_SOURCE_FILES.toLocaleString()} files and {MAX_PROCARE_UPLOAD_LABEL}; ZIP larger source folders without changing their contents, or use the file-only preflight outside the browser.
             </p>
+            {selectedSourceTooLarge || selectedFileCountTooLarge ? (
+              <Alert variant="destructive" role="alert">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Prepare a smaller secure browser package</AlertTitle>
+                <AlertDescription>
+                  {selectedFileCountTooLarge
+                    ? `This selection contains more than ${MAX_PROCARE_SOURCE_FILES.toLocaleString()} files.`
+                    : `This selection is larger than ${MAX_PROCARE_UPLOAD_LABEL}.`} Create one ZIP containing this school&apos;s unchanged reports, or run the file-only preflight outside the browser. Do not remove required reports to make the package fit.
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {hasMixedSources ? (
               <Alert variant="destructive" role="alert">
                 <AlertCircle className="size-4" />

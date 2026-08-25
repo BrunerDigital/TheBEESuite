@@ -666,7 +666,7 @@ export const modules: ModuleDefinition[] = [
     description:
       "Kid City USA Enterprises monthly software fee view for The BEE Suite access, billed at a fixed amount per active school.",
     owner: "Kid City USA accounting, platform owner, brand admin",
-    metrics: ["$99 per active school", "Monthly subscription", "School-authorized payment", "Audit logged"],
+    metrics: ["$49 corporate / $79 partner", "Monthly subscription", "School-authorized payment", "Audit logged"],
     features: ["Current invoice preview", "Active school-user count", "Bee Suite-branded hosted invoice link", "Corporate billing audit trail"],
     records: ["Kid City USA Enterprises monthly software access invoice"],
     sensitive: true,

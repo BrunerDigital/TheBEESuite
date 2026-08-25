@@ -2,10 +2,28 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  computeCommunicationSmsDeliveryState,
   computeIntegrationDeliveryState,
   nextIntegrationRetryAt,
   staleTimeSensitiveDeliveryReason,
 } from "@/lib/integration-deliveries";
+
+test("Twilio submission remains accepted until a delivery callback confirms the outcome", () => {
+  const now = new Date("2026-08-25T17:00:00.000Z");
+  assert.deepEqual(
+    computeCommunicationSmsDeliveryState({
+      result: { ok: true, id: "SM123" },
+      attempts: 1,
+      statusCallbackUrl: "https://thebeesuite.io/api/twilio/status",
+      now,
+    }),
+    { status: "accepted", nextAttemptAt: null, deliveredAt: null },
+  );
+  assert.deepEqual(
+    computeCommunicationSmsDeliveryState({ result: { ok: true, id: "SM123" }, attempts: 1, now }),
+    { status: "delivered", nextAttemptAt: null, deliveredAt: now },
+  );
+});
 
 test("integration delivery state records skipped, delivered, pending, and failed outcomes", () => {
   const now = new Date("2026-06-02T14:00:00.000Z");

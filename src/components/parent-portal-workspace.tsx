@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { InvoicePrintButton } from "@/components/billing-print-actions";
 import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import {
   AlertCircle,
@@ -119,6 +120,11 @@ type Invoice = {
   purposeLabel?: string | null;
   productCheckoutAvailable?: boolean;
   pendingPayment?: PendingInvoicePayment | null;
+  familyDocumentAmountCents?: number | null;
+  childName?: string | null;
+  servicePeriodStart?: string | null;
+  servicePeriodEnd?: string | null;
+  items?: Array<{ description: string; amountCents: number }>;
 };
 
 type Payment = {
@@ -375,6 +381,7 @@ type Props = {
     childNames: string[];
   }>;
   centerName?: string | null;
+  centerEin?: string | null;
   demoMode?: boolean;
   previewMode?: boolean;
 };
@@ -721,6 +728,7 @@ function ParentPortalWorkspaceView({
   replyDraft = null,
   availableFamilies = [],
   centerName = null,
+  centerEin = null,
   demoMode,
   previewMode = false,
   paymentCheckoutMethod,
@@ -3511,6 +3519,24 @@ function ParentPortalWorkspaceView({
                       ? "Processing"
                       : displayTokenLabel(invoice.status)}
                   </Badge>
+                  {typeof invoice.familyDocumentAmountCents === "number" ? <InvoicePrintButton
+                    invoice={{
+                      number: invoice.number,
+                      status: invoice.status,
+                      dueDate: invoice.dueDate,
+                      totalCents: invoice.familyDocumentAmountCents,
+                      childName: invoice.childName ?? null,
+                      servicePeriodStart: invoice.servicePeriodStart ?? null,
+                      servicePeriodEnd: invoice.servicePeriodEnd ?? null,
+                      items: invoice.items?.length
+                        ? invoice.items
+                        : [{ description: invoice.purposeLabel ?? "Family account charge", amountCents: invoice.familyDocumentAmountCents }],
+                      documentTitle: invoice.productCheckoutAvailable ? "Purchase Invoice" : "Tuition Invoice",
+                    }}
+                    familyName={family.name}
+                    schoolName={centerName}
+                    schoolEin={centerEin}
+                  /> : null}
                   {invoice.productCheckoutAvailable &&
                   invoice.status === "OPEN" &&
                   !invoiceHasPendingPayment ? (

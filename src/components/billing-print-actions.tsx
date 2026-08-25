@@ -46,6 +46,18 @@ export type BillingPaymentReceipt = {
   };
 };
 
+export type BillingInvoiceDocument = {
+  number: string;
+  status: string;
+  dueDate: Date | string;
+  totalCents: number;
+  childName: string | null;
+  servicePeriodStart: string | null;
+  servicePeriodEnd: string | null;
+  items: Array<{ description: string; amountCents: number }>;
+  documentTitle?: string;
+};
+
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
@@ -204,6 +216,56 @@ export function PaymentReceiptPrintButton({ payment, schools }: { payment: Billi
               <th>Payment reference</th>
               <td>{payment.externalIdPlaceholder ?? payment.id}</td>
             </tr>
+          </tbody>
+        </table>
+      </PrintableReport>
+    </>
+  );
+}
+
+export function InvoicePrintButton({
+  invoice,
+  familyName,
+  schoolName,
+  schoolEin,
+}: {
+  invoice: BillingInvoiceDocument;
+  familyName: string;
+  schoolName: string | null;
+  schoolEin: string | null;
+}) {
+  const timeZone = useSchoolTimeZone();
+  const { active, generatedAt, print } = usePrintableReport();
+
+  return (
+    <>
+      <ReportPrintStyles />
+      <Button type="button" variant="outline" size="sm" onClick={print}>
+        <Printer data-icon="inline-start" />
+        Invoice
+      </Button>
+      <PrintableReport active={active} label={`Printable invoice ${invoice.number}`}>
+        <header style={{ marginBottom: 20 }}>
+          <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>{invoice.documentTitle ?? "Tuition Invoice"}</h1>
+          <div>Invoice: {invoice.number}</div>
+          <div>Generated: {formatPrintDateTime(generatedAt, timeZone)}</div>
+          <div>School: {schoolName ?? "School not assigned"}</div>
+          <div>School EIN: {schoolEin ?? "Not provided"}</div>
+        </header>
+        <table>
+          <tbody>
+            <tr><th>Family</th><td>{familyName}</td></tr>
+            <tr><th>Child</th><td>{invoice.childName ?? "Family account charge"}</td></tr>
+            <tr><th>Service period</th><td>{invoice.servicePeriodStart && invoice.servicePeriodEnd ? `${invoice.servicePeriodStart} – ${invoice.servicePeriodEnd}` : "Not specified"}</td></tr>
+            <tr><th>Due date</th><td>{formatDate(invoice.dueDate, timeZone)}</td></tr>
+            <tr><th>Status</th><td>{displayLabel(invoice.status)}</td></tr>
+          </tbody>
+        </table>
+        <table style={{ marginTop: 20 }}>
+          <thead><tr><th>Description</th><th>Amount</th></tr></thead>
+          <tbody>
+            {invoice.items.map((item, index) => <tr key={`${item.description}-${index}`}><td>{item.description}</td><td>{money(item.amountCents)}</td></tr>)}
+            <tr><th>Total</th><th>{money(invoice.totalCents)}</th></tr>
           </tbody>
         </table>
       </PrintableReport>

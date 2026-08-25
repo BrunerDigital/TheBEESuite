@@ -78,7 +78,8 @@ test("bank account request copy separates verification from autopay consent", ()
   assert.match(email, /verify a bank account/i);
   assert.match(email, /does not turn on autopay/i);
   assert.match(email, /Connect securely through your bank/i);
-  assert.match(email, /instead of waiting for microdeposits/i);
+  assert.match(email, /instant verification first/i);
+  assert.match(email, /small microdeposit verification/i);
   assert.match(email, /Stripe provides the secure payment form/i);
   assert.match(notification, /Verify a bank account/i);
   assert.match(notification, /does not turn on autopay/i);

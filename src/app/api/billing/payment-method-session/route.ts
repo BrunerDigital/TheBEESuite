@@ -101,7 +101,7 @@ async function POSTHandler(request: NextRequest) {
   }
   const action = actionFrom(body.action);
   const paymentMethodCategory = paymentMethodCategoryFrom(body.paymentMethodCategory);
-  const bankAccountVerificationMethod = paymentMethodCategory === "link_bank" ? "instant" : null;
+  const bankAccountVerificationMethod = paymentMethodCategory === "link_bank" ? "automatic" : null;
   const processingRecoveryAccepted = body.processingRecoveryAccepted === true ||
     clean(body.processingRecoveryAccepted).toLowerCase() === "true";
   const returnPath = safeReturnPath(body.returnPath, isParentGuardian(user) ? "/parent-portal" : "/family-detail");
@@ -222,6 +222,7 @@ async function POSTHandler(request: NextRequest) {
           autopayDisabledAt: new Date().toISOString(),
           autopayDisabledByUserId: user.id,
           autopayPaymentMethodId: null,
+          ...(currentFields.stripeBankVerificationPending === true ? { stripePendingAutopayOutcome: null } : {}),
         },
       },
     });

@@ -18,7 +18,17 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
   assert.match(paymentMethodManagement, /const explicitEnable = setupMode === "enable"/);
   assert.match(paymentMethodManagement, /const explicitDisable = setupMode === "disabled"/);
   assert.match(webhook, /const autopayPatch = paymentMethodSetupAutopayOutcome/);
-  assert.match(webhook, /autopayEnabled: autopayPatch.autopayEnabled,/);
+  assert.match(webhook, /const appliedAutopayPatch = setupSucceeded \? autopayPatch : null/);
+  assert.match(webhook, /autopayStatus: "pending"/);
+  assert.match(webhook, /stripeBankVerificationPending !== true/);
+  assert.match(webhook, /event.type === "setup_intent.setup_failed"/);
+  assert.match(webhook, /const setupPending = !setupSucceeded/);
+  assert.match(webhook, /Billing account changed while failed bank verification was being recorded/);
+  assert.match(webhook, /stripePendingPaymentMethodId/);
+  assert.match(webhook, /Verified payment method details could not be retrieved/);
+  assert.match(webhook, /setupSucceeded \? \(paymentMethodId \|\| null\) : \(previousPaymentMethodId \|\| null\)/);
+  assert.match(paymentMethodRoute, /stripePendingAutopayOutcome: null/);
+  assert.match(webhook, /event.type === "setup_intent.succeeded"/);
 });
 
 test("director billing labels distinguish invoice creation from charging", () => {

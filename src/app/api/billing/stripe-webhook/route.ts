@@ -1235,7 +1235,7 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
             } : {}),
             ...(!setupSucceeded ? {
               autopayEnabled: false,
-              autopayStatus: "pending_bank_verification",
+              autopayStatus: "pending",
               autopayPaymentMethodId: null,
               stripePendingAutopayOutcome: autopayPatch,
               stripePendingAutopayAuditTenantId: auditTenantId,
@@ -1317,7 +1317,9 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
       if (!billingAccount) return;
       const currentFields = jsonObject(billingAccount.customFields);
       if (clean(currentFields.stripeSetupIntentId) !== setupIntent.id) return;
+      if (clean(currentFields.paymentMethodManagementStatus) !== "pending_bank_verification") return;
       const pendingOutcome = jsonObject(currentFields.stripePendingAutopayOutcome);
+      if (!Object.keys(pendingOutcome).length) return;
       const preservedExistingConsent = pendingOutcome.preservedExistingConsent === true;
       const update = await tx.billingAccount.updateMany({
         where: {

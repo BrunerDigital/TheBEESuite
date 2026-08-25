@@ -15,6 +15,15 @@ import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  MAX_PROCARE_SOURCE_FILES,
+  MAX_PROCARE_SOURCE_BYTES,
+  MAX_PROCARE_SOURCE_LABEL,
+  MAX_PROCARE_MULTIPART_BYTES,
+  MAX_PROCARE_MULTIPART_LABEL,
+  procareMultipartSizeBytes,
+  procareSourceSizeBytes,
+} from "@/lib/procare-upload-limits";
 
 type CenterOption = {
   id: string;
@@ -369,6 +378,17 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
 
   function submit(dryRun: boolean) {
     if (submitLockedRef.current) return;
+    const sourceBytes = selectedFiles.length
+      ? procareSourceSizeBytes(selectedFiles)
+      : new Blob([csv]).size;
+    if (selectedFiles.length > MAX_PROCARE_SOURCE_FILES) {
+      setError(`Choose no more than ${MAX_PROCARE_SOURCE_FILES.toLocaleString()} files in one reviewed school package.`);
+      return;
+    }
+    if (sourceBytes > MAX_PROCARE_SOURCE_BYTES) {
+      setError(`This source is larger than the ${MAX_PROCARE_SOURCE_LABEL} secure browser-source limit. Create one ZIP containing this school's unchanged reports, or run the file-only preflight outside the browser.`);
+      return;
+    }
     if (!dryRun && (
       !preview?.sourceSha256
       || !preview.reviewFingerprint
@@ -411,6 +431,13 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             formData.set("chunkStart", String(nextRow));
             formData.set("chunkSize", "20");
             if (resumeBatchId) formData.set("batchId", resumeBatchId);
+          }
+          const multipartBytes = await procareMultipartSizeBytes(formData, {
+            // Reserve the next request's resumable identifier before the first chunk writes.
+            batchId: "x".repeat(64),
+          });
+          if (multipartBytes > MAX_PROCARE_MULTIPART_BYTES) {
+            throw new Error(`The complete reviewed request is larger than the ${MAX_PROCARE_MULTIPART_LABEL} secure browser-request limit after confirmation details were added. Run the file-only preflight and retain the review packet.`);
           }
           response = await uploadImport(formData, (percent, uploaded) => {
             setProgressPercent((current) => Math.max(current, percent));
@@ -490,12 +517,14 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "the reviewed source package"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.createdStaffLogins ?? 0} staff logins, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.${unresolved ? ` ${unresolved} row(s) were safely retained below for mapping or disposal.` : ""}`,
         );
         router.refresh();
-      } catch {
+      } catch (error) {
         setProgressPhase("idle");
         setProgressPercent(0);
-        setError(dryRun
-          ? "Import review could not be prepared. Check the file and try again; the selected files remain attached."
-          : "Data import could not be committed. Keep this page open and retry with the same selected files; they remain attached.");
+        setError(error instanceof Error && error.message.includes("secure browser-request limit")
+          ? error.message
+          : dryRun
+            ? "Import review could not be prepared. Check the file and try again; the selected files remain attached."
+            : "Data import could not be committed. Keep this page open and retry with the same selected files; they remain attached.");
       } finally {
         submitLockedRef.current = false;
       }
@@ -541,7 +570,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const busy = isPending || importWorking;
   const duplicateScanSummary = `Complete duplicate analysis ran in ${preview?.duplicateReviewChunks ?? 1} relationship-preserving review chunk(s) and found ${preview?.duplicateMatches ?? 0} possible match groups across ${duplicateReviewRows} review row(s).`;
   const pastedCsvPresent = Boolean(csv.trim());
-  const selectedFilesTotalBytes = selectedFiles.reduce((total, file) => total + file.size, 0);
+  const selectedFilesTotalBytes = procareSourceSizeBytes(selectedFiles);
+  const pastedCsvTotalBytes = pastedCsvPresent ? new Blob([csv]).size : 0;
+  const selectedSourceTooLarge = (selectedFiles.length ? selectedFilesTotalBytes : pastedCsvTotalBytes) > MAX_PROCARE_SOURCE_BYTES;
+  const selectedFileCountTooLarge = selectedFiles.length > MAX_PROCARE_SOURCE_FILES;
   const hasMixedSources = pastedCsvPresent && selectedFiles.length > 0;
   const hasImportSource = pastedCsvPresent || selectedFiles.length > 0;
   const noCentersAvailable = !centers.length;
@@ -553,7 +585,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     && Array.isArray(preview.warningRowNumbers)
     && Array.isArray(preview.duplicateReviewRowNumbers),
   );
-  const canPreview = !busy && Boolean(centerId) && hasImportSource && !hasMixedSources && !noCentersAvailable;
+  const canPreview = !busy && Boolean(centerId) && hasImportSource && !hasMixedSources && !noCentersAvailable && !selectedSourceTooLarge && !selectedFileCountTooLarge;
   const requiredCorrelationSections = preview?.correlationReview?.filter((section) => section.required) ?? [];
   const missingCorrelationSections = requiredCorrelationSections.filter((section) => !correlationConfirmations.includes(section.id));
   const sourceInventory = preview?.datasetCoverage?.sourceInventory ?? [];
@@ -1183,8 +1215,19 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               </div>
             ) : null}
             <p className="text-xs leading-5 text-muted-foreground">
-              Choose one folder containing any number or combination of the supported previous-system reports, choose individual files, or choose a ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Do not submit exports from another provider through this importer. Each reviewed batch may contain up to 500 files and 100 MB.
+              Choose one folder containing any combination of the supported previous-system reports, choose individual files, or choose one ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Do not submit exports from another provider through this importer. Browser review supports up to {MAX_PROCARE_SOURCE_FILES.toLocaleString()} files and {MAX_PROCARE_SOURCE_LABEL} of source data; ZIP larger source folders without changing their contents, or use the file-only preflight outside the browser.
             </p>
+            {selectedSourceTooLarge || selectedFileCountTooLarge ? (
+              <Alert variant="destructive" role="alert">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Prepare a smaller secure browser package</AlertTitle>
+                <AlertDescription>
+                  {selectedFileCountTooLarge
+                    ? `This selection contains more than ${MAX_PROCARE_SOURCE_FILES.toLocaleString()} files. Run the file-only preflight outside the browser and retain its review packet.`
+                    : `This selection is larger than ${MAX_PROCARE_SOURCE_LABEL}. Create one ZIP containing this school&apos;s unchanged reports, or run the file-only preflight outside the browser.`} Do not remove required reports to make the package fit.
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {hasMixedSources ? (
               <Alert variant="destructive" role="alert">
                 <AlertCircle className="size-4" />

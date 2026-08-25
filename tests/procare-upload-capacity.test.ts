@@ -7,6 +7,7 @@ import {
   procareMultipartSizeBytes,
   procareSourceFitsBrowserUpload,
   procareSourceSizeBytes,
+  procareTextSizeBytes,
 } from "@/lib/procare-upload-limits";
 
 test("ProCare browser packages reserve metadata and multipart headroom below the hosting request limit", () => {
@@ -23,6 +24,11 @@ test("ProCare source sizing blocks oversized packages before upload", () => {
   assert.equal(procareSourceFitsBrowserUpload(exact), true);
   assert.equal(procareSourceFitsBrowserUpload([...exact, { size: 1 }]), false);
   assert.equal(procareSourceFitsBrowserUpload(Array.from({ length: 501 }, () => ({ size: 0 }))), false);
+});
+
+test("ProCare pasted-source sizing uses UTF-8 bytes", () => {
+  assert.equal(procareTextSizeBytes("abc"), 3);
+  assert.equal(procareTextSizeBytes("🐝"), 4);
 });
 
 test("ProCare commit sizing includes variable review metadata in the multipart body", async () => {

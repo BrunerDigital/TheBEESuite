@@ -72,6 +72,7 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(route, /Choose either uploaded files or pasted CSV text/);
   assert.match(route, /MAX_PROCARE_SOURCE_FILES/);
   assert.match(route, /MAX_PROCARE_SOURCE_BYTES/);
+  assert.match(route, /procareTextSizeBytes\(pastedCsv\)/);
   assert.match(route, /No supported source report or consolidated CSV columns were recognized/);
   assert.match(route, /formData\.getAll\("file"\)/);
   assert.match(route, /if \(isZipBuffer\(buffer\)\)/);

@@ -10,6 +10,10 @@ export function procareSourceSizeBytes(files: ArrayLike<{ size: number }>) {
   return Array.from(files).reduce((total, file) => total + file.size, 0);
 }
 
+export function procareTextSizeBytes(value: string) {
+  return new TextEncoder().encode(value).byteLength;
+}
+
 export function procareSourceFitsBrowserUpload(files: ArrayLike<{ size: number }>) {
   return files.length <= MAX_PROCARE_SOURCE_FILES
     && procareSourceSizeBytes(files) <= MAX_PROCARE_SOURCE_BYTES;

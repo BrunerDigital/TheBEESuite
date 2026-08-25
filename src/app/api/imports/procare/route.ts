@@ -63,6 +63,7 @@ import {
   MAX_PROCARE_SOURCE_FILES,
   MAX_PROCARE_SOURCE_BYTES,
   MAX_PROCARE_SOURCE_LABEL,
+  procareTextSizeBytes,
 } from "@/lib/procare-upload-limits";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -1424,6 +1425,9 @@ async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
   }
   if (uploadedFiles.length > MAX_PROCARE_SOURCE_FILES) {
     throw new Error(`The selected sources contain more than ${MAX_PROCARE_SOURCE_FILES} files. Split the handoff into reviewed batches.`);
+  }
+  if (!uploadedFiles.length && procareTextSizeBytes(pastedCsv) > MAX_PROCARE_SOURCE_BYTES) {
+    throw new Error(`The pasted source is larger than the ${MAX_PROCARE_SOURCE_LABEL} secure browser-source limit. Upload one ZIP containing this school's unchanged reports, or run the file-only preflight outside the browser.`);
   }
   const uploadedBytes = uploadedFiles.reduce((total, file) => total + file.size, 0);
   if (uploadedBytes > MAX_PROCARE_SOURCE_BYTES) {

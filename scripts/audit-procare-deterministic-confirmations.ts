@@ -41,35 +41,50 @@ async function main() {
       name: true,
       locationId: true,
       crmLocationId: true,
-      procareImports: {
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          filename: true,
-          status: true,
-          createdAt: true,
-          summary: true,
-          rows: {
-            select: {
-              status: true,
-              resolutionCategory: true,
-              resolutionReason: true,
-              resolutionEvidenceReference: true,
-              resolvedBy: true,
-              resolvedAt: true,
-            },
-          },
-        },
-      },
     },
   });
 
   const selected = centers.filter((center) => [center.locationId, center.crmLocationId].some(
     (locationId) => SCHOOL_LOCATION_IDS.includes(locationId as (typeof SCHOOL_LOCATION_IDS)[number]),
   ));
+  const selectedCenterIds = selected.map((center) => center.id);
+  const batches = await prisma.procareImportBatch.findMany({
+    where: {
+      OR: [
+        { centerId: { in: selectedCenterIds } },
+        ...selectedCenterIds.map((centerId) => ({
+          summary: { path: ["centerIdsTouched"], array_contains: [centerId] },
+        })),
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      centerId: true,
+      filename: true,
+      status: true,
+      createdAt: true,
+      summary: true,
+      rows: {
+        select: {
+          status: true,
+          resolutionCategory: true,
+          resolutionReason: true,
+          resolutionEvidenceReference: true,
+          resolvedBy: true,
+          resolvedAt: true,
+        },
+      },
+    },
+  });
 
   const report = selected.map((center) => {
-    const candidates = center.procareImports.map((candidate) => ({
+    const centerBatches = batches.filter((batch) => {
+      const touchedCenterIds = record(batch.summary).centerIdsTouched;
+      return batch.centerId === center.id
+        || (Array.isArray(touchedCenterIds) && touchedCenterIds.includes(center.id));
+    });
+    const candidates = centerBatches.map((candidate) => ({
       candidate,
       readiness: evaluateProcareInvitationBatchReadiness(candidate),
     }));

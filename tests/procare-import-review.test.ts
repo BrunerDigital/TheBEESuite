@@ -71,7 +71,7 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(route, /sourceType: "csv_files"/);
   assert.match(route, /Choose either uploaded files or pasted CSV text/);
   assert.match(route, /MAX_PROCARE_SOURCE_FILES/);
-  assert.match(route, /MAX_PROCARE_UPLOAD_BYTES/);
+  assert.match(route, /MAX_PROCARE_SOURCE_BYTES/);
   assert.match(route, /No supported source report or consolidated CSV columns were recognized/);
   assert.match(route, /formData\.getAll\("file"\)/);
   assert.match(route, /if \(isZipBuffer\(buffer\)\)/);
@@ -114,9 +114,10 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(panel, /warningRowNumbers \?\? \[\]\)\.join\(","\)/);
   assert.match(panel, /duplicateReviewRowNumbers \?\? \[\]\)\.join\(","\)/);
   assert.match(panel, /same selected files; they are still selected/);
-  assert.match(panel, /secure browser-upload limit/);
+  assert.match(panel, /secure browser-source limit/);
+  assert.match(panel, /secure browser-request limit/);
   assert.match(panel, /Do not remove required reports to make the package fit/);
-  assert.match(route, /MAX_PROCARE_UPLOAD_BYTES/);
+  assert.match(route, /MAX_PROCARE_SOURCE_BYTES/);
   assert.match(panel, /chunkSize", "20"/);
   assert.match(panel, /Continuing the resumable import from row/);
   assert.match(panel, /Continuing automatically/);

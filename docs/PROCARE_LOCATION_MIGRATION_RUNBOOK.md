@@ -28,7 +28,7 @@ npm run procare:preflight-location -- --location "<school>" --source-dir "<secur
 
 The school may move to an application preview only when `manifest.json` and `READINESS.md` report `READY_FOR_PREVIEW_REVIEW`. A `BLOCKED` result is an expected stop condition: correct or re-export the source, then generate a new packet. Do not reuse or edit a blocked packet into an import file.
 
-The hosted application accepts browser import packages up to 4 MB, leaving multipart headroom below the platform request limit. ZIP one school's unchanged reports when the source folder is larger. If the complete ZIP remains larger than 4 MB, run the file-only preflight above and retain the generated review packet; do not remove required source reports to make an upload fit.
+The hosted application accepts up to 3.5 MB of browser source data and verifies that the complete request remains below 4 MB after review metadata is added. This leaves headroom below the platform request limit. ZIP one school's unchanged reports when the source folder is larger. If the complete ZIP remains larger than 3.5 MB, run the file-only preflight above and retain the generated review packet; do not remove required source reports to make an upload fit.
 
 For the older single rendered-export preparation path:
 

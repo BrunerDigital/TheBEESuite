@@ -22,6 +22,8 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
   assert.match(webhook, /autopayStatus: "pending"/);
   assert.match(webhook, /stripeBankVerificationPending !== true/);
   assert.match(webhook, /event.type === "setup_intent.setup_failed"/);
+  assert.match(webhook, /stripePendingPaymentMethodId/);
+  assert.match(webhook, /setupSucceeded \? \(paymentMethodId \|\| null\) : \(previousPaymentMethodId \|\| null\)/);
   assert.match(paymentMethodRoute, /stripePendingAutopayOutcome: null/);
   assert.match(webhook, /event.type === "setup_intent.succeeded"/);
 });

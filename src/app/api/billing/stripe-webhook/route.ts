@@ -958,6 +958,7 @@ async function handlePayoutCreated(
   await finalizeCommunicationSmsDeliveryAttempt({
     id: delivery.id,
     result,
+    statusCallbackUrl,
   });
 
   await prisma.auditLog.create({

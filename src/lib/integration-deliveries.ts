@@ -70,6 +70,7 @@ type RecordCommunicationSmsDeliveryInput = {
 type FinalizeCommunicationSmsDeliveryInput = {
   id: string;
   result: IntegrationSendResult;
+  statusCallbackUrl?: string | null;
   maxAttempts?: number;
 };
 
@@ -309,6 +310,7 @@ export async function claimPayoutDeliveryForRetry({
 export async function finalizeCommunicationSmsDeliveryAttempt({
   id,
   result,
+  statusCallbackUrl,
   maxAttempts = 5,
 }: FinalizeCommunicationSmsDeliveryInput) {
   const deliveryResult: IntegrationAttemptResult = result.configured
@@ -317,10 +319,11 @@ export async function finalizeCommunicationSmsDeliveryAttempt({
   const attempts = deliveryResult.skipped ? 0 : 1;
   const state = result.acceptanceUnknown
     ? { status: "failed" as const, nextAttemptAt: null, deliveredAt: null }
-    : computeIntegrationDeliveryState({
+    : computeCommunicationSmsDeliveryState({
         result: deliveryResult,
         attempts,
         maxAttempts,
+        statusCallbackUrl,
       });
   const updated = await prisma.integrationDelivery.updateMany({
     where: { id, status: "attempting", attempts: 1 },

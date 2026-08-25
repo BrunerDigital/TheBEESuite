@@ -101,6 +101,7 @@ test("payout webhook sends only live, exactly mapped events and records delivery
   assert.match(handler, /attempts: 0/);
   assert.match(handler, /nextAttemptAt: nextIntegrationRetryAt\(1\)/);
   assert.match(handler, /sendPayoutSmsSafely\(\(\) => sendSms/);
+  assert.match(handler, /finalizeCommunicationSmsDeliveryAttempt\(\{[\s\S]*statusCallbackUrl,[\s\S]*\}\)/);
   assert.match(handler, /stripe-payout-created:\$\{event\.id\}:\$\{center\.id\}/);
 });
 

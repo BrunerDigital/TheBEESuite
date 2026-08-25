@@ -2,8 +2,21 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { kidCityCorporateRolloutSchools } from "../src/lib/kidcity-corporate-rollout";
 
-const locationNames = /\b(?:Kokomo|Granbury|Garland|Canton|Centennial|Sarasota|Oakleaf|Beach Blvd|Cordera|Longmont)\b/i;
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const locationNames = new RegExp(
+  `\\b(?:${[
+    ...kidCityCorporateRolloutSchools.map((school) => school.location),
+    "Canton",
+    "Centennial",
+    "Sarasota",
+  ].map(escapeRegExp).join("|")})\\b`,
+  "i",
+);
 
 // These files hold reviewed source evidence, migration aliases, rollout contacts,
 // or examples. They are data/configuration boundaries, not location-specific UI

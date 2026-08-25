@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   parseTwilioWebhookParams,
+  isTwilioWebhookReceiptUniqueConflict,
   phoneMatchKey,
+  twilioBlockedCurrentStatuses,
   twilioDeliveryStatus,
+  twilioStateTransition,
   twilioSmsConsentAction,
   uniqueSmsRecipients,
   validateTwilioSignature,
@@ -53,6 +57,26 @@ test("Twilio provider statuses collapse to queue states", () => {
   assert.equal(twilioDeliveryStatus("delivered"), "delivered");
   assert.equal(twilioDeliveryStatus("undelivered"), "failed");
   assert.equal(twilioDeliveryStatus("failed"), "failed");
+});
+
+test("Twilio status callbacks cannot regress or replace terminal outcomes", () => {
+  assert.deepEqual(twilioBlockedCurrentStatuses(), ["delivered", "failed"]);
+  assert.equal(twilioStateTransition("pending", "delivered"), "delivered");
+  assert.equal(twilioStateTransition("pending", "failed"), "failed");
+  assert.equal(twilioStateTransition("delivered", "pending"), null);
+  assert.equal(twilioStateTransition("failed", "pending"), null);
+  assert.equal(twilioStateTransition("delivered", "failed"), null);
+  assert.equal(twilioStateTransition("failed", "delivered"), null);
+});
+
+test("Twilio inbound retries reserve a durable receipt before app side effects", async () => {
+  assert.equal(isTwilioWebhookReceiptUniqueConflict({ code: "P2002", meta: { target: ["provider", "providerMessageId"] } }), true);
+  assert.equal(isTwilioWebhookReceiptUniqueConflict({ code: "P2002", meta: { target: ["externalId"] } }), false);
+  const source = await readFile(new URL("../src/app/api/twilio/inbound/route.ts", import.meta.url), "utf8");
+  const transaction = source.indexOf("prisma.$transaction");
+  const receipt = source.indexOf("tx.integrationDelivery.create", transaction);
+  const message = source.indexOf("tx.message.create", transaction);
+  assert.ok(transaction >= 0 && receipt > transaction && message > receipt);
 });
 
 test("Twilio SMS consent keywords require exact opt-in or opt-out commands", () => {

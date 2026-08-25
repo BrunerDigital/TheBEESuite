@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   parseTwilioWebhookParams,
+  twilioBlockedCurrentStatuses,
   twilioDeliveryStatus,
   twilioWebhookUrl,
   validateTwilioSignatureAgainstConfiguredTokens,
@@ -40,6 +41,7 @@ async function POSTHandler(request: NextRequest) {
     where: {
       provider: "twilio",
       providerMessageId: messageSid,
+      status: { notIn: twilioBlockedCurrentStatuses() },
     },
     data: {
       status,

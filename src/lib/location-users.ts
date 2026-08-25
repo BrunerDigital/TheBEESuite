@@ -1,4 +1,4 @@
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const defaultLeadershipRoles = [
@@ -11,13 +11,15 @@ export async function getCenterLeadershipUsers({
   centerId,
   excludeUserId,
   roles = defaultLeadershipRoles,
+  client = prisma,
 }: {
   centerId: string;
   excludeUserId?: string;
   roles?: UserRole[];
+  client?: Prisma.TransactionClient | typeof prisma;
 }) {
   const [grantUsers, legacyProfileUsers] = await Promise.all([
-    prisma.userAccessGrant.findMany({
+    client.userAccessGrant.findMany({
       where: {
         centerId,
         isActive: true,
@@ -29,7 +31,7 @@ export async function getCenterLeadershipUsers({
       },
       select: { role: true, user: { select: { id: true, email: true, role: true, staffProfile: { select: { phone: true } } } } },
     }),
-    prisma.staffProfile.findMany({
+    client.staffProfile.findMany({
       where: {
         centerId,
         user: {

@@ -98,6 +98,16 @@ test("agency authorization entry resets and shows the selected child's saved rat
   assert.match(workspace, /Switching children clears the entry fields/);
 });
 
+test("agency family choices include child and guardian names", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
+  assert.match(route, /guardians: \{ select: \{ fullName: true \}, orderBy: \{ fullName: "asc" \} \}/);
+  assert.match(workspace, /function familyOptionLabel\(family: Family\)/);
+  assert.match(workspace, /family\.children\.map\(\(child\) => child\.fullName\)/);
+  assert.match(workspace, /family\.guardians\.map\(\(guardian\) => guardian\.fullName\)/);
+  assert.match(workspace, /Options include the family, current child, and guardian names/);
+});
+
 test("authorization corrections fail closed and return useful duplicate guidance", () => {
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");

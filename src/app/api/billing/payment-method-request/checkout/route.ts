@@ -86,7 +86,7 @@ async function POSTHandler(request: NextRequest) {
 
   const payload = validation.payload;
   const requestedPaymentMethodCategory = paymentMethodCategory(body.paymentMethodCategory);
-  const bankAccountVerificationMethod = requestedPaymentMethodCategory === "link_bank" ? "instant" : null;
+  const bankAccountVerificationMethod = requestedPaymentMethodCategory === "link_bank" ? "automatic" : null;
   const invoiceId = clean(body.invoiceId);
 
   const family = await prisma.family.findUnique({
@@ -500,7 +500,7 @@ async function POSTHandler(request: NextRequest) {
     checkoutBranding: buildPaymentMethodRequestCheckoutBranding({
       centerLabel,
       familyName: family.name,
-      intent: bankAccountVerificationMethod === "instant" ? "instant_bank_verification" : "payment_steps",
+      intent: requestedPaymentMethodCategory === "link_bank" ? "instant_bank_verification" : "payment_steps",
     }),
     tenantId: payload.tenantId,
   });

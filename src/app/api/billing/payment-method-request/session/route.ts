@@ -67,7 +67,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const paymentMethodCategory = paymentMethodCategoryFrom(body.paymentMethodCategory);
-  const bankAccountVerificationMethod = paymentMethodCategory === "link_bank" ? "instant" : null;
+  const bankAccountVerificationMethod = paymentMethodCategory === "link_bank" ? "automatic" : null;
   const processingRecoveryAccepted = body.processingRecoveryAccepted === true ||
     clean(body.processingRecoveryAccepted).toLowerCase() === "true";
   if (
@@ -237,7 +237,7 @@ async function POSTHandler(request: NextRequest) {
     checkoutBranding: buildPaymentMethodRequestCheckoutBranding({
       centerLabel,
       familyName: family.name,
-      intent: payload.intent ?? (bankAccountVerificationMethod === "instant" ? "instant_bank_verification" : "payment_steps"),
+      intent: payload.intent ?? (paymentMethodCategory === "link_bank" ? "instant_bank_verification" : "payment_steps"),
     }),
     tenantId: payload.tenantId,
   });

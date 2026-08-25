@@ -2465,6 +2465,20 @@ async function renderLivePage(
           },
         })
       : null;
+    const invoiceChildIds = [...new Set(invoices.flatMap((invoice) => {
+      const fields = asRecord(invoice.customFields);
+      const singular = stringField(fields.childId);
+      const batch = Array.isArray(fields.childIds)
+        ? fields.childIds.filter((value): value is string => typeof value === "string")
+        : [];
+      return singular ? [singular, ...batch] : batch;
+    }))];
+    const invoiceChildNames = new Map((invoiceChildIds.length && family
+      ? await prisma.child.findMany({
+          where: { familyId: family.id, id: { in: invoiceChildIds } },
+          select: { id: true, fullName: true },
+        })
+      : []).map((child) => [child.id, child.fullName]));
     const pendingPaymentByInvoiceId = new Map<string, Omit<ReturnType<typeof activeStripeCheckoutPaymentSummary>, "amountCents">>();
     for (const payment of billingAccount?.payments ?? []) {
       if (!isActiveStripeCheckoutPayment(payment)) continue;
@@ -2525,7 +2539,7 @@ async function renderLivePage(
         ? invoiceFields.childIds.filter((value): value is string => typeof value === "string")
         : [];
       const batchChildNames = childIds
-        .map((childId) => family?.children.find((child) => child.id === childId)?.fullName)
+        .map((childId) => invoiceChildNames.get(childId))
         .filter((value): value is string => Boolean(value));
       return {
         id: invoice.id,
@@ -2534,7 +2548,7 @@ async function renderLivePage(
         dueDate: invoice.dueDate,
         familyDocumentAmountCents: document?.amountCents ?? null,
         childName: stringField(invoiceFields.childName)
-          || family?.children.find((child) => child.id === stringField(invoiceFields.childId))?.fullName
+          || invoiceChildNames.get(stringField(invoiceFields.childId))
           || (batchChildNames.length ? batchChildNames.join(", ") : null)
           || null,
         servicePeriodStart,

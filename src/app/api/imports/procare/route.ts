@@ -2080,7 +2080,8 @@ async function POSTHandler(request: NextRequest) {
   const autoMap = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase()) && canAccessAllCenters(user);
   const centerId = autoMap ? "" : requestedCenterId || user.primaryCenterId;
   const files = formData.getAll("file");
-  const pastedCsv = clean(formData.get("csv"));
+  const pastedCsvValue = formData.get("csv");
+  const pastedCsv = typeof pastedCsvValue === "string" ? pastedCsvValue : "";
   if (!centerId && !autoMap) return NextResponse.json({ ok: false, error: "Center ID is required." }, { status: 400 });
   if (centerId && !canAccessCenter(user, centerId)) return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
 

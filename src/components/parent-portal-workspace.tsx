@@ -3531,6 +3531,7 @@ function ParentPortalWorkspaceView({
                       items: invoice.items?.length
                         ? invoice.items
                         : [{ description: invoice.purposeLabel ?? "Family account charge", amountCents: invoice.familyDocumentAmountCents }],
+                      documentTitle: invoice.productCheckoutAvailable ? "Purchase Invoice" : "Tuition Invoice",
                     }}
                     familyName={family.name}
                     schoolName={centerName}

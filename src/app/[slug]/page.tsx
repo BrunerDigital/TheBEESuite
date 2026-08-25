@@ -147,6 +147,7 @@ import {
   isWeekBasedTuitionCadence,
   normalizeRecurringBillingDay,
   normalizeRecurringBillingPeriod,
+  recurringDueDateForPeriod,
   shouldCreateRecurringTuitionInvoice,
   utcBillingWeekday,
 } from "@/lib/billing-workflows";
@@ -2504,12 +2505,18 @@ async function renderLivePage(
       const document = parentInvoiceDocuments.get(invoice.id);
       const billingPeriod = stringField(invoiceFields.coverageStartsPeriod) || stringField(invoiceFields.billingPeriod);
       const invoiceWeekCount = Math.max(1, Number(invoiceFields.invoiceWeekCount) || 1);
-      const servicePeriodStart = billingPeriod && /^\d{4}-\d{2}-\d{2}$/.test(billingPeriod) ? billingPeriod : null;
-      const servicePeriodEnd = servicePeriodStart
-        ? new Date(`${servicePeriodStart}T00:00:00.000Z`).toISOString()
-        : null;
-      const servicePeriodEndLabel = servicePeriodEnd
-        ? new Date(new Date(servicePeriodEnd).getTime() + (invoiceWeekCount * 7 - 1) * 86_400_000).toISOString().slice(0, 10)
+      const billingCadence = stringField(invoiceFields.billingCadence) || stringField(invoiceFields.tuitionPlanCadence) || "weekly";
+      const weeklyPeriod = /^\d{4}-W\d{2}$/i.test(billingPeriod || "");
+      const monthlyPeriod = /^\d{4}-\d{2}$/.test(billingPeriod || "");
+      const servicePeriodStart = weeklyPeriod && billingPeriod
+        ? recurringDueDateForPeriod(billingPeriod, 1, billingCadence).toISOString().slice(0, 10)
+        : monthlyPeriod && billingPeriod
+          ? `${billingPeriod}-01`
+          : billingPeriod && /^\d{4}-\d{2}-\d{2}$/.test(billingPeriod) ? billingPeriod : null;
+      const servicePeriodEndLabel = servicePeriodStart
+        ? monthlyPeriod
+          ? new Date(Date.UTC(Number(servicePeriodStart.slice(0, 4)), Number(servicePeriodStart.slice(5, 7)), 0)).toISOString().slice(0, 10)
+          : new Date(new Date(`${servicePeriodStart}T00:00:00.000Z`).getTime() + (invoiceWeekCount * 7 - 1) * 86_400_000).toISOString().slice(0, 10)
         : null;
       const productCheckoutAvailable = stringField(invoiceFields.checkoutPurpose) === "product_purchase"
         || stringField(invoiceFields.receiptKind) === "product"

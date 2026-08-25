@@ -55,6 +55,7 @@ export type BillingInvoiceDocument = {
   servicePeriodStart: string | null;
   servicePeriodEnd: string | null;
   items: Array<{ description: string; amountCents: number }>;
+  documentTitle?: string;
 };
 
 function money(cents: number) {
@@ -245,7 +246,7 @@ export function InvoicePrintButton({
       </Button>
       <PrintableReport active={active} label={`Printable invoice ${invoice.number}`}>
         <header style={{ marginBottom: 20 }}>
-          <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>Tuition Invoice</h1>
+          <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>{invoice.documentTitle ?? "Tuition Invoice"}</h1>
           <div>Invoice: {invoice.number}</div>
           <div>Generated: {formatPrintDateTime(generatedAt, timeZone)}</div>
           <div>School: {schoolName ?? "School not assigned"}</div>

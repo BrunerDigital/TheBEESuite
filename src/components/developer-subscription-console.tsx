@@ -111,9 +111,9 @@ export function DeveloperSubscriptionConsole({
           School software subscriptions
         </CardTitle>
         <CardDescription>
-          Recurring monthly billing is quantity-based on active director,
-          assistant director, and billing administrator accounts. Sync after
-          access changes; processor invoices and retries run automatically.
+          Each school is billed once per month: $49 for corporate schools and
+          $79 for all other locations. The first paid cycle begins September 1,
+          2026; processor invoices and retries run automatically.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

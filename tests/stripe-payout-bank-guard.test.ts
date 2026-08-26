@@ -24,7 +24,7 @@ test("software-fee ACH cannot start before the payout destination is confirmed",
   assert.match(route, /\{ status: 409 \}/);
 });
 
-test("legacy Stripe-balance billing API remains approval-gated and hidden from school payout UI", () => {
+test("unsupported Stripe-balance software billing is rejected and hidden from school payout UI", () => {
   const route = fs.readFileSync(
     path.join(root, "src/app/api/billing/software-payment-method/route.ts"),
     "utf8",
@@ -33,14 +33,25 @@ test("legacy Stripe-balance billing API remains approval-gated and hidden from s
   const panel = fs.readFileSync(path.join(root, "src/components/stripe-connect-panel.tsx"), "utf8");
 
   assert.match(route, /requested === "stripe_balance"/);
-  assert.match(route, /body\.approved !== true/);
-  assert.match(route, /stripeSoftwareBalanceApprovalAt/);
-  assert.match(route, /stripeSoftwareBalanceApprovedByUserId/);
-  assert.match(route, /stripeSoftwareMonthlyAmountCents: monthlyAmountCents/);
-  assert.match(integrations, /customer_account: accountId/);
-  assert.match(integrations, /"payment_settings\[payment_method_types\]\[0\]": "stripe_balance"/);
+  assert.match(route, /Stripe balance is not a supported school software payment method/);
+  assert.doesNotMatch(integrations, /customer_account: accountId/);
+  assert.doesNotMatch(integrations, /"payment_settings\[payment_method_types\]\[0\]": "stripe_balance"/);
   assert.doesNotMatch(panel, /authorize The BEE Suite to debit this school's Stripe account balance|software-payment-method|\$99/);
   assert.doesNotMatch(route, /external_accounts|bank_accounts|payoutBankId/);
+});
+
+test("software subscriptions use an authorized external method and the September 1 anchor", () => {
+  const integrations = fs.readFileSync(path.join(root, "src/lib/integrations.ts"), "utf8");
+  const route = fs.readFileSync(path.join(root, "src/app/api/developer/software-subscriptions/route.ts"), "utf8");
+  const policy = fs.readFileSync(path.join(root, "src/lib/kidcity-software-billing.ts"), "utf8");
+
+  assert.match(policy, /2026-09-01T04:00:00\.000Z/);
+  assert.match(route, /paymentMethodId,/);
+  assert.match(route, /billingStartAt: getSchoolSoftwareBillingStartAt\(\)/);
+  assert.match(route, /stripeSoftwareBillingSource: "external_payment_method"/);
+  assert.match(integrations, /default_payment_method: paymentMethodId/);
+  assert.match(integrations, /body\.set\("trial_end"/);
+  assert.match(integrations, /"metadata\[billingBasis\]": "per_school"/);
 });
 
 test("new connected accounts follow Kokomo fee and loss responsibility without changing existing banks", () => {

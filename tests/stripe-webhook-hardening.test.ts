@@ -140,7 +140,12 @@ test("supported reconciliation matrix includes payment, invoice, subscription, d
     "payout.created",
     "setup_intent.succeeded",
     "setup_intent.setup_failed",
+    "v2.core.account.created",
     "v2.core.account.updated",
+    "v2.core.account[configuration.merchant].updated",
+    "v2.core.account[configuration.recipient].updated",
+    "v2.core.account[defaults].updated",
+    "v2.core.account[identity].updated",
     "v2.core.account[requirements].updated",
   ].sort());
 });

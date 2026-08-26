@@ -9,9 +9,11 @@ import {
   getKidCitySoftwareInvoiceNumber,
   getKidCitySoftwareInvoicePeriod,
   getPartnerSchoolSoftwareFeeUnitAmountCents,
+  getSchoolSoftwareBillingStartAt,
   getSchoolSoftwareFeePolicyForCenter,
   getSchoolSoftwareFeeTier,
   kidCitySchoolUserWhere,
+  isSchoolSoftwareBillingCenter,
 } from "../src/lib/kidcity-software-billing";
 
 const originalCorporateAmount = process.env.STRIPE_CORPORATE_SCHOOL_SOFTWARE_FEE_CENTS;
@@ -39,6 +41,17 @@ test("school software billing defaults to $49 for corporate schools and $79 for 
   assert.equal(getPartnerSchoolSoftwareFeeUnitAmountCents(), 7_900);
   assert.equal(getKidCitySoftwareFeeUnitAmountCents(), 7_900);
   assert.equal(getKidCitySoftwareInvoiceAmount(72), 568_800);
+});
+
+test("school software billing begins on September 1, 2026 Eastern time", () => {
+  assert.equal(getSchoolSoftwareBillingStartAt().toISOString(), "2026-09-01T04:00:00.000Z");
+});
+
+test("software billing excludes administrative placeholder centers", () => {
+  assert.equal(isSchoolSoftwareBillingCenter({ name: "Kid City USA - Longmont", status: "active" }), true);
+  assert.equal(isSchoolSoftwareBillingCenter({ name: "Kid City USA", status: "active" }), false);
+  assert.equal(isSchoolSoftwareBillingCenter({ name: "Kid City USA - Unassigned Lead Queue", status: "active" }), false);
+  assert.equal(isSchoolSoftwareBillingCenter({ name: "Kid City USA - Closed", status: "closed" }), false);
 });
 
 test("school software fee policy identifies corporate schools from owner groups and explicit center flags", () => {

@@ -1406,7 +1406,7 @@ export function TeacherMobileWorkspace({
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge variant={selectedChild?.photoVideoPermission ? "default" : "secondary"}>
-                {selectedChild?.photoVideoPermission ? "Parent sharing ready" : "Director review required"}
+                {selectedChild?.photoVideoPermission ? "Shares with parents now" : "Permission review required"}
               </Badge>
               <Badge variant="outline">Private storage</Badge>
             </div>

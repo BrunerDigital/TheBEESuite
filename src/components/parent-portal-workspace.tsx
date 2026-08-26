@@ -231,6 +231,12 @@ type ParentMedia = {
   child: { fullName: string };
 };
 
+type ClassroomTeacherRecipient = {
+  id: string;
+  name: string;
+  classroomNames: string[];
+};
+
 type DailyUpdateDay = {
   key: string;
   date: string | Date;
@@ -383,6 +389,7 @@ type Props = {
   }>;
   centerName?: string | null;
   centerEin?: string | null;
+  classroomTeachers?: ClassroomTeacherRecipient[];
   demoMode?: boolean;
   previewMode?: boolean;
 };
@@ -730,6 +737,7 @@ function ParentPortalWorkspaceView({
   availableFamilies = [],
   centerName = null,
   centerEin = null,
+  classroomTeachers = [],
   demoMode,
   previewMode = false,
   paymentCheckoutMethod,
@@ -762,6 +770,9 @@ function ParentPortalWorkspaceView({
       : "Question for the center",
   );
   const [message, setMessage] = useState("");
+  const [messageRecipientId, setMessageRecipientId] = useState(
+    classroomTeachers.length === 1 ? classroomTeachers[0].id : "school",
+  );
   const [replyToMessageId, setReplyToMessageId] = useState(
     replyDraft?.replyToMessageId ?? "",
   );
@@ -1180,6 +1191,7 @@ function ParentPortalWorkspaceView({
     const formData = new FormData();
     formData.append("familyId", familyId);
     if (replyToMessageId) formData.append("replyToMessageId", replyToMessageId);
+    if (!replyToMessageId && messageRecipientId !== "school") formData.append("assignedToId", messageRecipientId);
     formData.append("subject", subject);
     formData.append("message", message);
     formData.append("priority", "normal");
@@ -1198,6 +1210,7 @@ function ParentPortalWorkspaceView({
       const body = {
         familyId: family.id,
         replyToMessageId: replyToMessageId || null,
+        assignedToId: !replyToMessageId && messageRecipientId !== "school" ? messageRecipientId : null,
         subject,
         message,
         priority: "normal",
@@ -1224,7 +1237,9 @@ function ParentPortalWorkspaceView({
       setMessageAttachments([]);
       setMessageAttachmentInputKey((current) => current + 1);
       showStatus(
-        "Message sent to the center and recorded in the family timeline.",
+        messageRecipientId === "school"
+          ? "Message sent to the school and recorded in the family timeline."
+          : "Message sent to your child’s teacher and recorded in the family timeline.",
       );
       router.refresh();
     });
@@ -2376,25 +2391,12 @@ function ParentPortalWorkspaceView({
             {(selectedUpdateDay?.reports ?? []).map((report) => {
               const timedCareEvents = dailyReportTimedCareEvents(report);
               return (
-                <details
+                <article
                   key={report.id}
                   id="daily-reports"
-                  className="group py-3 first:pt-1"
+                  className="py-4 first:pt-1"
                 >
-                  <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 rounded-2xl border bg-background/55 p-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-                    <span className="grid size-11 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
-                      <ClipboardList className="size-5" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-semibold">{report.child.fullName}</span>
-                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                        {report.mood ? `${displayTokenLabel(report.mood)} · ` : ""}{formatDate(report.date)}
-                      </span>
-                    </span>
-                    <span className="text-xs font-medium text-primary group-open:hidden">View day</span>
-                    <span className="hidden text-xs font-medium text-primary group-open:inline">Close</span>
-                  </summary>
-                  <div className="mx-2 rounded-b-2xl border border-t-0 bg-card px-4 pb-4 pt-3">
+                  <div className="rounded-2xl border bg-background/55 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <h2 className="font-semibold">Daily report · {report.child.fullName}</h2>
@@ -2402,9 +2404,14 @@ function ParentPortalWorkspaceView({
                       </div>
                       <time className="text-xs text-muted-foreground">{formatDate(report.date)}</time>
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                      {report.teacherNote ?? report.mood ?? "No teacher note was added."}
-                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge variant="secondary">Mood: {report.mood ? displayTokenLabel(report.mood) : "Not recorded"}</Badge>
+                      <Badge variant="outline">{report.meals?.length ?? 0} meal{report.meals?.length === 1 ? "" : "s"}</Badge>
+                      <Badge variant="outline">{report.naps?.length ?? 0} nap{report.naps?.length === 1 ? "" : "s"}</Badge>
+                      <Badge variant="outline">{report.diapers?.length ?? 0} care log{report.diapers?.length === 1 ? "" : "s"}</Badge>
+                      <Badge variant="outline">{report.activities?.length ?? 0} activit{report.activities?.length === 1 ? "y" : "ies"}</Badge>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-muted-foreground"><span className="font-medium text-foreground">Teacher note:</span> {report.teacherNote || "No note added."}</p>
                     {report.suppliesNeeded ? (
                       <p className="mt-3 text-sm font-medium">Please bring: {report.suppliesNeeded}</p>
                     ) : null}
@@ -2426,7 +2433,7 @@ function ParentPortalWorkspaceView({
                           <dd className="mt-1 font-medium">{displayTokenLabel(event.type)} · {formatTime(event.occurredAt)}{event.notes ? ` · ${event.notes}` : ""}</dd>
                         </div>
                       ))}
-                      {report.activities?.slice(0, 4).map((activity) => (
+                      {report.activities?.map((activity) => (
                         <div key={activity.id} className="rounded-xl border bg-background p-3">
                           <dt className="text-xs text-muted-foreground">Activity</dt>
                           <dd className="mt-1 font-medium">{activity.title}{activity.notes ? ` · ${activity.notes}` : ""}</dd>
@@ -2434,7 +2441,7 @@ function ParentPortalWorkspaceView({
                       ))}
                     </dl>
                   </div>
-                </details>
+                </article>
               );
             })}
 
@@ -3746,6 +3753,24 @@ function ParentPortalWorkspaceView({
                 sendMessage();
               }}
             >
+              {!replyToMessageId && classroomTeachers.length ? (
+                <div className="mb-3">
+                  <Label htmlFor="parent-message-recipient">Send to</Label>
+                  <Select value={messageRecipientId} onValueChange={(value) => setMessageRecipientId(value ?? "school")}>
+                    <SelectTrigger id="parent-message-recipient" className="mt-2 w-full" aria-label="Choose message recipient">
+                      <SelectValue placeholder="Choose a recipient" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="school">School office</SelectItem>
+                      {classroomTeachers.map((teacher) => (
+                        <SelectItem key={teacher.id} value={teacher.id}>
+                          {teacher.name} · {teacher.classroomNames.join(", ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
               {replyToMessageId ? (
                 <div className={styles.parentReplyContext}>
                   <Reply className="size-4 shrink-0 text-primary" aria-hidden="true" />

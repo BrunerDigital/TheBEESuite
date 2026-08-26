@@ -45,6 +45,8 @@ test("parent billing controls preserve a school-selected biweekly cycle", () => 
   assert.match(parentRoute, /requestedCadence === BIWEEKLY_TUITION_AUTOBILL_CADENCE/);
   assert.match(parentWorkspace, /child\.tuitionAssignment\?\.cadence === "biweekly"/);
   assert.match(parentWorkspace, /<SelectItem value="biweekly">/);
+  assert.match(parentWorkspace, /Choose weekly, every two weeks,/);
+  assert.match(parentWorkspace, /Every 2 weeks · \{money\(weeklyAmount \* 2\)\}/);
   assert.match(billingPage, /const weekBased = isWeekBasedTuitionCadence\(cadence\)/);
   assert.match(billingPage, /currentDay,[\s\S]*?cadence,/);
 });

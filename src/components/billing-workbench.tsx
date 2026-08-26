@@ -196,6 +196,11 @@ function tuitionRateCadence(cadence: string | null | undefined) {
   return cadence === "monthly" ? "monthly" : "weekly";
 }
 
+function tuitionBillingCadence(cadence: string | null | undefined) {
+  if (cadence === "monthly" || cadence === "biweekly" || cadence === "four_week") return cadence;
+  return "weekly";
+}
+
 function tuitionCadenceUnit(cadence: string | null | undefined) {
   return tuitionRateCadence(cadence) === "monthly" ? "month" : "week";
 }
@@ -416,7 +421,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [planEditorId, setPlanEditorId] = useState(initialAssignedPlan?.id ?? "new");
   const [planName, setPlanName] = useState(initialAssignedPlan?.name ?? "");
   const [planAgeGroup, setPlanAgeGroup] = useState(initialAssignedPlan?.ageGroup ?? initialAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0]);
-  const [planCadence, setPlanCadence] = useState(tuitionRateCadence(initialAssignedPlan?.cadence));
+  const [planCadence, setPlanCadence] = useState(tuitionBillingCadence(initialAssignedPlan?.cadence));
   const [planAmountDollars, setPlanAmountDollars] = useState(initialAssignedPlan ? String(initialAssignedPlan.amountCents / 100) : "");
   const [planFundingType, setPlanFundingType] = useState<TuitionFundingType>(initialAssignedPlan?.amountCents === 0 ? "voucher" : "family");
   const [billingAction, setBillingAction] = useState("recurring");
@@ -894,7 +899,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setPlanEditorId(assignedPlan?.id ?? "new");
     setPlanName(assignedPlan?.name ?? "");
     setPlanAgeGroup(assignedPlan?.ageGroup ?? child?.ageGroup ?? defaultAgeGroupOptions[0]);
-    setPlanCadence(tuitionRateCadence(assignedPlan?.cadence));
+    setPlanCadence(tuitionBillingCadence(assignedPlan?.cadence));
     setPlanAmountDollars(assignedPlan ? String(assignedPlan.amountCents / 100) : "");
     setPlanFundingType(assignedPlan?.amountCents === 0 ? "voucher" : "family");
   }
@@ -1276,7 +1281,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const plan = locationTuitionPlans.find((item) => item.id === value);
     setAssignmentTuitionPlanId(value);
     setTuitionPlanId(value);
-    const nextCadence = tuitionRateCadence(plan?.cadence);
+    const nextCadence = tuitionBillingCadence(plan?.cadence);
     setAssignmentCadence(nextCadence);
     setAssignmentStartPeriod((current) => periodMatchesCadence(current, nextCadence) ? current : currentPeriodForCadence(nextCadence));
     if (plan) {
@@ -1382,7 +1387,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (!plan) return;
     setPlanName(plan.name);
     setPlanAgeGroup(plan.ageGroup || ageGroups[0] || defaultAgeGroupOptions[0]);
-    setPlanCadence(tuitionRateCadence(plan.cadence));
+    setPlanCadence(tuitionBillingCadence(plan.cadence));
     setPlanAmountDollars(String(plan.amountCents / 100));
     setPlanFundingType(plan.amountCents === 0 ? "voucher" : "family");
   }
@@ -1881,7 +1886,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </Select>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="billing-rate-family-amount">Family {planCadence} amount</Label>
+              <Label htmlFor="billing-rate-family-amount">Family {tuitionRateCadence(planCadence)} amount</Label>
               <Input
                 id="billing-rate-family-amount"
                 inputMode="decimal"
@@ -1893,16 +1898,19 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               {planFundingType === "voucher" ? <p className="text-xs text-muted-foreground">Directors can use this for any intentional $0.00 rate. It will not create family invoices or autopay attempts.</p> : null}
             </div>
             <div className="space-y-1">
-              <Label htmlFor="billing-rate-cadence">Rate cadence</Label>
+              <Label htmlFor="billing-rate-cadence">Billing cadence</Label>
               <Select value={planCadence} onValueChange={(value) => {
-                if (value === "weekly" || value === "monthly") setPlanCadence(value);
+                if (value === "weekly" || value === "biweekly" || value === "four_week" || value === "monthly") setPlanCadence(value);
               }}>
                 <SelectTrigger id="billing-rate-cadence"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="weekly">Weekly · 1 week ahead</SelectItem>
+                  <SelectItem value="biweekly">Biweekly · 2 weeks ahead</SelectItem>
+                  <SelectItem value="four_week">Every 4 weeks · 4 weeks ahead</SelectItem>
+                  <SelectItem value="monthly">Monthly · 1 month at a time</SelectItem>
                 </SelectContent>
               </Select>
+              {planCadence === "biweekly" ? <p className="text-xs text-muted-foreground">Enter the weekly rate. Each biweekly invoice will contain two weekly rates.</p> : null}
             </div>
             <div className="flex items-end">
               <Button disabled={isPending} onClick={saveTuitionPlan} className="w-full">

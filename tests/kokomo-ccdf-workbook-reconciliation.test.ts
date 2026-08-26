@@ -45,9 +45,8 @@ test("Kokomo CCDF reconciliation enumerates every non-void claim and revalidates
   assert.match(source, /row\.centerId === EXPECTED\.centerId && row\.agencyProgramId === EXPECTED\.programId && row\.authorizationId === authorizationId/);
   assert.match(source, /row\.lines\[0\]\.childId === childId/);
   assert.match(source, /canManageBilling\(actor\) && canAccessCenter\(actorScope, EXPECTED\.centerId\)/);
-  assert.match(source, /Boolean\(grant\.ownerGroupId\)/);
-  assert.match(source, /Boolean\(grant\.organizationId\)/);
-  assert.match(source, /Boolean\(grant\.brandId\)/);
+  assert.match(source, /grant\.scopeType === "CENTER" && grant\.centerId === EXPECTED\.centerId/);
+  assert.doesNotMatch(source, /scopeType === "(OWNER_GROUP|ORGANIZATION|BRAND)"/);
   assert.match(source, /subsidyClaim\.updateMany/);
   assert.match(source, /subsidyClaimLine\.updateMany/);
 });

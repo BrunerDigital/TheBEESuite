@@ -105,7 +105,7 @@ async function loadState(client: Prisma.TransactionClient | typeof prisma = pris
   const [center, actor, authorizations, claims, historicalWrenly] = await Promise.all([
     client.center.findUnique({
       where: { id: EXPECTED.centerId },
-      select: { id: true, name: true, organizationId: true, ownerGroupId: true, organization: { select: { tenantId: true, brandId: true } } },
+      select: { id: true, name: true, organization: { select: { tenantId: true } } },
     }),
     client.user.findUnique({
       where: { email: EXPECTED.actorEmail },
@@ -125,7 +125,7 @@ async function loadState(client: Prisma.TransactionClient | typeof prisma = pris
               { OR: [{ endsAt: null }, { endsAt: { gte: accessAsOf } }] },
             ],
           },
-          select: { id: true, tenantId: true, brandId: true, organizationId: true, ownerGroupId: true, centerId: true, scopeType: true, role: true, startsAt: true, endsAt: true },
+          select: { id: true, tenantId: true, centerId: true, scopeType: true, role: true, startsAt: true, endsAt: true },
           orderBy: { id: "asc" },
         },
       },
@@ -172,13 +172,8 @@ async function loadState(client: Prisma.TransactionClient | typeof prisma = pris
 
   invariant(center?.organization.tenantId === EXPECTED.tenantId, "Kokomo tenant/center identity changed.");
   invariant(actor?.tenantId === EXPECTED.tenantId && actor.isActive, "Active audit actor was not found in the expected tenant.");
-  const grantCoversCenter = actor.accessGrants.some((grant) =>
-    (grant.scopeType === "CENTER" && grant.centerId === EXPECTED.centerId)
-    || (grant.scopeType === "OWNER_GROUP" && Boolean(grant.ownerGroupId) && grant.ownerGroupId === center.ownerGroupId)
-    || (grant.scopeType === "ORGANIZATION" && Boolean(grant.organizationId) && grant.organizationId === center.organizationId)
-    || (grant.scopeType === "BRAND" && Boolean(grant.brandId) && grant.brandId === center.organization.brandId),
-  );
-  const actorCenterIds = actor.staffProfile?.centerId === EXPECTED.centerId || grantCoversCenter ? [EXPECTED.centerId] : [];
+  const directCenterGrant = actor.accessGrants.some((grant) => grant.scopeType === "CENTER" && grant.centerId === EXPECTED.centerId);
+  const actorCenterIds = actor.staffProfile?.centerId === EXPECTED.centerId || directCenterGrant ? [EXPECTED.centerId] : [];
   const actorScope = {
     role: actor.role,
     accessScope: actor.role === UserRole.PLATFORM_OWNER

@@ -162,6 +162,7 @@ async function customerActivity(apiKey: string, customer: JsonRecord) {
     quotes: `/v1/quotes?customer=${encodedId}&limit=1`,
     paymentMethods: `/v1/customers/${encodedId}/payment_methods?limit=1`,
     taxIds: `/v1/customers/${encodedId}/tax_ids?limit=1`,
+    cashBalanceTransactions: `/v1/customers/${encodedId}/cash_balance_transactions?limit=1`,
   } as const;
   const entries = await Promise.all(Object.entries(activityPaths).map(async ([key, path]) => {
     const response = await stripeRequest(apiKey, path);

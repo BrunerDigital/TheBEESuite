@@ -12,7 +12,10 @@ test("school customer reconciliation is preview-first and exact-target guarded",
   assert.match(reconciliation, /--expected-target-count/);
   assert.match(reconciliation, /--acknowledge-delete-unreferenced-empty-school-customers/);
   assert.match(reconciliation, /references\.has\(customerId\)/);
+  assert.match(reconciliation, /const metadataCenterId = clean\(metadata\.centerId\) \|\| clean\(metadata\.bee_suite_center_id\)/);
+  assert.match(reconciliation, /const metadataCenter = centersById\.get\(metadataCenterId\)/);
   assert.match(reconciliation, /matches\.length !== 1/);
+  assert.ok(reconciliation.indexOf("const metadataCenter = centersById.get") < reconciliation.indexOf("matches.length !== 1"));
   assert.match(reconciliation, /schoolCustomerEvidence/);
   assert.match(reconciliation, /clean\(metadata\.tenantId\) === center\.organization\.tenantId/);
   assert.match(reconciliation, /clean\(metadata\.centerId\) === center\.id/);

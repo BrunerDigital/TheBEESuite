@@ -113,7 +113,8 @@ async function loadDatabaseReferences() {
   billingAccounts.forEach((account) => collectCustomerIds(account.customFields).forEach((id) => add(id, `billing_account:${account.id}`)));
   const centersByName = new Map<string, typeof centers>();
   centers.forEach((center) => centersByName.set(normalizeName(center.name), [...(centersByName.get(normalizeName(center.name)) ?? []), center]));
-  return { references, centersByName };
+  const centersById = new Map(centers.map((center) => [center.id, center]));
+  return { references, centersByName, centersById };
 }
 
 function schoolCustomerEvidence(customer: JsonRecord, center: { id: string; name: string; email: string | null; organization: { tenantId: string } }) {
@@ -187,14 +188,22 @@ async function main() {
   const apply = process.argv.includes("--apply");
   const expectedTargetCount = Number.parseInt(argValue("--expected-target-count"), 10);
 
-  const [{ references, centersByName }, customers] = await Promise.all([
+  const [{ references, centersByName, centersById }, customers] = await Promise.all([
     loadDatabaseReferences(),
     listAll(apiKey, "/v1/customers?limit=100"),
   ]);
   const possibleDuplicates = customers.flatMap((customer) => {
     const customerId = clean(customer.id);
+    if (references.has(customerId)) return [];
+    const metadata = record(customer.metadata);
+    const metadataCenterId = clean(metadata.centerId) || clean(metadata.bee_suite_center_id);
+    const metadataCenter = centersById.get(metadataCenterId);
+    if (metadataCenter) {
+      const evidence = schoolCustomerEvidence(customer, metadataCenter);
+      if (evidence) return [{ customer, center: metadataCenter, evidence }];
+    }
     const matches = centersByName.get(normalizeName(customer.name)) ?? [];
-    if (references.has(customerId) || matches.length !== 1) return [];
+    if (matches.length !== 1) return [];
     const center = matches[0];
     const evidence = schoolCustomerEvidence(customer, center);
     if (!evidence) return [];

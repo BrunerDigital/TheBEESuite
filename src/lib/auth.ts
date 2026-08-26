@@ -351,6 +351,10 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     accessScope = "tenant";
   }
 
+  centerIds = hasProfileCenterAssignment
+    ? [profileCenterIds[0], ...centerIds.filter((centerId) => centerId !== profileCenterIds[0]).sort()]
+    : [...centerIds].sort();
+
   const timeZoneCenters = centerIds.length
     ? await prisma.center.findMany({
         where: { id: { in: centerIds } },

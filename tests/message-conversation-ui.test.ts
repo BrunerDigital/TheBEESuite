@@ -91,6 +91,7 @@ test("director send and suggestion APIs enforce the same primary-school scope as
   const auth = readFileSync("src/lib/auth.ts", "utf8");
   const sendRoute = readFileSync("src/app/api/communications/messages/route.ts", "utf8");
   const suggestionsRoute = readFileSync("src/app/api/communications/messages/suggestions/route.ts", "utf8");
+  assert.match(auth, /centerIds = hasProfileCenterAssignment[\s\S]*?centerIds\.filter[\s\S]*?\.sort\(\)[\s\S]*?: \[\.\.\.centerIds\]\.sort\(\)/);
   assert.match(auth, /function messageCenterIdsForUser[\s\S]*?UserRole\.CENTER_DIRECTOR[\s\S]*?UserRole\.ASSISTANT_DIRECTOR[\s\S]*?\[user\.primaryCenterId\]/);
   assert.match(sendRoute, /const messageCenterIds = messageCenterIdsForUser\(user\)/);
   assert.match(sendRoute, /family\.centerId && messageCenterIds\.includes\(family\.centerId\)/);

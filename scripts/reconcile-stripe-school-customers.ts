@@ -6,6 +6,13 @@ type JsonRecord = Record<string, unknown>;
 
 const MAX_PAGES = 50;
 const ACTIVITY_CONCURRENCY = 3;
+const LEGACY_CUSTOMER_CREATED_BEFORE = Math.floor(Date.parse("2026-08-15T00:00:00.000Z") / 1000);
+const LEGACY_UNLABELED_BATCH_START = Math.floor(Date.parse("2026-08-14T01:15:00.000Z") / 1000);
+const LEGACY_UNLABELED_BATCH_END = Math.floor(Date.parse("2026-08-14T01:25:00.000Z") / 1000);
+const LEGACY_CONNECT_PURPOSES = new Set([
+  "school_connect_full_dashboard_migration",
+  "school_connect_responsibility_migration",
+]);
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -91,7 +98,7 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, work: (item: 
 
 async function loadDatabaseReferences() {
   const [centers, ownerGroups, billingAccounts] = await Promise.all([
-    prisma.center.findMany({ select: { id: true, name: true, status: true, customFields: true } }),
+    prisma.center.findMany({ select: { id: true, name: true, email: true, status: true, customFields: true, organization: { select: { tenantId: true } } } }),
     prisma.ownerGroup.findMany({ select: { id: true, customFields: true } }),
     prisma.billingAccount.findMany({ select: { id: true, customFields: true } }),
   ]);
@@ -103,6 +110,27 @@ async function loadDatabaseReferences() {
   const centersByName = new Map<string, typeof centers>();
   centers.forEach((center) => centersByName.set(normalizeName(center.name), [...(centersByName.get(normalizeName(center.name)) ?? []), center]));
   return { references, centersByName };
+}
+
+function schoolCustomerEvidence(customer: JsonRecord, center: { id: string; name: string; email: string | null; organization: { tenantId: string } }) {
+  const metadata = record(customer.metadata);
+  const created = integer(customer.created);
+  const customerEmail = clean(customer.email).toLowerCase();
+  if (clean(metadata.tenantId) === center.organization.tenantId
+    && clean(metadata.centerId) === center.id
+    && clean(metadata.paymentScope) === "school_software_fee") return "school_software_metadata";
+  if (clean(metadata.bee_suite_center_id) === center.id
+    && LEGACY_CONNECT_PURPOSES.has(clean(metadata.bee_suite_purpose))
+    && clean(metadata.bee_suite_migration_source).startsWith("acct_")) return "legacy_connect_migration_metadata";
+  const isKnownBatch = created >= LEGACY_UNLABELED_BATCH_START
+    && created <= LEGACY_UNLABELED_BATCH_END
+    && (customerEmail.endsWith("@kidcityusa.com") || customerEmail.endsWith("@misshoneyslearningcenter.com"));
+  if (Object.keys(metadata).length === 0
+    && created > 0
+    && created < LEGACY_CUSTOMER_CREATED_BEFORE
+    && normalizeName(customer.name) === normalizeName(center.name)
+    && (customerEmail === clean(center.email).toLowerCase() || isKnownBatch)) return "legacy_unlabeled_school_batch";
+  return null;
 }
 
 async function customerActivity(apiKey: string, customer: JsonRecord) {
@@ -160,19 +188,25 @@ async function main() {
     const customerId = clean(customer.id);
     const matches = centersByName.get(normalizeName(customer.name)) ?? [];
     if (references.has(customerId) || matches.length !== 1) return [];
-    return [{ customer, center: matches[0] }];
+    const center = matches[0];
+    const evidence = schoolCustomerEvidence(customer, center);
+    if (!evidence) return [];
+    return [{ customer, center, evidence }];
   });
-  const audited = await mapWithConcurrency(possibleDuplicates, ACTIVITY_CONCURRENCY, async ({ customer, center }) => ({
+  const audited = await mapWithConcurrency(possibleDuplicates, ACTIVITY_CONCURRENCY, async ({ customer, center, evidence }) => ({
     customerId: clean(customer.id),
     school: center.name,
     centerId: center.id,
+    tenantId: center.organization.tenantId,
+    centerEmail: center.email,
+    evidence,
     centerStatus: center.status,
     createdAt: integer(customer.created) ? new Date(integer(customer.created) * 1000).toISOString() : null,
     activity: await customerActivity(apiKey, customer),
   }));
   const targets = audited.filter((row) => row.activity.reasons.length === 0);
   const held = audited.filter((row) => row.activity.reasons.length > 0);
-  const canonical = JSON.stringify(targets.map(({ customerId, centerId, createdAt }) => ({ customerId, centerId, createdAt })));
+  const canonical = JSON.stringify(targets.map(({ customerId, centerId, tenantId, evidence, createdAt }) => ({ customerId, centerId, tenantId, evidence, createdAt })));
   const fingerprint = createHash("sha256").update(canonical).digest("hex");
 
   if (apply && argValue("--confirm-fingerprint") !== fingerprint) {
@@ -196,6 +230,11 @@ async function main() {
       const customer = await stripeRequest(apiKey, `/v1/customers/${encodeURIComponent(target.customerId)}`);
       if (customer.deleted === true) {
         results.push({ customerId: target.customerId, school: target.school, status: "already_deleted" });
+        continue;
+      }
+      const liveEvidence = schoolCustomerEvidence(customer, { id: target.centerId, name: target.school, email: target.centerEmail, organization: { tenantId: target.tenantId } });
+      if (liveEvidence !== target.evidence) {
+        results.push({ customerId: target.customerId, school: target.school, status: "held_metadata_drift" });
         continue;
       }
       const liveActivity = await customerActivity(apiKey, customer);
@@ -227,6 +266,8 @@ async function main() {
       customerId: target.customerId,
       school: target.school,
       centerId: target.centerId,
+      tenantId: target.tenantId,
+      evidence: target.evidence,
       centerStatus: target.centerStatus,
       createdAt: target.createdAt,
     })),

@@ -11,6 +11,18 @@ test("school customer reconciliation is preview-first and exact-target guarded",
   assert.match(reconciliation, /--acknowledge-delete-unreferenced-empty-school-customers/);
   assert.match(reconciliation, /references\.has\(customerId\)/);
   assert.match(reconciliation, /matches\.length !== 1/);
+  assert.match(reconciliation, /schoolCustomerEvidence/);
+  assert.match(reconciliation, /clean\(metadata\.tenantId\) === center\.organization\.tenantId/);
+  assert.match(reconciliation, /clean\(metadata\.centerId\) === center\.id/);
+  assert.match(reconciliation, /clean\(metadata\.paymentScope\) === "school_software_fee"/);
+  assert.match(reconciliation, /clean\(metadata\.bee_suite_center_id\) === center\.id/);
+  assert.match(reconciliation, /LEGACY_CONNECT_PURPOSES\.has/);
+  assert.match(reconciliation, /LEGACY_CUSTOMER_CREATED_BEFORE/);
+  assert.match(reconciliation, /LEGACY_UNLABELED_BATCH_START/);
+  assert.match(reconciliation, /LEGACY_UNLABELED_BATCH_END/);
+  assert.match(reconciliation, /Object\.keys\(metadata\)\.length === 0/);
+  assert.match(reconciliation, /customerEmail === clean\(center\.email\)\.toLowerCase\(\) \|\| isKnownBatch/);
+  assert.match(reconciliation, /customerEmail\.endsWith\("@kidcityusa\.com"\)/);
 });
 
 test("school customer deletion holds every billing and payment evidence class", () => {
@@ -31,6 +43,7 @@ test("school customer deletion holds every billing and payment evidence class", 
     "sources",
   ]) assert.match(reconciliation, new RegExp(evidence));
   assert.match(reconciliation, /held_new_database_reference/);
+  assert.match(reconciliation, /held_metadata_drift/);
   assert.match(reconciliation, /held_new_activity/);
   assert.match(reconciliation, /deleted\.deleted !== true/);
 });
@@ -49,4 +62,7 @@ test("school software customer creation reuses provider metadata and is idempote
     assert.match(route, /existing\.customerIds\.length > 1/);
     assert.match(route, /school-software-customer:\$\{user\.tenantId\}:\$\{center\.id\}/);
   }
+  assert.match(developerRoute, /const latestCenter = await prisma\.center\.findUnique/);
+  assert.match(developerRoute, /latestCustomerId && latestCustomerId !== customerId/);
+  assert.doesNotMatch(developerRoute, /customFields: \{ \.\.\.fields, stripeSoftwareCustomerId: customerId \}/);
 });

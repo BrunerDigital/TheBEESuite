@@ -188,6 +188,7 @@ test("WordPress Avada inquiry snippet matches the corrected Indiana and closed-s
   const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
 
   assert.match(snippet, /<option value="Kid City USA - IN \| Fishers"/);
+  assert.match(snippet, /<option value="Kid City USA - IN \| Loogootee"[^>]*data-address="505 N\. Oak Street"/);
   for (const retiredLocation of ["Forest Edge", "Durbin", "Brownsburg", "Elkhart", "Lees Summit"]) {
     assert.doesNotMatch(snippet, new RegExp(`value="[^"]*${retiredLocation}`));
   }

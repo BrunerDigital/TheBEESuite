@@ -11,6 +11,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromFields, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
+import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -66,7 +67,8 @@ async function GETHandler(request: NextRequest) {
       status: "not_started",
       readiness,
       billingApproval,
-    });
+      flow: stripeSchoolReadinessFlowFromFields({ customFields: existingFields, centerName: center.name }),
+    }, { headers: { "Cache-Control": "no-store" } });
   }
 
   const retrieved = await retrieveStripeConnectedAccount(accountId, { tenantId: user.tenantId });
@@ -78,7 +80,6 @@ async function GETHandler(request: NextRequest) {
   }
 
   const readiness = stripeConnectReadinessFromSnapshot(retrieved.account);
-  const billingApproval = stripeSchoolBillingApproval({ customFields: existingFields, centerName: center.name });
   const payoutBanks = await listStripeConnectedAccountPayoutBanks({
     accountId,
     tenantId: user.tenantId,
@@ -96,19 +97,21 @@ async function GETHandler(request: NextRequest) {
       }
     : {};
 
+  const syncedFields: Prisma.JsonObject = {
+    ...existingFields,
+    ...stripeConnectCustomFieldPatch(readiness),
+    stripeMerchantCapabilityStatus: retrieved.account.merchantCapabilityStatus || null,
+    stripeMerchantPayoutCapabilityStatus: retrieved.account.merchantPayoutCapabilityStatus || null,
+    stripeRecipientTransferStatus: retrieved.account.recipientTransferStatus || null,
+    ...payoutBankPatch,
+  };
   const synced = await prisma.center.updateMany({
     where: {
       id: center.id,
       customFields: { equals: existingFields as Prisma.InputJsonValue },
     },
     data: {
-      customFields: {
-        ...existingFields,
-        ...stripeConnectCustomFieldPatch(readiness),
-        stripeMerchantCapabilityStatus: retrieved.account.merchantCapabilityStatus || null,
-        stripeRecipientTransferStatus: retrieved.account.recipientTransferStatus || null,
-        ...payoutBankPatch,
-      },
+      customFields: syncedFields,
     },
   });
   if (synced.count !== 1) {
@@ -129,6 +132,8 @@ async function GETHandler(request: NextRequest) {
     },
   });
 
+  const billingApproval = stripeSchoolBillingApproval({ customFields: syncedFields, centerName: center.name });
+  const flow = stripeSchoolReadinessFlowFromFields({ customFields: syncedFields, centerName: center.name });
   return NextResponse.json({
     ok: true,
     configured: true,
@@ -136,11 +141,29 @@ async function GETHandler(request: NextRequest) {
     status: readiness.status,
     readiness,
     billingApproval,
-    account: retrieved.account,
-    payoutBank,
+    account: {
+      id: retrieved.account.id,
+      livemode: retrieved.account.livemode,
+      dashboard: retrieved.account.dashboard,
+      chargesEnabled: retrieved.account.chargesEnabled,
+      payoutsEnabled: retrieved.account.payoutsEnabled,
+      detailsSubmitted: retrieved.account.detailsSubmitted,
+      merchantCapabilityStatus: retrieved.account.merchantCapabilityStatus,
+      merchantPayoutCapabilityStatus: retrieved.account.merchantPayoutCapabilityStatus,
+      requirementFields: readiness.requirementFields,
+      pendingVerificationFields: readiness.pendingVerificationFields,
+    },
+    payoutBank: payoutBank ? {
+      bankName: payoutBank.bankName,
+      last4: payoutBank.last4,
+      status: payoutBank.status,
+      currency: payoutBank.currency,
+      defaultForCurrency: payoutBank.defaultForCurrency,
+    } : null,
     payoutBankCount: payoutBanks.banks.length,
     payoutBankError: payoutBanks.ok ? null : payoutBanks.error || "Payout bank could not be confirmed.",
-  });
+    flow,
+  }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export const GET = withApiLogging("GET", GETHandler);

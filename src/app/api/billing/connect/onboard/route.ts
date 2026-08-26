@@ -58,6 +58,23 @@ function stripeConnectFailurePatch(status: string, error: string | undefined): P
   };
 }
 
+async function updateCenterCustomFieldsIfCurrent(
+  centerId: string,
+  expected: Prisma.JsonValue | null,
+  next: Prisma.JsonObject,
+) {
+  const updated = await prisma.center.updateMany({
+    where: {
+      id: centerId,
+      customFields: expected === null
+        ? { equals: Prisma.DbNull }
+        : { equals: expected as Prisma.InputJsonValue },
+    },
+    data: { customFields: next },
+  });
+  return updated.count === 1;
+}
+
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -128,11 +145,17 @@ async function POSTHandler(request: NextRequest) {
     stripeSoftwarePaymentPreference: clean(existingFields.stripeSoftwarePaymentPreference) || "payout_bank",
     stripeSoftwarePaymentStatus: clean(existingFields.stripeSoftwareDefaultPaymentMethodId) ? "ready" : "authorization_required",
   };
+  const profileFields = currentFields;
   let accountId = readStripeConnectedAccountId(existingFields);
   let createdAccount = false;
 
-  await prisma.center.update({
-    where: { id: center.id },
+  const profileSaved = await prisma.center.updateMany({
+    where: {
+      id: center.id,
+      customFields: center.customFields === null
+        ? { equals: Prisma.DbNull }
+        : { equals: existingFields as Prisma.InputJsonValue },
+    },
     data: {
       email: setup.details.payoutContactEmail || center.email,
       phone: setup.details.payoutContactPhone || center.phone,
@@ -143,6 +166,12 @@ async function POSTHandler(request: NextRequest) {
       customFields: currentFields,
     },
   });
+  if (profileSaved.count !== 1) {
+    return NextResponse.json(
+      { ok: false, error: "This school's payout settings changed while setup was opening. Refresh and try again." },
+      { status: 409 },
+    );
+  }
 
   const stripeSecretKey = await getStripeSecretKey({ tenantId: user.tenantId });
   if (!stripeSecretKey) {
@@ -183,18 +212,19 @@ async function POSTHandler(request: NextRequest) {
       businessUrl: setup.details.businessUrl,
       productDescription: setup.details.productDescription,
       tenantId: user.tenantId,
+      idempotencyKey: `bee-suite-school-connect-${center.id}`,
+      metadata: {
+        beeSuiteCenterId: center.id,
+        beeSuiteCrmLocationId: center.crmLocationId,
+        beeSuiteTenantId: user.tenantId,
+      },
     });
 
     if (!created.ok || !created.id) {
       const errorMessage = stripeConnectFailureMessage(created.error, "Connected payout account could not be created.");
-      await prisma.center.update({
-        where: { id: center.id },
-        data: {
-          customFields: {
-            ...currentFields,
-            ...stripeConnectFailurePatch("account_creation_failed", created.error),
-          },
-        },
+      await updateCenterCustomFieldsIfCurrent(center.id, currentFields, {
+        ...currentFields,
+        ...stripeConnectFailurePatch("account_creation_failed", created.error),
       });
       return NextResponse.json(
         { ok: false, configured: created.configured, error: errorMessage },
@@ -210,16 +240,22 @@ async function POSTHandler(request: NextRequest) {
       stripeConnectAccountId: accountId,
       ...(readiness ? stripeConnectCustomFieldPatch(readiness) : {}),
       stripePayoutStatus: "onboarding_started",
-      stripeConnectDashboard: "express",
+      stripeConnectDashboard: created.account?.dashboard || "full",
       stripeConnectApi: "accounts_v2",
       stripeConnectCreatedAt: new Date().toISOString(),
     };
-    await prisma.center.update({
-      where: { id: center.id },
-      data: {
-        customFields: currentFields,
-      },
-    });
+    const mapped = await updateCenterCustomFieldsIfCurrent(center.id, profileFields, currentFields);
+    if (!mapped) {
+      const fresh = await prisma.center.findUnique({ where: { id: center.id }, select: { customFields: true } });
+      const freshFields = jsonObject(fresh?.customFields);
+      if (readStripeConnectedAccountId(freshFields) !== accountId) {
+        return NextResponse.json(
+          { ok: false, error: "This school's Stripe account mapping changed while setup was opening. Refresh before continuing." },
+          { status: 409 },
+        );
+      }
+      currentFields = freshFields;
+    }
   } else {
     const retrieved = await retrieveStripeConnectedAccount(accountId, { tenantId: user.tenantId });
     const binding = verifyStripeConnectAccountBinding(accountId, retrieved.account?.id);
@@ -233,14 +269,9 @@ async function POSTHandler(request: NextRequest) {
         : !binding.ok
           ? binding.error
           : "The school's designated payout account could not be verified. Payout onboarding was stopped.";
-      await prisma.center.update({
-        where: { id: center.id },
-        data: {
-          customFields: {
-            ...currentFields,
-            ...stripeConnectFailurePatch("account_mapping_verification_failed", errorMessage),
-          },
-        },
+      await updateCenterCustomFieldsIfCurrent(center.id, currentFields, {
+        ...currentFields,
+        ...stripeConnectFailurePatch("account_mapping_verification_failed", errorMessage),
       });
       await writeAuditLog(user, {
         centerId: center.id,
@@ -264,13 +295,16 @@ async function POSTHandler(request: NextRequest) {
       ...stripeConnectCustomFieldPatch(readiness),
       stripeConnectAccountId: binding.accountId,
     };
-    await prisma.center.update({
-      where: { id: center.id },
-      data: { customFields: currentFields },
-    });
+    if (!await updateCenterCustomFieldsIfCurrent(center.id, profileFields, currentFields)) {
+      return NextResponse.json(
+        { ok: false, error: "This school's Stripe connection changed while status was refreshing. Refresh and try again." },
+        { status: 409 },
+      );
+    }
   }
 
   const payoutSchedule = await setStripeConnectedAccountDailyPayouts({ accountId, tenantId: user.tenantId });
+  const beforeScheduleFields = currentFields;
   currentFields = {
     ...currentFields,
     stripeConnectAccountId: accountId,
@@ -282,10 +316,12 @@ async function POSTHandler(request: NextRequest) {
       ? { stripePayoutScheduleLastError: null }
       : { stripePayoutScheduleLastError: clean(payoutSchedule.error).slice(0, 240) || "Daily automatic payout schedule could not be configured." }),
   };
-  await prisma.center.update({
-    where: { id: center.id },
-    data: { customFields: currentFields },
-  });
+  if (!await updateCenterCustomFieldsIfCurrent(center.id, beforeScheduleFields, currentFields)) {
+    return NextResponse.json(
+      { ok: false, error: "This school's Stripe connection changed while payout scheduling was saved. Refresh and try again." },
+      { status: 409 },
+    );
+  }
 
   const baseUrl = requestBaseUrl(request);
   const returnUrl = `${baseUrl}/billing-settings?stripeConnect=return&center=${encodeURIComponent(center.id)}`;
@@ -294,15 +330,10 @@ async function POSTHandler(request: NextRequest) {
 
   if (!link.ok || !link.url) {
     const errorMessage = stripeConnectFailureMessage(link.error, "Payout onboarding link could not be created.");
-    await prisma.center.update({
-      where: { id: center.id },
-      data: {
-        customFields: {
-          ...currentFields,
-          stripeConnectAccountId: accountId,
-          ...stripeConnectFailurePatch("onboarding_link_failed", link.error),
-        },
-      },
+    await updateCenterCustomFieldsIfCurrent(center.id, currentFields, {
+      ...currentFields,
+      stripeConnectAccountId: accountId,
+      ...stripeConnectFailurePatch("onboarding_link_failed", link.error),
     });
     return NextResponse.json(
       { ok: false, configured: link.configured, error: errorMessage },
@@ -310,19 +341,20 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  await prisma.center.update({
-    where: { id: center.id },
-    data: {
-      customFields: {
-        ...currentFields,
-        stripeConnectAccountId: accountId,
-        stripePayoutStatus: "onboarding_link_created",
-        stripeConnectDashboard: "express",
-        stripeConnectApi: "accounts_v2",
-        stripeConnectLastOnboardingAt: new Date().toISOString(),
-      },
-    },
-  });
+  const linkFields: Prisma.JsonObject = {
+    ...currentFields,
+    stripeConnectAccountId: accountId,
+    stripePayoutStatus: "onboarding_link_created",
+    stripeConnectDashboard: "full",
+    stripeConnectApi: "accounts_v2",
+    stripeConnectLastOnboardingAt: new Date().toISOString(),
+  };
+  if (!await updateCenterCustomFieldsIfCurrent(center.id, currentFields, linkFields)) {
+    return NextResponse.json(
+      { ok: false, error: "This school's Stripe connection changed before the secure handoff opened. Refresh and try again." },
+      { status: 409 },
+    );
+  }
 
   await writeAuditLog(user, {
     centerId: center.id,

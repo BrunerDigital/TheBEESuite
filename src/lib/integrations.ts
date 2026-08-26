@@ -136,11 +136,13 @@ export type StripeConnectedAccountSnapshot = {
   payoutsEnabled: boolean;
   detailsSubmitted: boolean;
   merchantCapabilityStatus?: string | null;
+  merchantPayoutCapabilityStatus?: string | null;
   recipientTransferStatus?: string | null;
   feesCollector?: "application" | "stripe" | null;
   lossesCollector?: "application" | "stripe" | null;
   requirementFields: string[];
   currentlyDueRequirementFields: string[];
+  eventuallyDueRequirementFields: string[];
   pendingVerificationFields: string[];
   raw?: unknown;
 };
@@ -471,6 +473,8 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
   const merchant = asRecord(configuration.merchant);
   const merchantCapabilities = asRecord(merchant.capabilities);
   const cardPayments = asRecord(merchantCapabilities.card_payments);
+  const merchantStripeBalance = asRecord(merchantCapabilities.stripe_balance);
+  const merchantPayouts = asRecord(merchantStripeBalance.payouts);
   const recipient = asRecord(configuration.recipient);
   const recipientCapabilities = asRecord(recipient.capabilities);
   const stripeBalance = asRecord(recipientCapabilities.stripe_balance);
@@ -492,6 +496,10 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
     })
     .map((entry) => clean(entry.field) || clean(entry.description))
     .filter((field): field is string => typeof field === "string");
+  const unclassifiedEntries = entryRecords
+    .filter((entry) => !clean(entry.awaiting_action_from) && !clean(asRecord(entry.minimum_deadline).status))
+    .map((entry) => clean(entry.field) || clean(entry.description))
+    .filter((field): field is string => typeof field === "string");
   const pendingVerificationEntries = entryRecords
     .filter((entry) => clean(entry.awaiting_action_from) === "stripe")
     .map((entry) => clean(entry.field) || clean(entry.description))
@@ -502,18 +510,19 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
         .map((entry) => clean(asRecord(entry).field) || clean(asRecord(entry).description))
         .filter((field): field is string => typeof field === "string")
     : [];
-  const requirementFields = Array.from(new Set([
-    ...currentDue,
+  const requirementFields = Array.from(new Set([...currentDue, ...currentlyDueEntries, ...unclassifiedEntries]));
+  const currentlyDueRequirementFields = Array.from(new Set([...currentDue, ...currentlyDueEntries, ...unclassifiedEntries]));
+  const pendingVerificationFields = Array.from(new Set([...pendingVerification, ...pendingVerificationEntries]));
+  const eventuallyDueRequirementFields = Array.from(new Set([
     ...eventuallyDue,
     ...futureCurrentDue,
     ...futureEventuallyDue,
     ...entries,
     ...futureEntries,
-  ]));
-  const currentlyDueRequirementFields = Array.from(new Set([...currentDue, ...currentlyDueEntries]));
-  const pendingVerificationFields = Array.from(new Set([...pendingVerification, ...pendingVerificationEntries]));
+  ])).filter((field) => !requirementFields.includes(field) && !pendingVerificationFields.includes(field));
   const recipientTransferStatus = clean(stripeTransfers.status) || null;
   const merchantCapabilityStatus = clean(cardPayments.status) || null;
+  const merchantPayoutCapabilityStatus = clean(merchantPayouts.status) || null;
   const feesPayer = clean(controllerFees.payer);
   const lossesPayer = clean(controllerLosses.payments);
   const feesCollector = clean(responsibilities.fees_collector) === "stripe" || feesPayer === "account"
@@ -534,14 +543,26 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
     dashboard: clean(account.dashboard) || clean(legacyStripeDashboard.type) || null,
     configurations,
     chargesEnabled: account.charges_enabled === true || merchantCapabilityStatus === "active",
-    payoutsEnabled: account.payouts_enabled === true || recipientTransferStatus === "active",
-    detailsSubmitted: account.details_submitted === true || account.detailsSubmitted === true || requirementFields.length === 0,
+    payoutsEnabled:
+      account.payouts_enabled === true ||
+      merchantPayoutCapabilityStatus === "active" ||
+      (!merchantPayoutCapabilityStatus && recipientTransferStatus === "active"),
+    detailsSubmitted:
+      account.details_submitted === true ||
+      account.detailsSubmitted === true ||
+      (
+        merchantCapabilityStatus === "active" &&
+        (merchantPayoutCapabilityStatus === "active" || (!merchantPayoutCapabilityStatus && recipientTransferStatus === "active")) &&
+        requirementFields.length === 0
+      ),
     merchantCapabilityStatus,
+    merchantPayoutCapabilityStatus,
     recipientTransferStatus,
     feesCollector,
     lossesCollector,
     requirementFields,
     currentlyDueRequirementFields,
+    eventuallyDueRequirementFields,
     pendingVerificationFields,
     raw: json,
   };
@@ -2421,13 +2442,6 @@ export async function createStripeConnectedAccount({
           url: clean(businessUrl) || undefined,
         },
       },
-      recipient: {
-        capabilities: {
-          stripe_balance: {
-            stripe_transfers: { requested: true },
-          },
-        },
-      },
       customer: {
         capabilities: {
           automatic_indirect_tax: { requested: true },
@@ -2447,7 +2461,7 @@ export async function createStripeConnectedAccount({
         losses_collector: "stripe",
       },
     },
-    include: ["configuration.merchant", "configuration.recipient", "configuration.customer", "defaults", "requirements"],
+    include: ["configuration.merchant", "configuration.customer", "defaults", "requirements"],
   };
 
   const response = await fetch("https://api.stripe.com/v2/core/accounts", {
@@ -2596,6 +2610,18 @@ export async function createStripeAccountLink({
       error: "The connected account does not have an applied onboarding configuration.",
     };
   }
+  const accountLinkUseCase = connectedAccount.account.detailsSubmitted
+    ? "account_update"
+    : "account_onboarding";
+  const accountLinkOptions = {
+    configurations,
+    collection_options: {
+      fields: collectionFields,
+      ...(includeFutureRequirements ? { future_requirements: "include" } : {}),
+    },
+    refresh_url: refreshUrl,
+    return_url: returnUrl,
+  };
 
   const response = await fetch("https://api.stripe.com/v2/core/account_links", {
     method: "POST",
@@ -2603,16 +2629,8 @@ export async function createStripeAccountLink({
     body: JSON.stringify({
       account: connectedAccountId,
       use_case: {
-        type: "account_onboarding",
-        account_onboarding: {
-          configurations,
-          collection_options: {
-            fields: collectionFields,
-            ...(includeFutureRequirements ? { future_requirements: "include" } : {}),
-          },
-          refresh_url: refreshUrl,
-          return_url: returnUrl,
-        },
+        type: accountLinkUseCase,
+        [accountLinkUseCase]: accountLinkOptions,
       },
     }),
     signal: AbortSignal.timeout(10_000),

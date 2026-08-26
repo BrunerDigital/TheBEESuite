@@ -91,7 +91,7 @@ test("public payment request routes hide provider details without changing respo
   }
 
   assert.match(sessionRoute, /PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE/);
-  assert.equal(sessionRoute.match(/paymentServiceError\(/g)?.length, 3);
+  assert.equal(sessionRoute.match(/paymentServiceError\(/g)?.length, 4);
   assert.match(sessionRoute, /configured:\s*customer\.configured/);
   assert.match(sessionRoute, /configured:\s*setup\.configured/);
   assert.match(
@@ -100,7 +100,7 @@ test("public payment request routes hide provider details without changing respo
   );
 
   assert.match(checkoutRoute, /PARENT_PAYMENT_UNAVAILABLE_MESSAGE/);
-  assert.equal(checkoutRoute.match(/paymentServiceError\(/g)?.length, 9);
+  assert.equal(checkoutRoute.match(/paymentServiceError\(/g)?.length, 10);
   assert.match(checkoutRoute, /configured:\s*false/);
   assert.match(checkoutRoute, /configured:\s*accountStatus\.configured/);
   assert.match(checkoutRoute, /configured:\s*customer\.configured/);

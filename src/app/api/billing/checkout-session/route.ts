@@ -32,6 +32,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
+import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
@@ -287,6 +288,24 @@ async function POSTHandler(request: NextRequest) {
           fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
         }),
         ...(parentCheckout ? {} : { billingApproval }),
+      },
+      { status: 403 },
+    );
+  }
+  const paymentReadiness = stripeSchoolReadinessFlowFromFields({
+    customFields: center?.customFields,
+    centerName: center?.name,
+  });
+  if (!paymentReadiness.canAcceptParentPayments) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: paymentServiceError({
+          parentFacing: parentCheckout,
+          providerError: paymentReadiness.explanation,
+          fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+        }),
+        ...(parentCheckout ? {} : { paymentReadiness }),
       },
       { status: 403 },
     );

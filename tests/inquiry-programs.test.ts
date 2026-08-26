@@ -18,4 +18,8 @@ test("Kid City strict routing excludes archived and closed schools", async () =>
   const source = await readFile("src/app/api/inquiries/route.ts", "utf8");
   const activeOnlyFilters = source.match(/status: strictLocationRouting \? "active" : \{ not: "closed" \}/g) ?? [];
   assert.equal(activeOnlyFilters.length, 2);
+  assert.match(
+    source,
+    /if \(center && \(!strictLocationRouting \|\| center\.status === "active"\)\) return center;/,
+  );
 });

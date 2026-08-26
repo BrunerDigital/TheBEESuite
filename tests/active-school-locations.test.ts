@@ -167,3 +167,12 @@ test("WordPress Avada inquiry snippet uses the branded Vero Beach location ID", 
   assert.match(snippet, /<option value="Kid City USA - FL \| Vero Beach"[^>]*>Kid City USA - FL \| Vero Beach<\/option>/);
   assert.match(snippet, /data-location-name="Kid City USA - Vero Beach"/);
 });
+
+test("WordPress Avada inquiry snippet matches the corrected Indiana and closed-school routing", () => {
+  const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
+
+  assert.match(snippet, /<option value="Kid City USA - IN \| Fishers"/);
+  for (const retiredLocation of ["Forest Edge", "Durbin", "Brownsburg", "Elkhart", "Lees Summit"]) {
+    assert.doesNotMatch(snippet, new RegExp(`value="[^"]*${retiredLocation}`));
+  }
+});

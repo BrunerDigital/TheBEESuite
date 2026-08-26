@@ -311,7 +311,7 @@ async function getIntakeCenter({
   if (requestedCenterId) {
     const center = await findCenterById(requestedCenterId);
 
-    if (center) return center;
+    if (center && (!strictLocationRouting || center.status === "active")) return center;
   }
 
   const locationIds = uniqueValues([locationId, publicLocationId ?? ""]);

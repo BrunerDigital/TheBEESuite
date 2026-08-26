@@ -97,6 +97,22 @@ test("static Kid City fallback locations use the canonical branded Vero Beach ID
   });
 });
 
+test("static Kid City fallback includes the Loogootee inquiry location", () => {
+  const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
+  const location = file.locations.find((item) => item.crmLocationId === "Kid City USA - IN | Loogootee");
+
+  assert.deepEqual(location, {
+    crmLocationId: "Kid City USA - IN | Loogootee",
+    locationId: "Kid City USA - IN | Loogootee",
+    name: "Kid City USA - Loogootee",
+    address: "505 N. Oak Street",
+    city: "Loogootee",
+    state: "IN",
+    postalCode: "47553",
+    phone: "855-543-2489",
+  });
+});
+
 test("static Kid City fallback excludes confirmed inactive schools", () => {
   const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
   const ids = new Set(file.locations.map((item) => item.crmLocationId));
@@ -172,6 +188,7 @@ test("WordPress Avada inquiry snippet matches the corrected Indiana and closed-s
   const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
 
   assert.match(snippet, /<option value="Kid City USA - IN \| Fishers"/);
+  assert.match(snippet, /<option value="Kid City USA - IN \| Loogootee"[^>]*data-address="505 N\. Oak Street"/);
   for (const retiredLocation of ["Forest Edge", "Durbin", "Brownsburg", "Elkhart", "Lees Summit"]) {
     assert.doesNotMatch(snippet, new RegExp(`value="[^"]*${retiredLocation}`));
   }

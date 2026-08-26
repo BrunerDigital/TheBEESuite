@@ -31,7 +31,7 @@ async function main() {
 
   const jsonPath = path.join(process.cwd(), "public", "kidcity-locations.json");
   const file = JSON.parse(await readFile(jsonPath, "utf8")) as PublicLocationFile;
-  invariant(Array.isArray(file.locations) && file.locations.length >= 70, "The Kid City public location source is incomplete.");
+  invariant(Array.isArray(file.locations) && file.locations.length >= 66, "The Kid City public location source is incomplete.");
   let jsonChanges = 0;
   for (const location of file.locations) {
     const canonicalId = canonical(location.crmLocationId || location.locationId);

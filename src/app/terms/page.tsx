@@ -84,7 +84,7 @@ export default function TermsPage() {
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>When enabled, parent payments are for childcare tuition, school fees, goods, or services received outside the app. Secure card or bank entry may open a separate payment screen operated by Stripe or another approved payment processor.</p>
-                  <p>Unless waived or otherwise agreed in writing, The BEE Suite retains a school-paid tuition feature fee of 1.50% from each tuition payout. This fee is paid by the school and does not increase the family&apos;s tuition invoice.</p>
+                  <p>Unless waived or otherwise agreed in writing, The BEE Suite retains a school-paid tuition feature fee of 1% from each tuition payment before payout. Stripe processing fees are also paid by the school. Neither fee increases the family&apos;s tuition invoice.</p>
                   <p>The BEE Suite does not store full card numbers, full bank account numbers, or bank login credentials.</p>
                 </CardContent>
               </Card>

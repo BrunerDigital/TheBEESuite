@@ -112,7 +112,7 @@ import {
   isStripeParentProcessingRecoveryApproved,
   readStripeConnectedAccountId,
 } from "@/lib/integrations";
-import { getKidCitySoftwareFeeUnitAmountCents, getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
+import { getKidCitySoftwareInvoiceSnapshot, getSchoolSoftwareFeePolicyForCenter, isSchoolSoftwareBillingCenter } from "@/lib/kidcity-software-billing";
 import { countCenterBillableUsers } from "@/lib/school-software-subscriptions";
 import { buildGuardianKioskCredential, kioskPathForCenter } from "@/lib/kiosk-credentials";
 import {
@@ -4681,7 +4681,18 @@ async function renderLivePage(
           city: true,
           state: true,
           postalCode: true,
+          locationId: true,
+          status: true,
           customFields: true,
+          ownerGroup: {
+            select: {
+              name: true,
+              ownerType: true,
+              billingEmail: true,
+              contactName: true,
+              customFields: true,
+            },
+          },
         },
       }),
     ]);
@@ -4699,6 +4710,22 @@ async function renderLivePage(
             ...center,
             stripeReauthorizationAvailable: !readCorporateStripeVerificationTarget(center.id) || canUseCorporateStripeVerification(user),
           })),
+          softwareBillingCenters: billingCenters.filter(isSchoolSoftwareBillingCenter).map((center) => {
+            const fields = jsonRecord(center.customFields);
+            const policy = getSchoolSoftwareFeePolicyForCenter(center);
+            const methodType = typeof fields.stripeSoftwarePaymentMethodType === "string" ? fields.stripeSoftwarePaymentMethodType : "";
+            const last4 = typeof fields.stripeSoftwarePaymentMethodLast4 === "string" ? fields.stripeSoftwarePaymentMethodLast4 : "";
+            return {
+              id: center.id,
+              name: center.name,
+              tier: policy.tier,
+              monthlyAmountCents: policy.unitAmountCents,
+              paymentMethodReady: typeof fields.stripeSoftwareDefaultPaymentMethodId === "string" && fields.stripeSoftwareDefaultPaymentMethodId.startsWith("pm_"),
+              paymentMethodLabel: methodType ? `${methodType.replaceAll("_", " ")}${last4 ? ` ending ${last4}` : ""}` : null,
+              paymentStatus: typeof fields.stripeSoftwarePaymentStatus === "string" ? fields.stripeSoftwarePaymentStatus : "authorization_required",
+              subscriptionStatus: typeof fields.stripeSoftwareSubscriptionStatus === "string" ? fields.stripeSoftwareSubscriptionStatus : "not_started",
+            };
+          }),
           stripeConfigured,
           webhookConfigured: stripeWebhookConfigured,
           parentProcessingRecoveryApproved: isStripeParentProcessingRecoveryApproved(),
@@ -5222,22 +5249,42 @@ async function renderLivePage(
         },
       }),
       prisma.user.groupBy({ where: { tenantId: user.tenantId }, by: ["isActive"], _count: { _all: true } }),
-      prisma.center.findMany({ where: { organization: { tenantId: user.tenantId }, status: { notIn: ["closed", "archived"] } }, orderBy: { name: "asc" }, select: { id: true, name: true, customFields: true } }),
+      prisma.center.findMany({
+        where: { organization: { tenantId: user.tenantId }, status: "active" },
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          crmLocationId: true,
+          locationId: true,
+          status: true,
+          customFields: true,
+          ownerGroup: {
+            select: {
+              name: true,
+              ownerType: true,
+              billingEmail: true,
+              contactName: true,
+              customFields: true,
+            },
+          },
+        },
+      }),
       prisma.payment.findMany({ where: { status: PaymentStatus.PAID, paidAt: { gte: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)) }, billingAccount: { family: { centerId: { in: centers.map((item) => item.id) } } } }, select: { amountCents: true, customFields: true } }),
       prisma.clientErrorReport.count({ where: { tenantId: user.tenantId, resolvedAt: null, lastSeenAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, ...(tenantWide ? {} : { centerId: scopedCenterIds }) } }),
       prisma.webPushDelivery.count({ where: { status: "failed", lastAttemptAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, subscription: { tenantId: user.tenantId } } }),
       prisma.webPushDelivery.count({ where: { responseStatus: { in: [400, 404, 410] }, lastAttemptAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, subscription: { tenantId: user.tenantId } } }),
     ]);
 
-    const unitAmountCents = getKidCitySoftwareFeeUnitAmountCents();
-    const softwareSubscriptions = await Promise.all(softwareCenters.map(async (school) => {
+    const softwareSubscriptions = await Promise.all(softwareCenters.filter(isSchoolSoftwareBillingCenter).map(async (school) => {
       const fields = jsonRecord(school.customFields);
       const activeUsers = await countCenterBillableUsers(prisma, school.id);
+      const feePolicy = getSchoolSoftwareFeePolicyForCenter(school);
       return {
         id: school.id,
         name: school.name,
         activeUsers,
-        monthlyAmountCents: unitAmountCents,
+        monthlyAmountCents: feePolicy.unitAmountCents,
         customerReady: typeof fields.stripeSoftwareCustomerId === "string" && fields.stripeSoftwareCustomerId.startsWith("cus_"),
         paymentMethodReady: typeof fields.stripeSoftwareDefaultPaymentMethodId === "string" && fields.stripeSoftwareDefaultPaymentMethodId.startsWith("pm_"),
         subscriptionId: typeof fields.stripeSoftwareSubscriptionId === "string" ? fields.stripeSoftwareSubscriptionId : null,

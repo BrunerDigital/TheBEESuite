@@ -708,10 +708,21 @@ async function createPayrollDeductionPayment(user: CurrentBillingUser, body: Rec
           description: `Payroll deduction payment: ${payrollReference}`,
           amountCents: -amountCents,
           balanceAfterCents: updatedAccount.balanceCents,
-          effectiveAt: paidAt,
+          effectiveAt: new Date(),
           sourceSystem: "bee_suite_payroll_deduction",
           externalId,
           metadata: { payrollReference, notes: notes || null, enteredBy: user.email },
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId: user.tenantId,
+          centerId: familyAccess.centerId,
+          userId: user.id,
+          action: "billing.payroll_deduction_payment.created",
+          resource: "Payment",
+          resourceId: payment.id,
+          metadata: { familyId: familyAccess.family.id, amountCents, payrollReference, payrollWithheldAt: paidAt.toISOString() },
         },
       });
       return { payment, entry, alreadyRecorded: false };
@@ -723,15 +734,6 @@ async function createPayrollDeductionPayment(user: CurrentBillingUser, body: Rec
     throw error;
   }
 
-  if (!result.alreadyRecorded) {
-    await writeAuditLog(user, {
-      centerId: familyAccess.centerId,
-      action: "billing.payroll_deduction_payment.created",
-      resource: "Payment",
-      resourceId: result.payment.id,
-      metadata: { familyId: familyAccess.family.id, amountCents, payrollReference },
-    });
-  }
   return NextResponse.json({ ok: true, totalCents: amountCents, payment: result.payment, entry: result.entry, alreadyRecorded: result.alreadyRecorded });
 }
 

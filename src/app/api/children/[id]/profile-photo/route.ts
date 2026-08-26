@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
-import { writeAuditLog } from "@/lib/audit";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import {
   contentTypeForProfilePhotoFile,
@@ -22,6 +21,36 @@ import { logOperationalError, withApiLogging } from "@/lib/request-response-logg
 export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ id: string }> };
+type PhotoUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
+
+class ProfilePhotoScopeError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+async function currentAuthorizedChild(tx: Prisma.TransactionClient, id: string, user: PhotoUser) {
+  const child = await tx.child.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      classroomId: true,
+      customFields: true,
+      family: { select: { centerId: true } },
+      classroom: { select: { centerId: true } },
+    },
+  });
+  if (!child) throw new ProfilePhotoScopeError("Child not found.", 404);
+  const centerId = child.classroom?.centerId ?? child.family.centerId;
+  const access = centerScopedAccessGuard({
+    centerId,
+    hasTenantWideAccess: canAccessAllCenters(user),
+    hasCenterAccess: Boolean(centerId && canAccessCenter(user, centerId)),
+    resourceLabel: "Child",
+  });
+  if (!access.ok) throw new ProfilePhotoScopeError(access.error, access.status);
+  return { child, centerId };
+}
 
 async function authorizedChild(id: string) {
   const user = await getCurrentUser();
@@ -73,7 +102,6 @@ async function POSTHandler(request: NextRequest, context: RouteContext): Promise
     return NextResponse.json({ ok: false, error: "The selected file does not match its JPG, PNG, or WebP image type." }, { status: 400 });
   }
 
-  const previousStorageKey = readProfilePhotoStorageKey(authorization.child.customFields);
   let uploaded: Awaited<ReturnType<typeof uploadChildMediaBuffer>>;
   try {
     uploaded = await uploadChildMediaBuffer({
@@ -97,26 +125,41 @@ async function POSTHandler(request: NextRequest, context: RouteContext): Promise
     contentType,
     uploadedAt: new Date().toISOString(),
   };
+  let previousStorageKey: string | null = null;
+  let persistedCenterId = authorization.centerId;
   try {
-    await prisma.child.update({
-      where: { id: authorization.child.id },
-      data: { customFields: mergeProfilePhotoCustomFields(authorization.child.customFields, profilePhoto) as Prisma.InputJsonValue },
-    });
+    const persisted = await prisma.$transaction(async (tx) => {
+      const current = await currentAuthorizedChild(tx, authorization.child.id, authorization.user);
+      const currentStorageKey = readProfilePhotoStorageKey(current.child.customFields);
+      await tx.child.update({
+        where: { id: current.child.id },
+        data: { customFields: mergeProfilePhotoCustomFields(current.child.customFields, profilePhoto) as Prisma.InputJsonValue },
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId: authorization.user.tenantId,
+          centerId: current.centerId,
+          userId: authorization.user.id,
+          action: currentStorageKey ? "child.profile_photo.replaced" : "child.profile_photo.created",
+          resource: "Child",
+          resourceId: current.child.id,
+          metadata: { storageProvider: "supabase", bucket: uploaded.bucket, contentType, previousPhotoReplaced: Boolean(currentStorageKey) },
+        },
+      });
+      return { previousStorageKey: currentStorageKey, centerId: current.centerId };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    previousStorageKey = persisted.previousStorageKey;
+    persistedCenterId = persisted.centerId;
   } catch (error) {
     await deleteChildMediaObject(uploaded.storageKey).catch(() => undefined);
+    if (error instanceof ProfilePhotoScopeError) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+    }
     throw error;
   }
-
-  await writeAuditLog(authorization.user, {
-    centerId: authorization.centerId,
-    action: previousStorageKey ? "child.profile_photo.replaced" : "child.profile_photo.created",
-    resource: "Child",
-    resourceId: authorization.child.id,
-    metadata: { storageProvider: "supabase", bucket: uploaded.bucket, contentType, previousPhotoReplaced: Boolean(previousStorageKey) },
-  });
   if (previousStorageKey && previousStorageKey !== uploaded.storageKey) {
     await deleteChildMediaObject(previousStorageKey).catch((error) => {
-      logOperationalError("child.profile_photo.previous_object_cleanup_failed", error, { childId: authorization.child.id, centerId: authorization.centerId });
+      logOperationalError("child.profile_photo.previous_object_cleanup_failed", error, { childId: authorization.child.id, centerId: persistedCenterId });
     });
   }
   return NextResponse.json({ ok: true, profilePhotoUrl: uploaded.signedUrl, profilePhotoStorageKey: uploaded.storageKey });
@@ -126,21 +169,40 @@ async function DELETEHandler(_request: NextRequest, context: RouteContext): Prom
   const { id } = await context.params;
   const authorization = await authorizedChild(id);
   if ("response" in authorization) return authorization.response!;
-  const storageKey = readProfilePhotoStorageKey(authorization.child.customFields);
-  await prisma.child.update({
-    where: { id: authorization.child.id },
-    data: { customFields: removeProfilePhotoCustomFields(authorization.child.customFields) as Prisma.InputJsonValue },
-  });
-  await writeAuditLog(authorization.user, {
-    centerId: authorization.centerId,
-    action: "child.profile_photo.removed",
-    resource: "Child",
-    resourceId: authorization.child.id,
-    metadata: { storageProvider: storageKey ? "supabase" : "none", objectRemoved: Boolean(storageKey) },
-  });
+  let storageKey: string | null;
+  let persistedCenterId = authorization.centerId;
+  try {
+    const persisted = await prisma.$transaction(async (tx) => {
+      const current = await currentAuthorizedChild(tx, authorization.child.id, authorization.user);
+      const currentStorageKey = readProfilePhotoStorageKey(current.child.customFields);
+      await tx.child.update({
+        where: { id: current.child.id },
+        data: { customFields: removeProfilePhotoCustomFields(current.child.customFields) as Prisma.InputJsonValue },
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId: authorization.user.tenantId,
+          centerId: current.centerId,
+          userId: authorization.user.id,
+          action: "child.profile_photo.removed",
+          resource: "Child",
+          resourceId: current.child.id,
+          metadata: { storageProvider: currentStorageKey ? "supabase" : "none", objectRemoved: Boolean(currentStorageKey) },
+        },
+      });
+      return { storageKey: currentStorageKey, centerId: current.centerId };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    storageKey = persisted.storageKey;
+    persistedCenterId = persisted.centerId;
+  } catch (error) {
+    if (error instanceof ProfilePhotoScopeError) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
   if (storageKey) {
     await deleteChildMediaObject(storageKey).catch((error) => {
-      logOperationalError("child.profile_photo.object_cleanup_failed", error, { childId: authorization.child.id, centerId: authorization.centerId });
+      logOperationalError("child.profile_photo.object_cleanup_failed", error, { childId: authorization.child.id, centerId: persistedCenterId });
     });
   }
   return NextResponse.json({ ok: true });

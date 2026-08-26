@@ -11,6 +11,8 @@ test("payroll deductions are explicit offline payments with an auditable idempot
   assert.match(route, /Payroll run or pay-period reference is required/);
   assert.match(route, /billing\.payroll_deduction_payment\.created/);
   assert.match(route, /manualFamilyPaymentExceedsVisibleBalance/);
+  assert.match(route, /effectiveAt: new Date\(\)/);
+  assert.match(route, /await tx\.auditLog\.create/);
 });
 
 test("director copy distinguishes a completed payroll payment from a discount or benefit", () => {

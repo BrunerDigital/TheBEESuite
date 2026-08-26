@@ -23,6 +23,10 @@ test("student profile photo route is school scoped, audited, signed, replaceable
   assert.match(route, /child\.profile_photo\.replaced/);
   assert.match(route, /child\.profile_photo\.removed/);
   assert.match(route, /deleteChildMediaObject/);
+  assert.match(route, /currentAuthorizedChild\(tx/);
+  assert.match(route, /mergeProfilePhotoCustomFields\(current\.child\.customFields/);
+  assert.match(route, /removeProfilePhotoCustomFields\(current\.child\.customFields/);
+  assert.match(route, /tx\.auditLog\.create/);
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
   assert.match(page, /createChildMediaSignedUrl/);
   assert.match(page, /profilePhotoUrl: parentChildProfilePhotoUrls/);

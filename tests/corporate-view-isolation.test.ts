@@ -91,3 +91,20 @@ test("corporate messages keep family threads center-scoped and internal threads 
   assert.equal(serialized.includes(tenantBCenter), false);
   assert.equal(serialized.includes('"familyId":{"not":null}'), false);
 });
+
+test("school messaging scopes staff and internal threads to the selected centers", () => {
+  const where = buildVisibleMessageWhere({
+    userId: "director-a",
+    tenantId: "tenant-a",
+    familyScopeWhere: { centerId: { in: ["center-a"] } },
+    nonFamilyCenterIds: ["center-a"],
+    allCenters: false,
+    teacherMessageScope: false,
+  });
+  const serialized = JSON.stringify(where);
+  assert.equal(serialized.includes("internal:center-a"), true);
+  assert.equal(serialized.includes('"role":"TEACHER"'), true);
+  assert.equal(serialized.includes('"centerId":{"in":["center-a"]}'), true);
+  assert.equal(serialized.includes('"accessGrants":{"some":{"isActive":true'), true);
+  assert.equal(serialized.includes('"threadKey":null'), false);
+});

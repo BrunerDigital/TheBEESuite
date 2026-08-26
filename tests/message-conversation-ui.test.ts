@@ -80,9 +80,24 @@ test("conversation direction is derived from role data inside the existing scope
 });
 
 test("director inbox keeps school-scoped threads visible after a family has no current enrollment", () => {
-  assert.match(routePage, /const messageFamilyScopeWhere:[\s\S]*?teacherMessageScope[\s\S]*?familyScopeWhere[\s\S]*?: visibleFamilyWhere\(visibleCenterIds\)/);
+  assert.match(routePage, /const authorizedMessageCenterIds = messageCenterIdsForUser\(user\)/);
+  assert.match(routePage, /const messageFamilyScopeWhere:[\s\S]*?teacherMessageScope[\s\S]*?familyScopeWhere[\s\S]*?: visibleFamilyWhere\(messageCenterIds\)/);
   assert.match(routePage, /buildVisibleMessageWhere\(\{[\s\S]*?familyScopeWhere: messageFamilyScopeWhere/);
   assert.match(routePage, /prisma\.family\.findMany\(\{[\s\S]*?where: familyScopeWhere/);
+  assert.match(routePage, /centers\.filter\(\(center\) => messageCenterIds\.includes\(center\.id\)\)\.map/);
+});
+
+test("director send and suggestion APIs enforce the same primary-school scope as the composer", () => {
+  const auth = readFileSync("src/lib/auth.ts", "utf8");
+  const sendRoute = readFileSync("src/app/api/communications/messages/route.ts", "utf8");
+  const suggestionsRoute = readFileSync("src/app/api/communications/messages/suggestions/route.ts", "utf8");
+  assert.match(auth, /centerIds = hasProfileCenterAssignment[\s\S]*?centerIds\.filter[\s\S]*?\.sort\(\)[\s\S]*?: \[\.\.\.centerIds\]\.sort\(\)/);
+  assert.match(auth, /function messageCenterIdsForUser[\s\S]*?UserRole\.CENTER_DIRECTOR[\s\S]*?UserRole\.ASSISTANT_DIRECTOR[\s\S]*?\[user\.primaryCenterId\]/);
+  assert.match(sendRoute, /const messageCenterIds = messageCenterIdsForUser\(user\)/);
+  assert.match(sendRoute, /family\.centerId && messageCenterIds\.includes\(family\.centerId\)/);
+  assert.match(sendRoute, /requestedCenterIds\.some\(\(centerId\) => !messageCenterIds\.includes\(centerId\)\)/);
+  assert.match(suggestionsRoute, /const messageCenterIds = messageCenterIdsForUser\(user\)/);
+  assert.match(suggestionsRoute, /family\.centerId && messageCenterIds\.includes\(family\.centerId\)/);
 });
 
 test("parent portal presents messaging as one responsive school conversation", () => {

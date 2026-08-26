@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
-import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian } from "@/lib/auth";
+import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian, messageCenterIdsForUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { activeClassroomWhere } from "@/lib/classroom-status";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
@@ -362,6 +362,7 @@ async function POSTHandler(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
+  const messageCenterIds = messageCenterIdsForUser(user);
 
   const input = await readMessageRequest(request);
   const familyId = input.familyId;
@@ -413,8 +414,8 @@ async function POSTHandler(request: NextRequest) {
           ? {}
           : {
               OR: [
-                { staffProfile: { centerId: { in: user.centerIds } } },
-                { accessGrants: { some: { isActive: true, centerId: { in: user.centerIds } } } },
+                { staffProfile: { centerId: { in: messageCenterIds } } },
+                { accessGrants: { some: { isActive: true, centerId: { in: messageCenterIds } } } },
               ],
             }),
       },
@@ -559,9 +560,9 @@ async function POSTHandler(request: NextRequest) {
     const scopedCenterIds = canAccessAllCenters(user)
       ? requestedCenterIds
       : requestedCenterIds.length
-        ? requestedCenterIds.filter((centerId) => user.centerIds.includes(centerId))
-        : user.centerIds;
-    if (!canAccessAllCenters(user) && requestedCenterIds.some((centerId) => !user.centerIds.includes(centerId))) {
+        ? requestedCenterIds.filter((centerId) => messageCenterIds.includes(centerId))
+        : messageCenterIds;
+    if (!canAccessAllCenters(user) && requestedCenterIds.some((centerId) => !messageCenterIds.includes(centerId))) {
       return NextResponse.json({ ok: false, error: "One or more selected centers are outside your access scope." }, { status: 403 });
     }
 
@@ -574,7 +575,7 @@ async function POSTHandler(request: NextRequest) {
         return NextResponse.json({ ok: false, error: "One or more selected classrooms are unavailable." }, { status: 400 });
       }
       const inaccessibleClassroom = selectedClassrooms.find((classroom) =>
-        !canAccessAllCenters(user) && !user.centerIds.includes(classroom.centerId),
+        !canAccessAllCenters(user) && !messageCenterIds.includes(classroom.centerId),
       );
       if (inaccessibleClassroom) {
         return NextResponse.json({ ok: false, error: "One or more selected classrooms are outside your access scope." }, { status: 403 });
@@ -850,7 +851,7 @@ async function POSTHandler(request: NextRequest) {
     if (!family) return NextResponse.json({ ok: false, error: "Family not found." }, { status: 404 });
 
     const isFamilyGuardian = family.guardians.some((guardian) => guardian.userId === user.id);
-    const hasCenterAccess = canAccessAllCenters(user) || Boolean(family.centerId && user.centerIds.includes(family.centerId));
+    const hasCenterAccess = canAccessAllCenters(user) || Boolean(family.centerId && messageCenterIds.includes(family.centerId));
     let hasClassroomAccess = false;
     if (!senderCanManageOperations && senderCanManageClassroom && !isFamilyGuardian) {
       const staffProfile = await prisma.staffProfile.findUnique({

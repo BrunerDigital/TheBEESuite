@@ -63,7 +63,7 @@ import {
 } from "@/lib/accounts-receivable";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
-import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, messageCenterIdsForUser, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import {
   canManageExecutiveMarketingPortfolio,
   marketingAccountIdFromConfig,
@@ -2915,6 +2915,10 @@ async function renderLivePage(
     const requestedReplyStaffId = firstSearchParam(searchParams.staffId) || "";
     const requestedReplySubject = firstSearchParam(searchParams.subject) || "";
     const teacherMessageScope = user.role === UserRole.TEACHER && !allCenters;
+    const authorizedMessageCenterIds = messageCenterIdsForUser(user);
+    const directorMessageCenterIds = visibleCenterIds.filter((centerId) => authorizedMessageCenterIds.includes(centerId));
+    const messageCenterIds = teacherMessageScope ? visibleCenterIds : directorMessageCenterIds;
+    const messageScopedCenterIds = visibleCenterIdFilter(messageCenterIds);
     const teacherStaffProfile = teacherMessageScope
       ? await prisma.staffProfile.findUnique({
           where: { userId: user.id },
@@ -2925,18 +2929,19 @@ async function renderLivePage(
       ? teacherStaffProfile?.classroomId
         ? { children: { some: { AND: [{ classroomId: teacherStaffProfile.classroomId }, currentlyEnrolledChildWhere()] } } }
         : { id: "__no_teacher_classroom__" }
-      : { ...visibleFamilyWhere(visibleCenterIds), children: { some: currentlyEnrolledChildWhere() } };
+      : { ...visibleFamilyWhere(messageCenterIds), children: { some: currentlyEnrolledChildWhere() } };
     const messageFamilyScopeWhere: Prisma.FamilyWhereInput = teacherMessageScope
       ? familyScopeWhere
-      : visibleFamilyWhere(visibleCenterIds);
+      : visibleFamilyWhere(messageCenterIds);
     const messageWhere = buildVisibleMessageWhere({
       userId: user.id,
       familyScopeWhere: messageFamilyScopeWhere,
       allCenters,
       teacherMessageScope,
       tenantId: user.tenantId,
+      nonFamilyCenterIds: allCenters ? undefined : messageCenterIds,
     });
-    const classroomWhere = visibleClassroomWhere(visibleCenterIds);
+    const classroomWhere = visibleClassroomWhere(messageCenterIds);
     const [messages, families, templates, staffUsers, classrooms, notificationPreferenceUsers, total, unread, priority, aiReview] = await Promise.all([
       prisma.message.findMany({
         where: messageWhere,
@@ -2997,7 +3002,7 @@ async function renderLivePage(
         where: {
           tenantId: user.tenantId,
           isActive: true,
-          ...visibleOrGlobalCenterWhere(visibleCenterIds),
+          ...visibleOrGlobalCenterWhere(messageCenterIds),
         },
         orderBy: [{ centerId: "asc" }, { category: "asc" }, { name: "asc" }],
         take: 100,
@@ -3011,8 +3016,8 @@ async function renderLivePage(
             ? {}
             : {
                 OR: [
-                  { staffProfile: { centerId: scopedCenterIds } },
-                  { accessGrants: { some: { isActive: true, centerId: scopedCenterIds } } },
+                  { staffProfile: { centerId: messageScopedCenterIds } },
+                  { accessGrants: { some: { isActive: true, centerId: messageScopedCenterIds } } },
                 ],
               }),
         },
@@ -3262,7 +3267,7 @@ async function renderLivePage(
           initialThreadKey: requestedReplyFamilyId ? `family:${requestedReplyFamilyId}` : null,
           initialSearchQuery: firstSearchParam(searchParams.q) || "",
           segmentOptions: {
-            centers: centers.map((center) => ({
+            centers: centers.filter((center) => messageCenterIds.includes(center.id)).map((center) => ({
               id: center.id,
               label: formatCenterName(center),
             })),

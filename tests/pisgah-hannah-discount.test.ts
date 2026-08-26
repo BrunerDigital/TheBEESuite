@@ -22,6 +22,8 @@ test("Pisgah assignment is fingerprinted and cannot alter August, payments, auto
   assert.match(source, /paymentAutopayChanged: false/);
   assert.match(source, /staffAccessChanged: false/);
   assert.match(source, /fields\.tuitionBillingEnabled === true/);
+  assert.match(source, /!state\.plan \|\| typeof fields\.tuitionPlanId !== "string" \|\| !fields\.tuitionPlanId/);
+  assert.match(source, /fields\.tuitionPlanId === state\.plan\.id/);
   assert.doesNotMatch(source, /data:\s*\{[\s\S]*?autopayPlaceholder\s*:/);
   assert.doesNotMatch(source, /\.payment\.(create|update|delete|deleteMany)\(/);
   assert.doesNotMatch(source, /\.invoice\.(create|update|delete|deleteMany)\(/);

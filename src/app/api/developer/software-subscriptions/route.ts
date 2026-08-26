@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import {
   createStripeCustomer,
   createStripeSoftwareSubscription,
   ensureStripeSoftwareRecurringPrice,
+  findStripeSchoolSoftwareCustomers,
   updateStripeSoftwareSubscription,
 } from "@/lib/integrations";
 import { getSchoolSoftwareBillingStartAt, getSchoolSoftwareFeePolicyForCenter } from "@/lib/kidcity-software-billing";
@@ -28,6 +30,7 @@ async function POSTHandler(request: NextRequest) {
     select: {
       id: true,
       name: true,
+      crmLocationId: true,
       locationId: true,
       email: true,
       customFields: true,
@@ -57,13 +60,47 @@ async function POSTHandler(request: NextRequest) {
     if (!price.ok) return NextResponse.json({ ok: false, error: price.error }, { status: price.configured ? 502 : 503 });
 
     let customerId = textField(fields, "stripeSoftwareCustomerId");
+    let shouldAdoptCustomer = false;
     if (!customerId) {
-      const customer = await createStripeCustomer({ email: center.email || user.email, name: center.name, tenantId: user.tenantId, metadata: { tenantId: user.tenantId, centerId: center.id, paymentScope: "school_software_fee" } });
+      const existing = await findStripeSchoolSoftwareCustomers({ centerId: center.id, tenantId: user.tenantId });
+      if (!existing.ok) return NextResponse.json({ ok: false, error: existing.error || "School billing profiles could not be checked." }, { status: existing.configured ? 502 : 503 });
+      if (existing.customerIds.length > 1) return NextResponse.json({ ok: false, error: "Multiple school software billing profiles require platform review before billing can start." }, { status: 409 });
+      customerId = existing.customerIds[0] || "";
+      shouldAdoptCustomer = Boolean(customerId);
+    }
+    if (!customerId) {
+      const customer = await createStripeCustomer({ email: center.email || null, name: center.crmLocationId || center.name, tenantId: user.tenantId, metadata: { tenantId: user.tenantId, centerId: center.id, paymentScope: "school_software_fee" }, idempotencyKey: `school-software-customer:${user.tenantId}:${center.id}` });
       if (!customer.ok || !customer.id) return NextResponse.json({ ok: false, error: customer.error || "School billing customer could not be created." }, { status: customer.configured ? 502 : 503 });
       customerId = customer.id;
-      await prisma.center.update({ where: { id: center.id }, data: { customFields: { ...fields, stripeSoftwareCustomerId: customerId } } });
+      shouldAdoptCustomer = true;
     }
-    const paymentMethodId = textField(fields, "stripeSoftwareDefaultPaymentMethodId");
+    let currentFields = fields;
+    if (shouldAdoptCustomer) {
+      await prisma.$executeRaw(Prisma.sql`
+        UPDATE "Center"
+        SET "customFields" = jsonb_set(
+          CASE WHEN jsonb_typeof("customFields") = 'object' THEN "customFields" ELSE '{}'::jsonb END,
+          '{stripeSoftwareCustomerId}',
+          to_jsonb(${customerId}::text),
+          true
+        )
+        WHERE "id" = ${center.id}
+          AND COALESCE(
+            CASE WHEN jsonb_typeof("customFields") = 'object' THEN "customFields" ->> 'stripeSoftwareCustomerId' ELSE '' END,
+            ''
+          ) = ''
+      `);
+      const latestCenter = await prisma.center.findUnique({ where: { id: center.id }, select: { customFields: true } });
+      if (!latestCenter) return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
+      const latestFields = record(latestCenter.customFields);
+      const latestCustomerId = textField(latestFields, "stripeSoftwareCustomerId");
+      if (latestCustomerId && latestCustomerId !== customerId) {
+        return NextResponse.json({ ok: false, error: "The school billing profile changed while billing was starting. Review the current profile and try again." }, { status: 409 });
+      }
+      if (!latestCustomerId) return NextResponse.json({ ok: false, error: "The school billing profile could not be adopted safely. Try again." }, { status: 409 });
+      currentFields = latestFields;
+    }
+    const paymentMethodId = textField(currentFields, "stripeSoftwareDefaultPaymentMethodId");
     if (!paymentMethodId) return NextResponse.json({ ok: false, error: "The school must authorize a software payment method before recurring billing can start." }, { status: 400 });
     result = await createStripeSoftwareSubscription({
       customerId,

@@ -1552,6 +1552,7 @@ export async function createStripeCustomer({
   email,
   name,
   metadata,
+  idempotencyKey,
   connectedAccountId,
   tenantId,
   credentials,
@@ -1559,6 +1560,7 @@ export async function createStripeCustomer({
   email?: string | null;
   name?: string | null;
   metadata?: Record<string, string>;
+  idempotencyKey?: string | null;
   connectedAccountId?: string | null;
   tenantId?: string | null;
   credentials?: Record<string, string>;
@@ -1577,7 +1579,10 @@ export async function createStripeCustomer({
 
   const response = await fetch("https://api.stripe.com/v1/customers", {
     method: "POST",
-    headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
+    headers: {
+      ...connectedStripeHeaders(apiKey, "form", connectedAccountId),
+      ...(clean(idempotencyKey) ? { "Idempotency-Key": clean(idempotencyKey) } : {}),
+    },
     body,
     signal: AbortSignal.timeout(10_000),
   });
@@ -1593,6 +1598,41 @@ export async function createStripeCustomer({
   }
 
   return { ok: true, configured: true, provider: "stripe", id: json.id };
+}
+
+export async function findStripeSchoolSoftwareCustomers({
+  centerId,
+  tenantId,
+  credentials,
+}: {
+  centerId: string;
+  tenantId: string;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { customerIds: string[] }> {
+  const normalizedCenterId = clean(centerId);
+  const normalizedTenantId = clean(tenantId);
+  if (!/^[A-Za-z0-9_-]+$/.test(normalizedCenterId) || !/^[A-Za-z0-9_-]+$/.test(normalizedTenantId)) {
+    return { ok: false, configured: true, provider: "stripe", error: "A valid school and tenant are required.", customerIds: [] };
+  }
+  const apiKey = await getStripeSecretKey({ tenantId: normalizedTenantId, credentials });
+  if (!apiKey) return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured.", customerIds: [] };
+  const query = [
+    `metadata['tenantId']:'${normalizedTenantId}'`,
+    `metadata['centerId']:'${normalizedCenterId}'`,
+    "metadata['paymentScope']:'school_software_fee'",
+  ].join(" AND ");
+  const response = await fetch(`https://api.stripe.com/v1/customers/search?limit=10&query=${encodeURIComponent(query)}`, {
+    headers: stripeHeaders(apiKey, "form"),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { data?: Array<{ id?: string; deleted?: boolean }>; error?: { message?: string } } | null;
+  const customerIds = (json?.data ?? [])
+    .filter((customer) => customer.deleted !== true && clean(customer.id).startsWith("cus_"))
+    .map((customer) => clean(customer.id));
+  if (!response.ok || !json) {
+    return { ok: false, configured: true, provider: "stripe", error: json?.error?.message || `Payment processor returned ${response.status}.`, customerIds: [] };
+  }
+  return { ok: true, configured: true, provider: "stripe", customerIds };
 }
 
 export async function createStripeRefund({

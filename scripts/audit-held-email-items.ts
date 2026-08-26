@@ -2,6 +2,7 @@ import "./load-env";
 
 import { createClient, type User as SupabaseAuthUser } from "@supabase/supabase-js";
 import { PaymentStatus, UserRole } from "@prisma/client";
+import { canAccessCenter, canManageBilling } from "@/lib/auth";
 import { readCenterLocationTimeZone } from "@/lib/attendance-state";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import {
@@ -267,7 +268,11 @@ async function auditCanton(authUsers: SupabaseAuthUser[]) {
     },
   });
   const candidateEmails = new Set(guardians.flatMap((guardian) => [normalizeEmail(guardian.email), normalizeEmail(guardian.user?.email)]).filter(Boolean));
-  const matchingAuth = authUsers.filter((authUser) => authUser.email && candidateEmails.has(normalizeEmail(authUser.email)));
+  const candidateUserIds = new Set(guardians.flatMap((guardian) => guardian.user?.id ? [guardian.user.id] : []));
+  const matchingAuth = authUsers.filter((authUser) => {
+    const appUserId = clean(authUser.app_metadata?.bee_suite_app_user_id);
+    return candidateEmails.has(normalizeEmail(authUser.email)) || candidateUserIds.has(appUserId);
+  });
   const deliveries = await prisma.integrationDelivery.findMany({
     where: {
       centerId: center.id,
@@ -296,15 +301,22 @@ async function auditCanton(authUsers: SupabaseAuthUser[]) {
         grants: guardian.user.accessGrants,
       } : null,
     })),
-    authRows: matchingAuth.map((authUser) => ({
-      id: authUser.id,
-      email: normalizeEmail(authUser.email),
-      confirmedAt: authUser.email_confirmed_at ?? null,
-      lastSignInAt: authUser.last_sign_in_at ?? null,
-      updatedAt: authUser.updated_at ?? null,
-      appUserId: clean(authUser.app_metadata?.bee_suite_app_user_id) || null,
-      providers: authUser.identities?.map((identity) => identity.provider) ?? [],
-    })),
+    authRows: matchingAuth.map((authUser) => {
+      const email = normalizeEmail(authUser.email);
+      const appUserId = clean(authUser.app_metadata?.bee_suite_app_user_id);
+      return {
+        id: authUser.id,
+        email,
+        confirmedAt: authUser.email_confirmed_at ?? null,
+        lastSignInAt: authUser.last_sign_in_at ?? null,
+        updatedAt: authUser.updated_at ?? null,
+        appUserId: appUserId || null,
+        matchedByEmail: candidateEmails.has(email),
+        matchedByAppUserId: candidateUserIds.has(appUserId),
+        identityDisagreement: Boolean(appUserId && !candidateUserIds.has(appUserId)) || Boolean(email && !candidateEmails.has(email)),
+        providers: authUser.identities?.map((identity) => identity.provider) ?? [],
+      };
+    }),
     duplicateAuthEmails: [...candidateEmails].map((email) => ({ email, count: authUsers.filter((user) => normalizeEmail(user.email) === email).length })),
     deliveries,
   };
@@ -427,21 +439,51 @@ async function auditHollyHill() {
 
 async function auditCordera() {
   const center = await findCenter(CENTERS.cordera);
+  const now = new Date();
   const statusCounts = await prisma.invoice.groupBy({
     by: ["status"],
     where: { billingAccount: { family: { centerId: center.id } } },
     _count: { _all: true },
     _sum: { totalCents: true },
   });
-  const directorUsers = await prisma.user.findMany({
+  const expectedOperators = await prisma.user.findMany({
     where: {
-      role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN, UserRole.REGIONAL_MANAGER, UserRole.BRAND_ADMIN, UserRole.PLATFORM_OWNER] },
-      OR: [
-        { accessGrants: { some: { centerId: center.id, isActive: true } } },
-        { staffProfile: { centerId: center.id } },
-      ],
+      email: { in: ["cordera@kidcityusa.com", "corpschools@kidcityusa.com"] },
     },
-    select: { id: true, email: true, role: true, isActive: true, accessGrants: { where: { centerId: center.id }, select: { role: true, scopeType: true, isActive: true, startsAt: true, endsAt: true } } },
+    select: {
+      id: true,
+      email: true,
+      tenantId: true,
+      role: true,
+      isActive: true,
+      staffProfile: { select: { centerId: true } },
+      accessGrants: {
+        where: {
+          isActive: true,
+          OR: [{ startsAt: null }, { startsAt: { lte: now } }],
+          AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: now } }] }],
+        },
+        select: { centerId: true, role: true, scopeType: true, isActive: true, startsAt: true, endsAt: true },
+      },
+    },
+  });
+  const operatorAccess = expectedOperators.map((user) => {
+    const centerIds = [...new Set([
+      ...(user.staffProfile?.centerId ? [user.staffProfile.centerId] : []),
+      ...user.accessGrants.flatMap((grant) => grant.centerId ? [grant.centerId] : []),
+    ])];
+    const tenantWide = user.tenantId === center.organization.tenantId && (user.role === UserRole.BRAND_ADMIN || user.role === UserRole.REGIONAL_MANAGER);
+    const accessScope = user.role === UserRole.PLATFORM_OWNER ? "platform" as const : tenantWide ? "tenant" as const : centerIds.length ? "scoped" as const : "none" as const;
+    const hasCenterAccess = user.isActive && canAccessCenter({ role: user.role, accessScope, centerIds }, center.id);
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      isActive: user.isActive,
+      accessGrants: user.accessGrants,
+      hasCenterAccess,
+      hasInvoiceView: hasCenterAccess && canManageBilling(user),
+    };
   });
   const paidSamples = await prisma.invoice.findMany({
     where: { billingAccount: { family: { centerId: center.id } }, status: PaymentStatus.PAID },
@@ -449,7 +491,7 @@ async function auditCordera() {
     take: 5,
     select: { number: true, status: true, dueDate: true, totalCents: true, billingAccount: { select: { family: { select: { name: true } } } } },
   });
-  return { center: center.name, statusCounts, directorUsers, paidSamples };
+  return { center: center.name, statusCounts, operatorAccess, paidSamples };
 }
 
 async function main() {

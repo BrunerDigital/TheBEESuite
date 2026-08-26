@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const source = readFileSync(new URL("../scripts/reconcile-centennial-brehm-duplicate.ts", import.meta.url), "utf8");
+const auditSource = readFileSync(new URL("../scripts/audit-held-email-items.ts", import.meta.url), "utf8");
 
 test("Centennial Brehm reconciliation is exact, guarded, and preserves payment and consent history", () => {
   assert.match(source, /DUPLICATE_FAMILY_ID = "cms7g6luu004cl704amixz8oa"/);
@@ -21,4 +22,14 @@ test("Centennial Brehm reconciliation is exact, guarded, and preserves payment a
   assert.match(source, /explicitAutopayConsentPreserved: true/);
   assert.match(source, /paymentsMutated: 0/);
   assert.doesNotMatch(source, /payment\.delete|ledgerEntry\.delete|family\.delete|guardian\.delete/);
+});
+
+test("held-item audit pins schools and reconciles effective application and Auth identities", () => {
+  assert.match(auditSource, /centennial: \{ id: "cms3g2the000i6a7wdd8pa20s"/);
+  assert.match(auditSource, /cordera: \{ id: "cmp4ew5yx00046alw8i1yf63m"/);
+  assert.match(auditSource, /candidateUserIds\.has\(appUserId\)/);
+  assert.match(auditSource, /identityDisagreement:/);
+  assert.match(auditSource, /canAccessCenter\(\{ role: user\.role, accessScope, centerIds \}, center\.id\)/);
+  assert.match(auditSource, /hasInvoiceView: hasCenterAccess && canManageBilling\(user\)/);
+  assert.doesNotMatch(auditSource, /center\.findFirst/);
 });

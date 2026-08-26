@@ -158,7 +158,8 @@ function normalizePayload(input: InquiryPayload) {
   const parentName = clean(input.parentName || input.parent_name);
   const email = normalizeEmail(input.email);
   const phone = clean(input.phone);
-  const program = normalizeInquiryProgram(input.program);
+  const submittedProgram = clean(input.program);
+  const program = normalizeInquiryProgram(submittedProgram);
   const centerId = clean(input.centerId || input.center_id);
   const locationId = clean(input.locationId || input.location_id);
   const publicLocationId = clean(input.publicLocationId || input.public_location_id);
@@ -169,6 +170,7 @@ function normalizePayload(input: InquiryPayload) {
     email,
     phone,
     program,
+    submittedProgram,
     centerId,
     locationId,
     publicLocationId,
@@ -517,7 +519,7 @@ async function POSTHandler(request: NextRequest) {
         phone: payload.phone,
         leadSource: payload.leadSource,
         programInterest: payload.program,
-        ageGroupInterest: payload.program,
+        ageGroupInterest: payload.submittedProgram,
         stage: EnrollmentStage.NEW_INQUIRY,
         score: scoreLead(payload.program, payload.locationId, payload.centerId),
         status: "open",
@@ -527,6 +529,7 @@ async function POSTHandler(request: NextRequest) {
           email: payload.email,
           phone: payload.phone,
           program: payload.program,
+          submittedProgram: payload.submittedProgram,
           centerId: payload.centerId,
           resolvedCenterId: center.id,
           resolvedCenterName: center.name,
@@ -559,7 +562,7 @@ async function POSTHandler(request: NextRequest) {
         notes: {
           create: [
             {
-              body: `Website inquiry for ${payload.program} at ${payload.locationId}. Parent email: ${payload.email}. Phone: ${payload.phone}.`,
+              body: `Website inquiry for ${payload.submittedProgram} at ${payload.locationId}. Parent email: ${payload.email}. Phone: ${payload.phone}.`,
             },
           ],
         },

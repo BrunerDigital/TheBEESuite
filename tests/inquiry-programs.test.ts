@@ -23,3 +23,12 @@ test("Kid City strict routing excludes archived and closed schools", async () =>
     /if \(center && \(!strictLocationRouting \|\| center\.status === "active"\)\) return center;/,
   );
 });
+
+test("inquiry intake preserves the submitted age-group choice separately from the CRM program", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile("src/app/api/inquiries/route.ts", "utf8");
+
+  assert.match(source, /const submittedProgram = clean\(input\.program\)/);
+  assert.match(source, /ageGroupInterest: payload\.submittedProgram/);
+  assert.match(source, /submittedProgram: payload\.submittedProgram/);
+});

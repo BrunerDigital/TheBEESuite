@@ -55,6 +55,12 @@ test("director messaging uses a searchable, accessible conversation inbox", () =
   assert.match(conversationStyles, /overscroll-behavior: contain/);
 });
 
+test("staff messaging presents flagged conversations as follow-up, not approval", () => {
+  assert.match(messagesPage, /label="Needs follow-up"/);
+  assert.match(messagesPage, /detail="Flagged for attention"/);
+  assert.doesNotMatch(messagesPage, /label="Review queue"[\s\S]*?detail="Needs approval"/);
+});
+
 test("selected family threads offer an in-context reply without bypassing the guarded send route", () => {
   assert.match(inbox, /variant="conversation"/);
   assert.match(inbox, /replyToMessageId:/);

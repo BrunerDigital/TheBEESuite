@@ -18,6 +18,13 @@ import {
 } from "@/lib/stripe-connect-migration";
 
 const EXPECTED_SUPABASE_REF = "nqjrlktoewiueiwrubas";
+const CENTERS = {
+  centennial: { id: "cms3g2the000i6a7wdd8pa20s", name: "Miss Honey's Learning Center - Centennial" },
+  canton: { id: "cmp4ewg4a004i6alwl5c6i3w4", name: "Kid City USA - Canton" },
+  garland: { id: "cmp4ewh78004y6alwu6s3bsv4", name: "Kid City USA - Garland" },
+  hollyHill: { id: "cmp4ew8u4001c6alwq674ue16", name: "Kid City USA - Holly Hill" },
+  cordera: { id: "cmp4ew5yx00046alw8i1yf63m", name: "Kid City USA - Cordera (Colorado Springs)" },
+} as const;
 const HOLLY_CASH_REFERENCES = [
   ["Ash", ["2026-08-17"]],
   ["Atanga", ["2026-08-13", "2026-08-17"]],
@@ -110,9 +117,9 @@ async function listAllSupabaseUsers() {
   throw new Error("Supabase Auth inventory exceeded 100,000 users; refusing a partial audit.");
 }
 
-async function findCenter(name: string) {
-  const center = await prisma.center.findFirst({
-    where: { name: { contains: name, mode: "insensitive" } },
+async function findCenter(identity: { id: string; name: string }) {
+  const center = await prisma.center.findUnique({
+    where: { id: identity.id },
     select: {
       id: true,
       name: true,
@@ -123,12 +130,12 @@ async function findCenter(name: string) {
       organization: { select: { tenantId: true } },
     },
   });
-  if (!center) throw new Error(`Center not found: ${name}`);
+  if (!center || center.name !== identity.name) throw new Error(`Center identity changed: ${identity.name}`);
   return center;
 }
 
 async function auditCentennial() {
-  const center = await findCenter("Centennial");
+  const center = await findCenter(CENTERS.centennial);
   const families = await prisma.family.findMany({
     where: {
       centerId: center.id,
@@ -230,7 +237,7 @@ async function auditCentennial() {
 }
 
 async function auditCanton(authUsers: SupabaseAuthUser[]) {
-  const center = await findCenter("Canton");
+  const center = await findCenter(CENTERS.canton);
   const guardians = await prisma.guardian.findMany({
     where: {
       family: { centerId: center.id },
@@ -304,7 +311,7 @@ async function auditCanton(authUsers: SupabaseAuthUser[]) {
 }
 
 async function auditGarlandTimeClock() {
-  const center = await findCenter("Garland");
+  const center = await findCenter(CENTERS.garland);
   const timeZone = readCenterLocationTimeZone(center);
   const staff = await prisma.staffProfile.findMany({
     where: { centerId: center.id },
@@ -332,7 +339,7 @@ async function auditGarlandTimeClock() {
 }
 
 async function auditHollyHill() {
-  const center = await findCenter("Holly Hill");
+  const center = await findCenter(CENTERS.hollyHill);
   const josiel = await prisma.child.findMany({
     where: { family: { centerId: center.id }, fullName: { contains: "Josiel Rowe", mode: "insensitive" } },
     select: {
@@ -419,7 +426,7 @@ async function auditHollyHill() {
 }
 
 async function auditCordera() {
-  const center = await findCenter("Cordera");
+  const center = await findCenter(CENTERS.cordera);
   const statusCounts = await prisma.invoice.groupBy({
     by: ["status"],
     where: { billingAccount: { family: { centerId: center.id } } },

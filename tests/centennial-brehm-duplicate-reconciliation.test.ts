@@ -12,6 +12,9 @@ test("Centennial Brehm reconciliation is exact, guarded, and preserves payment a
   assert.match(source, /--confirm-centennial-brehm-duplicate/);
   assert.match(source, /confirmFingerprint === plan\.sourceFingerprint/);
   assert.match(source, /TransactionIsolationLevel\.Serializable/);
+  assert.match(source, /duplicate\.billingAccount\.invoices\.length === 1/);
+  assert.match(source, /entry\.invoiceId === INVOICE_ID && entry\.paymentId === null/);
+  assert.match(source, /reduce\(\(sum, entry\) => sum \+ entry\.amountCents, 0\) === INVOICE_CENTS/);
   assert.match(source, /type: "invoice_void"/);
   assert.match(source, /amountCents: -INVOICE_CENTS/);
   assert.match(source, /balanceAfterCents: 0/);

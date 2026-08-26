@@ -168,7 +168,11 @@ function buildPlan(state: State) {
   invariant(fields.childId === STALE_CHILD_ID && fields.sourceId === SOURCE_PLAN_ID && fields.billingPeriod === "2026-W31" && fields.chargeSource === "tuitionPlan", "The duplicate Brehm invoice purpose changed.");
   invariant(invoice.items.length === 1 && invoice.items[0].amountCents === INVOICE_CENTS && invoice.items[0].description.includes("Nicholas Brehm"), "The duplicate Brehm invoice line changed.");
   invariant(duplicate.billingAccount.payments.length === 0, "The duplicate Brehm account now has payment history.");
-  invariant(invoice.ledgerEntries.filter((entry) => entry.externalId !== LEDGER_EXTERNAL_ID).every((entry) => entry.paymentId === null), "The duplicate Brehm invoice has payment-linked ledger history.");
+  invariant(duplicate.billingAccount.invoices.length === 1, "The duplicate Brehm account has an unrelated invoice.");
+  const originalDuplicateLedger = duplicate.billingAccount.ledgerEntries.filter((entry) => entry.externalId !== LEDGER_EXTERNAL_ID);
+  invariant(originalDuplicateLedger.length > 0, "The duplicate Brehm invoice has no originating ledger history.");
+  invariant(originalDuplicateLedger.every((entry) => entry.invoiceId === INVOICE_ID && entry.paymentId === null), "The duplicate Brehm account has unrelated or payment-linked ledger history.");
+  invariant(originalDuplicateLedger.reduce((sum, entry) => sum + entry.amountCents, 0) === INVOICE_CENTS, "The duplicate Brehm invoice does not own the entire original receivable.");
 
   const currentFields = record(current.billingAccount.customFields);
   invariant(current.billingAccount.balanceCents === 0, "The current Brehm balance is no longer zero.");

@@ -821,6 +821,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
       const json = await response.json().catch(() => null) as {
         error?: string;
         mode?: string;
+        duplicateCreatePrevented?: boolean;
         parentPortalLoginEnabled?: boolean;
         parentPortalLogin?: { status?: string; reason?: string };
         reenrollment?: { familyId: string; centerId: string; childId: string };
@@ -829,7 +830,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
         setErrorMessage(json?.error || `${successLabel} could not be saved.`);
         return;
       }
-      setStatusMessage(`${successLabel} ${json?.mode ?? "saved"}.${parentPortalStatusText(json)}`);
+      setStatusMessage(json?.duplicateCreatePrevented
+        ? `${successLabel} already exists. The existing child profile was kept and no duplicate was created.`
+        : `${successLabel} ${json?.mode ?? "saved"}.${parentPortalStatusText(json)}`);
       if (json?.reenrollment) {
         const params = new URLSearchParams({
           familyId: json.reenrollment.familyId,

@@ -8,6 +8,12 @@ import {
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { verifyStripeConnectAccountBinding } from "@/lib/stripe-connect-setup";
+import {
+  stripeConnectCustomFieldPatch,
+  stripeConnectReadinessFromSnapshot,
+  type StripeConnectRequirementStatus,
+} from "@/lib/stripe-connect-readiness";
+import { stripeSchoolReadinessFlowFromFields, type StripeSchoolReadinessStage } from "@/lib/stripe-school-readiness-flow";
 
 const DEMO_TENANT_SLUGS = ["bee-suite-demo", "bee-suite-isolated-demo"];
 const BATCH_SIZE = 5;
@@ -21,6 +27,9 @@ type PayoutBindingAuditRow = {
   technicallyReady: boolean;
   payoutBankConfirmed: boolean;
   payoutBankCount: number;
+  connectStatus: StripeConnectRequirementStatus;
+  flowStage: StripeSchoolReadinessStage;
+  schoolPaysStripeFeesDirectly: boolean;
   issue: string | null;
 };
 
@@ -72,6 +81,9 @@ export async function auditKidCityPayoutBindings(options: { includeSchools?: boo
           technicallyReady: false,
           payoutBankConfirmed: false,
           payoutBankCount: 0,
+          connectStatus: "not_started",
+          flowStage: "not_started",
+          schoolPaysStripeFeesDirectly: false,
           issue: "No designated Stripe account is mapped.",
         };
       }
@@ -89,6 +101,9 @@ export async function auditKidCityPayoutBindings(options: { includeSchools?: boo
           technicallyReady: false,
           payoutBankConfirmed: false,
           payoutBankCount: 0,
+          connectStatus: "not_started",
+          flowStage: "not_started",
+          schoolPaysStripeFeesDirectly: false,
           issue: safeProviderIssue(retrieved.error),
         };
       }
@@ -104,6 +119,9 @@ export async function auditKidCityPayoutBindings(options: { includeSchools?: boo
           technicallyReady: false,
           payoutBankConfirmed: false,
           payoutBankCount: 0,
+          connectStatus: "not_started",
+          flowStage: "not_started",
+          schoolPaysStripeFeesDirectly: false,
           issue: binding.error,
         };
       }
@@ -112,20 +130,30 @@ export async function auditKidCityPayoutBindings(options: { includeSchools?: boo
         accountId: binding.accountId,
         tenantId: center.organization.tenantId,
       });
-      const technicallyReady =
-        retrieved.account.chargesEnabled &&
-        retrieved.account.payoutsEnabled &&
-        retrieved.account.detailsSubmitted &&
-        retrieved.account.requirementFields.length === 0;
+      const readiness = stripeConnectReadinessFromSnapshot(retrieved.account);
+      const payoutBankConfirmed = Boolean(payoutBanks.defaultBank?.last4 && payoutBanks.defaultBank.defaultForCurrency);
+      const flowFields = {
+        ...(center.customFields && typeof center.customFields === "object" && !Array.isArray(center.customFields)
+          ? center.customFields as Record<string, unknown>
+          : {}),
+        ...stripeConnectCustomFieldPatch(readiness),
+        stripePayoutBankLast4: payoutBanks.defaultBank?.last4 || null,
+        stripePayoutBankDefaultConfirmed: payoutBankConfirmed,
+      };
+      const flow = stripeSchoolReadinessFlowFromFields({ customFields: flowFields, centerName: center.name });
+      const schoolPaysStripeFeesDirectly = retrieved.account.feesCollector === "stripe";
       return {
         school: center.name,
         locationId,
         mapped: true,
         reachable: true,
         exact: true,
-        technicallyReady,
-        payoutBankConfirmed: Boolean(payoutBanks.defaultBank?.last4),
+        technicallyReady: readiness.status === "ready",
+        payoutBankConfirmed,
         payoutBankCount: payoutBanks.banks.length,
+        connectStatus: readiness.status,
+        flowStage: flow.stage,
+        schoolPaysStripeFeesDirectly,
         issue: payoutBanks.ok ? null : safeProviderIssue(payoutBanks.error),
       };
     })));
@@ -143,13 +171,29 @@ export async function auditKidCityPayoutBindings(options: { includeSchools?: boo
     ).length,
     confirmedPayoutBanks: results.filter((row) => row.payoutBankConfirmed).length,
     awaitingPayoutBank: results.filter((row) => row.reachable && row.exact && !row.payoutBankConfirmed).length,
+    onboardingStages: {
+      schoolActionRequired: results.filter((row) => row.connectStatus === "requirements_due").length,
+      stripeReviewPending: results.filter((row) => row.connectStatus === "verification_pending").length,
+      chargesPending: results.filter((row) => row.connectStatus === "charges_pending").length,
+      payoutsPending: results.filter((row) => row.connectStatus === "payouts_pending").length,
+      payoutBankRequired: results.filter((row) => row.flowStage === "payout_bank_required").length,
+      finalActivationRequired: results.filter((row) => row.flowStage === "activation_required").length,
+      paymentsLive: results.filter((row) => row.flowStage === "ready").length,
+    },
+    feeResponsibility: {
+      schoolPaysStripeDirectly: results.filter((row) => row.schoolPaysStripeFeesDirectly).length,
+      retainedFromSchoolProceeds: results.filter((row) => row.mapped && !row.schoolPaysStripeFeesDirectly).length,
+      parentPaysProcessingFees: 0,
+    },
     failures: failures.map(({ school, locationId, issue }) => ({ school, locationId, issue })),
     schools: options.includeSchools
-      ? results.map(({ school, locationId, technicallyReady, payoutBankConfirmed }) => ({
+      ? results.map(({ school, locationId, technicallyReady, payoutBankConfirmed, connectStatus, flowStage }) => ({
           school,
           locationId,
           technicallyReady,
           payoutBankConfirmed,
+          connectStatus,
+          flowStage,
         }))
       : undefined,
   };

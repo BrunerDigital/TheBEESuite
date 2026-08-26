@@ -108,7 +108,8 @@ async function POSTHandler(request: NextRequest) {
       center.customFields &&
       typeof center.customFields === "object" &&
       !Array.isArray(center.customFields) &&
-      clean((center.customFields as Record<string, unknown>).stripePayoutBankLast4),
+      clean((center.customFields as Record<string, unknown>).stripePayoutBankLast4) &&
+      (center.customFields as Record<string, unknown>).stripePayoutBankDefaultConfirmed === true,
     ),
     tenantId: user.tenantId,
   });

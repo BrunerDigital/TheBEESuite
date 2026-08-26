@@ -80,9 +80,11 @@ test("conversation direction is derived from role data inside the existing scope
 });
 
 test("director inbox keeps school-scoped threads visible after a family has no current enrollment", () => {
-  assert.match(routePage, /const messageFamilyScopeWhere:[\s\S]*?teacherMessageScope[\s\S]*?familyScopeWhere[\s\S]*?: visibleFamilyWhere\(visibleCenterIds\)/);
+  assert.match(routePage, /const directorMessageCenterIds = user\.role === UserRole\.CENTER_DIRECTOR \|\| user\.role === UserRole\.ASSISTANT_DIRECTOR[\s\S]*?\[user\.primaryCenterId\]/);
+  assert.match(routePage, /const messageFamilyScopeWhere:[\s\S]*?teacherMessageScope[\s\S]*?familyScopeWhere[\s\S]*?: visibleFamilyWhere\(messageCenterIds\)/);
   assert.match(routePage, /buildVisibleMessageWhere\(\{[\s\S]*?familyScopeWhere: messageFamilyScopeWhere/);
   assert.match(routePage, /prisma\.family\.findMany\(\{[\s\S]*?where: familyScopeWhere/);
+  assert.match(routePage, /centers\.filter\(\(center\) => messageCenterIds\.includes\(center\.id\)\)\.map/);
 });
 
 test("parent portal presents messaging as one responsive school conversation", () => {

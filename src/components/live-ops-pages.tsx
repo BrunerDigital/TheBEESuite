@@ -2481,7 +2481,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
         <StatCard label="Messages" value={data.stats.total.toLocaleString()} />
         <StatCard label="Unread" value={data.stats.unread.toLocaleString()} />
         <StatCard label="Priority" value={data.stats.priority.toLocaleString()} />
-        {!isParentMessagingView ? <StatCard label="Review queue" value={data.stats.aiReview.toLocaleString()} detail="Needs approval" /> : null}
+        {!isParentMessagingView ? <StatCard label="Needs follow-up" value={data.stats.aiReview.toLocaleString()} detail="Flagged for attention" /> : null}
       </div>
       {isParentMessagingView ? (
         <>

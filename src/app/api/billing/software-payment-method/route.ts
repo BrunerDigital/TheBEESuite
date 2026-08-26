@@ -5,6 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import {
   createStripeCustomer,
   createStripeSetupCheckoutSession,
+  findStripeSchoolSoftwareCustomers,
   type StripePaymentMethodCategory,
 } from "@/lib/integrations";
 import { formatSchoolSoftwareFeeAmount, getSchoolSoftwareFeePolicyForCenter } from "@/lib/kidcity-software-billing";
@@ -79,11 +80,22 @@ async function POSTHandler(request: NextRequest) {
 
   let customerId = clean(fields.stripeSoftwareCustomerId);
   if (!customerId) {
+    const existing = await findStripeSchoolSoftwareCustomers({ centerId: center.id, tenantId: user.tenantId });
+    if (!existing.ok) {
+      return NextResponse.json({ ok: false, configured: existing.configured, error: existing.error || "School software billing profiles could not be checked." }, { status: existing.configured ? 502 : 503 });
+    }
+    if (existing.customerIds.length > 1) {
+      return NextResponse.json({ ok: false, error: "Multiple school software billing profiles require platform review before authorization can continue." }, { status: 409 });
+    }
+    customerId = existing.customerIds[0] || "";
+  }
+  if (!customerId) {
     const customer = await createStripeCustomer({
-      email: center.email || user.email,
+      email: center.email || null,
       name: center.crmLocationId || center.name,
       tenantId: user.tenantId,
       metadata: { tenantId: user.tenantId, centerId: center.id, paymentScope: "school_software_fee" },
+      idempotencyKey: `school-software-customer:${user.tenantId}:${center.id}`,
     });
     if (!customer.ok || !customer.id) {
       return NextResponse.json({ ok: false, configured: customer.configured, error: customer.error || "School software billing profile could not be created." }, { status: customer.configured ? 502 : 503 });

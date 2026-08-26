@@ -30,6 +30,9 @@ test("director tuition setup offers a two-week invoice cycle", () => {
 
   assert.match(assignmentRoute, /requestedCadence === BIWEEKLY_TUITION_AUTOBILL_CADENCE/);
   assert.match(workbench, /Biweekly · 2 weeks ahead/);
+  assert.match(workbench, /<Label htmlFor="billing-rate-cadence">Billing cadence<\/Label>/);
+  assert.match(workbench, /planCadence === "biweekly"[\s\S]*Each biweekly invoice will contain two weekly rates/);
+  assert.match(workbench, /tuitionBillingCadence\(plan\?\.cadence\)/);
   assert.match(workbench, /Biweekly billing creates one invoice equal to two net weekly rates every two weeks/);
   assert.match(scheduler, /invoiceWeekCount > 1 \? ` \(\$\{invoiceWeekCount\} weeks ahead\)`/);
 });

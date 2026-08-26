@@ -379,6 +379,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [cashPaidAt, setCashPaidAt] = useState(todayDate());
   const [cashReference, setCashReference] = useState("");
   const [cashNotes, setCashNotes] = useState("");
+  const [payrollAmountDollars, setPayrollAmountDollars] = useState("");
+  const [payrollPaidAt, setPayrollPaidAt] = useState(todayDate());
+  const [payrollReference, setPayrollReference] = useState("");
+  const [payrollNotes, setPayrollNotes] = useState("");
   const [refundPaymentIds, setRefundPaymentIds] = useState<string[]>([]);
   const [refundAmountDollars, setRefundAmountDollars] = useState("");
   const [refundReason, setRefundReason] = useState("");
@@ -934,6 +938,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         router.refresh();
         return;
       }
+      if (payload.mode === "payrollDeductionPayment") {
+        const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
+        setStatusMessage(`${total} verified payroll deduction posted to the family ledger.`);
+        setPayrollAmountDollars("");
+        setPayrollReference("");
+        setPayrollNotes("");
+        router.refresh();
+        return;
+      }
       if (payload.mode === "refundPayment") {
         const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
         setStatusMessage(
@@ -1121,6 +1134,22 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       reference: cashReference.trim(),
       description: "Cash payment",
       notes: cashNotes.trim(),
+    });
+  }
+
+  function submitPayrollDeductionPayment() {
+    if (!selectedFamily) return setErrorMessage("Choose a family before posting a payroll deduction.");
+    const amountCents = dollarsToCents(payrollAmountDollars);
+    if (amountCents <= 0) return setErrorMessage("Enter a payroll deduction amount greater than zero.");
+    if (!payrollReference.trim()) return setErrorMessage("Enter the payroll run or pay-period reference.");
+    if (!confirmBillingAction(`post ${money(amountCents)} already withheld through payroll`)) return;
+    submit({
+      mode: "payrollDeductionPayment",
+      familyId: selectedFamily.id,
+      amountCents,
+      paidAt: payrollPaidAt,
+      payrollReference: payrollReference.trim(),
+      notes: payrollNotes.trim(),
     });
   }
 
@@ -1905,6 +1934,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <TabsTrigger value="weekly-recovery"><Search data-icon="inline-start" />Weekly recovery</TabsTrigger>
             <TabsTrigger value="check"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
             <TabsTrigger value="cash"><Banknote data-icon="inline-start" />Cash payment</TabsTrigger>
+            <TabsTrigger value="payroll"><Banknote data-icon="inline-start" />Payroll deduction</TabsTrigger>
             <TabsTrigger value="refund"><RotateCcw data-icon="inline-start" />Refund</TabsTrigger>
             <TabsTrigger value="agency"><BadgeDollarSign data-icon="inline-start" />Agency claims</TabsTrigger>
             <TabsTrigger value="adjustment"><MinusCircle data-icon="inline-start" />Credit / adjustment</TabsTrigger>
@@ -2493,6 +2523,35 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <Button disabled={isPending || !selectedFamily || dollarsToCents(cashAmountDollars) <= 0} onClick={submitManualCashPayment}>
               <Banknote data-icon="inline-start" />
               Post Cash Payment
+            </Button>
+          </TabsContent>
+
+          <TabsContent value="payroll" className="space-y-4 rounded-lg border bg-background/35 p-4">
+            <div>
+              <div className="text-sm font-medium">Record childcare already withheld through payroll</div>
+              <p className="mt-1 text-xs text-muted-foreground">Use this only after payroll confirms the deduction. It is an offline family payment—not a discount or employer benefit—and it reduces the family ledger once with an auditable pay-period reference.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1">
+                <Label htmlFor="billing-payroll-amount">Amount withheld</Label>
+                <Input id="billing-payroll-amount" inputMode="decimal" value={payrollAmountDollars} onChange={(event) => setPayrollAmountDollars(event.target.value)} placeholder="250.00" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="billing-payroll-reference">Payroll run / pay period</Label>
+                <Input id="billing-payroll-reference" value={payrollReference} onChange={(event) => setPayrollReference(event.target.value)} placeholder="2026-08-16 to 2026-08-29" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="billing-payroll-posted-date">Payroll posted date</Label>
+                <Input id="billing-payroll-posted-date" type="date" value={payrollPaidAt} onChange={(event) => setPayrollPaidAt(event.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="billing-payroll-notes">Payroll confirmation notes</Label>
+              <Textarea id="billing-payroll-notes" value={payrollNotes} onChange={(event) => setPayrollNotes(event.target.value)} placeholder="Optional payroll register or internal confirmation reference; do not enter bank credentials" />
+            </div>
+            <Button disabled={isPending || !selectedFamily || dollarsToCents(payrollAmountDollars) <= 0 || !payrollReference.trim()} onClick={submitPayrollDeductionPayment}>
+              <Banknote data-icon="inline-start" />
+              Post Payroll Deduction Payment
             </Button>
           </TabsContent>
 

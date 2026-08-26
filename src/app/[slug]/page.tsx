@@ -210,7 +210,7 @@ import {
   summarizeEnrollmentChecklist,
 } from "@/lib/registration-packet";
 import { registrationPaymentFromData } from "@/lib/registration-billing";
-import { createAssetHubSignedUrl, createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
+import { createAssetHubSignedUrl, createChildMediaSignedUrl, createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
 import { centerServiceDayWindow, latestLogMap, readCenterLocationTimeZone } from "@/lib/attendance-state";
 import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { readStaffClockState, readStaffClockSummary, readStaffContactEmail, readStaffKioskPinHash } from "@/lib/staff-kiosk";
@@ -244,6 +244,18 @@ async function signedProfilePhotoUrl(
     }
   }
   return readProfilePhotoUrl(customFields) ?? fallbackUrl;
+}
+
+async function signedChildProfilePhotoUrl(customFields: unknown) {
+  const storageKey = readProfilePhotoStorageKey(customFields);
+  if (storageKey && isSupabaseStorageConfigured()) {
+    try {
+      return await createChildMediaSignedUrl(storageKey);
+    } catch {
+      return readProfilePhotoUrl(customFields);
+    }
+  }
+  return readProfilePhotoUrl(customFields);
 }
 
 export function generateStaticParams() {
@@ -1990,7 +2002,11 @@ async function renderLivePage(
     ]);
     const enrollmentLifecycle = summarizeEnrollmentLifecycleCounts(enrollmentStatusRows, total);
 
-    return <ChildProfilesPage data={{ children, allChildren, intakeCenters, stats: { total, allTotal, enrollmentLifecycle, allergies, restrictedMedicalNotes } }} />;
+    const [childrenWithProfilePhotos, allChildrenWithProfilePhotos] = await Promise.all([
+      Promise.all(children.map(async (child) => ({ ...child, profilePhotoUrl: await signedChildProfilePhotoUrl(child.customFields) }))),
+      Promise.all(allChildren.map(async (child) => ({ ...child, profilePhotoUrl: await signedChildProfilePhotoUrl(child.customFields) }))),
+    ]);
+    return <ChildProfilesPage data={{ children: childrenWithProfilePhotos, allChildren: allChildrenWithProfilePhotos, intakeCenters, stats: { total, allTotal, enrollmentLifecycle, allergies, restrictedMedicalNotes } }} />;
   }
 
   if (slug === "parent-portal") {
@@ -2389,6 +2405,7 @@ async function renderLivePage(
         .filter((report) => report.sentAt && report.date >= parentServiceDay.start && report.date < parentServiceDay.end)
         .map((report) => report.childId),
     );
+    const parentChildProfilePhotoUrls = new Map(await Promise.all((family?.children ?? []).map(async (child) => [child.id, await signedChildProfilePhotoUrl(child.customFields)] as const)));
     const parentPortalFamily = family
       ? {
           ...family,
@@ -2398,6 +2415,7 @@ async function renderLivePage(
             const { liveLocation, ...portalChild } = child;
             return {
               ...portalChild,
+              profilePhotoUrl: parentChildProfilePhotoUrls.get(child.id) ?? null,
               tuitionAssignment: tuitionAssignmentFromCustomFields(child.customFields),
               today: buildParentPortalTodayState({
                 attendanceStatus: attendance?.status,
@@ -2713,6 +2731,7 @@ async function renderLivePage(
         ageGroup: true,
         enrollmentStatus: true,
         photoVideoPermission: true,
+        customFields: true,
         classroom: { select: { id: true, name: true } },
         liveLocation: { select: { currentClassroomId: true, areaName: true, status: true, movedAt: true, currentClassroom: { select: { id: true, name: true } } } },
         family: { select: { custodyNotes: true } },
@@ -2775,12 +2794,17 @@ async function renderLivePage(
         latestDailyReportByChild.set(report.childId, report);
       }
     }
+    const teacherChildProfilePhotoUrls = new Map(await Promise.all(children.map(async (child) => [
+      child.id,
+      await signedChildProfilePhotoUrl(child.customFields),
+    ] as const)));
     const roster = children.map((child) => {
       const attendance = attendanceByChild.get(child.id);
       const latestLog = latestCheckLogByChild.get(child.id);
       const dailyReport = latestDailyReportByChild.get(child.id);
       return {
         ...child,
+        profilePhotoUrl: teacherChildProfilePhotoUrls.get(child.id) ?? null,
         attendance: {
           status: attendance?.status ?? "not_marked",
           latestLogType: latestLog?.type ?? null,

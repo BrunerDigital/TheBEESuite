@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
@@ -640,6 +640,99 @@ async function createManualCashPayment(user: CurrentBillingUser, body: Record<st
     },
   });
   return NextResponse.json({ ok: true, totalCents: amountCents, payment: result.payment, entry: result.entry });
+}
+
+class PayrollReferenceConflictError extends Error {}
+
+async function createPayrollDeductionPayment(user: CurrentBillingUser, body: Record<string, unknown>) {
+  const familyAccess = await assertFamilyAccess(user, clean(body.familyId));
+  if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
+  const amountCents = amountCentsFromBody(body);
+  if (amountCents <= 0) return NextResponse.json({ ok: false, error: "Payroll deduction amount is required." }, { status: 400 });
+  if (await manualFamilyPaymentExceedsVisibleBalance(familyAccess.family.id, amountCents)) {
+    return NextResponse.json({ ok: false, error: "Payroll deduction cannot exceed the family-responsibility balance." }, { status: 409 });
+  }
+  const payrollReference = clean(body.payrollReference);
+  if (!payrollReference) return NextResponse.json({ ok: false, error: "Payroll run or pay-period reference is required." }, { status: 400 });
+  const paidAt = parseDate(body.paidAt);
+  const notes = clean(body.notes);
+  const normalizedReference = payrollReference.toLowerCase().replace(/\s+/g, " ");
+
+  let result: { payment: { id: string }; entry: { id: string }; alreadyRecorded: boolean };
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const account = await tx.billingAccount.upsert({
+        where: { familyId: familyAccess.family.id },
+        update: {},
+        create: { familyId: familyAccess.family.id, balanceCents: 0 },
+      });
+      const referenceHash = createHash("sha256").update(`${account.id}:${normalizedReference}`).digest("hex").slice(0, 32);
+      const externalId = `payroll-deduction:${referenceHash}`;
+      const existingEntry = await tx.ledgerEntry.findUnique({
+        where: { sourceSystem_externalId: { sourceSystem: "bee_suite_payroll_deduction", externalId } },
+        select: { id: true, amountCents: true, payment: { select: { id: true, amountCents: true } } },
+      });
+      if (existingEntry) {
+        if (!existingEntry.payment || existingEntry.amountCents !== -amountCents || existingEntry.payment.amountCents !== amountCents) {
+          throw new PayrollReferenceConflictError("That payroll reference is already used for a different amount on this family account.");
+        }
+        return { payment: existingEntry.payment, entry: existingEntry, alreadyRecorded: true };
+      }
+      const payment = await tx.payment.create({
+        data: {
+          billingAccountId: account.id,
+          amountCents,
+          status: PaymentStatus.PAID,
+          provider: "manual_payroll_deduction",
+          externalIdPlaceholder: externalId,
+          paidAt,
+          customFields: {
+            paymentType: "manual_payroll_deduction",
+            payrollReference,
+            notes: notes || null,
+            enteredBy: user.email,
+            familyId: familyAccess.family.id,
+            centerId: familyAccess.centerId,
+          },
+        },
+      });
+      const updatedAccount = await tx.billingAccount.update({
+        where: { id: account.id },
+        data: { balanceCents: { decrement: amountCents } },
+      });
+      const entry = await tx.ledgerEntry.create({
+        data: {
+          billingAccountId: account.id,
+          paymentId: payment.id,
+          type: "payroll_deduction_payment",
+          description: `Payroll deduction payment: ${payrollReference}`,
+          amountCents: -amountCents,
+          balanceAfterCents: updatedAccount.balanceCents,
+          effectiveAt: paidAt,
+          sourceSystem: "bee_suite_payroll_deduction",
+          externalId,
+          metadata: { payrollReference, notes: notes || null, enteredBy: user.email },
+        },
+      });
+      return { payment, entry, alreadyRecorded: false };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  } catch (error) {
+    if (error instanceof PayrollReferenceConflictError) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 409 });
+    }
+    throw error;
+  }
+
+  if (!result.alreadyRecorded) {
+    await writeAuditLog(user, {
+      centerId: familyAccess.centerId,
+      action: "billing.payroll_deduction_payment.created",
+      resource: "Payment",
+      resourceId: result.payment.id,
+      metadata: { familyId: familyAccess.family.id, amountCents, payrollReference },
+    });
+  }
+  return NextResponse.json({ ok: true, totalCents: amountCents, payment: result.payment, entry: result.entry, alreadyRecorded: result.alreadyRecorded });
 }
 
 async function refundStripePayment(user: CurrentBillingUser, body: Record<string, unknown>) {
@@ -1342,6 +1435,7 @@ async function POSTHandler(request: NextRequest) {
   if (mode === "agencyPayment") return createAgencyPayment(user, body);
   if (mode === "manualCheckPayment") return createManualCheckPayment(user, body);
   if (mode === "manualCashPayment") return createManualCashPayment(user, body);
+  if (mode === "payrollDeductionPayment") return createPayrollDeductionPayment(user, body);
   if (mode === "refundPayment") return refundStripePayment(user, body);
   if (mode === "separateResponsibility") return separateInvoiceResponsibility(user, body);
 

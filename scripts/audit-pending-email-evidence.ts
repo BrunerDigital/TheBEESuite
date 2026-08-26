@@ -1,25 +1,10 @@
 import "./load-env";
 
+import { buildOutstandingNonInvoiceChargesByAccount } from "@/lib/accounts-receivable";
 import { prisma } from "@/lib/prisma";
-
-const INVOICE_APPLICATION_LEDGER_TYPES = new Set([
-  "payment",
-  "cash_payment",
-  "check_payment",
-  "payroll_deduction_payment",
-  "account_credit_application",
-  "refund",
-  "chargeback",
-  "chargeback_reversal",
-]);
 
 function record(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function nonNegativeCents(value: unknown) {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
 }
 
 function familySummary(family: {
@@ -33,7 +18,7 @@ function familySummary(family: {
     customFields: unknown;
     invoices: Array<{ id: string; number: string; status: string; dueDate: Date; totalCents: number; sourceSystem: string | null; externalId: string | null; customFields: unknown }>;
     payments: Array<{ id: string; amountCents: number; status: string; provider: string; externalIdPlaceholder: string | null; paidAt: Date | null; customFields: unknown }>;
-    ledgerEntries: Array<{ id: string; type: string; amountCents: number; balanceAfterCents: number | null; effectiveAt: Date; invoiceId: string | null; paymentId: string | null; sourceSystem: string | null; externalId: string | null; metadata: unknown }>;
+    ledgerEntries: Array<{ id: string; type: string; amountCents: number; balanceAfterCents: number | null; effectiveAt: Date; createdAt: Date; invoiceId: string | null; paymentId: string | null; sourceSystem: string | null; externalId: string | null; metadata: unknown }>;
   };
 }) {
   return {
@@ -125,18 +110,29 @@ async function main() {
   const longmontCurrent = longmontAsOf.filter((family) => family.children.some((child) => ["enrolled", "active", "current"].includes(child.enrollmentStatus.toLowerCase())));
   const longmontCurrentPositive = longmontCurrent.filter((family) => (family.account?.balanceCents ?? 0) > 0);
   const longmontCurrentCredits = longmontCurrent.filter((family) => (family.account?.balanceCents ?? 0) < 0);
-  const longmontInvoices = longmontAsOf.flatMap((family) => (family.account?.invoices ?? []).map((invoice) => ({ familyId: family.id, familyName: family.name, account: family.account, invoice })));
-  const longmontPastDueInvoices = longmontInvoices.filter(({ invoice }) => invoice.dueDate <= new Date("2026-08-25T23:59:59.999Z") && ["OPEN", "PARTIALLY_PAID", "FAILED"].includes(invoice.status));
-  const longmontPastDue = longmontPastDueInvoices.map(({ familyId, familyName, account, invoice }) => {
-    const applicationDeltaCents = (account?.ledgerEntries ?? []).filter((entry) => (
-      entry.invoiceId === invoice.id
-      && INVOICE_APPLICATION_LEDGER_TYPES.has(entry.type)
-    )).reduce((sum, entry) => entry.type === "account_credit_application"
-      ? sum - nonNegativeCents(record(entry.metadata).accountCreditAppliedCents)
-      : sum + entry.amountCents, 0);
-    const appliedCents = Math.max(0, -applicationDeltaCents);
-    return { familyId, familyName, invoice, appliedCents, outstandingCents: Math.max(0, invoice.totalCents - appliedCents) };
+  const longmontLedgerEntries = longmontAsOf.flatMap((family) => family.account
+    ? family.account.ledgerEntries.map((entry) => ({ ...entry, billingAccountId: family.account!.id }))
+    : []);
+  const nonInvoiceChargeCentsByAccount = buildOutstandingNonInvoiceChargesByAccount(longmontLedgerEntries);
+  const longmontOutstanding = longmontAsOf.flatMap((family) => {
+    const account = family.account;
+    if (!account) return [];
+    const openInvoices = account.invoices
+      .filter((invoice) => ["OPEN", "PARTIALLY_PAID", "FAILED"].includes(invoice.status))
+      .sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime() || left.id.localeCompare(right.id));
+    const openInvoiceTotalCents = openInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);
+    const invoiceReceivableCents = Math.max(
+      Math.max(account.balanceCents, 0) - Math.max(nonInvoiceChargeCentsByAccount.get(account.id) ?? 0, 0),
+      0,
+    );
+    let paidAgainstOpenInvoicesCents = Math.max(openInvoiceTotalCents - invoiceReceivableCents, 0);
+    return openInvoices.map((invoice) => {
+      const appliedCents = Math.min(paidAgainstOpenInvoicesCents, invoice.totalCents);
+      paidAgainstOpenInvoicesCents -= appliedCents;
+      return { familyId: family.id, familyName: family.name, invoice, appliedCents, outstandingCents: invoice.totalCents - appliedCents };
+    });
   });
+  const longmontPastDue = longmontOutstanding.filter(({ invoice }) => invoice.dueDate <= new Date("2026-08-25T23:59:59.999Z"));
 
   console.log(JSON.stringify({
     centers,

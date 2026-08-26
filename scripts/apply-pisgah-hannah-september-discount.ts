@@ -72,9 +72,18 @@ function reviewedState(state: Awaited<ReturnType<typeof loadState>>) {
 function assignmentApplied(state: Awaited<ReturnType<typeof loadState>>) {
   const fields = record(state.child.customFields);
   if (!state.plan || typeof fields.tuitionPlanId !== "string" || !fields.tuitionPlanId) return false;
+  const credits = Array.isArray(fields.tuitionCredits) ? fields.tuitionCredits : [];
+  const employeeCredit = credits.length === 1 ? record(credits[0] as Prisma.JsonValue) : {};
   return fields.tuitionBillingEnabled === true
     && fields.tuitionPlanId === state.plan.id
+    && fields.tuitionPlanAmountCents === PLAN_AMOUNT_CENTS
+    && fields.tuitionBillingCadence === "monthly"
+    && fields.tuitionBillingDay === BILLING_DAY
     && fields.tuitionBillingStartsPeriod === BILLING_START_PERIOD
+    && employeeCredit.category === "employee_discount"
+    && employeeCredit.amountCents === EMPLOYEE_DISCOUNT_CENTS
+    && Array.isArray(fields.tuitionAdditionalCharges)
+    && fields.tuitionAdditionalCharges.length === 0
     && fields.tuitionGrossAmountCents === PLAN_AMOUNT_CENTS
     && fields.tuitionCreditsTotalCents === EMPLOYEE_DISCOUNT_CENTS
     && fields.tuitionNetAmountCents === NET_AMOUNT_CENTS;

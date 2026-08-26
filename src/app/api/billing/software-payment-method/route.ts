@@ -91,7 +91,7 @@ async function POSTHandler(request: NextRequest) {
   }
   if (!customerId) {
     const customer = await createStripeCustomer({
-      email: center.email || user.email,
+      email: center.email || null,
       name: center.crmLocationId || center.name,
       tenantId: user.tenantId,
       metadata: { tenantId: user.tenantId, centerId: center.id, paymentScope: "school_software_fee" },

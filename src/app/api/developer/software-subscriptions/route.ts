@@ -30,6 +30,7 @@ async function POSTHandler(request: NextRequest) {
     select: {
       id: true,
       name: true,
+      crmLocationId: true,
       locationId: true,
       email: true,
       customFields: true,
@@ -68,7 +69,7 @@ async function POSTHandler(request: NextRequest) {
       shouldAdoptCustomer = Boolean(customerId);
     }
     if (!customerId) {
-      const customer = await createStripeCustomer({ email: center.email || user.email, name: center.name, tenantId: user.tenantId, metadata: { tenantId: user.tenantId, centerId: center.id, paymentScope: "school_software_fee" }, idempotencyKey: `school-software-customer:${user.tenantId}:${center.id}` });
+      const customer = await createStripeCustomer({ email: center.email || null, name: center.crmLocationId || center.name, tenantId: user.tenantId, metadata: { tenantId: user.tenantId, centerId: center.id, paymentScope: "school_software_fee" }, idempotencyKey: `school-software-customer:${user.tenantId}:${center.id}` });
       if (!customer.ok || !customer.id) return NextResponse.json({ ok: false, error: customer.error || "School billing customer could not be created." }, { status: customer.configured ? 502 : 503 });
       customerId = customer.id;
       shouldAdoptCustomer = true;

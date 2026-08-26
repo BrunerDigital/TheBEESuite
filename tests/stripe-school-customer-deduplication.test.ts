@@ -76,6 +76,8 @@ test("school software customer creation reuses provider metadata and is idempote
     assert.match(route, /findStripeSchoolSoftwareCustomers/);
     assert.match(route, /existing\.customerIds\.length > 1/);
     assert.match(route, /school-software-customer:\$\{user\.tenantId\}:\$\{center\.id\}/);
+    assert.match(route, /email: center\.email \|\| null/);
+    assert.match(route, /name: center\.crmLocationId \|\| center\.name/);
   }
   assert.match(developerRoute, /const latestCenter = await prisma\.center\.findUnique/);
   assert.match(developerRoute, /latestCustomerId && latestCustomerId !== customerId/);

@@ -71,7 +71,8 @@ function reviewedState(state: Awaited<ReturnType<typeof loadState>>) {
 
 function assignmentApplied(state: Awaited<ReturnType<typeof loadState>>) {
   const fields = record(state.child.customFields);
-  return fields.tuitionPlanId === state.plan?.id
+  return fields.tuitionBillingEnabled === true
+    && fields.tuitionPlanId === state.plan?.id
     && fields.tuitionBillingStartsPeriod === BILLING_START_PERIOD
     && fields.tuitionGrossAmountCents === PLAN_AMOUNT_CENTS
     && fields.tuitionCreditsTotalCents === EMPLOYEE_DISCOUNT_CENTS

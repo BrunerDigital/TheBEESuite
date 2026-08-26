@@ -97,6 +97,22 @@ test("static Kid City fallback locations use the canonical branded Vero Beach ID
   });
 });
 
+test("static Kid City fallback excludes confirmed inactive schools", () => {
+  const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
+  const ids = new Set(file.locations.map((item) => item.crmLocationId));
+
+  for (const id of [
+    "Kid City USA - CO | Woodland Park - Forest Edge",
+    "Kid City USA - FL | Jacksonville - Durbin",
+    "Kid City USA - IN | Brownsburg",
+    "Kid City USA - IN | Elkhart",
+    "Kid City USA - MO | Lees Summit",
+  ]) {
+    assert.equal(ids.has(id), false, `${id} must not return through the public fallback`);
+  }
+  assert.equal(ids.has("Kid City USA - IN | Fishers"), true);
+});
+
 test("live Kid City location API results keep static locations missing from the database", () => {
   const liveLocations: PublicLocationFile["locations"] = [
     {

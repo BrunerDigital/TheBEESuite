@@ -47,6 +47,8 @@ test("Kokomo CCDF reconciliation enumerates every non-void claim and revalidates
   assert.match(source, /hasWorkbookEvidence\(kaidenClaim\.row\.customFields/);
   assert.doesNotMatch(source, /invariant\(claims\.length === 2/);
   assert.match(source, /row\.centerId === EXPECTED\.centerId && row\.agencyProgramId === EXPECTED\.programId && row\.authorizationId === authorizationId/);
+  assert.match(source, /row\.centerId === EXPECTED\.centerId && row\.agencyProgramId === EXPECTED\.programId && row\.familyId === scope\.familyId && row\.childId === scope\.childId/);
+  assert.match(source, /state\.historicalWrenly\?\.centerId === EXPECTED\.centerId && state\.historicalWrenly\.agencyProgramId === EXPECTED\.programId/);
   assert.match(source, /row\.lines\[0\]\.childId === childId/);
   assert.match(source, /canManageBilling\(actor\) && canAccessCenter\(actorScope, EXPECTED\.centerId\)/);
   assert.match(source, /grant\.scopeType === "CENTER" && grant\.centerId === EXPECTED\.centerId/);

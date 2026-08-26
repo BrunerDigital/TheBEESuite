@@ -56,6 +56,14 @@ const EXPECTED = {
   },
 } as const;
 
+const AUTHORIZATION_SCOPES = new Map<string, { familyId: string; childId: string }>([
+  [EXPECTED.kaiden.authorizationId, { familyId: EXPECTED.kaiden.familyId, childId: EXPECTED.kaiden.childId }],
+  [EXPECTED.kaia.authorizationId, { familyId: EXPECTED.kaia.familyId, childId: EXPECTED.kaia.childId }],
+  [EXPECTED.wrenly.currentAuthorizationId, { familyId: EXPECTED.wrenly.familyId, childId: EXPECTED.wrenly.childId }],
+  [EXPECTED.oakleigh.authorizationId, { familyId: EXPECTED.oakleigh.familyId, childId: EXPECTED.oakleigh.childId }],
+  [EXPECTED.lyla.authorizationId, { familyId: EXPECTED.lyla.familyId, childId: EXPECTED.lyla.childId }],
+]);
+
 const d = (value: string) => new Date(`${value}T12:00:00.000Z`);
 
 function invariant(value: unknown, message: string): asserts value {
@@ -196,6 +204,8 @@ async function loadState(client: Prisma.TransactionClient | typeof prisma = pris
 function authorization(state: Awaited<ReturnType<typeof loadState>>, id: string) {
   const row = state.authorizations.find((item) => item.id === id);
   invariant(row, `Authorization ${id} was not found.`);
+  const scope = AUTHORIZATION_SCOPES.get(id);
+  invariant(scope && row.centerId === EXPECTED.centerId && row.agencyProgramId === EXPECTED.programId && row.familyId === scope.familyId && row.childId === scope.childId, `Authorization ${id} is no longer in the expected Kokomo program, family, and child scope.`);
   return row;
 }
 
@@ -268,7 +278,7 @@ function verifyFinal(state: Awaited<ReturnType<typeof loadState>>) {
   invariant(dateOnly(wrenly.coverageStart) === "2026-08-02", "Wrenly current authorization start correction was not applied.");
   invariant(oakleigh.authorizationNumber === EXPECTED.oakleigh.authorizationNumber && dateOnly(oakleigh.coverageStart) === "2026-07-19" && dateOnly(oakleigh.coverageEnd) === "2026-10-03", "Oakleigh authorization number/date correction was not applied.");
   invariant(lyla.authorizationNumber === EXPECTED.lyla.authorizationNumber, "Lyla authorization number correction was not applied.");
-  invariant(state.historicalWrenly?.authorizationNumber === EXPECTED.wrenly.historicalAuthorizationNumber && dateOnly(state.historicalWrenly.coverageStart) === "2026-07-12" && dateOnly(state.historicalWrenly.coverageEnd) === "2026-07-18" && state.historicalWrenly.authorizedRateCents === 31_300, "Wrenly historical authorization was not preserved from the workbook.");
+  invariant(state.historicalWrenly?.centerId === EXPECTED.centerId && state.historicalWrenly.agencyProgramId === EXPECTED.programId && state.historicalWrenly.familyId === EXPECTED.wrenly.familyId && state.historicalWrenly.childId === EXPECTED.wrenly.childId && state.historicalWrenly.authorizationNumber === EXPECTED.wrenly.historicalAuthorizationNumber && dateOnly(state.historicalWrenly.coverageStart) === "2026-07-12" && dateOnly(state.historicalWrenly.coverageEnd) === "2026-07-18" && state.historicalWrenly.authorizedRateCents === 31_300, "Wrenly historical authorization was not preserved in the expected Kokomo family and child scope.");
   invariant(kaidenClaim.row.claimedCents === 13_500 && kaidenClaim.line.serviceUnits === 1 && kaidenClaim.line.amountCents === 13_500 && hasWorkbookEvidence(kaidenClaim.row.customFields, "July 12-26", 2), "Kaiden claim correction and workbook provenance were not preserved.");
   invariant(dateOnly(kaiaClaim.row.servicePeriodStart) === "2026-07-19" && kaiaClaim.row.claimedCents === 13_500 && kaiaClaim.line.serviceUnits === 1 && kaiaClaim.line.amountCents === 13_500 && hasWorkbookEvidence(kaiaClaim.row.customFields, "July 12-26", 4), "Kaia claim correction and workbook provenance were not preserved.");
 }

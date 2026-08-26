@@ -57,6 +57,7 @@ async function loadState(db: Prisma.TransactionClient | typeof prisma = prisma) 
             id: true,
             fullName: true,
             ageGroup: true,
+            classroomId: true,
             enrollmentStatus: true,
             startDate: true,
             customFields: true,
@@ -104,6 +105,7 @@ async function loadState(db: Prisma.TransactionClient | typeof prisma = prisma) 
   const child = family.children[0];
   invariant(child.id === CHILD_ID && child.fullName === CHILD_NAME, "Sloane's child identity changed.");
   invariant(["enrolled", "active", "current"].includes(child.enrollmentStatus.toLowerCase()), "Sloane is no longer currently enrolled.");
+  invariant(child.classroomId !== null, "Sloane no longer has a classroom assignment required for recurring tuition billing.");
   invariant(child.startDate?.toISOString().slice(0, 10) === START_DATE, "Sloane's confirmed start date changed.");
   invariant(plans.length <= 1, "Multiple Sloane tuition plans already exist.");
   invariant(!plans[0] || (plans[0].centerId === CENTER_ID && plans[0].ageGroup === child.ageGroup && plans[0].cadence === "monthly" && plans[0].amountCents === MONTHLY_AMOUNT_CENTS), "An incompatible Sloane tuition plan already exists.");
@@ -119,6 +121,7 @@ function reviewedState(state: Awaited<ReturnType<typeof loadState>>) {
       id: state.child.id,
       name: state.child.fullName,
       ageGroup: state.child.ageGroup,
+      classroomId: state.child.classroomId,
       enrollmentStatus: state.child.enrollmentStatus,
       startDate: state.child.startDate,
       customFields: state.child.customFields,
@@ -171,6 +174,7 @@ async function main() {
         childId: before.child.id,
         childName: before.child.fullName,
         ageGroup: before.child.ageGroup,
+        classroomId: before.child.classroomId,
         enrollmentStatus: before.child.enrollmentStatus,
         startDate: before.child.startDate,
         billingAccount: before.account,

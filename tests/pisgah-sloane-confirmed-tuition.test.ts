@@ -31,3 +31,9 @@ test("Sloane billing uses a reviewed-state fingerprint and a serializable transa
   assert.match(source, /mode: wasAlreadyApplied \? "already_applied" : "applied"/);
   assert.doesNotMatch(source, /state\.account\.autopayPlaceholder === false\s*&& childFields/);
 });
+
+test("Sloane recurring billing requires a current classroom assignment", () => {
+  assert.match(source, /classroomId: true/);
+  assert.match(source, /child\.classroomId !== null/);
+  assert.match(source, /required for recurring tuition billing/);
+});

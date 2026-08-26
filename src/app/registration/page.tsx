@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BEE_SUITE_BRANDING, resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { prisma } from "@/lib/prisma";
 import { logOperationalError } from "@/lib/request-response-logging";
-import { resolveRegistrationHandoffCenterId } from "@/lib/registration-handoff";
+import { resolveRegistrationHandoffCenter } from "@/lib/registration-handoff";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +20,7 @@ async function getRegistrationCenters() {
         id: true,
         name: true,
         crmLocationId: true,
+        locationId: true,
         city: true,
         state: true,
         organization: {
@@ -44,11 +45,11 @@ function firstSearchParam(value: string | string[] | undefined) {
 export default async function OnlineRegistrationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ centerId?: string | string[] }>;
+  searchParams: Promise<{ centerId?: string | string[]; locationId?: string | string[] }>;
 }) {
   const [centers, query] = await Promise.all([getRegistrationCenters(), searchParams]);
-  const requestedCenterId = firstSearchParam(query.centerId).trim();
-  const initialCenterId = resolveRegistrationHandoffCenterId(requestedCenterId, centers.map((center) => center.id));
+  const requestedCenter = firstSearchParam(query.centerId) || firstSearchParam(query.locationId);
+  const initialCenterId = resolveRegistrationHandoffCenter(requestedCenter, centers);
   const selectedCenter = centers.find((center) => center.id === initialCenterId);
   const branding = selectedCenter
     ? resolveWorkspaceBranding({

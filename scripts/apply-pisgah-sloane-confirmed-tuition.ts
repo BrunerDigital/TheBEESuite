@@ -139,7 +139,6 @@ function alreadyApplied(state: Awaited<ReturnType<typeof loadState>>) {
   return Boolean(
     state.plan
     && state.account
-    && state.account.autopayPlaceholder === false
     && childFields.tuitionBillingEnabled === true
     && childFields.tuitionPlanId === state.plan.id
     && childFields.tuitionPlanAmountCents === MONTHLY_AMOUNT_CENTS
@@ -147,7 +146,7 @@ function alreadyApplied(state: Awaited<ReturnType<typeof loadState>>) {
     && childFields.tuitionBillingStartsPeriod === BILLING_START_PERIOD
     && accountFields.tuitionAutobillEnabled === true
     && accountFields.tuitionAutobillStartsPeriod === BILLING_START_PERIOD
-    && invoice?.status === PaymentStatus.OPEN
+    && invoice !== null
     && invoice.totalCents === AUGUST_PRORATION_CENTS
     && record(invoice.customFields).noPaymentSubmitted === true
     && record(invoice.customFields).autopaySuppressed === true,
@@ -158,11 +157,12 @@ async function main() {
   const before = await loadState();
   const reviewed = reviewedState(before);
   const planFingerprint = fingerprint(reviewed);
+  const wasAlreadyApplied = alreadyApplied(before);
 
   if (!process.argv.includes(APPLY_FLAG)) {
     console.log(JSON.stringify({
       mode: "preview",
-      alreadyApplied: alreadyApplied(before),
+      alreadyApplied: wasAlreadyApplied,
       planFingerprint,
       reviewed: {
         centerId: before.center.id,
@@ -332,13 +332,21 @@ async function main() {
 
   const after = await loadState();
   invariant(alreadyApplied(after), "Sloane's confirmed tuition setup did not persist exactly.");
-  invariant(after.account?.balanceCents === AUGUST_PRORATION_CENTS, "Sloane's post-apply balance is not the exact confirmed August proration.");
-  invariant(after.account.autopayPlaceholder === false, "Payment autopay was enabled unexpectedly.");
-  invariant(after.account.payments.length === 0, "A payment was created unexpectedly.");
-  invariant(after.account.invoices.length === 1 && after.account.ledgerEntries.length === 1, "Sloane's invoice or ledger entry was duplicated.");
+  invariant(after.account, "Sloane's billing account is missing after tuition setup.");
+  const invoice = matchingInvoice(after);
+  invariant(invoice, "Sloane's identified proration invoice is missing.");
+  const matchingLedgerEntries = after.account?.ledgerEntries.filter((entry) => entry.invoiceId === invoice.id) ?? [];
+  invariant(matchingLedgerEntries.length === 1 && matchingLedgerEntries[0].amountCents === AUGUST_PRORATION_CENTS, "Sloane's identified proration ledger entry is missing or duplicated.");
+  if (!wasAlreadyApplied) {
+    invariant(invoice.status === PaymentStatus.OPEN, "Sloane's newly created proration invoice is not open.");
+    invariant(after.account.balanceCents === (before.account?.balanceCents ?? 0) + AUGUST_PRORATION_CENTS, "Sloane's post-apply balance did not increase by the exact confirmed August proration.");
+    invariant(after.account.autopayPlaceholder === (before.account?.autopayPlaceholder ?? false), "Payment autopay changed unexpectedly.");
+    invariant(after.account.payments.length === (before.account?.payments.length ?? 0), "A payment was created unexpectedly.");
+    invariant(after.account.invoices.length === (before.account?.invoices.length ?? 0) + 1 && after.account.ledgerEntries.length === (before.account?.ledgerEntries.length ?? 0) + 1, "Sloane's invoice or ledger entry was not created exactly once.");
+  }
 
   console.log(JSON.stringify({
-    mode: "applied",
+    mode: wasAlreadyApplied ? "already_applied" : "applied",
     familyId: FAMILY_ID,
     childId: CHILD_ID,
     billingAccountId: after.account.id,

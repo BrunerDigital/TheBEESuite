@@ -174,9 +174,9 @@ async function loadState(client: Prisma.TransactionClient | typeof prisma = pris
   invariant(actor?.tenantId === EXPECTED.tenantId && actor.isActive, "Active audit actor was not found in the expected tenant.");
   const grantCoversCenter = actor.accessGrants.some((grant) =>
     (grant.scopeType === "CENTER" && grant.centerId === EXPECTED.centerId)
-    || (grant.scopeType === "OWNER_GROUP" && grant.ownerGroupId === center.ownerGroupId)
-    || (grant.scopeType === "ORGANIZATION" && grant.organizationId === center.organizationId)
-    || (grant.scopeType === "BRAND" && grant.brandId === center.organization.brandId),
+    || (grant.scopeType === "OWNER_GROUP" && Boolean(grant.ownerGroupId) && grant.ownerGroupId === center.ownerGroupId)
+    || (grant.scopeType === "ORGANIZATION" && Boolean(grant.organizationId) && grant.organizationId === center.organizationId)
+    || (grant.scopeType === "BRAND" && Boolean(grant.brandId) && grant.brandId === center.organization.brandId),
   );
   const actorCenterIds = actor.staffProfile?.centerId === EXPECTED.centerId || grantCoversCenter ? [EXPECTED.centerId] : [];
   const actorScope = {

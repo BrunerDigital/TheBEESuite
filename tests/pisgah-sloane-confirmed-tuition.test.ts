@@ -26,5 +26,8 @@ test("Sloane billing uses a reviewed-state fingerprint and a serializable transa
   assert.match(source, /--confirm-fingerprint/);
   assert.match(source, /fingerprint\(reviewedState\(current\)\) === planFingerprint/);
   assert.match(source, /Prisma\.TransactionIsolationLevel\.Serializable/);
-  assert.match(source, /invoices\.length === 1 && after\.account\.ledgerEntries\.length === 1/);
+  assert.match(source, /matchingLedgerEntries\.length === 1/);
+  assert.match(source, /before\.account\?\.invoices\.length \?\? 0\) \+ 1/);
+  assert.match(source, /mode: wasAlreadyApplied \? "already_applied" : "applied"/);
+  assert.doesNotMatch(source, /state\.account\.autopayPlaceholder === false\s*&& childFields/);
 });

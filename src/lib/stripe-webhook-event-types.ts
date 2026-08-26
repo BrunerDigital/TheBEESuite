@@ -1,6 +1,11 @@
 export const STRIPE_WEBHOOK_ACCOUNT_EVENT_TYPES = [
   "account.updated",
+  "v2.core.account.created",
   "v2.core.account.updated",
+  "v2.core.account[defaults].updated",
+  "v2.core.account[identity].updated",
+  "v2.core.account[configuration.merchant].updated",
+  "v2.core.account[configuration.recipient].updated",
   "v2.core.account[requirements].updated",
 ] as const;
 

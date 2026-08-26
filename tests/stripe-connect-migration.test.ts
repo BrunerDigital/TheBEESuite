@@ -303,7 +303,10 @@ test("migration routes protect the source bank and generate target links only af
   assert.match(migrationRoute, /customFields: \{ equals: reservedFields as Prisma\.InputJsonValue \}/);
   assert.match(oldPayoutRoute, /existing payout bank remains untouched/);
   assert.match(oldOnboardRoute, /parent payments remain on the current account until cutover/i);
-  assert.match(softwareRoute, /subscriptionCreated: false/);
+  assert.match(softwareRoute, /createStripeSetupCheckoutSession/);
+  assert.match(softwareRoute, /requested === "stripe_balance"/);
+  assert.match(softwareRoute, /Authorize ACH or card/);
+  assert.doesNotMatch(softwareRoute, /createStripeBalanceSoftwareSubscription|createStripeBalancePaymentMethod/);
   assert.match(preparation, /stripeConnectMigrationParentPaymentsAccountId: plan\.sourceAccountId/);
   assert.match(preparation, /stripeConnectMigrationTargetPayoutHoldStatus: "pending_confirmation"/);
   assert.match(preparation, /linksCreated: 0/);

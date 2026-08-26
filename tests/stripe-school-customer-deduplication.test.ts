@@ -7,6 +7,9 @@ const reconciliation = readFileSync("scripts/reconcile-stripe-school-customers.t
 test("school customer reconciliation is preview-first and exact-target guarded", () => {
   assert.match(reconciliation, /mode: apply \? "apply" : "read_only_preview"/);
   assert.doesNotMatch(reconciliation, /import \{ prisma \} from/);
+  assert.match(reconciliation, /AUTHORITATIVE_ENV_KEYS\.forEach\(\(key\) => delete process\.env\[key\]\)/);
+  assert.match(reconciliation, /loadEnvConfig\(envDir, false, console, true\)/);
+  assert.match(reconciliation, /selected environment must provide DATABASE_URL/);
   assert.match(reconciliation, /loadEnvConfig[\s\S]+await import\("\.\.\/src\/lib\/prisma"\)/);
   assert.match(reconciliation, /--confirm-fingerprint/);
   assert.match(reconciliation, /--expected-target-count/);
@@ -49,6 +52,8 @@ test("school customer deletion holds every billing and payment evidence class", 
     "sources",
   ]) assert.match(reconciliation, new RegExp(evidence));
   assert.match(reconciliation, /held_new_database_reference/);
+  assert.match(reconciliation, /concurrent_setup_adoption_candidate/);
+  assert.match(reconciliation, /evidence === "school_software_metadata"/);
   assert.match(reconciliation, /held_metadata_drift/);
   assert.match(reconciliation, /held_new_activity/);
   assert.match(reconciliation, /deleted\.deleted !== true/);

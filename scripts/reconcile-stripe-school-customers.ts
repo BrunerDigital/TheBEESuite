@@ -15,6 +15,15 @@ const LEGACY_CONNECT_PURPOSES = new Set([
   "school_connect_full_dashboard_migration",
   "school_connect_responsibility_migration",
 ]);
+const AUTHORITATIVE_ENV_KEYS = [
+  "DATABASE_URL",
+  "DIRECT_URL",
+  "POSTGRES_URL",
+  "POSTGRES_PRISMA_URL",
+  "POSTGRES_URL_NON_POOLING",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_API_VERSION",
+] as const;
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -181,9 +190,12 @@ async function customerActivity(apiKey: string, customer: JsonRecord) {
 }
 
 async function main() {
-  loadEnvConfig(argValue("--env-dir") || process.cwd());
+  const envDir = argValue("--env-dir") || process.cwd();
+  AUTHORITATIVE_ENV_KEYS.forEach((key) => delete process.env[key]);
+  loadEnvConfig(envDir, false, console, true);
   const apiKey = clean(process.env.STRIPE_SECRET_KEY);
   if (!/^(sk|rk)_live_/.test(apiKey)) throw new Error("A live Stripe secret or restricted key is required.");
+  if (!clean(process.env.DATABASE_URL)) throw new Error("The selected environment must provide DATABASE_URL.");
   prisma = (await import("../src/lib/prisma")).prisma;
   const apply = process.argv.includes("--apply");
   const expectedTargetCount = Number.parseInt(argValue("--expected-target-count"), 10);
@@ -209,19 +221,26 @@ async function main() {
     if (!evidence) return [];
     return [{ customer, center, evidence }];
   });
-  const audited = await mapWithConcurrency(possibleDuplicates, ACTIVITY_CONCURRENCY, async ({ customer, center, evidence }) => ({
-    customerId: clean(customer.id),
-    school: center.name,
-    centerId: center.id,
-    tenantId: center.organization.tenantId,
-    centerEmail: center.email,
-    evidence,
-    centerStatus: center.status,
-    createdAt: integer(customer.created) ? new Date(integer(customer.created) * 1000).toISOString() : null,
-    activity: await customerActivity(apiKey, customer),
-  }));
-  const targets = audited.filter((row) => row.activity.reasons.length === 0);
-  const held = audited.filter((row) => row.activity.reasons.length > 0);
+  const audited = await mapWithConcurrency(possibleDuplicates, ACTIVITY_CONCURRENCY, async ({ customer, center, evidence }) => {
+    const activity = await customerActivity(apiKey, customer);
+    return {
+      customerId: clean(customer.id),
+      school: center.name,
+      centerId: center.id,
+      tenantId: center.organization.tenantId,
+      centerEmail: center.email,
+      evidence,
+      centerStatus: center.status,
+      createdAt: integer(customer.created) ? new Date(integer(customer.created) * 1000).toISOString() : null,
+      activity,
+      safetyReasons: [
+        ...activity.reasons,
+        ...(evidence === "school_software_metadata" ? ["concurrent_setup_adoption_candidate"] : []),
+      ],
+    };
+  });
+  const targets = audited.filter((row) => row.safetyReasons.length === 0);
+  const held = audited.filter((row) => row.safetyReasons.length > 0);
   const canonical = JSON.stringify(targets.map(({ customerId, centerId, tenantId, evidence, createdAt }) => ({ customerId, centerId, tenantId, evidence, createdAt })));
   const fingerprint = createHash("sha256").update(canonical).digest("hex");
 

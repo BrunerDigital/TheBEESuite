@@ -652,7 +652,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
                 <div className="font-medium">{shellUserViewText(item.title, currentUser)}</div>
                 <Badge variant={item.priority === "high" ? "destructive" : "outline"}>{item.priority}</Badge>
               </div>
-              <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+              <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-muted-foreground">
                 {shellUserViewText(item.body, currentUser)}
               </p>
             </Link>

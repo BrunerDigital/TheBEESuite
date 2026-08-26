@@ -37,6 +37,7 @@ type ChildOption = {
   ageGroup: string;
   enrollmentStatus: string;
   photoVideoPermission: boolean;
+  profilePhotoUrl?: string | null;
   classroom: { id: string; name: string } | null;
   liveLocation?: { currentClassroomId: string | null; areaName: string | null; status: string; movedAt: string | Date; currentClassroom: { id: string; name: string } | null } | null;
   family?: { custodyNotes: string | null } | null;
@@ -1232,14 +1233,17 @@ export function TeacherMobileWorkspace({
                       className={`rounded-lg border p-2 text-sm transition ${selectedChild?.id === child.id ? "border-primary bg-primary/10" : "bg-card/40"}`}
                     >
                       <button type="button" className="flex min-h-10 w-full items-start justify-between gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => chooseChild(child.id)}>
-                        <span className="min-w-0">
-                          <span className="font-medium">{child.fullName}</span>
-                          <span className="ml-2 text-xs text-muted-foreground">{child.ageGroup}</span>
-                          {hasCustodyWarning(child.family) ? (
-                            <span className="mt-1 block text-xs font-medium text-destructive">
-                              {CUSTODY_WARNING_LABEL}: review before pickup or parent communication
-                            </span>
-                          ) : null}
+                        <span className="flex min-w-0 items-start gap-2">
+                          <UserAvatar name={child.fullName} src={child.profilePhotoUrl} size="sm" className="shrink-0" />
+                          <span className="min-w-0">
+                            <span className="font-medium">{child.fullName}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">{child.ageGroup}</span>
+                            {hasCustodyWarning(child.family) ? (
+                              <span className="mt-1 block text-xs font-medium text-destructive">
+                                {CUSTODY_WARNING_LABEL}: review before pickup or parent communication
+                              </span>
+                            ) : null}
+                          </span>
                         </span>
                         <span className="flex shrink-0 flex-col items-end gap-1">
                           <Badge variant="outline">{attendanceLabel(attendance)}</Badge>

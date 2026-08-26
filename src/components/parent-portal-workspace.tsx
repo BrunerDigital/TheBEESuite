@@ -91,6 +91,7 @@ type Child = {
   photoVideoPermission?: boolean;
   fieldTripPermission?: boolean;
   classroom?: { name: string; ageGroup: string } | null;
+  profilePhotoUrl?: string | null;
   tuitionAssignment?: {
     enabled: boolean;
     cadence: string | null;
@@ -1970,6 +1971,11 @@ function ParentPortalWorkspaceView({
                   className="w-[86%] min-w-0 shrink-0 snap-start rounded-2xl border bg-background/60 p-4 sm:w-auto sm:shrink sm:p-5"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
+                    {child.profilePhotoUrl ? (
+                      <span className="relative size-12 shrink-0 overflow-hidden rounded-full border bg-muted">
+                        <Image src={child.profilePhotoUrl} alt={`${child.fullName} profile`} fill sizes="48px" unoptimized className="object-cover" />
+                      </span>
+                    ) : null}
                     <div className="min-w-0">
                       <h3 className="truncate text-lg font-semibold">
                         {child.preferredName || child.fullName}

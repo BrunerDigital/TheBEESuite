@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { FamilyRecordEditor, type EditableFamilyRecord } from "@/components/family-record-editor";
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
+import { ChildProfilePhotoControl } from "@/components/child-profile-photo-control";
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, hasCustodyWarning } from "@/lib/custody-visibility";
 import { BULK_ENROLLMENT_STATUSES } from "@/lib/child-enrollment-bulk";
 import {
@@ -49,6 +50,7 @@ export type ChildProfileVisibilityRecord = {
   fieldTripPermission: boolean;
   familyId: string;
   classroomId: string | null;
+  profilePhotoUrl?: string | null;
   family: { id: string; name: string; centerId: string | null; custodyNotes: string | null };
   classroom: { id: string; name: string; center: { name: string; crmLocationId: string | null } } | null;
   _count: { allergies: number; medicalNotes: number; documents: number; incidents: number; dailyReports: number };
@@ -554,7 +556,7 @@ export function FamilyProfilesEnrollmentPanel({
               ))}
               {!visibleFamilies.length ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">
+                  <TableCell colSpan={7} className="text-muted-foreground">
                     No families match this view.
                   </TableCell>
                 </TableRow>
@@ -796,6 +798,7 @@ export function ChildProfilesEnrollmentPanel({
             <TableHeader>
               <TableRow>
                 <TableHead>Child</TableHead>
+                <TableHead>Profile photo</TableHead>
                 <TableHead>Family</TableHead>
                 <TableHead>Classroom</TableHead>
                 <TableHead>Status</TableHead>
@@ -809,6 +812,9 @@ export function ChildProfilesEnrollmentPanel({
                   <TableCell>
                     <div className="font-medium">{child.fullName}</div>
                     <div className="text-xs text-muted-foreground">{child.ageGroup} · DOB {formatDate(child.dateOfBirth)}</div>
+                  </TableCell>
+                  <TableCell>
+                    <ChildProfilePhotoControl childId={child.id} childName={child.fullName} initialUrl={child.profilePhotoUrl} />
                   </TableCell>
                   <TableCell>
                     <div className="font-medium">{child.family.name}</div>
@@ -832,7 +838,7 @@ export function ChildProfilesEnrollmentPanel({
               ))}
               {!visibleChildren.length ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">
+                  <TableCell colSpan={7} className="text-muted-foreground">
                     No students match this view.
                   </TableCell>
                 </TableRow>

@@ -2149,6 +2149,7 @@ async function renderLivePage(
               customFields: true,
               photoVideoPermission: true,
               fieldTripPermission: true,
+              classroomId: true,
               classroom: { select: { name: true, ageGroup: true, centerId: true } },
               liveLocation: {
                 select: {
@@ -2170,6 +2171,9 @@ async function renderLivePage(
 
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
+    const parentClassroomIds = Array.from(new Set(
+      family?.children.map((child) => child.classroomId).filter((id): id is string => Boolean(id)) ?? [],
+    ));
     const resolvedParentCenterId = family?.centerId ?? family?.children[0]?.classroom?.centerId ?? null;
     const parentPortalCenter = resolvedParentCenterId
       ? centers.find((center) => center.id === resolvedParentCenterId) ?? null
@@ -2184,7 +2188,7 @@ async function renderLivePage(
     const parentVisibleLedgerWhere: Prisma.LedgerEntryWhereInput = {
       NOT: agencyOnlyLedgerWhere,
     };
-    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs] = await prisma.$transaction([
+    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs, classroomTeacherRows] = await prisma.$transaction([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -2261,7 +2265,7 @@ async function renderLivePage(
         },
       }),
       prisma.dailyReport.findMany({
-        where: { childId: { in: childIds.length ? childIds : ["__none__"] } },
+        where: { childId: { in: childIds.length ? childIds : ["__none__"] }, sentAt: { not: null } },
         orderBy: { date: "desc" },
         take: 20,
         select: {
@@ -2360,7 +2364,25 @@ async function renderLivePage(
         orderBy: { occurredAt: "desc" },
         select: { childId: true, type: true, occurredAt: true },
       }),
+      prisma.user.findMany({
+        where: {
+          tenantId: user.tenantId,
+          role: UserRole.TEACHER,
+          isActive: true,
+          staffProfile: {
+            centerId: resolvedParentCenterId ?? "__none__",
+            classroomId: { in: parentClassroomIds.length ? parentClassroomIds : ["__none__"] },
+          },
+        },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, staffProfile: { select: { classroom: { select: { name: true } } } } },
+      }),
     ]);
+    const classroomTeachers = classroomTeacherRows.map((teacher) => ({
+      id: teacher.id,
+      name: userViewText(teacher.name),
+      classroomNames: teacher.staffProfile?.classroom?.name ? [teacher.staffProfile.classroom.name] : [],
+    }));
 
     const [signedDocuments, signedMedia, signedMessages] = await Promise.all([
       signDocumentRecords(documents),
@@ -2668,6 +2690,7 @@ async function renderLivePage(
         messages={signedMessages}
         centerName={parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
         centerEin={parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
+        classroomTeachers={classroomTeachers}
         documents={signedDocuments}
         media={signedMedia}
         announcements={announcements}

@@ -213,7 +213,7 @@ type MessageFamilyForDelivery = {
     fullName: string;
     classroomId: string | null;
     enrollmentStatus?: string | null;
-    classroom?: { name: string } | null;
+    classroom?: { name: string; centerId?: string | null } | null;
   }>;
 };
 
@@ -598,7 +598,7 @@ async function POSTHandler(request: NextRequest) {
             fullName: true,
             classroomId: true,
             enrollmentStatus: true,
-            classroom: { select: { name: true } },
+            classroom: { select: { name: true, centerId: true } },
           },
         },
       },
@@ -922,12 +922,29 @@ async function POSTHandler(request: NextRequest) {
   subject = renderMessageTemplate(subject, templateContext);
   message = renderMessageTemplate(message, templateContext);
 
+  const currentFamilyClassroomIds = family?.children
+    .filter((child) => ["enrolled", "active", "current"].includes((child.enrollmentStatus ?? "").toLowerCase()))
+    .map((child) => child.classroomId)
+    .filter((id): id is string => Boolean(id)) ?? [];
+  const familyMessageCenterId = family?.centerId ?? family?.children.find((child) => child.classroom?.centerId)?.classroom?.centerId ?? null;
+
   if (assignedToId) {
     const assignee = await prisma.user.findFirst({
       where: {
         id: assignedToId,
         tenantId: user.tenantId,
         isActive: true,
+        ...(senderIsParent
+          ? {
+              role: UserRole.TEACHER,
+              staffProfile: {
+                centerId: familyMessageCenterId ?? "__none__",
+                classroomId: {
+                  in: currentFamilyClassroomIds.length ? currentFamilyClassroomIds : ["__none__"],
+                },
+              },
+            }
+          : {}),
         ...(family?.centerId && !canAccessAllCenters(user)
           ? {
               OR: [
@@ -940,7 +957,7 @@ async function POSTHandler(request: NextRequest) {
       select: { id: true },
     });
     if (!assignee) {
-      return NextResponse.json({ ok: false, error: "Assigned staff user is not available for this family." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: senderIsParent ? "Teacher is not assigned to your child’s current classroom." : "Assigned staff user is not available for this family." }, { status: 400 });
     }
   }
 

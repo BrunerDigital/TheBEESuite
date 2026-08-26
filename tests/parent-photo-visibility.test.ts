@@ -10,7 +10,8 @@ test("teacher uploads flow through private storage into the parent-visible media
   assert.match(teacherMediaRoute, /resolveTeacherMediaShareState\(\{/);
   assert.match(teacherMediaRoute, /sharedWithParents: shareState\.sharedWithParents/);
   assert.match(teacherMediaRoute, /status: shareState\.status/);
-  assert.doesNotMatch(teacherMediaRoute, /buildParentPhotoNotifications\(\{/);
+  assert.match(teacherMediaRoute, /buildParentPhotoNotifications\(\{/);
+  assert.match(teacherMediaRoute, /skipDuplicates: true/);
 });
 
 test("the parent portal scopes shared photos to linked children and signs private objects", () => {
@@ -47,13 +48,14 @@ test("director approval shares a held photo and alerts linked parents", () => {
   assert.doesNotMatch(mediaReviewRoute, /tx\.child\.update\(\{/);
 });
 
-test("all parent-share uploads enter the director queue and alert school leadership", () => {
+test("permitted parent-share uploads go live while restricted uploads enter review", () => {
   const teacherMediaRoute = readFileSync("src/app/api/teacher/media/route.ts", "utf8");
   const parentPage = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const dashboardPage = readFileSync("src/app/dashboard/page.tsx", "utf8");
 
   assert.match(teacherMediaRoute, /if \(sharedWithParents && centerId\)/);
-  assert.match(teacherMediaRoute, /Photo ready for director approval/);
+  assert.match(teacherMediaRoute, /if \(shareState\.sharedWithParents\)/);
+  assert.match(teacherMediaRoute, /Photo needs parent permission review/);
   assert.match(parentPage, /status: \{ in: \["director_review", "permission_review"\] \}/);
   assert.match(dashboardPage, /status: \{ in: \["director_review", "permission_review"\] \}/);
 });

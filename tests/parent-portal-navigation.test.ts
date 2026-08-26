@@ -144,6 +144,7 @@ test("app shell retains complete guardian navigation without the empty mobile dr
 
 test("primary parent navigation uses document requests across responsive shells", () => {
   const shell = readFileSync("src/components/app-shell.tsx", "utf8");
+  const workspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
 
   assert.match(
     shell,
@@ -151,6 +152,16 @@ test("primary parent navigation uses document requests across responsive shells"
   );
   assert.equal(shell.match(/<ParentPortalDocumentLink/g)?.length, 2);
   assert.match(shell, /const NavigationLink = parentView \? ParentPortalDocumentLink : Link/);
+  assert.match(
+    workspace,
+    /function ParentPortalDocumentLink\([\s\S]*ComponentPropsWithoutRef<"a">[\s\S]*return <a href=\{href\} \{\.\.\.props\} \/>/,
+  );
+  assert.doesNotMatch(workspace, /from "next\/link"/);
+  assert.doesNotMatch(workspace, /<Link\b/);
+  assert.match(
+    workspace,
+    /<ParentPortalDocumentLink[\s\S]*Incident Report to Review[\s\S]*<\/ParentPortalDocumentLink>/,
+  );
 });
 
 test("authorized pickup shell navigation stays limited to the parent portal home entry point", () => {

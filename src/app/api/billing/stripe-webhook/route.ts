@@ -10,6 +10,7 @@ import {
   retrieveStripeSetupIntent,
   sendSms,
   setStripeCustomerDefaultPaymentMethod,
+  updateStripeSoftwareSubscription,
   type StripeSoftwareSubscriptionSnapshot,
 } from "@/lib/integrations";
 import { getSchoolSoftwareBillingStartAt, getSchoolSoftwareFeePolicyForCenter } from "@/lib/kidcity-software-billing";
@@ -1466,23 +1467,6 @@ async function handlePaymentMethodSetupIntentFailed(event: StripeWebhookEvent, s
 async function handleSchoolSoftwarePaymentMethodCompleted(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted, matchedTenantId?: string | null) {
   const centerId = clean(session.metadata?.centerId);
   if (!centerId) return NextResponse.json({ ok: false, error: "Missing school metadata." }, { status: 400 });
-  const tenantId = matchedTenantId || session.metadata?.tenantId || null;
-  const setupIntentId = clean(session.setup_intent);
-  const setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId, { tenantId }) : null;
-  if (!setupIntent?.ok || !setupIntent.setupIntent?.paymentMethodId) {
-    return NextResponse.json({ ok: false, error: setupIntent?.error || "The school payment method could not be confirmed." }, { status: setupIntent?.configured === false ? 503 : 502 });
-  }
-  const customerId = setupIntent.setupIntent.customerId || clean(session.customer) || clean(session.metadata?.stripeCustomerId);
-  const paymentMethodId = setupIntent.setupIntent.paymentMethodId;
-  const methodLookup = await retrieveStripePaymentMethod(paymentMethodId, { tenantId });
-  if (!methodLookup.ok || !methodLookup.paymentMethod || !customerId) {
-    return NextResponse.json({ ok: false, error: methodLookup.error || "The school payment method details could not be confirmed." }, { status: methodLookup.configured ? 502 : 503 });
-  }
-  const methodDetails = methodLookup.paymentMethod;
-  const defaultResult = await setStripeCustomerDefaultPaymentMethod({ customerId, paymentMethodId, tenantId });
-  if (!defaultResult.ok) {
-    return NextResponse.json({ ok: false, error: defaultResult.error || "The default school payment method could not be saved." }, { status: defaultResult.configured ? 502 : 503 });
-  }
   const center = await prisma.center.findUnique({
     where: { id: centerId },
     select: {
@@ -1504,12 +1488,56 @@ async function handleSchoolSoftwarePaymentMethodCompleted(event: StripeWebhookEv
     },
   });
   if (!center) return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
+  const metadataTenantId = clean(session.metadata?.tenantId);
+  if ((matchedTenantId && center.organization.tenantId !== matchedTenantId) ||
+    (metadataTenantId && center.organization.tenantId !== metadataTenantId)) {
+    return NextResponse.json({ ok: true, ignored: true, reason: "software_payment_tenant_mismatch" });
+  }
   const fields = jsonObject(center.customFields);
+  if (clean(fields.stripeSoftwareSetupSessionId) !== session.id) {
+    try {
+      await prisma.$transaction((tx) => recordStripeWebhookEvent(tx, event));
+    } catch (error) {
+      if (!isDuplicateWebhookEvent(error)) throw error;
+    }
+    return NextResponse.json({ ok: true, ignored: true, reason: "superseded_school_software_setup_session" });
+  }
+  const tenantId = matchedTenantId || center.organization.tenantId;
+  const setupIntentId = clean(session.setup_intent);
+  const setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId, { tenantId }) : null;
+  if (!setupIntent?.ok || !setupIntent.setupIntent?.paymentMethodId) {
+    return NextResponse.json({ ok: false, error: setupIntent?.error || "The school payment method could not be confirmed." }, { status: setupIntent?.configured === false ? 503 : 502 });
+  }
+  const customerId = setupIntent.setupIntent.customerId || clean(session.customer) || clean(session.metadata?.stripeCustomerId);
+  const paymentMethodId = setupIntent.setupIntent.paymentMethodId;
+  if (!customerId || customerId !== clean(fields.stripeSoftwareCustomerId)) {
+    return NextResponse.json({ ok: true, ignored: true, reason: "software_payment_customer_mismatch" });
+  }
+  const methodLookup = await retrieveStripePaymentMethod(paymentMethodId, { tenantId });
+  if (!methodLookup.ok || !methodLookup.paymentMethod || !customerId) {
+    return NextResponse.json({ ok: false, error: methodLookup.error || "The school payment method details could not be confirmed." }, { status: methodLookup.configured ? 502 : 503 });
+  }
+  const methodDetails = methodLookup.paymentMethod;
+  const defaultResult = await setStripeCustomerDefaultPaymentMethod({ customerId, paymentMethodId, tenantId });
+  if (!defaultResult.ok) {
+    return NextResponse.json({ ok: false, error: defaultResult.error || "The default school payment method could not be saved." }, { status: defaultResult.configured ? 502 : 503 });
+  }
   const feePolicy = getSchoolSoftwareFeePolicyForCenter(center);
   let subscription: StripeSoftwareSubscriptionSnapshot | null = null;
-  if (!clean(fields.stripeSoftwareSubscriptionId)) {
+  const existingSubscriptionId = clean(fields.stripeSoftwareSubscriptionId);
+  if (existingSubscriptionId) {
+    const updated = await updateStripeSoftwareSubscription({
+      subscriptionId: existingSubscriptionId,
+      defaultPaymentMethodId: paymentMethodId,
+      tenantId,
+    });
+    if (!updated.ok || !updated.subscription) {
+      return NextResponse.json({ ok: false, error: updated.error || "The recurring school software payment method could not be updated." }, { status: updated.configured ? 502 : 503 });
+    }
+    subscription = updated.subscription;
+  } else {
     const price = await ensureStripeSoftwareRecurringPrice({
-      tenantId: tenantId || center.organization.tenantId,
+      tenantId,
       unitAmountCents: feePolicy.unitAmountCents,
     });
     if (!price.ok || !price.priceId) {
@@ -1521,7 +1549,7 @@ async function handleSchoolSoftwarePaymentMethodCompleted(event: StripeWebhookEv
       priceId: price.priceId,
       quantity: 1,
       billingStartAt: getSchoolSoftwareBillingStartAt(),
-      tenantId: tenantId || center.organization.tenantId,
+      tenantId,
       centerId,
     });
     if (!created.ok || !created.subscription) {
@@ -2293,11 +2321,20 @@ async function dispatchAuthenticatedEvent(
     const centerId = clean(metadata.centerId) || clean(subscriptionMetadata.centerId);
     const customerId = clean(object.customer);
     const center = centerId
-      ? await prisma.center.findUnique({ where: { id: centerId }, select: { id: true, customFields: true } })
+      ? await prisma.center.findUnique({ where: { id: centerId }, select: { id: true, customFields: true, organization: { select: { tenantId: true } } } })
       : customerId
-        ? await prisma.center.findFirst({ where: { customFields: { path: ["stripeSoftwareCustomerId"], equals: customerId } }, select: { id: true, customFields: true } })
+        ? await prisma.center.findFirst({
+            where: {
+              customFields: { path: ["stripeSoftwareCustomerId"], equals: customerId },
+              ...(matchedTenantId ? { organization: { tenantId: matchedTenantId } } : {}),
+            },
+            select: { id: true, customFields: true, organization: { select: { tenantId: true } } },
+          })
         : null;
     if (!center) return NextResponse.json({ ok: true, ignored: true, reason: "software_billing_center_not_found" });
+    if (matchedTenantId && center.organization.tenantId !== matchedTenantId) {
+      return NextResponse.json({ ok: true, ignored: true, reason: "software_billing_tenant_mismatch" });
+    }
     const fields = jsonObject(center.customFields);
     const items = jsonObject(object.items);
     const firstItem = Array.isArray(items.data) ? jsonObject(items.data[0]) : {};

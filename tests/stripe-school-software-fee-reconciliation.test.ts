@@ -23,6 +23,14 @@ test("school software fees preserve policy and deterministic monthly evidence", 
   assert.match(source, /paymentScope\) === "school_software_fee"/);
   assert.match(source, /school_software_fee_catchup/);
   assert.match(source, /beforeApprovedStart/);
+  assert.match(source, /settledPositive/);
+  assert.match(source, /item\.beforeApprovedStart &&/);
+  assert.match(source, /item\.settledPositive &&/);
+  assert.match(source, /item\.kind !== "invoice"/);
+  assert.match(source, /expand\[\]=data\.latest_charge/);
+  assert.match(source, /latestCharge\.amount_refunded/);
+  assert.match(source, /item\.amount_reversed/);
+  assert.match(source, /clean\(item\.status\) === "paid"/);
   assert.match(source, /effectiveMonthlyAmountCents === policy\.unitAmountCents/);
   assert.match(source, /exactMonthlyConfiguration/);
   assert.match(source, /clean\(record\(active\[0\]\.metadata\)\.centerId\) === center\.id/);

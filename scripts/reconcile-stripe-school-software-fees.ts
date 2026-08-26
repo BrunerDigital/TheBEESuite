@@ -96,15 +96,29 @@ function softwareEvidence(item: JsonRecord, kind: "payment_intent" | "transfer" 
     ? record(record(record(item.parent).subscription_details).metadata)
     : record(item.metadata);
   const createdAt = integer(item.created) ? new Date(integer(item.created) * 1000).toISOString() : null;
+  const latestCharge = record(item.latest_charge);
+  const grossAmountCents = integer(item.amount_received) || integer(item.amount_paid) || integer(item.amount);
+  const reversedOrRefundedCents = kind === "payment_intent"
+    ? integer(latestCharge.amount_refunded)
+    : kind === "transfer"
+      ? integer(item.amount_reversed)
+      : 0;
+  const amountCents = Math.max(0, grossAmountCents - reversedOrRefundedCents);
+  const settledPositive = amountCents > 0 && (
+    (kind === "payment_intent" && clean(item.status) === "succeeded") ||
+    (kind === "transfer" && item.reversed !== true) ||
+    (kind === "invoice" && clean(item.status) === "paid")
+  );
   return {
     kind,
     id: clean(item.id),
     createdAt,
-    amountCents: integer(item.amount_received) || integer(item.amount_paid) || integer(item.amount),
+    amountCents,
     status: clean(item.status) || (item.paid === true ? "paid" : "unknown"),
     centerId: clean(metadata.centerId) || null,
     paymentScope: clean(metadata.paymentScope) || clean(metadata.purpose) || null,
     beforeApprovedStart: Boolean(createdAt && createdAt < getSchoolSoftwareBillingStartAt().toISOString()),
+    settledPositive,
   };
 }
 
@@ -144,7 +158,7 @@ async function main() {
       },
     }),
     listAll(apiKey, "/v1/subscriptions?limit=100&status=all"),
-    listAll(apiKey, `/v1/payment_intents?limit=100&created[gte]=${createdSince}`),
+    listAll(apiKey, `/v1/payment_intents?limit=100&created[gte]=${createdSince}&expand[]=data.latest_charge`),
     listAll(apiKey, `/v1/transfers?limit=100&created[gte]=${createdSince}`),
     listAll(apiKey, `/v1/invoices?limit=100&created[gte]=${createdSince}`),
   ]);
@@ -197,7 +211,12 @@ async function main() {
         !(integer(active[0].cancel_at) > 0);
     })();
     const subscriptionShared = Boolean(storedSubscriptionId && (subscriptionUse.get(storedSubscriptionId) ?? []).length > 1);
-    const preStartEvidence = evidence.filter((item) => item.centerId === center.id && item.beforeApprovedStart);
+    const preStartEvidence = evidence.filter((item) =>
+      item.centerId === center.id &&
+      item.beforeApprovedStart &&
+      item.settledPositive &&
+      item.kind !== "invoice"
+    );
 
     let status = "ready_for_september";
     let proposedAction = "none";

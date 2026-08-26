@@ -1802,7 +1802,7 @@ export async function createStripeSoftwareSubscription({
   return { ok: true as const, configured: true, subscription: softwareSubscriptionSnapshot(json) };
 }
 
-export async function updateStripeSoftwareSubscription({ subscriptionId, itemId, priceId, quantity, cancelAtPeriodEnd, tenantId }: { subscriptionId: string; itemId?: string | null; priceId?: string | null; quantity?: number; cancelAtPeriodEnd?: boolean; tenantId?: string | null }) {
+export async function updateStripeSoftwareSubscription({ subscriptionId, itemId, priceId, quantity, defaultPaymentMethodId, cancelAtPeriodEnd, tenantId }: { subscriptionId: string; itemId?: string | null; priceId?: string | null; quantity?: number; defaultPaymentMethodId?: string | null; cancelAtPeriodEnd?: boolean; tenantId?: string | null }) {
   const apiKey = await getStripeSecretKey({ tenantId });
   if (!apiKey) return { ok: false as const, configured: false, error: "Payment processor is not configured." };
   const body = new URLSearchParams({ proration_behavior: "create_prorations", expand: "latest_invoice" });
@@ -1811,8 +1811,17 @@ export async function updateStripeSoftwareSubscription({ subscriptionId, itemId,
     if (priceId) body.set("items[0][price]", priceId);
     if (quantity !== undefined) body.set("items[0][quantity]", String(Math.max(1, quantity)));
   }
+  if (defaultPaymentMethodId) body.set("default_payment_method", defaultPaymentMethodId);
   if (cancelAtPeriodEnd !== undefined) body.set("cancel_at_period_end", String(cancelAtPeriodEnd));
-  const response = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, { method: "POST", headers: stripeHeaders(apiKey, "form"), body, signal: AbortSignal.timeout(10_000) });
+  const response = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+    method: "POST",
+    headers: {
+      ...stripeHeaders(apiKey, "form"),
+      ...(defaultPaymentMethodId ? { "Idempotency-Key": `school-software-payment-method:${subscriptionId}:${defaultPaymentMethodId}` } : {}),
+    },
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
   const json = await response.json().catch(() => null) as Record<string, unknown> | null;
   if (!response.ok || !json?.id) return { ok: false as const, configured: true, error: clean(asRecord(json?.error).message) || `Payment processor returned ${response.status}.` };
   return { ok: true as const, configured: true, subscription: softwareSubscriptionSnapshot(json) };

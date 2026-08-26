@@ -29,6 +29,7 @@ test("school customer deletion holds every billing and payment evidence class", 
   for (const evidence of [
     "subscriptions",
     "invoices",
+    "pendingInvoiceItems",
     "paymentIntents",
     "setupIntents",
     "charges",

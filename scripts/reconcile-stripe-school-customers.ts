@@ -140,6 +140,7 @@ async function customerActivity(apiKey: string, customer: JsonRecord) {
   const activityPaths = {
     subscriptions: `/v1/subscriptions?customer=${encodedId}&status=all&limit=1`,
     invoices: `/v1/invoices?customer=${encodedId}&limit=1`,
+    pendingInvoiceItems: `/v1/invoiceitems?customer=${encodedId}&pending=true&limit=1`,
     paymentIntents: `/v1/payment_intents?customer=${encodedId}&limit=1`,
     setupIntents: `/v1/setup_intents?customer=${encodedId}&limit=1`,
     charges: `/v1/charges?customer=${encodedId}&limit=1`,

@@ -40,8 +40,28 @@ export function buildVisibleMessageWhere({
           directStaffThreads,
           {
             OR: [
-              { sender: { is: { role: "TEACHER", staffProfile: { is: { centerId: { in: [...nonFamilyCenterIds] } } } } } },
-              { assignedTo: { is: { role: "TEACHER", staffProfile: { is: { centerId: { in: [...nonFamilyCenterIds] } } } } } },
+              {
+                sender: {
+                  is: {
+                    role: "TEACHER",
+                    OR: [
+                      { staffProfile: { is: { centerId: { in: [...nonFamilyCenterIds] } } } },
+                      { accessGrants: { some: { isActive: true, centerId: { in: [...nonFamilyCenterIds] } } } },
+                    ],
+                  },
+                },
+              },
+              {
+                assignedTo: {
+                  is: {
+                    role: "TEACHER",
+                    OR: [
+                      { staffProfile: { is: { centerId: { in: [...nonFamilyCenterIds] } } } },
+                      { accessGrants: { some: { isActive: true, centerId: { in: [...nonFamilyCenterIds] } } } },
+                    ],
+                  },
+                },
+              },
             ],
           },
         ],

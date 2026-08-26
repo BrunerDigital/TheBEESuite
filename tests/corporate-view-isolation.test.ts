@@ -105,5 +105,6 @@ test("school messaging scopes staff and internal threads to the selected centers
   assert.equal(serialized.includes("internal:center-a"), true);
   assert.equal(serialized.includes('"role":"TEACHER"'), true);
   assert.equal(serialized.includes('"centerId":{"in":["center-a"]}'), true);
+  assert.equal(serialized.includes('"accessGrants":{"some":{"isActive":true'), true);
   assert.equal(serialized.includes('"threadKey":null'), false);
 });

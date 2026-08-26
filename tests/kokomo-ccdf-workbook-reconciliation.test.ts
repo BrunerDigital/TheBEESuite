@@ -42,6 +42,10 @@ test("Kokomo CCDF reconciliation cannot manufacture financial settlement", () =>
 test("Kokomo CCDF reconciliation enumerates every non-void claim and revalidates authorization, child, and actor scope", () => {
   assert.match(source, /authorizationId: \{ in: authorizationIds \}, status: \{ not: "void" \}/);
   assert.match(source, /Expected only the two reviewed non-void draft claims across the five authorizations/);
+  assert.match(source, /state\.claims\.length === reviewedClaimIds\.size/);
+  assert.match(source, /state\.claims\.every\(\(row\) => reviewedClaimIds\.has\(row\.id\)\)/);
+  assert.match(source, /hasWorkbookEvidence\(kaidenClaim\.row\.customFields/);
+  assert.doesNotMatch(source, /invariant\(claims\.length === 2/);
   assert.match(source, /row\.centerId === EXPECTED\.centerId && row\.agencyProgramId === EXPECTED\.programId && row\.authorizationId === authorizationId/);
   assert.match(source, /row\.lines\[0\]\.childId === childId/);
   assert.match(source, /canManageBilling\(actor\) && canAccessCenter\(actorScope, EXPECTED\.centerId\)/);

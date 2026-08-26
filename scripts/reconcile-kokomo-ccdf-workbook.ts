@@ -189,7 +189,6 @@ async function loadState(client: Prisma.TransactionClient | typeof prisma = pris
   };
   invariant(canManageBilling(actor) && canAccessCenter(actorScope, EXPECTED.centerId), "Audit actor no longer has active Kokomo billing access.");
   invariant(authorizations.length === 5, `Expected five exact authorization rows; found ${authorizations.length}.`);
-  invariant(claims.length === 2, `Expected only the two reviewed non-void draft claims across the five authorizations; found ${claims.length}.`);
 
   return { center, actor, authorizations, claims, historicalWrenly };
 }
@@ -205,8 +204,17 @@ function claim(state: Awaited<ReturnType<typeof loadState>>, id: string, lineId:
   invariant(row, `Claim ${id} was not found.`);
   invariant(row.centerId === EXPECTED.centerId && row.agencyProgramId === EXPECTED.programId && row.authorizationId === authorizationId, `Claim ${id} is no longer in the expected Kokomo program and authorization.`);
   invariant(row.lines.length === 1 && row.lines[0].id === lineId && row.lines[0].childId === childId, `Claim ${id} no longer has its one expected child line.`);
-  invariant(row.remittances.length === 0, `Claim ${id} now has remittance history and requires separate review.`);
   return { row, line: row.lines[0] };
+}
+
+function hasWorkbookEvidence(customFields: Prisma.JsonValue | null, sheet: string, row: number) {
+  const reconciliation = object(object(customFields).reconciliation as Prisma.JsonValue);
+  const workbook = object(reconciliation.workbook as Prisma.JsonValue);
+  return reconciliation.source === "director_email_attachment"
+    && workbook.messageId === EXPECTED.evidenceMessageId
+    && workbook.sha256 === EXPECTED.evidenceSha256
+    && workbook.sheet === sheet
+    && workbook.row === row;
 }
 
 function dateOnly(value: Date) {
@@ -214,6 +222,8 @@ function dateOnly(value: Date) {
 }
 
 function verifyInitial(state: Awaited<ReturnType<typeof loadState>>) {
+  const reviewedClaimIds = new Set<string>([EXPECTED.kaiden.claimId, EXPECTED.kaia.claimId]);
+  invariant(state.claims.length === reviewedClaimIds.size && state.claims.every((row) => reviewedClaimIds.has(row.id)), `Expected only the two reviewed non-void draft claims across the five authorizations; found ${state.claims.length}.`);
   const kaiden = authorization(state, EXPECTED.kaiden.authorizationId);
   invariant(kaiden.authorizationNumber === EXPECTED.kaiden.authorizationNumber && kaiden.childId === EXPECTED.kaiden.childId && kaiden.familyId === EXPECTED.kaiden.familyId, "Kaiden authorization identity changed.");
   invariant(dateOnly(kaiden.coverageStart) === "2026-07-12" && dateOnly(kaiden.coverageEnd) === "2026-07-18" && kaiden.authorizedRateCents === 13_500 && kaiden.familyCopayCents === 0, "Kaiden authorization no longer matches the reviewed pre-correction state.");
@@ -236,11 +246,11 @@ function verifyInitial(state: Awaited<ReturnType<typeof loadState>>) {
   invariant(dateOnly(lyla.coverageStart) === "2026-08-02" && dateOnly(lyla.coverageEnd) === "2026-10-10" && lyla.authorizedRateCents === 38_700 && lyla.familyCopayCents === 0, "Lyla authorization terms changed.");
 
   const kaidenClaim = claim(state, EXPECTED.kaiden.claimId, EXPECTED.kaiden.lineId, EXPECTED.kaiden.authorizationId, EXPECTED.kaiden.childId);
-  invariant(kaidenClaim.row.status === "draft" && kaidenClaim.row.claimedCents === 27_000 && kaidenClaim.row.approvedCents === null && kaidenClaim.row.paidCents === 0 && kaidenClaim.row.submittedAt === null && kaidenClaim.row.externalReference === null, "Kaiden claim is no longer an unsettled draft in the reviewed state.");
+  invariant(kaidenClaim.row.status === "draft" && kaidenClaim.row.claimedCents === 27_000 && kaidenClaim.row.approvedCents === null && kaidenClaim.row.paidCents === 0 && kaidenClaim.row.submittedAt === null && kaidenClaim.row.externalReference === null && kaidenClaim.row.remittances.length === 0, "Kaiden claim is no longer an unsettled draft in the reviewed state.");
   invariant(dateOnly(kaidenClaim.row.servicePeriodStart) === "2026-07-12" && dateOnly(kaidenClaim.row.servicePeriodEnd) === "2026-07-18" && kaidenClaim.line.serviceUnits === 2 && kaidenClaim.line.rateCents === 13_500 && kaidenClaim.line.amountCents === 27_000, "Kaiden draft claim values changed.");
 
   const kaiaClaim = claim(state, EXPECTED.kaia.claimId, EXPECTED.kaia.lineId, EXPECTED.kaia.authorizationId, EXPECTED.kaia.childId);
-  invariant(kaiaClaim.row.status === "draft" && kaiaClaim.row.claimedCents === 27_000 && kaiaClaim.row.approvedCents === null && kaiaClaim.row.paidCents === 0 && kaiaClaim.row.submittedAt === null && kaiaClaim.row.externalReference === null, "Kaia claim is no longer an unsettled draft in the reviewed state.");
+  invariant(kaiaClaim.row.status === "draft" && kaiaClaim.row.claimedCents === 27_000 && kaiaClaim.row.approvedCents === null && kaiaClaim.row.paidCents === 0 && kaiaClaim.row.submittedAt === null && kaiaClaim.row.externalReference === null && kaiaClaim.row.remittances.length === 0, "Kaia claim is no longer an unsettled draft in the reviewed state.");
   invariant(dateOnly(kaiaClaim.row.servicePeriodStart) === "2026-07-12" && dateOnly(kaiaClaim.row.servicePeriodEnd) === "2026-07-25" && kaiaClaim.line.serviceUnits === 2 && kaiaClaim.line.rateCents === 13_500 && kaiaClaim.line.amountCents === 27_000, "Kaia draft claim values changed.");
 }
 
@@ -259,8 +269,8 @@ function verifyFinal(state: Awaited<ReturnType<typeof loadState>>) {
   invariant(oakleigh.authorizationNumber === EXPECTED.oakleigh.authorizationNumber && dateOnly(oakleigh.coverageStart) === "2026-07-19" && dateOnly(oakleigh.coverageEnd) === "2026-10-03", "Oakleigh authorization number/date correction was not applied.");
   invariant(lyla.authorizationNumber === EXPECTED.lyla.authorizationNumber, "Lyla authorization number correction was not applied.");
   invariant(state.historicalWrenly?.authorizationNumber === EXPECTED.wrenly.historicalAuthorizationNumber && dateOnly(state.historicalWrenly.coverageStart) === "2026-07-12" && dateOnly(state.historicalWrenly.coverageEnd) === "2026-07-18" && state.historicalWrenly.authorizedRateCents === 31_300, "Wrenly historical authorization was not preserved from the workbook.");
-  invariant(kaidenClaim.row.status === "draft" && kaidenClaim.row.claimedCents === 13_500 && kaidenClaim.row.paidCents === 0 && kaidenClaim.line.serviceUnits === 1 && kaidenClaim.line.amountCents === 13_500, "Kaiden draft claim correction was not applied without settlement.");
-  invariant(kaiaClaim.row.status === "draft" && dateOnly(kaiaClaim.row.servicePeriodStart) === "2026-07-19" && kaiaClaim.row.claimedCents === 13_500 && kaiaClaim.row.paidCents === 0 && kaiaClaim.line.serviceUnits === 1 && kaiaClaim.line.amountCents === 13_500, "Kaia draft claim correction was not applied without settlement.");
+  invariant(kaidenClaim.row.claimedCents === 13_500 && kaidenClaim.line.serviceUnits === 1 && kaidenClaim.line.amountCents === 13_500 && hasWorkbookEvidence(kaidenClaim.row.customFields, "July 12-26", 2), "Kaiden claim correction and workbook provenance were not preserved.");
+  invariant(dateOnly(kaiaClaim.row.servicePeriodStart) === "2026-07-19" && kaiaClaim.row.claimedCents === 13_500 && kaiaClaim.line.serviceUnits === 1 && kaiaClaim.line.amountCents === 13_500 && hasWorkbookEvidence(kaiaClaim.row.customFields, "July 12-26", 4), "Kaia claim correction and workbook provenance were not preserved.");
 }
 
 function evidence(previous: Prisma.InputJsonObject, workbookSource: Prisma.InputJsonObject): Prisma.InputJsonObject {

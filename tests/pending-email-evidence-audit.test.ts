@@ -15,6 +15,8 @@ test("pending email audit counts only real invoice payment applications", () => 
   assert.match(source, /"chargeback"/);
   assert.match(source, /"chargeback_reversal"/);
   assert.match(source, /INVOICE_APPLICATION_LEDGER_TYPES\.has\(entry\.type\)/);
+  assert.match(source, /entry\.type === "account_credit_application"/);
+  assert.match(source, /record\(entry\.metadata\)\.accountCreditAppliedCents/);
   assert.match(source, /Math\.max\(0, -applicationDeltaCents\)/);
   assert.doesNotMatch(source, /INVOICE_APPLICATION_LEDGER_TYPES[\s\S]*?"tuition_credit"/);
   assert.doesNotMatch(source, /INVOICE_APPLICATION_LEDGER_TYPES[\s\S]*?"agency_voucher_credit"/);

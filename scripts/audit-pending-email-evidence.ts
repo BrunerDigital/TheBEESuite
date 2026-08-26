@@ -17,6 +17,11 @@ function record(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function nonNegativeCents(value: unknown) {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
+}
+
 function familySummary(family: {
   id: string;
   name: string;
@@ -126,7 +131,9 @@ async function main() {
     const applicationDeltaCents = (account?.ledgerEntries ?? []).filter((entry) => (
       entry.invoiceId === invoice.id
       && INVOICE_APPLICATION_LEDGER_TYPES.has(entry.type)
-    )).reduce((sum, entry) => sum + entry.amountCents, 0);
+    )).reduce((sum, entry) => entry.type === "account_credit_application"
+      ? sum - nonNegativeCents(record(entry.metadata).accountCreditAppliedCents)
+      : sum + entry.amountCents, 0);
     const appliedCents = Math.max(0, -applicationDeltaCents);
     return { familyId, familyName, invoice, appliedCents, outstandingCents: Math.max(0, invoice.totalCents - appliedCents) };
   });

@@ -52,10 +52,10 @@ function argValue(name: string) {
   return index >= 0 ? clean(process.argv[index + 1]) : "";
 }
 
-function collectCustomerIds(value: unknown, output = new Set<string>()) {
-  if (typeof value === "string" && value.startsWith("cus_")) output.add(value);
-  else if (Array.isArray(value)) value.forEach((item) => collectCustomerIds(item, output));
-  else if (value && typeof value === "object") Object.values(value).forEach((item) => collectCustomerIds(item, output));
+function collectStripePartyIds(value: unknown, output = new Set<string>()) {
+  if (typeof value === "string" && (value.startsWith("cus_") || value.startsWith("acct_"))) output.add(value);
+  else if (Array.isArray(value)) value.forEach((item) => collectStripePartyIds(item, output));
+  else if (value && typeof value === "object") Object.values(value).forEach((item) => collectStripePartyIds(item, output));
   return output;
 }
 
@@ -117,9 +117,9 @@ async function loadDatabaseReferences() {
   ]);
   const references = new Map<string, string[]>();
   const add = (customerId: string, label: string) => references.set(customerId, [...(references.get(customerId) ?? []), label]);
-  centers.forEach((center) => collectCustomerIds(center.customFields).forEach((id) => add(id, `center:${center.id}`)));
-  ownerGroups.forEach((ownerGroup) => collectCustomerIds(ownerGroup.customFields).forEach((id) => add(id, `owner_group:${ownerGroup.id}`)));
-  billingAccounts.forEach((account) => collectCustomerIds(account.customFields).forEach((id) => add(id, `billing_account:${account.id}`)));
+  centers.forEach((center) => collectStripePartyIds(center.customFields).forEach((id) => add(id, `center:${center.id}`)));
+  ownerGroups.forEach((ownerGroup) => collectStripePartyIds(ownerGroup.customFields).forEach((id) => add(id, `owner_group:${ownerGroup.id}`)));
+  billingAccounts.forEach((account) => collectStripePartyIds(account.customFields).forEach((id) => add(id, `billing_account:${account.id}`)));
   const centersByName = new Map<string, typeof centers>();
   centers.forEach((center) => centersByName.set(normalizeName(center.name), [...(centersByName.get(normalizeName(center.name)) ?? []), center]));
   const centersById = new Map(centers.map((center) => [center.id, center]));
@@ -210,7 +210,8 @@ async function main() {
   ]);
   const possibleDuplicates = customers.flatMap((customer) => {
     const customerId = clean(customer.id);
-    if (references.has(customerId)) return [];
+    const customerAccountId = clean(customer.customer_account);
+    if (references.has(customerId) || (customerAccountId && references.has(customerAccountId))) return [];
     const metadata = record(customer.metadata);
     const metadataCenterId = clean(metadata.centerId) || clean(metadata.bee_suite_center_id);
     const metadataCenter = centersById.get(metadataCenterId);
@@ -277,7 +278,8 @@ async function main() {
         continue;
       }
       const liveReferences = (await loadDatabaseReferences()).references;
-      if (liveReferences.has(target.customerId)) {
+      const liveCustomerAccountId = clean(customer.customer_account);
+      if (liveReferences.has(target.customerId) || (liveCustomerAccountId && liveReferences.has(liveCustomerAccountId))) {
         results.push({ customerId: target.customerId, school: target.school, status: "held_new_database_reference" });
         continue;
       }
@@ -294,7 +296,9 @@ async function main() {
     fingerprint,
     summary: {
       platformCustomers: customers.length,
-      databaseReferencedCustomers: customers.filter((customer) => references.has(clean(customer.id))).length,
+      databaseReferencedCustomers: customers.filter((customer) => references.has(clean(customer.id)) || references.has(clean(customer.customer_account))).length,
+      databaseReferencedByCustomerId: customers.filter((customer) => references.has(clean(customer.id))).length,
+      databaseReferencedByCustomerAccountId: customers.filter((customer) => references.has(clean(customer.customer_account))).length,
       exactUnreferencedSchoolMatches: possibleDuplicates.length,
       deletionTargets: targets.length,
       heldForActivity: held.length,

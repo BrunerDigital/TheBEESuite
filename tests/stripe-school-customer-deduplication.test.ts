@@ -14,7 +14,9 @@ test("school customer reconciliation is preview-first and exact-target guarded",
   assert.match(reconciliation, /--confirm-fingerprint/);
   assert.match(reconciliation, /--expected-target-count/);
   assert.match(reconciliation, /--acknowledge-delete-unreferenced-empty-school-customers/);
-  assert.match(reconciliation, /references\.has\(customerId\)/);
+  assert.match(reconciliation, /references\.has\(customerId\) \|\| \(customerAccountId && references\.has\(customerAccountId\)\)/);
+  assert.match(reconciliation, /value\.startsWith\("cus_"\) \|\| value\.startsWith\("acct_"\)/);
+  assert.match(reconciliation, /databaseReferencedByCustomerAccountId/);
   assert.match(reconciliation, /const metadataCenterId = clean\(metadata\.centerId\) \|\| clean\(metadata\.bee_suite_center_id\)/);
   assert.match(reconciliation, /const metadataCenter = centersById\.get\(metadataCenterId\)/);
   assert.match(reconciliation, /matches\.length !== 1/);
@@ -56,6 +58,7 @@ test("school customer deletion holds every billing and payment evidence class", 
   ]) assert.match(reconciliation, new RegExp(evidence));
   assert.match(reconciliation, /customerAccountId: clean\(customer\.customer_account\) \|\| null/);
   assert.match(reconciliation, /held_new_database_reference/);
+  assert.match(reconciliation, /liveReferences\.has\(target\.customerId\) \|\| \(liveCustomerAccountId && liveReferences\.has\(liveCustomerAccountId\)\)/);
   assert.match(reconciliation, /concurrent_setup_adoption_candidate/);
   assert.match(reconciliation, /evidence === "school_software_metadata"/);
   assert.match(reconciliation, /held_metadata_drift/);

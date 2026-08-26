@@ -113,6 +113,24 @@ function parseDate(value: unknown) {
   return parseCalendarDateOrTimestamp(value);
 }
 
+function sameTimestamp(left: Date | null | undefined, right: Date | null | undefined) {
+  return (left?.getTime() ?? null) === (right?.getTime() ?? null);
+}
+
+function canonicalJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (!value || typeof value !== "object") return value ?? null;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nested]) => [key, canonicalJson(nested)]),
+  );
+}
+
+function sameJson(left: unknown, right: unknown) {
+  return JSON.stringify(canonicalJson(left)) === JSON.stringify(canonicalJson(right));
+}
+
 function dollarsToCents(value: unknown) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.round(number * 100) : 0;
@@ -316,6 +334,7 @@ async function POSTHandler(request: NextRequest) {
   const entity = clean(body.entity);
   const id = clean(body.id);
   const mode = id ? "updated" : "created";
+  let operationMode = mode;
   const auditMetadata: Record<string, Prisma.InputJsonValue> = { mode };
 
   if (!entity) {
@@ -1106,7 +1125,75 @@ async function POSTHandler(request: NextRequest) {
           })),
         ]);
       } else {
-        result = id ? await prisma.child.update({ where: { id }, data }) : await prisma.child.create({ data });
+        if (id) {
+          result = await prisma.child.update({ where: { id }, data });
+        } else {
+          const createResult = await prisma.$transaction(async (tx) => {
+            await tx.$queryRaw(Prisma.sql`
+              SELECT "id"
+              FROM "Family"
+              WHERE "id" = ${familyId}
+              FOR UPDATE
+            `);
+            const matchingChild = await tx.child.findFirst({
+              where: {
+                familyId,
+                fullName: { equals: data.fullName, mode: "insensitive" },
+                dateOfBirth: data.dateOfBirth,
+              },
+              orderBy: { createdAt: "asc" },
+            });
+            if (matchingChild) {
+              const exactRepeat = matchingChild.classroomId === data.classroomId
+                && matchingChild.fullName.trim().toLowerCase() === data.fullName.trim().toLowerCase()
+                && (matchingChild.preferredName ?? null) === data.preferredName
+                && sameTimestamp(matchingChild.dateOfBirth, data.dateOfBirth)
+                && matchingChild.ageGroup === data.ageGroup
+                && matchingChild.enrollmentStatus === data.enrollmentStatus
+                && sameTimestamp(matchingChild.startDate, data.startDate)
+                && sameJson(matchingChild.schedule, data.schedule)
+                && matchingChild.photoVideoPermission === data.photoVideoPermission
+                && matchingChild.fieldTripPermission === data.fieldTripPermission
+                && matchingChild.napNotes === data.napNotes
+                && matchingChild.feedingNotes === data.feedingNotes
+                && matchingChild.pottyNotes === data.pottyNotes
+                && matchingChild.developmentalNotes === data.developmentalNotes
+                && sameJson(matchingChild.customFields, data.customFields);
+              return { record: matchingChild, duplicateCreatePrevented: true, exactRepeat };
+            }
+            return {
+              record: await tx.child.create({ data }),
+              duplicateCreatePrevented: false,
+              exactRepeat: false,
+            };
+          });
+          result = createResult.record;
+          if (createResult.duplicateCreatePrevented) {
+            if (!createResult.exactRepeat) {
+              await writeAuditLog(user, {
+                centerId,
+                action: "operations.child.duplicate_create_blocked",
+                resource: "child",
+                resourceId: createResult.record.id,
+                metadata: {
+                  mode: "blocked",
+                  familyId,
+                  existingChildId: createResult.record.id,
+                },
+              });
+              return NextResponse.json({
+                ok: false,
+                code: "CHILD_ALREADY_EXISTS",
+                error: "This child already exists in the family. Open the existing child to update or re-enroll them.",
+                existingChildId: createResult.record.id,
+              }, { status: 409 });
+            }
+            operationMode = "existing";
+            auditMetadata.mode = operationMode;
+            auditMetadata.duplicateCreatePrevented = true;
+            auditMetadata.existingChildId = createResult.record.id;
+          }
+        }
       }
       const resultId = resultRecordId(result);
       if (
@@ -2113,9 +2200,9 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const resourceId = id || resultRecordId(result);
-  if (notificationEntities.has(entity)) {
+  if (notificationEntities.has(entity) && auditMetadata.duplicateCreatePrevented !== true) {
     try {
-      const notificationMode = entity === "staffAssignment" || entity === "staffTimeClock" ? "updated" : mode;
+      const notificationMode = entity === "staffAssignment" || entity === "staffTimeClock" ? "updated" : operationMode;
       auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
         actor: user,
         entity,
@@ -2130,7 +2217,7 @@ async function POSTHandler(request: NextRequest) {
 
   await writeAuditLog(user, {
     centerId,
-    action: `operations.${entity}.${mode}`,
+    action: `operations.${entity}.${operationMode}`,
     resource: entity,
     resourceId,
     metadata: auditMetadata as Prisma.InputJsonObject,
@@ -2150,12 +2237,12 @@ async function POSTHandler(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     entity,
-    mode,
+    mode: operationMode,
     record: result,
     ...auditMetadata,
     ...(reenrollmentContext ? { reenrollment: reenrollmentContext } : {}),
     ...(login ? { login } : {}),
-  }, { status: id ? 200 : 201 });
+  }, { status: id || operationMode === "existing" ? 200 : 201 });
 }
 
 async function DELETEHandler(request: NextRequest) {

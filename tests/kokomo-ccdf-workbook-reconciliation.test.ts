@@ -38,3 +38,13 @@ test("Kokomo CCDF reconciliation cannot manufacture financial settlement", () =>
   assert.match(source, /parentBalancesChanged: 0/);
   assert.match(source, /Tyler Technologies remittance transaction\/reference ID/);
 });
+
+test("Kokomo CCDF reconciliation enumerates every non-void claim and revalidates authorization, child, and actor scope", () => {
+  assert.match(source, /authorizationId: \{ in: authorizationIds \}, status: \{ not: "void" \}/);
+  assert.match(source, /Expected only the two reviewed non-void draft claims across the five authorizations/);
+  assert.match(source, /row\.centerId === EXPECTED\.centerId && row\.agencyProgramId === EXPECTED\.programId && row\.authorizationId === authorizationId/);
+  assert.match(source, /row\.lines\[0\]\.childId === childId/);
+  assert.match(source, /canManageBilling\(actor\) && canAccessCenter\(actorScope, EXPECTED\.centerId\)/);
+  assert.match(source, /subsidyClaim\.updateMany/);
+  assert.match(source, /subsidyClaimLine\.updateMany/);
+});

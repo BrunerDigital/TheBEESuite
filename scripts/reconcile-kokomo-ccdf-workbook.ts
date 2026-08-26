@@ -1,7 +1,8 @@
 import "./load-env";
 
 import { createHash } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
+import { canAccessCenter, canManageBilling } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const APPLY = "--apply";
@@ -93,20 +94,44 @@ function source(sheet: string, row: number, reportedPaymentDate: string, reporte
 }
 
 async function loadState(client: Prisma.TransactionClient | typeof prisma = prisma) {
+  const accessAsOf = new Date();
+  const authorizationIds = [
+    EXPECTED.kaiden.authorizationId,
+    EXPECTED.kaia.authorizationId,
+    EXPECTED.wrenly.currentAuthorizationId,
+    EXPECTED.oakleigh.authorizationId,
+    EXPECTED.lyla.authorizationId,
+  ];
   const [center, actor, authorizations, claims, historicalWrenly] = await Promise.all([
     client.center.findUnique({
       where: { id: EXPECTED.centerId },
-      select: { id: true, name: true, organization: { select: { tenantId: true } } },
+      select: { id: true, name: true, organizationId: true, ownerGroupId: true, organization: { select: { tenantId: true, brandId: true } } },
     }),
-    client.user.findUnique({ where: { email: EXPECTED.actorEmail }, select: { id: true, tenantId: true, email: true, isActive: true } }),
+    client.user.findUnique({
+      where: { email: EXPECTED.actorEmail },
+      select: {
+        id: true,
+        tenantId: true,
+        email: true,
+        role: true,
+        isActive: true,
+        staffProfile: { select: { centerId: true } },
+        accessGrants: {
+          where: {
+            tenantId: EXPECTED.tenantId,
+            isActive: true,
+            AND: [
+              { OR: [{ startsAt: null }, { startsAt: { lte: accessAsOf } }] },
+              { OR: [{ endsAt: null }, { endsAt: { gte: accessAsOf } }] },
+            ],
+          },
+          select: { id: true, tenantId: true, brandId: true, organizationId: true, ownerGroupId: true, centerId: true, scopeType: true, role: true, startsAt: true, endsAt: true },
+          orderBy: { id: "asc" },
+        },
+      },
+    }),
     client.subsidyAuthorization.findMany({
-      where: { id: { in: [
-        EXPECTED.kaiden.authorizationId,
-        EXPECTED.kaia.authorizationId,
-        EXPECTED.wrenly.currentAuthorizationId,
-        EXPECTED.oakleigh.authorizationId,
-        EXPECTED.lyla.authorizationId,
-      ] } },
+      where: { id: { in: authorizationIds } },
       select: {
         id: true, centerId: true, agencyProgramId: true, familyId: true, childId: true,
         authorizationNumber: true, coverageStart: true, coverageEnd: true,
@@ -116,7 +141,7 @@ async function loadState(client: Prisma.TransactionClient | typeof prisma = pris
       orderBy: { id: "asc" },
     }),
     client.subsidyClaim.findMany({
-      where: { id: { in: [EXPECTED.kaiden.claimId, EXPECTED.kaia.claimId] } },
+      where: { authorizationId: { in: authorizationIds }, status: { not: "void" } },
       select: {
         id: true, centerId: true, agencyProgramId: true, authorizationId: true, number: true,
         servicePeriodStart: true, servicePeriodEnd: true, status: true, claimedCents: true,
@@ -147,8 +172,29 @@ async function loadState(client: Prisma.TransactionClient | typeof prisma = pris
 
   invariant(center?.organization.tenantId === EXPECTED.tenantId, "Kokomo tenant/center identity changed.");
   invariant(actor?.tenantId === EXPECTED.tenantId && actor.isActive, "Active audit actor was not found in the expected tenant.");
+  const grantCoversCenter = actor.accessGrants.some((grant) =>
+    (grant.scopeType === "CENTER" && grant.centerId === EXPECTED.centerId)
+    || (grant.scopeType === "OWNER_GROUP" && grant.ownerGroupId === center.ownerGroupId)
+    || (grant.scopeType === "ORGANIZATION" && grant.organizationId === center.organizationId)
+    || (grant.scopeType === "BRAND" && grant.brandId === center.organization.brandId),
+  );
+  const actorCenterIds = actor.staffProfile?.centerId === EXPECTED.centerId || grantCoversCenter ? [EXPECTED.centerId] : [];
+  const actorScope = {
+    role: actor.role,
+    accessScope: actor.role === UserRole.PLATFORM_OWNER
+      ? "platform" as const
+      : actor.role === UserRole.BRAND_ADMIN || actor.role === UserRole.REGIONAL_MANAGER
+        ? "tenant" as const
+        : actor.accessGrants.some((grant) => grant.scopeType === "TENANT" && grant.tenantId === EXPECTED.tenantId)
+          ? "tenant" as const
+          : actorCenterIds.length
+            ? "scoped" as const
+          : "none" as const,
+    centerIds: actorCenterIds,
+  };
+  invariant(canManageBilling(actor) && canAccessCenter(actorScope, EXPECTED.centerId), "Audit actor no longer has active Kokomo billing access.");
   invariant(authorizations.length === 5, `Expected five exact authorization rows; found ${authorizations.length}.`);
-  invariant(claims.length === 2, `Expected two exact draft claims; found ${claims.length}.`);
+  invariant(claims.length === 2, `Expected only the two reviewed non-void draft claims across the five authorizations; found ${claims.length}.`);
 
   return { center, actor, authorizations, claims, historicalWrenly };
 }
@@ -159,10 +205,11 @@ function authorization(state: Awaited<ReturnType<typeof loadState>>, id: string)
   return row;
 }
 
-function claim(state: Awaited<ReturnType<typeof loadState>>, id: string, lineId: string) {
+function claim(state: Awaited<ReturnType<typeof loadState>>, id: string, lineId: string, authorizationId: string, childId: string) {
   const row = state.claims.find((item) => item.id === id);
   invariant(row, `Claim ${id} was not found.`);
-  invariant(row.lines.length === 1 && row.lines[0].id === lineId, `Claim ${id} no longer has its one expected line.`);
+  invariant(row.centerId === EXPECTED.centerId && row.agencyProgramId === EXPECTED.programId && row.authorizationId === authorizationId, `Claim ${id} is no longer in the expected Kokomo program and authorization.`);
+  invariant(row.lines.length === 1 && row.lines[0].id === lineId && row.lines[0].childId === childId, `Claim ${id} no longer has its one expected child line.`);
   invariant(row.remittances.length === 0, `Claim ${id} now has remittance history and requires separate review.`);
   return { row, line: row.lines[0] };
 }
@@ -193,11 +240,11 @@ function verifyInitial(state: Awaited<ReturnType<typeof loadState>>) {
   invariant(lyla.authorizationNumber === EXPECTED.lyla.previousAuthorizationNumber && lyla.childId === EXPECTED.lyla.childId && lyla.familyId === EXPECTED.lyla.familyId, "Lyla authorization no longer matches the reviewed pre-correction state.");
   invariant(dateOnly(lyla.coverageStart) === "2026-08-02" && dateOnly(lyla.coverageEnd) === "2026-10-10" && lyla.authorizedRateCents === 38_700 && lyla.familyCopayCents === 0, "Lyla authorization terms changed.");
 
-  const kaidenClaim = claim(state, EXPECTED.kaiden.claimId, EXPECTED.kaiden.lineId);
+  const kaidenClaim = claim(state, EXPECTED.kaiden.claimId, EXPECTED.kaiden.lineId, EXPECTED.kaiden.authorizationId, EXPECTED.kaiden.childId);
   invariant(kaidenClaim.row.status === "draft" && kaidenClaim.row.claimedCents === 27_000 && kaidenClaim.row.approvedCents === null && kaidenClaim.row.paidCents === 0 && kaidenClaim.row.submittedAt === null && kaidenClaim.row.externalReference === null, "Kaiden claim is no longer an unsettled draft in the reviewed state.");
   invariant(dateOnly(kaidenClaim.row.servicePeriodStart) === "2026-07-12" && dateOnly(kaidenClaim.row.servicePeriodEnd) === "2026-07-18" && kaidenClaim.line.serviceUnits === 2 && kaidenClaim.line.rateCents === 13_500 && kaidenClaim.line.amountCents === 27_000, "Kaiden draft claim values changed.");
 
-  const kaiaClaim = claim(state, EXPECTED.kaia.claimId, EXPECTED.kaia.lineId);
+  const kaiaClaim = claim(state, EXPECTED.kaia.claimId, EXPECTED.kaia.lineId, EXPECTED.kaia.authorizationId, EXPECTED.kaia.childId);
   invariant(kaiaClaim.row.status === "draft" && kaiaClaim.row.claimedCents === 27_000 && kaiaClaim.row.approvedCents === null && kaiaClaim.row.paidCents === 0 && kaiaClaim.row.submittedAt === null && kaiaClaim.row.externalReference === null, "Kaia claim is no longer an unsettled draft in the reviewed state.");
   invariant(dateOnly(kaiaClaim.row.servicePeriodStart) === "2026-07-12" && dateOnly(kaiaClaim.row.servicePeriodEnd) === "2026-07-25" && kaiaClaim.line.serviceUnits === 2 && kaiaClaim.line.rateCents === 13_500 && kaiaClaim.line.amountCents === 27_000, "Kaia draft claim values changed.");
 }
@@ -208,8 +255,8 @@ function verifyFinal(state: Awaited<ReturnType<typeof loadState>>) {
   const wrenly = authorization(state, EXPECTED.wrenly.currentAuthorizationId);
   const oakleigh = authorization(state, EXPECTED.oakleigh.authorizationId);
   const lyla = authorization(state, EXPECTED.lyla.authorizationId);
-  const kaidenClaim = claim(state, EXPECTED.kaiden.claimId, EXPECTED.kaiden.lineId);
-  const kaiaClaim = claim(state, EXPECTED.kaia.claimId, EXPECTED.kaia.lineId);
+  const kaidenClaim = claim(state, EXPECTED.kaiden.claimId, EXPECTED.kaiden.lineId, EXPECTED.kaiden.authorizationId, EXPECTED.kaiden.childId);
+  const kaiaClaim = claim(state, EXPECTED.kaia.claimId, EXPECTED.kaia.lineId, EXPECTED.kaia.authorizationId, EXPECTED.kaia.childId);
 
   invariant(kaiden.familyCopayCents === 7_500, "Kaiden copay correction was not applied.");
   invariant(dateOnly(kaia.coverageStart) === "2026-07-19" && kaia.familyCopayCents === 7_500, "Kaia authorization correction was not applied.");
@@ -295,13 +342,17 @@ async function apply(expectedFingerprint: string) {
     });
     await tx.auditLog.create({ data: { tenantId: EXPECTED.tenantId, centerId: EXPECTED.centerId, userId: before.actor.id, action: "billing.subsidy_authorization.created_from_director_workbook", resource: "SubsidyAuthorization", resourceId: historicalWrenly.id, metadata: { evidenceMessageId: EXPECTED.evidenceMessageId, evidenceSha256: EXPECTED.evidenceSha256, appliedAt: now.toISOString(), sourceFingerprint: expectedFingerprint, remittancePosted: false, parentBalanceChanged: false } } });
 
-    const kaidenClaimBefore = claim(before, EXPECTED.kaiden.claimId, EXPECTED.kaiden.lineId);
-    await tx.subsidyClaim.update({ where: { id: EXPECTED.kaiden.claimId }, data: { claimedCents: 13_500, customFields: { ...object(kaidenClaimBefore.row.customFields), ...evidence({ claimedCents: 27_000, serviceUnits: 2, lineAmountCents: 27_000 }, source("July 12-26", 2, "2026-08-09", 13_500)) } } });
-    await tx.subsidyClaimLine.update({ where: { id: EXPECTED.kaiden.lineId }, data: { serviceUnits: 1, amountCents: 13_500 } });
+    const kaidenClaimBefore = claim(before, EXPECTED.kaiden.claimId, EXPECTED.kaiden.lineId, EXPECTED.kaiden.authorizationId, EXPECTED.kaiden.childId);
+    const kaidenClaimUpdate = await tx.subsidyClaim.updateMany({ where: { id: EXPECTED.kaiden.claimId, centerId: EXPECTED.centerId, agencyProgramId: EXPECTED.programId, authorizationId: EXPECTED.kaiden.authorizationId, status: "draft" }, data: { claimedCents: 13_500, customFields: { ...object(kaidenClaimBefore.row.customFields), ...evidence({ claimedCents: 27_000, serviceUnits: 2, lineAmountCents: 27_000 }, source("July 12-26", 2, "2026-08-09", 13_500)) } } });
+    invariant(kaidenClaimUpdate.count === 1, "Kaiden claim changed scope or status before update.");
+    const kaidenLineUpdate = await tx.subsidyClaimLine.updateMany({ where: { id: EXPECTED.kaiden.lineId, claimId: EXPECTED.kaiden.claimId, childId: EXPECTED.kaiden.childId }, data: { serviceUnits: 1, amountCents: 13_500 } });
+    invariant(kaidenLineUpdate.count === 1, "Kaiden claim line changed scope before update.");
 
-    const kaiaClaimBefore = claim(before, EXPECTED.kaia.claimId, EXPECTED.kaia.lineId);
-    await tx.subsidyClaim.update({ where: { id: EXPECTED.kaia.claimId }, data: { servicePeriodStart: d("2026-07-19"), claimedCents: 13_500, customFields: { ...object(kaiaClaimBefore.row.customFields), ...evidence({ servicePeriodStart: "2026-07-12", claimedCents: 27_000, serviceUnits: 2, lineAmountCents: 27_000 }, source("July 12-26", 4, "2026-08-09", 13_500)) } } });
-    await tx.subsidyClaimLine.update({ where: { id: EXPECTED.kaia.lineId }, data: { serviceUnits: 1, amountCents: 13_500 } });
+    const kaiaClaimBefore = claim(before, EXPECTED.kaia.claimId, EXPECTED.kaia.lineId, EXPECTED.kaia.authorizationId, EXPECTED.kaia.childId);
+    const kaiaClaimUpdate = await tx.subsidyClaim.updateMany({ where: { id: EXPECTED.kaia.claimId, centerId: EXPECTED.centerId, agencyProgramId: EXPECTED.programId, authorizationId: EXPECTED.kaia.authorizationId, status: "draft" }, data: { servicePeriodStart: d("2026-07-19"), claimedCents: 13_500, customFields: { ...object(kaiaClaimBefore.row.customFields), ...evidence({ servicePeriodStart: "2026-07-12", claimedCents: 27_000, serviceUnits: 2, lineAmountCents: 27_000 }, source("July 12-26", 4, "2026-08-09", 13_500)) } } });
+    invariant(kaiaClaimUpdate.count === 1, "Kaia claim changed scope or status before update.");
+    const kaiaLineUpdate = await tx.subsidyClaimLine.updateMany({ where: { id: EXPECTED.kaia.lineId, claimId: EXPECTED.kaia.claimId, childId: EXPECTED.kaia.childId }, data: { serviceUnits: 1, amountCents: 13_500 } });
+    invariant(kaiaLineUpdate.count === 1, "Kaia claim line changed scope before update.");
 
     for (const claimId of [EXPECTED.kaiden.claimId, EXPECTED.kaia.claimId]) {
       await tx.auditLog.create({ data: { tenantId: EXPECTED.tenantId, centerId: EXPECTED.centerId, userId: before.actor.id, action: "billing.subsidy_claim.draft_corrected_from_director_workbook", resource: "SubsidyClaim", resourceId: claimId, metadata: { evidenceMessageId: EXPECTED.evidenceMessageId, evidenceSha256: EXPECTED.evidenceSha256, appliedAt: now.toISOString(), sourceFingerprint: expectedFingerprint, statusPreserved: "draft", remittancePosted: false, paidCentsPreserved: 0, parentBalanceChanged: false } } });

@@ -6,6 +6,7 @@ type BuildMessageVisibilityWhereInput = {
   allCenters: boolean;
   teacherMessageScope: boolean;
   tenantId?: string;
+  nonFamilyCenterIds?: readonly string[];
 };
 
 function directStaffThreadWhere(userId: string): Prisma.MessageWhereInput {
@@ -30,8 +31,22 @@ export function buildVisibleMessageWhere({
   allCenters,
   teacherMessageScope,
   tenantId,
+  nonFamilyCenterIds,
 }: BuildMessageVisibilityWhereInput): Prisma.MessageWhereInput {
-  const staffThreads = directStaffThreadWhere(userId);
+  const directStaffThreads = directStaffThreadWhere(userId);
+  const staffThreads: Prisma.MessageWhereInput = nonFamilyCenterIds
+    ? {
+        AND: [
+          directStaffThreads,
+          {
+            OR: [
+              { sender: { is: { role: "TEACHER", staffProfile: { is: { centerId: { in: [...nonFamilyCenterIds] } } } } } },
+              { assignedTo: { is: { role: "TEACHER", staffProfile: { is: { centerId: { in: [...nonFamilyCenterIds] } } } } } },
+            ],
+          },
+        ],
+      }
+    : directStaffThreads;
 
   if (teacherMessageScope) {
     return {
@@ -52,10 +67,16 @@ export function buildVisibleMessageWhere({
     };
   }
 
+  const scopedInternalThreadWhere: Prisma.MessageWhereInput = nonFamilyCenterIds
+    ? {
+        familyId: null,
+        threadKey: { in: nonFamilyCenterIds.map((centerId) => `internal:${centerId}`) },
+      }
+    : nonStaffInternalThreadWhere;
   const tenantInternalThreadWhere: Prisma.MessageWhereInput = tenantId
     ? {
         AND: [
-          nonStaffInternalThreadWhere,
+          scopedInternalThreadWhere,
           { OR: [{ sender: { is: { tenantId } } }, { assignedTo: { is: { tenantId } } }] },
         ],
       }

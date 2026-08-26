@@ -2939,6 +2939,7 @@ async function renderLivePage(
       allCenters,
       teacherMessageScope,
       tenantId: user.tenantId,
+      nonFamilyCenterIds: allCenters ? undefined : messageCenterIds,
     });
     const classroomWhere = visibleClassroomWhere(messageCenterIds);
     const [messages, families, templates, staffUsers, classrooms, notificationPreferenceUsers, total, unread, priority, aiReview] = await Promise.all([

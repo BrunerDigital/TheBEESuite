@@ -75,6 +75,20 @@ async function POSTHandler(request: NextRequest) {
     }
     let currentFields = fields;
     if (shouldAdoptCustomer) {
+      await prisma.$executeRaw(Prisma.sql`
+        UPDATE "Center"
+        SET "customFields" = jsonb_set(
+          CASE WHEN jsonb_typeof("customFields") = 'object' THEN "customFields" ELSE '{}'::jsonb END,
+          '{stripeSoftwareCustomerId}',
+          to_jsonb(${customerId}::text),
+          true
+        )
+        WHERE "id" = ${center.id}
+          AND COALESCE(
+            CASE WHEN jsonb_typeof("customFields") = 'object' THEN "customFields" ->> 'stripeSoftwareCustomerId' ELSE '' END,
+            ''
+          ) = ''
+      `);
       const latestCenter = await prisma.center.findUnique({ where: { id: center.id }, select: { customFields: true } });
       if (!latestCenter) return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
       const latestFields = record(latestCenter.customFields);
@@ -82,10 +96,8 @@ async function POSTHandler(request: NextRequest) {
       if (latestCustomerId && latestCustomerId !== customerId) {
         return NextResponse.json({ ok: false, error: "The school billing profile changed while billing was starting. Review the current profile and try again." }, { status: 409 });
       }
-      currentFields = latestCustomerId ? latestFields : { ...latestFields, stripeSoftwareCustomerId: customerId };
-      if (!latestCustomerId) {
-        await prisma.center.update({ where: { id: center.id }, data: { customFields: currentFields as Prisma.InputJsonObject } });
-      }
+      if (!latestCustomerId) return NextResponse.json({ ok: false, error: "The school billing profile could not be adopted safely. Try again." }, { status: 409 });
+      currentFields = latestFields;
     }
     const paymentMethodId = textField(currentFields, "stripeSoftwareDefaultPaymentMethodId");
     if (!paymentMethodId) return NextResponse.json({ ok: false, error: "The school must authorize a software payment method before recurring billing can start." }, { status: 400 });

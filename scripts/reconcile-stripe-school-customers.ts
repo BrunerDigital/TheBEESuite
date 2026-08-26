@@ -116,6 +116,7 @@ function schoolCustomerEvidence(customer: JsonRecord, center: { id: string; name
   const metadata = record(customer.metadata);
   const created = integer(customer.created);
   const customerEmail = clean(customer.email).toLowerCase();
+  const centerEmail = clean(center.email).toLowerCase();
   if (clean(metadata.tenantId) === center.organization.tenantId
     && clean(metadata.centerId) === center.id
     && clean(metadata.paymentScope) === "school_software_fee") return "school_software_metadata";
@@ -129,7 +130,7 @@ function schoolCustomerEvidence(customer: JsonRecord, center: { id: string; name
     && created > 0
     && created < LEGACY_CUSTOMER_CREATED_BEFORE
     && normalizeName(customer.name) === normalizeName(center.name)
-    && (customerEmail === clean(center.email).toLowerCase() || isKnownBatch)) return "legacy_unlabeled_school_batch";
+    && ((customerEmail.length > 0 && centerEmail.length > 0 && customerEmail === centerEmail) || isKnownBatch)) return "legacy_unlabeled_school_batch";
   return null;
 }
 
@@ -221,12 +222,7 @@ async function main() {
 
   const results: Array<{ customerId: string; school: string; status: string }> = [];
   if (apply) {
-    const liveReferences = (await loadDatabaseReferences()).references;
     for (const target of targets) {
-      if (liveReferences.has(target.customerId)) {
-        results.push({ customerId: target.customerId, school: target.school, status: "held_new_database_reference" });
-        continue;
-      }
       const customer = await stripeRequest(apiKey, `/v1/customers/${encodeURIComponent(target.customerId)}`);
       if (customer.deleted === true) {
         results.push({ customerId: target.customerId, school: target.school, status: "already_deleted" });
@@ -240,6 +236,11 @@ async function main() {
       const liveActivity = await customerActivity(apiKey, customer);
       if (liveActivity.reasons.length > 0) {
         results.push({ customerId: target.customerId, school: target.school, status: `held_new_activity:${liveActivity.reasons.join(",")}` });
+        continue;
+      }
+      const liveReferences = (await loadDatabaseReferences()).references;
+      if (liveReferences.has(target.customerId)) {
+        results.push({ customerId: target.customerId, school: target.school, status: "held_new_database_reference" });
         continue;
       }
       const deleted = await stripeRequest(apiKey, `/v1/customers/${encodeURIComponent(target.customerId)}`, "DELETE");

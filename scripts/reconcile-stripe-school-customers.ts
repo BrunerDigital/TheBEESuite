@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
-import { prisma } from "../src/lib/prisma";
 
 type JsonRecord = Record<string, unknown>;
+type PrismaClient = typeof import("../src/lib/prisma").prisma;
+
+let prisma: PrismaClient | null = null;
 
 const MAX_PAGES = 50;
 const ACTIVITY_CONCURRENCY = 3;
@@ -97,10 +99,12 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, work: (item: 
 }
 
 async function loadDatabaseReferences() {
+  if (!prisma) throw new Error("The selected database environment has not been loaded.");
+  const db = prisma;
   const [centers, ownerGroups, billingAccounts] = await Promise.all([
-    prisma.center.findMany({ select: { id: true, name: true, email: true, status: true, customFields: true, organization: { select: { tenantId: true } } } }),
-    prisma.ownerGroup.findMany({ select: { id: true, customFields: true } }),
-    prisma.billingAccount.findMany({ select: { id: true, customFields: true } }),
+    db.center.findMany({ select: { id: true, name: true, email: true, status: true, customFields: true, organization: { select: { tenantId: true } } } }),
+    db.ownerGroup.findMany({ select: { id: true, customFields: true } }),
+    db.billingAccount.findMany({ select: { id: true, customFields: true } }),
   ]);
   const references = new Map<string, string[]>();
   const add = (customerId: string, label: string) => references.set(customerId, [...(references.get(customerId) ?? []), label]);
@@ -179,6 +183,7 @@ async function main() {
   loadEnvConfig(argValue("--env-dir") || process.cwd());
   const apiKey = clean(process.env.STRIPE_SECRET_KEY);
   if (!/^(sk|rk)_live_/.test(apiKey)) throw new Error("A live Stripe secret or restricted key is required.");
+  prisma = (await import("../src/lib/prisma")).prisma;
   const apply = process.argv.includes("--apply");
   const expectedTargetCount = Number.parseInt(argValue("--expected-target-count"), 10);
 
@@ -283,4 +288,6 @@ void main()
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
   })
-  .finally(async () => prisma.$disconnect());
+  .finally(async () => {
+    if (prisma) await prisma.$disconnect();
+  });

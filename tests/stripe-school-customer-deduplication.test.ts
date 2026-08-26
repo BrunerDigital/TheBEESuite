@@ -6,6 +6,8 @@ const reconciliation = readFileSync("scripts/reconcile-stripe-school-customers.t
 
 test("school customer reconciliation is preview-first and exact-target guarded", () => {
   assert.match(reconciliation, /mode: apply \? "apply" : "read_only_preview"/);
+  assert.doesNotMatch(reconciliation, /import \{ prisma \} from/);
+  assert.match(reconciliation, /loadEnvConfig[\s\S]+await import\("\.\.\/src\/lib\/prisma"\)/);
   assert.match(reconciliation, /--confirm-fingerprint/);
   assert.match(reconciliation, /--expected-target-count/);
   assert.match(reconciliation, /--acknowledge-delete-unreferenced-empty-school-customers/);

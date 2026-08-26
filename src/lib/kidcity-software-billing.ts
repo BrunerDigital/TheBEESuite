@@ -20,11 +20,21 @@ const corporateSoftwareFeeOwnerTypes = new Set([
 
 type SchoolSoftwareFeeTier = "corporate" | "partner";
 
+// The approved first recurring software-fee cycle begins at midnight Eastern
+// on September 1, 2026. Subscriptions authorized before then remain trialing
+// and create their first paid invoice on this anchor.
+export const SCHOOL_SOFTWARE_BILLING_START_AT = "2026-09-01T04:00:00.000Z";
+
+export function getSchoolSoftwareBillingStartAt() {
+  return new Date(SCHOOL_SOFTWARE_BILLING_START_AT);
+}
+
 type SchoolSoftwareFeeCenter = {
   id?: string | null;
   name?: string | null;
   crmLocationId?: string | null;
   locationId?: string | null;
+  status?: string | null;
   customFields?: unknown;
   ownerGroup?: {
     name?: string | null;
@@ -34,6 +44,16 @@ type SchoolSoftwareFeeCenter = {
     customFields?: unknown;
   } | null;
 };
+
+const nonBillableCenterNames = new Set([
+  "kid city usa",
+  "kid city usa unassigned lead queue",
+]);
+
+export function isSchoolSoftwareBillingCenter(center: SchoolSoftwareFeeCenter) {
+  if (center.status && center.status !== "active") return false;
+  return !nonBillableCenterNames.has(normalizeKey(center.name).replaceAll("_", " "));
+}
 
 function nonNegativeIntEnv(name: string, fallback = 0) {
   const parsed = Number.parseInt(process.env[name] || String(fallback), 10);
@@ -345,7 +365,8 @@ export async function getKidCitySoftwareInvoiceSnapshot(db: PrismaLike, date = n
       },
     },
   });
-  const activeSchools = activeSchoolRows.map((school) => {
+  const billableSchoolRows = activeSchoolRows.filter(isSchoolSoftwareBillingCenter);
+  const activeSchools = billableSchoolRows.map((school) => {
     const policy = getSchoolSoftwareFeePolicyForCenter(school);
     return {
       id: school.id,
@@ -355,7 +376,7 @@ export async function getKidCitySoftwareInvoiceSnapshot(db: PrismaLike, date = n
       monthlyAmountCents: policy.unitAmountCents,
     };
   });
-  const policies = activeSchoolRows.map(getSchoolSoftwareFeePolicyForCenter);
+  const policies = billableSchoolRows.map(getSchoolSoftwareFeePolicyForCenter);
   const activeSchoolUserCount = schoolUsers.length;
   const activeSchoolCount = activeSchools.length;
   const totalAmountCents = policies.reduce((total, policy) => total + policy.unitAmountCents, 0);

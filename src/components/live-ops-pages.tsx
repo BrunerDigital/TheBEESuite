@@ -143,7 +143,6 @@ import {
 } from "@/components/invoice-stored-payment-button";
 import { DirectorInvoiceStatusFilter } from "@/components/director-invoice-status-filter";
 import type { DirectorInvoiceStatus } from "@/lib/director-invoice-status";
-import { KidCitySoftwareInvoiceButton } from "@/components/kidcity-software-invoice-button";
 import { LicensingConfigurationPanel, type LicensingConfigurationCenter } from "@/components/licensing-configuration-panel";
 import { MediaReviewActions } from "@/components/media-review-actions";
 import { MedicationLogPanel, type MedicationLogChildOption } from "@/components/medication-log-panel";
@@ -157,6 +156,7 @@ import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { StaffOnboardingChecklistPanel } from "@/components/staff-onboarding-checklist-panel";
 import { SignatureRequestPanel, type SignatureRequestFamilyOption } from "@/components/signature-request-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
+import { SchoolSoftwarePaymentPanel, type SchoolSoftwareBillingRow } from "@/components/school-software-payment-panel";
 import { TerminalStore } from "@/components/terminal-store";
 import { TuitionPaymentReminderSettingsPanel } from "@/components/tuition-payment-reminder-settings-panel";
 import {
@@ -5906,6 +5906,7 @@ export type BillingSettingsPageData = {
   }>;
   subscriptions: Array<{ id: string; name: string; plan: string; status: string }>;
   centers: StripeConnectCenter[];
+  softwareBillingCenters: SchoolSoftwareBillingRow[];
   stripeConfigured: boolean;
   webhookConfigured: boolean;
   parentProcessingRecoveryApproved: boolean;
@@ -5914,15 +5915,22 @@ export type BillingSettingsPageData = {
 };
 
 type KidCitySoftwareInvoiceData = {
-    period: string;
-    invoiceNumber: string;
-    unitAmountCents: number;
-    activeSchoolUserCount: number;
-    totalAmountCents: number;
-    description: string;
-    daysUntilDue: number;
-    stripeCustomerConfigured: boolean;
-    billingEmail?: string | null;
+  period: string;
+  invoiceNumber: string;
+  unitAmountCents: number;
+  activeSchoolUserCount: number;
+  totalAmountCents: number;
+  description: string;
+  daysUntilDue: number;
+  stripeCustomerConfigured: boolean;
+  billingEmail?: string | null;
+  activeSchools: Array<{
+    id: string;
+    name: string;
+    crmLocationId: string | null;
+    feeTier: "corporate" | "partner";
+    monthlyAmountCents: number;
+  }>;
 };
 
 export type CorporateBillingPageData = {
@@ -5994,36 +6002,38 @@ export function TerminalStoreReturnPage({ status }: { status: "success" | "cance
 
 export function CorporateBillingPage({ data }: { data: CorporateBillingPageData }) {
   const invoice = data.kidCitySoftwareInvoice;
+  const corporateSchoolCount = invoice.activeSchools.filter((school) => school.feeTier === "corporate").length;
+  const partnerSchoolCount = invoice.activeSchools.filter((school) => school.feeTier === "partner").length;
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
         <Badge className="mb-4">
           <BadgeDollarSign data-icon="inline-start" />
-          Corporate invoice
+          School subscriptions
         </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">Kid City USA Enterprises Software Invoice</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">The BEE Suite Software Subscriptions</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
           Review monthly The BEE Suite software access fees. Corporate schools receive the $49 monthly discounted rate; all other locations are billed $79 through their separately authorized school subscriptions.
         </p>
       </section>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Invoice period" value={invoice.period} />
-        <StatCard label="Active school users" value={invoice.activeSchoolUserCount} />
-        <StatCard label="Monthly rate" value={money(invoice.unitAmountCents)} />
-        <StatCard label="Amount due" value={money(invoice.totalAmountCents)} />
+        <StatCard label="First paid cycle" value="Sep 1, 2026" />
+        <StatCard label="Corporate schools" value={corporateSchoolCount} />
+        <StatCard label="Other locations" value={partnerSchoolCount} />
+        <StatCard label="Monthly total" value={money(invoice.totalAmountCents)} />
       </div>
 
       <Card className="glass-panel">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <CardTitle as="div">{invoice.invoiceNumber}</CardTitle>
-              <CardDescription className="mt-2 max-w-3xl">{invoice.description}</CardDescription>
+              <CardTitle as="div">Per-school recurring billing</CardTitle>
+              <CardDescription className="mt-2 max-w-3xl">
+                Each location authorizes its own school payment method. No parent payment method or tuition invoice is used for software fees.
+              </CardDescription>
             </div>
-            <Badge variant={invoice.stripeCustomerConfigured ? "default" : "destructive"}>
-              {invoice.stripeCustomerConfigured ? "Ready for hosted payment" : "Payment profile will be created"}
-            </Badge>
+            <Badge>September 1 start</Badge>
           </div>
         </CardHeader>
         <CardContent className="grid gap-5 lg:grid-cols-[1fr_340px]">
@@ -6032,23 +6042,17 @@ export function CorporateBillingPage({ data }: { data: CorporateBillingPageData 
             <p className="mt-2">
               Corporate schools are billed the discounted rate of $49 per month, and all other locations are billed $79 per month. This fee is separate from parent tuition billing, school Stripe processing fees, and the BEE Suite payment operations fee.
             </p>
-            <p className="mt-2">Payment terms: due {invoice.daysUntilDue} day(s) after the hosted invoice is sent.</p>
+            <p className="mt-2">Each authorized subscription recurs monthly. Stripe processing costs remain the school&apos;s responsibility.</p>
           </div>
           <div className="rounded-xl border bg-background/40 p-4">
-            <div className="text-sm font-medium">Pay securely online</div>
+            <div className="text-sm font-medium">Configure each school</div>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              The button creates the current monthly invoice and opens the hosted invoice link for secure payment.
+              Use Billing Settings to select a school and authorize its bank account or card. The first paid cycle begins September 1, 2026, then renews monthly.
             </p>
-            <div className="mt-4">
-              <KidCitySoftwareInvoiceButton
-                disabled={invoice.totalAmountCents <= 0}
-              />
-            </div>
-            {!invoice.stripeCustomerConfigured ? (
-              <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                The first payment attempt will create and remember a payment profile for Kid City USA Enterprises.
-              </p>
-            ) : null}
+            <Link className={buttonVariants({ className: "mt-4 w-full" })} href="/billing-settings">
+              Open Billing Settings
+              <ArrowRight data-icon="inline-end" />
+            </Link>
           </div>
         </CardContent>
       </Card>
@@ -6088,6 +6092,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         parentSurchargeBps={data.parentSurchargeBps}
         parentSurchargeFixedCents={data.parentSurchargeFixedCents}
       />
+      <SchoolSoftwarePaymentPanel schools={data.softwareBillingCenters} />
       <TuitionPaymentReminderSettingsPanel centers={data.centers} />
       <DashboardOptionsSettingsPanel centers={data.centers} />
       <div className="grid gap-4 lg:grid-cols-2">

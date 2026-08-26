@@ -174,6 +174,7 @@ async function customerActivity(apiKey: string, customer: JsonRecord) {
   const counts = Object.fromEntries(entries) as Record<keyof typeof activityPaths, number>;
   const sourceCount = rows(record(customer.sources).data).length;
   const immediate = {
+    customerAccountId: clean(customer.customer_account) || null,
     customerBalanceCents: integer(customer.balance),
     cashBalanceCents: availableCash,
     defaultSource: clean(customer.default_source) || null,
@@ -182,6 +183,7 @@ async function customerActivity(apiKey: string, customer: JsonRecord) {
   };
   const reasons = [
     ...Object.entries(counts).filter(([, count]) => count > 0).map(([key]) => key),
+    ...(immediate.customerAccountId ? ["accountsV2CustomerConfiguration"] : []),
     ...(immediate.customerBalanceCents !== 0 ? ["customerBalance"] : []),
     ...(immediate.cashBalanceCents !== 0 ? ["cashBalance"] : []),
     ...(immediate.defaultSource ? ["defaultSource"] : []),

@@ -9,15 +9,21 @@ test("billing activation is restricted to live Stripe-ready schools with confirm
   assert.match(source, /currentInspection\.eligible/);
   assert.match(source, /connected-account binding changed after review/);
   assert.match(source, /verifyStripeConnectAccountBinding\(accountId, retrieved\.account\.id\)/);
+  assert.match(source, /payoutBank\.defaultForCurrency === true/);
   assert.match(source, /const freshCenter = await prisma\.center\.findUnique/);
   assert.match(source, /connected-account binding changed during activation/);
   assert.match(source, /confirm-fingerprint/);
+  assert.match(source, /payoutBankId: row\.payoutBank!\.id/);
+  assert.match(source, /default payout bank changed after review/);
 });
 
 test("billing activation enables school capabilities without creating financial activity", () => {
   assert.match(source, /livePaymentsEnabled: true/);
   assert.match(source, /tuitionBillingEnabled: true/);
   assert.match(source, /refundsEnabled: true/);
+  assert.match(source, /stripePayoutBankLast4: confirmedPayoutBank\.last4/);
+  assert.match(source, /stripePayoutBankDefaultConfirmed: true/);
+  assert.match(source, /stripePayoutBankCount: currentInspection\.payoutBankCount/);
   assert.match(source, /stripeBillingApprovalCustomFieldPatch/);
   assert.match(source, /billingPreviewApprovedAt: activatedAt/);
   assert.match(source, /accountingApprovedAt: activatedAt/);
@@ -31,6 +37,7 @@ test("billing activation enables school capabilities without creating financial 
 
 test("billing activation records a school-scoped audit event", () => {
   assert.match(source, /billing\.stripe_ready_school\.activated/);
+  assert.match(source, /billing\.stripe_ready_school\.payout_bank_synced/);
   assert.match(source, /resource: "Center"/);
   assert.match(source, /centerId: planned\.centerId/);
   assert.match(source, /user_authorized_all_stripe_ready_schools_for_full_billing_capability/);

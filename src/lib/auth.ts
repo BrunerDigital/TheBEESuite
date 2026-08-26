@@ -465,6 +465,17 @@ export function canAccessAllCenters(user: Pick<CurrentUser, "role"> & Partial<Pi
   return tenantWideAccessRoles.has(user.role);
 }
 
+export function messageCenterIdsForUser(
+  user: Pick<CurrentUser, "role" | "centerIds" | "primaryCenterId">,
+) {
+  if (user.role !== UserRole.CENTER_DIRECTOR && user.role !== UserRole.ASSISTANT_DIRECTOR) {
+    return user.centerIds;
+  }
+  return user.primaryCenterId && user.centerIds.includes(user.primaryCenterId)
+    ? [user.primaryCenterId]
+    : [];
+}
+
 export function getLeadScopeWhere(user: CurrentUser) {
   if (user.role === UserRole.PLATFORM_OWNER) return {};
   if (canAccessAllCenters(user)) {

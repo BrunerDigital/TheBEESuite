@@ -63,7 +63,7 @@ import {
 } from "@/lib/accounts-receivable";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
-import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, messageCenterIdsForUser, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import {
   canManageExecutiveMarketingPortfolio,
   marketingAccountIdFromConfig,
@@ -2915,11 +2915,8 @@ async function renderLivePage(
     const requestedReplyStaffId = firstSearchParam(searchParams.staffId) || "";
     const requestedReplySubject = firstSearchParam(searchParams.subject) || "";
     const teacherMessageScope = user.role === UserRole.TEACHER && !allCenters;
-    const directorMessageCenterIds = user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR
-      ? user.primaryCenterId && visibleCenterIds.includes(user.primaryCenterId)
-        ? [user.primaryCenterId]
-        : []
-      : visibleCenterIds;
+    const authorizedMessageCenterIds = messageCenterIdsForUser(user);
+    const directorMessageCenterIds = visibleCenterIds.filter((centerId) => authorizedMessageCenterIds.includes(centerId));
     const messageCenterIds = teacherMessageScope ? visibleCenterIds : directorMessageCenterIds;
     const messageScopedCenterIds = visibleCenterIdFilter(messageCenterIds);
     const teacherStaffProfile = teacherMessageScope

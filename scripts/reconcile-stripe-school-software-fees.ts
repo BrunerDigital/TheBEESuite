@@ -202,6 +202,7 @@ async function main() {
       return clean(item.id) === storedSubscriptionId || clean(metadata.centerId) === center.id;
     });
     const active = matches.filter((item) => ["active", "trialing"].includes(clean(item.status)));
+    const unresolved = matches.filter((item) => ["past_due", "unpaid", "paused", "incomplete"].includes(clean(item.status)));
     const exactSubscription = active.length === 1 && (() => {
       const configuration = subscriptionConfiguration(active[0]);
       return configuration.exactMonthlyConfiguration &&
@@ -223,7 +224,7 @@ async function main() {
     if (preStartEvidence.length) {
       status = "manual_review";
       proposedAction = "review_pre_september_software_charge";
-    } else if (subscriptionShared || active.length > 1 || (active.length > 0 && !exactSubscription)) {
+    } else if (subscriptionShared || unresolved.length > 0 || active.length > 1 || (active.length > 0 && !exactSubscription)) {
       status = "ambiguous";
       proposedAction = "stop_subscription_configuration_mismatch";
     } else if (!paymentMethodId.startsWith("pm_")) {
@@ -247,6 +248,7 @@ async function main() {
       paymentMethodId: paymentMethodId || null,
       storedSubscriptionId: storedSubscriptionId || null,
       matchingSubscriptionIds: matches.map((item) => clean(item.id)),
+      unresolvedSubscriptionIds: unresolved.map((item) => clean(item.id)),
       status,
       proposedAction,
       preStartEvidence,

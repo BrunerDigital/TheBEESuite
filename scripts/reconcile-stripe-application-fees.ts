@@ -138,7 +138,10 @@ async function main() {
     .filter((item): item is { center: typeof centers[number]; accountId: string } => Boolean(item.accountId))
     .filter((item) => (accountUsage.get(item.accountId) || []).length === 1);
 
-  const priorCorrections = await listAll(apiKey, `/v1/charges?limit=100&created[gte]=${startSeconds}&created[lt]=${endSeconds}`);
+  // A correction for an in-window tuition payment can be created after the
+  // historical payment window closes. Search forward from the payment-window
+  // start so reruns always find those later corrections.
+  const priorCorrections = await listAll(apiKey, `/v1/charges?limit=100&created[gte]=${startSeconds}`);
   const priorByIntent = new Map<string, number>();
   for (const charge of priorCorrections) {
     const metadata = record(charge.metadata);

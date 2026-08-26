@@ -48,3 +48,10 @@ test("replacement school payment methods update the existing Stripe subscription
   assert.match(integrations, /body\.set\("default_payment_method", defaultPaymentMethodId\)/);
   assert.match(integrations, /school-software-payment-method:\$\{subscriptionId\}:\$\{defaultPaymentMethodId\}/);
 });
+
+test("historical application-fee reruns search for later correction debits", () => {
+  const reconciliation = readFileSync("scripts/reconcile-stripe-application-fees.ts", "utf8");
+  const correctionQuery = reconciliation.match(/const priorCorrections = await listAll\(apiKey, `([^`]+)`\)/)?.[1] ?? "";
+  assert.match(correctionQuery, /created\[gte\]=\$\{startSeconds\}/);
+  assert.doesNotMatch(correctionQuery, /created\[lt\]=\$\{endSeconds\}/);
+});

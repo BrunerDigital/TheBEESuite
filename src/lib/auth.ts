@@ -495,7 +495,7 @@ export function getDashboardCenterScopeWhere(user: CurrentUser) {
   return getLeadScopeWhere(user);
 }
 
-export function canAccessCenter(user: CurrentUser, centerId: string) {
+export function canAccessCenter(user: Pick<CurrentUser, "role" | "accessScope" | "centerIds">, centerId: string) {
   return (
     user.role === UserRole.PLATFORM_OWNER ||
     (user.accessScope === "tenant" && canUseTenantWideAccessRole(user.role)) ||

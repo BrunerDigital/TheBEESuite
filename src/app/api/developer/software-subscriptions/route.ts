@@ -5,6 +5,7 @@ import {
   createStripeCustomer,
   createStripeSoftwareSubscription,
   ensureStripeSoftwareRecurringPrice,
+  findStripeSchoolSoftwareCustomers,
   updateStripeSoftwareSubscription,
 } from "@/lib/integrations";
 import { getSchoolSoftwareBillingStartAt, getSchoolSoftwareFeePolicyForCenter } from "@/lib/kidcity-software-billing";
@@ -58,11 +59,17 @@ async function POSTHandler(request: NextRequest) {
 
     let customerId = textField(fields, "stripeSoftwareCustomerId");
     if (!customerId) {
-      const customer = await createStripeCustomer({ email: center.email || user.email, name: center.name, tenantId: user.tenantId, metadata: { tenantId: user.tenantId, centerId: center.id, paymentScope: "school_software_fee" } });
+      const existing = await findStripeSchoolSoftwareCustomers({ centerId: center.id, tenantId: user.tenantId });
+      if (!existing.ok) return NextResponse.json({ ok: false, error: existing.error || "School billing profiles could not be checked." }, { status: existing.configured ? 502 : 503 });
+      if (existing.customerIds.length > 1) return NextResponse.json({ ok: false, error: "Multiple school software billing profiles require platform review before billing can start." }, { status: 409 });
+      customerId = existing.customerIds[0] || "";
+    }
+    if (!customerId) {
+      const customer = await createStripeCustomer({ email: center.email || user.email, name: center.name, tenantId: user.tenantId, metadata: { tenantId: user.tenantId, centerId: center.id, paymentScope: "school_software_fee" }, idempotencyKey: `school-software-customer:${user.tenantId}:${center.id}` });
       if (!customer.ok || !customer.id) return NextResponse.json({ ok: false, error: customer.error || "School billing customer could not be created." }, { status: customer.configured ? 502 : 503 });
       customerId = customer.id;
-      await prisma.center.update({ where: { id: center.id }, data: { customFields: { ...fields, stripeSoftwareCustomerId: customerId } } });
     }
+    await prisma.center.update({ where: { id: center.id }, data: { customFields: { ...fields, stripeSoftwareCustomerId: customerId } } });
     const paymentMethodId = textField(fields, "stripeSoftwareDefaultPaymentMethodId");
     if (!paymentMethodId) return NextResponse.json({ ok: false, error: "The school must authorize a software payment method before recurring billing can start." }, { status: 400 });
     result = await createStripeSoftwareSubscription({

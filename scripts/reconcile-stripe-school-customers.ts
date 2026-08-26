@@ -1,0 +1,243 @@
+import { createHash } from "node:crypto";
+import { loadEnvConfig } from "@next/env";
+import { prisma } from "../src/lib/prisma";
+
+type JsonRecord = Record<string, unknown>;
+
+const MAX_PAGES = 50;
+const ACTIVITY_CONCURRENCY = 3;
+
+function clean(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function record(value: unknown): JsonRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
+}
+
+function rows(value: unknown) {
+  return Array.isArray(value) ? value.map(record) : [];
+}
+
+function integer(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : 0;
+}
+
+function normalizeName(value: unknown) {
+  return clean(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function argValue(name: string) {
+  const inline = process.argv.find((argument) => argument.startsWith(`${name}=`));
+  if (inline) return inline.slice(name.length + 1).trim();
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? clean(process.argv[index + 1]) : "";
+}
+
+function collectCustomerIds(value: unknown, output = new Set<string>()) {
+  if (typeof value === "string" && value.startsWith("cus_")) output.add(value);
+  else if (Array.isArray(value)) value.forEach((item) => collectCustomerIds(item, output));
+  else if (value && typeof value === "object") Object.values(value).forEach((item) => collectCustomerIds(item, output));
+  return output;
+}
+
+async function stripeRequest(apiKey: string, path: string, method: "GET" | "DELETE" = "GET") {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const response = await fetch(`https://api.stripe.com${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Stripe-Version": process.env.STRIPE_API_VERSION || "2026-07-29.dahlia",
+      },
+      signal: AbortSignal.timeout(20_000),
+    });
+    const json = await response.json().catch(() => null) as JsonRecord | null;
+    if (response.ok && json) return json;
+    if ((response.status === 429 || response.status >= 500) && attempt < 3) {
+      const retryAfterSeconds = Math.max(1, Math.min(5, Number.parseInt(response.headers.get("retry-after") || "1", 10) || 1));
+      await new Promise((resolve) => setTimeout(resolve, retryAfterSeconds * 1000));
+      continue;
+    }
+    throw new Error(clean(record(json?.error).message) || `Stripe returned ${response.status} for ${path}.`);
+  }
+  throw new Error(`Stripe retries were exhausted for ${path}.`);
+}
+
+async function listAll(apiKey: string, path: string) {
+  const output: JsonRecord[] = [];
+  let startingAfter = "";
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const separator = path.includes("?") ? "&" : "?";
+    const response = await stripeRequest(apiKey, `${path}${startingAfter ? `${separator}starting_after=${encodeURIComponent(startingAfter)}` : ""}`);
+    const data = rows(response.data);
+    output.push(...data);
+    if (response.has_more !== true || data.length === 0) return output;
+    startingAfter = clean(data.at(-1)?.id);
+  }
+  throw new Error(`Stripe pagination exceeded ${MAX_PAGES} pages for ${path}.`);
+}
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, work: (item: T) => Promise<R>) {
+  const output = new Array<R>(items.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      output[index] = await work(items[index]);
+    }
+  }));
+  return output;
+}
+
+async function loadDatabaseReferences() {
+  const [centers, ownerGroups, billingAccounts] = await Promise.all([
+    prisma.center.findMany({ select: { id: true, name: true, status: true, customFields: true } }),
+    prisma.ownerGroup.findMany({ select: { id: true, customFields: true } }),
+    prisma.billingAccount.findMany({ select: { id: true, customFields: true } }),
+  ]);
+  const references = new Map<string, string[]>();
+  const add = (customerId: string, label: string) => references.set(customerId, [...(references.get(customerId) ?? []), label]);
+  centers.forEach((center) => collectCustomerIds(center.customFields).forEach((id) => add(id, `center:${center.id}`)));
+  ownerGroups.forEach((ownerGroup) => collectCustomerIds(ownerGroup.customFields).forEach((id) => add(id, `owner_group:${ownerGroup.id}`)));
+  billingAccounts.forEach((account) => collectCustomerIds(account.customFields).forEach((id) => add(id, `billing_account:${account.id}`)));
+  const centersByName = new Map<string, typeof centers>();
+  centers.forEach((center) => centersByName.set(normalizeName(center.name), [...(centersByName.get(normalizeName(center.name)) ?? []), center]));
+  return { references, centersByName };
+}
+
+async function customerActivity(apiKey: string, customer: JsonRecord) {
+  const customerId = clean(customer.id);
+  const encodedId = encodeURIComponent(customerId);
+  const activityPaths = {
+    subscriptions: `/v1/subscriptions?customer=${encodedId}&status=all&limit=1`,
+    invoices: `/v1/invoices?customer=${encodedId}&limit=1`,
+    paymentIntents: `/v1/payment_intents?customer=${encodedId}&limit=1`,
+    setupIntents: `/v1/setup_intents?customer=${encodedId}&limit=1`,
+    charges: `/v1/charges?customer=${encodedId}&limit=1`,
+    checkoutSessions: `/v1/checkout/sessions?customer=${encodedId}&limit=1`,
+    quotes: `/v1/quotes?customer=${encodedId}&limit=1`,
+    paymentMethods: `/v1/customers/${encodedId}/payment_methods?limit=1`,
+    taxIds: `/v1/customers/${encodedId}/tax_ids?limit=1`,
+  } as const;
+  const entries = await Promise.all(Object.entries(activityPaths).map(async ([key, path]) => {
+    const response = await stripeRequest(apiKey, path);
+    return [key, rows(response.data).length] as const;
+  }));
+  const cashBalance = await stripeRequest(apiKey, `/v1/customers/${encodedId}/cash_balance`);
+  const availableCash = Object.values(record(cashBalance.available)).reduce<number>((sum, value) => sum + Math.abs(integer(value)), 0);
+  const counts = Object.fromEntries(entries) as Record<keyof typeof activityPaths, number>;
+  const sourceCount = rows(record(customer.sources).data).length;
+  const immediate = {
+    customerBalanceCents: integer(customer.balance),
+    cashBalanceCents: availableCash,
+    defaultSource: clean(customer.default_source) || null,
+    defaultPaymentMethod: clean(record(customer.invoice_settings).default_payment_method) || null,
+    sourceCount,
+  };
+  const reasons = [
+    ...Object.entries(counts).filter(([, count]) => count > 0).map(([key]) => key),
+    ...(immediate.customerBalanceCents !== 0 ? ["customerBalance"] : []),
+    ...(immediate.cashBalanceCents !== 0 ? ["cashBalance"] : []),
+    ...(immediate.defaultSource ? ["defaultSource"] : []),
+    ...(immediate.defaultPaymentMethod ? ["defaultPaymentMethod"] : []),
+    ...(immediate.sourceCount > 0 ? ["sources"] : []),
+  ];
+  return { counts, immediate, reasons };
+}
+
+async function main() {
+  loadEnvConfig(argValue("--env-dir") || process.cwd());
+  const apiKey = clean(process.env.STRIPE_SECRET_KEY);
+  if (!/^(sk|rk)_live_/.test(apiKey)) throw new Error("A live Stripe secret or restricted key is required.");
+  const apply = process.argv.includes("--apply");
+  const expectedTargetCount = Number.parseInt(argValue("--expected-target-count"), 10);
+
+  const [{ references, centersByName }, customers] = await Promise.all([
+    loadDatabaseReferences(),
+    listAll(apiKey, "/v1/customers?limit=100"),
+  ]);
+  const possibleDuplicates = customers.flatMap((customer) => {
+    const customerId = clean(customer.id);
+    const matches = centersByName.get(normalizeName(customer.name)) ?? [];
+    if (references.has(customerId) || matches.length !== 1) return [];
+    return [{ customer, center: matches[0] }];
+  });
+  const audited = await mapWithConcurrency(possibleDuplicates, ACTIVITY_CONCURRENCY, async ({ customer, center }) => ({
+    customerId: clean(customer.id),
+    school: center.name,
+    centerId: center.id,
+    centerStatus: center.status,
+    createdAt: integer(customer.created) ? new Date(integer(customer.created) * 1000).toISOString() : null,
+    activity: await customerActivity(apiKey, customer),
+  }));
+  const targets = audited.filter((row) => row.activity.reasons.length === 0);
+  const held = audited.filter((row) => row.activity.reasons.length > 0);
+  const canonical = JSON.stringify(targets.map(({ customerId, centerId, createdAt }) => ({ customerId, centerId, createdAt })));
+  const fingerprint = createHash("sha256").update(canonical).digest("hex");
+
+  if (apply && argValue("--confirm-fingerprint") !== fingerprint) {
+    throw new Error("The confirmation fingerprint does not match the current live deletion plan.");
+  }
+  if (apply && !process.argv.includes("--acknowledge-delete-unreferenced-empty-school-customers")) {
+    throw new Error("Applying deletion requires the explicit empty-school-customer acknowledgement flag.");
+  }
+  if (apply && (!Number.isInteger(expectedTargetCount) || expectedTargetCount !== targets.length)) {
+    throw new Error(`The expected target count must equal the current ${targets.length}-customer deletion plan.`);
+  }
+
+  const results: Array<{ customerId: string; school: string; status: string }> = [];
+  if (apply) {
+    const liveReferences = (await loadDatabaseReferences()).references;
+    for (const target of targets) {
+      if (liveReferences.has(target.customerId)) {
+        results.push({ customerId: target.customerId, school: target.school, status: "held_new_database_reference" });
+        continue;
+      }
+      const customer = await stripeRequest(apiKey, `/v1/customers/${encodeURIComponent(target.customerId)}`);
+      if (customer.deleted === true) {
+        results.push({ customerId: target.customerId, school: target.school, status: "already_deleted" });
+        continue;
+      }
+      const liveActivity = await customerActivity(apiKey, customer);
+      if (liveActivity.reasons.length > 0) {
+        results.push({ customerId: target.customerId, school: target.school, status: `held_new_activity:${liveActivity.reasons.join(",")}` });
+        continue;
+      }
+      const deleted = await stripeRequest(apiKey, `/v1/customers/${encodeURIComponent(target.customerId)}`, "DELETE");
+      if (deleted.deleted !== true || clean(deleted.id) !== target.customerId) {
+        throw new Error(`${target.school}: Stripe did not confirm customer deletion.`);
+      }
+      results.push({ customerId: target.customerId, school: target.school, status: "deleted" });
+    }
+  }
+
+  console.log(JSON.stringify({
+    mode: apply ? "apply" : "read_only_preview",
+    fingerprint,
+    summary: {
+      platformCustomers: customers.length,
+      databaseReferencedCustomers: customers.filter((customer) => references.has(clean(customer.id))).length,
+      exactUnreferencedSchoolMatches: possibleDuplicates.length,
+      deletionTargets: targets.length,
+      heldForActivity: held.length,
+      deleted: results.filter((row) => row.status === "deleted").length,
+      heldDuringApply: results.filter((row) => row.status.startsWith("held_")).length,
+    },
+    targets: targets.map((target) => ({
+      customerId: target.customerId,
+      school: target.school,
+      centerId: target.centerId,
+      centerStatus: target.centerStatus,
+      createdAt: target.createdAt,
+    })),
+    held,
+    results,
+  }, null, 2));
+}
+
+void main()
+  .catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  })
+  .finally(async () => prisma.$disconnect());

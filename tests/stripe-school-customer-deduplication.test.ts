@@ -1,0 +1,52 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const reconciliation = readFileSync("scripts/reconcile-stripe-school-customers.ts", "utf8");
+
+test("school customer reconciliation is preview-first and exact-target guarded", () => {
+  assert.match(reconciliation, /mode: apply \? "apply" : "read_only_preview"/);
+  assert.match(reconciliation, /--confirm-fingerprint/);
+  assert.match(reconciliation, /--expected-target-count/);
+  assert.match(reconciliation, /--acknowledge-delete-unreferenced-empty-school-customers/);
+  assert.match(reconciliation, /references\.has\(customerId\)/);
+  assert.match(reconciliation, /matches\.length !== 1/);
+});
+
+test("school customer deletion holds every billing and payment evidence class", () => {
+  for (const evidence of [
+    "subscriptions",
+    "invoices",
+    "paymentIntents",
+    "setupIntents",
+    "charges",
+    "checkoutSessions",
+    "quotes",
+    "paymentMethods",
+    "taxIds",
+    "customerBalance",
+    "cashBalance",
+    "defaultSource",
+    "defaultPaymentMethod",
+    "sources",
+  ]) assert.match(reconciliation, new RegExp(evidence));
+  assert.match(reconciliation, /held_new_database_reference/);
+  assert.match(reconciliation, /held_new_activity/);
+  assert.match(reconciliation, /deleted\.deleted !== true/);
+});
+
+test("school software customer creation reuses provider metadata and is idempotent", () => {
+  const integrations = readFileSync("src/lib/integrations.ts", "utf8");
+  const setupRoute = readFileSync("src/app/api/billing/software-payment-method/route.ts", "utf8");
+  const developerRoute = readFileSync("src/app/api/developer/software-subscriptions/route.ts", "utf8");
+  assert.match(integrations, /findStripeSchoolSoftwareCustomers/);
+  assert.match(integrations, /metadata\['tenantId'\]/);
+  assert.match(integrations, /metadata\['centerId'\]/);
+  assert.match(integrations, /metadata\['paymentScope'\]/);
+  assert.match(integrations, /"Idempotency-Key": clean\(idempotencyKey\)/);
+  for (const route of [setupRoute, developerRoute]) {
+    assert.match(route, /findStripeSchoolSoftwareCustomers/);
+    assert.match(route, /existing\.customerIds\.length > 1/);
+    assert.match(route, /school-software-customer:\$\{user\.tenantId\}:\$\{center\.id\}/);
+  }
+});

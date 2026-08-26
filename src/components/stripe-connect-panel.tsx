@@ -111,7 +111,9 @@ export function StripeConnectPanel({
   );
 
   const stats = useMemo(() => {
-    const ready = localCenters.filter((center) => statusLabel(center) === "Ready").length;
+    const ready = localCenters.filter((center) => (
+      stripeSchoolReadinessFlowFromFields({ customFields: center.customFields, centerName: center.name }).stage === "ready"
+    )).length;
     const started = localCenters.filter((center) => maskedAccount(center) !== "Not connected").length;
     return {
       ready,

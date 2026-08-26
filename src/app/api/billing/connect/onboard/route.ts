@@ -60,11 +60,16 @@ function stripeConnectFailurePatch(status: string, error: string | undefined): P
 
 async function updateCenterCustomFieldsIfCurrent(
   centerId: string,
-  expected: Prisma.JsonObject,
+  expected: Prisma.JsonValue | null,
   next: Prisma.JsonObject,
 ) {
   const updated = await prisma.center.updateMany({
-    where: { id: centerId, customFields: { equals: expected as Prisma.InputJsonValue } },
+    where: {
+      id: centerId,
+      customFields: expected === null
+        ? { equals: Prisma.DbNull }
+        : { equals: expected as Prisma.InputJsonValue },
+    },
     data: { customFields: next },
   });
   return updated.count === 1;
@@ -145,7 +150,12 @@ async function POSTHandler(request: NextRequest) {
   let createdAccount = false;
 
   const profileSaved = await prisma.center.updateMany({
-    where: { id: center.id, customFields: { equals: existingFields as Prisma.InputJsonValue } },
+    where: {
+      id: center.id,
+      customFields: center.customFields === null
+        ? { equals: Prisma.DbNull }
+        : { equals: existingFields as Prisma.InputJsonValue },
+    },
     data: {
       email: setup.details.payoutContactEmail || center.email,
       phone: setup.details.payoutContactPhone || center.phone,

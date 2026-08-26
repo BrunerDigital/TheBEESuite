@@ -24,6 +24,7 @@ import {
   stripeConnectSavedMethodNeedsReauthorization,
 } from "@/lib/stripe-connect-migration";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
+import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
 import {
@@ -287,6 +288,24 @@ async function POSTHandler(request: NextRequest) {
           fallback: PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE,
         }),
         ...(parentFacing ? {} : { billingApproval }),
+      },
+      { status: 403 },
+    );
+  }
+  const paymentReadiness = stripeSchoolReadinessFlowFromFields({
+    customFields: center?.customFields,
+    centerName: center?.name,
+  });
+  if (!paymentReadiness.canAcceptParentPayments) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: paymentServiceError({
+          parentFacing,
+          providerError: paymentReadiness.explanation,
+          fallback: PARENT_PAYMENT_METHOD_UNAVAILABLE_MESSAGE,
+        }),
+        ...(parentFacing ? {} : { paymentReadiness }),
       },
       { status: 403 },
     );

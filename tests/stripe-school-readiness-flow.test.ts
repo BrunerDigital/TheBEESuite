@@ -108,7 +108,32 @@ test("new school account creation is idempotent and omits indirect-transfer onbo
   );
   assert.match(route, /idempotencyKey: `bee-suite-school-connect-\$\{center\.id\}`/);
   assert.match(route, /updateCenterCustomFieldsIfCurrent/);
+  assert.match(route, /center\.customFields === null[\s\S]{0,100}Prisma\.DbNull/);
   assert.doesNotMatch(createAccount, /recipient:\s*\{/);
   assert.match(createAccount, /fees_collector: "stripe"/);
   assert.match(createAccount, /losses_collector: "stripe"/);
+});
+
+test("every payment entry point enforces the complete school readiness flow", () => {
+  for (const routePath of [
+    "src/app/api/billing/checkout-session/route.ts",
+    "src/app/api/billing/family-payment/route.ts",
+    "src/app/api/billing/payment-method-session/route.ts",
+    "src/app/api/billing/payment-method-request/checkout/route.ts",
+    "src/app/api/billing/payment-method-request/session/route.ts",
+    "src/app/api/billing/terminal-payment/route.ts",
+    "src/lib/autopay-processing.ts",
+  ]) {
+    const source = readFileSync(routePath, "utf8");
+    assert.match(source, /stripeSchoolReadinessFlowFromFields/, routePath);
+    assert.match(source, /!paymentReadiness\.canAcceptParentPayments/, routePath);
+  }
+});
+
+test("school readiness summary and audit use only verified live classifications", () => {
+  const panel = readFileSync("src/components/stripe-connect-panel.tsx", "utf8");
+  const audit = readFileSync("scripts/audit-kidcity-payout-bindings.ts", "utf8");
+  assert.match(panel, /stripeSchoolReadinessFlowFromFields[\s\S]{0,120}\.stage === "ready"/);
+  assert.match(audit, /row\.reachable && row\.exact && !row\.schoolPaysStripeFeesDirectly/);
+  assert.match(audit, /unverifiable:/);
 });

@@ -181,8 +181,9 @@ export async function auditKidCityPayoutBindings(options: { includeSchools?: boo
       paymentsLive: results.filter((row) => row.flowStage === "ready").length,
     },
     feeResponsibility: {
-      schoolPaysStripeDirectly: results.filter((row) => row.schoolPaysStripeFeesDirectly).length,
-      retainedFromSchoolProceeds: results.filter((row) => row.mapped && !row.schoolPaysStripeFeesDirectly).length,
+      schoolPaysStripeDirectly: results.filter((row) => row.reachable && row.exact && row.schoolPaysStripeFeesDirectly).length,
+      retainedFromSchoolProceeds: results.filter((row) => row.reachable && row.exact && !row.schoolPaysStripeFeesDirectly).length,
+      unverifiable: results.filter((row) => row.mapped && (!row.reachable || !row.exact)).length,
       parentPaysProcessingFees: 0,
     },
     failures: failures.map(({ school, locationId, issue }) => ({ school, locationId, issue })),

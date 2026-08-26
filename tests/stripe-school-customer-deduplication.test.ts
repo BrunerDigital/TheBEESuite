@@ -47,12 +47,14 @@ test("school customer deletion holds every billing and payment evidence class", 
     "taxIds",
     "balanceTransactions",
     "cashBalanceTransactions",
+    "accountsV2CustomerConfiguration",
     "customerBalance",
     "cashBalance",
     "defaultSource",
     "defaultPaymentMethod",
     "sources",
   ]) assert.match(reconciliation, new RegExp(evidence));
+  assert.match(reconciliation, /customerAccountId: clean\(customer\.customer_account\) \|\| null/);
   assert.match(reconciliation, /held_new_database_reference/);
   assert.match(reconciliation, /concurrent_setup_adoption_candidate/);
   assert.match(reconciliation, /evidence === "school_software_metadata"/);

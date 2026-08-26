@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { ComponentPropsWithoutRef, Dispatch, SetStateAction } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { InvoicePrintButton } from "@/components/billing-print-actions";
@@ -79,6 +78,13 @@ import {
   dailyReportTimedCareEvents,
   sortDailyReportsChronologically,
 } from "@/lib/daily-report-ordering";
+
+function ParentPortalDocumentLink({
+  href,
+  ...props
+}: ComponentPropsWithoutRef<"a"> & { href: string }) {
+  return <a href={href} {...props} />;
+}
 
 type Child = {
   id: string;
@@ -1799,13 +1805,13 @@ function ParentPortalWorkspaceView({
             {activeView === "home" ? homeGreeting : activeViewCopy.title}
           </h1>
           {activeView !== "home" ? (
-            <Link
+            <ParentPortalDocumentLink
               href={workspaceHref("home", { familyId: family.id })}
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
               <Home data-icon="inline-start" aria-hidden="true" />
               Home
-            </Link>
+            </ParentPortalDocumentLink>
           ) : null}
         </div>
         {availableFamilies.length > 1 ? (
@@ -1814,7 +1820,7 @@ function ParentPortalWorkspaceView({
             aria-label="Choose family profile"
           >
             {availableFamilies.map((item) => (
-              <Link
+              <ParentPortalDocumentLink
                 key={item.id}
                 href={workspaceHref(activeView, {
                   familyId: item.id,
@@ -1832,7 +1838,7 @@ function ParentPortalWorkspaceView({
                 <Building2 data-icon="inline-start" aria-hidden="true" />
                 {item.name}
                 {item.centerName ? ` · ${item.centerName}` : ""}
-              </Link>
+              </ParentPortalDocumentLink>
             ))}
           </div>
         ) : null}
@@ -1880,7 +1886,7 @@ function ParentPortalWorkspaceView({
                 ["notifications", "Notifications & Privacy"],
               ] as Array<[ParentPortalFamilySection, string]>
             ).map(([section, label]) => (
-              <Link
+              <ParentPortalDocumentLink
                 key={section}
                 href={workspaceHref("family", {
                   familyId: family.id,
@@ -1893,7 +1899,7 @@ function ParentPortalWorkspaceView({
                 className={`relative flex min-h-11 shrink-0 snap-start items-center rounded-full border px-4 py-2 text-sm font-medium leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-1 ${activeFamilySection === section ? "border-primary/40 bg-primary/10 text-foreground sm:border-primary sm:bg-transparent" : "border-border/70 bg-card/70 text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground sm:border-transparent sm:bg-transparent sm:hover:bg-transparent"}`}
               >
                 {label}
-              </Link>
+              </ParentPortalDocumentLink>
             ))}
           </div>
         </nav>
@@ -1921,14 +1927,14 @@ function ParentPortalWorkspaceView({
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Link
+                  <ParentPortalDocumentLink
                     href={workspaceHref("updates", { familyId: family.id })}
                     className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-primary/70 bg-background px-4 text-sm font-medium transition-colors hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <Camera className="size-4" aria-hidden="true" /> View
                     Today’s Update{" "}
                     <ArrowRight className="size-4" aria-hidden="true" />
-                  </Link>
+                  </ParentPortalDocumentLink>
                 </div>
               </div>
             </div>
@@ -1957,7 +1963,7 @@ function ParentPortalWorkspaceView({
                     </p>
                   </div>
                 </div>
-                <Link
+                <ParentPortalDocumentLink
                   href={workspaceHref("updates", { familyId: family.id })}
                   className="group relative hidden min-h-36 overflow-hidden border-l border-border/60 bg-muted sm:block"
                   aria-label="Open photos and daily reports"
@@ -1979,7 +1985,7 @@ function ParentPortalWorkspaceView({
                   <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-4 pb-3 pt-8 text-xs font-semibold text-white">
                     Photos &amp; reports
                   </span>
-                </Link>
+                </ParentPortalDocumentLink>
               </div>
             ) : null}
             <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto p-4 sm:grid sm:overflow-visible sm:p-6 lg:grid-cols-2">
@@ -2108,7 +2114,7 @@ function ParentPortalWorkspaceView({
               defaultCollapsed={!homeAttentionCount}
             >
                 {documentsNeedingAction[0] ? (
-                  <Link
+                  <ParentPortalDocumentLink
                     href={workspaceHref("family", {
                       familyId: family.id,
                       section: "documents",
@@ -2130,10 +2136,10 @@ function ParentPortalWorkspaceView({
                       className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
                       aria-hidden="true"
                     />
-                  </Link>
+                  </ParentPortalDocumentLink>
                 ) : null}
                 {openInvoices[0] ? (
-                  <Link
+                  <ParentPortalDocumentLink
                     href={workspaceHref("payments", { familyId: family.id })}
                     className="group flex min-h-16 items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
@@ -2153,10 +2159,10 @@ function ParentPortalWorkspaceView({
                       className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
                       aria-hidden="true"
                     />
-                  </Link>
+                  </ParentPortalDocumentLink>
                 ) : null}
                 {incidentsNeedingReceipt[0] ? (
-                  <Link
+                  <ParentPortalDocumentLink
                     href={workspaceHref("family", {
                       familyId: family.id,
                       section: "children",
@@ -2180,7 +2186,7 @@ function ParentPortalWorkspaceView({
                       className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
                       aria-hidden="true"
                     />
-                  </Link>
+                  </ParentPortalDocumentLink>
                 ) : null}
                 {!homeAttentionCount ? (
                   <p className="py-6 text-sm text-muted-foreground">
@@ -2269,7 +2275,7 @@ function ParentPortalWorkspaceView({
                   </p>
                 </div>
               )}
-              <Link
+              <ParentPortalDocumentLink
                 href={workspaceHref("payments", { familyId: family.id })}
                 className={buttonVariants({
                   variant: balanceCents > 0 && !checkoutBlocked ? "default" : "outline",
@@ -2278,7 +2284,7 @@ function ParentPortalWorkspaceView({
               >
                 {balanceCents > 0 && !checkoutBlocked ? "Review & Pay" : "View Payment Details"}
                 <ArrowRight data-icon="inline-end" aria-hidden="true" />
-              </Link>
+              </ParentPortalDocumentLink>
               <p className="mt-3 text-xs text-muted-foreground">
                 {openInvoices.length
                   ? `${openInvoices.length} open invoice${openInvoices.length === 1 ? "" : "s"}`
@@ -2330,7 +2336,7 @@ function ParentPortalWorkspaceView({
                   ],
                 ] as const
               ).map(([href, label, detail, Icon]) => (
-                <Link
+                <ParentPortalDocumentLink
                   key={href}
                   href={href}
                   className="group flex min-h-20 items-center gap-2 rounded-xl border bg-card p-3 transition-colors hover:border-primary/60 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-3 sm:p-4"
@@ -2346,7 +2352,7 @@ function ParentPortalWorkspaceView({
                     className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
                     aria-hidden="true"
                   />
-                </Link>
+                </ParentPortalDocumentLink>
               ))}
             </div>
           </section>
@@ -2628,10 +2634,10 @@ function ParentPortalWorkspaceView({
                 </Alert>
               ) : null}
             </div>
-            <Link href={workspaceHref("payments", { familyId: family.id, section: null, hash: null })} className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
+            <ParentPortalDocumentLink href={workspaceHref("payments", { familyId: family.id, section: null, hash: null })} className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
               <ArrowRight data-icon="inline-start" aria-hidden="true" />
               Return to Payments
-            </Link>
+            </ParentPortalDocumentLink>
           </CardContent>
         </Card>
       ) : null}
@@ -2894,9 +2900,10 @@ function ParentPortalWorkspaceView({
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="font-medium">Tuition billing cycle</div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Your weekly rate stays the same. Choose weekly invoices or one
-                  invoice every four weeks that covers the next four weeks. This
-                  choice does not create an opening balance or turn on autopay.
+                  Your weekly rate stays the same. Choose weekly, every two weeks,
+                  or every four weeks. Multi-week invoices cover the upcoming two
+                  or four weeks. This choice does not create an opening balance or
+                  turn on autopay.
                 </p>
                 <div className="mt-3 space-y-3">
                   {family.children
@@ -3054,7 +3061,7 @@ function ParentPortalWorkspaceView({
                   </p>
                   <div className="flex gap-2">
                     {ledgerPagination.hasPrevious ? (
-                      <Link
+                      <ParentPortalDocumentLink
                         href={`${workspaceHref("payments", { familyId: family?.id })}&ledgerPage=${ledgerPagination.page - 1}`}
                         className={buttonVariants({
                           variant: "outline",
@@ -3062,10 +3069,10 @@ function ParentPortalWorkspaceView({
                         })}
                       >
                         Previous
-                      </Link>
+                      </ParentPortalDocumentLink>
                     ) : null}
                     {ledgerPagination.hasNext ? (
-                      <Link
+                      <ParentPortalDocumentLink
                         href={`${workspaceHref("payments", { familyId: family?.id })}&ledgerPage=${ledgerPagination.page + 1}`}
                         className={buttonVariants({
                           variant: "outline",
@@ -3073,7 +3080,7 @@ function ParentPortalWorkspaceView({
                         })}
                       >
                         Next
-                      </Link>
+                      </ParentPortalDocumentLink>
                     ) : null}
                   </div>
                 </div>
@@ -3116,14 +3123,14 @@ function ParentPortalWorkspaceView({
                 ) : null}
               </div>
             </div>
-            <Link
+            <ParentPortalDocumentLink
               href={workspaceHref("family", { familyId: family.id, section: "billing", hash: null })}
               className="flex min-h-16 items-center gap-3 rounded-2xl border bg-background/55 p-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary"><CreditCard className="size-5" aria-hidden="true" /></span>
               <span className="min-w-0 flex-1"><span className="block font-semibold">Billing settings</span><span className="block truncate text-xs text-muted-foreground">Payment methods, billing email &amp; autopay</span></span>
               <ArrowRight className="size-5 shrink-0 text-primary" aria-hidden="true" />
-            </Link>
+            </ParentPortalDocumentLink>
             {showFamilyPaymentPanel ? (
               <div className="rounded-xl border bg-primary/10 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -4209,7 +4216,7 @@ function ParentPortalWorkspaceView({
               </summary>
               <div className="border-t px-4 pb-4 pt-3">
               <div className="flex justify-end">
-                <Link
+                <ParentPortalDocumentLink
                   href={workspaceHref("family", {
                     familyId: family.id,
                     section: "documents",
@@ -4221,7 +4228,7 @@ function ParentPortalWorkspaceView({
                   })}
                 >
                   Request a Correction
-                </Link>
+                </ParentPortalDocumentLink>
               </div>
               <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
                 <div>
@@ -4379,7 +4386,7 @@ function ParentPortalWorkspaceView({
                   medical, or custody concerns.
                 </p>
               </div>
-              <Link
+              <ParentPortalDocumentLink
                 href={previewHrefBase ?? "/support"}
                 className={buttonVariants({
                   variant: "outline",
@@ -4388,7 +4395,7 @@ function ParentPortalWorkspaceView({
               >
                 <LifeBuoy data-icon="inline-start" aria-hidden="true" />
                 Open support
-              </Link>
+              </ParentPortalDocumentLink>
             </div>
             <details className="group rounded-2xl border border-destructive/30 bg-destructive/5">
               <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">

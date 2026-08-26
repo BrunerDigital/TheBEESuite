@@ -20,6 +20,11 @@ const SOURCE_STATEMENT_FILE = "Standard customer statement.pdf";
 const SOURCE_CURRENT_BILLING_AT = new Date("2026-08-11T23:19:43.000Z");
 const CORRECTION_SOURCE_SYSTEM = "bee_suite_source_reconciliation";
 const CORRECTION_EXTERNAL_ID = "lees-summit:myisha-adams:current-billing:2026-08-11";
+const STRIPE_CONNECTED_ACCOUNT_ID = "acct_1TvJxjGS9yWyJNre";
+const STRIPE_CUSTOMER_ID = "cus_V2BYyqlZczTopM";
+const STRIPE_API_VERSION = "2026-07-29.dahlia";
+
+type StripeList<T> = { data?: T[]; has_more?: boolean };
 
 function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -36,6 +41,52 @@ function option(name: string) {
 
 function fingerprint(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+async function stripeGet<T>(path: string) {
+  const apiKey = process.env.STRIPE_SECRET_KEY?.trim();
+  invariant(apiKey, "STRIPE_SECRET_KEY is required to revalidate Myisha's exact connected customer.");
+  const response = await fetch(`https://api.stripe.com${path}`, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Stripe-Version": STRIPE_API_VERSION,
+      "Stripe-Account": STRIPE_CONNECTED_ACCOUNT_ID,
+    },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) throw new Error(`Stripe GET ${path.split("?")[0]} returned HTTP ${response.status}.`);
+  return response.json() as Promise<T>;
+}
+
+async function loadStripeEvidence() {
+  const [customer, paymentIntents, charges] = await Promise.all([
+    stripeGet<{ id?: string; deleted?: boolean }>(`/v1/customers/${STRIPE_CUSTOMER_ID}`),
+    stripeGet<StripeList<{ id: string; status: string; amount: number; amount_received: number; created: number }>>(`/v1/payment_intents?customer=${STRIPE_CUSTOMER_ID}&limit=100`),
+    stripeGet<StripeList<{ id: string; status: string; amount: number; amount_refunded: number; created: number }>>(`/v1/charges?customer=${STRIPE_CUSTOMER_ID}&limit=100`),
+  ]);
+  invariant(customer.id === STRIPE_CUSTOMER_ID && !customer.deleted, "Myisha's exact connected Stripe customer is missing or deleted.");
+  invariant(!paymentIntents.has_more && !charges.has_more, "Stripe returned more than 100 exact-customer records; pagination is required before reconciliation.");
+
+  const chargeRows = await Promise.all((charges.data ?? []).map(async (charge) => {
+    const refunds = await stripeGet<StripeList<{ id: string; amount: number; status?: string | null; created: number }>>(`/v1/refunds?charge=${charge.id}&limit=100`);
+    invariant(!refunds.has_more, `Stripe returned more than 100 refunds for charge ${charge.id}; pagination is required before reconciliation.`);
+    return {
+      id: charge.id,
+      status: charge.status,
+      amountCents: charge.amount,
+      amountRefundedCents: charge.amount_refunded,
+      created: charge.created,
+      refunds: (refunds.data ?? []).map((refund) => ({ id: refund.id, amountCents: refund.amount, status: refund.status ?? null, created: refund.created })),
+    };
+  }));
+
+  return {
+    connectedAccountId: STRIPE_CONNECTED_ACCOUNT_ID,
+    customerId: STRIPE_CUSTOMER_ID,
+    customerExists: true,
+    paymentIntents: (paymentIntents.data ?? []).map((intent) => ({ id: intent.id, status: intent.status, amountCents: intent.amount, amountReceivedCents: intent.amount_received, created: intent.created })),
+    charges: chargeRows,
+  };
 }
 
 async function loadState(db: Prisma.TransactionClient | typeof prisma = prisma) {
@@ -84,8 +135,8 @@ function reviewedState(state: Awaited<ReturnType<typeof loadState>>) {
 }
 
 async function main() {
-  const before = await loadState();
-  const reviewed = reviewedState(before);
+  const [before, stripeEvidence] = await Promise.all([loadState(), loadStripeEvidence()]);
+  const reviewed = { database: reviewedState(before), stripe: stripeEvidence };
   const planFingerprint = fingerprint(reviewed);
   const alreadyApplied = Boolean(before.correctionLedger);
 
@@ -98,7 +149,13 @@ async function main() {
       evidence: {
         sourceCurrentBilling: { messageId: SOURCE_CURRENT_BILLING_MESSAGE_ID, filename: SOURCE_CURRENT_BILLING_FILE, reportedBalanceCents: 0 },
         sourceStatement: { messageId: SOURCE_STATEMENT_MESSAGE_ID, filename: SOURCE_STATEMENT_FILE, endingBalanceCents: 0, throughDate: "2026-07-31" },
-        stripeConnectedCustomerAudit: { paymentIntents: 0, charges: 0, refunds: 0 },
+        stripeConnectedCustomerAudit: {
+          connectedAccountId: stripeEvidence.connectedAccountId,
+          customerId: stripeEvidence.customerId,
+          paymentIntents: stripeEvidence.paymentIntents.length,
+          charges: stripeEvidence.charges.length,
+          refunds: stripeEvidence.charges.reduce((sum, charge) => sum + charge.refunds.length, 0),
+        },
       },
       planned: {
         accountBalanceAdjustmentCents: alreadyApplied ? 0 : IMPORTED_CREDIT_CENTS,
@@ -115,7 +172,7 @@ async function main() {
 
   await prisma.$transaction(async (tx) => {
     const current = await loadState(tx);
-    invariant(fingerprint(reviewedState(current)) === planFingerprint, "Production state changed after preview; no reconciliation was applied.");
+    invariant(fingerprint({ database: reviewedState(current), stripe: stripeEvidence }) === planFingerprint, "Production or Stripe state changed after preview; no reconciliation was applied.");
 
     if (current.correctionLedger) {
       invariant(current.account.balanceCents === 0 && current.correctionLedger.amountCents === IMPORTED_CREDIT_CENTS && current.correctionLedger.balanceAfterCents === 0, "Existing Myisha reconciliation is incomplete or changed.");
@@ -124,6 +181,7 @@ async function main() {
 
     invariant(current.account.balanceCents === -IMPORTED_CREDIT_CENTS, "Myisha balance is no longer the reviewed imported -$315.00.");
     invariant(current.account.invoices.length === 0 && current.account.payments.length === 0 && current.refundRequests.length === 0, "A BEE Suite invoice, payment, or refund request now exists; manual transaction reconciliation is required.");
+    invariant(stripeEvidence.paymentIntents.length === 0 && stripeEvidence.charges.length === 0, "Myisha's connected Stripe customer now has payment activity; no balance reconciliation was applied.");
 
     const accountFields = record(current.account.customFields);
     const account = await tx.billingAccount.update({
@@ -170,9 +228,9 @@ async function main() {
         currentBillingFilename: SOURCE_CURRENT_BILLING_FILE,
         statementMessageId: SOURCE_STATEMENT_MESSAGE_ID,
         statementFilename: SOURCE_STATEMENT_FILE,
-        stripePaymentIntentsFound: 0,
-        stripeChargesFound: 0,
-        stripeRefundsFound: 0,
+        stripePaymentIntentsFound: stripeEvidence.paymentIntents.length,
+        stripeChargesFound: stripeEvidence.charges.length,
+        stripeRefundsFound: stripeEvidence.charges.reduce((sum, charge) => sum + charge.refunds.length, 0),
         invoicesChanged: false,
         paymentsChanged: false,
         refundsChanged: false,

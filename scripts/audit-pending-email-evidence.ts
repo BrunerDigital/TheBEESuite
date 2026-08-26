@@ -2,12 +2,15 @@ import "./load-env";
 
 import { prisma } from "@/lib/prisma";
 
-const INVOICE_PAYMENT_APPLICATION_TYPES = new Set([
+const INVOICE_APPLICATION_LEDGER_TYPES = new Set([
   "payment",
   "cash_payment",
   "check_payment",
   "payroll_deduction_payment",
   "account_credit_application",
+  "refund",
+  "chargeback",
+  "chargeback_reversal",
 ]);
 
 function record(value: unknown) {
@@ -120,11 +123,11 @@ async function main() {
   const longmontInvoices = longmontAsOf.flatMap((family) => (family.account?.invoices ?? []).map((invoice) => ({ familyId: family.id, familyName: family.name, account: family.account, invoice })));
   const longmontPastDueInvoices = longmontInvoices.filter(({ invoice }) => invoice.dueDate <= new Date("2026-08-25T23:59:59.999Z") && ["OPEN", "PARTIALLY_PAID", "FAILED"].includes(invoice.status));
   const longmontPastDue = longmontPastDueInvoices.map(({ familyId, familyName, account, invoice }) => {
-    const appliedCents = Math.abs((account?.ledgerEntries ?? []).filter((entry) => (
+    const applicationDeltaCents = (account?.ledgerEntries ?? []).filter((entry) => (
       entry.invoiceId === invoice.id
-      && entry.amountCents < 0
-      && INVOICE_PAYMENT_APPLICATION_TYPES.has(entry.type)
-    )).reduce((sum, entry) => sum + entry.amountCents, 0));
+      && INVOICE_APPLICATION_LEDGER_TYPES.has(entry.type)
+    )).reduce((sum, entry) => sum + entry.amountCents, 0);
+    const appliedCents = Math.max(0, -applicationDeltaCents);
     return { familyId, familyName, invoice, appliedCents, outstandingCents: Math.max(0, invoice.totalCents - appliedCents) };
   });
 

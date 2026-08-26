@@ -23,7 +23,17 @@ test("Myisha reconciliation is anchored to both later ProCare sources", () => {
   assert.match(source, /Standard customer statement\.pdf/);
   assert.match(source, /reportedBalanceCents: 0/);
   assert.match(source, /endingBalanceCents: 0/);
-  assert.match(source, /stripePaymentIntentsFound: 0/);
-  assert.match(source, /stripeChargesFound: 0/);
-  assert.match(source, /stripeRefundsFound: 0/);
+  assert.match(source, /stripePaymentIntentsFound: stripeEvidence\.paymentIntents\.length/);
+  assert.match(source, /stripeChargesFound: stripeEvidence\.charges\.length/);
+  assert.match(source, /stripeRefundsFound: stripeEvidence\.charges\.reduce/);
+});
+
+test("Myisha apply fingerprint includes a fresh exact connected-customer Stripe audit", () => {
+  assert.match(source, /loadStripeEvidence\(\)/);
+  assert.match(source, /const reviewed = \{ database: reviewedState\(before\), stripe: stripeEvidence \}/);
+  assert.match(source, /fingerprint\(\{ database: reviewedState\(current\), stripe: stripeEvidence \}\)/);
+  assert.match(source, /\/v1\/payment_intents\?customer=\$\{STRIPE_CUSTOMER_ID\}/);
+  assert.match(source, /\/v1\/charges\?customer=\$\{STRIPE_CUSTOMER_ID\}/);
+  assert.match(source, /\/v1\/refunds\?charge=\$\{charge\.id\}/);
+  assert.match(source, /stripeEvidence\.paymentIntents\.length === 0 && stripeEvidence\.charges\.length === 0/);
 });

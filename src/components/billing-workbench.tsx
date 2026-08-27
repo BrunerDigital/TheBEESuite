@@ -944,6 +944,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setCheckAmountDollars("");
         setCheckNumber("");
         setCheckNotes("");
+        setCheckPaidAt(currentLocalDateTime(timeZone));
         router.refresh();
         return;
       }
@@ -953,6 +954,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setCashAmountDollars("");
         setCashReference("");
         setCashNotes("");
+        setCashPaidAt(currentLocalDateTime(timeZone));
         router.refresh();
         return;
       }
@@ -962,6 +964,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setPayrollAmountDollars("");
         setPayrollReference("");
         setPayrollNotes("");
+        setPayrollPaidAt(currentLocalDateTime(timeZone));
         router.refresh();
         return;
       }

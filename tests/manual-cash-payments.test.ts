@@ -63,5 +63,12 @@ test("payment receipts use the payment family's school time zone", () => {
 test("manual payments reject nonexistent and repeated daylight-saving wall times", () => {
   assert.equal(unambiguousZonedDateTimeLocalToUtc("2026-03-08T02:30", "America/New_York"), null);
   assert.equal(unambiguousZonedDateTimeLocalToUtc("2026-11-01T01:30", "America/New_York"), null);
+  assert.equal(unambiguousZonedDateTimeLocalToUtc("2026-04-05T01:45", "Australia/Lord_Howe"), null);
   assert.equal(unambiguousZonedDateTimeLocalToUtc("2026-08-27T17:15", "America/New_York")?.toISOString(), "2026-08-27T21:15:00.000Z");
+});
+
+test("each successful manual payment refreshes its default received time", () => {
+  assert.match(workbench, /payload\.mode === "manualCheckPayment"[\s\S]*setCheckPaidAt\(currentLocalDateTime\(timeZone\)\)/);
+  assert.match(workbench, /payload\.mode === "manualCashPayment"[\s\S]*setCashPaidAt\(currentLocalDateTime\(timeZone\)\)/);
+  assert.match(workbench, /payload\.mode === "payrollDeductionPayment"[\s\S]*setPayrollPaidAt\(currentLocalDateTime\(timeZone\)\)/);
 });

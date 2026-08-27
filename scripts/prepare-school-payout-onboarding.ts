@@ -12,6 +12,7 @@ import {
   buildSchoolPayoutSetupInput,
   hasSchoolPayoutSelector,
   SCHOOL_PAYOUT_SETUP_VERSION,
+  schoolPayoutOnboardingAppBaseUrl,
   schoolPayoutSetupCustomFieldPatch,
   schoolPayoutCenterWhere,
   type SchoolPayoutSelector,
@@ -165,7 +166,7 @@ export async function prepareSchoolPayoutOnboarding(options: PrepareOptions = {}
         stripeConnectAccountId: accountId,
         ...(readiness ? stripeConnectCustomFieldPatch(readiness) : {}),
         stripePayoutStatus: "onboarding_started",
-        stripeConnectDashboard: "express",
+        stripeConnectDashboard: created.account?.dashboard || "full",
         stripeConnectApi: "accounts_v2",
         stripeConnectCreatedAt: new Date().toISOString(),
       };
@@ -189,7 +190,10 @@ export async function prepareSchoolPayoutOnboarding(options: PrepareOptions = {}
 
   let onboardingUrl: string | undefined;
   if (hasFlag("--create-link") && accountId) {
-    const baseUrl = (argValue("--app-url") || process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://thebeesuite.io").replace(/\/$/, "");
+    const baseUrl = schoolPayoutOnboardingAppBaseUrl(
+      argValue("--app-url"),
+      process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL,
+    );
     const link = await createStripeAccountLink({
       accountId,
       refreshUrl: `${baseUrl}/api/billing/connect/refresh?centerId=${encodeURIComponent(center.id)}`,

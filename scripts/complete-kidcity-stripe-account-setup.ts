@@ -96,6 +96,9 @@ export async function completeKidCityStripeAccountSetup() {
     let payoutScheduleUpdated = false;
     let error: string | null = null;
     const schoolEin = readSchoolEin(center.customFields);
+    const existing = center.customFields && typeof center.customFields === "object" && !Array.isArray(center.customFields)
+      ? center.customFields as Prisma.JsonObject
+      : {};
     const initial = await retrieveStripeConnectedAccount(accountId, { tenantId: center.organization.tenantId });
     if (!initial.ok || !initial.account) {
       return {
@@ -111,13 +114,15 @@ export async function completeKidCityStripeAccountSetup() {
 
     if (apply) {
       const alreadyReady = initial.account.chargesEnabled && initial.account.payoutsEnabled;
-      if (!alreadyReady) {
+      const onboardingAlreadyPrepared = Boolean(existing.stripeConnectLastOnboardingAt);
+      if (!alreadyReady && !onboardingAlreadyPrepared) {
         const profile = await completeStripeConnectedAccountBusinessProfile({
           accountId,
           businessPhone: setup.details.payoutContactPhone,
+          businessUrl: setup.details.businessUrl,
           ein: schoolEin,
           tenantId: center.organization.tenantId,
-          idempotencyKey: `kidcity-account-profile-v3-${center.id}`,
+          idempotencyKey: `kidcity-account-profile-v4-${center.id}`,
         });
         profileUpdated = profile.ok;
         if (!profile.ok) error = profile.error || "Stripe business profile update failed.";
@@ -150,17 +155,16 @@ export async function completeKidCityStripeAccountSetup() {
 
     const readiness = stripeConnectReadinessFromSnapshot(retrieved.account);
     if (apply) {
-      const existing = center.customFields && typeof center.customFields === "object" && !Array.isArray(center.customFields)
-        ? center.customFields as Prisma.JsonObject
-        : {};
       await prisma.center.update({
         where: { id: center.id },
         data: {
           customFields: jsonInput({
             ...existing,
             ...stripeConnectCustomFieldPatch(readiness),
-            stripeConnectBusinessProfileCompletedAt: new Date().toISOString(),
-            ...(schoolEin ? { stripeConnectEinSubmittedAt: new Date().toISOString() } : {}),
+            ...(profileUpdated
+              ? { stripeConnectBusinessProfileCompletedAt: new Date().toISOString() }
+              : {}),
+            ...(profileUpdated && schoolEin ? { stripeConnectEinSubmittedAt: new Date().toISOString() } : {}),
             stripeConnectPayoutSchedule: payoutScheduleUpdated ? "daily" : existing.stripeConnectPayoutSchedule,
           }),
         },

@@ -114,6 +114,24 @@ test("new school account creation is idempotent and omits indirect-transfer onbo
   assert.match(createAccount, /losses_collector: "stripe"/);
 });
 
+test("school payout provisioning records the actual Full Dashboard account model", () => {
+  for (const scriptPath of [
+    "scripts/prepare-kidcity-school-payouts.ts",
+    "scripts/prepare-school-payout-onboarding.ts",
+  ]) {
+    const source = readFileSync(scriptPath, "utf8");
+    assert.match(source, /created\.account\?\.dashboard \|\| "full"/);
+    assert.doesNotMatch(source, /stripeConnectDashboard:\s*"express"/);
+  }
+});
+
+test("Stripe profile completion stops before hosted onboarding owns protected fields", () => {
+  const source = readFileSync("scripts/complete-kidcity-stripe-account-setup.ts", "utf8");
+  assert.match(source, /onboardingAlreadyPrepared = Boolean\(existing\.stripeConnectLastOnboardingAt\)/);
+  assert.match(source, /!alreadyReady && !onboardingAlreadyPrepared/);
+  assert.match(source, /profileUpdated\s*\? \{ stripeConnectBusinessProfileCompletedAt/);
+});
+
 test("every payment entry point enforces the complete school readiness flow", () => {
   for (const routePath of [
     "src/app/api/billing/checkout-session/route.ts",

@@ -215,7 +215,7 @@ export async function prepareKidCitySchoolPayouts() {
           postalCode: setup.details.postalCode,
           businessUrl: setup.details.businessUrl,
           productDescription: setup.details.productDescription,
-          idempotencyKey: `kidcity-connect-account-${center.id}`,
+          idempotencyKey: `kidcity-connect-account-v2-${center.id}`,
           tenantId: center.organization.tenantId,
         });
         if (!created.ok || !created.id) {

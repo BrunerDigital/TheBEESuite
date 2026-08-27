@@ -115,6 +115,8 @@ test("new school account creation is idempotent and omits indirect-transfer onbo
 });
 
 test("school payout provisioning records the actual Full Dashboard account model", () => {
+  const bulkProvisioning = readFileSync("scripts/prepare-kidcity-school-payouts.ts", "utf8");
+  assert.match(bulkProvisioning, /kidcity-connect-account-v2-/);
   for (const scriptPath of [
     "scripts/prepare-kidcity-school-payouts.ts",
     "scripts/prepare-school-payout-onboarding.ts",

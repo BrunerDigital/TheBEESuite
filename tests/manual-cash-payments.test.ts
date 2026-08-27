@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { unambiguousZonedDateTimeLocalToUtc } from "@/lib/zoned-date-time";
 
 const invoicesRoute = readFileSync("src/app/api/billing/invoices/route.ts", "utf8");
 const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
+const printActions = readFileSync("src/components/billing-print-actions.tsx", "utf8");
 const parentPortal = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
 
 function section(source: string, start: string, end: string) {
@@ -43,4 +45,30 @@ test("directors can enter cash details and families see a clear payment label", 
   assert.match(workbench, /Post Cash Payment/);
   assert.match(workbench, /Receipt \/ reference/);
   assert.match(parentPortal, /provider === "manual_cash"\) return "Cash payment"/);
+});
+
+test("manual cash timestamps use the selected school's local date and time", () => {
+  assert.match(workbench, /resolveSchoolTimeZone\(centerId\)/);
+  assert.match(workbench, /zonedDateTimeLocalValue\(new Date\(\), timeZone\)/);
+  assert.match(workbench, /const localNow = currentLocalDateTime\(resolveSchoolTimeZone\(value\)\);[\s\S]*setCheckPaidAt\(localNow\);[\s\S]*setCashPaidAt\(localNow\);[\s\S]*setPayrollPaidAt\(localNow\);/);
+  assert.match(workbench, /manualPaymentTimestamp\(cashPaidAt, timeZone\)/);
+  assert.match(workbench, /type="datetime-local" value=\{cashPaidAt\}/);
+});
+
+test("payment receipts use the payment family's school time zone", () => {
+  assert.match(printActions, /useSchoolTimeZone\(payment\.billingAccount\.family\.centerId\)/);
+  assert.match(printActions, /formatPrintDateTime\(payment\.paidAt, timeZone\)/);
+});
+
+test("manual payments reject nonexistent and repeated daylight-saving wall times", () => {
+  assert.equal(unambiguousZonedDateTimeLocalToUtc("2026-03-08T02:30", "America/New_York"), null);
+  assert.equal(unambiguousZonedDateTimeLocalToUtc("2026-11-01T01:30", "America/New_York"), null);
+  assert.equal(unambiguousZonedDateTimeLocalToUtc("2026-04-05T01:45", "Australia/Lord_Howe"), null);
+  assert.equal(unambiguousZonedDateTimeLocalToUtc("2026-08-27T17:15", "America/New_York")?.toISOString(), "2026-08-27T21:15:00.000Z");
+});
+
+test("each successful manual payment refreshes its default received time", () => {
+  assert.match(workbench, /payload\.mode === "manualCheckPayment"[\s\S]*setCheckPaidAt\(currentLocalDateTime\(timeZone\)\)/);
+  assert.match(workbench, /payload\.mode === "manualCashPayment"[\s\S]*setCashPaidAt\(currentLocalDateTime\(timeZone\)\)/);
+  assert.match(workbench, /payload\.mode === "payrollDeductionPayment"[\s\S]*setPayrollPaidAt\(currentLocalDateTime\(timeZone\)\)/);
 });

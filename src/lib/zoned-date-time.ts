@@ -62,6 +62,28 @@ export function zonedDateTimeLocalToUtc(value: string, timeZone: string) {
   }, timeZone);
 }
 
+export function unambiguousZonedDateTimeLocalToUtc(value: string, timeZone: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value);
+  if (!match) return null;
+  const includeSeconds = match[6] !== undefined;
+  const wallTimeAsUtc = Date.UTC(
+    Number(match[1]), Number(match[2]) - 1, Number(match[3]),
+    Number(match[4]), Number(match[5]), Number(match[6] ?? 0),
+  );
+  const offsets = new Set<number>();
+  const sampleWindowMs = 48 * 60 * 60 * 1000;
+  const sampleStepMs = 15 * 60 * 1000;
+  for (let sampleTime = wallTimeAsUtc - sampleWindowMs; sampleTime <= wallTimeAsUtc + sampleWindowMs; sampleTime += sampleStepMs) {
+    const sample = new Date(sampleTime);
+    const parts = partsInTimeZone(sample, timeZone);
+    offsets.add(Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) - sampleTime);
+  }
+  const candidates = [...offsets]
+    .map((offset) => new Date(wallTimeAsUtc - offset))
+    .filter((candidate) => zonedDateTimeLocalValue(candidate, timeZone, includeSeconds) === value);
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
 export function formatZonedDateTime(
   value: Date | string | null | undefined,
   timeZone: string,

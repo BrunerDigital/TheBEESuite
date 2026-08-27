@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Save, Search, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
-import { useSchoolTimeZone } from "@/components/school-time-zone-context";
-import { formatZonedDateTime } from "@/lib/zoned-date-time";
+import { useSchoolTimeZoneResolver } from "@/components/school-time-zone-context";
+import { formatZonedDateTime, unambiguousZonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -169,6 +169,14 @@ type InvoiceEditDraft = {
 
 function todayDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function currentLocalDateTime(timeZone: string) {
+  return zonedDateTimeLocalValue(new Date(), timeZone);
+}
+
+function manualPaymentTimestamp(value: string, timeZone: string) {
+  return unambiguousZonedDateTimeLocalToUtc(value, timeZone)?.toISOString() ?? "";
 }
 
 function currentBillingPeriod() {
@@ -345,7 +353,6 @@ function formatShortDate(value: Date | string | null | undefined) {
 }
 
 export function BillingWorkbench({ families, centers, products, tuitionPlans, currentRole, initialFamilyId, initialCenterId, initialChildId, searchQuery }: Props) {
-  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const initialFamily = useMemo(
     () => pickInitialBillingFamily(families, initialFamilyId, searchQuery),
@@ -361,6 +368,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const initialAssignment = initialAssignmentChild?.tuitionAssignment ?? null;
   const initialAssignedPlan = initialLocationTuitionPlans.find((plan) => plan.id === initialAssignment?.tuitionPlanId) ?? null;
   const [centerId, setCenterId] = useState(initialCenter);
+  const resolveSchoolTimeZone = useSchoolTimeZoneResolver();
+  const timeZone = resolveSchoolTimeZone(centerId);
   const [familyId, setFamilyId] = useState(initialFamily?.id ?? "");
   const [chargeSource, setChargeSource] = useState("tuitionPlan");
   const [tuitionPlanId, setTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
@@ -378,14 +387,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [adjustmentType, setAdjustmentType] = useState("credit");
   const [checkAmountDollars, setCheckAmountDollars] = useState("");
   const [checkNumber, setCheckNumber] = useState("");
-  const [checkPaidAt, setCheckPaidAt] = useState(todayDate());
+  const [checkPaidAt, setCheckPaidAt] = useState(() => currentLocalDateTime(timeZone));
   const [checkNotes, setCheckNotes] = useState("");
   const [cashAmountDollars, setCashAmountDollars] = useState("");
-  const [cashPaidAt, setCashPaidAt] = useState(todayDate());
+  const [cashPaidAt, setCashPaidAt] = useState(() => currentLocalDateTime(timeZone));
   const [cashReference, setCashReference] = useState("");
   const [cashNotes, setCashNotes] = useState("");
   const [payrollAmountDollars, setPayrollAmountDollars] = useState("");
-  const [payrollPaidAt, setPayrollPaidAt] = useState(todayDate());
+  const [payrollPaidAt, setPayrollPaidAt] = useState(() => currentLocalDateTime(timeZone));
   const [payrollReference, setPayrollReference] = useState("");
   const [payrollNotes, setPayrollNotes] = useState("");
   const [refundPaymentIds, setRefundPaymentIds] = useState<string[]>([]);
@@ -836,7 +845,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (!value) return;
     const nextPlans = tuitionPlans.filter((plan) => plan.centerId === value);
     const nextFamily = families.find((family) => family.centerId === value) ?? null;
+    const localNow = currentLocalDateTime(resolveSchoolTimeZone(value));
     setCenterId(value);
+    setCheckPaidAt(localNow);
+    setCashPaidAt(localNow);
+    setPayrollPaidAt(localNow);
     setWeeklyRecoveryPreview(null);
     setFamilyId(nextFamily?.id ?? "");
     setChildId("none");
@@ -931,6 +944,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setCheckAmountDollars("");
         setCheckNumber("");
         setCheckNotes("");
+        setCheckPaidAt(currentLocalDateTime(timeZone));
         router.refresh();
         return;
       }
@@ -940,6 +954,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setCashAmountDollars("");
         setCashReference("");
         setCashNotes("");
+        setCashPaidAt(currentLocalDateTime(timeZone));
         router.refresh();
         return;
       }
@@ -949,6 +964,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setPayrollAmountDollars("");
         setPayrollReference("");
         setPayrollNotes("");
+        setPayrollPaidAt(currentLocalDateTime(timeZone));
         router.refresh();
         return;
       }
@@ -1114,13 +1130,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   function submitManualCheckPayment() {
     if (!selectedFamily) return setErrorMessage("Choose a family before posting a check payment.");
     if (!checkAmountDollars || !checkNumber.trim()) return setErrorMessage("Enter the check amount and check number.");
+    const paidAt = manualPaymentTimestamp(checkPaidAt, timeZone);
+    if (!paidAt) return setErrorMessage("Enter a valid check received date and time.");
     if (!confirmBillingAction(`post check #${checkNumber.trim()} as a payment`)) return;
     submit({
       mode: "manualCheckPayment",
       familyId: selectedFamily.id,
       amountDollars: checkAmountDollars,
       checkNumber: checkNumber.trim(),
-      paidAt: checkPaidAt,
+      paidAt,
       description: `Check payment #${checkNumber.trim()}`,
       notes: checkNotes,
     });
@@ -1130,12 +1148,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (!selectedFamily) return setErrorMessage("Choose a family before posting a cash payment.");
     const amountCents = dollarsToCents(cashAmountDollars);
     if (amountCents <= 0) return setErrorMessage("Enter a cash amount greater than zero.");
+    const paidAt = manualPaymentTimestamp(cashPaidAt, timeZone);
+    if (!paidAt) return setErrorMessage("Enter a valid cash received date and time.");
     if (!confirmBillingAction(`post ${money(amountCents)} received in cash`)) return;
     submit({
       mode: "manualCashPayment",
       familyId: selectedFamily.id,
       amountCents,
-      paidAt: cashPaidAt,
+      paidAt,
       reference: cashReference.trim(),
       description: "Cash payment",
       notes: cashNotes.trim(),
@@ -1147,12 +1167,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const amountCents = dollarsToCents(payrollAmountDollars);
     if (amountCents <= 0) return setErrorMessage("Enter a payroll deduction amount greater than zero.");
     if (!payrollReference.trim()) return setErrorMessage("Enter the payroll run or pay-period reference.");
+    const paidAt = manualPaymentTimestamp(payrollPaidAt, timeZone);
+    if (!paidAt) return setErrorMessage("Enter a valid withholding date and time.");
     if (!confirmBillingAction(`post ${money(amountCents)} already withheld through payroll`)) return;
     submit({
       mode: "payrollDeductionPayment",
       familyId: selectedFamily.id,
       amountCents,
-      paidAt: payrollPaidAt,
+      paidAt,
       payrollReference: payrollReference.trim(),
       notes: payrollNotes.trim(),
     });
@@ -2491,8 +2513,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <Input id="billing-check-reference" value={checkNumber} onChange={(event) => setCheckNumber(event.target.value)} placeholder="1042" />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="billing-check-received-date">Received date</Label>
-                <Input id="billing-check-received-date" type="date" value={checkPaidAt} onChange={(event) => setCheckPaidAt(event.target.value)} />
+                <Label htmlFor="billing-check-received-date">Received date and time</Label>
+                <Input id="billing-check-received-date" type="datetime-local" value={checkPaidAt} onChange={(event) => setCheckPaidAt(event.target.value)} />
               </div>
             </div>
             <div className="space-y-1">
@@ -2520,8 +2542,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <Input id="billing-cash-reference" value={cashReference} onChange={(event) => setCashReference(event.target.value)} placeholder="Front desk receipt 1042" />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="billing-cash-received-date">Received date</Label>
-                <Input id="billing-cash-received-date" type="date" value={cashPaidAt} onChange={(event) => setCashPaidAt(event.target.value)} />
+                <Label htmlFor="billing-cash-received-date">Received date and time</Label>
+                <Input id="billing-cash-received-date" type="datetime-local" value={cashPaidAt} onChange={(event) => setCashPaidAt(event.target.value)} />
               </div>
             </div>
             <div className="space-y-1">
@@ -2549,8 +2571,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <Input id="billing-payroll-reference" value={payrollReference} onChange={(event) => setPayrollReference(event.target.value)} placeholder="2026-08-16 to 2026-08-29" />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="billing-payroll-posted-date">Payroll posted date</Label>
-                <Input id="billing-payroll-posted-date" type="date" value={payrollPaidAt} onChange={(event) => setPayrollPaidAt(event.target.value)} />
+                <Label htmlFor="billing-payroll-posted-date">Payroll posted date and time</Label>
+                <Input id="billing-payroll-posted-date" type="datetime-local" value={payrollPaidAt} onChange={(event) => setPayrollPaidAt(event.target.value)} />
               </div>
             </div>
             <div className="space-y-1">

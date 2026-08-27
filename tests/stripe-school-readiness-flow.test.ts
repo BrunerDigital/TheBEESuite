@@ -106,7 +106,9 @@ test("new school account creation is idempotent and omits indirect-transfer onbo
     integrations.indexOf("export async function createStripeConnectedAccount"),
     integrations.indexOf("export async function completeStripeConnectedAccountBusinessProfile"),
   );
-  assert.match(route, /idempotencyKey: `bee-suite-school-connect-\$\{center\.id\}`/);
+  assert.match(route, /idempotencyKey: stripeAccountCreationIdempotencyKey/);
+  assert.match(route, /legacyKidCityKey: `bee-suite-school-connect-\$\{center\.id\}`/);
+  assert.match(route, /changedDescriptorKey: `bee-suite-school-connect-v2-\$\{center\.id\}`/);
   assert.match(route, /updateCenterCustomFieldsIfCurrent/);
   assert.match(route, /center\.customFields === null[\s\S]{0,100}Prisma\.DbNull/);
   assert.doesNotMatch(createAccount, /recipient:\s*\{/);
@@ -115,6 +117,8 @@ test("new school account creation is idempotent and omits indirect-transfer onbo
 });
 
 test("school payout provisioning records the actual Full Dashboard account model", () => {
+  const bulkProvisioning = readFileSync("scripts/prepare-kidcity-school-payouts.ts", "utf8");
+  assert.match(bulkProvisioning, /kidcity-connect-account-v2-/);
   for (const scriptPath of [
     "scripts/prepare-kidcity-school-payouts.ts",
     "scripts/prepare-school-payout-onboarding.ts",

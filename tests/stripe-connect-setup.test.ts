@@ -11,6 +11,8 @@ import {
   retrieveStripeConnectedAccount,
   setStripeConnectedAccountDailyPayouts,
   setStripeConnectedAccountManualPayouts,
+  stripeAccountCreationIdempotencyKey,
+  stripeSchoolStatementDescriptor,
 } from "../src/lib/integrations";
 import {
   STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE,
@@ -23,6 +25,43 @@ import {
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
+
+test("Stripe school statement descriptors follow the school brand", () => {
+  assert.deepEqual(stripeSchoolStatementDescriptor("Kid City USA - Fishers"), {
+    descriptor: "KID CITY USA",
+    prefix: "KIDCITY",
+  });
+  assert.deepEqual(stripeSchoolStatementDescriptor("Miss Honey's Onion Sprouts - Lyons"), {
+    descriptor: "MISS HONEYS",
+    prefix: "MISSHONEY",
+  });
+  assert.deepEqual(stripeSchoolStatementDescriptor("A B C"), {
+    descriptor: "A B C",
+    prefix: "SCHOOL",
+  });
+  assert.deepEqual(stripeSchoolStatementDescriptor("12345"), {
+    descriptor: "SCHOOL TUITION",
+    prefix: "SCHOOLTUITION".slice(0, 10),
+  });
+  assert.deepEqual(stripeSchoolStatementDescriptor("Miss Honeymoon Academy"), {
+    descriptor: "MISS HONEYMOON ACADEMY",
+    prefix: "MISSHONEYM",
+  });
+  assert.deepEqual(stripeSchoolStatementDescriptor("Smart Kid City Preschool"), {
+    descriptor: "SMART KID CITY PRESCHO",
+    prefix: "SMARTKIDCI",
+  });
+});
+
+test("Stripe account creation preserves legacy Kid City retries and versions changed descriptors", () => {
+  const keys = {
+    legacyKidCityKey: "account-center-1",
+    changedDescriptorKey: "account-v2-center-1",
+  };
+  assert.equal(stripeAccountCreationIdempotencyKey({ ...keys, displayName: "Kid City USA - Fishers" }), keys.legacyKidCityKey);
+  assert.equal(stripeAccountCreationIdempotencyKey({ ...keys, displayName: "Miss Honey's Onion Sprouts - Lyons" }), keys.changedDescriptorKey);
+  assert.equal(stripeAccountCreationIdempotencyKey({ ...keys, displayName: "Independent Preschool" }), keys.changedDescriptorKey);
+});
 
 test("Stripe Connect setup normalizes dashboard payout profile fields", () => {
   const setup = normalizeStripeConnectSetupInput({
@@ -276,6 +315,7 @@ test("Stripe connected account business completion supplies childcare merchant f
   try {
     const result = await completeStripeConnectedAccountBusinessProfile({
       accountId: "acct_123",
+      businessName: "Miss Honey's Onion Sprouts - Lyons",
       businessPhone: "+17655551234",
       businessUrl: "https://kidcityusa.com/locations/indiana/fishers/",
       ein: "12-3456789",
@@ -292,7 +332,8 @@ test("Stripe connected account business completion supplies childcare merchant f
     assert.deepEqual(result.account?.requirementFields, ["external_account"]);
     assert.equal(requestedUrl, "https://api.stripe.com/v2/core/accounts/acct_123");
     assert.equal(merchant.mcc, "8351");
-    assert.equal(asRecord(merchant.statement_descriptor).descriptor, "KID CITY USA");
+    assert.equal(asRecord(merchant.statement_descriptor).descriptor, "MISS HONEYS");
+    assert.equal(asRecord(merchant.statement_descriptor).prefix, "MISSHONEY");
     assert.equal(asRecord(identity.business_details).phone, "+17655551234");
     assert.deepEqual(asRecord(identity.business_details).id_numbers, [{ type: "us_ein", value: "123456789" }]);
     assert.equal(asRecord(merchant.support).url, "https://kidcityusa.com/locations/indiana/fishers/");

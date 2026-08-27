@@ -289,12 +289,21 @@ export const executiveParentPortalDemo = {
     mood: report.mood,
     teacherNote: report.teacherNote,
     suppliesNeeded: report.suppliesNeeded,
+    checkInAt: isoWithOffset(0, 7, 42),
+    checkOutAt: isoWithOffset(0, 17, 18),
     child: { fullName: report.child.fullName },
     meals: [{ id: `${report.id}-meal`, mealType: "Lunch", food: "Pasta, peas, and fruit", amount: "Most" }],
     naps: [{ id: `${report.id}-nap`, startsAt: isoWithOffset(0, 12, 30), endsAt: isoWithOffset(0, 14, 0) }],
     diapers: [{ id: `${report.id}-potty`, type: "Dry", occurredAt: isoWithOffset(0, 10, 15), notes: null }],
     activities: [{ id: `${report.id}-activity`, title: "Sensory bins", notes: "Practiced sharing and color sorting." }],
   })),
+  media: [{
+    id: "exec-demo-parent-photo",
+    url: "/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png",
+    caption: "Classroom learning and play update",
+    createdAt: isoWithOffset(0, 15, 5),
+    child: { fullName: "Mia Rivera" },
+  }],
   incidents: [
     {
       id: "exec-demo-incident",

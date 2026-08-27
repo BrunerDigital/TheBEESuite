@@ -216,3 +216,16 @@ test("parent correction deep link resolves to a labeled request section", () => 
   assert.match(workspace, /<Label htmlFor="contact-request-details">[\s\S]*<Textarea[\s\S]*id="contact-request-details"/);
   assert.match(workspace, /hash: "contact-request"/);
 });
+
+test("parent updates expose the full attendance window and openable photos", () => {
+  const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const workspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
+
+  assert.match(page, /reportAttendanceByChildDay/);
+  assert.match(page, /log\.type === "check_in"/);
+  assert.match(page, /log\.type === "check_out"/);
+  assert.match(page, /dailyReports=\{parentDailyReports\}/);
+  assert.match(workspace, /Check-in: \{report\.checkInAt/);
+  assert.match(workspace, /Check-out: \{report\.checkOutAt/);
+  assert.match(workspace, /href=\{imageSrc \|\| undefined\}[\s\S]*Open full-size photo/);
+});

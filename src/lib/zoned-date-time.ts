@@ -62,6 +62,16 @@ export function zonedDateTimeLocalToUtc(value: string, timeZone: string) {
   }, timeZone);
 }
 
+export function unambiguousZonedDateTimeLocalToUtc(value: string, timeZone: string) {
+  const date = zonedDateTimeLocalToUtc(value, timeZone);
+  if (!date) return null;
+  const includeSeconds = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value);
+  if (zonedDateTimeLocalValue(date, timeZone, includeSeconds) !== value) return null;
+  const sameWallTime = (candidate: Date) => zonedDateTimeLocalValue(candidate, timeZone, includeSeconds) === value;
+  if (sameWallTime(new Date(date.getTime() - 3_600_000)) || sameWallTime(new Date(date.getTime() + 3_600_000))) return null;
+  return date;
+}
+
 export function formatZonedDateTime(
   value: Date | string | null | undefined,
   timeZone: string,

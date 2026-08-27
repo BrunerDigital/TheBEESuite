@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { unambiguousZonedDateTimeLocalToUtc } from "@/lib/zoned-date-time";
 
 const invoicesRoute = readFileSync("src/app/api/billing/invoices/route.ts", "utf8");
 const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
@@ -57,4 +58,10 @@ test("manual cash timestamps use the selected school's local date and time", () 
 test("payment receipts use the payment family's school time zone", () => {
   assert.match(printActions, /useSchoolTimeZone\(payment\.billingAccount\.family\.centerId\)/);
   assert.match(printActions, /formatPrintDateTime\(payment\.paidAt, timeZone\)/);
+});
+
+test("manual payments reject nonexistent and repeated daylight-saving wall times", () => {
+  assert.equal(unambiguousZonedDateTimeLocalToUtc("2026-03-08T02:30", "America/New_York"), null);
+  assert.equal(unambiguousZonedDateTimeLocalToUtc("2026-11-01T01:30", "America/New_York"), null);
+  assert.equal(unambiguousZonedDateTimeLocalToUtc("2026-08-27T17:15", "America/New_York")?.toISOString(), "2026-08-27T21:15:00.000Z");
 });

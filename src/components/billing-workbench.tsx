@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Save, Search, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { useSchoolTimeZoneResolver } from "@/components/school-time-zone-context";
-import { formatZonedDateTime, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
+import { formatZonedDateTime, unambiguousZonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -176,7 +176,7 @@ function currentLocalDateTime(timeZone: string) {
 }
 
 function manualPaymentTimestamp(value: string, timeZone: string) {
-  return zonedDateTimeLocalToUtc(value, timeZone)?.toISOString() ?? "";
+  return unambiguousZonedDateTimeLocalToUtc(value, timeZone)?.toISOString() ?? "";
 }
 
 function currentBillingPeriod() {

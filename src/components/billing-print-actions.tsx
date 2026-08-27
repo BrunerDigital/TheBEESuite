@@ -160,7 +160,7 @@ export function LedgerPrintButton({ entries, schools }: { entries: BillingLedger
 }
 
 export function PaymentReceiptPrintButton({ payment, schools }: { payment: BillingPaymentReceipt; schools: BillingReceiptSchool[] }) {
-  const timeZone = useSchoolTimeZone();
+  const timeZone = useSchoolTimeZone(payment.billingAccount.family.centerId);
   const { active, generatedAt, print } = usePrintableReport();
   const school = schoolForCenterId(schools, payment.billingAccount.family.centerId);
   const paid = payment.status === "PAID";

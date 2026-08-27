@@ -212,7 +212,7 @@ import {
 import { registrationPaymentFromData } from "@/lib/registration-billing";
 import { createAssetHubSignedUrl, createChildMediaSignedUrl, createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
 import { centerServiceDayWindow, latestLogMap, readCenterLocationTimeZone } from "@/lib/attendance-state";
-import { formatZonedDateTime } from "@/lib/zoned-date-time";
+import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
 import { readStaffClockState, readStaffClockSummary, readStaffContactEmail, readStaffKioskPinHash } from "@/lib/staff-kiosk";
 import { estimatedHourlyGrossPayCents, readStaffCompensation } from "@/lib/staff-compensation";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
@@ -2396,6 +2396,34 @@ async function renderLivePage(
         attachments: await signMessageAttachmentsFromMetadata(message.metadata),
       }))),
     ]);
+    const reportAttendanceLogs = dailyReports.length
+      ? await prisma.checkInOutLog.findMany({
+          where: {
+            childId: { in: childIds.length ? childIds : ["__none__"] },
+            occurredAt: {
+              gte: new Date(Math.min(...dailyReports.map((report) => report.date.getTime())) - 86_400_000),
+              lt: new Date(Math.max(...dailyReports.map((report) => report.date.getTime())) + 172_800_000),
+            },
+          },
+          orderBy: { occurredAt: "asc" },
+          select: { childId: true, type: true, occurredAt: true },
+        })
+      : [];
+    const reportAttendanceByChildDay = new Map<string, { checkInAt: Date | null; checkOutAt: Date | null }>();
+    for (const log of reportAttendanceLogs) {
+      const key = `${log.childId}:${zonedDateKey(log.occurredAt, parentServiceDay.timeZone)}`;
+      const window = reportAttendanceByChildDay.get(key) ?? { checkInAt: null, checkOutAt: null };
+      if (log.type === "check_in" && (!window.checkInAt || log.occurredAt < window.checkInAt)) window.checkInAt = log.occurredAt;
+      if (log.type === "check_out" && (!window.checkOutAt || log.occurredAt > window.checkOutAt)) window.checkOutAt = log.occurredAt;
+      reportAttendanceByChildDay.set(key, window);
+    }
+    const parentDailyReports = dailyReports.map((report) => ({
+      ...report,
+      ...(reportAttendanceByChildDay.get(`${report.childId}:${zonedDateKey(report.date, parentServiceDay.timeZone)}`) ?? {
+        checkInAt: null,
+        checkOutAt: null,
+      }),
+    }));
     const parentPortalCenterName = resolvedParentCenterId
       ? centers.find((center) => center.id === resolvedParentCenterId)
       : null;
@@ -2685,7 +2713,7 @@ async function renderLivePage(
           hasPrevious: requestedLedgerPage > 1,
           hasNext: (billingAccount?.ledgerEntries.length ?? 0) > PARENT_LEDGER_PAGE_SIZE,
         }}
-        dailyReports={dailyReports}
+        dailyReports={parentDailyReports}
         incidents={incidents}
         messages={signedMessages}
         centerName={parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}

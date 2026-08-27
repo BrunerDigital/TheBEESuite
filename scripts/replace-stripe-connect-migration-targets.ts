@@ -355,7 +355,7 @@ async function main() {
       postalCode: setup.postalCode,
       businessUrl: setup.businessUrl,
       productDescription: setup.productDescription,
-      idempotencyKey: `bee-suite-full-dashboard-replacement-${plan.center.id}-${plan.oldTargetAccountId}`,
+      idempotencyKey: `bee-suite-full-dashboard-replacement-v2-${plan.center.id}-${plan.oldTargetAccountId}`,
       metadata: {
         bee_suite_center_id: plan.center.id,
         bee_suite_location_id: plan.center.locationId || plan.center.crmLocationId,
@@ -386,7 +386,7 @@ async function main() {
       businessUrl: setup.businessUrl,
       ein: schoolEin,
       tenantId: plan.center.organization.tenantId,
-      idempotencyKey: `bee-suite-full-dashboard-profile-${plan.center.id}-${plan.oldTargetAccountId}`,
+      idempotencyKey: `bee-suite-full-dashboard-profile-v2-${plan.center.id}-${plan.oldTargetAccountId}`,
     });
     if (!profile.ok) {
       throw new Error(`${plan.center.name}: replacement business profile failed: ${profile.error || "Stripe rejected the profile."}`);

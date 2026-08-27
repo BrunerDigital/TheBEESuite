@@ -212,7 +212,7 @@ async function POSTHandler(request: NextRequest) {
       businessUrl: setup.details.businessUrl,
       productDescription: setup.details.productDescription,
       tenantId: user.tenantId,
-      idempotencyKey: `bee-suite-school-connect-${center.id}`,
+      idempotencyKey: `bee-suite-school-connect-v2-${center.id}`,
       metadata: {
         beeSuiteCenterId: center.id,
         beeSuiteCrmLocationId: center.crmLocationId,

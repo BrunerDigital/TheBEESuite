@@ -309,6 +309,7 @@ test("migration routes protect the source bank and generate target links only af
   assert.doesNotMatch(softwareRoute, /createStripeBalanceSoftwareSubscription|createStripeBalancePaymentMethod/);
   assert.match(preparation, /stripeConnectMigrationParentPaymentsAccountId: plan\.sourceAccountId/);
   assert.match(preparation, /stripeConnectMigrationTargetPayoutHoldStatus: "pending_confirmation"/);
+  assert.match(preparation, /bee-suite-connect-migration-v3-/);
   assert.match(preparation, /linksCreated: 0/);
   assert.doesNotMatch(preparation, /createStripeAccountLink/);
 });
@@ -503,7 +504,8 @@ test("Full Dashboard target replacement is fingerprinted, idempotent, and preser
   assert.match(replacement, /endsAt: \{ gte: grantNow \}/);
   assert.match(replacement, /customFields: \{ equals: transactionFields as Prisma\.InputJsonValue \}/);
   assert.match(replacement, /a concurrent migration update stopped the database swap/);
-  assert.match(replacement, /bee-suite-full-dashboard-replacement-/);
+  assert.match(replacement, /bee-suite-full-dashboard-replacement-v2-/);
+  assert.match(replacement, /bee-suite-full-dashboard-profile-v2-/);
   assert.match(replacement, /created\.account\.dashboard !== "full"/);
   assert.match(replacement, /businessName: setup\.displayName/);
   assert.match(replacement, /businessUrl: setup\.businessUrl/);

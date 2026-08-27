@@ -235,7 +235,7 @@ async function main() {
         postalCode: setup.postalCode,
         businessUrl: setup.businessUrl,
         productDescription: setup.productDescription,
-        idempotencyKey: `bee-suite-connect-migration-v2-${plan.center.id}`,
+        idempotencyKey: `bee-suite-connect-migration-v3-${plan.center.id}`,
         metadata: {
           bee_suite_center_id: plan.center.id,
           bee_suite_location_id: plan.center.locationId || plan.center.crmLocationId,

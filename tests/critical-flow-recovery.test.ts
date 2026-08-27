@@ -49,6 +49,11 @@ test("login and password recovery preserve controlled input when services are un
   assert.match(forgotRoute, /delivery_audit_unavailable/);
   assert.match(forgotRoute, /user_lookup_unavailable/);
   assert.match(forgotRoute, /redirectUrl:\s*recovery\.redirectTo \|\| redirectTo/);
+  assert.ok(
+    forgotRoute.indexOf("user = await prisma.user.findUnique") <
+      forgotRoute.indexOf("const recovery = await generateSupabasePasswordRecoveryLink"),
+    "unknown or inactive application users must be filtered before calling the recovery provider",
+  );
   assert.doesNotMatch(forgotRoute, /if \(!delivery\.ok\)[\s\S]{0,400}status:\s*503/);
   assert.match(readFileSync("src/lib/supabase-auth.ts", "utf8"), /AbortSignal\.timeout\(10_000\)/);
   assert.match(forgotRoute, /delivery_unavailable/);

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The BEE Suite | Dynamic Savings Model</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { color-scheme: dark; }
+    body { margin: 0; min-height: 100vh; background: #050a10; color: #f8fbff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .2; background: radial-gradient(circle at 82% 10%, rgba(245,181,27,.5), transparent 28rem), radial-gradient(circle at 8% 70%, rgba(27,201,188,.32), transparent 26rem); }
+    main { position: relative; width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 40px 0 64px; }
+    nav { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 48px; }
+    nav a { color: #f8fbff; text-decoration: none; font-weight: 800; }
+    .brand { display: flex; align-items: center; gap: 11px; }
+    .mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; background: #f5b51b; color: #07101a; }
+    .back { color: rgba(248,251,255,.68); font-size: 14px; }
+    header { max-width: 800px; }
+    .eyebrow { display: inline-flex; color: #f5b51b; font-size: 13px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 14px 0 16px; font-size: clamp(42px, 7vw, 78px); line-height: .95; letter-spacing: -.045em; }
+    header p { margin: 0; max-width: 700px; color: rgba(248,251,255,.7); font-size: clamp(17px, 2vw, 21px); line-height: 1.55; }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(330px, .92fr); gap: 22px; margin-top: 40px; }
+    .panel { border: 1px solid rgba(255,255,255,.12); border-radius: 26px; background: rgba(11,18,26,.86); box-shadow: 0 30px 80px rgba(0,0,0,.28); overflow: hidden; }
+    .panel-head { padding: 24px 26px 18px; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .panel-head h2 { margin: 0; font-size: 22px; }
+    .panel-head p { margin: 7px 0 0; color: rgba(248,251,255,.58); line-height: 1.45; }
+    form { padding: 24px 26px 28px; }
+    fieldset { margin: 0 0 26px; padding: 0; border: 0; }
+    legend { width: 100%; margin-bottom: 15px; color: #1bc9bc; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    label { display: grid; gap: 8px; color: rgba(248,251,255,.72); font-size: 13px; font-weight: 700; line-height: 1.35; }
+    input { width: 100%; border: 1px solid rgba(255,255,255,.14); border-radius: 13px; padding: 14px 15px; background: rgba(255,255,255,.055); color: white; font: inherit; font-size: 17px; font-weight: 800; outline: none; }
+    input:focus { border-color: #f5b51b; box-shadow: 0 0 0 3px rgba(245,181,27,.15); }
+    .results { display: grid; align-content: start; gap: 14px; padding: 26px; }
+    .result { padding: 20px; border: 1px solid rgba(255,255,255,.1); border-radius: 18px; background: rgba(255,255,255,.04); }
+    .result span { display: block; color: rgba(248,251,255,.58); font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+    .result strong { display: block; margin-top: 7px; font-size: clamp(28px, 5vw, 44px); letter-spacing: -.04em; }
+    .result.primary { border-color: rgba(245,181,27,.35); background: linear-gradient(145deg, rgba(245,181,27,.18), rgba(245,181,27,.05)); }
+    .result.primary strong { color: #f5b51b; }
+    .result.negative strong { color: #ff8f8f; }
+    .assumptions { margin: 6px 0 0; padding: 17px 18px; border-radius: 16px; background: rgba(27,201,188,.08); color: rgba(248,251,255,.68); font-size: 13px; line-height: 1.55; }
+    .assumptions strong { color: #1bc9bc; }
+    .fine-print { margin: 20px 0 0; color: rgba(248,251,255,.45); font-size: 12px; line-height: 1.55; }
+    @media (max-width: 800px) { .workspace { grid-template-columns: 1fr; } .fields { grid-template-columns: 1fr; } main { padding-top: 24px; } nav { margin-bottom: 34px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <nav>
+      <a class="brand" href="/"><span class="mark">⬡</span><span>The BEE Suite</span></a>
+      <a class="back" href="/">← Product site</a>
+    </nav>
+    <header>
+      <span class="eyebrow">Interactive planning model</span>
+      <h1>Model the cost of fragmented operations.</h1>
+      <p>Enter your own software and administrative-work assumptions to compare a current-state scenario with a more connected one.</p>
+    </header>
+    <div class="workspace">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Your assumptions</h2>
+          <p>Use combined monthly totals across the locations you want to model.</p>
+        </div>
+        <form id="model-form">
+          <fieldset>
+            <legend>Current fragmented model</legend>
+            <div class="fields">
+              <label>Monthly software per location ($)<input id="current-software" type="number" min="0" step="25" value="1600" /></label>
+              <label>Admin hours / week per location<input id="current-hours" type="number" min="0" step="0.5" value="18" /></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Modeled connected scenario</legend>
+            <div class="fields">
+              <label>Monthly software per location ($)<input id="modeled-software" type="number" min="0" step="25" value="1100" /></label>
+              <label>Admin hours / week per location<input id="modeled-hours" type="number" min="0" step="0.5" value="8" /></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Planning context</legend>
+            <div class="fields">
+              <label>Loaded admin labor cost / hour ($)<input id="hourly-cost" type="number" min="0" step="1" value="32" /></label>
+              <label>Locations in this scenario<input id="locations" type="number" min="1" step="1" value="3" /></label>
+            </div>
+          </fieldset>
+          <p class="fine-print">This browser-only model does not send or store the values you enter. Software and weekly labor inputs are per-location estimates and are multiplied by the location count.</p>
+        </form>
+      </section>
+      <aside class="panel results" aria-live="polite">
+        <div class="result"><span>Current annual modeled cost</span><strong id="current-total">$0</strong></div>
+        <div class="result"><span>Connected annual modeled cost</span><strong id="modeled-total">$0</strong></div>
+        <div class="result primary" id="difference-card"><span id="difference-label">Modeled annual difference</span><strong id="difference">$0</strong></div>
+        <div class="result"><span>Locations modeled</span><strong id="location-output">0</strong></div>
+        <p class="assumptions"><strong>Planning estimate only.</strong> Results reflect only the values entered here. They are not a quote, ROI promise, guarantee, or representation of actual BEE Suite pricing or customer outcomes.</p>
+      </aside>
+    </div>
+  </main>
+  <script>
+    const ids = ["current-software", "current-hours", "modeled-software", "modeled-hours", "hourly-cost", "locations"];
+    const value = (id) => Math.max(0, Number(document.getElementById(id).value) || 0);
+    const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    function calculate() {
+      const hourly = value("hourly-cost");
+      const locations = Math.max(1, Math.round(value("locations")));
+      const current = (value("current-software") * 12 + value("current-hours") * hourly * 52) * locations;
+      const modeled = (value("modeled-software") * 12 + value("modeled-hours") * hourly * 52) * locations;
+      const difference = current - modeled;
+      document.getElementById("current-total").textContent = money.format(current);
+      document.getElementById("modeled-total").textContent = money.format(modeled);
+      document.getElementById("difference").textContent = money.format(Math.abs(difference));
+      document.getElementById("difference-label").textContent = difference >= 0 ? "Modeled annual difference" : "Modeled annual increase";
+      document.getElementById("difference-card").classList.toggle("negative", difference < 0);
+      document.getElementById("location-output").textContent = String(locations);
+    }
+    ids.forEach((id) => document.getElementById(id).addEventListener("input", calculate));
+    calculate();
+  </script>
+</body>
+</html>

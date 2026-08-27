@@ -2,13 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { checkoutApplicationGuard } from "@/lib/billing-guardrails";
 import {
+  createStripeSoftwareSubscription,
+  ensureStripeSoftwareRecurringPrice,
   readStripeConnectedAccountId,
   retrieveStripeConnectedAccount,
   retrieveStripePaymentMethod,
   retrieveStripeSetupIntent,
   sendSms,
   setStripeCustomerDefaultPaymentMethod,
+  updateStripeSoftwareSubscription,
+  type StripeSoftwareSubscriptionSnapshot,
 } from "@/lib/integrations";
+import { getSchoolSoftwareBillingStartAt, getSchoolSoftwareFeePolicyForCenter } from "@/lib/kidcity-software-billing";
 import { beginCommunicationSmsDeliveryAttempt, finalizeCommunicationSmsDeliveryAttempt, nextIntegrationRetryAt } from "@/lib/integration-deliveries";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import {
@@ -17,6 +22,7 @@ import {
 } from "@/lib/payment-method-management";
 import { beeSuitePayoutSmsBody, payoutSmsRecipient, sendPayoutSmsSafely } from "@/lib/payout-sms";
 import { prisma } from "@/lib/prisma";
+import { saveSoftwareSubscriptionSnapshot } from "@/lib/school-software-subscriptions";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
@@ -154,6 +160,15 @@ type StripePaymentIntentObject = {
   metadata?: StripeMetadata;
 };
 
+type StripeSetupIntentObject = {
+  id: string;
+  object: "setup_intent";
+  customer?: string | null;
+  payment_method?: string | null;
+  status?: string | null;
+  metadata?: StripeMetadata;
+};
+
 type StripeChargeObject = {
   id: string;
   object: "charge";
@@ -190,7 +205,7 @@ type StripeWebhookEvent = {
   livemode?: boolean;
   account?: string;
   data: {
-    object: StripeCheckoutSessionCompleted | StripePaymentIntentObject | StripeChargeObject | StripeDisputeObject | StripePayoutObject | { id?: string; object?: string };
+    object: StripeCheckoutSessionCompleted | StripePaymentIntentObject | StripeSetupIntentObject | StripeChargeObject | StripeDisputeObject | StripePayoutObject | { id?: string; object?: string };
   };
 };
 
@@ -958,6 +973,7 @@ async function handlePayoutCreated(
   await finalizeCommunicationSmsDeliveryAttempt({
     id: delivery.id,
     result,
+    statusCallbackUrl,
   });
 
   await prisma.auditLog.create({
@@ -1189,6 +1205,9 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
         linkedGuardianUserIds: lockedGuardianLinks.map((guardian) => guardian.userId),
         setupMode,
       });
+      const setupSucceeded = setupIntent?.setupIntent?.status === "succeeded";
+      const setupPending = !setupSucceeded && !["canceled", "setup_failed"].includes(setupIntent?.setupIntent?.status || "");
+      const appliedAutopayPatch = setupSucceeded ? autopayPatch : null;
       const auditTenantId = familyCenter?.organization.tenantId || clean(tenantId);
       if (autopayPatch?.preservedExistingConsent && !auditTenantId) {
         throw new Error("Autopay consent migration requires an authoritative tenant for its audit record.");
@@ -1206,41 +1225,63 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
           customFields: {
             ...currentFields,
             ...(customerId ? stripeCustomerCustomFieldPatch(currentFields, customerId, connectedAccountId) : {}),
-            ...(autopayPatch ? {
-              autopayEnabled: autopayPatch.autopayEnabled,
-              autopayStatus: autopayPatch.autopayStatus,
-              autopayPaymentMethodId: autopayPatch.autopayPaymentMethodId,
-              ...(autopayPatch.preservedExistingConsent ? {
+            ...(appliedAutopayPatch ? {
+              autopayEnabled: appliedAutopayPatch.autopayEnabled,
+              autopayStatus: appliedAutopayPatch.autopayStatus,
+              autopayPaymentMethodId: appliedAutopayPatch.autopayPaymentMethodId,
+              ...(appliedAutopayPatch.preservedExistingConsent ? {
                 autopayConsentMigratedAt: new Date().toISOString(),
                 autopayConsentMigrationReason: "stripe_connected_account_payment_method_reauthorized",
                 autopayDisabledAt: null,
                 autopayDisabledReason: null,
               } : {}),
-              ...(autopayPatch.replacementDisabledAutopay ? {
+              ...(appliedAutopayPatch.replacementDisabledAutopay ? {
                 autopayDisabledAt: new Date().toISOString(),
                 autopayDisabledReason: "saved_payment_method_replaced",
               } : {}),
             } : {}),
-            stripeDefaultPaymentMethodId: paymentMethodId || null,
-            stripeDefaultPaymentMethodConnectedAccountId: connectedAccountId || null,
-            stripePaymentMethodType: paymentMethodDetails?.type ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodType) || null),
-            stripePaymentMethodLast4: paymentMethodDetails?.last4 ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodLast4) || null),
-            stripePaymentMethodBrand: paymentMethodDetails?.brand ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodBrand) || null),
-            stripePaymentMethodBankName: paymentMethodDetails?.bankName ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodBankName) || null),
+            ...(setupPending ? {
+              autopayEnabled: false,
+              autopayStatus: "pending",
+              autopayPaymentMethodId: null,
+              stripePendingAutopayOutcome: autopayPatch,
+              stripePendingAutopayAuditTenantId: auditTenantId,
+              stripePendingAutopayAuditCenterId: familyCenter?.id ?? null,
+              stripeBankVerificationPending: true,
+            } : {
+              stripePendingAutopayOutcome: null,
+              stripePendingAutopayAuditTenantId: null,
+              stripePendingAutopayAuditCenterId: null,
+              stripeBankVerificationPending: false,
+            }),
+            stripeDefaultPaymentMethodId: setupSucceeded ? (paymentMethodId || null) : (previousPaymentMethodId || null),
+            stripeDefaultPaymentMethodConnectedAccountId: setupSucceeded ? (connectedAccountId || null) : (clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId) || null),
+            stripePaymentMethodType: setupSucceeded ? (paymentMethodDetails?.type ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodType) || null)) : (clean(currentFields.stripePaymentMethodType) || null),
+            stripePaymentMethodLast4: setupSucceeded ? (paymentMethodDetails?.last4 ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodLast4) || null)) : (clean(currentFields.stripePaymentMethodLast4) || null),
+            stripePaymentMethodBrand: setupSucceeded ? (paymentMethodDetails?.brand ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodBrand) || null)) : (clean(currentFields.stripePaymentMethodBrand) || null),
+            stripePaymentMethodBankName: setupSucceeded ? (paymentMethodDetails?.bankName ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodBankName) || null)) : (clean(currentFields.stripePaymentMethodBankName) || null),
+            stripePendingPaymentMethodId: setupPending ? (paymentMethodId || null) : null,
+            stripePendingPaymentMethodConnectedAccountId: setupPending ? (connectedAccountId || null) : null,
+            stripePendingPaymentMethodType: setupPending ? (paymentMethodDetails?.type || null) : null,
+            stripePendingPaymentMethodLast4: setupPending ? (paymentMethodDetails?.last4 || null) : null,
+            stripePendingPaymentMethodBrand: setupPending ? (paymentMethodDetails?.brand || null) : null,
+            stripePendingPaymentMethodBankName: setupPending ? (paymentMethodDetails?.bankName || null) : null,
             stripeSetupIntentId: setupIntentId || null,
             stripeSetupIntentStatus: setupIntent?.setupIntent?.status || null,
             stripeSetupCheckoutSessionId: session.id,
             stripeSetupConnectedAccountId: connectedAccountId || null,
             stripeEventId: event.id,
-            stripePaymentMethodSavedAt: new Date().toISOString(),
-            paymentMethodManagementStatus: paymentMethodId ? "payment_method_saved" : "setup_completed_missing_payment_method",
+            stripePaymentMethodSavedAt: setupSucceeded ? new Date().toISOString() : null,
+            paymentMethodManagementStatus: setupSucceeded
+              ? (paymentMethodId ? "payment_method_saved" : "setup_completed_missing_payment_method")
+              : (setupPending ? "pending_bank_verification" : "bank_verification_failed"),
           },
         },
       });
       if (billingAccountUpdate.count !== 1) {
         throw new Error("Billing account consent changed while Stripe payment-method setup was completing.");
       }
-      if (autopayPatch?.preservedExistingConsent) {
+      if (appliedAutopayPatch?.preservedExistingConsent) {
         await tx.auditLog.create({
           data: {
             tenantId: auditTenantId,
@@ -1258,7 +1299,7 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
           await tx.center.update({ where: { id: familyCenter.id }, data: { updatedAt: new Date() } });
         }
       }
-      return autopayPatch?.preservedExistingConsent ? "preserved" as const : "applied" as const;
+      return appliedAutopayPatch?.preservedExistingConsent ? "preserved" as const : "applied" as const;
     });
     if (outcome === "stale") return NextResponse.json({ ok: true, staleSetupSessionIgnored: true });
   } catch (error) {
@@ -1271,10 +1312,197 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
   return NextResponse.json({ ok: true });
 }
 
+async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent, setupIntent: StripeSetupIntentObject) {
+  const billingAccountId = clean(setupIntent.metadata?.billingAccountId);
+  if (!billingAccountId) {
+    return NextResponse.json({ ok: true, ignored: true, reason: "billing_account_metadata_missing" });
+  }
+  const paymentMethodId = clean(setupIntent.payment_method);
+  if (!paymentMethodId) {
+    return NextResponse.json({ ok: false, error: "Verified setup intent is missing a payment method." }, { status: 400 });
+  }
+  const paymentMethodLookup = await retrieveStripePaymentMethod(paymentMethodId, {
+    tenantId: clean(setupIntent.metadata?.tenantId) || null,
+    connectedAccountId: clean(setupIntent.metadata?.stripeConnectedAccountId) || clean(event.account) || null,
+  });
+  if (!paymentMethodLookup.ok || !paymentMethodLookup.paymentMethod) {
+    return NextResponse.json(
+      { ok: false, error: paymentMethodLookup.error || "Verified payment method details could not be retrieved." },
+      { status: paymentMethodLookup.configured ? 502 : 503 },
+    );
+  }
+  const paymentMethodDetails = paymentMethodLookup.paymentMethod;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event);
+      const billingAccount = await tx.billingAccount.findUnique({
+        where: { id: billingAccountId },
+        select: { autopayPlaceholder: true, customFields: true },
+      });
+      if (!billingAccount) return;
+      const currentFields = jsonObject(billingAccount.customFields);
+      if (clean(currentFields.stripeSetupIntentId) !== setupIntent.id) return;
+      if (currentFields.stripeBankVerificationPending !== true) return;
+      const pendingOutcome = jsonObject(currentFields.stripePendingAutopayOutcome);
+      const hasPendingOutcome = Object.keys(pendingOutcome).length > 0;
+      const preservedExistingConsent = pendingOutcome.preservedExistingConsent === true;
+      const update = await tx.billingAccount.updateMany({
+        where: {
+          id: billingAccountId,
+          autopayPlaceholder: billingAccount.autopayPlaceholder,
+          customFields: billingAccount.customFields === null
+            ? { equals: Prisma.DbNull }
+            : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+        },
+        data: {
+          ...(hasPendingOutcome ? { autopayPlaceholder: pendingOutcome.autopayPlaceholder === true } : {}),
+          customFields: {
+            ...currentFields,
+            ...(hasPendingOutcome ? {
+              autopayEnabled: pendingOutcome.autopayEnabled === true,
+              autopayStatus: clean(pendingOutcome.autopayStatus) || "disabled",
+              autopayPaymentMethodId: clean(pendingOutcome.autopayPaymentMethodId) || null,
+            } : {}),
+            ...(preservedExistingConsent ? {
+              autopayConsentMigratedAt: new Date().toISOString(),
+              autopayConsentMigrationReason: "stripe_connected_account_payment_method_reauthorized",
+              autopayDisabledAt: null,
+              autopayDisabledReason: null,
+            } : {}),
+            stripeSetupIntentStatus: "succeeded",
+            stripeDefaultPaymentMethodId: clean(currentFields.stripePendingPaymentMethodId) || paymentMethodId,
+            stripeDefaultPaymentMethodConnectedAccountId: clean(currentFields.stripePendingPaymentMethodConnectedAccountId) || null,
+            stripePaymentMethodType: paymentMethodDetails.type || clean(currentFields.stripePendingPaymentMethodType) || null,
+            stripePaymentMethodLast4: paymentMethodDetails.last4 || clean(currentFields.stripePendingPaymentMethodLast4) || null,
+            stripePaymentMethodBrand: paymentMethodDetails.brand || clean(currentFields.stripePendingPaymentMethodBrand) || null,
+            stripePaymentMethodBankName: paymentMethodDetails.bankName || clean(currentFields.stripePendingPaymentMethodBankName) || null,
+            stripePendingPaymentMethodId: null,
+            stripePendingPaymentMethodConnectedAccountId: null,
+            stripePendingPaymentMethodType: null,
+            stripePendingPaymentMethodLast4: null,
+            stripePendingPaymentMethodBrand: null,
+            stripePendingPaymentMethodBankName: null,
+            stripeEventId: event.id,
+            stripePaymentMethodSavedAt: new Date().toISOString(),
+            paymentMethodManagementStatus: "payment_method_saved",
+            stripePendingAutopayOutcome: null,
+            stripePendingAutopayAuditTenantId: null,
+            stripePendingAutopayAuditCenterId: null,
+            stripeBankVerificationPending: false,
+          },
+        },
+      });
+      if (update.count !== 1) throw new Error("Billing account changed while bank verification was completing.");
+      const auditTenantId = clean(currentFields.stripePendingAutopayAuditTenantId);
+      if (preservedExistingConsent && auditTenantId) {
+        await tx.auditLog.create({
+          data: {
+            tenantId: auditTenantId,
+            centerId: clean(currentFields.stripePendingAutopayAuditCenterId) || null,
+            action: "billing.autopay.consent_migrated_to_current_stripe_account",
+            resource: "BillingAccount",
+            resourceId: billingAccountId,
+            metadata: { stripeEventId: event.id, stripeSetupIntentId: setupIntent.id },
+          },
+        });
+      }
+    });
+  } catch (error) {
+    if (isDuplicateWebhookEvent(error)) return NextResponse.json({ ok: true, duplicate: true });
+    throw error;
+  }
+  return NextResponse.json({ ok: true });
+}
+
+async function handlePaymentMethodSetupIntentFailed(event: StripeWebhookEvent, setupIntent: StripeSetupIntentObject) {
+  const billingAccountId = clean(setupIntent.metadata?.billingAccountId);
+  if (!billingAccountId) return NextResponse.json({ ok: true, ignored: true, reason: "billing_account_metadata_missing" });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event);
+      const billingAccount = await tx.billingAccount.findUnique({ where: { id: billingAccountId }, select: { customFields: true } });
+      if (!billingAccount) return;
+      const currentFields = jsonObject(billingAccount.customFields);
+      if (clean(currentFields.stripeSetupIntentId) !== setupIntent.id || currentFields.stripeBankVerificationPending !== true) return;
+      const update = await tx.billingAccount.updateMany({
+        where: {
+          id: billingAccountId,
+          customFields: billingAccount.customFields === null
+            ? { equals: Prisma.DbNull }
+            : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+        },
+        data: {
+          autopayPlaceholder: false,
+          customFields: {
+            ...currentFields,
+            autopayEnabled: false,
+            autopayStatus: "disabled",
+            autopayPaymentMethodId: null,
+            stripePendingPaymentMethodId: null,
+            stripePendingPaymentMethodConnectedAccountId: null,
+            stripePendingPaymentMethodType: null,
+            stripePendingPaymentMethodLast4: null,
+            stripePendingPaymentMethodBrand: null,
+            stripePendingPaymentMethodBankName: null,
+            stripeSetupIntentStatus: "setup_failed",
+            paymentMethodManagementStatus: "bank_verification_failed",
+            stripePendingAutopayOutcome: null,
+            stripePendingAutopayAuditTenantId: null,
+            stripePendingAutopayAuditCenterId: null,
+            stripeBankVerificationPending: false,
+            stripeEventId: event.id,
+          },
+        },
+      });
+      if (update.count !== 1) throw new Error("Billing account changed while failed bank verification was being recorded.");
+    });
+  } catch (error) {
+    if (isDuplicateWebhookEvent(error)) return NextResponse.json({ ok: true, duplicate: true });
+    throw error;
+  }
+  return NextResponse.json({ ok: true });
+}
+
 async function handleSchoolSoftwarePaymentMethodCompleted(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted, matchedTenantId?: string | null) {
   const centerId = clean(session.metadata?.centerId);
   if (!centerId) return NextResponse.json({ ok: false, error: "Missing school metadata." }, { status: 400 });
-  const tenantId = matchedTenantId || session.metadata?.tenantId || null;
+  const center = await prisma.center.findUnique({
+    where: { id: centerId },
+    select: {
+      id: true,
+      name: true,
+      crmLocationId: true,
+      locationId: true,
+      customFields: true,
+      organization: { select: { tenantId: true } },
+      ownerGroup: {
+        select: {
+          name: true,
+          ownerType: true,
+          billingEmail: true,
+          contactName: true,
+          customFields: true,
+        },
+      },
+    },
+  });
+  if (!center) return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
+  const metadataTenantId = clean(session.metadata?.tenantId);
+  if ((matchedTenantId && center.organization.tenantId !== matchedTenantId) ||
+    (metadataTenantId && center.organization.tenantId !== metadataTenantId)) {
+    return NextResponse.json({ ok: true, ignored: true, reason: "software_payment_tenant_mismatch" });
+  }
+  const fields = jsonObject(center.customFields);
+  if (clean(fields.stripeSoftwareSetupSessionId) !== session.id) {
+    try {
+      await prisma.$transaction((tx) => recordStripeWebhookEvent(tx, event));
+    } catch (error) {
+      if (!isDuplicateWebhookEvent(error)) throw error;
+    }
+    return NextResponse.json({ ok: true, ignored: true, reason: "superseded_school_software_setup_session" });
+  }
+  const tenantId = matchedTenantId || center.organization.tenantId;
   const setupIntentId = clean(session.setup_intent);
   const setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId, { tenantId }) : null;
   if (!setupIntent?.ok || !setupIntent.setupIntent?.paymentMethodId) {
@@ -1282,6 +1510,9 @@ async function handleSchoolSoftwarePaymentMethodCompleted(event: StripeWebhookEv
   }
   const customerId = setupIntent.setupIntent.customerId || clean(session.customer) || clean(session.metadata?.stripeCustomerId);
   const paymentMethodId = setupIntent.setupIntent.paymentMethodId;
+  if (!customerId || customerId !== clean(fields.stripeSoftwareCustomerId)) {
+    return NextResponse.json({ ok: true, ignored: true, reason: "software_payment_customer_mismatch" });
+  }
   const methodLookup = await retrieveStripePaymentMethod(paymentMethodId, { tenantId });
   if (!methodLookup.ok || !methodLookup.paymentMethod || !customerId) {
     return NextResponse.json({ ok: false, error: methodLookup.error || "The school payment method details could not be confirmed." }, { status: methodLookup.configured ? 502 : 503 });
@@ -1291,12 +1522,44 @@ async function handleSchoolSoftwarePaymentMethodCompleted(event: StripeWebhookEv
   if (!defaultResult.ok) {
     return NextResponse.json({ ok: false, error: defaultResult.error || "The default school payment method could not be saved." }, { status: defaultResult.configured ? 502 : 503 });
   }
+  const feePolicy = getSchoolSoftwareFeePolicyForCenter(center);
+  let subscription: StripeSoftwareSubscriptionSnapshot | null = null;
+  const existingSubscriptionId = clean(fields.stripeSoftwareSubscriptionId);
+  if (existingSubscriptionId) {
+    const updated = await updateStripeSoftwareSubscription({
+      subscriptionId: existingSubscriptionId,
+      defaultPaymentMethodId: paymentMethodId,
+      tenantId,
+    });
+    if (!updated.ok || !updated.subscription) {
+      return NextResponse.json({ ok: false, error: updated.error || "The recurring school software payment method could not be updated." }, { status: updated.configured ? 502 : 503 });
+    }
+    subscription = updated.subscription;
+  } else {
+    const price = await ensureStripeSoftwareRecurringPrice({
+      tenantId,
+      unitAmountCents: feePolicy.unitAmountCents,
+    });
+    if (!price.ok || !price.priceId) {
+      return NextResponse.json({ ok: false, error: price.error || "The school software price could not be prepared." }, { status: price.configured ? 502 : 503 });
+    }
+    const created = await createStripeSoftwareSubscription({
+      customerId,
+      paymentMethodId,
+      priceId: price.priceId,
+      quantity: 1,
+      billingStartAt: getSchoolSoftwareBillingStartAt(),
+      tenantId,
+      centerId,
+    });
+    if (!created.ok || !created.subscription) {
+      return NextResponse.json({ ok: false, error: created.error || "The recurring school software subscription could not be started." }, { status: created.configured ? 502 : 503 });
+    }
+    subscription = created.subscription;
+  }
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
-      const center = await tx.center.findUnique({ where: { id: centerId }, select: { customFields: true } });
-      if (!center) return;
-      const fields = jsonObject(center.customFields);
       await tx.center.update({
         where: { id: centerId },
         data: { customFields: {
@@ -1308,12 +1571,25 @@ async function handleSchoolSoftwarePaymentMethodCompleted(event: StripeWebhookEv
           stripeSoftwarePaymentMethodBrand: methodDetails.brand,
           stripeSoftwarePaymentMethodBankName: methodDetails.bankName,
           stripeSoftwarePaymentStatus: "ready",
+          stripeSoftwareBillingSource: "external_payment_method",
+          stripeSoftwareBillingStartAt: getSchoolSoftwareBillingStartAt().toISOString(),
+          stripeSoftwareMonthlyAmountCents: feePolicy.unitAmountCents,
+          stripeSoftwareFeeTier: feePolicy.tier,
           stripeSoftwarePaymentPreference: methodDetails.type === "us_bank_account" ? "payout_bank" : methodDetails.type,
           stripeSoftwarePaymentMethodSavedAt: new Date().toISOString(),
           stripeSoftwareSetupIntentId: setupIntentId,
           stripeSoftwareSetupSessionId: session.id,
         } },
       });
+      if (subscription) {
+        await saveSoftwareSubscriptionSnapshot(tx, centerId, subscription, {
+          stripeSoftwareMonthlyAmountCents: feePolicy.unitAmountCents,
+          stripeSoftwareFeeTier: feePolicy.tier,
+          stripeSoftwareBillingBasis: feePolicy.billingBasis,
+          stripeSoftwareBillingSource: "external_payment_method",
+          stripeSoftwareBillingStartAt: getSchoolSoftwareBillingStartAt().toISOString(),
+        });
+      }
     });
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) return NextResponse.json({ ok: true, duplicate: true });
@@ -2045,11 +2321,20 @@ async function dispatchAuthenticatedEvent(
     const centerId = clean(metadata.centerId) || clean(subscriptionMetadata.centerId);
     const customerId = clean(object.customer);
     const center = centerId
-      ? await prisma.center.findUnique({ where: { id: centerId }, select: { id: true, customFields: true } })
+      ? await prisma.center.findUnique({ where: { id: centerId }, select: { id: true, customFields: true, organization: { select: { tenantId: true } } } })
       : customerId
-        ? await prisma.center.findFirst({ where: { customFields: { path: ["stripeSoftwareCustomerId"], equals: customerId } }, select: { id: true, customFields: true } })
+        ? await prisma.center.findFirst({
+            where: {
+              customFields: { path: ["stripeSoftwareCustomerId"], equals: customerId },
+              ...(matchedTenantId ? { organization: { tenantId: matchedTenantId } } : {}),
+            },
+            select: { id: true, customFields: true, organization: { select: { tenantId: true } } },
+          })
         : null;
     if (!center) return NextResponse.json({ ok: true, ignored: true, reason: "software_billing_center_not_found" });
+    if (matchedTenantId && center.organization.tenantId !== matchedTenantId) {
+      return NextResponse.json({ ok: true, ignored: true, reason: "software_billing_tenant_mismatch" });
+    }
     const fields = jsonObject(center.customFields);
     const items = jsonObject(object.items);
     const firstItem = Array.isArray(items.data) ? jsonObject(items.data[0]) : {};
@@ -2090,6 +2375,14 @@ async function dispatchAuthenticatedEvent(
 
   if (event.type === "payment_intent.payment_failed") {
     return handlePaymentIntentFailed(event, event.data.object as StripePaymentIntentObject);
+  }
+
+  if (event.type === "setup_intent.succeeded") {
+    return handlePaymentMethodSetupIntentSucceeded(event, event.data.object as StripeSetupIntentObject);
+  }
+
+  if (event.type === "setup_intent.setup_failed") {
+    return handlePaymentMethodSetupIntentFailed(event, event.data.object as StripeSetupIntentObject);
   }
 
   if (event.type === "charge.refunded") {

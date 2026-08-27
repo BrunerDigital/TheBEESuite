@@ -3,10 +3,26 @@ import { test } from "node:test";
 import {
   buildSchoolPayoutSetupInput,
   hasSchoolPayoutSelector,
+  schoolPayoutOnboardingAppBaseUrl,
   schoolPayoutSetupCustomFieldPatch,
   schoolPayoutCenterWhere,
 } from "../src/lib/school-payout-onboarding";
 import { normalizeStripeConnectSetupInput } from "../src/lib/stripe-connect-setup";
+
+test("live payout onboarding ignores an implicit localhost app URL", () => {
+  assert.equal(
+    schoolPayoutOnboardingAppBaseUrl(undefined, "http://localhost:3000"),
+    "https://thebeesuite.io",
+  );
+  assert.equal(
+    schoolPayoutOnboardingAppBaseUrl("https://app.example.com/", "http://localhost:3000"),
+    "https://app.example.com",
+  );
+  assert.equal(
+    schoolPayoutOnboardingAppBaseUrl("http://localhost:3000/", "https://thebeesuite.io"),
+    "http://localhost:3000",
+  );
+});
 
 test("school payout setup defaults come from the selected center", () => {
   const input = buildSchoolPayoutSetupInput({}, {

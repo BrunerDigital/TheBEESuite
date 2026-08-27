@@ -7,6 +7,7 @@ import {
   listStripeConnectedAccountPayoutBanks,
   readStripeConnectedAccountId,
   retrieveStripeConnectedAccount,
+  type StripePayoutBankSnapshot,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { stripeBillingApprovalCustomFieldPatch } from "@/lib/stripe-billing-approval";
@@ -41,9 +42,9 @@ function maskAccountId(accountId: string) {
   return `${accountId.slice(0, 8)}...${accountId.slice(-4)}`;
 }
 
-function activationFingerprint(rows: Array<{ centerId: string; accountId: string }>) {
+function activationFingerprint(rows: Array<{ centerId: string; accountId: string; payoutBankId: string }>) {
   const canonical = rows
-    .map((row) => `${row.centerId}:${row.accountId}`)
+    .map((row) => `${row.centerId}:${row.accountId}:${row.payoutBankId}`)
     .sort()
     .join("\n");
   return createHash("sha256").update(canonical).digest("hex");
@@ -119,7 +120,10 @@ async function inspectCenter(center: CenterRow) {
     accountId,
     tenantId: center.organization.tenantId,
   });
-  const payoutBankConfirmed = payoutBanks.ok && Boolean(payoutBanks.defaultBank?.last4);
+  const payoutBank = payoutBanks.defaultBank;
+  const payoutBankConfirmed = payoutBanks.ok && Boolean(
+    payoutBank?.last4 && payoutBank.defaultForCurrency === true,
+  );
   const eligible = readiness.status === "ready" && payoutBankConfirmed;
 
   return {
@@ -127,6 +131,8 @@ async function inspectCenter(center: CenterRow) {
     center,
     accountId,
     readiness,
+    payoutBank,
+    payoutBankCount: payoutBanks.banks.length,
     payoutBankConfirmed,
     reason: eligible
       ? null
@@ -170,11 +176,14 @@ async function main() {
     inspected.push(...await Promise.all(centers.slice(index, index + concurrency).map(inspectCenter)));
   }
 
-  const eligible = inspected.filter((row) => row.eligible && row.accountId && row.readiness);
+  const eligible = inspected.filter((row) => (
+    row.eligible && row.accountId && row.readiness && row.payoutBank?.id
+  ));
   invariant(eligible.length > 0, "No Stripe-ready schools with a confirmed payout bank were found.");
   const fingerprint = activationFingerprint(eligible.map((row) => ({
     centerId: row.center.id,
     accountId: row.accountId!,
+    payoutBankId: row.payoutBank!.id,
   })));
   invariant(!apply || suppliedFingerprint === fingerprint, "Stripe-ready school set changed after dry-run review; rerun the dry run before applying.");
 
@@ -186,6 +195,8 @@ async function main() {
       school: row.center.name,
       locationId: row.center.locationId || row.center.crmLocationId,
       accountId: maskAccountId(row.accountId!),
+      payoutBankLast4: row.payoutBank?.last4 || null,
+      payoutBankCount: row.payoutBankCount,
       tuitionPlans: row.center._count.tuitionPlans,
       ...await activationInventory(row.center.id),
       alreadyActivated:
@@ -228,6 +239,7 @@ async function main() {
   });
   let activated = 0;
   let alreadyActivated = 0;
+  let payoutBankRecordsSynced = 0;
   for (const planned of plan) {
     const row = eligible.find((item) => item.center.id === planned.centerId);
     invariant(row?.accountId && row.readiness, `Eligible school disappeared: ${planned.school}`);
@@ -248,8 +260,20 @@ async function main() {
     });
     invariant(freshCenter && isActivePublicSchoolCandidate(freshCenter), `${planned.school} is no longer an active public school.`);
     const currentInspection = await inspectCenter(freshCenter);
-    invariant(currentInspection.eligible && currentInspection.accountId && currentInspection.readiness, `${planned.school} is no longer Stripe-ready with a confirmed payout bank.`);
+    invariant(
+      currentInspection.eligible &&
+        currentInspection.accountId &&
+        currentInspection.readiness &&
+        currentInspection.payoutBank?.last4 &&
+        currentInspection.payoutBank.defaultForCurrency === true,
+      `${planned.school} is no longer Stripe-ready with a confirmed default payout bank.`,
+    );
     invariant(currentInspection.accountId === row.accountId, `${planned.school} connected-account binding changed after review.`);
+    invariant(
+      currentInspection.payoutBank.id === row.payoutBank!.id,
+      `${planned.school} default payout bank changed after review; rerun the dry run before applying.`,
+    );
+    const confirmedPayoutBank = currentInspection.payoutBank as StripePayoutBankSnapshot;
 
     const result = await prisma.$transaction(async (tx) => {
       const current = await tx.center.findUnique({
@@ -264,6 +288,10 @@ async function main() {
         fields.tuitionBillingEnabled === true &&
         fields.refundsEnabled === true &&
         fields.stripeBillingApproved === true;
+      const wasPayoutBankSynced =
+        fields.stripePayoutBankLast4 === confirmedPayoutBank.last4 &&
+        fields.stripePayoutBankDefaultConfirmed === true &&
+        fields.stripePayoutBankCount === currentInspection.payoutBankCount;
 
       await tx.center.update({
         where: { id: planned.centerId },
@@ -272,6 +300,13 @@ async function main() {
             ...fields,
             ...stripeConnectCustomFieldPatch(currentInspection.readiness),
             ...billingApprovalPatch,
+            stripePayoutBankName: confirmedPayoutBank.bankName || null,
+            stripePayoutBankLast4: confirmedPayoutBank.last4,
+            stripePayoutBankStatus: confirmedPayoutBank.status || null,
+            stripePayoutBankCurrency: confirmedPayoutBank.currency || null,
+            stripePayoutBankDefaultConfirmed: true,
+            stripePayoutBankCount: currentInspection.payoutBankCount,
+            stripePayoutBankLastSyncedAt: activatedAt,
             livePaymentsEnabled: true,
             tuitionBillingEnabled: true,
             refundsEnabled: true,
@@ -313,11 +348,35 @@ async function main() {
           },
         });
       }
-      return { wasActivated };
+      if (!wasPayoutBankSynced) {
+        await tx.auditLog.create({
+          data: {
+            tenantId: row.center.organization.tenantId,
+            centerId: planned.centerId,
+            action: "billing.stripe_ready_school.payout_bank_synced",
+            resource: "Center",
+            resourceId: planned.centerId,
+            metadata: {
+              source: ACTIVATION_SOURCE,
+              authorization: "user_authorized_completion_of_school_payout_selection_and_billing_readiness",
+              activationFingerprint: fingerprint,
+              payoutBankLast4: confirmedPayoutBank.last4,
+              payoutBankDefaultConfirmed: true,
+              payoutBankCount: currentInspection.payoutBankCount,
+              payoutAccountChanged: false,
+              chargesCreated: false,
+              invoicesCreated: false,
+              syncedAt: activatedAt,
+            },
+          },
+        });
+      }
+      return { wasActivated, wasPayoutBankSynced };
     }, { maxWait: 10_000, timeout: 30_000 });
 
     if (result.wasActivated) alreadyActivated += 1;
     else activated += 1;
+    if (!result.wasPayoutBankSynced) payoutBankRecordsSynced += 1;
   }
 
   const verified = await prisma.center.findMany({
@@ -332,6 +391,8 @@ async function main() {
       fields.refundsEnabled === true &&
       fields.billingActivationStatus === "active" &&
       fields.stripeBillingApproved === true &&
+      typeof fields.stripePayoutBankLast4 === "string" &&
+      fields.stripePayoutBankDefaultConfirmed === true &&
       typeof fields.stripeBillingApprovalVersion === "string";
   }), "At least one Stripe-ready school failed billing activation verification.");
 
@@ -342,6 +403,7 @@ async function main() {
     eligibleSchools: plan.length,
     activated,
     alreadyActivated,
+    payoutBankRecordsSynced,
     verified: verified.map((center) => center.name).sort(),
     boundaries: {
       chargesCreated: 0,

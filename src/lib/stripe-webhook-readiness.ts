@@ -3,13 +3,22 @@ import { stripeWebhookSecretFingerprint, verifyStripeSignature } from "@/lib/int
 
 export type StripeWebhookSecretCandidate = {
   owner: "platform_destination" | "tenant_destination";
-  source: "STRIPE_CONNECT_WEBHOOK_SECRET" | "STRIPE_PLATFORM_WEBHOOK_SECRET" | "STRIPE_WEBHOOK_SECRET" | "tenant_integration_credential";
+  source: "STRIPE_THIN_WEBHOOK_SECRET" | "STRIPE_CONNECT_WEBHOOK_SECRET" | "STRIPE_PLATFORM_WEBHOOK_SECRET" | "STRIPE_WEBHOOK_SECRET" | "tenant_integration_credential";
   tenantId: string | null;
   secret: string;
 };
 
 export async function stripeWebhookSecretCandidates(): Promise<StripeWebhookSecretCandidate[]> {
   const candidates: StripeWebhookSecretCandidate[] = [];
+  const thinSecret = process.env.STRIPE_THIN_WEBHOOK_SECRET?.trim();
+  if (thinSecret) {
+    candidates.push({
+      owner: "platform_destination",
+      source: "STRIPE_THIN_WEBHOOK_SECRET",
+      tenantId: null,
+      secret: thinSecret,
+    });
+  }
   const connectSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET?.trim();
   if (connectSecret) {
     candidates.push({

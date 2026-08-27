@@ -185,15 +185,20 @@ function currentWeeklyPeriod(date = new Date()) {
 }
 
 function currentPeriodForCadence(cadence: string) {
-  return cadence === "weekly" || cadence === "four_week" ? currentWeeklyPeriod() : currentBillingPeriod();
+  return cadence === "weekly" || cadence === "biweekly" || cadence === "four_week" ? currentWeeklyPeriod() : currentBillingPeriod();
 }
 
 function periodMatchesCadence(value: string, cadence: string) {
-  return cadence === "weekly" || cadence === "four_week" ? /^\d{4}-W\d{2}$/i.test(value) : /^\d{4}-\d{2}$/.test(value);
+  return cadence === "weekly" || cadence === "biweekly" || cadence === "four_week" ? /^\d{4}-W\d{2}$/i.test(value) : /^\d{4}-\d{2}$/.test(value);
 }
 
 function tuitionRateCadence(cadence: string | null | undefined) {
   return cadence === "monthly" ? "monthly" : "weekly";
+}
+
+function tuitionBillingCadence(cadence: string | null | undefined) {
+  if (cadence === "monthly" || cadence === "biweekly" || cadence === "four_week") return cadence;
+  return "weekly";
 }
 
 function tuitionCadenceUnit(cadence: string | null | undefined) {
@@ -379,6 +384,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [cashPaidAt, setCashPaidAt] = useState(todayDate());
   const [cashReference, setCashReference] = useState("");
   const [cashNotes, setCashNotes] = useState("");
+  const [payrollAmountDollars, setPayrollAmountDollars] = useState("");
+  const [payrollPaidAt, setPayrollPaidAt] = useState(todayDate());
+  const [payrollReference, setPayrollReference] = useState("");
+  const [payrollNotes, setPayrollNotes] = useState("");
   const [refundPaymentIds, setRefundPaymentIds] = useState<string[]>([]);
   const [refundAmountDollars, setRefundAmountDollars] = useState("");
   const [refundReason, setRefundReason] = useState("");
@@ -391,7 +400,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [assignmentChildId, setAssignmentChildId] = useState(initialAssignmentChild?.id ?? "");
   const [assignmentEnabled, setAssignmentEnabled] = useState(initialAssignment?.enabled === false ? "false" : "true");
   const [assignmentCadence, setAssignmentCadence] = useState(
-    initialAssignment?.cadence === "monthly" ? "monthly" : initialAssignment?.cadence === "four_week" ? "four_week" : "weekly",
+    initialAssignment?.cadence === "monthly" ? "monthly" : initialAssignment?.cadence === "biweekly" ? "biweekly" : initialAssignment?.cadence === "four_week" ? "four_week" : "weekly",
   );
   const [assignmentBillingDay, setAssignmentBillingDay] = useState(String(initialAssignment?.billingDay ?? 1));
   const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
@@ -412,7 +421,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [planEditorId, setPlanEditorId] = useState(initialAssignedPlan?.id ?? "new");
   const [planName, setPlanName] = useState(initialAssignedPlan?.name ?? "");
   const [planAgeGroup, setPlanAgeGroup] = useState(initialAssignedPlan?.ageGroup ?? initialAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0]);
-  const [planCadence, setPlanCadence] = useState(tuitionRateCadence(initialAssignedPlan?.cadence));
+  const [planCadence, setPlanCadence] = useState(tuitionBillingCadence(initialAssignedPlan?.cadence));
   const [planAmountDollars, setPlanAmountDollars] = useState(initialAssignedPlan ? String(initialAssignedPlan.amountCents / 100) : "");
   const [planFundingType, setPlanFundingType] = useState<TuitionFundingType>(initialAssignedPlan?.amountCents === 0 ? "voucher" : "family");
   const [billingAction, setBillingAction] = useState("recurring");
@@ -870,7 +879,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
     setAssignmentChildId(child?.id ?? "");
     setAssignmentEnabled(assignment?.enabled === false ? "false" : "true");
-    const nextCadence = assignment?.cadence === "monthly" ? "monthly" : assignment?.cadence === "four_week" ? "four_week" : "weekly";
+    const nextCadence = assignment?.cadence === "monthly" ? "monthly" : assignment?.cadence === "biweekly" ? "biweekly" : assignment?.cadence === "four_week" ? "four_week" : "weekly";
     setAssignmentCadence(nextCadence);
     setAssignmentBillingDay(String(assignment?.billingDay ?? 1));
     setAssignmentTuitionPlanId(assignedPlan?.id ?? "");
@@ -890,7 +899,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setPlanEditorId(assignedPlan?.id ?? "new");
     setPlanName(assignedPlan?.name ?? "");
     setPlanAgeGroup(assignedPlan?.ageGroup ?? child?.ageGroup ?? defaultAgeGroupOptions[0]);
-    setPlanCadence(tuitionRateCadence(assignedPlan?.cadence));
+    setPlanCadence(tuitionBillingCadence(assignedPlan?.cadence));
     setPlanAmountDollars(assignedPlan ? String(assignedPlan.amountCents / 100) : "");
     setPlanFundingType(assignedPlan?.amountCents === 0 ? "voucher" : "family");
   }
@@ -931,6 +940,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setCashAmountDollars("");
         setCashReference("");
         setCashNotes("");
+        router.refresh();
+        return;
+      }
+      if (payload.mode === "payrollDeductionPayment") {
+        const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
+        setStatusMessage(`${total} verified payroll deduction posted to the family ledger.`);
+        setPayrollAmountDollars("");
+        setPayrollReference("");
+        setPayrollNotes("");
         router.refresh();
         return;
       }
@@ -1124,6 +1142,22 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     });
   }
 
+  function submitPayrollDeductionPayment() {
+    if (!selectedFamily) return setErrorMessage("Choose a family before posting a payroll deduction.");
+    const amountCents = dollarsToCents(payrollAmountDollars);
+    if (amountCents <= 0) return setErrorMessage("Enter a payroll deduction amount greater than zero.");
+    if (!payrollReference.trim()) return setErrorMessage("Enter the payroll run or pay-period reference.");
+    if (!confirmBillingAction(`post ${money(amountCents)} already withheld through payroll`)) return;
+    submit({
+      mode: "payrollDeductionPayment",
+      familyId: selectedFamily.id,
+      amountCents,
+      paidAt: payrollPaidAt,
+      payrollReference: payrollReference.trim(),
+      notes: payrollNotes.trim(),
+    });
+  }
+
   function submitRefundPayment() {
     if (!selectedFamily) return setErrorMessage("Choose a family.");
     const refundCents = dollarsToCents(refundAmountDollars);
@@ -1247,7 +1281,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const plan = locationTuitionPlans.find((item) => item.id === value);
     setAssignmentTuitionPlanId(value);
     setTuitionPlanId(value);
-    const nextCadence = tuitionRateCadence(plan?.cadence);
+    const nextCadence = tuitionBillingCadence(plan?.cadence);
     setAssignmentCadence(nextCadence);
     setAssignmentStartPeriod((current) => periodMatchesCadence(current, nextCadence) ? current : currentPeriodForCadence(nextCadence));
     if (plan) {
@@ -1332,7 +1366,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           : assignmentEnabled === "true"
           ? effectiveAssignmentCadence === "monthly"
             ? `Recurring tuition enabled for ${selectedAssignmentChild.fullName} at ${money(effectiveAssignmentNetCents)} per month. Monthly invoice creation is scheduled for day ${effectiveAssignmentBillingDay}.`
-            : `Recurring tuition enabled for ${selectedAssignmentChild.fullName} at ${money(effectiveAssignmentNetCents)} net per week. ${effectiveAssignmentCadence === "four_week" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 4)} and cover four weeks ahead.` : "Thursday invoice creation is scheduled for the following week."}`
+            : `Recurring tuition enabled for ${selectedAssignmentChild.fullName} at ${money(effectiveAssignmentNetCents)} net per week. ${effectiveAssignmentCadence === "four_week" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 4)} and cover four weeks ahead.` : effectiveAssignmentCadence === "biweekly" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 2)} and cover two weeks ahead.` : "Thursday invoice creation is scheduled for the following week."}`
           : `Recurring tuition disabled for ${selectedAssignmentChild.fullName}.`,
       );
     });
@@ -1353,7 +1387,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (!plan) return;
     setPlanName(plan.name);
     setPlanAgeGroup(plan.ageGroup || ageGroups[0] || defaultAgeGroupOptions[0]);
-    setPlanCadence(tuitionRateCadence(plan.cadence));
+    setPlanCadence(tuitionBillingCadence(plan.cadence));
     setPlanAmountDollars(String(plan.amountCents / 100));
     setPlanFundingType(plan.amountCents === 0 ? "voucher" : "family");
   }
@@ -1852,7 +1886,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </Select>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="billing-rate-family-amount">Family {planCadence} amount</Label>
+              <Label htmlFor="billing-rate-family-amount">Family {tuitionRateCadence(planCadence)} amount</Label>
               <Input
                 id="billing-rate-family-amount"
                 inputMode="decimal"
@@ -1864,16 +1898,19 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               {planFundingType === "voucher" ? <p className="text-xs text-muted-foreground">Directors can use this for any intentional $0.00 rate. It will not create family invoices or autopay attempts.</p> : null}
             </div>
             <div className="space-y-1">
-              <Label htmlFor="billing-rate-cadence">Rate cadence</Label>
+              <Label htmlFor="billing-rate-cadence">Billing cadence</Label>
               <Select value={planCadence} onValueChange={(value) => {
-                if (value === "weekly" || value === "monthly") setPlanCadence(value);
+                if (value === "weekly" || value === "biweekly" || value === "four_week" || value === "monthly") setPlanCadence(value);
               }}>
                 <SelectTrigger id="billing-rate-cadence"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="weekly">Weekly · 1 week ahead</SelectItem>
+                  <SelectItem value="biweekly">Biweekly · 2 weeks ahead</SelectItem>
+                  <SelectItem value="four_week">Every 4 weeks · 4 weeks ahead</SelectItem>
+                  <SelectItem value="monthly">Monthly · 1 month at a time</SelectItem>
                 </SelectContent>
               </Select>
+              {planCadence === "biweekly" ? <p className="text-xs text-muted-foreground">Enter the weekly rate. Each biweekly invoice will contain two weekly rates.</p> : null}
             </div>
             <div className="flex items-end">
               <Button disabled={isPending} onClick={saveTuitionPlan} className="w-full">
@@ -1905,6 +1942,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <TabsTrigger value="weekly-recovery"><Search data-icon="inline-start" />Weekly recovery</TabsTrigger>
             <TabsTrigger value="check"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
             <TabsTrigger value="cash"><Banknote data-icon="inline-start" />Cash payment</TabsTrigger>
+            <TabsTrigger value="payroll"><Banknote data-icon="inline-start" />Payroll deduction</TabsTrigger>
             <TabsTrigger value="refund"><RotateCcw data-icon="inline-start" />Refund</TabsTrigger>
             <TabsTrigger value="agency"><BadgeDollarSign data-icon="inline-start" />Agency claims</TabsTrigger>
             <TabsTrigger value="adjustment"><MinusCircle data-icon="inline-start" />Credit / adjustment</TabsTrigger>
@@ -2275,6 +2313,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     ) : (
                       <>
                         <SelectItem value="weekly">Weekly · 1 week ahead</SelectItem>
+                        <SelectItem value="biweekly">Biweekly · 2 weeks ahead</SelectItem>
                         <SelectItem value="four_week">Every 4 weeks · 4 weeks ahead</SelectItem>
                       </>
                     )}
@@ -2389,8 +2428,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <DisplayValue label={`Gross ${effectiveRateCadence} tuition`} value={money(effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents)} />
                 <DisplayValue label={`${effectiveRateCadence === "monthly" ? "Monthly" : "Weekly"} credits`} value={`−${money(effectiveAssignmentCreditsTotalCents)}`} />
                 <DisplayValue
-                  label={effectiveAssignmentCadence === "four_week" ? "Every-4-weeks invoice" : `Net ${effectiveRateCadence} invoice`}
-                  value={money(Math.max(0, effectiveAssignmentNetCents) * (effectiveAssignmentCadence === "four_week" ? 4 : 1))}
+                  label={effectiveAssignmentCadence === "four_week" ? "Every-4-weeks invoice" : effectiveAssignmentCadence === "biweekly" ? "Biweekly invoice" : `Net ${effectiveRateCadence} invoice`}
+                  value={money(Math.max(0, effectiveAssignmentNetCents) * (effectiveAssignmentCadence === "four_week" ? 4 : effectiveAssignmentCadence === "biweekly" ? 2 : 1))}
                   detail={effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents && !assignmentIsVoucherFunded
                     ? "Credits must be less than gross tuition"
                     : "Amount added to the family ledger"}
@@ -2423,7 +2462,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Weekly billing creates one week-ahead invoices. Every-4-weeks billing creates one invoice equal to four net weekly rates. Monthly billing creates one invoice for the saved monthly rate on the selected day (1–28). The opening balance remains unchanged; enter an opening balance only when the family already owes money. This does not enable family autopay. Explicit $0.00 CCDF or voucher-funded assignments never create a family invoice or autopay attempt.
+              Weekly billing creates one week-ahead invoices. Biweekly billing creates one invoice equal to two net weekly rates every two weeks. Every-4-weeks billing creates one invoice equal to four net weekly rates. Monthly billing creates one invoice for the saved monthly rate on the selected day (1–28). The opening balance remains unchanged; enter an opening balance only when the family already owes money. This does not enable family autopay. Explicit $0.00 CCDF or voucher-funded assignments never create a family invoice or autopay attempt.
             </p>
           </TabsContent>
 
@@ -2492,6 +2531,35 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <Button disabled={isPending || !selectedFamily || dollarsToCents(cashAmountDollars) <= 0} onClick={submitManualCashPayment}>
               <Banknote data-icon="inline-start" />
               Post Cash Payment
+            </Button>
+          </TabsContent>
+
+          <TabsContent value="payroll" className="space-y-4 rounded-lg border bg-background/35 p-4">
+            <div>
+              <div className="text-sm font-medium">Record childcare already withheld through payroll</div>
+              <p className="mt-1 text-xs text-muted-foreground">Use this only after payroll confirms the deduction. It is an offline family payment—not a discount or employer benefit—and it reduces the family ledger once with an auditable pay-period reference.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1">
+                <Label htmlFor="billing-payroll-amount">Amount withheld</Label>
+                <Input id="billing-payroll-amount" inputMode="decimal" value={payrollAmountDollars} onChange={(event) => setPayrollAmountDollars(event.target.value)} placeholder="250.00" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="billing-payroll-reference">Payroll run / pay period</Label>
+                <Input id="billing-payroll-reference" value={payrollReference} onChange={(event) => setPayrollReference(event.target.value)} placeholder="2026-08-16 to 2026-08-29" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="billing-payroll-posted-date">Payroll posted date</Label>
+                <Input id="billing-payroll-posted-date" type="date" value={payrollPaidAt} onChange={(event) => setPayrollPaidAt(event.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="billing-payroll-notes">Payroll confirmation notes</Label>
+              <Textarea id="billing-payroll-notes" value={payrollNotes} onChange={(event) => setPayrollNotes(event.target.value)} placeholder="Optional payroll register or internal confirmation reference; do not enter bank credentials" />
+            </div>
+            <Button disabled={isPending || !selectedFamily || dollarsToCents(payrollAmountDollars) <= 0 || !payrollReference.trim()} onClick={submitPayrollDeductionPayment}>
+              <Banknote data-icon="inline-start" />
+              Post Payroll Deduction Payment
             </Button>
           </TabsContent>
 

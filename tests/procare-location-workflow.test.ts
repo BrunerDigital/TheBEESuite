@@ -9,6 +9,21 @@ function write(filePath: string, contents: string) {
   fs.writeFileSync(filePath, contents.replaceAll("\n", "\r\n"), "utf8");
 }
 
+test("child information tracking stays separate from enrollment when ProCare repeats status fields", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "bee-procare-child-info-kind-"));
+  const source = path.join(root, "source");
+  const output = path.join(root, "output");
+  fs.mkdirSync(source);
+  write(path.join(source, "Sample - Enrollment.csv"), "Child ID,Person ID,Person Type,Full Name,Primary Classroom,Classroom ID,Enrollment Status,Status Start Date,Relationship 1 Id\nchild-1,child-person-1,Child,Child One,Infants,room-1,Enrolled,1/1/2026,payer-1");
+  write(path.join(source, "Sample - Relationships.csv"), "Child ID,Row ID,Person ID,Person Type,Full Name,Relationship Type,Lives With,Emergency,Authorized Pickup\nchild-1,row-1,payer-1,Relationship,Parent One,Mom,Checked,Checked,Checked");
+  write(path.join(source, "Sample - Account Balance Summary.csv"), "Account ID,Balance,Person ID,Full Name\naccount-1,0.00,payer-1,Parent One");
+  write(path.join(source, "Sample - Child Information Tracking.csv"), "Child ID,Person ID,Person Type,Full Name,Primary Classroom,Classroom ID,Enrollment Status,Status Date,Category Description,Item Description,Item Is Active\nchild-1,child-person-1,Child,Child One,Infants,room-1,Enrolled,1/1/2026,Allergies,Peanuts,Checked");
+
+  const result = await prepareProcareLocationWorkflow({ location: "Sample", sourceDirectory: source, outputDirectory: output });
+  assert.equal(result.metrics.sourceChildInfoPresent, true);
+  assert.equal(result.metrics.normalizedRecords, 1);
+});
+
 test("location workflow derives a one-to-one primary payer source and keeps missing gates blocked", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "bee-procare-location-"));
   const source = path.join(root, "source");

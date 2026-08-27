@@ -77,6 +77,19 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
   assert.doesNotMatch(resources, /warning banners and developer controls excluded/);
 });
 
+test("director clean-start guide has a stable public route with steps, FAQs, and stop conditions", () => {
+  const resources = readFileSync("src/app/resources/page.tsx", "utf8");
+  const guide = readFileSync("src/app/resources/director-data-clean-start/page.tsx", "utf8");
+
+  assert.match(resources, /href="\/resources\/director-data-clean-start"/);
+  assert.match(guide, /Director School Data Clean-Start Guide/);
+  assert.match(guide, /READY_FOR_DIRECTOR_REVIEW/);
+  assert.match(guide, /Stop condition:/);
+  assert.match(guide, /Frequently asked questions/);
+  assert.match(guide, /A blank field is not proof/);
+  assert.match(guide, /does not activate invitations, access, kiosk\/PIN, attendance, billing, payments, messaging, or ProCare cutover/);
+});
+
 test("all canonical instruction graphics referenced by public resources exist", () => {
   const resources = readFileSync("src/app/resources/page.tsx", "utf8");
   const paths = [...resources.matchAll(/graphicSrc: "([^"]+)"/g)].map(
@@ -223,13 +236,26 @@ test("director clean-start documentation is evidence-backed and keeps launch gat
   const guide = readFileSync("docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md", "utf8");
   const transition = readFileSync("docs/sops/SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md", "utf8");
 
-  assert.match(guide, /`raw\/` contains the original source evidence/);
-  assert.match(guide, /`MISSING SOURCE` means `NOT VERIFIED`/);
-  assert.match(guide, /stable Account, Person, Child, Classroom, and Employee IDs/);
-  assert.match(guide, /allergies, medical conditions, medications, emergency contacts, authorized pickups, and custody restrictions are separate checks/i);
-  assert.match(guide, /family responsibility from agency\/subsidy responsibility/i);
-  assert.match(guide, /Review at least 10 representative current families/);
-  assert.match(guide, /parent invitations, staff access, kiosk\/PIN activation, attendance, tuition generation, payment collection, messaging, or ProCare retirement/);
+  assert.match(guide, /You are not expected to repair import files or guess which record is right/);
+  assert.match(guide, /READY_FOR_DIRECTOR_REVIEW/);
+  assert.match(guide, /exact source-file path already entered in the review workbook/);
+  assert.match(guide, /Fleet Verification Packet shows source filenames but does not show this full repository path/);
+  assert.match(guide, /docs\/procare-exports\/<YOUR SCHOOL>\/raw\//);
+  assert.match(guide, /A blank field means "not yet confirmed," not "none/);
+  assert.match(guide, /`VERIFIED`/);
+  assert.match(guide, /`NEEDS CORRECTION`/);
+  assert.match(guide, /`MISSING SOURCE`/);
+  assert.match(guide, /`NOT APPLICABLE`/);
+  assert.match(guide, /allergies and severity/);
+  assert.match(guide, /parent responsibility is separated from agency\/subsidy responsibility/i);
+  assert.match(guide, /Review at least 10 current families/);
+  assert.match(guide, /Step 6 - Compare The School Totals/);
+  assert.match(guide, /Signed opening-balance total/);
+  assert.match(guide, /Do not compare a current-only total with an all-record total/);
+  assert.match(guide, /source export\/as-of date/);
+  assert.match(guide, /every imported former or withdrawn family/);
+  assert.match(guide, /does not turn on invitations, access, kiosk PINs, attendance, billing, payments, messages, or ProCare cutover/);
+  assert.match(guide, /Director Sign-Off Checklist/);
   assert.match(transition, /DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE/);
 });
 

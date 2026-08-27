@@ -351,6 +351,10 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     accessScope = "tenant";
   }
 
+  centerIds = hasProfileCenterAssignment
+    ? [profileCenterIds[0], ...centerIds.filter((centerId) => centerId !== profileCenterIds[0]).sort()]
+    : [...centerIds].sort();
+
   const timeZoneCenters = centerIds.length
     ? await prisma.center.findMany({
         where: { id: { in: centerIds } },
@@ -465,6 +469,17 @@ export function canAccessAllCenters(user: Pick<CurrentUser, "role"> & Partial<Pi
   return tenantWideAccessRoles.has(user.role);
 }
 
+export function messageCenterIdsForUser(
+  user: Pick<CurrentUser, "role" | "centerIds" | "primaryCenterId">,
+) {
+  if (user.role !== UserRole.CENTER_DIRECTOR && user.role !== UserRole.ASSISTANT_DIRECTOR) {
+    return user.centerIds;
+  }
+  return user.primaryCenterId && user.centerIds.includes(user.primaryCenterId)
+    ? [user.primaryCenterId]
+    : [];
+}
+
 export function getLeadScopeWhere(user: CurrentUser) {
   if (user.role === UserRole.PLATFORM_OWNER) return {};
   if (canAccessAllCenters(user)) {
@@ -495,7 +510,7 @@ export function getDashboardCenterScopeWhere(user: CurrentUser) {
   return getLeadScopeWhere(user);
 }
 
-export function canAccessCenter(user: CurrentUser, centerId: string) {
+export function canAccessCenter(user: Pick<CurrentUser, "role" | "accessScope" | "centerIds">, centerId: string) {
   return (
     user.role === UserRole.PLATFORM_OWNER ||
     (user.accessScope === "tenant" && canUseTenantWideAccessRole(user.role)) ||

@@ -45,6 +45,7 @@ test("ProCare review fingerprints bind the export, center, and duplicate mode", 
 test("ProCare imports require the exact completed review before commit", () => {
   const route = readFileSync(new URL("../src/app/api/imports/procare/route.ts", import.meta.url), "utf8");
   const panel = readFileSync(new URL("../src/components/procare-import-panel.tsx", import.meta.url), "utf8");
+  const reviewedImportCli = readFileSync(new URL("../scripts/import-reviewed-procare-package.ts", import.meta.url), "utf8");
 
   assert.match(panel, /Submit this exact source export for review before committing it/);
   assert.match(panel, /Guided school migration setup/);
@@ -71,7 +72,10 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(route, /sourceType: "csv_files"/);
   assert.match(route, /Choose either uploaded files or pasted CSV text/);
   assert.match(route, /MAX_PROCARE_SOURCE_FILES/);
-  assert.match(route, /MAX_PROCARE_UPLOAD_BYTES/);
+  assert.match(route, /MAX_PROCARE_SOURCE_BYTES/);
+  assert.match(route, /procareTextSizeBytes\(pastedCsv\)/);
+  assert.match(route, /const pastedCsvValue = formData\.get\("csv"\)/);
+  assert.match(route, /typeof pastedCsvValue === "string" \? pastedCsvValue : ""/);
   assert.match(route, /No supported source report or consolidated CSV columns were recognized/);
   assert.match(route, /formData\.getAll\("file"\)/);
   assert.match(route, /if \(isZipBuffer\(buffer\)\)/);
@@ -114,6 +118,14 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(panel, /warningRowNumbers \?\? \[\]\)\.join\(","\)/);
   assert.match(panel, /duplicateReviewRowNumbers \?\? \[\]\)\.join\(","\)/);
   assert.match(panel, /same selected files; they are still selected/);
+  assert.match(panel, /secure browser-source limit/);
+  assert.match(panel, /secure browser-request limit/);
+  assert.match(panel, /batchId: "x"\.repeat\(64\)/);
+  assert.match(panel, /Run the file-only preflight outside the browser and retain its review packet/);
+  assert.match(reviewedImportCli, /procareMultipartSizeBytes\(formData, \{ batchId: "x"\.repeat\(64\) \}\)/);
+  assert.match(reviewedImportCli, /MAX_PROCARE_MULTIPART_BYTES/);
+  assert.match(panel, /Do not remove required reports to make the package fit/);
+  assert.match(route, /MAX_PROCARE_SOURCE_BYTES/);
   assert.match(panel, /chunkSize", "20"/);
   assert.match(panel, /Continuing the resumable import from row/);
   assert.match(panel, /Continuing automatically/);

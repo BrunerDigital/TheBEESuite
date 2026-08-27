@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { defaultNotificationPreferenceChannels } from "@/lib/notification-preferences";
 import { prisma } from "@/lib/prisma";
 import {
   parseTwilioWebhookParams,
+  isTwilioWebhookReceiptUniqueConflict,
   phoneMatchKey,
   twilioSmsConsentAction,
   type TwilioSmsConsentAction,
@@ -50,10 +51,12 @@ function smsConsentCustomFields(value: unknown, action: TwilioSmsConsentAction) 
 }
 
 async function applyGuardianSmsConsent({
+  tx,
   tenantId,
   guardian,
   action,
 }: {
+  tx: Prisma.TransactionClient;
   tenantId: string;
   guardian: GuardianSmsConsentTarget;
   action: TwilioSmsConsentAction;
@@ -64,7 +67,7 @@ async function applyGuardianSmsConsent({
     guardian.userId
       ? types.map((type) => {
           const defaults = defaultNotificationPreferenceChannels(type);
-          return prisma.notificationPreference.upsert({
+          return tx.notificationPreference.upsert({
             where: { tenantId_userId_type: { tenantId, userId: guardian.userId!, type } },
             update: { smsEnabled },
             create: {
@@ -80,7 +83,7 @@ async function applyGuardianSmsConsent({
       : [],
   );
 
-  await prisma.guardian.update({
+  await tx.guardian.update({
     where: { id: guardian.id },
     data: {
       preferredCommunication: smsEnabled ? "sms" : guardian.email ? "email" : guardian.phone ? "phone" : null,
@@ -104,13 +107,12 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const messageSid = clean(params.MessageSid);
-  if (messageSid) {
-    const existing = await prisma.integrationDelivery.findUnique({
-      where: { provider_providerMessageId: { provider: "twilio", providerMessageId: messageSid } },
-      select: { id: true },
-    });
-    if (existing) return twimlResponse();
-  }
+  if (!messageSid) return twimlResponse();
+  const existing = await prisma.integrationDelivery.findUnique({
+    where: { provider_providerMessageId: { provider: "twilio", providerMessageId: messageSid } },
+    select: { id: true },
+  });
+  if (existing) return twimlResponse();
 
   const from = clean(params.From);
   const to = clean(params.To);
@@ -144,30 +146,84 @@ async function POSTHandler(request: NextRequest) {
   if (!tenantId) return twimlResponse();
 
   const consentAction = twilioSmsConsentAction(body);
-  if (consentAction) {
-    await applyGuardianSmsConsent({
-      tenantId,
-      guardian,
-      action: consentAction,
-    });
+  let createdMessageId: string | null = null;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const delivery = await tx.integrationDelivery.create({
+        data: {
+          tenantId,
+          centerId: guardian.family.centerId,
+          provider: "twilio",
+          providerMessageId: messageSid,
+          purpose: consentAction === "opt_in" ? "sms_opt_in" : consentAction === "opt_out" ? "sms_opt_out" : "sms_inbound",
+          direction: "inbound",
+          sender: from,
+          recipient: to,
+          status: "processing",
+          attempts: 0,
+          payload: params,
+          lastResult: { ok: true, messageSid, consentAction },
+        },
+      });
 
-    await prisma.integrationDelivery.create({
-      data: {
-        tenantId,
-        centerId: guardian.family.centerId,
-        provider: "twilio",
-        providerMessageId: messageSid || null,
-        purpose: consentAction === "opt_in" ? "sms_opt_in" : "sms_opt_out",
-        direction: "inbound",
-        sender: from,
-        recipient: to,
-        status: "delivered",
-        attempts: 0,
-        payload: params,
-        lastResult: { ok: true, messageSid: messageSid || null, consentAction },
-        deliveredAt: new Date(),
-      },
+      if (consentAction) {
+        await applyGuardianSmsConsent({
+          tx,
+          tenantId,
+          guardian,
+          action: consentAction,
+        });
+      } else {
+        const created = await tx.message.create({
+          data: {
+            familyId: guardian.family.id,
+            senderId: guardian.userId,
+            subject: "SMS reply",
+            body,
+            channel: "sms_inbound",
+            priority: "normal",
+            sentiment: "neutral",
+          },
+        });
+        createdMessageId = created.id;
+
+        if (guardian.family.centerId) {
+          const directors = await getCenterLeadershipUsers({
+            centerId: guardian.family.centerId,
+            roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
+            client: tx,
+          });
+          await Promise.all(
+            directors.map((director) =>
+              tx.notification.create({
+                data: {
+                  userId: director.id,
+                  title: "Incoming parent SMS",
+                  body: `${guardian.family.name}: ${body}`,
+                  type: "message",
+                  priority: "normal",
+                },
+              }),
+            ),
+          );
+        }
+      }
+
+      await tx.integrationDelivery.update({
+        where: { id: delivery.id },
+        data: {
+          messageId: createdMessageId,
+          status: "delivered",
+          deliveredAt: new Date(),
+        },
+      });
     });
+  } catch (error) {
+    if (isTwilioWebhookReceiptUniqueConflict(error)) return twimlResponse();
+    throw error;
+  }
+
+  if (consentAction) {
 
     await writeSystemAuditLog({
       tenantId,
@@ -176,7 +232,7 @@ async function POSTHandler(request: NextRequest) {
       resource: "Guardian",
       resourceId: guardian.id,
       metadata: {
-        providerMessageId: messageSid || null,
+        providerMessageId: messageSid,
         familyId: guardian.family.id,
         guardianId: guardian.id,
         userId: guardian.userId,
@@ -188,65 +244,14 @@ async function POSTHandler(request: NextRequest) {
     return twimlResponse();
   }
 
-  const created = await prisma.message.create({
-    data: {
-      familyId: guardian.family.id,
-      senderId: guardian.userId,
-      subject: "SMS reply",
-      body,
-      channel: "sms_inbound",
-      priority: "normal",
-      sentiment: "neutral",
-    },
-  });
-
-  await prisma.integrationDelivery.create({
-    data: {
-      tenantId,
-      centerId: guardian.family.centerId,
-      messageId: created.id,
-      provider: "twilio",
-      providerMessageId: messageSid || null,
-      purpose: "sms_inbound",
-      direction: "inbound",
-      sender: from,
-      recipient: to,
-      status: "delivered",
-      attempts: 0,
-      payload: params,
-      lastResult: { ok: true, messageSid: messageSid || null },
-      deliveredAt: new Date(),
-    },
-  });
-
-  if (guardian.family.centerId) {
-    const directors = await getCenterLeadershipUsers({
-      centerId: guardian.family.centerId,
-      roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
-    });
-    await Promise.all(
-      directors.map((director) =>
-        prisma.notification.create({
-          data: {
-            userId: director.id,
-            title: "Incoming parent SMS",
-            body: `${guardian.family.name}: ${body}`,
-            type: "message",
-            priority: "normal",
-          },
-        }),
-      ),
-    );
-  }
-
   await writeSystemAuditLog({
     tenantId,
     centerId: guardian.family.centerId,
     action: "twilio.sms.inbound",
     resource: "Message",
-    resourceId: created.id,
+    resourceId: createdMessageId!,
     metadata: {
-      providerMessageId: messageSid || null,
+      providerMessageId: messageSid,
       familyId: guardian.family.id,
       guardianId: guardian.id,
       fromLast4: from.slice(-4),

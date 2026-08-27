@@ -17,6 +17,7 @@ import {
 } from "@/lib/payment-disclosures";
 import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { maskStripeAccountId, readStripeConnectMigration } from "@/lib/stripe-connect-migration";
+import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 import { stripeReauthorizationHref } from "@/lib/stripe-payout-setup-flow";
 import {
   normalizeStripeConnectSetupInput,
@@ -55,11 +56,14 @@ function text(value: unknown) {
 }
 
 function statusLabel(center: StripeConnectCenter) {
-  return stripeConnectReadinessFromFields(center.customFields).label;
+  return stripeSchoolReadinessFlowFromFields({
+    customFields: center.customFields,
+    centerName: center.name,
+  }).label;
 }
 
 function statusVariant(status: string): "default" | "outline" | "secondary" | "destructive" {
-  if (status === "Ready") return "default";
+  if (status === "Payments live") return "default";
   if (status === "Needs setup") return "outline";
   if (status === "Requirements due") return "destructive";
   return "secondary";
@@ -107,7 +111,9 @@ export function StripeConnectPanel({
   );
 
   const stats = useMemo(() => {
-    const ready = localCenters.filter((center) => statusLabel(center) === "Ready").length;
+    const ready = localCenters.filter((center) => (
+      stripeSchoolReadinessFlowFromFields({ customFields: center.customFields, centerName: center.name }).stage === "ready"
+    )).length;
     const started = localCenters.filter((center) => maskedAccount(center) !== "Not connected").length;
     return {
       ready,
@@ -256,6 +262,33 @@ export function StripeConnectPanel({
     }
   }
 
+  async function activateParentPayments(center: StripeConnectCenter) {
+    const acknowledged = window.confirm(
+      `Activate live parent tuition payments for ${center.name}?\n\nThis confirms the Stripe account, payout bank, billing preview, accounting review, and cutover are approved. It does not create invoices or charge anyone.`,
+    );
+    if (!acknowledged) return;
+
+    setBusyCenterId(center.id);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/billing/connect/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centerId: center.id, activationAcknowledged: true }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.ok) {
+        throw new Error(json.error || "Parent payments could not be activated.");
+      }
+      await syncStatus(center.id);
+      setMessage(`Parent tuition payments are live for ${center.name}. No invoice or charge was created by this activation.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Parent payments could not be activated.");
+    } finally {
+      setBusyCenterId(null);
+    }
+  }
+
   const syncStatus = useCallback(async (centerId: string) => {
     setBusyCenterId(centerId);
     setMessage(null);
@@ -279,8 +312,10 @@ export function StripeConnectPanel({
               stripePayoutsEnabled: json.account.payoutsEnabled,
               stripeDetailsSubmitted: json.account.detailsSubmitted,
               stripeMerchantCapabilityStatus: json.account.merchantCapabilityStatus,
-              stripeRecipientTransferStatus: json.account.recipientTransferStatus,
+              stripeMerchantPayoutCapabilityStatus: json.account.merchantPayoutCapabilityStatus,
               stripePayoutRequirementFields: json.account.requirementFields,
+              stripeCurrentlyDueRequirementFields: json.account.requirementFields,
+              stripePendingVerificationFields: json.account.pendingVerificationFields,
               stripePayoutStatus: text(readiness.status) || json.status,
               stripeConnectLastSyncedAt: new Date().toISOString(),
               stripePayoutBankName: json.payoutBank?.bankName ?? null,
@@ -397,7 +432,7 @@ export function StripeConnectPanel({
             <div className="mt-1 font-semibold">{webhookConfigured ? "Configured" : "Missing"}</div>
           </div>
           <div className="rounded-xl border bg-background/40 p-4">
-            <div className="text-sm text-muted-foreground">Ready schools</div>
+            <div className="text-sm text-muted-foreground">Payments live</div>
             <div className="mt-1 font-semibold">{stats.ready}</div>
           </div>
           <div className="rounded-xl border bg-background/40 p-4">
@@ -553,11 +588,10 @@ export function StripeConnectPanel({
           </TableHeader>
           <TableBody>
             {localCenters.map((center) => {
-              const readiness = stripeConnectReadinessFromFields(center.customFields);
+              const flow = stripeSchoolReadinessFlowFromFields({ customFields: center.customFields, centerName: center.name });
+              const readiness = flow.connect;
               const status = statusLabel(center);
               const hasAccount = maskedAccount(center) !== "Not connected";
-              const centerFields = fields(center.customFields);
-              const hasConfirmedPayoutBank = Boolean(text(centerFields.stripePayoutBankLast4));
               const migration = readStripeConnectMigration(center.customFields);
               const migrationInProgress = Boolean(migration.targetAccountId && !migration.cutoverAt);
               return (
@@ -580,12 +614,12 @@ export function StripeConnectPanel({
                       ? migration.status === "ready_for_cutover"
                         ? "New account authorized and ready for controlled cutover"
                         : "Parent payments remain active on the current account while the replacement is verified"
-                      : readiness.requirementFields.length
-                      ? readiness.requirementFields.slice(0, 4).join(", ")
-                      : readiness.canAcceptParentPayments
-                        ? "Parent payments enabled"
-                        : readiness.blockingReason || "Awaiting payout status"}
-                    {readiness.requirementFields.length > 4 ? ` +${readiness.requirementFields.length - 4} more` : ""}
+                      : flow.explanation}
+                    {readiness.requirementFields.length
+                      ? ` (${readiness.requirementFields.length} item${readiness.requirementFields.length === 1 ? "" : "s"} needed)`
+                      : readiness.pendingVerificationFields.length
+                        ? ` (${readiness.pendingVerificationFields.length} item${readiness.pendingVerificationFields.length === 1 ? "" : "s"} under review)`
+                        : ""}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap justify-end gap-2">
@@ -603,7 +637,7 @@ export function StripeConnectPanel({
                         <span className="max-w-52 text-right text-xs leading-5 text-muted-foreground">
                           An authorized corporate representative completes this setup from the secure corporate portfolio.
                         </span>
-                      ) : hasAccount ? (
+                      ) : flow.stage === "payout_bank_required" ? (
                         <Button
                           type="button"
                           size="sm"
@@ -611,7 +645,28 @@ export function StripeConnectPanel({
                           disabled={busyCenterId === center.id || !stripeConfigured}
                         >
                           <Landmark data-icon="inline-start" />
-                          {hasConfirmedPayoutBank ? "Change payout bank" : "Connect payout bank"}
+                          Connect payout bank
+                        </Button>
+                      ) : flow.stage === "activation_required" ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void activateParentPayments(center)}
+                          disabled={busyCenterId === center.id || !stripeConfigured || !webhookConfigured}
+                        >
+                          <ShieldCheck data-icon="inline-start" />
+                          Activate parent payments
+                        </Button>
+                      ) : flow.stage === "ready" ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openPayoutBankSelection(center)}
+                          disabled={busyCenterId === center.id || !stripeConfigured}
+                        >
+                          <Landmark data-icon="inline-start" />
+                          Change payout bank
                         </Button>
                       ) : null}
                       {hasAccount && !migrationInProgress ? (
@@ -626,14 +681,14 @@ export function StripeConnectPanel({
                           Check
                         </Button>
                       ) : null}
-                      {!migrationInProgress ? <Button
+                      {!migrationInProgress && flow.stage !== "payout_bank_required" && flow.stage !== "activation_required" && flow.stage !== "ready" ? <Button
                         type="button"
                         size="sm"
                         variant={hasAccount ? "outline" : "default"}
                         onClick={() => openSetupDialog(center)}
                         disabled={busyCenterId === center.id}
                       >
-                        {hasAccount ? "Requirements" : "Set up"}
+                        {flow.actionLabel}
                         <ArrowUpRight data-icon="inline-end" />
                       </Button> : null}
                     </div>
@@ -652,7 +707,7 @@ export function StripeConnectPanel({
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
           <span>
-            A school can accept parent payments whenever its active account shows Ready. If a replacement account still needs information, the current verified account remains active until a controlled cutover. Stripe Dashboard links are account-specific and should only be opened from this authenticated BEE Suite screen.
+            A school shows Payments live only after Stripe has enabled direct charges and payouts, the default payout bank is confirmed, the webhook is configured, and final BEE Suite billing activation is recorded. If a replacement account still needs information, the current verified account remains active until a controlled cutover.
           </span>
         </div>
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">

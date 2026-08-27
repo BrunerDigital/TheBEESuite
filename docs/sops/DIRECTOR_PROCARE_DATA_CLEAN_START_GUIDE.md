@@ -1,193 +1,290 @@
-# Director ProCare Data Clean-Start Guide - The BEE Suite
+# Director's School Data Clean-Start Checklist - The BEE Suite
 
 **Updated:** August 24, 2026
 
-**Audience:** school directors, assistant directors, billing reviewers, and BEE Suite implementation support
+**For:** school directors and assistant directors
 
-**Purpose:** verify each school's imported data against its preserved ProCare exports before operational launch.
+**Goal:** confirm that the families, children, classrooms, safety information, tuition, balances, and staff shown in The BEE Suite are correct before the school begins using them.
 
-> DATA READINESS ONLY
+> START HERE
 >
-> A clean data review does not authorize parent invitations, staff access, kiosk/PIN activation, attendance, tuition generation, payment collection, messaging, or ProCare retirement. Record those decisions separately in `SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md`.
+> Compare The BEE Suite with the review packet for your school. Mark what is correct, write down what needs to be fixed, and stop when information is missing or unclear. You are not expected to repair import files or guess which record is right. Finishing this checklist does not turn on invitations, access, kiosk PINs, attendance, billing, payments, messages, or ProCare cutover; each requires a separate approval.
 
-## 1. Use The Repository Export Package Correctly
+## Before You Begin
 
-The private canonical export root is `docs/procare-exports/<LOCATION>/`. It is intentionally excluded from Git because it contains private school records.
+Ask your BEE Suite implementation contact for these items:
 
-- `raw/` contains the original source evidence. Never edit, rename, normalize, or overwrite these files during director review.
-- `review/` contains generated worksheets, exception lists, readiness reports, and dated reviewer outputs. These are aids, not a replacement for the raw source.
-- `packages/` contains dated received packages and their rendered review outputs.
-- `source-archives/`, ZIP, and RPT files are preserved source artifacts. Keep them recoverable; do not treat an unreadable archive as verified coverage.
-- `SOURCE-MANIFEST.csv` maps former paths to canonical paths and hashes when duplicates were collapsed.
+- [ ] Your school's current Fleet Verification Packet marked `READY_FOR_DIRECTOR_REVIEW`.
+- [ ] Your school's current review workbook, including the source export/as-of date, current-enrollment count, and exact source-file paths prepared by BEE Suite support.
+- [ ] The Fleet Verification Packet source filenames match the filenames listed in the review workbook.
+- [ ] The name of the person who will receive your corrections.
 
-Classify a report from its headers and stable identifiers, not its filename. A misleading filename never expands what the file proves.
+**Stop and ask for help if:**
 
-## 2. Complete Source Coverage Before Reviewing Values
+- the packet is missing or is not marked `READY_FOR_DIRECTOR_REVIEW`;
+- the packet names a different school or its source filenames do not match the review workbook;
+- The BEE Suite opens to the wrong school; or
+- you cannot find the source information needed to confirm an answer.
 
-Record `AVAILABLE`, `MISSING SOURCE`, or `NOT APPLICABLE` for each domain. `MISSING SOURCE` means `NOT VERIFIED`; it never means none exists.
+Do not use an older packet just because it is available. Do not edit the original ProCare exports.
 
-| Director verifies | Preferred ProCare evidence | Required identity/evidence |
+## How To Mark Your Review
+
+Use one of these four answers for every section:
+
+| Mark | What it means | What to do |
 | --- | --- | --- |
-| Family account and payer | Account Information, Account Data, Accounts | stable Account ID and payer Person ID |
-| Child identity and enrollment | Child All Enrollment Status, Child Enrollment Status | stable Child ID, status, start/end date |
-| Guardians and relationships | Child Relationships, Children and Relationships | Child ID, Person ID, relationship, account link |
-| Emergency contacts and pickups | Relationship or Pickup People report | stable Person ID and explicit role/permission |
-| Custody and child safety | Child Information Tracking and current school documents | exact source row plus current supporting record |
-| Classroom and age group | Classroom Schedule or Children by Classroom | Classroom ID/name, assignment, capacity, ratio |
-| Child schedule | Child Schedule, Weekly Schedule, Classroom Schedule | child identity, days/times, effective period |
-| Tuition | Child Contract Billing Summary | Child ID, positive amount, cadence, description, effective date |
-| Opening balance | Account Balance Summary or dated ledger | Account ID, signed amount, as-of date |
-| Agency responsibility | Account Agency Relationships and primary/agency balance reports | program, child/account, authorization and amount |
-| Current staff | Employee Information Tracking | Employee ID, current status, school/classroom |
-| Attendance evidence | Child Time Card | Child ID, date/time, school/classroom |
+| `VERIFIED` | The BEE Suite matches the school record. | Check the item and continue. |
+| `NEEDS CORRECTION` | You found a specific difference. | Write down the family, child, or staff member and the correction needed. |
+| `MISSING SOURCE` | The answer cannot be proven from the packet or current school record. | Stop that item and request the missing information. |
+| `NOT APPLICABLE` | The item truly does not apply to this school or family. | Add a short reason. |
 
-Payment exports, immunization workbooks, photos, and historical timecards are reconciliation evidence only unless a separately reviewed importer explicitly supports them. Never recreate historical payments, charges, medical records, or access from evidence-only files.
+Never guess. A blank field means "not yet confirmed," not "none."
 
-## 3. Director FAQs
+For every section you review, use the exact source-file path already entered in the review workbook by BEE Suite support. It should begin with `docs/procare-exports/<YOUR SCHOOL>/raw/`. The Fleet Verification Packet shows source filenames but does not show this full repository path. You do not need to find or open the repository folder yourself. Stop and ask support to complete the workbook when a full path is missing.
 
-### Does `import complete` mean the school is accurate?
+## Step 1 - Confirm You Are Reviewing The Correct School
 
-No. It means processing ended. Review the final batch status, imported/excluded/error counts, source coverage, reconciliation, and every exception before calling the data accurate.
+1. Go to `https://thebeesuite.io/directors` and sign in.
+2. Check the school name at the top of the page.
+3. Confirm the review packet shows the same school.
+4. Copy the ProCare source export/as-of date from the review workbook. Also write down the school name, your name, review date, and planned BEE Suite start date if one has been assigned.
 
-### Can I match records by name, email, phone, address, or date of birth?
+**Pass this step when:** the school name agrees, the packet source filenames match the review workbook, and the workbook includes the source export/as-of date.
 
-Not when ownership is ambiguous. Use stable Account, Person, Child, Classroom, and Employee IDs. Shared or misspelled contact information remains blocked until authoritative evidence resolves it.
+**Stop when:** you see another school, the packet is outdated, or records from more than one location appear together.
 
-### Does a blank safety field mean none?
+## Step 2 - Check The School, Classrooms, And Children
 
-No. Allergies, medical conditions, medications, emergency contacts, authorized pickups, and custody restrictions are separate checks. Record `director confirmed none` only after reviewing the current school record.
+### School information
 
-### Does an allergy entry complete the safety review?
+- [ ] School name and parent-facing name are correct.
+- [ ] Address, phone number, time zone, and operating hours are correct.
+- [ ] Director and notification contacts are correct.
+- [ ] Licensed capacity is correct.
 
-No. Confirm severity, action plan, medication/instructions, medical notes, pickups, emergency contacts, custody restrictions, and supporting documents independently.
+### Classrooms
 
-### Does the family owe every positive balance?
+For each active classroom, check:
 
-No. Separate family responsibility from agency/subsidy responsibility. Parent-facing balances and payment paths must contain only family responsibility.
+- [ ] classroom name and age group;
+- [ ] capacity and ratio;
+- [ ] assigned teachers; and
+- [ ] current children.
 
-### Can one sibling's tuition be copied to another?
+Mark duplicate rooms, placeholder rooms, `Unknown` rooms, or zero-capacity rooms as `NEEDS CORRECTION` unless your current school record proves they are intentional.
 
-Only when the signed child-level evidence proves the same amount, cadence, description, and effective date. Tuition is child-specific, and siblings may differ.
+### Children
 
-### Can I edit a shared tuition plan for one child?
+For each currently enrolled child, check:
 
-No. Create a new child-specific plan or assignment so other assigned children retain their approved rate.
+- [ ] legal/preferred name and date of birth;
+- [ ] enrollment status and start date;
+- [ ] correct family;
+- [ ] one current classroom;
+- [ ] age group; and
+- [ ] actual scheduled days and times.
 
-### What should I do with withdrawn or duplicate records?
+Do not turn an unclear or part-time schedule into five days. Former or withdrawn children may remain in history, but they must not appear as currently enrolled.
 
-Keep history. Correct status/end dates and exclude historical records from current operations. Do not delete or merge records containing identity, attendance, billing, payment, safety, or audit history without an approved reconciliation.
+**Pass this step when:** every current child belongs to the correct family and has the correct status, classroom, and schedule.
 
-### Can parents be invited after the roster review?
+## Step 3 - Check Families, Contacts, Pickups, And Safety
 
-Only after the separate invitation gate. A wrong guardian/family link can disclose another family's information.
+Open each current family record and review every child and adult connected to it.
 
-### When can ProCare be retired?
+### Family and contact information
 
-Only after all applicable data domains are verified, exceptions and approvals are recorded, operational gates are independently decided, rollback evidence exists, and the named school has written cutover approval. Archive exports as recoverable backups after verified cutover; never delete them or leave them as active import inputs.
+- [ ] Every child is in the correct family.
+- [ ] The primary payer is correct.
+- [ ] Each adult's name, relationship, email, and phone are correct.
+- [ ] Billing contacts are marked correctly.
+- [ ] Emergency contacts are marked correctly.
+- [ ] Authorized pickups are marked correctly.
+- [ ] Anyone prohibited from pickup is clearly recorded.
 
-## 4. Start The School Review
+### Child safety information
 
-Prerequisite: do not begin this director review until the exact school package has completed the Fleet Verification Gate and its current Fleet Verification Packet is `READY_FOR_DIRECTOR_REVIEW`. If it is `NOT_VERIFIED`, `BLOCKED`, missing, or tied to different source files, stop and return it for machine verification. Machine readiness permits this human review; it does not approve import, launch, billing, invitations, access, payments, retirement, or cutover.
+Check each item separately:
 
-1. Sign in at `https://thebeesuite.io/directors`.
-2. Confirm the header shows the intended school and role. Stop immediately for wrong-school visibility.
-3. Record school, director, export date, review date, target start date, and source-package location.
-4. Confirm all raw reports belong to the same location and intended reporting period.
-5. Complete the source-coverage table before reviewing individual values.
-6. Open the latest dated `review/` package. Treat older reviews as historical evidence.
-7. Create or update an exception register with domain, stable record ID, issue, source reference, affected gate, owner, due date, resolution, reviewer, and retest result.
+- [ ] allergies and severity;
+- [ ] allergy or medical action plan;
+- [ ] medical conditions;
+- [ ] medications and instructions;
+- [ ] emergency contacts;
+- [ ] pickup permissions; and
+- [ ] custody restrictions and supporting documents.
 
-## 5. Reconcile School, Classroom, And Roster Data
+An allergy entry by itself does not complete the safety review. If the child has no information in one of these areas, record `director confirmed none` only after checking the current school record.
 
-1. Verify school name, address, phone, time zone, operating hours, licensed capacity, director contact, notification recipients, and parent-facing name.
-2. Compare active classrooms with the classroom/schedule exports.
-3. For every classroom, verify name, age group, capacity, ratio, active status, current children, and assigned staff.
-4. Hold duplicate, placeholder, `Unknown`, or zero-capacity classrooms unless current evidence proves they are intentional.
-5. Compare current enrolled-child counts to the enrollment export.
-6. For every child, verify name, Child ID, date of birth, enrollment status, start/end date, classroom, age group, schedule, and family Account ID.
-7. Confirm each active child has exactly one current classroom. Do not default an unclear or part-time schedule to five days.
-8. Keep withdrawn/historical children out of active roster, attendance, invitation, and tuition populations without deleting their history.
+**Stop immediately when:** custody, pickup permission, allergies, medications, or medical instructions are missing, conflicting, or attached to the wrong child.
 
-## 6. Reconcile Families, Guardians, And Safety
+## Step 4 - Check Tuition And Opening Balances
 
-1. Open each current family and bind it to one stable source Account ID.
-2. Verify every child belongs to the correct account.
-3. Bind the primary payer only to the selected source Person ID and relationship evidence.
-4. Verify each adult's name, relationship, email, phone, billing-contact status, emergency-contact status, and pickup authorization separately.
-5. Hold any Person ID crossing active family accounts and any contact collision that lacks an explicit household/privacy decision.
-6. Compare authorized pickups and prohibited pickups with the current signed school record.
-7. Review custody documentation without inferring rights from payment, household name, or enrollment ownership.
-8. Review allergies, severity, action plans, medical conditions, medications/instructions, emergency contacts, custody, and permissions independently.
-9. Treat missing or conflicting custody, pickup, allergy, or medical information as a safety blocker.
+In The BEE Suite, open `Billing & Payments`. Select the correct school, then the family and child you are reviewing.
 
-## 7. Reconcile Tuition, Balances, And Agency Responsibility
+### Tuition - check every current child
 
-1. Open `Billing & Payments` and select the exact school, family, and child.
-2. For every current child, compare the assigned tuition with Child Contract Billing evidence.
-3. Confirm amount, cadence, description, effective date/period, additional charges, discounts/credits, family portion, agency portion, and billing-enabled status.
-4. Do not derive tuition from employee pay, account totals, a point-in-time balance, or monthly totals divided into weeks.
-5. Compare opening balances with one dated account-level source using the same as-of date.
-6. Reconcile charges, payments, credits, refunds, adjustments, open invoices, and agency responsibility. Never add a generic adjustment merely to force equality.
-7. For subsidy families, verify program, authorization/reference, covered child, coverage dates, rate, family copay, claim evidence, external submission/reference, decision, and remittance separately.
-8. Keep recurring billing, invoices, payments, autopay, and agency submission held until their independent approvals.
+- [ ] tuition amount;
+- [ ] weekly, biweekly, four-week, monthly, or other billing schedule;
+- [ ] program or tuition description;
+- [ ] date the rate begins;
+- [ ] additional recurring charges;
+- [ ] discounts or credits;
+- [ ] parent/family portion; and
+- [ ] agency or subsidy portion.
 
-## 8. Reconcile Current Staff
+Tuition belongs to the individual child. Do not copy one sibling's rate to another unless the signed child-level record confirms every detail is the same. Do not edit a shared tuition plan to correct only one child; report the child-specific correction instead.
 
-1. Compare the BEE Suite staff roster with the current Employee Information export.
-2. Verify stable Employee ID, name, current employment status, title, school, classroom, and contact information.
-3. Keep former employees out of current operational lists without deleting their history.
-4. Hold staff missing required Employee IDs or with ambiguous school/classroom assignments.
-5. Do not create logins, grants, invitations, PINs, or Auth identities as part of data validation.
+### Opening balance - check current families and every nonzero balance
 
-## 9. Perform Representative Spot Checks
+Review every current family. Also review every imported former or withdrawn family when The BEE Suite or the source record shows an amount owed or a credit.
 
-Review at least 10 representative current families, or all families when fewer than 10. Include, when present: siblings, part-time care, school-age care, medical/allergy needs, multiple pickups, custody restrictions, subsidy, a positive balance, a credit, and recent enrollment/withdrawal.
+- [ ] balance amount matches the dated school record;
+- [ ] the "as of" date is the same in both places;
+- [ ] charges, payments, credits, refunds, and adjustments explain the balance;
+- [ ] parent responsibility is separated from agency/subsidy responsibility; and
+- [ ] a credit is shown as a credit, not an amount owed.
 
-Trace each sample end to end:
+Do not skip a former family just because no child is currently enrolled. Its balance or credit must still belong to the correct family and match the dated source record.
 
-`Account -> children -> guardians -> pickups/custody -> safety -> classroom -> schedule -> tuition -> balance`
+Never add a general adjustment simply to make two totals match. Report the difference so it can be researched.
 
-Spot checks supplement full count reconciliation; they do not replace it.
+**Important:** reviewing tuition and balances does not approve invoices, autopay, payment collection, or agency claim submission.
 
-## 10. Resolve, Retest, And Sign Off
+## Step 5 - Check Current Staff
 
-Every excluded or unresolved row requires:
+For every current employee, check:
 
-- one affected row/record;
-- resolution category and reason;
-- exact source/evidence reference;
-- reviewer identity and timestamp;
-- approved correction or documented hold;
-- exact retest and result.
+- [ ] name;
+- [ ] current employment status;
+- [ ] title or role;
+- [ ] correct school;
+- [ ] classroom assignment, when applicable; and
+- [ ] contact information.
 
-Do not resolve identity, relationship, safety, financial, tuition, or staff ambiguity by inference. Correct the source and regenerate the review package whenever possible.
+Former employees may remain in history but must not appear as current staff. Report duplicate employees, missing employees, or anyone assigned to the wrong school or classroom.
 
-Record this summary for each domain:
+Do not create staff logins, invitations, access permissions, or PINs during this review.
 
-| Field | Required value |
-| --- | --- |
-| Source filename and report date | exact canonical raw path and as-of/export date |
-| Source/BEE counts | totals and current-population definitions |
-| Matched/unresolved counts | exact counts |
-| Result | `VERIFIED`, `NEEDS CORRECTION`, `MISSING SOURCE`, or `NOT APPLICABLE` |
-| Reviewer | name and date/time |
-| Exceptions | secure review-file path and owners |
+## Step 6 - Compare The School Totals
 
-## 11. Data-Ready Checklist
+Use the totals named below and compare them with the matching totals in The BEE Suite. Do not compare a current-only total with an all-record total. Record the results in the review workbook.
 
-- [ ] Correct school and role scope verified.
-- [ ] Required source domains are available or explicitly not applicable.
-- [ ] School profile, classrooms, capacities, ratios, and staff assignments are accurate.
-- [ ] Every active child has a stable identity, current family, classroom, status, and evidence-backed schedule.
-- [ ] Guardians, payers, emergency contacts, pickups, and custody restrictions are verified separately.
-- [ ] Allergies, medical conditions, medications, and action plans are verified or director-confirmed none.
-- [ ] Tuition amount, cadence, description, and effective date are verified per child.
-- [ ] Opening balances use a dated source and family/agency responsibility is separated.
-- [ ] Current staff have stable evidence and correct school/classroom assignments.
-- [ ] All exceptions have evidence, owner, due date, decision, and retest.
-- [ ] At least 10 representative family chains were spot-checked.
-- [ ] Final import reconciliation has no unresolved/disposed/error rows affecting required domains.
-- [ ] Source exports and review evidence remain recoverable.
-- [ ] Invitations, access, kiosk, attendance, billing, payments, messaging, and cutover remain separate decisions.
+| Total to compare | Where to find the source total | Source total | The BEE Suite | Difference | Result |
+| --- | --- | --- | --- | --- | --- |
+| All imported families | Fleet Verification Packet |  |  |  |  |
+| All imported child IDs | Fleet Verification Packet |  |  |  |  |
+| All imported classroom IDs | Fleet Verification Packet |  |  |  |  |
+| All imported employee IDs | Fleet Verification Packet |  |  |  |  |
+| Signed opening-balance total | Fleet Verification Packet |  |  |  |  |
+| Currently enrolled children | Review workbook |  |  |  |  |
 
-The school is data-ready only when the director can explain what each required value means, where it came from, how it was verified, and what remains held.
+If any totals differ, mark the line `NEEDS CORRECTION` and identify which records are missing, extra, duplicated, or in the wrong status. Do not mark the school `DATA CORRECT` until every difference is corrected and checked again, or formally recorded as `NOT APPLICABLE` with an approved reason.
+
+## Step 7 - Perform A Family Spot Check
+
+Review at least 10 current families from beginning to end. If the school has fewer than 10, review all current families.
+
+Include these examples when the school has them:
+
+- siblings;
+- part-time care;
+- school-age care;
+- allergies or medical needs;
+- multiple authorized pickups;
+- custody restrictions;
+- agency/subsidy care;
+- a family with an amount owed;
+- a family with a credit; and
+- a recent enrollment or withdrawal.
+
+For each sample, follow this order:
+
+`Family -> children -> adults -> pickups/custody -> safety -> classroom -> schedule -> tuition -> balance`
+
+The spot check is an extra safeguard. It does not replace checking the full roster and totals.
+
+## Step 8 - Record Corrections And Review Them Again
+
+For every item marked `NEEDS CORRECTION` or `MISSING SOURCE`, record:
+
+- school name;
+- family, child, classroom, or employee name;
+- the ID shown in the review packet, when available;
+- what The BEE Suite currently shows;
+- what the school record shows;
+- where the correct answer came from;
+- the exact source-file path supplied in the review workbook;
+- who is responsible for the correction; and
+- whether the item affects safety, family privacy, tuition, balances, staff, or launch readiness.
+
+After support reports that the item is corrected:
+
+1. Open the record again.
+2. Compare it with the same school evidence.
+3. Mark the retest `VERIFIED` or return it for another correction.
+4. Add your name and the retest date.
+
+Do not resolve unclear identity, family relationships, safety information, tuition, balances, or staff assignments by making your best guess.
+
+## Director Sign-Off Checklist
+
+- [ ] I reviewed the correct school and the current review packet.
+- [ ] School information and classrooms are correct.
+- [ ] Every current child is in the correct family and classroom with the correct schedule.
+- [ ] Guardians, payers, emergency contacts, pickups, and custody restrictions are correct.
+- [ ] Allergies, medical needs, medications, and action plans are correct or confirmed as none.
+- [ ] Tuition amount, billing schedule, description, and start date are correct for each child.
+- [ ] Opening balances use the same date and separate parent responsibility from agency responsibility.
+- [ ] Every imported former or withdrawn family with an amount owed or a credit has been checked individually.
+- [ ] Current staff and classroom assignments are correct.
+- [ ] Imported family, child, classroom, employee, and signed opening-balance totals match the Fleet Verification Packet.
+- [ ] The currently enrolled child total matches the review workbook.
+- [ ] I completed at least 10 family spot checks, or all families when fewer than 10.
+- [ ] Every correction has an owner and has been reviewed again after the change.
+- [ ] The original exports and review evidence remain available.
+- [ ] Every reviewed section includes the exact source-file path supplied in the review workbook.
+- [ ] I understand that invitations, staff access, kiosk/PINs, attendance, billing, payments, messaging, and ProCare cutover still require separate approval.
+
+**School:** _______________________________________________
+
+**Director:** _____________________________________________
+
+**Review completed on:** __________________________________
+
+**Open corrections remaining:** ____________________________
+
+**Director result:** `DATA CORRECT` / `CORRECTIONS REQUIRED` / `MISSING INFORMATION`
+
+**Director signature:** ____________________________________
+
+## Frequently Asked Questions
+
+### Does "import complete" mean everything is correct?
+
+No. It only means the import process ended. The director review confirms whether the records are accurate.
+
+### Can I match a person by name, email, or phone number?
+
+Not when there is any doubt. Families may share contact information, and names may be misspelled. Report the uncertain match so support can verify it using the source IDs.
+
+### Does a blank allergy, pickup, or custody field mean there is nothing to report?
+
+No. A blank means the information has not been confirmed. Check the current school record before marking `director confirmed none`.
+
+### Does the parent owe every positive balance?
+
+No. Part of the balance may belong to an agency or subsidy program. Only the verified family portion should be shown to the parent for payment.
+
+### Can I delete a duplicate or withdrawn record?
+
+Do not delete it during this review. Report the duplicate or incorrect status. Billing, attendance, safety, and audit history may need to be preserved.
+
+### Can parents be invited as soon as the family list looks correct?
+
+No. Parent invitations have a separate approval because the wrong family connection could show private information to the wrong person.
+
+### When can the school stop using ProCare?
+
+Only after all required data is verified, corrections are closed or formally held, separate operating features are approved, a recoverable backup exists, and the school receives written cutover approval.

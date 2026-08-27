@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
@@ -74,12 +75,20 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
   }
 
+  if (action === "approve" && !media.child.photoVideoPermission) {
+    return NextResponse.json({
+      ok: false,
+      error: "Photo/video permission must be confirmed on the child record before this photo can be shared.",
+    }, { status: 409 });
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
     if (action === "approve") {
-      await tx.child.update({
-        where: { id: media.childId },
+      const permissionLock = await tx.child.updateMany({
+        where: { id: media.childId, photoVideoPermission: true },
         data: { photoVideoPermission: true },
       });
+      if (permissionLock.count !== 1) return null;
       return tx.childMedia.update({
         where: { id },
         data: {
@@ -96,7 +105,14 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
         sharedWithParents: false,
       },
     });
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+  if (!updated) {
+    return NextResponse.json({
+      ok: false,
+      error: "Photo/video permission changed before approval. Review the child record and try again.",
+    }, { status: 409 });
+  }
 
   if (action === "approve") {
     const parentNotifications = buildParentPhotoNotifications({
@@ -139,7 +155,7 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
       classroomId: media.classroomId,
       previousStatus: media.status,
       newStatus: updated.status,
-      photoVideoPermissionEnabled: action === "approve",
+      photoVideoPermissionConfirmed: media.child.photoVideoPermission,
       note: note || null,
     },
   });

@@ -38,6 +38,7 @@ import {
   applySucceededStripeInvoicePayment,
 } from "@/lib/stripe-payment-application";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
+import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
@@ -382,6 +383,14 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     const billingApproval = stripeSchoolBillingApproval({ customFields: center.customFields, centerName: center.name });
     if (!billingApproval.approved) {
       results.push({ ...baseResult, status: "skipped", reason: billingApproval.blockingReason });
+      continue;
+    }
+    const paymentReadiness = stripeSchoolReadinessFlowFromFields({
+      customFields: center.customFields,
+      centerName: center.name,
+    });
+    if (!paymentReadiness.canAcceptParentPayments) {
+      results.push({ ...baseResult, status: "skipped", reason: paymentReadiness.explanation });
       continue;
     }
 

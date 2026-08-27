@@ -10,6 +10,33 @@ export function resolveRegistrationHandoffCenterId(requestedCenterId: string, av
   return availableCenterIds.includes(normalizedCenterId) ? normalizedCenterId : "";
 }
 
+type RegistrationHandoffCenter = {
+  id: string;
+  crmLocationId?: string | null;
+  locationId?: string | null;
+  name?: string | null;
+};
+
+function normalizedSelector(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+export function resolveRegistrationHandoffCenter(
+  requestedSelector: string,
+  availableCenters: readonly RegistrationHandoffCenter[],
+) {
+  const selector = normalizedSelector(requestedSelector);
+  if (!selector) return "";
+
+  const matches = availableCenters.filter((center) =>
+    [center.id, center.crmLocationId, center.locationId, center.name]
+      .map(normalizedSelector)
+      .includes(selector),
+  );
+
+  return matches.length === 1 ? matches[0].id : "";
+}
+
 export function registrationLeadLookupWhere(centerId: string, email: string) {
   return {
     centerId: centerId.trim(),

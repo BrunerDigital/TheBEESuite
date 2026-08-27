@@ -1,6 +1,11 @@
 export const STRIPE_WEBHOOK_ACCOUNT_EVENT_TYPES = [
   "account.updated",
+  "v2.core.account.created",
   "v2.core.account.updated",
+  "v2.core.account[defaults].updated",
+  "v2.core.account[identity].updated",
+  "v2.core.account[configuration.merchant].updated",
+  "v2.core.account[configuration.recipient].updated",
   "v2.core.account[requirements].updated",
 ] as const;
 
@@ -20,6 +25,8 @@ export const STRIPE_WEBHOOK_PAYMENT_EVENT_TYPES = [
   "checkout.session.expired",
   "payment_intent.succeeded",
   "payment_intent.payment_failed",
+  "setup_intent.succeeded",
+  "setup_intent.setup_failed",
   "charge.refunded",
   "charge.dispute.created",
   "charge.dispute.updated",

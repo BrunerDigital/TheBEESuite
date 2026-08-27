@@ -48,7 +48,7 @@ async function GETHandler(request: NextRequest) {
   const dryRun = request.nextUrl.searchParams.get("dryRun") === "1";
   const suppressAutopay = request.nextUrl.searchParams.get("suppressAutopay") === "1";
   const requestedCadence = clean(request.nextUrl.searchParams.get("cadence")).toLowerCase();
-  const cadenceScope = ["weekly", "four_week", "monthly"].includes(requestedCadence) ? requestedCadence : null;
+  const cadenceScope = ["weekly", "biweekly", "four_week", "monthly"].includes(requestedCadence) ? requestedCadence : null;
   const asOfParam = request.nextUrl.searchParams.get("asOf");
   const asOf = asOfParam ? new Date(asOfParam) : new Date();
   const safeAsOf = Number.isNaN(asOf.getTime()) ? new Date() : asOf;
@@ -104,12 +104,13 @@ async function GETHandler(request: NextRequest) {
     if (!plan || plan.centerId !== entry.child.family.centerId) return [];
     const cadence = normalizeBillingCadence(entry.fields.tuitionBillingCadence ?? plan?.cadence ?? entry.fields.tuitionPlanCadence);
     if (cadenceScope && cadence !== cadenceScope) return [];
-    const billingPeriod = cadence === "weekly" || cadence === "four_week" ? weeklyBillingPeriod : monthlyBillingPeriod;
+    const weekBased = cadence === "weekly" || cadence === "biweekly" || cadence === "four_week";
+    const billingPeriod = weekBased ? weeklyBillingPeriod : monthlyBillingPeriod;
     const startsPeriod = defaultRecurringBillingPeriod(clean(entry.fields.tuitionBillingStartsPeriod) || billingPeriod, safeAsOf, cadence);
-    const billingDay = cadence === "weekly" || cadence === "four_week"
+    const billingDay = weekBased
       ? WEEKLY_TUITION_AUTOBILL_DAY
       : normalizeRecurringBillingDay(entry.fields.tuitionBillingDay, cadence);
-    const currentDay = cadence === "weekly" || cadence === "four_week" ? currentWeeklyDay : currentMonthlyDay;
+    const currentDay = weekBased ? currentWeeklyDay : currentMonthlyDay;
     if (!shouldCreateRecurringTuitionInvoice({
       enabled: true,
       planId: entry.planId,
@@ -144,7 +145,7 @@ async function GETHandler(request: NextRequest) {
           throw new Error(`Weekly credits must be less than tuition for child ${entry.child.id}.`);
         }
         const invoiceWeekCount = tuitionInvoiceWeekCount(entry.cadence);
-        const dueDate = entry.cadence === "weekly" || entry.cadence === "four_week"
+        const dueDate = entry.cadence === "weekly" || entry.cadence === "biweekly" || entry.cadence === "four_week"
           ? weeklyTuitionChargeDateForPeriod(entry.billingPeriod)
           : recurringDueDateForPeriod(entry.billingPeriod, entry.billingDay, entry.cadence);
         const dedupeKey = billingDedupeKey({
@@ -155,7 +156,7 @@ async function GETHandler(request: NextRequest) {
           batchTarget: "recurring-child",
           childIds: [entry.child.id],
         });
-        const lineDescription = `${description} - ${entry.child.fullName}${invoiceWeekCount === 4 ? " (4 weeks ahead)" : ""}`;
+        const lineDescription = `${description} - ${entry.child.fullName}${invoiceWeekCount > 1 ? ` (${invoiceWeekCount} weeks ahead)` : ""}`;
         const invoiceItems = tuitionInvoiceItems({ description: lineDescription, grossAmountCents: amountCents, additionalCharges: tuitionAdditionalCharges, credits: tuitionCredits })
           .map((item) => ({ ...item, amountCents: item.amountCents * invoiceWeekCount }));
         const grossTuitionCents = (amountCents + tuitionAdditionalChargesTotalCents) * invoiceWeekCount;

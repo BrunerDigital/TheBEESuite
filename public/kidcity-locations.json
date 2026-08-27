@@ -11,16 +11,6 @@
       "phone": "719-301-0049"
     },
     {
-      "crmLocationId": "Kid City USA - CO | Woodland Park - Forest Edge",
-      "locationId": "Kid City USA - CO | Woodland Park - Forest Edge",
-      "name": "Kid City USA - Woodland Park - Forest Edge",
-      "address": "501 Forest Edge Rd.",
-      "city": "Woodland Park",
-      "state": "CO",
-      "postalCode": "80863",
-      "phone": "719-687-8513"
-    },
-    {
       "crmLocationId": "Kid City USA - CO | Grand Junction",
       "locationId": "Kid City USA - CO | Grand Junction",
       "name": "Kid City USA - Grand Junction",
@@ -189,16 +179,6 @@
       "state": "FL",
       "postalCode": "32216",
       "phone": "904-575-9649"
-    },
-    {
-      "crmLocationId": "Kid City USA - FL | Jacksonville - Durbin",
-      "locationId": "Kid City USA - FL | Jacksonville - Durbin",
-      "name": "Kid City USA - Durbin",
-      "address": "14985 Old St. Augustine Rd Suite 120",
-      "city": "Jacksonville",
-      "state": "FL",
-      "postalCode": "32258",
-      "phone": "904-672-7616"
     },
     {
       "crmLocationId": "Kid City USA - FL | Jacksonville - Fruit Cove",
@@ -441,24 +421,14 @@
       "phone": "855-543-2489"
     },
     {
-      "crmLocationId": "Kid City USA - IN | Brownsburg",
-      "locationId": "Kid City USA - IN | Brownsburg",
-      "name": "Kid City USA - Brownsburg",
-      "address": "1570 East US Highway 136",
-      "city": "Brownsburg",
+      "crmLocationId": "Kid City USA - IN | Fishers",
+      "locationId": "Kid City USA - IN | Fishers",
+      "name": "Kid City USA - Fishers",
+      "address": "9000 Fitness Lane",
+      "city": "Fishers",
       "state": "IN",
-      "postalCode": "46112",
+      "postalCode": "46038",
       "phone": "855-543-2489"
-    },
-    {
-      "crmLocationId": "Kid City USA - IN | Elkhart",
-      "locationId": "Kid City USA - IN | Elkhart",
-      "name": "Kid City USA - Elkhart",
-      "address": "631 Simpson Ave.",
-      "city": "Elkhart",
-      "state": "IN",
-      "postalCode": "46516",
-      "phone": "574-444-3543"
     },
     {
       "crmLocationId": "Kid City USA - IN | Greenwood",
@@ -498,6 +468,16 @@
       "city": "Kokomo",
       "state": "IN",
       "postalCode": "46901",
+      "phone": "855-543-2489"
+    },
+    {
+      "crmLocationId": "Kid City USA - IN | Loogootee",
+      "locationId": "Kid City USA - IN | Loogootee",
+      "name": "Kid City USA - Loogootee",
+      "address": "505 N. Oak Street",
+      "city": "Loogootee",
+      "state": "IN",
+      "postalCode": "47553",
       "phone": "855-543-2489"
     },
     {
@@ -549,16 +529,6 @@
       "state": "IN",
       "postalCode": "46075",
       "phone": "855-543-2490"
-    },
-    {
-      "crmLocationId": "Kid City USA - MO | Lees Summit",
-      "locationId": "Kid City USA - MO | Lees Summit",
-      "name": "Kid City USA - Lees Summit",
-      "address": "850 NE Swann Road",
-      "city": "Leeâ€™s Summit",
-      "state": "MO",
-      "postalCode": "64086",
-      "phone": "816-875-3363"
     },
     {
       "crmLocationId": "Kid City USA - NC | Canton",

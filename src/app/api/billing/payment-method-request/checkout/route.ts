@@ -40,6 +40,7 @@ import { withApiLogging } from "@/lib/request-response-logging";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
+import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { invoiceResponsibilityReviewExempt, invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 import {
@@ -86,7 +87,7 @@ async function POSTHandler(request: NextRequest) {
 
   const payload = validation.payload;
   const requestedPaymentMethodCategory = paymentMethodCategory(body.paymentMethodCategory);
-  const bankAccountVerificationMethod = requestedPaymentMethodCategory === "link_bank" ? "instant" : null;
+  const bankAccountVerificationMethod = requestedPaymentMethodCategory === "link_bank" ? "automatic" : null;
   const invoiceId = clean(body.invoiceId);
 
   const family = await prisma.family.findUnique({
@@ -241,6 +242,23 @@ async function POSTHandler(request: NextRequest) {
         error: paymentServiceError({
           parentFacing: true,
           providerError: billingApproval.blockingReason || "Online billing is not approved for this school.",
+          fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+        }),
+      },
+      { status: 403 },
+    );
+  }
+  const paymentReadiness = stripeSchoolReadinessFlowFromFields({
+    customFields: center.customFields,
+    centerName: center.name,
+  });
+  if (!paymentReadiness.canAcceptParentPayments) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: paymentServiceError({
+          parentFacing: true,
+          providerError: paymentReadiness.explanation,
           fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
         }),
       },
@@ -500,7 +518,7 @@ async function POSTHandler(request: NextRequest) {
     checkoutBranding: buildPaymentMethodRequestCheckoutBranding({
       centerLabel,
       familyName: family.name,
-      intent: bankAccountVerificationMethod === "instant" ? "instant_bank_verification" : "payment_steps",
+      intent: requestedPaymentMethodCategory === "link_bank" ? "instant_bank_verification" : "payment_steps",
     }),
     tenantId: payload.tenantId,
   });

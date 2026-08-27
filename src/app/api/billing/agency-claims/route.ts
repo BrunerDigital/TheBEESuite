@@ -281,7 +281,13 @@ async function getHandler(request: NextRequest) {
     prisma.family.findMany({
       where: { centerId: { in: centerIds }, children: { some: { OR: [{ enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES }, classroomId: { not: null } }, { subsidyAuthorizations: { some: {} } }] } } },
       orderBy: { name: "asc" },
-      select: { id: true, centerId: true, name: true, children: { where: { OR: [{ enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES }, classroomId: { not: null } }, { subsidyAuthorizations: { some: {} } }] }, select: { id: true, fullName: true, enrollmentStatus: true, classroomId: true }, orderBy: { fullName: "asc" } } },
+      select: {
+        id: true,
+        centerId: true,
+        name: true,
+        guardians: { select: { fullName: true }, orderBy: { fullName: "asc" } },
+        children: { where: { OR: [{ enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES }, classroomId: { not: null } }, { subsidyAuthorizations: { some: {} } }] }, select: { id: true, fullName: true, enrollmentStatus: true, classroomId: true }, orderBy: { fullName: "asc" } },
+      },
     }),
   ]);
 

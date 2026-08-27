@@ -63,7 +63,7 @@ import {
 } from "@/lib/accounts-receivable";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
-import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, messageCenterIdsForUser, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import {
   canManageExecutiveMarketingPortfolio,
   marketingAccountIdFromConfig,
@@ -112,7 +112,7 @@ import {
   isStripeParentProcessingRecoveryApproved,
   readStripeConnectedAccountId,
 } from "@/lib/integrations";
-import { getKidCitySoftwareFeeUnitAmountCents, getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
+import { getKidCitySoftwareInvoiceSnapshot, getSchoolSoftwareFeePolicyForCenter, isSchoolSoftwareBillingCenter } from "@/lib/kidcity-software-billing";
 import { countCenterBillableUsers } from "@/lib/school-software-subscriptions";
 import { buildGuardianKioskCredential, kioskPathForCenter } from "@/lib/kiosk-credentials";
 import {
@@ -144,8 +144,10 @@ import {
   normalizeBillingCadence,
   defaultRecurringBillingPeriod,
   isoWeekBillingPeriod,
+  isWeekBasedTuitionCadence,
   normalizeRecurringBillingDay,
   normalizeRecurringBillingPeriod,
+  recurringDueDateForPeriod,
   shouldCreateRecurringTuitionInvoice,
   utcBillingWeekday,
 } from "@/lib/billing-workflows";
@@ -208,7 +210,7 @@ import {
   summarizeEnrollmentChecklist,
 } from "@/lib/registration-packet";
 import { registrationPaymentFromData } from "@/lib/registration-billing";
-import { createAssetHubSignedUrl, createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
+import { createAssetHubSignedUrl, createChildMediaSignedUrl, createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
 import { centerServiceDayWindow, latestLogMap, readCenterLocationTimeZone } from "@/lib/attendance-state";
 import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { readStaffClockState, readStaffClockSummary, readStaffContactEmail, readStaffKioskPinHash } from "@/lib/staff-kiosk";
@@ -242,6 +244,18 @@ async function signedProfilePhotoUrl(
     }
   }
   return readProfilePhotoUrl(customFields) ?? fallbackUrl;
+}
+
+async function signedChildProfilePhotoUrl(customFields: unknown) {
+  const storageKey = readProfilePhotoStorageKey(customFields);
+  if (storageKey && isSupabaseStorageConfigured()) {
+    try {
+      return await createChildMediaSignedUrl(storageKey);
+    } catch {
+      return readProfilePhotoUrl(customFields);
+    }
+  }
+  return readProfilePhotoUrl(customFields);
 }
 
 export function generateStaticParams() {
@@ -606,10 +620,17 @@ async function buildFtePrefills(
     where: {
       OR: [
         { family: { is: { centerId: centerIdFilter(centerIds) } } },
-        { classroom: { is: { centerId: centerIdFilter(centerIds) } } },
+        {
+          AND: [
+            { family: { is: { centerId: null } } },
+            { classroom: { is: { centerId: centerIdFilter(centerIds) } } },
+          ],
+        },
       ],
     },
     select: {
+      id: true,
+      fullName: true,
       ageGroup: true,
       enrollmentStatus: true,
       startDate: true,
@@ -668,6 +689,7 @@ async function buildFtePrefills(
     fourDayCount: 0,
     fiveDayCount: 0,
     unknownScheduleCount: 0,
+    missingScheduleChildren: [] as FteReportPrefill["missingScheduleChildren"],
     infants: 0,
     toddlers: 0,
     twos: 0,
@@ -689,8 +711,9 @@ async function buildFtePrefills(
   } satisfies FteReportPrefill]));
 
   for (const child of children) {
-    const centerId = child.classroom?.centerId ?? child.family.centerId;
+    const centerId = child.family.centerId ?? child.classroom?.centerId;
     if (!centerId) continue;
+    if (child.classroom?.centerId && child.classroom.centerId !== centerId) continue;
     const row = byCenter.get(centerId);
     if (!row) continue;
     const isActive = activeEnrollmentStatus(child.enrollmentStatus);
@@ -702,7 +725,14 @@ async function buildFtePrefills(
       else if (scheduledDays === 3) row.threeDayCount += 1;
       else if (scheduledDays === 4) row.fourDayCount += 1;
       else if (scheduledDays === 5) row.fiveDayCount += 1;
-      else row.unknownScheduleCount += 1;
+      else {
+        row.unknownScheduleCount += 1;
+        row.missingScheduleChildren.push({
+          id: child.id,
+          fullName: child.fullName,
+          classroomName: child.classroom?.name ?? null,
+        });
+      }
     }
     if (child.startDate && child.startDate >= weekStart && child.startDate < weekEndExclusive) row.newStarts += 1;
     if (!isActive && child.updatedAt >= weekStart && child.updatedAt < weekEndExclusive) row.withdrawals += 1;
@@ -786,6 +816,7 @@ async function buildFtePrefills(
 
   return Array.from(byCenter.values()).map((row) => ({
     ...row,
+    missingScheduleChildren: row.missingScheduleChildren.sort((left, right) => left.fullName.localeCompare(right.fullName)),
     accountReceivableAmount: row.accountReceivableAmount === null ? null : Math.round(row.accountReceivableAmount * 100) / 100,
     selfPayerBillAmount: Math.round(row.selfPayerBillAmount * 100) / 100,
     subsidyBillAmount: Math.round(row.subsidyBillAmount * 100) / 100,
@@ -1971,7 +2002,11 @@ async function renderLivePage(
     ]);
     const enrollmentLifecycle = summarizeEnrollmentLifecycleCounts(enrollmentStatusRows, total);
 
-    return <ChildProfilesPage data={{ children, allChildren, intakeCenters, stats: { total, allTotal, enrollmentLifecycle, allergies, restrictedMedicalNotes } }} />;
+    const [childrenWithProfilePhotos, allChildrenWithProfilePhotos] = await Promise.all([
+      Promise.all(children.map(async (child) => ({ ...child, profilePhotoUrl: await signedChildProfilePhotoUrl(child.customFields) }))),
+      Promise.all(allChildren.map(async (child) => ({ ...child, profilePhotoUrl: await signedChildProfilePhotoUrl(child.customFields) }))),
+    ]);
+    return <ChildProfilesPage data={{ children: childrenWithProfilePhotos, allChildren: allChildrenWithProfilePhotos, intakeCenters, stats: { total, allTotal, enrollmentLifecycle, allergies, restrictedMedicalNotes } }} />;
   }
 
   if (slug === "parent-portal") {
@@ -2114,6 +2149,7 @@ async function renderLivePage(
               customFields: true,
               photoVideoPermission: true,
               fieldTripPermission: true,
+              classroomId: true,
               classroom: { select: { name: true, ageGroup: true, centerId: true } },
               liveLocation: {
                 select: {
@@ -2135,6 +2171,9 @@ async function renderLivePage(
 
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
+    const parentClassroomIds = Array.from(new Set(
+      family?.children.map((child) => child.classroomId).filter((id): id is string => Boolean(id)) ?? [],
+    ));
     const resolvedParentCenterId = family?.centerId ?? family?.children[0]?.classroom?.centerId ?? null;
     const parentPortalCenter = resolvedParentCenterId
       ? centers.find((center) => center.id === resolvedParentCenterId) ?? null
@@ -2149,7 +2188,7 @@ async function renderLivePage(
     const parentVisibleLedgerWhere: Prisma.LedgerEntryWhereInput = {
       NOT: agencyOnlyLedgerWhere,
     };
-    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs] = await prisma.$transaction([
+    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs, classroomTeacherRows] = await prisma.$transaction([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -2215,10 +2254,18 @@ async function renderLivePage(
         where: { billingAccount: { familyId } },
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
         take: 20,
-        select: { id: true, number: true, status: true, dueDate: true, totalCents: true, customFields: true },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          dueDate: true,
+          totalCents: true,
+          customFields: true,
+          items: { orderBy: { id: "asc" }, select: { description: true, amountCents: true } },
+        },
       }),
       prisma.dailyReport.findMany({
-        where: { childId: { in: childIds.length ? childIds : ["__none__"] } },
+        where: { childId: { in: childIds.length ? childIds : ["__none__"] }, sentAt: { not: null } },
         orderBy: { date: "desc" },
         take: 20,
         select: {
@@ -2317,7 +2364,25 @@ async function renderLivePage(
         orderBy: { occurredAt: "desc" },
         select: { childId: true, type: true, occurredAt: true },
       }),
+      prisma.user.findMany({
+        where: {
+          tenantId: user.tenantId,
+          role: UserRole.TEACHER,
+          isActive: true,
+          staffProfile: {
+            centerId: resolvedParentCenterId ?? "__none__",
+            classroomId: { in: parentClassroomIds.length ? parentClassroomIds : ["__none__"] },
+          },
+        },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, staffProfile: { select: { classroom: { select: { name: true } } } } },
+      }),
     ]);
+    const classroomTeachers = classroomTeacherRows.map((teacher) => ({
+      id: teacher.id,
+      name: userViewText(teacher.name),
+      classroomNames: teacher.staffProfile?.classroom?.name ? [teacher.staffProfile.classroom.name] : [],
+    }));
 
     const [signedDocuments, signedMedia, signedMessages] = await Promise.all([
       signDocumentRecords(documents),
@@ -2362,6 +2427,7 @@ async function renderLivePage(
         .filter((report) => report.sentAt && report.date >= parentServiceDay.start && report.date < parentServiceDay.end)
         .map((report) => report.childId),
     );
+    const parentChildProfilePhotoUrls = new Map(await Promise.all((family?.children ?? []).map(async (child) => [child.id, await signedChildProfilePhotoUrl(child.customFields)] as const)));
     const parentPortalFamily = family
       ? {
           ...family,
@@ -2371,6 +2437,7 @@ async function renderLivePage(
             const { liveLocation, ...portalChild } = child;
             return {
               ...portalChild,
+              profilePhotoUrl: parentChildProfilePhotoUrls.get(child.id) ?? null,
               tuitionAssignment: tuitionAssignmentFromCustomFields(child.customFields),
               today: buildParentPortalTodayState({
                 attendanceStatus: attendance?.status,
@@ -2438,6 +2505,20 @@ async function renderLivePage(
           },
         })
       : null;
+    const invoiceChildIds = [...new Set(invoices.flatMap((invoice) => {
+      const fields = asRecord(invoice.customFields);
+      const singular = stringField(fields.childId);
+      const batch = Array.isArray(fields.childIds)
+        ? fields.childIds.filter((value): value is string => typeof value === "string")
+        : [];
+      return singular ? [singular, ...batch] : batch;
+    }))];
+    const invoiceChildNames = new Map((invoiceChildIds.length && family
+      ? await prisma.child.findMany({
+          where: { familyId: family.id, id: { in: invoiceChildIds } },
+          select: { id: true, fullName: true },
+        })
+      : []).map((child) => [child.id, child.fullName]));
     const pendingPaymentByInvoiceId = new Map<string, Omit<ReturnType<typeof activeStripeCheckoutPaymentSummary>, "amountCents">>();
     for (const payment of billingAccount?.payments ?? []) {
       if (!isActiveStripeCheckoutPayment(payment)) continue;
@@ -2459,16 +2540,61 @@ async function renderLivePage(
         feeDisclosureVersion: summary.feeDisclosureVersion,
       });
     }
+    const parentInvoiceDocuments = new Map(invoices.map((invoice) => {
+      const separated = responsibilitySeparatedBillingAmounts({
+        invoiceTotalCents: invoice.totalCents,
+        customFields: invoice.customFields,
+      });
+      const familyOnly = invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents);
+      const amountCents = separated?.familyResponsibilityCents ?? (familyOnly ? invoice.totalCents : null);
+      return [invoice.id, {
+        amountCents,
+        items: separated
+          ? [{ description: "Family responsibility", amountCents: separated.familyResponsibilityCents }]
+          : familyOnly ? invoice.items : [],
+      }] as const;
+    }));
     const parentInvoices = invoices.map((invoice) => {
       const invoiceFields = asRecord(invoice.customFields);
+      const document = parentInvoiceDocuments.get(invoice.id);
       const productCheckoutAvailable = stringField(invoiceFields.checkoutPurpose) === "product_purchase"
         || stringField(invoiceFields.receiptKind) === "product"
         || stringField(invoiceFields.chargeSource) === "product";
+      const billingPeriod = stringField(invoiceFields.coverageStartsPeriod) || stringField(invoiceFields.billingPeriod);
+      const invoiceWeekCount = Math.max(1, Number(invoiceFields.invoiceWeekCount) || 1);
+      const billingCadence = stringField(invoiceFields.billingCadence) || stringField(invoiceFields.tuitionPlanCadence) || "weekly";
+      const weeklyPeriod = /^\d{4}-W\d{2}$/i.test(billingPeriod || "");
+      const monthlyPeriod = /^\d{4}-\d{2}$/.test(billingPeriod || "");
+      const servicePeriodStart = productCheckoutAvailable ? null : weeklyPeriod && billingPeriod
+        ? recurringDueDateForPeriod(billingPeriod, 1, billingCadence).toISOString().slice(0, 10)
+        : monthlyPeriod && billingPeriod
+          ? `${billingPeriod}-01`
+          : billingPeriod && /^\d{4}-\d{2}-\d{2}$/.test(billingPeriod) ? billingPeriod : null;
+      const servicePeriodEndLabel = servicePeriodStart
+        ? monthlyPeriod
+          ? new Date(Date.UTC(Number(servicePeriodStart.slice(0, 4)), Number(servicePeriodStart.slice(5, 7)), 0)).toISOString().slice(0, 10)
+          : new Date(new Date(`${servicePeriodStart}T00:00:00.000Z`).getTime() + (invoiceWeekCount * 7 - 1) * 86_400_000).toISOString().slice(0, 10)
+        : null;
+      const childIds = Array.isArray(invoiceFields.childIds)
+        ? invoiceFields.childIds.filter((value): value is string => typeof value === "string")
+        : [];
+      const batchChildNames = childIds
+        .map((childId) => invoiceChildNames.get(childId))
+        .filter((value): value is string => Boolean(value));
+      const singularChildId = stringField(invoiceFields.childId);
       return {
         id: invoice.id,
         number: invoice.number,
         status: invoice.status,
         dueDate: invoice.dueDate,
+        familyDocumentAmountCents: document?.amountCents ?? null,
+        childName: stringField(invoiceFields.childName)
+          || (singularChildId ? invoiceChildNames.get(singularChildId) : null)
+          || (batchChildNames.length ? batchChildNames.join(", ") : null)
+          || null,
+        servicePeriodStart,
+        servicePeriodEnd: servicePeriodEndLabel,
+        items: document?.items ?? [],
         purposeLabel: invoicePurposeLabel(invoiceFields),
         productCheckoutAvailable,
         pendingPayment: pendingPaymentByInvoiceId.get(invoice.id) ?? null,
@@ -2563,6 +2689,8 @@ async function renderLivePage(
         incidents={incidents}
         messages={signedMessages}
         centerName={parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
+        centerEin={parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
+        classroomTeachers={classroomTeachers}
         documents={signedDocuments}
         media={signedMedia}
         announcements={announcements}
@@ -2626,6 +2754,7 @@ async function renderLivePage(
         ageGroup: true,
         enrollmentStatus: true,
         photoVideoPermission: true,
+        customFields: true,
         classroom: { select: { id: true, name: true } },
         liveLocation: { select: { currentClassroomId: true, areaName: true, status: true, movedAt: true, currentClassroom: { select: { id: true, name: true } } } },
         family: { select: { custodyNotes: true } },
@@ -2688,12 +2817,17 @@ async function renderLivePage(
         latestDailyReportByChild.set(report.childId, report);
       }
     }
+    const teacherChildProfilePhotoUrls = new Map(await Promise.all(children.map(async (child) => [
+      child.id,
+      await signedChildProfilePhotoUrl(child.customFields),
+    ] as const)));
     const roster = children.map((child) => {
       const attendance = attendanceByChild.get(child.id);
       const latestLog = latestCheckLogByChild.get(child.id);
       const dailyReport = latestDailyReportByChild.get(child.id);
       return {
         ...child,
+        profilePhotoUrl: teacherChildProfilePhotoUrls.get(child.id) ?? null,
         attendance: {
           status: attendance?.status ?? "not_marked",
           latestLogType: latestLog?.type ?? null,
@@ -2781,6 +2915,10 @@ async function renderLivePage(
     const requestedReplyStaffId = firstSearchParam(searchParams.staffId) || "";
     const requestedReplySubject = firstSearchParam(searchParams.subject) || "";
     const teacherMessageScope = user.role === UserRole.TEACHER && !allCenters;
+    const authorizedMessageCenterIds = messageCenterIdsForUser(user);
+    const directorMessageCenterIds = visibleCenterIds.filter((centerId) => authorizedMessageCenterIds.includes(centerId));
+    const messageCenterIds = teacherMessageScope ? visibleCenterIds : directorMessageCenterIds;
+    const messageScopedCenterIds = visibleCenterIdFilter(messageCenterIds);
     const teacherStaffProfile = teacherMessageScope
       ? await prisma.staffProfile.findUnique({
           where: { userId: user.id },
@@ -2791,15 +2929,19 @@ async function renderLivePage(
       ? teacherStaffProfile?.classroomId
         ? { children: { some: { AND: [{ classroomId: teacherStaffProfile.classroomId }, currentlyEnrolledChildWhere()] } } }
         : { id: "__no_teacher_classroom__" }
-      : { ...visibleFamilyWhere(visibleCenterIds), children: { some: currentlyEnrolledChildWhere() } };
+      : { ...visibleFamilyWhere(messageCenterIds), children: { some: currentlyEnrolledChildWhere() } };
+    const messageFamilyScopeWhere: Prisma.FamilyWhereInput = teacherMessageScope
+      ? familyScopeWhere
+      : visibleFamilyWhere(messageCenterIds);
     const messageWhere = buildVisibleMessageWhere({
       userId: user.id,
-      familyScopeWhere,
+      familyScopeWhere: messageFamilyScopeWhere,
       allCenters,
       teacherMessageScope,
       tenantId: user.tenantId,
+      nonFamilyCenterIds: allCenters ? undefined : messageCenterIds,
     });
-    const classroomWhere = visibleClassroomWhere(visibleCenterIds);
+    const classroomWhere = visibleClassroomWhere(messageCenterIds);
     const [messages, families, templates, staffUsers, classrooms, notificationPreferenceUsers, total, unread, priority, aiReview] = await Promise.all([
       prisma.message.findMany({
         where: messageWhere,
@@ -2818,12 +2960,15 @@ async function renderLivePage(
               name: true,
               email: true,
               role: true,
+              staffProfile: { select: { centerId: true } },
             },
           },
           assignedTo: {
             select: {
               name: true,
               email: true,
+              role: true,
+              staffProfile: { select: { centerId: true } },
             },
           },
         },
@@ -2857,7 +3002,7 @@ async function renderLivePage(
         where: {
           tenantId: user.tenantId,
           isActive: true,
-          ...visibleOrGlobalCenterWhere(visibleCenterIds),
+          ...visibleOrGlobalCenterWhere(messageCenterIds),
         },
         orderBy: [{ centerId: "asc" }, { category: "asc" }, { name: "asc" }],
         take: 100,
@@ -2871,8 +3016,8 @@ async function renderLivePage(
             ? {}
             : {
                 OR: [
-                  { staffProfile: { centerId: scopedCenterIds } },
-                  { accessGrants: { some: { isActive: true, centerId: scopedCenterIds } } },
+                  { staffProfile: { centerId: messageScopedCenterIds } },
+                  { accessGrants: { some: { isActive: true, centerId: messageScopedCenterIds } } },
                 ],
               }),
         },
@@ -2959,16 +3104,23 @@ async function renderLivePage(
 
     const signedMessages = await Promise.all(messages.map(async (message) => ({
       ...message,
+      staffCenterId: message.threadKey?.startsWith("staff:")
+        ? message.sender?.role === UserRole.TEACHER
+          ? message.sender.staffProfile?.centerId ?? null
+          : message.assignedTo?.role === UserRole.TEACHER
+            ? message.assignedTo.staffProfile?.centerId ?? null
+            : null
+        : null,
       subject: message.subject ? userViewText(message.subject) : null,
       body: userViewText(message.body),
       family: message.family
         ? { ...message.family, name: userViewText(message.family.name) }
         : null,
       sender: message.sender
-        ? { ...message.sender, name: userViewText(message.sender.name) }
+        ? { name: userViewText(message.sender.name), email: message.sender.email, role: message.sender.role }
         : null,
       assignedTo: message.assignedTo
-        ? { ...message.assignedTo, name: userViewText(message.assignedTo.name) }
+        ? { name: userViewText(message.assignedTo.name), email: message.assignedTo.email }
         : null,
       attachments: await signMessageAttachmentsFromMetadata(message.metadata),
       replyHref: messageReplyHref(message),
@@ -2976,6 +3128,7 @@ async function renderLivePage(
     const demoMode = showDemoFallbackData && messages.length === 0;
     const visibleMessages = demoMode ? executiveParentMessageDemoRows : signedMessages;
     const centerLabelById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
+    const centerTimeZoneById = new Map(centers.map((center) => [center.id, readCenterLocationTimeZone(center)]));
     const familyOptions = sortFamiliesByName(families.map((family) => ({
       id: family.id,
       name: userViewText(family.name),
@@ -3010,6 +3163,7 @@ async function renderLivePage(
       familyId: string | null;
       familyName: string;
       centerLabel: string | null;
+      timeZone: string | null;
       assignedTo: { name: string; email: string } | null;
       unread: number;
       priority: number;
@@ -3027,24 +3181,34 @@ async function renderLivePage(
         replyHref?: string | null;
       }>;
     };
-    const threadMap = visibleMessages.reduce((map, message) => {
+    const projectedThreads: MessageThread[] = [];
+    for (const message of visibleMessages) {
       const key = message.threadKey ?? (message.familyId ? `family:${message.familyId}` : `internal:${message.id}`);
-      const existing = map.get(key) ?? {
+      const internalCenterId = message.threadKey?.startsWith("internal:")
+        ? message.threadKey.slice("internal:".length)
+        : null;
+      const staffCenterId = "staffCenterId" in message && typeof message.staffCenterId === "string" ? message.staffCenterId : null;
+      const threadCenterId = internalCenterId && centerTimeZoneById.has(internalCenterId) ? internalCenterId : staffCenterId;
+      const messageCenterId = message.family?.centerId ?? (threadCenterId && centerTimeZoneById.has(threadCenterId) ? threadCenterId : null);
+      const messageCreatedAt = new Date(message.createdAt).toISOString();
+      const existing = projectedThreads.find((thread) => thread.key === key) ?? {
         key,
         familyId: message.familyId,
         familyName: message.family?.name ?? "Internal thread",
-        centerLabel: message.family?.centerId ? centerLabelById.get(message.family.centerId) ?? null : null,
+        centerLabel: messageCenterId ? centerLabelById.get(messageCenterId) ?? null : null,
+        timeZone: messageCenterId ? centerTimeZoneById.get(messageCenterId) ?? null : null,
         assignedTo: message.assignedTo ?? null,
         unread: 0,
         priority: 0,
-        lastMessageAt: message.createdAt,
+        lastMessageAt: messageCreatedAt,
         messages: [],
       };
+      if (!projectedThreads.some((thread) => thread.key === key)) projectedThreads.push(existing);
       existing.assignedTo = existing.assignedTo ?? message.assignedTo ?? null;
       existing.unread += message.readAt ? 0 : 1;
       existing.priority += ["high", "urgent"].includes(message.priority) ? 1 : 0;
-      if (new Date(message.createdAt).getTime() > new Date(existing.lastMessageAt).getTime()) {
-        existing.lastMessageAt = message.createdAt;
+      if (new Date(messageCreatedAt).getTime() > new Date(existing.lastMessageAt).getTime()) {
+        existing.lastMessageAt = messageCreatedAt;
       }
       existing.messages.push({
         id: message.id,
@@ -3052,15 +3216,14 @@ async function renderLivePage(
         body: message.body,
         channel: message.channel,
         priority: message.priority,
-        createdAt: message.createdAt,
+        createdAt: messageCreatedAt,
         sender: message.sender,
         isFromFamily: message.sender?.role === UserRole.PARENT_GUARDIAN || message.sender?.role === UserRole.AUTHORIZED_PICKUP,
         attachments: message.attachments,
         replyHref: message.replyHref,
       });
-      return map;
-    }, new Map<string, MessageThread>());
-    const threads = Array.from(threadMap.values())
+    }
+    const threads = projectedThreads
       .map((thread) => ({
         ...thread,
         messages: thread.messages
@@ -3104,7 +3267,7 @@ async function renderLivePage(
           initialThreadKey: requestedReplyFamilyId ? `family:${requestedReplyFamilyId}` : null,
           initialSearchQuery: firstSearchParam(searchParams.q) || "",
           segmentOptions: {
-            centers: centers.map((center) => ({
+            centers: centers.filter((center) => messageCenterIds.includes(center.id)).map((center) => ({
               id: center.id,
               label: formatCenterName(center),
             })),
@@ -3690,11 +3853,12 @@ async function renderLivePage(
           const assignment = tuitionAssignmentFromCustomFields(child.customFields);
           if (!assignment.enabled) continue;
           const cadence = normalizeBillingCadence(assignment.cadence);
-          const billingPeriod = cadence === "weekly" ? currentWeeklyPeriod : currentMonthlyPeriod;
+          const weekBased = isWeekBasedTuitionCadence(cadence);
+          const billingPeriod = weekBased ? currentWeeklyPeriod : currentMonthlyPeriod;
           const billingDay = normalizeRecurringBillingDay(assignment.billingDay, cadence);
-          const currentDay = cadence === "weekly" ? utcBillingWeekday(schedulerDate) : schedulerDate.getUTCDate();
+          const currentDay = weekBased ? utcBillingWeekday(schedulerDate) : schedulerDate.getUTCDate();
           summary.activeAssignments += 1;
-          if (cadence === "weekly") summary.weeklyAssignments += 1;
+          if (weekBased) summary.weeklyAssignments += 1;
           else summary.monthlyAssignments += 1;
           if (shouldCreateRecurringTuitionInvoice({
             enabled: assignment.enabled,
@@ -3704,6 +3868,7 @@ async function renderLivePage(
             billingPeriod,
             billingDay,
             currentDay,
+            cadence,
           })) {
             summary.dueToday += 1;
           }
@@ -4516,7 +4681,18 @@ async function renderLivePage(
           city: true,
           state: true,
           postalCode: true,
+          locationId: true,
+          status: true,
           customFields: true,
+          ownerGroup: {
+            select: {
+              name: true,
+              ownerType: true,
+              billingEmail: true,
+              contactName: true,
+              customFields: true,
+            },
+          },
         },
       }),
     ]);
@@ -4534,6 +4710,22 @@ async function renderLivePage(
             ...center,
             stripeReauthorizationAvailable: !readCorporateStripeVerificationTarget(center.id) || canUseCorporateStripeVerification(user),
           })),
+          softwareBillingCenters: billingCenters.filter(isSchoolSoftwareBillingCenter).map((center) => {
+            const fields = jsonRecord(center.customFields);
+            const policy = getSchoolSoftwareFeePolicyForCenter(center);
+            const methodType = typeof fields.stripeSoftwarePaymentMethodType === "string" ? fields.stripeSoftwarePaymentMethodType : "";
+            const last4 = typeof fields.stripeSoftwarePaymentMethodLast4 === "string" ? fields.stripeSoftwarePaymentMethodLast4 : "";
+            return {
+              id: center.id,
+              name: center.name,
+              tier: policy.tier,
+              monthlyAmountCents: policy.unitAmountCents,
+              paymentMethodReady: typeof fields.stripeSoftwareDefaultPaymentMethodId === "string" && fields.stripeSoftwareDefaultPaymentMethodId.startsWith("pm_"),
+              paymentMethodLabel: methodType ? `${methodType.replaceAll("_", " ")}${last4 ? ` ending ${last4}` : ""}` : null,
+              paymentStatus: typeof fields.stripeSoftwarePaymentStatus === "string" ? fields.stripeSoftwarePaymentStatus : "authorization_required",
+              subscriptionStatus: typeof fields.stripeSoftwareSubscriptionStatus === "string" ? fields.stripeSoftwareSubscriptionStatus : "not_started",
+            };
+          }),
           stripeConfigured,
           webhookConfigured: stripeWebhookConfigured,
           parentProcessingRecoveryApproved: isStripeParentProcessingRecoveryApproved(),
@@ -5057,22 +5249,42 @@ async function renderLivePage(
         },
       }),
       prisma.user.groupBy({ where: { tenantId: user.tenantId }, by: ["isActive"], _count: { _all: true } }),
-      prisma.center.findMany({ where: { organization: { tenantId: user.tenantId }, status: { notIn: ["closed", "archived"] } }, orderBy: { name: "asc" }, select: { id: true, name: true, customFields: true } }),
+      prisma.center.findMany({
+        where: { organization: { tenantId: user.tenantId }, status: "active" },
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          crmLocationId: true,
+          locationId: true,
+          status: true,
+          customFields: true,
+          ownerGroup: {
+            select: {
+              name: true,
+              ownerType: true,
+              billingEmail: true,
+              contactName: true,
+              customFields: true,
+            },
+          },
+        },
+      }),
       prisma.payment.findMany({ where: { status: PaymentStatus.PAID, paidAt: { gte: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)) }, billingAccount: { family: { centerId: { in: centers.map((item) => item.id) } } } }, select: { amountCents: true, customFields: true } }),
       prisma.clientErrorReport.count({ where: { tenantId: user.tenantId, resolvedAt: null, lastSeenAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, ...(tenantWide ? {} : { centerId: scopedCenterIds }) } }),
       prisma.webPushDelivery.count({ where: { status: "failed", lastAttemptAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, subscription: { tenantId: user.tenantId } } }),
       prisma.webPushDelivery.count({ where: { responseStatus: { in: [400, 404, 410] }, lastAttemptAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, subscription: { tenantId: user.tenantId } } }),
     ]);
 
-    const unitAmountCents = getKidCitySoftwareFeeUnitAmountCents();
-    const softwareSubscriptions = await Promise.all(softwareCenters.map(async (school) => {
+    const softwareSubscriptions = await Promise.all(softwareCenters.filter(isSchoolSoftwareBillingCenter).map(async (school) => {
       const fields = jsonRecord(school.customFields);
       const activeUsers = await countCenterBillableUsers(prisma, school.id);
+      const feePolicy = getSchoolSoftwareFeePolicyForCenter(school);
       return {
         id: school.id,
         name: school.name,
         activeUsers,
-        monthlyAmountCents: unitAmountCents,
+        monthlyAmountCents: feePolicy.unitAmountCents,
         customerReady: typeof fields.stripeSoftwareCustomerId === "string" && fields.stripeSoftwareCustomerId.startsWith("cus_"),
         paymentMethodReady: typeof fields.stripeSoftwareDefaultPaymentMethodId === "string" && fields.stripeSoftwareDefaultPaymentMethodId.startsWith("pm_"),
         subscriptionId: typeof fields.stripeSoftwareSubscriptionId === "string" ? fields.stripeSoftwareSubscriptionId : null,
@@ -5768,7 +5980,7 @@ async function renderLivePage(
 
     const [media, pending, sharedThirtyDays, rejectedThirtyDays, restrictedChildren] = await Promise.all([
       prisma.childMedia.findMany({
-        where: scopedMediaWhere({ status: "permission_review", sharedWithParents: false }),
+        where: scopedMediaWhere({ status: { in: ["director_review", "permission_review"] }, sharedWithParents: false }),
         orderBy: { createdAt: "desc" },
         take: 50,
         include: {
@@ -5791,7 +6003,7 @@ async function renderLivePage(
           uploadedBy: { select: { name: true, email: true, role: true } },
         },
       }),
-      prisma.childMedia.count({ where: scopedMediaWhere({ status: "permission_review", sharedWithParents: false }) }),
+      prisma.childMedia.count({ where: scopedMediaWhere({ status: { in: ["director_review", "permission_review"] }, sharedWithParents: false }) }),
       prisma.childMedia.count({ where: scopedMediaWhere({ status: "shared", sharedWithParents: true, createdAt: { gte: thirtyDaysAgo } }) }),
       prisma.childMedia.count({ where: scopedMediaWhere({ status: "rejected", createdAt: { gte: thirtyDaysAgo } }) }),
       prisma.child.count({

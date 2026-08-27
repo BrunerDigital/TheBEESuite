@@ -3,6 +3,7 @@ function clean(value: unknown) {
 }
 
 export const WEEKLY_TUITION_AUTOBILL_CADENCE = "weekly" as const;
+export const BIWEEKLY_TUITION_AUTOBILL_CADENCE = "biweekly" as const;
 export const FOUR_WEEK_TUITION_AUTOBILL_CADENCE = "four_week" as const;
 export const WEEKLY_TUITION_AUTOBILL_DAY = 4;
 
@@ -127,13 +128,16 @@ export function normalizeBillingPeriod(value: unknown, fallbackDate: Date) {
 
 export function normalizeBillingCadence(value: unknown) {
   const normalized = clean(value).toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
+  if (["biweekly", "bi_weekly", "every_2_weeks", "2_week", "2_weeks"].includes(normalized)) return BIWEEKLY_TUITION_AUTOBILL_CADENCE;
   if (["four_week", "four_weeks", "4_week", "4_weeks", "every_4_weeks"].includes(normalized)) return FOUR_WEEK_TUITION_AUTOBILL_CADENCE;
   return normalized.startsWith("week") ? WEEKLY_TUITION_AUTOBILL_CADENCE : "monthly";
 }
 
 export function isWeekBasedTuitionCadence(value: unknown) {
   const cadence = normalizeBillingCadence(value);
-  return cadence === WEEKLY_TUITION_AUTOBILL_CADENCE || cadence === FOUR_WEEK_TUITION_AUTOBILL_CADENCE;
+  return cadence === WEEKLY_TUITION_AUTOBILL_CADENCE
+    || cadence === BIWEEKLY_TUITION_AUTOBILL_CADENCE
+    || cadence === FOUR_WEEK_TUITION_AUTOBILL_CADENCE;
 }
 
 function utcDateOnly(date: Date) {
@@ -227,7 +231,10 @@ export function weeksBetweenBillingPeriods(startPeriod: string, billingPeriod: s
 }
 
 export function tuitionInvoiceWeekCount(cadence: unknown) {
-  return normalizeBillingCadence(cadence) === FOUR_WEEK_TUITION_AUTOBILL_CADENCE ? 4 : 1;
+  const normalized = normalizeBillingCadence(cadence);
+  if (normalized === FOUR_WEEK_TUITION_AUTOBILL_CADENCE) return 4;
+  if (normalized === BIWEEKLY_TUITION_AUTOBILL_CADENCE) return 2;
+  return 1;
 }
 
 export function addWeeksToBillingPeriod(period: string, weeks: number) {
@@ -287,8 +294,9 @@ export function shouldCreateRecurringTuitionInvoice(input: {
 }) {
   if (!input.enabled || !input.planId || input.amountCents <= 0) return false;
   if (input.startsPeriod && input.startsPeriod > input.billingPeriod) return false;
-  if (normalizeBillingCadence(input.cadence) === FOUR_WEEK_TUITION_AUTOBILL_CADENCE) {
-    if (!input.startsPeriod || weeksBetweenBillingPeriods(input.startsPeriod, input.billingPeriod) % 4 !== 0) return false;
+  const invoiceWeekCount = tuitionInvoiceWeekCount(input.cadence);
+  if (invoiceWeekCount > 1) {
+    if (!input.startsPeriod || weeksBetweenBillingPeriods(input.startsPeriod, input.billingPeriod) % invoiceWeekCount !== 0) return false;
   }
   return input.billingDay <= input.currentDay;
 }

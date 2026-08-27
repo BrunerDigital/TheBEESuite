@@ -12,7 +12,9 @@ import {
   type MessageStaffOption,
   type MessageTemplateOption,
 } from "@/components/message-reply-panel";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import type { MessageAttachmentView } from "@/lib/message-attachments";
+import { zonedDateKey } from "@/lib/zoned-date-time";
 import styles from "@/components/message-conversation.module.css";
 
 export type MessageConversationThread = {
@@ -20,6 +22,7 @@ export type MessageConversationThread = {
   familyId: string | null;
   familyName: string;
   centerLabel: string | null;
+  timeZone: string | null;
   assignedTo: { name: string; email: string } | null;
   unread: number;
   priority: number;
@@ -47,15 +50,15 @@ type ConversationComposerProps = {
   currentRole: string;
 };
 
-function formatConversationTime(value: Date | string) {
+function formatConversationTime(value: Date | string, timeZone: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
 
   const now = new Date();
-  const sameDay = date.toDateString() === now.toDateString();
+  const sameDay = zonedDateKey(date, timeZone) === zonedDateKey(now, timeZone);
   return new Intl.DateTimeFormat("en-US", sameDay
-    ? { hour: "numeric", minute: "2-digit" }
-    : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
+    ? { hour: "numeric", minute: "2-digit", timeZone }
+    : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone }).format(date);
 }
 function attachmentSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -113,6 +116,7 @@ export function MessageConversationInbox({
   initialSearchQuery?: string | null;
   composer: ConversationComposerProps;
 }) {
+  const defaultTimeZone = useSchoolTimeZone();
   const [query, setQuery] = useState(initialSearchQuery ?? "");
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
   const [selectedThreadKey, setSelectedThreadKey] = useState(() => {
@@ -149,6 +153,7 @@ export function MessageConversationInbox({
   const selectedThread = filteredThreads.find((thread) => thread.key === selectedThreadKey)
     ?? filteredThreads[0]
     ?? (deferredQuery ? null : threads[0] ?? null);
+  const selectedThreadTimeZone = selectedThread?.timeZone || defaultTimeZone;
   const latestMessage = selectedThread?.messages.at(-1) ?? null;
   const replyTarget = selectedThread?.familyId && latestMessage
     ? {
@@ -191,6 +196,7 @@ export function MessageConversationInbox({
             {filteredThreads.map((thread) => {
               const lastMessage = thread.messages.at(-1);
               const isSelected = selectedThread?.key === thread.key;
+              const timeZone = thread.timeZone || defaultTimeZone;
               return (
                 <button
                   key={thread.key}
@@ -205,7 +211,7 @@ export function MessageConversationInbox({
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
                       <span className={`truncate text-sm ${thread.unread ? "font-semibold" : "font-medium"}`}>{thread.familyName}</span>
-                      <span className="shrink-0 text-[0.68rem] text-muted-foreground">{formatConversationTime(thread.lastMessageAt)}</span>
+                      <span className="shrink-0 text-[0.68rem] text-muted-foreground">{formatConversationTime(thread.lastMessageAt, timeZone)}</span>
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                       {lastMessage?.isFromFamily ? "Parent: " : "School: "}{lastMessage?.body ?? "No messages yet"}
@@ -266,7 +272,7 @@ export function MessageConversationInbox({
                       >
                         <div className={`mb-1 flex flex-wrap items-center gap-x-2 text-[0.68rem] ${message.isFromFamily ? "text-muted-foreground" : "text-white/65"}`}>
                           <span className="font-medium">{message.isFromFamily ? message.sender?.name ?? "Parent" : message.sender?.name ?? "School"}</span>
-                          <span>{formatConversationTime(message.createdAt)}</span>
+                          <span>{formatConversationTime(message.createdAt, selectedThreadTimeZone)}</span>
                           <span className="capitalize">{message.channel.replaceAll("_", " ")}</span>
                         </div>
                         {message.subject ? <div className="mb-1 text-sm font-semibold">{message.subject}</div> : null}

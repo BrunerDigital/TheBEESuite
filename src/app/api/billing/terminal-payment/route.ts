@@ -21,6 +21,7 @@ import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
+import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 import {
   allOpenInvoicesResponsibilitySeparated,
   invoiceResponsibilityReviewExempt,
@@ -279,6 +280,16 @@ async function processPayment(body: Record<string, unknown>) {
   const readerId = clean(body.readerId);
   const context = await authorizedCenter(centerId);
   if (!("user" in context)) return context.response;
+  const paymentReadiness = stripeSchoolReadinessFlowFromFields({
+    customFields: context.center.customFields,
+    centerName: context.center.name,
+  });
+  if (!paymentReadiness.canAcceptParentPayments) {
+    return NextResponse.json(
+      { ok: false, error: paymentReadiness.explanation, paymentReadiness },
+      { status: 403 },
+    );
+  }
   const readiness = await verifyConnectedAccount(context.user.tenantId, context.connectedAccountId);
   if (!readiness.ok) return readiness.response;
   if (body.parentPresent !== true) {

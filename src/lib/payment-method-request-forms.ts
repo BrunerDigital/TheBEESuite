@@ -305,7 +305,7 @@ export function buildPaymentMethodRequestEmailText({
       `Hi ${recipientLabel || "there"},`,
       "",
       `${paymentMethodRequestBrandSender(centerLabel)} is asking you to verify a bank account for ${familyName}'s future tuition payments.`,
-      "Connect securely through your bank using the BEE Suite link below. This verifies the account now instead of waiting for microdeposits.",
+      "Connect securely through your bank using the BEE Suite link below. Stripe will try instant verification first. If your bank cannot complete it, Stripe may ask for manual account details and a small microdeposit verification; follow the secure instructions Stripe provides.",
       "Verifying a bank account does not turn on autopay. You can choose autopay separately in the Parent Portal or with your school.",
       "You can also pay an open tuition invoice from the same form using a bank account or a debit or credit card if a payment is due today.",
       "The BEE Suite and your school do not receive or store your bank sign-in credentials, full account number, or full card details. Stripe provides the secure payment form and may appear during setup.",

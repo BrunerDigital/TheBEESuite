@@ -156,21 +156,16 @@ async function POSTHandler(request: NextRequest) {
   const responseMedia = storageKey ? { ...media, url: await createChildMediaSignedUrl(storageKey).catch(() => media.url) } : media;
 
   if (shareState.sharedWithParents) {
-    const parentNotifications = buildParentPhotoNotifications({
+    const notifications = buildParentPhotoNotifications({
       mediaId: media.id,
       childName: child.fullName,
       caption: media.caption,
       guardians: child.family.guardians,
     });
-    if (parentNotifications.length) {
-      await prisma.notification.createMany({
-        data: parentNotifications,
-        skipDuplicates: true,
-      });
+    if (notifications.length) {
+      await prisma.notification.createMany({ data: notifications, skipDuplicates: true });
     }
-  }
-
-  if (sharedWithParents && !child.photoVideoPermission && centerId) {
+  } else if (sharedWithParents && centerId) {
     const directors = await getCenterLeadershipUsers({
       centerId,
       excludeUserId: user.id,

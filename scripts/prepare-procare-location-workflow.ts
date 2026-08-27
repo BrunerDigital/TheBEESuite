@@ -158,9 +158,10 @@ function classify(headers: string[]) {
   const relationshipReport = has("Child ID", "Person ID", "Person Type")
     && any("Relationship Type")
     && any("Lives With", "Emergency", "Authorized Pickup");
+  const childInformationReport = has("Child ID", "Category Description", "Item Description", "Item Is Active");
   if (relationshipReport) kinds.push("relationships");
-  if (!relationshipReport && has("Child ID", "Enrollment Status") && any("Primary Classroom", "Classroom ID") && any("Status Start Date", "Status Date")) kinds.push("enrollment");
-  if (has("Child ID", "Category Description", "Item Description", "Item Is Active")) kinds.push("childinfo");
+  if (!relationshipReport && !childInformationReport && has("Child ID", "Enrollment Status") && any("Primary Classroom", "Classroom ID") && any("Status Start Date", "Status Date")) kinds.push("enrollment");
+  if (childInformationReport) kinds.push("childinfo");
   if (has("Account ID", "Person ID", "Person Type")) kinds.push("parentinfo");
   if (has("Account ID", "Balance")) kinds.push("balance");
   if (has("Account ID", "Person ID") && !has("Person Type")) kinds.push("account_reference");

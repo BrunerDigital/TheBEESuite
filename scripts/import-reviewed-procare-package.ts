@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  MAX_PROCARE_MULTIPART_BYTES,
+  MAX_PROCARE_MULTIPART_LABEL,
+  procareMultipartSizeBytes,
+} from "@/lib/procare-upload-limits";
 
 type ImportSummary = {
   sourceSha256?: string;
@@ -111,6 +116,10 @@ export async function importReviewedProcarePackage(input: {
     const formData = new FormData();
     for (const [key, value] of Object.entries(fields)) formData.set(key, value);
     formData.append("file", upload);
+    const multipartBytes = await procareMultipartSizeBytes(formData, { batchId: "x".repeat(64) });
+    if (multipartBytes > MAX_PROCARE_MULTIPART_BYTES) {
+      throw new Error(`The complete reviewed request is larger than the ${MAX_PROCARE_MULTIPART_LABEL} secure request limit. Run the file-only preflight and retain the review packet.`);
+    }
     const response = await fetch(`${input.baseUrl}/api/imports/procare`, {
       method: "POST",
       headers: { Cookie: cookie },

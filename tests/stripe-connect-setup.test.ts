@@ -11,6 +11,8 @@ import {
   retrieveStripeConnectedAccount,
   setStripeConnectedAccountDailyPayouts,
   setStripeConnectedAccountManualPayouts,
+  stripeAccountCreationIdempotencyKey,
+  stripeSchoolStatementDescriptor,
 } from "../src/lib/integrations";
 import {
   STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE,
@@ -23,6 +25,43 @@ import {
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
+
+test("Stripe school statement descriptors follow the school brand", () => {
+  assert.deepEqual(stripeSchoolStatementDescriptor("Kid City USA - Fishers"), {
+    descriptor: "KID CITY USA",
+    prefix: "KIDCITY",
+  });
+  assert.deepEqual(stripeSchoolStatementDescriptor("Miss Honey's Onion Sprouts - Lyons"), {
+    descriptor: "MISS HONEYS",
+    prefix: "MISSHONEY",
+  });
+  assert.deepEqual(stripeSchoolStatementDescriptor("A B C"), {
+    descriptor: "A B C",
+    prefix: "SCHOOL",
+  });
+  assert.deepEqual(stripeSchoolStatementDescriptor("12345"), {
+    descriptor: "SCHOOL TUITION",
+    prefix: "SCHOOLTUITION".slice(0, 10),
+  });
+  assert.deepEqual(stripeSchoolStatementDescriptor("Miss Honeymoon Academy"), {
+    descriptor: "MISS HONEYMOON ACADEMY",
+    prefix: "MISSHONEYM",
+  });
+  assert.deepEqual(stripeSchoolStatementDescriptor("Smart Kid City Preschool"), {
+    descriptor: "SMART KID CITY PRESCHO",
+    prefix: "SMARTKIDCI",
+  });
+});
+
+test("Stripe account creation preserves legacy Kid City retries and versions changed descriptors", () => {
+  const keys = {
+    legacyKidCityKey: "account-center-1",
+    changedDescriptorKey: "account-v2-center-1",
+  };
+  assert.equal(stripeAccountCreationIdempotencyKey({ ...keys, displayName: "Kid City USA - Fishers" }), keys.legacyKidCityKey);
+  assert.equal(stripeAccountCreationIdempotencyKey({ ...keys, displayName: "Miss Honey's Onion Sprouts - Lyons" }), keys.changedDescriptorKey);
+  assert.equal(stripeAccountCreationIdempotencyKey({ ...keys, displayName: "Independent Preschool" }), keys.changedDescriptorKey);
+});
 
 test("Stripe Connect setup normalizes dashboard payout profile fields", () => {
   const setup = normalizeStripeConnectSetupInput({
@@ -176,7 +215,8 @@ test("Stripe connected account creation sends dashboard profile details to Accou
     assert.equal(responsibilities.fees_collector, "stripe");
     assert.equal(responsibilities.losses_collector, "stripe");
     assert.ok(asRecord(configuration.customer));
-    assert.deepEqual(payload.include, ["configuration.merchant", "configuration.recipient", "configuration.customer", "defaults", "requirements"]);
+    assert.equal(Object.hasOwn(configuration, "recipient"), false);
+    assert.deepEqual(payload.include, ["configuration.merchant", "configuration.customer", "defaults", "requirements"]);
     assert.equal(JSON.stringify(payload).includes("external_account"), false);
     assert.equal(JSON.stringify(payload).includes("requirements_collector"), false);
   } finally {
@@ -275,7 +315,9 @@ test("Stripe connected account business completion supplies childcare merchant f
   try {
     const result = await completeStripeConnectedAccountBusinessProfile({
       accountId: "acct_123",
+      businessName: "Miss Honey's Onion Sprouts - Lyons",
       businessPhone: "+17655551234",
+      businessUrl: "https://kidcityusa.com/locations/indiana/fishers/",
       ein: "12-3456789",
       idempotencyKey: "kidcity-account-profile-center_123",
       credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
@@ -283,15 +325,19 @@ test("Stripe connected account business completion supplies childcare merchant f
     const configuration = asRecord(payload.configuration);
     const merchant = asRecord(configuration.merchant);
     const identity = asRecord(payload.identity);
+    const defaults = asRecord(payload.defaults);
 
     assert.equal(result.ok, true);
     assert.equal(result.account?.detailsSubmitted, false);
     assert.deepEqual(result.account?.requirementFields, ["external_account"]);
     assert.equal(requestedUrl, "https://api.stripe.com/v2/core/accounts/acct_123");
     assert.equal(merchant.mcc, "8351");
-    assert.equal(asRecord(merchant.statement_descriptor).descriptor, "KID CITY USA");
+    assert.equal(asRecord(merchant.statement_descriptor).descriptor, "MISS HONEYS");
+    assert.equal(asRecord(merchant.statement_descriptor).prefix, "MISSHONEY");
     assert.equal(asRecord(identity.business_details).phone, "+17655551234");
     assert.deepEqual(asRecord(identity.business_details).id_numbers, [{ type: "us_ein", value: "123456789" }]);
+    assert.equal(asRecord(merchant.support).url, "https://kidcityusa.com/locations/indiana/fishers/");
+    assert.equal(asRecord(asRecord(defaults.profile)).business_url, "https://kidcityusa.com/locations/indiana/fishers/");
     assert.equal(idempotencyKey, "kidcity-account-profile-center_123");
   } finally {
     globalThis.fetch = originalFetch;
@@ -577,6 +623,57 @@ test("Stripe account links can collect only currently due requirements without f
   }
 });
 
+test("Stripe account links use the update flow after an account has completed onboarding", async () => {
+  const originalFetch = globalThis.fetch;
+  let accountLinkBody: Record<string, unknown> = {};
+
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    if (String(url).startsWith("https://api.stripe.com/v2/core/accounts/acct_update?")) {
+      return new Response(JSON.stringify({
+        id: "acct_update",
+        livemode: true,
+        details_submitted: true,
+        configuration: {
+          merchant: {
+            capabilities: {
+              card_payments: { status: "restricted" },
+              stripe_balance: { payouts: { status: "restricted" } },
+            },
+          },
+          customer: {},
+        },
+        defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
+        requirements: {
+          currently_due: ["identity.business_details.tax_id"],
+        },
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
+    accountLinkBody = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+    return new Response(JSON.stringify({ url: "https://connect.stripe.com/update/acct_update/secure" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeAccountLink({
+      accountId: "acct_update",
+      refreshUrl: "https://thebeesuite.io/api/billing/connect/refresh?centerId=center_123",
+      returnUrl: "https://thebeesuite.io/billing-settings?center=center_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+
+    assert.equal(result.ok, true);
+    const useCase = asRecord(accountLinkBody.use_case);
+    const update = asRecord(useCase.account_update);
+    assert.equal(useCase.type, "account_update");
+    assert.deepEqual(update.configurations, ["customer", "merchant"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Stripe payout bank lookup selects the default USD account for location confirmation", async () => {
   const originalFetch = globalThis.fetch;
   let requestedUrl = "";
@@ -640,8 +737,13 @@ test("Stripe connected account retrieval uses indexed Accounts v2 include params
       id: "acct_123",
       livemode: true,
       configuration: {
-        merchant: { capabilities: { card_payments: { status: "active" } } },
-        recipient: { capabilities: { stripe_balance: { stripe_transfers: { status: "active" } } } },
+        merchant: {
+          capabilities: {
+            card_payments: { status: "active" },
+            stripe_balance: { payouts: { status: "active" } },
+          },
+        },
+        recipient: { capabilities: { stripe_balance: { stripe_transfers: { status: "restricted" } } } },
       },
       defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
       requirements: {
@@ -684,6 +786,8 @@ test("Stripe connected account retrieval uses indexed Accounts v2 include params
     assert.equal(result.account?.livemode, true);
     assert.equal(result.account?.chargesEnabled, true);
     assert.equal(result.account?.payoutsEnabled, true);
+    assert.equal(result.account?.merchantPayoutCapabilityStatus, "active");
+    assert.equal(result.account?.recipientTransferStatus, "restricted");
     assert.equal(result.account?.feesCollector, "stripe");
     assert.equal(result.account?.lossesCollector, "stripe");
     assert.deepEqual(result.account?.currentlyDueRequirementFields, [
@@ -693,6 +797,7 @@ test("Stripe connected account retrieval uses indexed Accounts v2 include params
     assert.deepEqual(result.account?.pendingVerificationFields, [
       "identity.business_details.address",
     ]);
+    assert.deepEqual(result.account?.eventuallyDueRequirementFields, ["identity.future_requirement"]);
     assert.equal(url.searchParams.get("include[0]"), "configuration.merchant");
     assert.equal(url.searchParams.get("include[1]"), "configuration.recipient");
     assert.equal(url.searchParams.get("include[2]"), "configuration.customer");

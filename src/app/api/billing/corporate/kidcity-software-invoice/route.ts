@@ -45,7 +45,7 @@ async function POSTHandler(request: NextRequest) {
   }
   return NextResponse.json({
     ok: false,
-    error: "Aggregate emailed software invoices are disabled. Each school is billed $99 through its separately authorized school subscription.",
+    error: "Aggregate emailed software invoices are disabled. Each corporate school is billed $49 per month through its separately authorized school subscription; all other locations are billed $79 per month.",
     invoice: snapshot,
   }, { status: 409 });
 }

@@ -249,20 +249,35 @@ async function main() {
   const lookupStartSeconds = startSeconds - 7 * 86_400;
   const applicationFees = await listAll(
     apiKey,
-    `/v1/application_fees?limit=100&created[gte]=${lookupStartSeconds}&created[lt]=${endSeconds}`,
+    `/v1/application_fees?limit=100&created[gte]=${lookupStartSeconds}&created[lt]=${endSeconds}&expand[]=data.charge`,
   );
   const accountCache = new Map<string, JsonRecord>();
   const chargeByReference = new Map<string, { accountId: string; charge: JsonRecord; fee: JsonRecord; account: JsonRecord }>();
+  const inaccessibleChargeReferences = new Set<string>();
   for (const fee of applicationFees) {
     const accountId = clean(fee.account);
-    const reference = clean(fee.charge || fee.originating_transaction);
+    const expandedCharge = record(fee.charge);
+    const reference = clean(expandedCharge.id) || clean(fee.charge) || clean(fee.originating_transaction);
     if (!accountId.startsWith("acct_") || !reference) continue;
     let account = accountCache.get(accountId);
     if (!account) {
       account = await stripeRequest(apiKey, `/v1/accounts/${encodeURIComponent(accountId)}`);
       accountCache.set(accountId, account);
     }
-    const charge = await stripeRequest(apiKey, `/v1/charges/${encodeURIComponent(reference)}`, { accountId });
+    let charge = expandedCharge;
+    if (!clean(charge.id)) {
+      try {
+        charge = await stripeRequest(apiKey, `/v1/charges/${encodeURIComponent(reference)}`, { accountId });
+      } catch (connectedError) {
+        try {
+          charge = await stripeRequest(apiKey, `/v1/charges/${encodeURIComponent(reference)}`);
+        } catch {
+          void connectedError;
+          inaccessibleChargeReferences.add(reference);
+          charge = { id: reference, metadata: {} };
+        }
+      }
+    }
     const item = { accountId, charge, fee, account };
     chargeByReference.set(reference, item);
     chargeByReference.set(clean(charge.id), item);
@@ -273,19 +288,22 @@ async function main() {
   const unmappedRows: CsvRow[] = [];
   for (const row of feeRows) {
     const item = chargeByReference.get(clean(row.incurred_by));
-    if (!item || clean(record(record(item.account.controller).fees).payer) !== "application") {
+    if (!item) {
       unmappedRows.push(row);
       continue;
     }
-    const amountMinorUnits = Number.parseFloat(row.amount || "0") * 100;
     allocationRows.push({
       accountId: item.accountId,
       balanceTransactionId: clean(row.balance_transaction_id),
-      amountMinorUnits,
+      amountMinorUnits: Number.parseFloat(row.amount || "0") * 100,
     });
     matchedCharges.set(clean(item.charge.id), item);
   }
-  if (unmappedRows.length) throw new Error(`${unmappedRows.length} Stripe fee report rows could not be mapped to one fee-paying school account.`);
+  const mappedBalanceTransactionIds = new Set(allocationRows.map((row) => row.balanceTransactionId));
+  const uncoveredBalanceTransactionIds = [...providerById.keys()].filter((id) => !mappedBalanceTransactionIds.has(id));
+  if (uncoveredBalanceTransactionIds.length) {
+    throw new Error(`${uncoveredBalanceTransactionIds.length} Stripe fee transaction(s) have no verified school allocation row.`);
+  }
 
   const actualByAccount = allocateExactStripeFees(allocationRows, providerById);
   const allocatedFeeCents = [...actualByAccount.values()].reduce((sum, amount) => sum + amount, 0);
@@ -402,6 +420,10 @@ async function main() {
     })),
   });
   const fingerprint = createHash("sha256").update(canonical).digest("hex");
+  const matchedInaccessibleCharges = [...matchedCharges.keys()].filter((chargeId) => inaccessibleChargeReferences.has(chargeId));
+  if (apply && matchedInaccessibleCharges.length) {
+    throw new Error(`${matchedInaccessibleCharges.length} matched Stripe charge(s) could not be retrieved to verify retained fee metadata.`);
+  }
   if (apply && argValue("--confirm-fingerprint") !== fingerprint) {
     throw new Error("The confirmation fingerprint does not match the current live plan.");
   }
@@ -521,6 +543,8 @@ async function main() {
     retainedProcessingFeeCents: plans.reduce((sum, plan) => sum + plan.retainedProcessingFeeCents, 0),
     priorCorrectionCents: plans.reduce((sum, plan) => sum + plan.priorCorrectionCents, 0),
     correctionCents: plans.reduce((sum, plan) => sum + plan.correctionCents, 0),
+    matchedInaccessibleCharges: matchedInaccessibleCharges.length,
+    unmappedReportComponents: unmappedRows.length,
     plans: plans.map((plan) => ({
       account: plan.account,
       accountName: plan.accountName,

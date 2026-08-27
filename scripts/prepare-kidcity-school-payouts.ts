@@ -8,10 +8,12 @@ import {
   getStripeSecretKey,
   readStripeConnectedAccountId,
   retrieveStripeConnectedAccount,
+  stripeAccountCreationIdempotencyKey,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import {
   buildSchoolPayoutSetupInput,
+  schoolPayoutOnboardingAppBaseUrl,
   schoolPayoutSetupCustomFieldPatch,
 } from "@/lib/school-payout-onboarding";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
@@ -69,7 +71,10 @@ function maskAccountId(accountId: string | null) {
 }
 
 function appBaseUrl() {
-  return (argValue("--app-url") || process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://thebeesuite.io").replace(/\/$/, "");
+  return schoolPayoutOnboardingAppBaseUrl(
+    argValue("--app-url"),
+    process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL,
+  );
 }
 
 async function assertConnectedAccountReadPreflight(
@@ -211,7 +216,11 @@ export async function prepareKidCitySchoolPayouts() {
           postalCode: setup.details.postalCode,
           businessUrl: setup.details.businessUrl,
           productDescription: setup.details.productDescription,
-          idempotencyKey: `kidcity-connect-account-${center.id}`,
+          idempotencyKey: stripeAccountCreationIdempotencyKey({
+            displayName: setup.details.displayName,
+            legacyKidCityKey: `kidcity-connect-account-${center.id}`,
+            changedDescriptorKey: `kidcity-connect-account-v2-${center.id}`,
+          }),
           tenantId: center.organization.tenantId,
         });
         if (!created.ok || !created.id) {
@@ -232,7 +241,7 @@ export async function prepareKidCitySchoolPayouts() {
           stripeConnectAccountId: accountId,
           ...(readiness ? stripeConnectCustomFieldPatch(readiness) : {}),
           stripePayoutStatus: "onboarding_started",
-          stripeConnectDashboard: "express",
+          stripeConnectDashboard: created.account?.dashboard || "full",
           stripeConnectApi: "accounts_v2",
           stripeConnectCreatedAt: new Date().toISOString(),
         };
@@ -268,7 +277,10 @@ export async function prepareKidCitySchoolPayouts() {
         customFields = {
           ...customFields,
           stripeConnectAccountId: accountId,
-          stripeConnectDashboard: "express",
+          stripeConnectDashboard:
+            typeof customFields.stripeConnectDashboard === "string"
+              ? customFields.stripeConnectDashboard
+              : "full",
           stripeConnectApi: "accounts_v2",
           stripeConnectLastOnboardingAt: new Date().toISOString(),
           stripePayoutStatus: "onboarding_started",

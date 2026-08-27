@@ -153,7 +153,7 @@ export function StaffOnboardingChecklistPanel({ items, summary }: Props) {
             <span className="text-muted-foreground">{completePercent}%</span>
           </div>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${completePercent}%` }} />
+            <div className="h-full rounded-full bg-primary" style={{ width: `${completePercent}%` }} />
           </div>
         </div>
 

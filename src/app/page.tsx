@@ -46,7 +46,7 @@ const primaryLinkClass =
   "inline-flex min-h-12 touch-manipulation items-center justify-center gap-2 rounded-xl bg-[#f6bd2c] px-6 py-3 text-sm font-semibold text-[#071018] shadow-[0_16px_38px_rgba(246,189,44,0.18)] transition-[background-color,box-shadow,transform] motion-safe:hover:-translate-y-0.5 hover:bg-[#ffd15a] hover:shadow-[0_20px_46px_rgba(246,189,44,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6bd2c] focus-visible:ring-offset-2 focus-visible:ring-offset-[#071018]";
 
 const outlineLinkClass =
-  "inline-flex min-h-12 touch-manipulation items-center justify-center gap-2 rounded-xl border border-[#f6bd2c]/70 bg-white/[0.025] px-6 py-3 text-sm font-semibold text-white transition-[background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 hover:border-[#ffd15a] hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6bd2c] focus-visible:ring-offset-2 focus-visible:ring-offset-[#071018]";
+  "inline-flex min-h-12 touch-manipulation items-center justify-center gap-2 rounded-xl border border-amber-500/70 bg-white/55 px-6 py-3 text-sm font-semibold text-slate-950 transition-[background-color,border-color,transform] motion-safe:hover:-translate-y-0.5 hover:border-amber-500 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fbf7ec] dark:border-[#f6bd2c]/70 dark:bg-white/[0.025] dark:text-white dark:hover:border-[#ffd15a] dark:hover:bg-white/[0.07] dark:focus-visible:ring-[#f6bd2c] dark:focus-visible:ring-offset-[#071018]";
 
 function WorkspaceLink({
   title,
@@ -88,39 +88,46 @@ export default function Home() {
         Skip to main content
       </a>
 
-      <div className="relative overflow-hidden bg-[#071018] text-white">
+      <div className="relative overflow-hidden bg-[#fbf7ec] text-slate-950 dark:bg-[#071018] dark:text-white">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_74%_42%,rgba(32,70,94,0.34),transparent_34rem),linear-gradient(112deg,#071018_0%,#071018_52%,#0b1b27_100%)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_74%_42%,rgba(246,189,44,0.20),transparent_34rem),linear-gradient(112deg,#fbf7ec_0%,#fbf7ec_52%,#f3ead8_100%)] dark:bg-[radial-gradient(circle_at_74%_42%,rgba(32,70,94,0.34),transparent_34rem),linear-gradient(112deg,#071018_0%,#071018_52%,#0b1b27_100%)]"
         />
 
-        <header className="relative z-40 border-b border-white/10 bg-[#071018]/88 backdrop-blur-xl">
+        <header className="relative z-40 border-b border-slate-900/10 bg-[#fbf7ec]/88 backdrop-blur-xl dark:border-white/10 dark:bg-[#071018]/88">
           <div className="mx-auto flex min-h-18 max-w-[1480px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-10 xl:px-14">
-            <BrandLogo href="/" compact size="sm" priority className="min-h-11 touch-manipulation" />
+            <BrandLogo
+              href="/"
+              compact
+              size="sm"
+              priority
+              className="min-h-11 touch-manipulation"
+              textClassName="[&>span:first-child]:text-amber-700 dark:[&>span:first-child]:text-amber-300"
+            />
 
             <nav aria-label="Primary navigation" className="flex items-center gap-2 sm:gap-3">
               <div className="mr-3 hidden items-center gap-1 lg:flex xl:gap-2">
                 <Link
                   href="#product"
-                  className="inline-flex min-h-11 touch-manipulation items-center rounded-lg px-3 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                  className="inline-flex min-h-11 touch-manipulation items-center rounded-lg px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:text-zinc-300 dark:hover:bg-white/[0.06] dark:hover:text-white dark:focus-visible:ring-amber-300"
                 >
                   Product
                 </Link>
                 <Link
                   href="#role-views"
-                  className="inline-flex min-h-11 touch-manipulation items-center rounded-lg px-3 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                  className="inline-flex min-h-11 touch-manipulation items-center rounded-lg px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:text-zinc-300 dark:hover:bg-white/[0.06] dark:hover:text-white dark:focus-visible:ring-amber-300"
                 >
                   For Every Role
                 </Link>
                 <Link
                   href="#in-schools"
-                  className="inline-flex min-h-11 touch-manipulation items-center rounded-lg px-3 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                  className="inline-flex min-h-11 touch-manipulation items-center rounded-lg px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:text-zinc-300 dark:hover:bg-white/[0.06] dark:hover:text-white dark:focus-visible:ring-amber-300"
                 >
                   In Schools
                 </Link>
                 <Link
                   href="/resources"
-                  className="inline-flex min-h-11 touch-manipulation items-center rounded-lg px-3 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                  className="inline-flex min-h-11 touch-manipulation items-center rounded-lg px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:text-zinc-300 dark:hover:bg-white/[0.06] dark:hover:text-white dark:focus-visible:ring-amber-300"
                 >
                   Help &amp; Guides
                 </Link>
@@ -128,7 +135,7 @@ export default function Home() {
               <PublicThemeToggle />
               <Link
                 href="/login"
-                className="inline-flex min-h-11 touch-manipulation items-center justify-center rounded-xl border border-amber-300/80 px-4 py-2.5 text-sm font-semibold text-white transition-[background-color,border-color,color] hover:border-amber-300 hover:bg-amber-300 hover:text-[#071018] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#071018]"
+                className="inline-flex min-h-11 touch-manipulation items-center justify-center rounded-xl border border-amber-500/80 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-[background-color,border-color,color] hover:border-amber-500 hover:bg-amber-300 hover:text-[#071018] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fbf7ec] dark:border-amber-300/80 dark:text-white dark:hover:border-amber-300 dark:focus-visible:ring-amber-300 dark:focus-visible:ring-offset-[#071018]"
               >
                 Sign In
               </Link>
@@ -143,7 +150,7 @@ export default function Home() {
                 <h1 className="text-balance text-[clamp(3.15rem,5.7vw,5.9rem)] font-semibold leading-[0.92] tracking-[-0.065em]">
                   The school day, connected.
                 </h1>
-                <p className="mx-auto mt-7 max-w-xl text-pretty text-base leading-7 text-zinc-300 sm:text-lg sm:leading-8 lg:mx-0">
+                <p className="mx-auto mt-7 max-w-xl text-pretty text-base leading-7 text-slate-600 dark:text-zinc-300 sm:text-lg sm:leading-8 lg:mx-0">
                   One secure suite for enrollment, classrooms, family communication, billing, and multi-location oversight.
                 </p>
                 <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start">
@@ -155,7 +162,7 @@ export default function Home() {
                     See the product
                   </Link>
                 </div>
-                <p className="mt-7 text-sm leading-6 text-zinc-400 sm:text-base">
+                <p className="mt-7 text-sm leading-6 text-slate-500 dark:text-zinc-400 sm:text-base">
                   Built for directors, teachers, families, and multi-school teams.
                 </p>
               </div>

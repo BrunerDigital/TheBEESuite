@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { ComponentPropsWithoutRef, Dispatch, SetStateAction } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { InvoicePrintButton } from "@/components/billing-print-actions";
 import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import {
   AlertCircle,
@@ -79,6 +79,13 @@ import {
   sortDailyReportsChronologically,
 } from "@/lib/daily-report-ordering";
 
+function ParentPortalDocumentLink({
+  href,
+  ...props
+}: ComponentPropsWithoutRef<"a"> & { href: string }) {
+  return <a href={href} {...props} />;
+}
+
 type Child = {
   id: string;
   fullName: string;
@@ -90,6 +97,7 @@ type Child = {
   photoVideoPermission?: boolean;
   fieldTripPermission?: boolean;
   classroom?: { name: string; ageGroup: string } | null;
+  profilePhotoUrl?: string | null;
   tuitionAssignment?: {
     enabled: boolean;
     cadence: string | null;
@@ -119,6 +127,11 @@ type Invoice = {
   purposeLabel?: string | null;
   productCheckoutAvailable?: boolean;
   pendingPayment?: PendingInvoicePayment | null;
+  familyDocumentAmountCents?: number | null;
+  childName?: string | null;
+  servicePeriodStart?: string | null;
+  servicePeriodEnd?: string | null;
+  items?: Array<{ description: string; amountCents: number }>;
 };
 
 type Payment = {
@@ -222,6 +235,12 @@ type ParentMedia = {
   caption: string | null;
   createdAt: string | Date;
   child: { fullName: string };
+};
+
+type ClassroomTeacherRecipient = {
+  id: string;
+  name: string;
+  classroomNames: string[];
 };
 
 type DailyUpdateDay = {
@@ -375,6 +394,8 @@ type Props = {
     childNames: string[];
   }>;
   centerName?: string | null;
+  centerEin?: string | null;
+  classroomTeachers?: ClassroomTeacherRecipient[];
   demoMode?: boolean;
   previewMode?: boolean;
 };
@@ -408,6 +429,9 @@ const fallbackCheckoutReadiness: StripeCheckoutReadiness = {
   payoutsEnabled: true,
   detailsSubmitted: true,
   requirementFields: [],
+  pendingVerificationFields: [],
+  merchantCapabilityStatus: "active",
+  merchantPayoutCapabilityStatus: "active",
   status: "ready",
   label: "Ready",
   canAcceptParentPayments: true,
@@ -721,6 +745,8 @@ function ParentPortalWorkspaceView({
   replyDraft = null,
   availableFamilies = [],
   centerName = null,
+  centerEin = null,
+  classroomTeachers = [],
   demoMode,
   previewMode = false,
   paymentCheckoutMethod,
@@ -753,6 +779,9 @@ function ParentPortalWorkspaceView({
       : "Question for the center",
   );
   const [message, setMessage] = useState("");
+  const [messageRecipientId, setMessageRecipientId] = useState(
+    classroomTeachers.length === 1 ? classroomTeachers[0].id : "school",
+  );
   const [replyToMessageId, setReplyToMessageId] = useState(
     replyDraft?.replyToMessageId ?? "",
   );
@@ -871,9 +900,11 @@ function ParentPortalWorkspaceView({
     }
     const billingCadence =
       tuitionCadenceDrafts[child.id] ??
-      (child.tuitionAssignment?.cadence === "four_week"
-        ? "four_week"
-        : "weekly");
+      (child.tuitionAssignment?.cadence === "biweekly"
+        ? "biweekly"
+        : child.tuitionAssignment?.cadence === "four_week"
+          ? "four_week"
+          : "weekly");
     startTransition(async () => {
       setStatus("");
       setError("");
@@ -890,7 +921,9 @@ function ParentPortalWorkspaceView({
       setStatus(
         billingCadence === "four_week"
           ? `${child.fullName}'s tuition will be invoiced every four weeks for the four weeks ahead.`
-          : `${child.fullName}'s tuition will be invoiced one week at a time.`,
+          : billingCadence === "biweekly"
+            ? `${child.fullName}'s tuition will be invoiced every two weeks for the two weeks ahead.`
+            : `${child.fullName}'s tuition will be invoiced one week at a time.`,
       );
       router.refresh();
     });
@@ -1167,6 +1200,7 @@ function ParentPortalWorkspaceView({
     const formData = new FormData();
     formData.append("familyId", familyId);
     if (replyToMessageId) formData.append("replyToMessageId", replyToMessageId);
+    if (!replyToMessageId && messageRecipientId !== "school") formData.append("assignedToId", messageRecipientId);
     formData.append("subject", subject);
     formData.append("message", message);
     formData.append("priority", "normal");
@@ -1185,6 +1219,7 @@ function ParentPortalWorkspaceView({
       const body = {
         familyId: family.id,
         replyToMessageId: replyToMessageId || null,
+        assignedToId: !replyToMessageId && messageRecipientId !== "school" ? messageRecipientId : null,
         subject,
         message,
         priority: "normal",
@@ -1211,7 +1246,9 @@ function ParentPortalWorkspaceView({
       setMessageAttachments([]);
       setMessageAttachmentInputKey((current) => current + 1);
       showStatus(
-        "Message sent to the center and recorded in the family timeline.",
+        messageRecipientId === "school"
+          ? "Message sent to the school and recorded in the family timeline."
+          : "Message sent to your child’s teacher and recorded in the family timeline.",
       );
       router.refresh();
     });
@@ -1768,13 +1805,13 @@ function ParentPortalWorkspaceView({
             {activeView === "home" ? homeGreeting : activeViewCopy.title}
           </h1>
           {activeView !== "home" ? (
-            <Link
+            <ParentPortalDocumentLink
               href={workspaceHref("home", { familyId: family.id })}
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
               <Home data-icon="inline-start" aria-hidden="true" />
               Home
-            </Link>
+            </ParentPortalDocumentLink>
           ) : null}
         </div>
         {availableFamilies.length > 1 ? (
@@ -1783,7 +1820,7 @@ function ParentPortalWorkspaceView({
             aria-label="Choose family profile"
           >
             {availableFamilies.map((item) => (
-              <Link
+              <ParentPortalDocumentLink
                 key={item.id}
                 href={workspaceHref(activeView, {
                   familyId: item.id,
@@ -1801,7 +1838,7 @@ function ParentPortalWorkspaceView({
                 <Building2 data-icon="inline-start" aria-hidden="true" />
                 {item.name}
                 {item.centerName ? ` · ${item.centerName}` : ""}
-              </Link>
+              </ParentPortalDocumentLink>
             ))}
           </div>
         ) : null}
@@ -1849,7 +1886,7 @@ function ParentPortalWorkspaceView({
                 ["notifications", "Notifications & Privacy"],
               ] as Array<[ParentPortalFamilySection, string]>
             ).map(([section, label]) => (
-              <Link
+              <ParentPortalDocumentLink
                 key={section}
                 href={workspaceHref("family", {
                   familyId: family.id,
@@ -1862,7 +1899,7 @@ function ParentPortalWorkspaceView({
                 className={`relative flex min-h-11 shrink-0 snap-start items-center rounded-full border px-4 py-2 text-sm font-medium leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-1 ${activeFamilySection === section ? "border-primary/40 bg-primary/10 text-foreground sm:border-primary sm:bg-transparent" : "border-border/70 bg-card/70 text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground sm:border-transparent sm:bg-transparent sm:hover:bg-transparent"}`}
               >
                 {label}
-              </Link>
+              </ParentPortalDocumentLink>
             ))}
           </div>
         </nav>
@@ -1890,14 +1927,14 @@ function ParentPortalWorkspaceView({
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Link
+                  <ParentPortalDocumentLink
                     href={workspaceHref("updates", { familyId: family.id })}
                     className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-primary/70 bg-background px-4 text-sm font-medium transition-colors hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <Camera className="size-4" aria-hidden="true" /> View
                     Today’s Update{" "}
                     <ArrowRight className="size-4" aria-hidden="true" />
-                  </Link>
+                  </ParentPortalDocumentLink>
                 </div>
               </div>
             </div>
@@ -1926,7 +1963,7 @@ function ParentPortalWorkspaceView({
                     </p>
                   </div>
                 </div>
-                <Link
+                <ParentPortalDocumentLink
                   href={workspaceHref("updates", { familyId: family.id })}
                   className="group relative hidden min-h-36 overflow-hidden border-l border-border/60 bg-muted sm:block"
                   aria-label="Open photos and daily reports"
@@ -1948,7 +1985,7 @@ function ParentPortalWorkspaceView({
                   <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-4 pb-3 pt-8 text-xs font-semibold text-white">
                     Photos &amp; reports
                   </span>
-                </Link>
+                </ParentPortalDocumentLink>
               </div>
             ) : null}
             <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto p-4 sm:grid sm:overflow-visible sm:p-6 lg:grid-cols-2">
@@ -1958,6 +1995,11 @@ function ParentPortalWorkspaceView({
                   className="w-[86%] min-w-0 shrink-0 snap-start rounded-2xl border bg-background/60 p-4 sm:w-auto sm:shrink sm:p-5"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
+                    {child.profilePhotoUrl ? (
+                      <span className="relative size-12 shrink-0 overflow-hidden rounded-full border bg-muted">
+                        <Image src={child.profilePhotoUrl} alt={`${child.fullName} profile`} fill sizes="48px" unoptimized className="object-cover" />
+                      </span>
+                    ) : null}
                     <div className="min-w-0">
                       <h3 className="truncate text-lg font-semibold">
                         {child.preferredName || child.fullName}
@@ -2072,7 +2114,7 @@ function ParentPortalWorkspaceView({
               defaultCollapsed={!homeAttentionCount}
             >
                 {documentsNeedingAction[0] ? (
-                  <Link
+                  <ParentPortalDocumentLink
                     href={workspaceHref("family", {
                       familyId: family.id,
                       section: "documents",
@@ -2094,10 +2136,10 @@ function ParentPortalWorkspaceView({
                       className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
                       aria-hidden="true"
                     />
-                  </Link>
+                  </ParentPortalDocumentLink>
                 ) : null}
                 {openInvoices[0] ? (
-                  <Link
+                  <ParentPortalDocumentLink
                     href={workspaceHref("payments", { familyId: family.id })}
                     className="group flex min-h-16 items-center gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
@@ -2117,10 +2159,10 @@ function ParentPortalWorkspaceView({
                       className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
                       aria-hidden="true"
                     />
-                  </Link>
+                  </ParentPortalDocumentLink>
                 ) : null}
                 {incidentsNeedingReceipt[0] ? (
-                  <Link
+                  <ParentPortalDocumentLink
                     href={workspaceHref("family", {
                       familyId: family.id,
                       section: "children",
@@ -2144,7 +2186,7 @@ function ParentPortalWorkspaceView({
                       className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
                       aria-hidden="true"
                     />
-                  </Link>
+                  </ParentPortalDocumentLink>
                 ) : null}
                 {!homeAttentionCount ? (
                   <p className="py-6 text-sm text-muted-foreground">
@@ -2233,7 +2275,7 @@ function ParentPortalWorkspaceView({
                   </p>
                 </div>
               )}
-              <Link
+              <ParentPortalDocumentLink
                 href={workspaceHref("payments", { familyId: family.id })}
                 className={buttonVariants({
                   variant: balanceCents > 0 && !checkoutBlocked ? "default" : "outline",
@@ -2242,7 +2284,7 @@ function ParentPortalWorkspaceView({
               >
                 {balanceCents > 0 && !checkoutBlocked ? "Review & Pay" : "View Payment Details"}
                 <ArrowRight data-icon="inline-end" aria-hidden="true" />
-              </Link>
+              </ParentPortalDocumentLink>
               <p className="mt-3 text-xs text-muted-foreground">
                 {openInvoices.length
                   ? `${openInvoices.length} open invoice${openInvoices.length === 1 ? "" : "s"}`
@@ -2294,7 +2336,7 @@ function ParentPortalWorkspaceView({
                   ],
                 ] as const
               ).map(([href, label, detail, Icon]) => (
-                <Link
+                <ParentPortalDocumentLink
                   key={href}
                   href={href}
                   className="group flex min-h-20 items-center gap-2 rounded-xl border bg-card p-3 transition-colors hover:border-primary/60 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-3 sm:p-4"
@@ -2310,7 +2352,7 @@ function ParentPortalWorkspaceView({
                     className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
                     aria-hidden="true"
                   />
-                </Link>
+                </ParentPortalDocumentLink>
               ))}
             </div>
           </section>
@@ -2358,25 +2400,12 @@ function ParentPortalWorkspaceView({
             {(selectedUpdateDay?.reports ?? []).map((report) => {
               const timedCareEvents = dailyReportTimedCareEvents(report);
               return (
-                <details
+                <article
                   key={report.id}
                   id="daily-reports"
-                  className="group py-3 first:pt-1"
+                  className="py-4 first:pt-1"
                 >
-                  <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 rounded-2xl border bg-background/55 p-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-                    <span className="grid size-11 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
-                      <ClipboardList className="size-5" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-semibold">{report.child.fullName}</span>
-                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                        {report.mood ? `${displayTokenLabel(report.mood)} · ` : ""}{formatDate(report.date)}
-                      </span>
-                    </span>
-                    <span className="text-xs font-medium text-primary group-open:hidden">View day</span>
-                    <span className="hidden text-xs font-medium text-primary group-open:inline">Close</span>
-                  </summary>
-                  <div className="mx-2 rounded-b-2xl border border-t-0 bg-card px-4 pb-4 pt-3">
+                  <div className="rounded-2xl border bg-background/55 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <h2 className="font-semibold">Daily report · {report.child.fullName}</h2>
@@ -2384,9 +2413,14 @@ function ParentPortalWorkspaceView({
                       </div>
                       <time className="text-xs text-muted-foreground">{formatDate(report.date)}</time>
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                      {report.teacherNote ?? report.mood ?? "No teacher note was added."}
-                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge variant="secondary">Mood: {report.mood ? displayTokenLabel(report.mood) : "Not recorded"}</Badge>
+                      <Badge variant="outline">{report.meals?.length ?? 0} meal{report.meals?.length === 1 ? "" : "s"}</Badge>
+                      <Badge variant="outline">{report.naps?.length ?? 0} nap{report.naps?.length === 1 ? "" : "s"}</Badge>
+                      <Badge variant="outline">{report.diapers?.length ?? 0} care log{report.diapers?.length === 1 ? "" : "s"}</Badge>
+                      <Badge variant="outline">{report.activities?.length ?? 0} activit{report.activities?.length === 1 ? "y" : "ies"}</Badge>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-muted-foreground"><span className="font-medium text-foreground">Teacher note:</span> {report.teacherNote || "No note added."}</p>
                     {report.suppliesNeeded ? (
                       <p className="mt-3 text-sm font-medium">Please bring: {report.suppliesNeeded}</p>
                     ) : null}
@@ -2408,7 +2442,7 @@ function ParentPortalWorkspaceView({
                           <dd className="mt-1 font-medium">{displayTokenLabel(event.type)} · {formatTime(event.occurredAt)}{event.notes ? ` · ${event.notes}` : ""}</dd>
                         </div>
                       ))}
-                      {report.activities?.slice(0, 4).map((activity) => (
+                      {report.activities?.map((activity) => (
                         <div key={activity.id} className="rounded-xl border bg-background p-3">
                           <dt className="text-xs text-muted-foreground">Activity</dt>
                           <dd className="mt-1 font-medium">{activity.title}{activity.notes ? ` · ${activity.notes}` : ""}</dd>
@@ -2416,7 +2450,7 @@ function ParentPortalWorkspaceView({
                       ))}
                     </dl>
                   </div>
-                </details>
+                </article>
               );
             })}
 
@@ -2600,10 +2634,10 @@ function ParentPortalWorkspaceView({
                 </Alert>
               ) : null}
             </div>
-            <Link href={workspaceHref("payments", { familyId: family.id, section: null, hash: null })} className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
+            <ParentPortalDocumentLink href={workspaceHref("payments", { familyId: family.id, section: null, hash: null })} className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
               <ArrowRight data-icon="inline-start" aria-hidden="true" />
               Return to Payments
-            </Link>
+            </ParentPortalDocumentLink>
           </CardContent>
         </Card>
       ) : null}
@@ -2866,9 +2900,10 @@ function ParentPortalWorkspaceView({
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="font-medium">Tuition billing cycle</div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Your weekly rate stays the same. Choose weekly invoices or one
-                  invoice every four weeks that covers the next four weeks. This
-                  choice does not create an opening balance or turn on autopay.
+                  Your weekly rate stays the same. Choose weekly, every two weeks,
+                  or every four weeks. Multi-week invoices cover the upcoming two
+                  or four weeks. This choice does not create an opening balance or
+                  turn on autopay.
                 </p>
                 <div className="mt-3 space-y-3">
                   {family.children
@@ -2881,9 +2916,11 @@ function ParentPortalWorkspaceView({
                     .map((child) => {
                       const cadence =
                         tuitionCadenceDrafts[child.id] ??
-                        (child.tuitionAssignment?.cadence === "four_week"
-                          ? "four_week"
-                          : "weekly");
+                        (child.tuitionAssignment?.cadence === "biweekly"
+                          ? "biweekly"
+                          : child.tuitionAssignment?.cadence === "four_week"
+                            ? "four_week"
+                            : "weekly");
                       const weeklyAmount =
                         child.tuitionAssignment?.amountCents ?? 0;
                       return (
@@ -2919,6 +2956,9 @@ function ParentPortalWorkspaceView({
                               <SelectContent>
                                 <SelectItem value="weekly">
                                   Weekly · {money(weeklyAmount)}
+                                </SelectItem>
+                                <SelectItem value="biweekly">
+                                  Every 2 weeks · {money(weeklyAmount * 2)}
                                 </SelectItem>
                                 <SelectItem value="four_week">
                                   Every 4 weeks · {money(weeklyAmount * 4)}
@@ -3021,7 +3061,7 @@ function ParentPortalWorkspaceView({
                   </p>
                   <div className="flex gap-2">
                     {ledgerPagination.hasPrevious ? (
-                      <Link
+                      <ParentPortalDocumentLink
                         href={`${workspaceHref("payments", { familyId: family?.id })}&ledgerPage=${ledgerPagination.page - 1}`}
                         className={buttonVariants({
                           variant: "outline",
@@ -3029,10 +3069,10 @@ function ParentPortalWorkspaceView({
                         })}
                       >
                         Previous
-                      </Link>
+                      </ParentPortalDocumentLink>
                     ) : null}
                     {ledgerPagination.hasNext ? (
-                      <Link
+                      <ParentPortalDocumentLink
                         href={`${workspaceHref("payments", { familyId: family?.id })}&ledgerPage=${ledgerPagination.page + 1}`}
                         className={buttonVariants({
                           variant: "outline",
@@ -3040,7 +3080,7 @@ function ParentPortalWorkspaceView({
                         })}
                       >
                         Next
-                      </Link>
+                      </ParentPortalDocumentLink>
                     ) : null}
                   </div>
                 </div>
@@ -3083,14 +3123,14 @@ function ParentPortalWorkspaceView({
                 ) : null}
               </div>
             </div>
-            <Link
+            <ParentPortalDocumentLink
               href={workspaceHref("family", { familyId: family.id, section: "billing", hash: null })}
               className="flex min-h-16 items-center gap-3 rounded-2xl border bg-background/55 p-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary"><CreditCard className="size-5" aria-hidden="true" /></span>
               <span className="min-w-0 flex-1"><span className="block font-semibold">Billing settings</span><span className="block truncate text-xs text-muted-foreground">Payment methods, billing email &amp; autopay</span></span>
               <ArrowRight className="size-5 shrink-0 text-primary" aria-hidden="true" />
-            </Link>
+            </ParentPortalDocumentLink>
             {showFamilyPaymentPanel ? (
               <div className="rounded-xl border bg-primary/10 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -3502,6 +3542,24 @@ function ParentPortalWorkspaceView({
                       ? "Processing"
                       : displayTokenLabel(invoice.status)}
                   </Badge>
+                  {typeof invoice.familyDocumentAmountCents === "number" ? <InvoicePrintButton
+                    invoice={{
+                      number: invoice.number,
+                      status: invoice.status,
+                      dueDate: invoice.dueDate,
+                      totalCents: invoice.familyDocumentAmountCents,
+                      childName: invoice.childName ?? null,
+                      servicePeriodStart: invoice.servicePeriodStart ?? null,
+                      servicePeriodEnd: invoice.servicePeriodEnd ?? null,
+                      items: invoice.items?.length
+                        ? invoice.items
+                        : [{ description: invoice.purposeLabel ?? "Family account charge", amountCents: invoice.familyDocumentAmountCents }],
+                      documentTitle: invoice.productCheckoutAvailable ? "Purchase Invoice" : "Tuition Invoice",
+                    }}
+                    familyName={family.name}
+                    schoolName={centerName}
+                    schoolEin={centerEin}
+                  /> : null}
                   {invoice.productCheckoutAvailable &&
                   invoice.status === "OPEN" &&
                   !invoiceHasPendingPayment ? (
@@ -3705,6 +3763,24 @@ function ParentPortalWorkspaceView({
                 sendMessage();
               }}
             >
+              {!replyToMessageId && classroomTeachers.length ? (
+                <div className="mb-3">
+                  <Label htmlFor="parent-message-recipient">Send to</Label>
+                  <Select value={messageRecipientId} onValueChange={(value) => setMessageRecipientId(value ?? "school")}>
+                    <SelectTrigger id="parent-message-recipient" className="mt-2 w-full" aria-label="Choose message recipient">
+                      <SelectValue placeholder="Choose a recipient" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="school">School office</SelectItem>
+                      {classroomTeachers.map((teacher) => (
+                        <SelectItem key={teacher.id} value={teacher.id}>
+                          {teacher.name} · {teacher.classroomNames.join(", ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
               {replyToMessageId ? (
                 <div className={styles.parentReplyContext}>
                   <Reply className="size-4 shrink-0 text-primary" aria-hidden="true" />
@@ -3760,7 +3836,9 @@ function ParentPortalWorkspaceView({
                   name="message-attachments"
                   type="file"
                   multiple
-                  className="sr-only"
+                  aria-label="Attach photos or files"
+                  className="absolute overflow-hidden whitespace-nowrap border-0 p-0"
+                  style={{ width: 1, height: 1, clip: "rect(0 0 0 0)", clipPath: "inset(50%)" }}
                   accept="image/*,.pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
                   onChange={(event) => addMessageAttachments(event.target.files)}
                 />
@@ -4138,7 +4216,7 @@ function ParentPortalWorkspaceView({
               </summary>
               <div className="border-t px-4 pb-4 pt-3">
               <div className="flex justify-end">
-                <Link
+                <ParentPortalDocumentLink
                   href={workspaceHref("family", {
                     familyId: family.id,
                     section: "documents",
@@ -4150,7 +4228,7 @@ function ParentPortalWorkspaceView({
                   })}
                 >
                   Request a Correction
-                </Link>
+                </ParentPortalDocumentLink>
               </div>
               <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
                 <div>
@@ -4308,7 +4386,7 @@ function ParentPortalWorkspaceView({
                   medical, or custody concerns.
                 </p>
               </div>
-              <Link
+              <ParentPortalDocumentLink
                 href={previewHrefBase ?? "/support"}
                 className={buttonVariants({
                   variant: "outline",
@@ -4317,7 +4395,7 @@ function ParentPortalWorkspaceView({
               >
                 <LifeBuoy data-icon="inline-start" aria-hidden="true" />
                 Open support
-              </Link>
+              </ParentPortalDocumentLink>
             </div>
             <details className="group rounded-2xl border border-destructive/30 bg-destructive/5">
               <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">

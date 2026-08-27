@@ -265,6 +265,11 @@ export async function createChildMediaSignedUrl(storageKey: string, expiresIn = 
   return data.signedUrl;
 }
 
+export async function deleteChildMediaObject(storageKey: string) {
+  const { error } = await getSupabaseStorageClient().storage.from(CHILD_MEDIA_BUCKET).remove([storageKey]);
+  if (error) throw new Error(error.message);
+}
+
 export async function signChildMediaRecords<T extends { url: string; storageKey?: string | null }>(records: T[]) {
   return Promise.all(
     records.map(async (record) => {

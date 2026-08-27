@@ -46,6 +46,7 @@ import { allOpenInvoicesResponsibilitySeparated } from "@/lib/invoice-responsibi
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
+import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { applySucceededStripeFamilyBalancePayment } from "@/lib/stripe-payment-application";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
@@ -350,6 +351,24 @@ async function POSTHandler(request: NextRequest) {
           fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
         }),
         ...(parentCheckout ? {} : { billingApproval }),
+      },
+      { status: 403 },
+    );
+  }
+  const paymentReadiness = stripeSchoolReadinessFlowFromFields({
+    customFields: center.customFields,
+    centerName: center.name,
+  });
+  if (!paymentReadiness.canAcceptParentPayments) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: paymentServiceError({
+          parentFacing: parentCheckout,
+          providerError: paymentReadiness.explanation,
+          fallback: PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
+        }),
+        ...(parentCheckout ? {} : { paymentReadiness }),
       },
       { status: 403 },
     );

@@ -86,17 +86,20 @@ type ChildRecord = {
 
 function tuitionCadenceLabel(cadence: string | null | undefined) {
   if (cadence === "monthly") return "monthly";
+  if (cadence === "biweekly") return "every two weeks";
   if (cadence === "four_week") return "every four weeks";
   return "weekly";
 }
 
 function tuitionCadenceUnit(cadence: string | null | undefined) {
   if (cadence === "monthly") return "month";
+  if (cadence === "biweekly") return "2 weeks";
   if (cadence === "four_week") return "4 weeks";
   return "week";
 }
 
 function tuitionCadenceAmountCents(amountCents: number, cadence: string | null | undefined) {
+  if (cadence === "biweekly") return amountCents * 2;
   return cadence === "four_week" ? amountCents * 4 : amountCents;
 }
 
@@ -818,6 +821,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
       const json = await response.json().catch(() => null) as {
         error?: string;
         mode?: string;
+        duplicateCreatePrevented?: boolean;
         parentPortalLoginEnabled?: boolean;
         parentPortalLogin?: { status?: string; reason?: string };
         reenrollment?: { familyId: string; centerId: string; childId: string };
@@ -826,7 +830,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
         setErrorMessage(json?.error || `${successLabel} could not be saved.`);
         return;
       }
-      setStatusMessage(`${successLabel} ${json?.mode ?? "saved"}.${parentPortalStatusText(json)}`);
+      setStatusMessage(json?.duplicateCreatePrevented
+        ? `${successLabel} already exists. The existing child profile was kept and no duplicate was created.`
+        : `${successLabel} ${json?.mode ?? "saved"}.${parentPortalStatusText(json)}`);
       if (json?.reenrollment) {
         const params = new URLSearchParams({
           familyId: json.reenrollment.familyId,

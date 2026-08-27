@@ -7,7 +7,7 @@ import {
   shouldNotifyGuardianOfSharedPhoto,
 } from "@/lib/teacher-media";
 
-test("teacher photo sharing goes straight to parents when permission is enabled", () => {
+test("teacher photo sharing reaches parents immediately when permission is enabled", () => {
   assert.deepEqual(resolveTeacherMediaShareState({
     requestedParentShare: true,
     photoVideoPermission: true,

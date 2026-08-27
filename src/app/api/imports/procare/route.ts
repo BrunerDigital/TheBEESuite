@@ -59,6 +59,12 @@ import {
 } from "@/lib/procare-guardian-merge";
 import { enrollmentClassroomValidationError, isClosedEnrollmentStatus } from "@/lib/enrollment-status";
 import { invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
+import {
+  MAX_PROCARE_SOURCE_FILES,
+  MAX_PROCARE_SOURCE_BYTES,
+  MAX_PROCARE_SOURCE_LABEL,
+  procareTextSizeBytes,
+} from "@/lib/procare-upload-limits";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -1197,9 +1203,6 @@ const STANDARD_MULTI_REPORT_HINT_GROUPS = [
   ["relationship type", "authorized pickup"],
   ["category description", "item description"],
 ] as const;
-const MAX_PROCARE_SOURCE_FILES = 500;
-const MAX_PROCARE_UPLOAD_BYTES = 100 * 1024 * 1024;
-
 function normalizedImportHeader(value: string) {
   return value.replace(/^\ufeff/, "").trim().toLowerCase().replace(/#/g, " number ").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -1423,9 +1426,12 @@ async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
   if (uploadedFiles.length > MAX_PROCARE_SOURCE_FILES) {
     throw new Error(`The selected sources contain more than ${MAX_PROCARE_SOURCE_FILES} files. Split the handoff into reviewed batches.`);
   }
+  if (!uploadedFiles.length && procareTextSizeBytes(pastedCsv) > MAX_PROCARE_SOURCE_BYTES) {
+    throw new Error(`The pasted source is larger than the ${MAX_PROCARE_SOURCE_LABEL} secure browser-source limit. Upload one ZIP containing this school's unchanged reports, or run the file-only preflight outside the browser.`);
+  }
   const uploadedBytes = uploadedFiles.reduce((total, file) => total + file.size, 0);
-  if (uploadedBytes > MAX_PROCARE_UPLOAD_BYTES) {
-    throw new Error("The selected sources are larger than 100 MB. Split the handoff into reviewed batches.");
+  if (uploadedBytes > MAX_PROCARE_SOURCE_BYTES) {
+    throw new Error(`The selected sources are larger than the ${MAX_PROCARE_SOURCE_LABEL} secure browser-source limit. Create one ZIP containing this school's unchanged reports, or run the file-only preflight outside the browser.`);
   }
   if (!uploadedFiles.length) {
     return { text: pastedCsv, filename: "pasted-procare-import.csv", sourceType: "csv_text", datasetCoverage: null };
@@ -2074,7 +2080,8 @@ async function POSTHandler(request: NextRequest) {
   const autoMap = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase()) && canAccessAllCenters(user);
   const centerId = autoMap ? "" : requestedCenterId || user.primaryCenterId;
   const files = formData.getAll("file");
-  const pastedCsv = clean(formData.get("csv"));
+  const pastedCsvValue = formData.get("csv");
+  const pastedCsv = typeof pastedCsvValue === "string" ? pastedCsvValue : "";
   if (!centerId && !autoMap) return NextResponse.json({ ok: false, error: "Center ID is required." }, { status: 400 });
   if (centerId && !canAccessCenter(user, centerId)) return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
 

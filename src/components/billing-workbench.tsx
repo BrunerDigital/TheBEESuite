@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Save, Search, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
-import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { useSchoolTimeZoneResolver } from "@/components/school-time-zone-context";
 import { formatZonedDateTime, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -368,7 +368,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const initialAssignment = initialAssignmentChild?.tuitionAssignment ?? null;
   const initialAssignedPlan = initialLocationTuitionPlans.find((plan) => plan.id === initialAssignment?.tuitionPlanId) ?? null;
   const [centerId, setCenterId] = useState(initialCenter);
-  const timeZone = useSchoolTimeZone(centerId);
+  const resolveSchoolTimeZone = useSchoolTimeZoneResolver();
+  const timeZone = resolveSchoolTimeZone(centerId);
   const [familyId, setFamilyId] = useState(initialFamily?.id ?? "");
   const [chargeSource, setChargeSource] = useState("tuitionPlan");
   const [tuitionPlanId, setTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
@@ -441,13 +442,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [paymentRequestEmailSelections, setPaymentRequestEmailSelections] = useState<Record<string, string[]>>({});
   const [paymentReviewMethod, setPaymentReviewMethod] = useState<DirectorPaymentMethod | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    const localNow = currentLocalDateTime(timeZone);
-    setCheckPaidAt(localNow);
-    setCashPaidAt(localNow);
-    setPayrollPaidAt(localNow);
-  }, [timeZone]);
 
   const filteredFamilies = useMemo(
     () => families.filter((family) => !centerId || family.centerId === centerId),
@@ -851,7 +845,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (!value) return;
     const nextPlans = tuitionPlans.filter((plan) => plan.centerId === value);
     const nextFamily = families.find((family) => family.centerId === value) ?? null;
+    const localNow = currentLocalDateTime(resolveSchoolTimeZone(value));
     setCenterId(value);
+    setCheckPaidAt(localNow);
+    setCashPaidAt(localNow);
+    setPayrollPaidAt(localNow);
     setWeeklyRecoveryPreview(null);
     setFamilyId(nextFamily?.id ?? "");
     setChildId("none");

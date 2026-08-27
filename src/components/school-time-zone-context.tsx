@@ -18,6 +18,11 @@ export function useSchoolTimeZone(centerId?: string | null) {
   return (centerId ? context.byCenterId[centerId] : null) || context.defaultTimeZone;
 }
 
+export function useSchoolTimeZoneResolver() {
+  const context = useContext(SchoolTimeZoneContext);
+  return (centerId?: string | null) => (centerId ? context.byCenterId[centerId] : null) || context.defaultTimeZone;
+}
+
 export function SchoolDateTime({
   value,
   options,

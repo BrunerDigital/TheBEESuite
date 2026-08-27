@@ -8,6 +8,7 @@ import {
   readStripeConnectedAccountId,
   retrieveStripeConnectedAccount,
   setStripeConnectedAccountManualPayouts,
+  stripeAccountCreationIdempotencyKey,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { buildSchoolPayoutSetupInput } from "@/lib/school-payout-onboarding";
@@ -235,7 +236,11 @@ async function main() {
         postalCode: setup.postalCode,
         businessUrl: setup.businessUrl,
         productDescription: setup.productDescription,
-        idempotencyKey: `bee-suite-connect-migration-v3-${plan.center.id}`,
+        idempotencyKey: stripeAccountCreationIdempotencyKey({
+          displayName: setup.displayName,
+          legacyKidCityKey: `bee-suite-connect-migration-v2-${plan.center.id}`,
+          changedDescriptorKey: `bee-suite-connect-migration-v3-${plan.center.id}`,
+        }),
         metadata: {
           bee_suite_center_id: plan.center.id,
           bee_suite_location_id: plan.center.locationId || plan.center.crmLocationId,

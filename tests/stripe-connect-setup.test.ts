@@ -11,6 +11,7 @@ import {
   retrieveStripeConnectedAccount,
   setStripeConnectedAccountDailyPayouts,
   setStripeConnectedAccountManualPayouts,
+  stripeAccountCreationIdempotencyKey,
   stripeSchoolStatementDescriptor,
 } from "../src/lib/integrations";
 import {
@@ -50,6 +51,16 @@ test("Stripe school statement descriptors follow the school brand", () => {
     descriptor: "SMART KID CITY PRESCHO",
     prefix: "SMARTKIDCI",
   });
+});
+
+test("Stripe account creation preserves legacy Kid City retries and versions changed descriptors", () => {
+  const keys = {
+    legacyKidCityKey: "account-center-1",
+    changedDescriptorKey: "account-v2-center-1",
+  };
+  assert.equal(stripeAccountCreationIdempotencyKey({ ...keys, displayName: "Kid City USA - Fishers" }), keys.legacyKidCityKey);
+  assert.equal(stripeAccountCreationIdempotencyKey({ ...keys, displayName: "Miss Honey's Onion Sprouts - Lyons" }), keys.changedDescriptorKey);
+  assert.equal(stripeAccountCreationIdempotencyKey({ ...keys, displayName: "Independent Preschool" }), keys.changedDescriptorKey);
 });
 
 test("Stripe Connect setup normalizes dashboard payout profile fields", () => {

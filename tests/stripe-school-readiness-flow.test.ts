@@ -106,7 +106,9 @@ test("new school account creation is idempotent and omits indirect-transfer onbo
     integrations.indexOf("export async function createStripeConnectedAccount"),
     integrations.indexOf("export async function completeStripeConnectedAccountBusinessProfile"),
   );
-  assert.match(route, /idempotencyKey: `bee-suite-school-connect-v2-\$\{center\.id\}`/);
+  assert.match(route, /idempotencyKey: stripeAccountCreationIdempotencyKey/);
+  assert.match(route, /legacyKidCityKey: `bee-suite-school-connect-\$\{center\.id\}`/);
+  assert.match(route, /changedDescriptorKey: `bee-suite-school-connect-v2-\$\{center\.id\}`/);
   assert.match(route, /updateCenterCustomFieldsIfCurrent/);
   assert.match(route, /center\.customFields === null[\s\S]{0,100}Prisma\.DbNull/);
   assert.doesNotMatch(createAccount, /recipient:\s*\{/);

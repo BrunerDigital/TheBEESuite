@@ -72,6 +72,21 @@ export function stripeSchoolStatementDescriptor(value: string | null | undefined
   };
 }
 
+export function stripeAccountCreationIdempotencyKey({
+  changedDescriptorKey,
+  displayName,
+  legacyKidCityKey,
+}: {
+  changedDescriptorKey: string;
+  displayName: string | null | undefined;
+  legacyKidCityKey: string;
+}) {
+  const statementDescriptor = stripeSchoolStatementDescriptor(displayName);
+  return statementDescriptor.descriptor === STRIPE_KID_CITY_STATEMENT_DESCRIPTOR && statementDescriptor.prefix === "KIDCITY"
+    ? legacyKidCityKey
+    : changedDescriptorKey;
+}
+
 export type StripePaymentMethodCategory = StripeSchoolProcessingFeeCategory;
 export type StripeBankAccountVerificationMethod = "automatic" | "instant";
 

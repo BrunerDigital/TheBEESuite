@@ -9,6 +9,7 @@ import {
   readStripeConnectedAccountId,
   retrieveStripeConnectedAccount,
   setStripeConnectedAccountManualPayouts,
+  stripeAccountCreationIdempotencyKey,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { buildSchoolPayoutSetupInput } from "@/lib/school-payout-onboarding";
@@ -355,7 +356,11 @@ async function main() {
       postalCode: setup.postalCode,
       businessUrl: setup.businessUrl,
       productDescription: setup.productDescription,
-      idempotencyKey: `bee-suite-full-dashboard-replacement-v2-${plan.center.id}-${plan.oldTargetAccountId}`,
+      idempotencyKey: stripeAccountCreationIdempotencyKey({
+        displayName: setup.displayName,
+        legacyKidCityKey: `bee-suite-full-dashboard-replacement-${plan.center.id}-${plan.oldTargetAccountId}`,
+        changedDescriptorKey: `bee-suite-full-dashboard-replacement-v2-${plan.center.id}-${plan.oldTargetAccountId}`,
+      }),
       metadata: {
         bee_suite_center_id: plan.center.id,
         bee_suite_location_id: plan.center.locationId || plan.center.crmLocationId,

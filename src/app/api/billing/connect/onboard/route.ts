@@ -9,6 +9,7 @@ import {
   readStripeConnectedAccountId,
   retrieveStripeConnectedAccount,
   setStripeConnectedAccountDailyPayouts,
+  stripeAccountCreationIdempotencyKey,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
@@ -212,7 +213,11 @@ async function POSTHandler(request: NextRequest) {
       businessUrl: setup.details.businessUrl,
       productDescription: setup.details.productDescription,
       tenantId: user.tenantId,
-      idempotencyKey: `bee-suite-school-connect-v2-${center.id}`,
+      idempotencyKey: stripeAccountCreationIdempotencyKey({
+        displayName: setup.details.displayName,
+        legacyKidCityKey: `bee-suite-school-connect-${center.id}`,
+        changedDescriptorKey: `bee-suite-school-connect-v2-${center.id}`,
+      }),
       metadata: {
         beeSuiteCenterId: center.id,
         beeSuiteCrmLocationId: center.crmLocationId,

@@ -49,6 +49,7 @@ test("directors can enter cash details and families see a clear payment label", 
 test("manual cash timestamps use the selected school's local date and time", () => {
   assert.match(workbench, /useSchoolTimeZone\(centerId\)/);
   assert.match(workbench, /zonedDateTimeLocalValue\(new Date\(\), timeZone\)/);
+  assert.match(workbench, /useEffect\(\(\) => \{[\s\S]*setCheckPaidAt\(localNow\);[\s\S]*setCashPaidAt\(localNow\);[\s\S]*setPayrollPaidAt\(localNow\);[\s\S]*\}, \[timeZone\]\)/);
   assert.match(workbench, /manualPaymentTimestamp\(cashPaidAt, timeZone\)/);
   assert.match(workbench, /type="datetime-local" value=\{cashPaidAt\}/);
 });

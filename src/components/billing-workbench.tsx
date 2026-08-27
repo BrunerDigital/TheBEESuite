@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Save, Search, Send } from "lucide-react";
@@ -441,6 +441,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [paymentRequestEmailSelections, setPaymentRequestEmailSelections] = useState<Record<string, string[]>>({});
   const [paymentReviewMethod, setPaymentReviewMethod] = useState<DirectorPaymentMethod | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    const localNow = currentLocalDateTime(timeZone);
+    setCheckPaidAt(localNow);
+    setCashPaidAt(localNow);
+    setPayrollPaidAt(localNow);
+  }, [timeZone]);
 
   const filteredFamilies = useMemo(
     () => families.filter((family) => !centerId || family.centerId === centerId),

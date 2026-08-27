@@ -54,10 +54,10 @@ export function stripeSchoolStatementDescriptor(value: string | null | undefined
     .replace(/\s+/g, " ")
     .trim();
 
-  if (normalized.includes("MISS HONEY")) {
+  if (/^MISS HONEY(?:S| S)(?: |$)/.test(normalized)) {
     return { descriptor: STRIPE_MISS_HONEYS_STATEMENT_DESCRIPTOR, prefix: "MISSHONEY" };
   }
-  if (normalized.includes("KID CITY")) {
+  if (/^KID CITY USA(?: |$)/.test(normalized)) {
     return { descriptor: STRIPE_KID_CITY_STATEMENT_DESCRIPTOR, prefix: "KIDCITY" };
   }
 

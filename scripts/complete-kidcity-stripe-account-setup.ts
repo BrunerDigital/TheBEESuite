@@ -118,11 +118,12 @@ export async function completeKidCityStripeAccountSetup() {
       if (!alreadyReady && !onboardingAlreadyPrepared) {
         const profile = await completeStripeConnectedAccountBusinessProfile({
           accountId,
+          businessName: setup.details.displayName,
           businessPhone: setup.details.payoutContactPhone,
           businessUrl: setup.details.businessUrl,
           ein: schoolEin,
           tenantId: center.organization.tenantId,
-          idempotencyKey: `kidcity-account-profile-v4-${center.id}`,
+          idempotencyKey: `kidcity-account-profile-v5-${center.id}`,
         });
         profileUpdated = profile.ok;
         if (!profile.ok) error = profile.error || "Stripe business profile update failed.";

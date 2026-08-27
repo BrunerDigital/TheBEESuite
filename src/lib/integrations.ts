@@ -43,6 +43,31 @@ const STRIPE_ACCOUNT_LINK_CONFIGURATION_KEYS = ["customer", "merchant", "recipie
 type StripeAccountLinkConfiguration = (typeof STRIPE_ACCOUNT_LINK_CONFIGURATION_KEYS)[number];
 export const STRIPE_CHILD_CARE_MCC = "8351";
 export const STRIPE_KID_CITY_STATEMENT_DESCRIPTOR = "KID CITY USA";
+export const STRIPE_MISS_HONEYS_STATEMENT_DESCRIPTOR = "MISS HONEYS";
+
+export function stripeSchoolStatementDescriptor(value: string | null | undefined) {
+  const normalized = clean(value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (normalized.includes("MISS HONEY")) {
+    return { descriptor: STRIPE_MISS_HONEYS_STATEMENT_DESCRIPTOR, prefix: "MISSHONEY" };
+  }
+  if (normalized.includes("KID CITY")) {
+    return { descriptor: STRIPE_KID_CITY_STATEMENT_DESCRIPTOR, prefix: "KIDCITY" };
+  }
+
+  const descriptor = normalized.slice(0, 22).trim();
+  const safeDescriptor = descriptor.length >= 5 ? descriptor : "SCHOOL TUITION";
+  return {
+    descriptor: safeDescriptor,
+    prefix: safeDescriptor.replace(/\s/g, "").slice(0, 10),
+  };
+}
 
 export type StripePaymentMethodCategory = StripeSchoolProcessingFeeCategory;
 export type StripeBankAccountVerificationMethod = "automatic" | "instant";
@@ -2390,6 +2415,7 @@ export async function createStripeConnectedAccount({
 
   const registeredName = clean(businessName);
   const accountDisplayName = clean(displayName) || registeredName;
+  const statementDescriptor = stripeSchoolStatementDescriptor(accountDisplayName);
   const contactEmail = email && isEmail(email) ? email : undefined;
   const publicSupportEmail = supportEmail && isEmail(supportEmail) ? supportEmail : contactEmail;
   const contactPhone = clean(phone) || undefined;
@@ -2429,8 +2455,8 @@ export async function createStripeConnectedAccount({
       merchant: {
         mcc: STRIPE_CHILD_CARE_MCC,
         statement_descriptor: {
-          descriptor: STRIPE_KID_CITY_STATEMENT_DESCRIPTOR,
-          prefix: "KIDCITY",
+          descriptor: statementDescriptor.descriptor,
+          prefix: statementDescriptor.prefix,
         },
         capabilities: {
           card_payments: { requested: true },
@@ -2489,6 +2515,7 @@ export async function createStripeConnectedAccount({
 
 export async function completeStripeConnectedAccountBusinessProfile({
   accountId,
+  businessName,
   businessPhone,
   businessUrl,
   ein,
@@ -2497,6 +2524,7 @@ export async function completeStripeConnectedAccountBusinessProfile({
   idempotencyKey,
 }: {
   accountId: string;
+  businessName?: string | null;
   businessPhone?: string | null;
   businessUrl?: string | null;
   ein?: string | null;
@@ -2515,6 +2543,7 @@ export async function completeStripeConnectedAccountBusinessProfile({
   }
 
   const contactPhone = clean(businessPhone) || undefined;
+  const statementDescriptor = stripeSchoolStatementDescriptor(businessName || STRIPE_KID_CITY_STATEMENT_DESCRIPTOR);
   const publicBusinessUrl = clean(businessUrl) || undefined;
   if (publicBusinessUrl && !/^https?:\/\//i.test(publicBusinessUrl)) {
     return { ok: false, configured: true, provider: "stripe", error: "School business URL must use HTTPS or HTTP." };
@@ -2532,8 +2561,8 @@ export async function completeStripeConnectedAccountBusinessProfile({
       merchant: {
         mcc: STRIPE_CHILD_CARE_MCC,
         statement_descriptor: {
-          descriptor: STRIPE_KID_CITY_STATEMENT_DESCRIPTOR,
-          prefix: "KIDCITY",
+          descriptor: statementDescriptor.descriptor,
+          prefix: statementDescriptor.prefix,
         },
         ...(publicBusinessUrl ? { support: { url: publicBusinessUrl } } : {}),
       },

@@ -11,6 +11,7 @@ const liveOpsSource = readFileSync("src/components/live-ops-pages.tsx", "utf8");
 const credentialCardSource = readFileSync("src/components/guardian-kiosk-credential-card.tsx", "utf8");
 const credentialPanelSource = readFileSync("src/components/parent-kiosk-credential-panel.tsx", "utf8");
 const pinManagerSource = readFileSync("src/components/guardian-pin-manager.tsx", "utf8");
+const familyEditorSource = readFileSync("src/components/family-record-editor.tsx", "utf8");
 
 test("family PIN and QR controls have explicit working and recovery states", () => {
   assert.match(kioskSource, /disabled=\{!pin\.length\}[\s\S]*>Clear<\/Button>/);
@@ -74,4 +75,6 @@ test("guardian credential controls are semantic and fail with actionable message
   assert.match(credentialCardSource, /<Link href=\{credential\.kioskPath\} prefetch=\{false\}/);
   assert.match(credentialCardSource, /className="h-auto w-40 max-w-full"/);
   assert.doesNotMatch(credentialCardSource, /navigator\.clipboard|window\.location\.assign|QR scan payload|Kiosk:/);
+  assert.match(familyEditorSource, /selectedGuardian && selectedFamily[\s\S]*<GuardianPinManager/);
+  assert.match(familyEditorSource, /guardianId=\{selectedGuardian\.id\}/);
 });

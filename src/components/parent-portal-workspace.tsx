@@ -170,6 +170,8 @@ type DailyReport = {
   mood: string | null;
   teacherNote: string | null;
   suppliesNeeded: string | null;
+  checkInAt?: string | Date | null;
+  checkOutAt?: string | Date | null;
   child: { fullName: string };
   meals?: Array<{
     id: string;
@@ -2413,6 +2415,16 @@ function ParentPortalWorkspaceView({
                       </div>
                       <time className="text-xs text-muted-foreground">{formatDate(report.date)}</time>
                     </div>
+                    {report.checkInAt || report.checkOutAt ? (
+                      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 rounded-xl border bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
+                        <span>
+                          Check-in: {report.checkInAt ? formatTime(report.checkInAt) : "Not recorded"}
+                        </span>
+                        <span>
+                          Check-out: {report.checkOutAt ? formatTime(report.checkOutAt) : "Not recorded yet"}
+                        </span>
+                      </div>
+                    ) : null}
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Badge variant="secondary">Mood: {report.mood ? displayTokenLabel(report.mood) : "Not recorded"}</Badge>
                       <Badge variant="outline">{report.meals?.length ?? 0} meal{report.meals?.length === 1 ? "" : "s"}</Badge>
@@ -2471,7 +2483,13 @@ function ParentPortalWorkspaceView({
                       <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.caption || "A classroom moment shared by your school."}</p>
                       <time className="mt-2 block text-xs text-muted-foreground">{formatTime(item.createdAt)}</time>
                     </div>
-                    <div className="relative aspect-video overflow-hidden rounded-xl border bg-muted/40">
+                    <a
+                      href={imageSrc || undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={imageSrc ? `Open full-size photo of ${item.child.fullName}` : undefined}
+                      className="relative aspect-video overflow-hidden rounded-xl border bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
                       {imageSrc ? (
                         <Image
                           src={imageSrc}
@@ -2484,7 +2502,12 @@ function ParentPortalWorkspaceView({
                       ) : (
                         <div className="flex h-full items-center justify-center px-4 text-center text-xs text-muted-foreground">Image unavailable</div>
                       )}
-                    </div>
+                      {imageSrc ? (
+                        <span className="absolute inset-x-2 bottom-2 rounded-lg bg-black/70 px-2 py-1 text-center text-xs font-semibold text-white">
+                          Open full-size photo
+                        </span>
+                      ) : null}
+                    </a>
                   </div>
                 </article>
               );

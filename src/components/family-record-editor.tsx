@@ -24,6 +24,7 @@ import {
 } from "@/lib/family-dedupe";
 import { defaultAgeGroupOptions, mergeAgeGroupOptions } from "@/lib/dashboard-options";
 import { resolveDailyReportEmailRecipients } from "@/lib/daily-report-email-settings";
+import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import {
   enrollmentClassroomValidationError,
   isCurrentlyEnrolledStatus,
@@ -1570,6 +1571,19 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               <Save data-icon="inline-start" />
               {selectedGuardian ? "Save parent" : "Add parent"}
             </Button>
+            {selectedGuardian && selectedFamily ? (
+              <GuardianPinManager
+                key={`${selectedGuardian.id}:${selectedGuardian.checkInPinSetAt ?? "unset"}`}
+                guardianId={selectedGuardian.id}
+                guardianName={selectedGuardian.fullName}
+                familyName={selectedFamily.name}
+                centerId={selectedFamily.centerId}
+                centerName={selectedGuardian.centerName ?? selectedFamily.centerName}
+                pinSetAt={selectedGuardian.checkInPinSetAt}
+                qrToken={selectedGuardian.qrToken}
+                kioskPath={selectedGuardian.kioskPath}
+              />
+            ) : null}
             <Button type="button" variant="outline" disabled={isPending || !selectedGuardian} onClick={removeGuardian}>
               <Trash2 data-icon="inline-start" />
               Remove parent

@@ -2490,6 +2490,7 @@ export async function createStripeConnectedAccount({
 export async function completeStripeConnectedAccountBusinessProfile({
   accountId,
   businessPhone,
+  businessUrl,
   ein,
   tenantId,
   credentials,
@@ -2497,6 +2498,7 @@ export async function completeStripeConnectedAccountBusinessProfile({
 }: {
   accountId: string;
   businessPhone?: string | null;
+  businessUrl?: string | null;
   ein?: string | null;
   tenantId?: string | null;
   credentials?: Record<string, string>;
@@ -2513,6 +2515,10 @@ export async function completeStripeConnectedAccountBusinessProfile({
   }
 
   const contactPhone = clean(businessPhone) || undefined;
+  const publicBusinessUrl = clean(businessUrl) || undefined;
+  if (publicBusinessUrl && !/^https?:\/\//i.test(publicBusinessUrl)) {
+    return { ok: false, configured: true, provider: "stripe", error: "School business URL must use HTTPS or HTTP." };
+  }
   const federalEin = clean(ein).replace(/\D/g, "");
   if (federalEin && federalEin.length !== 9) {
     return { ok: false, configured: true, provider: "stripe", error: "School EIN must contain exactly 9 digits." };
@@ -2529,8 +2535,10 @@ export async function completeStripeConnectedAccountBusinessProfile({
           descriptor: STRIPE_KID_CITY_STATEMENT_DESCRIPTOR,
           prefix: "KIDCITY",
         },
+        ...(publicBusinessUrl ? { support: { url: publicBusinessUrl } } : {}),
       },
     },
+    ...(publicBusinessUrl ? { defaults: { profile: { business_url: publicBusinessUrl } } } : {}),
     ...(contactPhone || federalEin
       ? {
           ...(contactPhone ? { contact_phone: contactPhone } : {}),

@@ -34,6 +34,26 @@ export type SchoolPayoutCustomFieldPatchInput = {
   now?: Date;
 };
 
+export function schoolPayoutOnboardingAppBaseUrl(
+  explicitUrl: string | null | undefined,
+  configuredUrl: string | null | undefined,
+  fallbackUrl = "https://thebeesuite.io",
+) {
+  const candidates = [explicitUrl, configuredUrl, fallbackUrl];
+  for (const [index, candidate] of candidates.entries()) {
+    const value = clean(candidate).replace(/\/+$/, "");
+    if (!value) continue;
+    try {
+      const parsed = new URL(value);
+      const explicitLocalhost = index === 0 && parsed.protocol === "http:" && parsed.hostname === "localhost";
+      if (parsed.protocol === "https:" || explicitLocalhost) return value;
+    } catch {
+      // Try the next source. Live onboarding must not inherit a malformed app URL.
+    }
+  }
+  return "https://thebeesuite.io";
+}
+
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }

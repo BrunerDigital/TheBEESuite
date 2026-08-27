@@ -381,7 +381,9 @@ async function main() {
     const schoolEin = readSchoolEin(plan.center.customFields);
     const profile = await completeStripeConnectedAccountBusinessProfile({
       accountId: newTargetAccountId,
+      businessName: setup.displayName,
       businessPhone: setup.payoutContactPhone,
+      businessUrl: setup.businessUrl,
       ein: schoolEin,
       tenantId: plan.center.organization.tenantId,
       idempotencyKey: `bee-suite-full-dashboard-profile-${plan.center.id}-${plan.oldTargetAccountId}`,

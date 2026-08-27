@@ -505,6 +505,8 @@ test("Full Dashboard target replacement is fingerprinted, idempotent, and preser
   assert.match(replacement, /a concurrent migration update stopped the database swap/);
   assert.match(replacement, /bee-suite-full-dashboard-replacement-/);
   assert.match(replacement, /created\.account\.dashboard !== "full"/);
+  assert.match(replacement, /businessName: setup\.displayName/);
+  assert.match(replacement, /businessUrl: setup\.businessUrl/);
   assert.match(replacement, /stripeConnectMigrationPreviousTargetAccountId/);
   assert.match(replacement, /stripeConnectMigrationPreviousTargetLastOnboardingAt: plan\.storedReservationAt/);
   assert.match(replacement, /stripeConnectMigrationLastOnboardingAt: null/);

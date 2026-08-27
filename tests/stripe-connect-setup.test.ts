@@ -34,6 +34,14 @@ test("Stripe school statement descriptors follow the school brand", () => {
     descriptor: "MISS HONEYS",
     prefix: "MISSHONEY",
   });
+  assert.deepEqual(stripeSchoolStatementDescriptor("A B C"), {
+    descriptor: "A B C",
+    prefix: "SCHOOL",
+  });
+  assert.deepEqual(stripeSchoolStatementDescriptor("12345"), {
+    descriptor: "SCHOOL TUITION",
+    prefix: "SCHOOLTUITION".slice(0, 10),
+  });
 });
 
 test("Stripe Connect setup normalizes dashboard payout profile fields", () => {

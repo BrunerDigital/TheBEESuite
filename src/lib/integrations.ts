@@ -62,10 +62,13 @@ export function stripeSchoolStatementDescriptor(value: string | null | undefined
   }
 
   const descriptor = normalized.slice(0, 22).trim();
-  const safeDescriptor = descriptor.length >= 5 ? descriptor : "SCHOOL TUITION";
+  const safeDescriptor = descriptor.length >= 5 && /[A-Z]/.test(descriptor)
+    ? descriptor
+    : "SCHOOL TUITION";
+  const compactPrefix = safeDescriptor.replace(/\s/g, "").slice(0, 10);
   return {
     descriptor: safeDescriptor,
-    prefix: safeDescriptor.replace(/\s/g, "").slice(0, 10),
+    prefix: compactPrefix.length >= 5 && /[A-Z]/.test(compactPrefix) ? compactPrefix : "SCHOOL",
   };
 }
 

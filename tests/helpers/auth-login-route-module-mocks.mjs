@@ -26,7 +26,7 @@ const applicationUsers = new Map([
 ]);
 
 mock.module("@/lib/prisma", {
-  exports: {
+  namedExports: {
     prisma: {
       user: {
         async findFirst(args) {
@@ -59,7 +59,7 @@ mock.module("@/lib/prisma", {
 });
 
 mock.module("@/lib/supabase-auth", {
-  exports: {
+  namedExports: {
     async verifySupabasePassword(email) {
       state.passwordChecks.push(email);
       return true;
@@ -68,7 +68,7 @@ mock.module("@/lib/supabase-auth", {
 });
 
 mock.module("@/lib/rate-limit", {
-  exports: {
+  namedExports: {
     async checkPersistentRateLimit() {
       return { ok: true };
     },
@@ -82,7 +82,7 @@ mock.module("@/lib/rate-limit", {
 });
 
 mock.module("@/lib/auth", {
-  exports: {
+  namedExports: {
     SESSION_COOKIE: "bee_suite_session",
     createSessionToken() {
       state.sessionTokensCreated += 1;
@@ -98,7 +98,7 @@ mock.module("@/lib/auth", {
 });
 
 mock.module("@/lib/demo-accounts", {
-  exports: {
+  namedExports: {
     resolveLoginIdentifier(value) {
       return value;
     },
@@ -106,7 +106,7 @@ mock.module("@/lib/demo-accounts", {
 });
 
 mock.module("@/lib/login-routing", {
-  exports: {
+  namedExports: {
     resolvePortalPostLoginPath() {
       return "/parent-portal";
     },
@@ -114,7 +114,7 @@ mock.module("@/lib/login-routing", {
 });
 
 mock.module("@/lib/device-sessions", {
-  exports: {
+  namedExports: {
     buildDeviceSessionLabel() {
       return "Test device";
     },
@@ -134,7 +134,7 @@ mock.module("@/lib/device-sessions", {
 });
 
 mock.module("@/lib/request-response-logging", {
-  exports: {
+  namedExports: {
     withApiLogging(_method, handler) {
       return handler;
     },

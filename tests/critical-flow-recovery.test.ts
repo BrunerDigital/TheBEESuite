@@ -48,6 +48,8 @@ test("login and password recovery preserve controlled input when services are un
   assert.match(forgotRoute, /providerStatus === 401/);
   assert.match(forgotRoute, /delivery_audit_unavailable/);
   assert.match(forgotRoute, /user_lookup_unavailable/);
+  assert.match(forgotRoute, /privacySafeResponse\(requestStartedAt\)/);
+  assert.match(forgotRoute, /minimumDurationMs\s*=\s*1_500\s*\+\s*randomInt/);
   assert.match(forgotRoute, /redirectUrl:\s*recovery\.redirectTo \|\| redirectTo/);
   assert.ok(
     forgotRoute.indexOf("user = await prisma.user.findUnique") <

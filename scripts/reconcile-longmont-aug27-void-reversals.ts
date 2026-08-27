@@ -8,21 +8,21 @@ const CENTER_ID = "cmp4ew6f3000a6alwmz62n7w2";
 const TENANT_ID = "cmp4evl4v00006arspz79fggn";
 const APPLY = "--apply";
 const CONFIRM = "--confirm-longmont-aug27-void-reversals";
-const targets = new Map<string, readonly [string, number]>([
-  ["INV-20260813-15E30F82", ["Calvo", 44000]],
-  ["INV-20260813-701F9FD2", ["Castillo", 28925]],
-  ["INV-20260813-BECC71EC", ["Chum", 44000]],
-  ["INV-20260813-6FBF7246", ["Rose", 41000]],
-  ["INV-20260813-0BDB8A39", ["Rose", 21600]],
-  ["INV-20260813-77D2A504", ["Wenzl", 39500]],
-  ["INV-20260813-00A1CB42", ["Wenzl", 43000]],
-  ["INV-20260813-24C21C00", ["Keane", 38500]],
-  ["INV-20260813-652522B6", ["Keane", 14400]],
-  ["INV-20260813-FC038B3F", ["Pastrana", 15000]],
-  ["INV-20260813-EF3F2FAC", ["Jensen", 37500]],
-  ["INV-20260813-0BEA7F6D", ["Maclean", 7200]],
-  ["INV-20260813-76B67FC0", ["Ortiz", 35000]],
-  ["INV-20260813-6A0255AC", ["Yancy", 39500]],
+const targets = new Map<string, readonly [familyId: string, requestedSurname: string, amountCents: number]>([
+  ["INV-20260813-15E30F82", ["cmq9wfv0o00awk10adwcdx9l3", "Calvo", 44000]],
+  ["INV-20260813-701F9FD2", ["cmq9wg0ur00d0k10al9q5snf8", "Castillo", 28925]],
+  ["INV-20260813-BECC71EC", ["cms99o47f000e6awsu2q6ehnm", "Chum", 44000]],
+  ["INV-20260813-6FBF7246", ["cmq9wkdlm01suk10aqge0ir5u", "Rose", 41000]],
+  ["INV-20260813-0BDB8A39", ["cmq9wkdlm01suk10aqge0ir5u", "Rose", 21600]],
+  ["INV-20260813-77D2A504", ["cms99o3au00066aws9025bjxt", "Wenzl", 39500]],
+  ["INV-20260813-00A1CB42", ["cms99o3au00066aws9025bjxt", "Wenzl", 43000]],
+  ["INV-20260813-24C21C00", ["cmq9wi9jk013vk10ao41q0wxb", "Keane", 38500]],
+  ["INV-20260813-652522B6", ["cmq9wi9jk013vk10ao41q0wxb", "Keane", 14400]],
+  ["INV-20260813-FC038B3F", ["cmq9wjq1w01ljk10avz4j9qia", "Pastrana", 15000]],
+  ["INV-20260813-EF3F2FAC", ["cmq9wi453011tk10ajbv1xl3m", "Jensen", 37500]],
+  ["INV-20260813-0BEA7F6D", ["cmq9wive701b0k10a780tj3xs", "Maclean", 7200]],
+  ["INV-20260813-76B67FC0", ["cmq9wjl2x01k3k10atrk7g0sc", "Ortiz", 35000]],
+  ["INV-20260813-6A0255AC", ["cms99o3or00096awsxm3x77xs", "Yancy", 39500]],
 ]);
 
 function object(value: Prisma.JsonValue | null) { return value && typeof value === "object" && !Array.isArray(value) ? value as Prisma.JsonObject : {}; }
@@ -41,7 +41,8 @@ async function load(db: Prisma.TransactionClient | typeof prisma) {
   for (const invoice of invoices) {
     const expected = targets.get(invoice.number)!;
     const fields = object(invoice.customFields);
-    invariant(invoice.totalCents === expected[1], `${invoice.number} amount changed.`);
+    invariant(invoice.billingAccount.family.id === expected[0], `${invoice.number} moved to a different family than the reviewed ${expected[1]} target.`);
+    invariant(invoice.totalCents === expected[2], `${invoice.number} amount changed.`);
     invariant(invoice.billingAccount.family.centerId === CENTER_ID, `${invoice.number} moved outside Longmont.`);
     invariant(fields.billingPeriod === "2026-W34" && fields.voidReason === "Longmont August 13 duplicate billing run rollback.", `${invoice.number} is not the requested August 14 void.`);
     const restore = invoice.ledgerEntries.filter((entry) => entry.externalId === externalId(invoice.id));

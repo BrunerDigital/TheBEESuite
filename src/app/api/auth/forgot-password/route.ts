@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomInt } from "node:crypto";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
@@ -24,7 +25,23 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] || character);
 }
 
+const PRIVACY_SAFE_RESPONSE = {
+  ok: true,
+  message: "If that email is active, a password reset link will be sent shortly. Use only the newest email because another request replaces older links.",
+} as const;
+
+async function privacySafeResponse(requestStartedAt: number) {
+  // Missing/inactive accounts skip the provider and delivery calls. Hold every
+  // accepted response to the same minimum window, with jitter, so the public
+  // endpoint does not turn that optimization into an account-timing oracle.
+  const minimumDurationMs = 1_500 + randomInt(0, 201);
+  const remainingMs = minimumDurationMs - (Date.now() - requestStartedAt);
+  if (remainingMs > 0) await new Promise((resolve) => setTimeout(resolve, remainingMs));
+  return NextResponse.json(PRIVACY_SAFE_RESPONSE);
+}
+
 async function POSTHandler(request: NextRequest) {
+  const requestStartedAt = Date.now();
   const body = (await request.json().catch(() => null)) as { email?: unknown; next?: unknown } | null;
   const email = clean(body?.email).toLowerCase();
   const nextPath = clean(body?.next);
@@ -68,16 +85,10 @@ async function POSTHandler(request: NextRequest) {
       });
     } catch (error) {
       logOperationalError("auth.forgot_password.user_lookup_unavailable", error);
-      return NextResponse.json({
-        ok: true,
-        message: "If that email is active, a password reset link will be sent shortly. Use only the newest email because another request replaces older links.",
-      });
+      return privacySafeResponse(requestStartedAt);
     }
     if (!user?.isActive) {
-      return NextResponse.json({
-        ok: true,
-        message: "If that email is active, a password reset link will be sent shortly. Use only the newest email because another request replaces older links.",
-      });
+      return privacySafeResponse(requestStartedAt);
     }
 
     const recovery = await generateSupabasePasswordRecoveryLink({ email, redirectTo });
@@ -131,11 +142,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({
-    ok: true,
-    message:
-      "If that email is active, a password reset link will be sent shortly. Use only the newest email because another request replaces older links.",
-  });
+  return privacySafeResponse(requestStartedAt);
 }
 
 export const POST = withApiLogging("POST", POSTHandler);

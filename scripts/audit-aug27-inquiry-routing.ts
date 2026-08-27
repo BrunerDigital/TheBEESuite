@@ -4,6 +4,7 @@ import { EnrollmentStage, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const APPLY = "--create-haleigh-loogootee-inquiry";
+const TODAY_START_UTC = new Date("2026-08-27T00:00:00.000Z");
 const EXPECTED = [
   { gmailId: "1a041c54dfbd33b6", email: "laurabanh52@gmail.com", location: "CO | Highlands Ranch" },
   { gmailId: "1a041afce1d646d6", email: "dwest7541@gmail.com", location: "CO | Woodland Park - East Midland" },
@@ -45,12 +46,14 @@ async function main() {
   });
 
   const automated = EXPECTED.map((expected) => {
-    const exact = leads.filter((lead) => lead.email?.toLowerCase() === expected.email);
-    return { ...expected, count: exact.length, routes: exact.map((lead) => ({ id: lead.id, createdAt: lead.createdAt, center: lead.center.name, status: lead.center.status, crmLocationId: lead.center.crmLocationId, source: lead.externalId?.startsWith("gmail-inquiry:") ? "gmail_repair" : "canonical_intake" })) };
+    const sameAddress = leads.filter((lead) => lead.email?.toLowerCase() === expected.email);
+    const exact = sameAddress.filter((lead) => lead.createdAt >= TODAY_START_UTC);
+    return { ...expected, count: exact.length, priorHistoricalMatchCount: sameAddress.length - exact.length, routes: exact.map((lead) => ({ id: lead.id, createdAt: lead.createdAt, center: lead.center.name, status: lead.center.status, crmLocationId: lead.center.crmLocationId, source: lead.externalId?.startsWith("gmail-inquiry:") ? "gmail_repair" : "canonical_intake" })) };
   });
   const haleighMatches = leads.filter((lead) => lead.email?.toLowerCase() === HALEIGH.email || lead.externalId === `gmail-inquiry:${HALEIGH.gmailId}`);
+  const haleighLoogooteeMatches = haleighMatches.filter((lead) => lead.centerId === loogootee.id || lead.externalId === `gmail-inquiry:${HALEIGH.gmailId}`);
 
-  if (process.argv.includes(APPLY) && haleighMatches.length === 0) {
+  if (process.argv.includes(APPLY) && haleighLoogooteeMatches.length === 0) {
     await prisma.$transaction(async (tx) => {
       const existing = await tx.lead.findFirst({ where: { OR: [{ externalId: `gmail-inquiry:${HALEIGH.gmailId}` }, { centerId: loogootee.id, email: { equals: HALEIGH.email, mode: "insensitive" } }] }, select: { id: true } });
       if (existing) return;
@@ -77,7 +80,7 @@ async function main() {
 
   const afterHaleigh = await prisma.lead.findMany({ where: { OR: [{ externalId: `gmail-inquiry:${HALEIGH.gmailId}` }, { centerId: loogootee.id, email: { equals: HALEIGH.email, mode: "insensitive" } }] }, select: { id: true, centerId: true, externalId: true, center: { select: { name: true, status: true, crmLocationId: true, customFields: true } } } });
   const publicContact = Object.fromEntries(Object.entries(loogooteeFields).filter(([key, value]) => typeof value === "string" && /phone|email|address|website/i.test(key)));
-  console.log(JSON.stringify({ mode: process.argv.includes(APPLY) ? "apply" : "dry-run", loogootee: { id: loogootee.id, name: loogootee.name, status: loogootee.status, crmLocationId: loogootee.crmLocationId, publicContact }, automated, haleigh: { beforeCount: haleighMatches.length, afterCount: afterHaleigh.length, route: afterHaleigh.map((lead) => ({ center: lead.center.name, status: lead.center.status, crmLocationId: lead.center.crmLocationId })) } }, null, 2));
+  console.log(JSON.stringify({ mode: process.argv.includes(APPLY) ? "apply" : "dry-run", loogootee: { id: loogootee.id, name: loogootee.name, status: loogootee.status, crmLocationId: loogootee.crmLocationId, publicContact }, automated, haleigh: { allCenterMatchCount: haleighMatches.length, beforeCount: haleighLoogooteeMatches.length, afterCount: afterHaleigh.length, route: afterHaleigh.map((lead) => ({ center: lead.center.name, status: lead.center.status, crmLocationId: lead.center.crmLocationId })) } }, null, 2));
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

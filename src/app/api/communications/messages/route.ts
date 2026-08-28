@@ -4,6 +4,7 @@ import { Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian, messageCenterIdsForUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { activeClassroomWhere } from "@/lib/classroom-status";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { messageAttachmentKind, type StoredMessageAttachment } from "@/lib/message-attachments";
 import {
@@ -584,9 +585,11 @@ async function POSTHandler(request: NextRequest) {
 
     const familyWhere: Prisma.FamilyWhereInput = {
       ...(scopedCenterIds.length ? { centerId: { in: scopedCenterIds } } : {}),
-      ...(broadcastSegment.classroomIds.length
-        ? { children: { some: { classroomId: { in: broadcastSegment.classroomIds } } } }
-        : {}),
+      children: {
+        some: broadcastSegment.classroomIds.length
+          ? { AND: [currentlyEnrolledChildWhere(), { classroomId: { in: broadcastSegment.classroomIds } }] }
+          : currentlyEnrolledChildWhere(),
+      },
     };
     const candidateFamilies = await prisma.family.findMany({
       where: familyWhere,
@@ -834,8 +837,8 @@ async function POSTHandler(request: NextRequest) {
   let family: MessageFamilyForDelivery | null = null;
   let familyCenter: MessageCenterContext | null = null;
   if (familyId) {
-    family = await prisma.family.findUnique({
-      where: { id: familyId },
+    family = await prisma.family.findFirst({
+      where: { id: familyId, children: { some: currentlyEnrolledChildWhere() } },
       include: {
         guardians: { select: { userId: true, email: true, fullName: true, phone: true, preferredCommunication: true } },
         children: {

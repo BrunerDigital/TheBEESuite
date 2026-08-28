@@ -5,7 +5,7 @@ import test from "node:test";
 test("installed portals refresh their framework code before using a cached fallback", () => {
   const serviceWorker = readFileSync("public/sw.js", "utf8");
 
-  assert.match(serviceWorker, /bee-suite-app-shell-v3/);
+  assert.match(serviceWorker, /bee-suite-app-shell-v4/);
   assert.match(serviceWorker, /url\.pathname\.startsWith\("\/_next\/static\/"\)/);
   const networkRead = serviceWorker.indexOf("const response = await fetch(request)");
   const cacheFallback = serviceWorker.indexOf("const cached = await cache.match(request)");

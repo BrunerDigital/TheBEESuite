@@ -1,4 +1,4 @@
-const CACHE_NAME = "bee-suite-app-shell-v3";
+const CACHE_NAME = "bee-suite-app-shell-v4";
 const APP_SHELL_URLS = [
   "/app",
   "/brand/the-bee-suite/app-icon-yellow.png",

@@ -98,10 +98,22 @@ async function GETHandler(request: NextRequest) {
     ? await prisma.tuitionPlan.findMany({ where: { id: { in: planIds } } })
     : [];
   const plansById = new Map(plans.map((plan) => [plan.id, plan]));
+  const configurationFailures: Array<{ childId: string; familyId: string; error: string }> = [];
 
   const dueChildren = candidateChildren.flatMap((entry) => {
     const plan = plansById.get(entry.planId);
     if (!plan || plan.centerId !== entry.child.family.centerId) return [];
+    const amountCents = plan.amountCents ?? entry.snapshotAmountCents;
+    const tuitionAdditionalChargesTotalCents = totalTuitionAdditionalChargesCents(normalizeTuitionAdditionalCharges(entry.fields.tuitionAdditionalCharges));
+    const tuitionCreditsTotalCents = totalTuitionCreditsCents(normalizeTuitionCredits(entry.fields.tuitionCredits));
+    if (tuitionCreditsTotalCents >= amountCents + tuitionAdditionalChargesTotalCents) {
+      configurationFailures.push({
+        childId: entry.child.id,
+        familyId: entry.child.familyId,
+        error: "Recurring tuition is paused because saved credits are not less than gross tuition. Review the assignment before billing.",
+      });
+      return [];
+    }
     const cadence = normalizeBillingCadence(entry.fields.tuitionBillingCadence ?? plan?.cadence ?? entry.fields.tuitionPlanCadence);
     if (cadenceScope && cadence !== cadenceScope) return [];
     const weekBased = cadence === "weekly" || cadence === "biweekly" || cadence === "four_week";
@@ -141,9 +153,6 @@ async function GETHandler(request: NextRequest) {
         const tuitionAdditionalChargesTotalCents = totalTuitionAdditionalChargesCents(tuitionAdditionalCharges);
         const tuitionCredits = normalizeTuitionCredits(entry.fields.tuitionCredits);
         const tuitionCreditsTotalCents = totalTuitionCreditsCents(tuitionCredits);
-        if (tuitionCreditsTotalCents >= amountCents + tuitionAdditionalChargesTotalCents) {
-          throw new Error(`Weekly credits must be less than tuition for child ${entry.child.id}.`);
-        }
         const invoiceWeekCount = tuitionInvoiceWeekCount(entry.cadence);
         const dueDate = entry.cadence === "weekly" || entry.cadence === "biweekly" || entry.cadence === "four_week"
           ? weeklyTuitionChargeDateForPeriod(entry.billingPeriod)
@@ -261,6 +270,7 @@ async function GETHandler(request: NextRequest) {
 
   return NextResponse.json({
     ok: failures.length === 0,
+    needsReview: configurationFailures.length > 0,
     dryRun,
     cadenceScope,
     suppressAutopay,
@@ -273,10 +283,12 @@ async function GETHandler(request: NextRequest) {
     created,
     skipped: dryRun ? 0 : skipped,
     failed: failures.length,
+    configurationFailed: configurationFailures.length,
     wouldCreate: dryRun ? dueChildren.length : 0,
     totalCents,
     invoices,
     failures,
+    configurationFailures,
   }, { status: failures.length ? 500 : 200 });
 }
 

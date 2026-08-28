@@ -168,42 +168,38 @@ function confirmedFamilyOnlyTuitionAssignment(fields: Record<string, unknown>, c
     : 1;
   if (!invoiceChildIds.length || !invoicePlanId) return false;
 
-  const assignmentAmount = (value: unknown): number | null => {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const amount = assignmentAmount(item);
-        if (amount !== null) return amount;
-      }
-      return null;
-    }
-    if (!value || typeof value !== "object") return null;
+  const assignmentAmounts = (value: unknown): number[] => {
+    if (Array.isArray(value)) return value.flatMap(assignmentAmounts);
+    if (!value || typeof value !== "object") return [];
     const assignment = record(value);
     const billingEvidenceApplies = assignment.tuitionBillingEnabled === true
       || (
         assignment.tuitionBillingEnabled === false
         && text(assignment.tuitionBillingDisabledReason) === "enrollment_closed"
       );
-    if (
+    const ownAmount = (
       text(assignment.tuitionFundingType).toLowerCase() === "family"
       && billingEvidenceApplies
       && text(assignment.tuitionPlanId) === invoicePlanId
-    ) return cents(assignment.tuitionNetAmountCents);
-    for (const item of Object.values(assignment)) {
-      const amount = assignmentAmount(item);
-      if (amount !== null) return amount;
-    }
-    return null;
+    ) ? cents(assignment.tuitionNetAmountCents) : null;
+    return [
+      ...(ownAmount === null ? [] : [ownAmount]),
+      ...Object.values(assignment).flatMap(assignmentAmounts),
+    ];
   };
 
-  let weeklyTotalCents = 0;
+  let possibleWeeklyTotals = new Set([0]);
   for (const childId of invoiceChildIds) {
     const matchingEvidence = evidence.find((value) => {
       const evidenceId = text(record(value).id);
       const childMatches = invoiceChildIds.length > 1 ? evidenceId === childId : (!evidenceId || evidenceId === childId);
-      return childMatches && assignmentAmount(value) !== null;
+      return childMatches && assignmentAmounts(value).length > 0;
     });
     if (!matchingEvidence) return false;
-    weeklyTotalCents += assignmentAmount(matchingEvidence) ?? 0;
+    const amounts = new Set(assignmentAmounts(matchingEvidence));
+    possibleWeeklyTotals = new Set(
+      [...possibleWeeklyTotals].flatMap((total) => [...amounts].map((amount) => total + amount)),
+    );
   }
-  return weeklyTotalCents * invoiceWeekCount === currentInvoiceTotalCents;
+  return [...possibleWeeklyTotals].some((total) => total * invoiceWeekCount === currentInvoiceTotalCents);
 }

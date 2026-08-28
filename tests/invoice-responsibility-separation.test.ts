@@ -88,7 +88,7 @@ test("an exact family-funded tuition assignment does not request a second respon
   assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, {
     ...child,
     customFields: {
-      tuitionPlanId: "new_plan",
+      tuitionPlanId: "plan_parent_copay",
       tuitionNetAmountCents: 9_000,
       tuitionFundingType: "family",
       tuitionBillingEnabled: true,

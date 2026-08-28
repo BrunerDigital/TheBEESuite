@@ -19,6 +19,13 @@ async function state(client: PrismaClient | Prisma.TransactionClient = prisma) {
     select: { id: true, status: true, organization: { select: { tenantId: true } } },
   });
   if (!center || center.status !== "active") throw new Error("Active Beach Blvd center was not found.");
+  const plan = await client.tuitionPlan.findUnique({
+    where: { id: PLAN_ID },
+    select: { id: true, centerId: true, amountCents: true, cadence: true },
+  });
+  if (!plan || plan.centerId !== CENTER_ID || plan.amountCents !== 2_000 || plan.cadence !== "weekly") {
+    throw new Error("Beach Blvd tuition plan no longer matches the reviewed $20 weekly plan.");
+  }
   const child = await client.child.findFirst({
     where: { id: CHILD_ID, familyId: FAMILY_ID, family: { is: { centerId: CENTER_ID } } },
     select: { id: true, familyId: true, updatedAt: true, customFields: true },
@@ -40,6 +47,7 @@ async function state(client: PrismaClient | Prisma.TransactionClient = prisma) {
     creditsCents: fields.tuitionCreditsTotalCents,
     credits: fields.tuitionCredits ?? null,
     netCents: fields.tuitionNetAmountCents,
+    plan: { id: plan.id, centerId: plan.centerId, amountCents: plan.amountCents, cadence: plan.cadence },
   };
   return { center, child, fields, reviewed, fingerprint: createHash("sha256").update(JSON.stringify(reviewed)).digest("hex") };
 }

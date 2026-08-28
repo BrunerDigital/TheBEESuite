@@ -92,7 +92,7 @@ async function loadState(client = prisma) {
       invariant(earlier && earlier.totalCents === target.invoice.totalCents, `${target.invoice.number} no longer has its exact earlier invoice.`);
       fields.duplicateOfInvoiceId = earlier.id;
       fields.duplicateOfInvoiceNumber = earlier.number;
-      target.invoice.customFields = fields;
+      target.invoice.customFields = fields as Prisma.JsonObject;
     }
   }
 

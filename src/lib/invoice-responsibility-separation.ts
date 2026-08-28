@@ -169,9 +169,14 @@ function confirmedFamilyOnlyTuitionAssignment(fields: Record<string, unknown>, c
     if (Array.isArray(value)) return value.some(visit);
     if (!value || typeof value !== "object") return false;
     const assignment = record(value);
+    const billingEvidenceApplies = assignment.tuitionBillingEnabled === true
+      || (
+        assignment.tuitionBillingEnabled === false
+        && text(assignment.tuitionBillingDisabledReason) === "enrollment_closed"
+      );
     if (
       text(assignment.tuitionFundingType).toLowerCase() === "family"
-      && assignment.tuitionBillingEnabled === true
+      && billingEvidenceApplies
       && text(assignment.tuitionPlanId) === invoicePlanId
       && (cents(assignment.tuitionNetAmountCents) ?? -1) * invoiceWeekCount === currentInvoiceTotalCents
     ) return true;

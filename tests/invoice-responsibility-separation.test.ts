@@ -63,6 +63,22 @@ test("an exact family-funded tuition assignment does not request a second respon
   assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_001, child), false);
   assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, { ...child, id: "another_child" }), false);
   assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, { ...child, customFields: { ...child.customFields, tuitionPlanId: "another_plan" } }), false);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, {
+    ...child,
+    customFields: {
+      ...child.customFields,
+      tuitionBillingEnabled: false,
+      tuitionBillingDisabledReason: "enrollment_closed",
+    },
+  }), true);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, {
+    ...child,
+    customFields: {
+      ...child.customFields,
+      tuitionBillingEnabled: false,
+      tuitionBillingDisabledReason: "director_disabled",
+    },
+  }), false);
 });
 
 test("account review resolves only when every open invoice has an exact separation", () => {

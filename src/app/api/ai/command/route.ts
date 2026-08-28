@@ -353,11 +353,26 @@ async function applyAiProfileChange(
     if (!child) throw new Error("Child not found in the selected school.");
     const values = cleanAiPatch(patch, tuitionAiFields);
     const existingFields = asRecord(child.customFields);
+    const priorHistory = Array.isArray(existingFields.tuitionAssignmentHistory)
+      ? existingFields.tuitionAssignmentHistory.map(asRecord)
+      : [];
+    const priorSnapshot = clean(existingFields.tuitionPlanId) && Number.isInteger(existingFields.tuitionNetAmountCents)
+      ? {
+          tuitionPlanId: existingFields.tuitionPlanId,
+          tuitionNetAmountCents: existingFields.tuitionNetAmountCents,
+          tuitionFundingType: existingFields.tuitionFundingType,
+          tuitionBillingEnabled: existingFields.tuitionBillingEnabled,
+          tuitionBillingDisabledReason: existingFields.tuitionBillingDisabledReason,
+        }
+      : null;
+    const tuitionAssignmentHistory = priorSnapshot
+      ? [...priorHistory.filter((item) => JSON.stringify(item) !== JSON.stringify(priorSnapshot)), priorSnapshot].slice(-50)
+      : priorHistory.slice(-50);
     const enabled = values.enabled !== false;
     if (!enabled) {
       await prisma.child.update({
         where: { id: child.id },
-        data: { customFields: { ...existingFields, tuitionBillingEnabled: false, tuitionBillingUpdatedAt: new Date().toISOString(), tuitionBillingUpdatedBy: user.email } as Prisma.InputJsonObject },
+        data: { customFields: { ...existingFields, tuitionAssignmentHistory, tuitionBillingEnabled: false, tuitionBillingUpdatedAt: new Date().toISOString(), tuitionBillingUpdatedBy: user.email } as Prisma.InputJsonObject },
       });
     } else {
       const requestedPlanId = clean(values.tuitionPlanId);
@@ -390,6 +405,7 @@ async function applyAiProfileChange(
           data: {
             customFields: {
               ...existingFields,
+              tuitionAssignmentHistory,
               tuitionBillingEnabled: true,
               tuitionPlanId: plan.id,
               tuitionPlanName: plan.name,

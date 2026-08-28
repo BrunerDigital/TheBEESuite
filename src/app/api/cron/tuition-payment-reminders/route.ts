@@ -271,7 +271,7 @@ async function GETHandler(request: NextRequest) {
             centerId: true,
             customFields: true,
             children: {
-              select: { enrollmentStatus: true, classroomId: true, customFields: true },
+              select: { id: true, enrollmentStatus: true, classroomId: true, customFields: true },
             },
             guardians: {
               select: {
@@ -375,7 +375,10 @@ async function GETHandler(request: NextRequest) {
     const responsibilityReviewRequired = paymentCollectionResponsibilityHoldRequired({
       accountBalanceCents: account.balanceCents,
       agencyLedgerEntries: account.ledgerEntries,
-      invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(account.invoices),
+      invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(
+        account.invoices,
+        ...family.children.map((child) => ({ id: child.id, customFields: child.customFields })),
+      ),
       responsibilityEvidence: [
         account.customFields,
         family.customFields,

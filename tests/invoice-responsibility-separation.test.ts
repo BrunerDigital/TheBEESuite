@@ -22,6 +22,23 @@ const separation = {
   separatedByUserId: "user_1",
 };
 
+test("parent responsibility evidence covers every open account invoice beyond the display page", () => {
+  const source = readFileSync(new URL("../src/app/[slug]/page.tsx", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /const responsibilityInvoices = \[\.\.\.invoices, \.\.\.\(billingAccount\?\.invoices \?\? \[\]\)\];\s+const invoiceChildIds = \[\.\.\.new Set\(responsibilityInvoices\.flatMap/,
+  );
+});
+
+test("tuition assignment edits retain immutable evidence for existing invoices", () => {
+  const source = readFileSync(new URL("../src/app/api/billing/tuition-assignments/route.ts", import.meta.url), "utf8");
+  const aiSource = readFileSync(new URL("../src/app/api/ai/command/route.ts", import.meta.url), "utf8");
+  assert.ok((source.match(/tuitionAssignmentHistory,/g) ?? []).length >= 2);
+  assert.match(source, /const priorSnapshot = clean\(existingFields\.tuitionPlanId\)/);
+  assert.ok((aiSource.match(/tuitionAssignmentHistory/g) ?? []).length >= 3);
+  assert.match(aiSource, /const priorSnapshot = clean\(existingFields\.tuitionPlanId\)/);
+});
+
 test("a reviewed invoice separation preserves exact family, agency, and gross totals", () => {
   assert.deepEqual(invoiceResponsibilitySeparation({ responsibilitySeparation: separation }), separation);
   assert.deepEqual(responsibilitySeparatedBillingAmounts({
@@ -32,6 +49,68 @@ test("a reviewed invoice separation preserves exact family, agency, and gross to
     agencyResponsibilityCents: 10_000,
     totalResponsibilityCents: 12_000,
   });
+});
+
+test("an exact family-funded tuition assignment does not request a second responsibility split", () => {
+  const invoiceFields = {
+    chargeSource: "tuitionPlan",
+    childId: "child_granbury",
+    sourceId: "plan_parent_copay",
+  };
+  const child = {
+    id: "child_granbury",
+    customFields: {
+      tuitionFundingType: "family",
+      tuitionBillingEnabled: true,
+      tuitionPlanId: "plan_parent_copay",
+      tuitionNetAmountCents: 4_000,
+    },
+  };
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, child), true);
+  assert.equal(invoiceResponsibilityReviewExempt({ ...invoiceFields, invoiceWeekCount: 2 }, 8_000, child), true);
+  assert.equal(invoiceResponsibilityReviewExempt({ ...invoiceFields, invoiceWeekCount: 4 }, 16_000, child), true);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_001, child), false);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, { ...child, id: "another_child" }), false);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, { ...child, customFields: { ...child.customFields, tuitionPlanId: "another_plan" } }), false);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, {
+    ...child,
+    customFields: {
+      ...child.customFields,
+      tuitionBillingEnabled: false,
+      tuitionBillingDisabledReason: "enrollment_closed",
+    },
+  }), true);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, {
+    ...child,
+    customFields: {
+      ...child.customFields,
+      tuitionBillingEnabled: false,
+      tuitionBillingDisabledReason: "director_disabled",
+    },
+  }), false);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, {
+    ...child,
+    customFields: {
+      tuitionPlanId: "plan_parent_copay",
+      tuitionNetAmountCents: 9_000,
+      tuitionFundingType: "family",
+      tuitionBillingEnabled: true,
+      tuitionAssignmentHistory: [child.customFields],
+    },
+  }), true);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    ...invoiceFields,
+    childId: undefined,
+    childIds: ["child_granbury", "child_sibling"],
+  }, 7_000, child, {
+    id: "child_sibling",
+    customFields: { ...child.customFields, tuitionNetAmountCents: 3_000 },
+  }), true);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    ...invoiceFields,
+    childId: undefined,
+    childIds: ["child_granbury", "child_sibling"],
+  }, 7_000, child), false);
 });
 
 test("account review resolves only when every open invoice has an exact separation", () => {

@@ -36,6 +36,10 @@ function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
 function paymentRequestIntent(value: unknown): PaymentMethodRequestIntent {
   if (clean(value) === "payment_method_reauthorization") return "payment_method_reauthorization";
   return clean(value) === "instant_bank_verification" ? "instant_bank_verification" : "payment_steps";
@@ -68,6 +72,7 @@ async function POSTHandler(request: NextRequest) {
       centerId: true,
       name: true,
       billingEmail: true,
+      billingAccount: { select: { customFields: true } },
       guardians: {
         select: { id: true, fullName: true, email: true, userId: true },
         orderBy: { fullName: "asc" },
@@ -117,6 +122,18 @@ async function POSTHandler(request: NextRequest) {
       { ok: false, error: "Payment forms can only be sent to emails saved on the selected family.", invalidEmails },
       { status: 400 },
     );
+  }
+  if (intent === "payment_method_reauthorization") {
+    const enabledByUserId = clean(record(family.billingAccount?.customFields).autopayEnabledByUserId);
+    const unauthorizedEmails = requestedEmails.filter((email) => (
+      !enabledByUserId || !optionByEmail.get(email)?.userIds.includes(enabledByUserId)
+    ));
+    if (unauthorizedEmails.length) {
+      return NextResponse.json(
+        { ok: false, error: "A replacement link can only be sent to the linked guardian who enabled autopay." },
+        { status: 400 },
+      );
+    }
   }
 
   const appBaseUrl = getPaymentMethodRequestAppBaseUrl(request.url);
@@ -194,7 +211,11 @@ async function POSTHandler(request: NextRequest) {
       const created = await prisma.notification.createMany({
         data: uniqueUserIds.map((userId) => ({
           userId,
-          title: intent === "instant_bank_verification" ? "Verify tuition bank account" : "Save tuition payment information",
+          title: intent === "instant_bank_verification"
+            ? "Verify tuition bank account"
+            : intent === "payment_method_reauthorization"
+              ? "Update tuition payment method"
+              : "Save tuition payment information",
           body: buildPaymentMethodRequestNotificationBody({ familyName: family.name, formUrl, intent }),
           type: PAYMENT_METHOD_REQUEST_NOTIFICATION_TYPE,
           priority: "normal",

@@ -8,6 +8,8 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   const livePages = readFileSync("src/components/live-ops-pages.tsx", "utf8");
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const processing = readFileSync("src/lib/autopay-processing.ts", "utf8");
+  const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
+  const paymentRequests = readFileSync("src/app/api/billing/payment-method-requests/route.ts", "utf8");
 
   assert.match(route, /Review eligible family balances before processing autopay/);
   assert.match(route, /JSON\.stringify\(actual\) !== JSON\.stringify\(expected\)/);
@@ -32,4 +34,9 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(page, /activeConnectedAccountId: readStripeConnectedAccountId\(center\?\.customFields\)/);
   assert.match(processing, /if \(paymentMethod\.paymentMethodReauthorizationRequired\)/);
   assert.match(processing, /prior payout account/);
+  assert.match(workbench, /sendPaymentMethodRequest\("payment_method_reauthorization"\)/);
+  assert.match(workbench, /Send replacement method link/);
+  assert.match(workbench, /selectedPaymentMethod\?\.paymentMethodReauthorizationRecipientEmails/);
+  assert.match(paymentRequests, /optionByEmail\.get\(email\)\?\.userIds\.includes\(enabledByUserId\)/);
+  assert.match(paymentRequests, /linked guardian who enabled autopay/);
 });

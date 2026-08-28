@@ -29,4 +29,7 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(actions, /summary\?\.dryRun && summary\.wouldCharge/);
   assert.match(actions, /Process this batch first/);
   assert.match(processing, /hasMore/);
+  assert.match(page, /activeConnectedAccountId: readStripeConnectedAccountId\(center\?\.customFields\)/);
+  assert.match(processing, /if \(paymentMethod\.paymentMethodReauthorizationRequired\)/);
+  assert.match(processing, /prior payout account/);
 });

@@ -27,6 +27,7 @@ test("payment method summary identifies saved Stripe customer and autopay status
 
   assert.equal(summary.autopayEnabled, true);
   assert.equal(summary.autopayStatus, "enabled");
+  assert.equal(summary.paymentMethodReauthorizationRequired, false);
   assert.equal(summary.hasStripeCustomer, true);
   assert.equal(summary.hasSavedPaymentMethod, true);
   assert.equal(summary.stripeCustomerId, "cus_123");
@@ -35,6 +36,56 @@ test("payment method summary identifies saved Stripe customer and autopay status
   assert.equal(summary.paymentMethodLabel, "Test Bank ending 6789");
   assert.equal(summary.lastUpdatedAt, "2026-06-04T15:00:00.000Z");
   assert.equal(paymentMethodAutopayCategory(summary), "ach");
+});
+
+test("prior-account methods are excluded from current autopay after Connect cutover", () => {
+  const summary = paymentMethodManagementSummary({
+    autopayPlaceholder: true,
+    activeConnectedAccountId: "acct_target",
+    centerCustomFields: {
+      stripeConnectMigrationSourceAccountId: "acct_source",
+      stripeConnectMigrationTargetAccountId: "acct_target",
+      stripeConnectMigrationCutoverAt: "2026-08-12T16:49:50.985Z",
+      stripeConnectMigrationSourceAccountRetainedForReconciliation: true,
+    },
+    customFields: {
+      stripeCustomerId: "cus_source",
+      stripeDefaultPaymentMethodId: "pm_source",
+      stripeDefaultPaymentMethodConnectedAccountId: "acct_source",
+      autopayEnabled: true,
+      autopayStatus: "enabled",
+    },
+  });
+
+  assert.equal(summary.paymentMethodReauthorizationRequired, true);
+  assert.equal(summary.autopayEnabled, false);
+  assert.equal(summary.autopayStatus, "disabled");
+  assert.equal(summary.hasSavedPaymentMethod, true);
+  assert.equal(canRunAutopay(summary), false);
+});
+
+test("current-account methods remain eligible after Connect cutover", () => {
+  const summary = paymentMethodManagementSummary({
+    autopayPlaceholder: true,
+    activeConnectedAccountId: "acct_target",
+    centerCustomFields: {
+      stripeConnectMigrationSourceAccountId: "acct_source",
+      stripeConnectMigrationTargetAccountId: "acct_target",
+      stripeConnectMigrationCutoverAt: "2026-08-12T16:49:50.985Z",
+      stripeConnectMigrationSourceAccountRetainedForReconciliation: true,
+    },
+    customFields: {
+      stripeCustomerId: "cus_target",
+      stripeDefaultPaymentMethodId: "pm_target",
+      stripeDefaultPaymentMethodConnectedAccountId: "acct_target",
+      autopayEnabled: true,
+      autopayStatus: "enabled",
+    },
+  });
+
+  assert.equal(summary.paymentMethodReauthorizationRequired, false);
+  assert.equal(summary.autopayStatus, "enabled");
+  assert.equal(canRunAutopay(summary), true);
 });
 
 test("Stripe account migration preserves exact consent from a still-linked guardian", () => {

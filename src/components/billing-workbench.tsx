@@ -51,6 +51,7 @@ export type BillingWorkbenchFamily = {
     paymentMethodManagement?: {
       autopayEnabled: boolean;
       autopayStatus: "enabled" | "disabled" | "pending";
+      paymentMethodReauthorizationRequired: boolean;
       hasStripeCustomer: boolean;
       hasSavedPaymentMethod: boolean;
       stripeCustomerId: string | null;
@@ -1666,7 +1667,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </InfoTip>
               </div>
             </div>
-            <Badge variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} className="capitalize">{selectedAutopayStatus}</Badge>
+            <Badge variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} className="capitalize">
+              {selectedPaymentMethod?.paymentMethodReauthorizationRequired ? "Reauthorization required" : selectedAutopayStatus}
+            </Badge>
           </div>
           <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
             <div className="rounded-lg border bg-background/40 p-3">
@@ -1679,7 +1682,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     : "No saved payment method"}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                {selectedPaymentMethod?.lastUpdatedAt ? `Updated ${formatZonedDateTime(selectedPaymentMethod.lastUpdatedAt, timeZone, { month: "short", day: "numeric", year: "numeric" })}` : "Families can also update this from the parent portal."}
+                {selectedPaymentMethod?.paymentMethodReauthorizationRequired
+                  ? "This method belongs to the school's prior payout account and is excluded from payment processing until the family replaces it."
+                  : selectedPaymentMethod?.lastUpdatedAt ? `Updated ${formatZonedDateTime(selectedPaymentMethod.lastUpdatedAt, timeZone, { month: "short", day: "numeric", year: "numeric" })}` : "Families can also update this from the parent portal."}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">

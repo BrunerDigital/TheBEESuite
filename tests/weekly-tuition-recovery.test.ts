@@ -4,6 +4,7 @@ import test from "node:test";
 
 test("directors can preview and run scoped weekly tuition recovery invoices only", () => {
   const route = readFileSync("src/app/api/billing/tuition-recovery/route.ts", "utf8");
+  assert.match(route, /plan\.amountCents > 0 \? plan\.amountCents : entry\.snapshotAmountCents/);
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
 
   assert.match(route, /getCurrentUser\(\)/);

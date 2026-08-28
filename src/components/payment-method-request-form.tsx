@@ -48,7 +48,9 @@ export function PaymentMethodRequestForm({
   const [isPending, startTransition] = useTransition();
   const nextOpenInvoice = openInvoices[0] ?? null;
   const showPendingBankVerification = autopayStatus === "pending" && paymentMethodStatus !== "success";
-  const autopayLabel = autopayStatus === "enabled"
+  const autopayLabel = reauthorization && reauthorizationPreservesAutopay
+    ? "Autopay consent preserved"
+    : autopayStatus === "enabled"
     ? "Autopay enabled"
     : autopayStatus === "pending"
       ? "Autopay setup pending"
@@ -125,7 +127,7 @@ export function PaymentMethodRequestForm({
               {centerLabel} sent this secure payment link for {familyName}.
             </CardDescription>
           </div>
-          <Badge variant={autopayStatus === "enabled" ? "default" : "outline"} className="capitalize">
+          <Badge variant={autopayStatus === "enabled" || (reauthorization && reauthorizationPreservesAutopay) ? "default" : "outline"} className="capitalize">
             {autopayLabel}
           </Badge>
         </div>

@@ -268,6 +268,13 @@ async function GETHandler(request: NextRequest) {
     }
   }
 
+  if (configurationFailures.length > 0) {
+    console.error("[tuition-billing] assignments paused for invalid credit configuration", {
+      count: configurationFailures.length,
+      assignments: configurationFailures,
+    });
+  }
+
   return NextResponse.json({
     ok: failures.length === 0,
     needsReview: configurationFailures.length > 0,

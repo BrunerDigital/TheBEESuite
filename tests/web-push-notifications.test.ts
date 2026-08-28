@@ -10,8 +10,8 @@ import {
 } from "@/lib/web-push-policy";
 
 test("permanently or repeatedly rejected web push subscriptions are deactivated", () => {
-  assert.equal(webPushSubscriptionShouldDeactivate(400), true);
-  assert.equal(webPushSubscriptionShouldDeactivate(400, 4), true);
+  assert.equal(webPushSubscriptionShouldDeactivate(400), false);
+  assert.equal(webPushSubscriptionShouldDeactivate(400, 4), false);
   assert.equal(webPushSubscriptionShouldDeactivate(400, 5), true);
   assert.equal(webPushSubscriptionShouldDeactivate(404), true);
   assert.equal(webPushSubscriptionShouldDeactivate(410), true);

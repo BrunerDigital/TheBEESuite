@@ -13,6 +13,7 @@ import {
   PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
 } from "@/lib/payment-method-request-forms";
 import { prisma } from "@/lib/prisma";
+import { sendGridDeliveryStatus, sendGridMessageIdCandidates } from "@/lib/sendgrid-events";
 import { stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
 import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 
@@ -310,6 +311,46 @@ async function sendCandidate(candidate: Candidate) {
       },
     }),
   ]);
+  const providerMessageId = result.id;
+  if (providerMessageId) {
+    await prisma.$transaction(async (tx) => {
+      const receipts = await tx.sendGridEventReceipt.findMany({
+        where: {
+          providerMessageId: { in: sendGridMessageIdCandidates(providerMessageId) },
+          matchedDeliveries: 0,
+        },
+        orderBy: { processedAt: "asc" },
+      });
+      const failed = receipts.findLast((receipt) => sendGridDeliveryStatus(receipt.eventType) === "failed");
+      const delivered = receipts.findLast((receipt) => sendGridDeliveryStatus(receipt.eventType) === "delivered");
+      const terminal = failed ?? delivered;
+      if (terminal) {
+        const status = sendGridDeliveryStatus(terminal.eventType);
+        if (!status) throw new Error(`Unsupported SendGrid event type ${terminal.eventType}.`);
+        await tx.integrationDelivery.update({
+          where: { id: delivery.id },
+          data: {
+            status,
+            lastResult: {
+              ok: status !== "failed",
+              event: terminal.eventType,
+              eventId: terminal.eventId,
+              occurredAt: terminal.occurredAt?.toISOString() ?? null,
+              reconciledAfterProviderAcceptance: true,
+            },
+            lastError: status === "failed" ? `SendGrid ${terminal.eventType} event.` : null,
+            deliveredAt: status === "delivered" ? terminal.occurredAt ?? new Date() : null,
+          },
+        });
+      }
+      if (receipts.length) {
+        await tx.sendGridEventReceipt.updateMany({
+          where: { id: { in: receipts.map((receipt) => receipt.id) }, matchedDeliveries: 0 },
+          data: { matchedDeliveries: 1 },
+        });
+      }
+    });
+  }
   return { ok: result.ok, configured: result.configured, deliveryId: delivery.id, error: result.error ?? null };
 }
 

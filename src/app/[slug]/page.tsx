@@ -3961,11 +3961,20 @@ async function renderLivePage(
                     id: family.billingAccount.id,
                     balanceCents: family.billingAccount.balanceCents,
                     autopayPlaceholder: family.billingAccount.autopayPlaceholder,
-                    paymentMethodManagement: billingPaymentMethodSummary({
-                      autopayPlaceholder: family.billingAccount.autopayPlaceholder,
-                      customFields: family.billingAccount.customFields,
-                      centerId: family.centerId,
-                    }),
+                    paymentMethodManagement: {
+                      ...billingPaymentMethodSummary({
+                        autopayPlaceholder: family.billingAccount.autopayPlaceholder,
+                        customFields: family.billingAccount.customFields,
+                        centerId: family.centerId,
+                      }),
+                      paymentMethodReauthorizationRecipientEmails: family.guardians.flatMap((guardian) => (
+                        guardian.userId
+                        && guardian.userId === recordFromJson(family.billingAccount?.customFields).autopayEnabledByUserId
+                        && guardian.email
+                          ? [guardian.email.trim().toLowerCase()]
+                          : []
+                      )),
+                    },
                     openInvoices: family.billingAccount.invoices.map((invoice) => ({
                       id: invoice.id,
                       number: invoice.number,

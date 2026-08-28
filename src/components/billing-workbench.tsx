@@ -52,6 +52,7 @@ export type BillingWorkbenchFamily = {
       autopayEnabled: boolean;
       autopayStatus: "enabled" | "disabled" | "pending";
       paymentMethodReauthorizationRequired: boolean;
+      paymentMethodReauthorizationRecipientEmails: string[];
       hasStripeCustomer: boolean;
       hasSavedPaymentMethod: boolean;
       stripeCustomerId: string | null;
@@ -785,7 +786,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function sendPaymentMethodRequest(intent: "payment_steps" | "instant_bank_verification" | "payment_method_reauthorization" = "payment_steps") {
     if (!selectedFamily) return setErrorMessage("Choose a family before sending a payment form.");
-    if (!selectedPaymentRequestEmails.length) return setErrorMessage("Choose at least one family email to receive the payment form.");
+    const requestEmails = intent === "payment_method_reauthorization"
+      ? selectedPaymentMethod?.paymentMethodReauthorizationRecipientEmails ?? []
+      : selectedPaymentRequestEmails;
+    if (!requestEmails.length) return setErrorMessage(intent === "payment_method_reauthorization"
+      ? "The guardian who enabled autopay needs a linked family email before a replacement link can be sent."
+      : "Choose at least one family email to receive the payment form.");
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -795,7 +801,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           familyId: selectedFamily.id,
-          emails: selectedPaymentRequestEmails,
+          emails: requestEmails,
           intent,
         }),
       });
@@ -1819,7 +1825,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </div>
               <div className="flex flex-wrap gap-2">
                 {selectedPaymentMethod?.paymentMethodReauthorizationRequired ? (
-                  <Button disabled={isPending || !selectedFamily || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("payment_method_reauthorization")}>
+                  <Button disabled={isPending || !selectedFamily || !selectedPaymentMethod.paymentMethodReauthorizationRecipientEmails.length} onClick={() => sendPaymentMethodRequest("payment_method_reauthorization")}>
                     <Send data-icon="inline-start" />
                     Send replacement method link
                   </Button>

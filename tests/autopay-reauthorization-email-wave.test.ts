@@ -12,6 +12,8 @@ test("autopay reauthorization email wave is exact, idempotent, and no-charge", (
   assert.match(source, /stripeConnectSavedMethodNeedsReauthorization/);
   assert.match(source, /readiness\.canAcceptParentPayments/);
   assert.match(source, /option\.userIds\.includes\(enabledByUserId\)/);
+  assert.match(source, /enablingGuardian\?\.fullName/);
+  assert.match(source, /pre-send attempt\(s\) require provider reconciliation/);
   assert.match(source, /dedupeKey: candidate\.dedupeKey/);
   assert.match(source, /--confirm-approved-autopay-reauthorization-email-wave/);
   assert.match(source, /--confirm-fingerprint/);

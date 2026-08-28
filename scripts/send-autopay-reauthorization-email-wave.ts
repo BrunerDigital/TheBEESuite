@@ -175,6 +175,7 @@ async function buildPlan() {
       blocked.push({ centerName: center.name, familyHash: hash(family.id), reason: "enabled_guardian_recipient_not_available" });
       continue;
     }
+    const enablingGuardian = family.guardians.find((guardian) => guardian.userId === enabledByUserId);
     candidates.push({
       billingAccountId: family.billingAccount.id,
       centerEmail: center.email,
@@ -185,7 +186,7 @@ async function buildPlan() {
       familyId: family.id,
       familyName: family.name,
       recipientEmail: recipient.email,
-      recipientLabel: recipient.label,
+      recipientLabel: clean(enablingGuardian?.fullName) || "Guardian",
       tenantId: center.organization.tenantId,
     });
   }
@@ -195,6 +196,10 @@ async function buildPlan() {
     select: { dedupeKey: true, status: true },
   }) : [];
   const existingByKey = new Map(existing.map((delivery) => [delivery.dedupeKey, delivery.status]));
+  const unresolved = candidates.filter((candidate) => existingByKey.get(candidate.dedupeKey) === "attempting").map((candidate) => ({
+    familyHash: hash(candidate.familyId),
+    status: "attempting",
+  }));
   const sendable = candidates.filter((candidate) => !existingByKey.has(candidate.dedupeKey));
   return {
     blocked,
@@ -205,6 +210,7 @@ async function buildPlan() {
     })),
     fingerprint: fingerprint(sendable),
     sendable,
+    unresolved,
   };
 }
 
@@ -324,6 +330,7 @@ async function main() {
       sendable: plan.sendable.length,
       alreadyRecorded: plan.existing.length,
       recordedStatuses: Object.fromEntries(plan.existing.reduce((entries, item) => entries.set(item.status ?? "unknown", (entries.get(item.status ?? "unknown") ?? 0) + 1), new Map<string, number>())),
+      unresolvedAttempts: plan.unresolved,
       blocked: plan.blocked,
       schoolCounts,
       recipientHashes: plan.sendable.map((candidate) => hash(candidate.recipientEmail)),
@@ -339,6 +346,9 @@ async function main() {
     return;
   }
   if (!acknowledged) throw new Error("Apply requires --confirm-approved-autopay-reauthorization-email-wave.");
+  if (plan.unresolved.length) {
+    throw new Error(`Apply blocked: ${plan.unresolved.length} pre-send attempt(s) require provider reconciliation before this campaign can resume.`);
+  }
   if (!confirmedFingerprint || confirmedFingerprint !== plan.fingerprint) {
     throw new Error(`Fingerprint mismatch. Re-run preview and pass --confirm-fingerprint=${plan.fingerprint}.`);
   }
@@ -355,6 +365,7 @@ async function main() {
     failed: results.filter((result) => !result.ok).length,
     failures: results.filter((result) => !result.ok).map((result) => ({ deliveryId: result.deliveryId, configured: result.configured, error: result.error })),
     remainingSendable: post.sendable.length,
+    unresolvedAttempts: post.unresolved,
     recordedStatuses: Object.fromEntries(post.existing.reduce((entries, item) => entries.set(item.status ?? "unknown", (entries.get(item.status ?? "unknown") ?? 0) + 1), new Map<string, number>())),
     cardCharges: 0,
     stripeSessionsCreated: 0,

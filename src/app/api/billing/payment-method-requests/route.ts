@@ -194,7 +194,11 @@ async function POSTHandler(request: NextRequest) {
       const created = await prisma.notification.createMany({
         data: uniqueUserIds.map((userId) => ({
           userId,
-          title: intent === "instant_bank_verification" ? "Verify tuition bank account" : "Save tuition payment information",
+          title: intent === "instant_bank_verification"
+            ? "Verify tuition bank account"
+            : intent === "payment_method_reauthorization"
+              ? "Update tuition payment method"
+              : "Save tuition payment information",
           body: buildPaymentMethodRequestNotificationBody({ familyName: family.name, formUrl, intent }),
           type: PAYMENT_METHOD_REQUEST_NOTIFICATION_TYPE,
           priority: "normal",

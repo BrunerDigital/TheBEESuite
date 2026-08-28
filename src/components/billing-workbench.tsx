@@ -783,7 +783,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     });
   }
 
-  function sendPaymentMethodRequest(intent: "payment_steps" | "instant_bank_verification" = "payment_steps") {
+  function sendPaymentMethodRequest(intent: "payment_steps" | "instant_bank_verification" | "payment_method_reauthorization" = "payment_steps") {
     if (!selectedFamily) return setErrorMessage("Choose a family before sending a payment form.");
     if (!selectedPaymentRequestEmails.length) return setErrorMessage("Choose at least one family email to receive the payment form.");
     startTransition(async () => {
@@ -813,7 +813,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         return;
       }
       const failed = json?.results?.filter((result) => !result.ok) ?? [];
-      const label = intent === "instant_bank_verification" ? "bank verification email" : "tuition payment link email";
+      const label = intent === "instant_bank_verification"
+        ? "bank verification email"
+        : intent === "payment_method_reauthorization"
+          ? "replacement payment method email"
+          : "tuition payment link email";
       setStatusMessage(
         `${json?.emailsSent ?? 0} ${label}${json?.emailsSent === 1 ? "" : "s"} sent and ${json?.notificationsCreated ?? 0} Parent Portal notification${json?.notificationsCreated === 1 ? "" : "s"} created.${failed.length ? ` ${failed.length} email${failed.length === 1 ? "" : "s"} need attention.` : ""}`,
       );
@@ -1814,6 +1818,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
+                {selectedPaymentMethod?.paymentMethodReauthorizationRequired ? (
+                  <Button disabled={isPending || !selectedFamily || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("payment_method_reauthorization")}>
+                    <Send data-icon="inline-start" />
+                    Send replacement method link
+                  </Button>
+                ) : null}
                 <Button disabled={isPending || !selectedFamily || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("instant_bank_verification")}>
                   <Building2 data-icon="inline-start" />
                   Send bank verification link

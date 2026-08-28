@@ -339,7 +339,7 @@ async function sendCandidate(candidate: Candidate) {
   ]);
   const providerMessageId = result.id;
   if (providerMessageId) {
-    await prisma.$transaction(async (tx) => {
+    const reconcileReceipts = () => prisma.$transaction(async (tx) => {
       const messageIdCandidates = sendGridMessageIdCandidates(providerMessageId);
       const baseMessageId = messageIdCandidates.at(-1) ?? providerMessageId;
       const receipts = await tx.sendGridEventReceipt.findMany({
@@ -381,6 +381,12 @@ async function sendCandidate(candidate: Candidate) {
         });
       }
     });
+    await reconcileReceipts();
+    // A webhook transaction can be in flight while the provider message ID is
+    // first persisted. The delayed second pass sees receipts committed during
+    // that boundary and prevents a terminal event from remaining unmatched.
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await reconcileReceipts();
   }
   return { ok: result.ok, configured: result.configured, deliveryId: delivery.id, error: result.error ?? null };
 }

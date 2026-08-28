@@ -2541,12 +2541,13 @@ async function renderLivePage(
         : [];
       return singular ? [singular, ...batch] : batch;
     }))];
-    const invoiceChildNames = new Map((invoiceChildIds.length && family
+    const invoiceChildren = invoiceChildIds.length && family
       ? await prisma.child.findMany({
           where: { familyId: family.id, id: { in: invoiceChildIds } },
-          select: { id: true, fullName: true },
+          select: { id: true, fullName: true, customFields: true },
         })
-      : []).map((child) => [child.id, child.fullName]));
+      : [];
+    const invoiceChildNames = new Map(invoiceChildren.map((child) => [child.id, child.fullName]));
     const pendingPaymentByInvoiceId = new Map<string, Omit<ReturnType<typeof activeStripeCheckoutPaymentSummary>, "amountCents">>();
     for (const payment of billingAccount?.payments ?? []) {
       if (!isActiveStripeCheckoutPayment(payment)) continue;
@@ -2576,7 +2577,7 @@ async function renderLivePage(
       const familyOnly = invoiceResponsibilityReviewExempt(
         invoice.customFields,
         invoice.totalCents,
-        ...(family?.children.map((child) => ({ id: child.id, customFields: child.customFields })) ?? []),
+        ...invoiceChildren.map((child) => ({ id: child.id, customFields: child.customFields })),
       );
       const amountCents = separated?.familyResponsibilityCents ?? (familyOnly ? invoice.totalCents : null);
       return [invoice.id, {
@@ -2673,6 +2674,7 @@ async function renderLivePage(
           invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(
             billingAccount.invoices,
             ...(family?.children.map((child) => ({ id: child.id, customFields: child.customFields })) ?? []),
+            ...invoiceChildren.map((child) => ({ id: child.id, customFields: child.customFields })),
           ),
           responsibilityEvidence: [
             billingAccount.customFields,

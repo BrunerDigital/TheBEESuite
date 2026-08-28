@@ -72,6 +72,12 @@ function fingerprint(candidates: Candidate[]) {
   return createHash("sha256").update(rows.join("\n")).digest("hex");
 }
 
+function isConfirmedNoSendFailure(delivery: { status: string; providerMessageId: string | null; lastResult: unknown }) {
+  if (delivery.status !== "failed" || delivery.providerMessageId) return false;
+  const result = record(delivery.lastResult);
+  return result.configured === false || /^SendGrid returned \d{3}\.$/.test(clean(result.error));
+}
+
 function emailText(candidate: Candidate, formUrl: string) {
   const greeting = candidate.recipientLabel && candidate.recipientLabel !== "Guardian"
     ? candidate.recipientLabel
@@ -194,7 +200,7 @@ async function buildPlan() {
   candidates.sort((a, b) => a.dedupeKey.localeCompare(b.dedupeKey));
   const existing = candidates.length ? await prisma.integrationDelivery.findMany({
     where: { dedupeKey: { in: candidates.map((candidate) => candidate.dedupeKey) } },
-    select: { dedupeKey: true, status: true, providerMessageId: true },
+    select: { dedupeKey: true, status: true, providerMessageId: true, lastResult: true },
   }) : [];
   const existingByKey = new Map(existing.map((delivery) => [delivery.dedupeKey, delivery]));
   const unresolved = candidates.filter((candidate) => existingByKey.get(candidate.dedupeKey)?.status === "attempting").map((candidate) => ({
@@ -203,7 +209,7 @@ async function buildPlan() {
   }));
   const sendable = candidates.filter((candidate) => {
     const delivery = existingByKey.get(candidate.dedupeKey);
-    return !delivery || (delivery.status === "failed" && !delivery.providerMessageId);
+    return !delivery || isConfirmedNoSendFailure(delivery);
   });
   return {
     blocked,
@@ -270,6 +276,7 @@ async function sendCandidate(candidate: Candidate) {
   const prior = await prisma.integrationDelivery.findUnique({ where: { dedupeKey: candidate.dedupeKey } });
   let delivery: { id: string };
   if (prior) {
+    if (!isConfirmedNoSendFailure(prior)) throw new Error(`Delivery ${prior.id} is not a confirmed no-send failure.`);
     const claimed = await prisma.integrationDelivery.updateMany({
       where: { id: prior.id, status: "failed", providerMessageId: null },
       data: {

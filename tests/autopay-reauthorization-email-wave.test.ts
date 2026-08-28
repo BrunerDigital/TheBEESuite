@@ -16,7 +16,8 @@ test("autopay reauthorization email wave is exact, idempotent, and no-charge", (
   assert.match(source, /pre-send attempt\(s\) require provider reconciliation/);
   assert.match(source, /sendGridEventReceipt\.findMany/);
   assert.match(source, /reconciledAfterProviderAcceptance: true/);
-  assert.match(source, /delivery\.status === "failed" && !delivery\.providerMessageId/);
+  assert.match(source, /isConfirmedNoSendFailure\(delivery\)/);
+  assert.match(source, /\^SendGrid returned \\d\{3\}/);
   assert.match(source, /providerMessageId: \{ startsWith: `\$\{baseMessageId\}\.\` \}/);
   assert.match(source, /dedupeKey: candidate\.dedupeKey/);
   assert.match(source, /--confirm-approved-autopay-reauthorization-email-wave/);

@@ -3,6 +3,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const APPLY_FLAG = "--apply-reviewed-granbury-stale-credit-repair";
+const FINGERPRINT_PREFIX = "--reviewed-fingerprint=";
 const CENTER_NAME = "Kid City USA - Granbury";
 const targets = new Map([
   ["cms6kugo800a66a6cgbo6m7uk", { planId: "cmse1pl4q005r6azg13z3ldiu", staleCreditsCents: 16_500 }],
@@ -37,7 +38,16 @@ async function loadState(client: PrismaClient | Prisma.TransactionClient = prism
     if (fields.tuitionPlanId !== expected.planId) throw new Error(`Tuition plan changed for ${child.id}.`);
     if (fields.tuitionPlanAmountCents !== 5_000) throw new Error(`Tuition amount changed for ${child.id}.`);
     if (fields.tuitionCreditsTotalCents !== expected.staleCreditsCents) throw new Error(`Tuition credits changed for ${child.id}.`);
-    return { id: child.id, updatedAt: child.updatedAt.toISOString(), planId: fields.tuitionPlanId, amountCents: fields.tuitionPlanAmountCents, creditsCents: fields.tuitionCreditsTotalCents };
+    return {
+      id: child.id,
+      updatedAt: child.updatedAt.toISOString(),
+      planId: fields.tuitionPlanId,
+      amountCents: fields.tuitionPlanAmountCents,
+      creditsCents: fields.tuitionCreditsTotalCents,
+      credits: fields.tuitionCredits ?? null,
+      grossCents: fields.tuitionGrossAmountCents ?? null,
+      netCents: fields.tuitionNetAmountCents ?? null,
+    };
   });
   return { center, children, rows, fingerprint: fingerprint(rows) };
 }
@@ -47,10 +57,17 @@ async function main() {
   const apply = process.argv.includes(APPLY_FLAG);
   console.log(JSON.stringify({ mode: apply ? "apply" : "dry_run", school: CENTER_NAME, before: before.rows, fingerprint: before.fingerprint }, null, 2));
   if (!apply) return;
+  const reviewedFingerprint = process.argv.find((argument) => argument.startsWith(FINGERPRINT_PREFIX))?.slice(FINGERPRINT_PREFIX.length);
+  if (!reviewedFingerprint || !/^[a-f0-9]{64}$/.test(reviewedFingerprint)) {
+    throw new Error(`Apply requires ${FINGERPRINT_PREFIX}<64-character dry-run fingerprint>.`);
+  }
+  if (before.fingerprint !== reviewedFingerprint) {
+    throw new Error("Granbury tuition assignments changed since the reviewed dry run; do not apply.");
+  }
 
   await prisma.$transaction(async (tx) => {
     const locked = await loadState(tx);
-    if (locked.fingerprint !== before.fingerprint) throw new Error("Granbury tuition assignments changed after review; rerun the dry run.");
+    if (locked.fingerprint !== reviewedFingerprint) throw new Error("Granbury tuition assignments changed after review; rerun the dry run.");
     const repairedAt = new Date().toISOString();
     for (const child of locked.children) {
       const fields = object(child.customFields);
@@ -83,7 +100,7 @@ async function main() {
             source: "reviewed audit history 2026-08-06 and 2026-08-12",
             invoicesCreated: false,
             paymentsChanged: false,
-            fingerprint: before.fingerprint,
+            fingerprint: reviewedFingerprint,
           },
         },
       });

@@ -26,6 +26,16 @@ test("client load recovery refreshes the service worker and clears stale app cac
   assert.match(recovery, /getRegistrations/);
   assert.match(recovery, /registration\.update/);
   assert.match(recovery, /key\.startsWith\("bee-suite-"\)/);
+  assert.match(recovery, /window\.caches\.delete\(key\)\.catch/);
+  assert.match(recovery, /finally \{\s*window\.location\.reload\(\)/);
   assert.match(appError, /recoverClientAssetsAndReload/);
   assert.match(globalError, /recoverClientAssetsAndReload/);
+});
+
+test("Granbury billing repair requires the exact reviewed dry-run fingerprint", () => {
+  const repair = readFileSync("scripts/repair-granbury-stale-tuition-credits.ts", "utf8");
+  assert.match(repair, /--reviewed-fingerprint=/);
+  assert.match(repair, /before\.fingerprint !== reviewedFingerprint/);
+  assert.match(repair, /locked\.fingerprint !== reviewedFingerprint/);
+  assert.match(repair, /credits: fields\.tuitionCredits \?\? null/);
 });

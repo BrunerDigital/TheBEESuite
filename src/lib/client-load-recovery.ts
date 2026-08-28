@@ -18,14 +18,19 @@ export async function recoverClientAssetsAndReload() {
     return false;
   }
 
-  if ("serviceWorker" in navigator) {
-    const registrations = await navigator.serviceWorker.getRegistrations().catch(() => []);
-    await Promise.all(registrations.map((registration) => registration.update().catch(() => undefined)));
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations().catch(() => []);
+      await Promise.all(registrations.map((registration) => registration.update().catch(() => undefined)));
+    }
+    if ("caches" in window) {
+      const keys = await window.caches.keys().catch(() => []);
+      await Promise.all(keys
+        .filter((key) => key.startsWith("bee-suite-"))
+        .map((key) => window.caches.delete(key).catch(() => false)));
+    }
+  } finally {
+    window.location.reload();
   }
-  if ("caches" in window) {
-    const keys = await window.caches.keys().catch(() => []);
-    await Promise.all(keys.filter((key) => key.startsWith("bee-suite-")).map((key) => window.caches.delete(key)));
-  }
-  window.location.reload();
   return true;
 }

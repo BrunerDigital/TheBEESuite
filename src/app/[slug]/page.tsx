@@ -2533,7 +2533,8 @@ async function renderLivePage(
           },
         })
       : null;
-    const invoiceChildIds = [...new Set(invoices.flatMap((invoice) => {
+    const responsibilityInvoices = [...invoices, ...(billingAccount?.invoices ?? [])];
+    const invoiceChildIds = [...new Set(responsibilityInvoices.flatMap((invoice) => {
       const fields = asRecord(invoice.customFields);
       const singular = stringField(fields.childId);
       const batch = Array.isArray(fields.childIds)

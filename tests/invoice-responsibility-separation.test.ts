@@ -22,6 +22,14 @@ const separation = {
   separatedByUserId: "user_1",
 };
 
+test("parent responsibility evidence covers every open account invoice beyond the display page", () => {
+  const source = readFileSync(new URL("../src/app/[slug]/page.tsx", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /const responsibilityInvoices = \[\.\.\.invoices, \.\.\.\(billingAccount\?\.invoices \?\? \[\]\)\];\s+const invoiceChildIds = \[\.\.\.new Set\(responsibilityInvoices\.flatMap/,
+  );
+});
+
 test("a reviewed invoice separation preserves exact family, agency, and gross totals", () => {
   assert.deepEqual(invoiceResponsibilitySeparation({ responsibilitySeparation: separation }), separation);
   assert.deepEqual(responsibilitySeparatedBillingAmounts({

@@ -14,6 +14,7 @@ test("every SendGrid sender is covered by IntegrationDelivery auditing", () => {
     "src/lib/integrations.ts": "low-level provider implementation",
     "src/lib/inquiry-integrations.ts": "caller records inquiry_notification in src/app/api/inquiries/route.ts",
     "src/lib/integration-deliveries.ts": "retry dispatcher owns the existing delivery record",
+    "scripts/send-autopay-reauthorization-email-wave.ts": "precreates and updates its campaign delivery record around each send",
     "scripts/retry-granbury-parent-invite-timeout.ts": "claims and updates an existing delivery record",
   };
   const missing = files.filter((file) => {

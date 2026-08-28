@@ -119,7 +119,8 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
 
   async function submitProgramSetup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const action = setupProgram ? "updateProgram" : "createProgram";
     const fields: Record<string, unknown> = {
       agencyProgramId: setupProgram?.id,
@@ -141,7 +142,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
     }
     const ok = await post(action, fields);
     if (ok && !setupProgram) {
-      event.currentTarget.reset();
+      formElement.reset();
       setSetupProgramId("new");
     }
   }
@@ -231,7 +232,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
           <Button type="submit" disabled={pending}>{setupProgram ? "Update agency setup" : "Save agency program"}</Button>
         </form></CardContent></Card>
 
-        <Card><CardHeader><CardTitle as="h3">2. Record authorization</CardTitle><CardDescription>Bind one current child, family, payer, coverage period, rate, units, and copay. Switching children clears the entry fields.</CardDescription></CardHeader><CardContent><form key={`${centerId}:${programId}:${familyId}:${childId}:${editingAuthorizationId}`} className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const ok = await post(editingAuthorization ? "updateAuthorization" : "createAuthorization", { authorizationId: editingAuthorization?.id, agencyProgramId: programId, familyId, childId, authorizationNumber: form.get("authorizationNumber"), coverageStart: form.get("coverageStart"), coverageEnd: form.get("coverageEnd"), authorizedRateDollars: form.get("authorizedRateDollars"), familyCopayDollars: form.get("familyCopayDollars"), unitType: form.get("unitType"), authorizedUnits: form.get("authorizedUnits") }); if (ok) { event.currentTarget.reset(); setEditingAuthorizationId(""); } }}>
+        <Card><CardHeader><CardTitle as="h3">2. Record authorization</CardTitle><CardDescription>Bind one current child, family, payer, coverage period, rate, units, and copay. Switching children clears the entry fields.</CardDescription></CardHeader><CardContent><form key={`${centerId}:${programId}:${familyId}:${childId}:${editingAuthorizationId}`} className="space-y-3" onSubmit={async (event) => { event.preventDefault(); const formElement = event.currentTarget; const form = new FormData(formElement); const ok = await post(editingAuthorization ? "updateAuthorization" : "createAuthorization", { authorizationId: editingAuthorization?.id, agencyProgramId: programId, familyId, childId, authorizationNumber: form.get("authorizationNumber"), coverageStart: form.get("coverageStart"), coverageEnd: form.get("coverageEnd"), authorizedRateDollars: form.get("authorizedRateDollars"), familyCopayDollars: form.get("familyCopayDollars"), unitType: form.get("unitType"), authorizedUnits: form.get("authorizedUnits") }); if (ok) { formElement.reset(); setEditingAuthorizationId(""); } }}>
           <div><Label>Agency program</Label><Select value={programId} onValueChange={(value) => { if (!value) return; setProgramId(value); setEditingAuthorizationId(""); }}><SelectTrigger><SelectValue placeholder="Choose a completed agency setup" /></SelectTrigger><SelectContent>{programs.map((program) => { const blocked = agencyProgramSetupBlockers(program).length > 0; return <SelectItem key={program.id} value={program.id} disabled={blocked}>{program.name}{program.programName ? ` · ${program.programName}` : ""}{blocked ? " · setup required" : ""}</SelectItem>; })}</SelectContent></Select></div>
           <div><Label>Family</Label><Select value={familyId} onValueChange={(value) => { setFamilyId(value ?? ""); setChildId(""); setEditingAuthorizationId(""); }}><SelectTrigger><SelectValue placeholder="Choose family" /></SelectTrigger><SelectContent>{data?.families.map((family) => <SelectItem key={family.id} value={family.id}>{familyOptionLabel(family)}</SelectItem>)}</SelectContent></Select><p className="mt-1 text-xs text-muted-foreground">Options include the family, current child, and guardian names.</p></div>
           <div><Label>Child</Label><Select value={childId} onValueChange={(value) => { if (!value) return; setChildId(value); setEditingAuthorizationId(""); }}><SelectTrigger><SelectValue placeholder="Choose child" /></SelectTrigger><SelectContent>{selectedFamily?.children.map((child) => <SelectItem key={child.id} value={child.id}>{child.fullName}{isCurrentlyEnrolledChildRecord(child) ? "" : isCurrentlyEnrolledStatus(child.enrollmentStatus) ? " · classroom required" : " · former"}</SelectItem>)}</SelectContent></Select></div>

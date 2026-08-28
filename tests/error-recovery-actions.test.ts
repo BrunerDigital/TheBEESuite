@@ -17,21 +17,25 @@ test("route error actions use the Next.js retry callback that refetches failed c
 });
 
 test("client asset failures and parent network failures receive one guarded full-document recovery", () => {
+  const recovery = source("src/lib/client-load-recovery.ts");
+  assert.match(recovery, /\/parent-portal/);
+  assert.match(recovery, /load failed\|network error\|failed to fetch/i);
+  assert.match(recovery, /ChunkLoadError/);
+  assert.match(recovery, /failed to load chunk\|loading chunk/);
+  assert.match(recovery, /sessionStorage\.getItem\(CLIENT_LOAD_RECOVERY_KEY\)/);
+  assert.match(recovery, /CLIENT_LOAD_RECOVERY_WINDOW_MS = 60_000/);
+  assert.match(recovery, /registration\.update/);
+  assert.match(recovery, /window\.caches\.delete/);
   for (const path of ["src/app/error.tsx", "src/app/global-error.tsx"]) {
     const errorBoundary = source(path);
-    assert.match(errorBoundary, /\/parent-portal/);
-    assert.match(errorBoundary, /load failed\|network error\|failed to fetch/i);
-    assert.match(errorBoundary, /ChunkLoadError/);
-    assert.match(errorBoundary, /failed to load chunk\|loading chunk/);
-    assert.match(errorBoundary, /sessionStorage\.getItem\(CLIENT_LOAD_RECOVERY_KEY\)/);
-    assert.match(errorBoundary, /CLIENT_LOAD_RECOVERY_WINDOW_MS = 60_000/);
+    assert.match(errorBoundary, /recoverClientAssetsAndReload/);
     assert.match(errorBoundary, /Reload this page/);
   }
 });
 
 test("service worker never substitutes the app launcher for authenticated routes", () => {
   const serviceWorker = source("public/sw.js");
-  assert.match(serviceWorker, /bee-suite-app-shell-v3/);
+  assert.match(serviceWorker, /bee-suite-app-shell-v4/);
   assert.match(serviceWorker, /cache\.addAll\(APP_SHELL_URLS\)/);
   assert.doesNotMatch(serviceWorker, /cache\.addAll\(APP_SHELL_URLS\)[\s\S]{0,80}\.catch/);
   assert.match(serviceWorker, /url\.pathname === "\/app" \|\| url\.pathname === "\/app\/"/);

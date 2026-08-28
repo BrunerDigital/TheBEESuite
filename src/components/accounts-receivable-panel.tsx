@@ -83,7 +83,7 @@ export function AccountsReceivablePanel({
         </div>
         <div className="rounded-xl border bg-background/60 p-3">
           <div className="text-xs text-muted-foreground">Current families owing</div>
-          <div className="mt-1 text-lg font-semibold">{snapshot.owingAccountCount.toLocaleString()}</div>
+          <div className="mt-1 text-lg font-semibold">{snapshot.owingAccountCount.toLocaleString("en-US")}</div>
         </div>
         <div className="rounded-xl border bg-background/60 p-3">
           <div className="text-xs text-muted-foreground">Family credits</div>
@@ -93,7 +93,7 @@ export function AccountsReceivablePanel({
         </div>
         <div className="rounded-xl border bg-background/60 p-3">
           <div className="text-xs text-muted-foreground">Current-family accounts</div>
-          <div className="mt-1 text-lg font-semibold">{snapshot.totalAccountCount.toLocaleString()}</div>
+          <div className="mt-1 text-lg font-semibold">{snapshot.totalAccountCount.toLocaleString("en-US")}</div>
         </div>
       </div>
 
@@ -148,11 +148,11 @@ export function AccountsReceivablePanel({
                 </thead>
                 <tbody>
                   <tr>
-                    <td>{snapshot.owingAccountCount.toLocaleString()}</td>
+                    <td>{snapshot.owingAccountCount.toLocaleString("en-US")}</td>
                     <td>{money(snapshot.totalOwedCents)}</td>
                     <td>{money(Math.abs(snapshot.totalCreditCents))}</td>
-                    <td>{snapshot.currentAccountCount.toLocaleString()}</td>
-                    <td>{snapshot.overdueAccountCount.toLocaleString()}</td>
+                    <td>{snapshot.currentAccountCount.toLocaleString("en-US")}</td>
+                    <td>{snapshot.overdueAccountCount.toLocaleString("en-US")}</td>
                   </tr>
                 </tbody>
               </table>
@@ -178,8 +178,8 @@ export function AccountsReceivablePanel({
                       <td>{account.familyName}</td>
                       <td>{statusLabel(account.status)}</td>
                       <td>{money(account.balanceCents)}</td>
-                      <td>{account.openInvoiceCount.toLocaleString()}</td>
-                      <td>{account.overdueInvoiceCount.toLocaleString()}</td>
+                      <td>{account.openInvoiceCount.toLocaleString("en-US")}</td>
+                      <td>{account.overdueInvoiceCount.toLocaleString("en-US")}</td>
                       <td>{account.oldestOpenDueDate ? shortDate(account.oldestOpenDueDate, { dateOnly: true }) : "No due date"}</td>
                     </tr>
                   ))}
@@ -188,12 +188,12 @@ export function AccountsReceivablePanel({
                   <tr>
                     <th scope="row" colSpan={printCenterNames ? 3 : 2}>Net balance</th>
                     <th>{money(snapshot.netBalanceCents)}</th>
-                    <td colSpan={3}>{snapshot.totalAccountCount.toLocaleString()} current-family accounts</td>
+                    <td colSpan={3}>{snapshot.totalAccountCount.toLocaleString("en-US")} current-family accounts</td>
                   </tr>
                   <tr>
                     <th scope="row" colSpan={printCenterNames ? 3 : 2}>Total owed</th>
                     <th>{money(snapshot.totalOwedCents)}</th>
-                    <td colSpan={3}>{snapshot.owingAccountCount.toLocaleString()} families owing</td>
+                    <td colSpan={3}>{snapshot.owingAccountCount.toLocaleString("en-US")} families owing</td>
                   </tr>
                 </tfoot>
               </table>
@@ -309,15 +309,15 @@ export function ExecutiveAccountsReceivablePanel({
         </div>
         <div className="rounded-xl border bg-background/60 p-3">
           <div className="text-xs text-muted-foreground">Current families owing</div>
-          <div className="mt-1 text-lg font-semibold">{summary.owingAccountCount.toLocaleString()}</div>
+          <div className="mt-1 text-lg font-semibold">{summary.owingAccountCount.toLocaleString("en-US")}</div>
         </div>
         <div className="rounded-xl border bg-background/60 p-3">
           <div className="text-xs text-muted-foreground">Schools with balances</div>
-          <div className="mt-1 text-lg font-semibold">{schoolsOwing.toLocaleString()}</div>
+          <div className="mt-1 text-lg font-semibold">{schoolsOwing.toLocaleString("en-US")}</div>
         </div>
         <div className="rounded-xl border bg-background/60 p-3">
           <div className="text-xs text-muted-foreground">Overdue current families</div>
-          <div className="mt-1 text-lg font-semibold">{summary.overdueAccountCount.toLocaleString()}</div>
+          <div className="mt-1 text-lg font-semibold">{summary.overdueAccountCount.toLocaleString("en-US")}</div>
         </div>
       </div>
 

@@ -194,20 +194,23 @@ async function buildPlan() {
   candidates.sort((a, b) => a.dedupeKey.localeCompare(b.dedupeKey));
   const existing = candidates.length ? await prisma.integrationDelivery.findMany({
     where: { dedupeKey: { in: candidates.map((candidate) => candidate.dedupeKey) } },
-    select: { dedupeKey: true, status: true },
+    select: { dedupeKey: true, status: true, providerMessageId: true },
   }) : [];
-  const existingByKey = new Map(existing.map((delivery) => [delivery.dedupeKey, delivery.status]));
-  const unresolved = candidates.filter((candidate) => existingByKey.get(candidate.dedupeKey) === "attempting").map((candidate) => ({
+  const existingByKey = new Map(existing.map((delivery) => [delivery.dedupeKey, delivery]));
+  const unresolved = candidates.filter((candidate) => existingByKey.get(candidate.dedupeKey)?.status === "attempting").map((candidate) => ({
     familyHash: hash(candidate.familyId),
     status: "attempting",
   }));
-  const sendable = candidates.filter((candidate) => !existingByKey.has(candidate.dedupeKey));
+  const sendable = candidates.filter((candidate) => {
+    const delivery = existingByKey.get(candidate.dedupeKey);
+    return !delivery || (delivery.status === "failed" && !delivery.providerMessageId);
+  });
   return {
     blocked,
     candidates,
-    existing: candidates.filter((candidate) => existingByKey.has(candidate.dedupeKey)).map((candidate) => ({
+    existing: candidates.filter((candidate) => existingByKey.has(candidate.dedupeKey) && !sendable.includes(candidate)).map((candidate) => ({
       familyHash: hash(candidate.familyId),
-      status: existingByKey.get(candidate.dedupeKey),
+      status: existingByKey.get(candidate.dedupeKey)?.status,
     })),
     fingerprint: fingerprint(sendable),
     sendable,
@@ -239,8 +242,7 @@ async function sendCandidate(candidate: Candidate) {
     // The signed full URL remains valid if the short-link table is unavailable.
   }
   const text = emailText(candidate, formUrl);
-  const delivery = await prisma.integrationDelivery.create({
-    data: {
+  const deliveryData = {
       tenantId: candidate.tenantId,
       centerId: candidate.centerId,
       dedupeKey: candidate.dedupeKey,
@@ -250,7 +252,7 @@ async function sendCandidate(candidate: Candidate) {
       recipient: "1 recipient",
       status: "attempting",
       attempts: 1,
-      maxAttempts: 1,
+      maxAttempts: 3,
       payload: {
         campaign: CAMPAIGN,
         to: [candidate.recipientEmail],
@@ -264,8 +266,25 @@ async function sendCandidate(candidate: Candidate) {
         enabledByUserId: candidate.enabledByUserId,
         expiresAt: expiresAt.toISOString(),
       } as Prisma.InputJsonObject,
-    },
-  });
+  };
+  const prior = await prisma.integrationDelivery.findUnique({ where: { dedupeKey: candidate.dedupeKey } });
+  let delivery: { id: string };
+  if (prior) {
+    const claimed = await prisma.integrationDelivery.updateMany({
+      where: { id: prior.id, status: "failed", providerMessageId: null },
+      data: {
+        ...deliveryData,
+        attempts: { increment: 1 },
+        lastResult: Prisma.DbNull,
+        lastError: null,
+        deliveredAt: null,
+      },
+    });
+    if (claimed.count !== 1) throw new Error(`Delivery ${prior.id} is no longer safe to retry.`);
+    delivery = { id: prior.id };
+  } else {
+    delivery = await prisma.integrationDelivery.create({ data: deliveryData });
+  }
   const result = await sendEmail({
     to: [candidate.recipientEmail],
     subject: SUBJECT,
@@ -314,10 +333,15 @@ async function sendCandidate(candidate: Candidate) {
   const providerMessageId = result.id;
   if (providerMessageId) {
     await prisma.$transaction(async (tx) => {
+      const messageIdCandidates = sendGridMessageIdCandidates(providerMessageId);
+      const baseMessageId = messageIdCandidates.at(-1) ?? providerMessageId;
       const receipts = await tx.sendGridEventReceipt.findMany({
         where: {
-          providerMessageId: { in: sendGridMessageIdCandidates(providerMessageId) },
           matchedDeliveries: 0,
+          OR: [
+            { providerMessageId: { in: messageIdCandidates } },
+            { providerMessageId: { startsWith: `${baseMessageId}.` } },
+          ],
         },
         orderBy: { processedAt: "asc" },
       });

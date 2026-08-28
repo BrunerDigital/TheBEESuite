@@ -64,6 +64,7 @@ async function loadState(client = prisma) {
     invariant(object(invoice.customFields).reconciliationFingerprint === ORIGINAL_RECONCILIATION_FINGERPRINT, `${invoice.number} was voided outside this reconciliation.`);
     invariant(invoice.ledgerEntries.some((entry) => entry.type === "invoice_void" && entry.amountCents === -invoice.totalCents), `${invoice.number} is missing its exact compensating ledger entry.`);
   }
+  invariant(duplicates.every((invoice) => invoice.status === PaymentStatus.OPEN || invoice.status === PaymentStatus.VOID), "A reviewed duplicate has an unexpected status.");
 
   const targets = [...avon.map((invoice) => ({ invoice, reason: "Avon W36 tuition invoice rollback: live parent billing was not activated for this school." })), ...duplicates.filter((invoice) => invoice.status === PaymentStatus.OPEN).map((invoice) => ({ invoice, reason: "W36 duplicate rollback: an earlier active invoice already billed the same child and period." }))];
   for (const target of targets) {
@@ -91,6 +92,7 @@ async function loadState(client = prisma) {
       invariant(earlier && earlier.totalCents === target.invoice.totalCents, `${target.invoice.number} no longer has its exact earlier invoice.`);
       fields.duplicateOfInvoiceId = earlier.id;
       fields.duplicateOfInvoiceNumber = earlier.number;
+      target.invoice.customFields = fields;
     }
   }
 
@@ -134,7 +136,9 @@ async function main() {
       invariant(currentCenter?.organization.tenantId === actor.tenantId, `${current.number} moved outside the audit actor tenant.`);
       const reversalCents = invoiceLedgerBalanceCents(current.ledgerEntries);
       invariant(reversalCents === current.totalCents, `${current.number} is no longer exactly reversible.`);
-      const updated = await tx.invoice.updateMany({ where: { id: current.id, status: PaymentStatus.OPEN }, data: { status: PaymentStatus.VOID, customFields: { ...object(current.customFields), voidedAt: appliedAt.toISOString(), voidedByUserId: actor.id, voidedByEmail: actor.email, voidReason: target.reason, reconciliationFingerprint: ORIGINAL_RECONCILIATION_FINGERPRINT } as Prisma.InputJsonObject } });
+      const reviewedFields = object(target.invoice.customFields);
+      const duplicateLink = typeof reviewedFields.duplicateOfInvoiceId === "string" && typeof reviewedFields.duplicateOfInvoiceNumber === "string" ? { duplicateOfInvoiceId: reviewedFields.duplicateOfInvoiceId, duplicateOfInvoiceNumber: reviewedFields.duplicateOfInvoiceNumber } : {};
+      const updated = await tx.invoice.updateMany({ where: { id: current.id, status: PaymentStatus.OPEN }, data: { status: PaymentStatus.VOID, customFields: { ...object(current.customFields), ...duplicateLink, voidedAt: appliedAt.toISOString(), voidedByUserId: actor.id, voidedByEmail: actor.email, voidReason: target.reason, reconciliationFingerprint: ORIGINAL_RECONCILIATION_FINGERPRINT } as Prisma.InputJsonObject } });
       invariant(updated.count === 1, `${current.number} changed during reconciliation.`);
       const account = await tx.billingAccount.update({ where: { id: current.billingAccount.id }, data: { balanceCents: { decrement: reversalCents } }, select: { balanceCents: true } });
       const ledger = await tx.ledgerEntry.create({ data: { billingAccountId: current.billingAccount.id, invoiceId: current.id, type: "invoice_void", description: `Voided ${current.number}: ${target.reason}`, amountCents: -reversalCents, balanceAfterCents: account.balanceCents, sourceSystem: "bee_suite_manual", externalId: `invoice-void:${current.id}`, metadata: { reason: target.reason, reconciliationFingerprint: ORIGINAL_RECONCILIATION_FINGERPRINT } } });

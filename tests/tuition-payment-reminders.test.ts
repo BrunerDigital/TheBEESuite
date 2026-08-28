@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   BEE_SUITE_PARENT_PORTAL_URL,
@@ -10,6 +11,14 @@ import {
   tuitionPaymentReminderDedupeKey,
   tuitionPaymentReminderSettingsFromCustomFields,
 } from "../src/lib/tuition-payment-reminders";
+
+test("payment reminders evaluate autopay against the center's active Stripe account", () => {
+  const source = readFileSync("src/app/api/cron/tuition-payment-reminders/route.ts", "utf8");
+
+  assert.match(source, /activeConnectedAccountId: readStripeConnectedAccountId\(input\.centerCustomFields\)/);
+  assert.match(source, /centerCustomFields: input\.centerCustomFields/);
+  assert.match(source, /centerCustomFields: center\.customFields/);
+});
 
 test("tuition balance reminders default to a weekly current-family cadence", () => {
   const settings = normalizeTuitionPaymentReminderSettings(null);

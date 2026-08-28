@@ -3915,6 +3915,20 @@ async function renderLivePage(
     const requestedBillingChildId = firstSearchParam(searchParams.childId) || "";
     const requestedBillingSearch = firstSearchParam(searchParams.q) || "";
     const requestedBillingWorkspace = firstSearchParam(searchParams.workspace) === "terminal" ? "terminal" as const : undefined;
+    const billingCentersById = new Map(centers.map((center) => [center.id, center]));
+    const billingPaymentMethodSummary = (input: {
+      autopayPlaceholder: boolean;
+      customFields: unknown;
+      centerId: string | null;
+    }) => {
+      const center = input.centerId ? billingCentersById.get(input.centerId) : null;
+      return paymentMethodManagementSummary({
+        autopayPlaceholder: input.autopayPlaceholder,
+        customFields: input.customFields,
+        activeConnectedAccountId: readStripeConnectedAccountId(center?.customFields),
+        centerCustomFields: center?.customFields,
+      });
+    };
     const billingClassroomsByCenter = new Map<string, Array<{ id: string; name: string; ageGroup: string }>>();
     for (const classroom of billingClassrooms) {
       const current = billingClassroomsByCenter.get(classroom.centerId) ?? [];
@@ -3947,9 +3961,10 @@ async function renderLivePage(
                     id: family.billingAccount.id,
                     balanceCents: family.billingAccount.balanceCents,
                     autopayPlaceholder: family.billingAccount.autopayPlaceholder,
-                    paymentMethodManagement: paymentMethodManagementSummary({
+                    paymentMethodManagement: billingPaymentMethodSummary({
                       autopayPlaceholder: family.billingAccount.autopayPlaceholder,
                       customFields: family.billingAccount.customFields,
+                      centerId: family.centerId,
                     }),
                     openInvoices: family.billingAccount.invoices.map((invoice) => ({
                       id: invoice.id,
@@ -4047,9 +4062,10 @@ async function renderLivePage(
             billingAccount: {
               id: invoice.billingAccount.id,
               balanceCents: invoice.billingAccount.balanceCents,
-              paymentMethodManagement: paymentMethodManagementSummary({
+              paymentMethodManagement: billingPaymentMethodSummary({
                 autopayPlaceholder: invoice.billingAccount.autopayPlaceholder,
                 customFields: invoice.billingAccount.customFields,
+                centerId: invoice.billingAccount.family.centerId,
               }),
               family: {
                 id: invoice.billingAccount.family.id,
@@ -4113,6 +4129,7 @@ async function renderLivePage(
           id: true,
           autopayPlaceholder: true,
           customFields: true,
+          family: { select: { centerId: true } },
         },
       }),
       prisma.invoice.findMany({
@@ -4128,6 +4145,7 @@ async function renderLivePage(
             select: {
               autopayPlaceholder: true,
               customFields: true,
+              family: { select: { centerId: true } },
             },
           },
         },
@@ -4180,19 +4198,27 @@ async function renderLivePage(
     const dunningReady = payments.filter((payment) => payment.dunningStatus === "ready").length;
     const dunningWaiting = payments.filter((payment) => payment.dunningStatus === "waiting").length;
     const dunningMaxed = payments.filter((payment) => payment.dunningStatus === "maxed").length;
-    const paymentMethodSummaries = paymentMethodAccounts.map((account) => paymentMethodManagementSummary({
-      autopayPlaceholder: account.autopayPlaceholder,
-      customFields: account.customFields,
-    }));
+    const paymentCentersById = new Map(payoutCenters.map((center) => [center.id, center]));
+    const paymentSummary = (account: {
+      autopayPlaceholder: boolean;
+      customFields: unknown;
+      family: { centerId: string | null };
+    }) => {
+      const center = account.family.centerId ? paymentCentersById.get(account.family.centerId) : null;
+      return paymentMethodManagementSummary({
+        autopayPlaceholder: account.autopayPlaceholder,
+        customFields: account.customFields,
+        activeConnectedAccountId: readStripeConnectedAccountId(center?.customFields),
+        centerCustomFields: center?.customFields,
+      });
+    };
+    const paymentMethodSummaries = paymentMethodAccounts.map(paymentSummary);
     const savedPaymentMethods = paymentMethodSummaries.filter((summary) => summary.hasSavedPaymentMethod).length;
     const stripeCustomers = paymentMethodSummaries.filter((summary) => summary.hasStripeCustomer).length;
     const autopayEnabled = paymentMethodSummaries.filter((summary) => summary.autopayStatus === "enabled").length;
     const autopayPending = paymentMethodSummaries.filter((summary) => summary.autopayStatus === "pending").length;
     const dueAutopayInvoices = dueOpenInvoices.filter((invoice) => {
-      const summary = paymentMethodManagementSummary({
-        autopayPlaceholder: invoice.billingAccount.autopayPlaceholder,
-        customFields: invoice.billingAccount.customFields,
-      });
+      const summary = paymentSummary(invoice.billingAccount);
       return summary.autopayStatus === "enabled" && summary.hasStripeCustomer && summary.hasSavedPaymentMethod;
     });
     const autopayDueCents = dueAutopayInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);

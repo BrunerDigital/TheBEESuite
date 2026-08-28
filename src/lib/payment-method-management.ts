@@ -1,6 +1,9 @@
+import { stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
+
 export type PaymentMethodManagementSummary = {
   autopayEnabled: boolean;
   autopayStatus: "enabled" | "disabled" | "pending";
+  paymentMethodReauthorizationRequired: boolean;
   hasStripeCustomer: boolean;
   hasSavedPaymentMethod: boolean;
   stripeCustomerId: string | null;
@@ -43,6 +46,8 @@ function paymentMethodLabel(input: {
 export function paymentMethodManagementSummary(input: {
   autopayPlaceholder?: boolean | null;
   customFields: unknown;
+  activeConnectedAccountId?: string | null;
+  centerCustomFields?: unknown;
 }): PaymentMethodManagementSummary {
   const custom = fields(input.customFields);
   const stripeCustomerId = clean(custom.stripeCustomerId);
@@ -51,13 +56,20 @@ export function paymentMethodManagementSummary(input: {
   const paymentMethodLast4 = clean(custom.stripePaymentMethodLast4);
   const savedAt = clean(custom.stripePaymentMethodSavedAt);
   const status = clean(custom.autopayStatus);
-  const enabled = custom.autopayEnabled === true || input.autopayPlaceholder === true;
+  const paymentMethodReauthorizationRequired = stripeConnectSavedMethodNeedsReauthorization({
+    activeAccountId: input.activeConnectedAccountId,
+    savedMethodAccountId: clean(custom.stripeDefaultPaymentMethodConnectedAccountId),
+    centerCustomFields: input.centerCustomFields,
+  });
+  const enabled = (custom.autopayEnabled === true || input.autopayPlaceholder === true)
+    && !paymentMethodReauthorizationRequired;
   const setupExplicitlyExpired = clean(custom.paymentMethodManagementStatus) === "setup_session_expired";
   const pending = status === "pending" && !setupExplicitlyExpired;
 
   return {
     autopayEnabled: enabled,
     autopayStatus: enabled ? "enabled" : pending ? "pending" : "disabled",
+    paymentMethodReauthorizationRequired,
     hasStripeCustomer: Boolean(stripeCustomerId),
     hasSavedPaymentMethod: Boolean(stripeDefaultPaymentMethodId),
     stripeCustomerId,

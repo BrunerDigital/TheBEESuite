@@ -106,10 +106,15 @@ function preferenceBuckets(rows: Array<NotificationPreferenceRecord & { tenantId
   return buckets;
 }
 
-function hasActiveAutopay(account: { autopayPlaceholder: boolean; customFields: unknown }) {
+function hasActiveAutopay(input: {
+  account: { autopayPlaceholder: boolean; customFields: unknown };
+  centerCustomFields: unknown;
+}) {
   const summary = paymentMethodManagementSummary({
-    autopayPlaceholder: account.autopayPlaceholder,
-    customFields: account.customFields,
+    autopayPlaceholder: input.account.autopayPlaceholder,
+    customFields: input.account.customFields,
+    activeConnectedAccountId: readStripeConnectedAccountId(input.centerCustomFields),
+    centerCustomFields: input.centerCustomFields,
   });
   return summary.autopayStatus === "enabled" && summary.hasStripeCustomer && summary.hasSavedPaymentMethod;
 }
@@ -414,7 +419,10 @@ async function GETHandler(request: NextRequest) {
       continue;
     }
 
-    const activeAutopay = hasActiveAutopay(account);
+    const activeAutopay = hasActiveAutopay({
+      account,
+      centerCustomFields: center.customFields,
+    });
     const pendingPayment = account.payments.some((payment) => (
       isActiveStripeCheckoutPayment(payment) || isActiveStripeAutopayPayment(payment)
     ));

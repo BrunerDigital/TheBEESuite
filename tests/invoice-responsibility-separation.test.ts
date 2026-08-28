@@ -32,8 +32,11 @@ test("parent responsibility evidence covers every open account invoice beyond th
 
 test("tuition assignment edits retain immutable evidence for existing invoices", () => {
   const source = readFileSync(new URL("../src/app/api/billing/tuition-assignments/route.ts", import.meta.url), "utf8");
+  const aiSource = readFileSync(new URL("../src/app/api/ai/command/route.ts", import.meta.url), "utf8");
   assert.ok((source.match(/tuitionAssignmentHistory,/g) ?? []).length >= 2);
   assert.match(source, /const priorSnapshot = clean\(existingFields\.tuitionPlanId\)/);
+  assert.ok((aiSource.match(/tuitionAssignmentHistory/g) ?? []).length >= 3);
+  assert.match(aiSource, /const priorSnapshot = clean\(existingFields\.tuitionPlanId\)/);
 });
 
 test("a reviewed invoice separation preserves exact family, agency, and gross totals", () => {

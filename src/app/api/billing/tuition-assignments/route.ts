@@ -64,6 +64,21 @@ async function POSTHandler(request: NextRequest) {
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
 
   const existingFields = jsonObject(access.child.customFields);
+  const priorHistory = Array.isArray(existingFields.tuitionAssignmentHistory)
+    ? existingFields.tuitionAssignmentHistory.map(jsonObject)
+    : [];
+  const priorSnapshot = clean(existingFields.tuitionPlanId) && Number.isInteger(existingFields.tuitionNetAmountCents)
+    ? {
+        tuitionPlanId: existingFields.tuitionPlanId,
+        tuitionNetAmountCents: existingFields.tuitionNetAmountCents,
+        tuitionFundingType: existingFields.tuitionFundingType,
+        tuitionBillingEnabled: existingFields.tuitionBillingEnabled,
+        tuitionBillingDisabledReason: existingFields.tuitionBillingDisabledReason,
+      }
+    : null;
+  const tuitionAssignmentHistory = priorSnapshot
+    ? [...priorHistory.filter((item) => JSON.stringify(item) !== JSON.stringify(priorSnapshot)), priorSnapshot].slice(-50)
+    : priorHistory.slice(-50);
   const description = clean(body.description);
   const tuitionPlanId = clean(body.tuitionPlanId);
   const updatedBy = user.email || user.id;
@@ -74,6 +89,7 @@ async function POSTHandler(request: NextRequest) {
       data: {
         customFields: {
           ...existingFields,
+          tuitionAssignmentHistory,
           tuitionBillingEnabled: false,
           tuitionBillingUpdatedAt: new Date().toISOString(),
           tuitionBillingUpdatedBy: updatedBy,
@@ -162,6 +178,7 @@ async function POSTHandler(request: NextRequest) {
       data: {
         customFields: {
           ...existingFields,
+          tuitionAssignmentHistory,
           tuitionBillingEnabled: true,
           tuitionPlanId: plan.id,
           tuitionPlanName: plan.name,

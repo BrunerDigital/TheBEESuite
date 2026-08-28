@@ -2533,7 +2533,8 @@ async function renderLivePage(
           },
         })
       : null;
-    const invoiceChildIds = [...new Set(invoices.flatMap((invoice) => {
+    const responsibilityInvoices = [...invoices, ...(billingAccount?.invoices ?? [])];
+    const invoiceChildIds = [...new Set(responsibilityInvoices.flatMap((invoice) => {
       const fields = asRecord(invoice.customFields);
       const singular = stringField(fields.childId);
       const batch = Array.isArray(fields.childIds)
@@ -2541,12 +2542,13 @@ async function renderLivePage(
         : [];
       return singular ? [singular, ...batch] : batch;
     }))];
-    const invoiceChildNames = new Map((invoiceChildIds.length && family
+    const invoiceChildren = invoiceChildIds.length && family
       ? await prisma.child.findMany({
           where: { familyId: family.id, id: { in: invoiceChildIds } },
-          select: { id: true, fullName: true },
+          select: { id: true, fullName: true, customFields: true },
         })
-      : []).map((child) => [child.id, child.fullName]));
+      : [];
+    const invoiceChildNames = new Map(invoiceChildren.map((child) => [child.id, child.fullName]));
     const pendingPaymentByInvoiceId = new Map<string, Omit<ReturnType<typeof activeStripeCheckoutPaymentSummary>, "amountCents">>();
     for (const payment of billingAccount?.payments ?? []) {
       if (!isActiveStripeCheckoutPayment(payment)) continue;
@@ -2573,7 +2575,11 @@ async function renderLivePage(
         invoiceTotalCents: invoice.totalCents,
         customFields: invoice.customFields,
       });
-      const familyOnly = invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents);
+      const familyOnly = invoiceResponsibilityReviewExempt(
+        invoice.customFields,
+        invoice.totalCents,
+        ...invoiceChildren.map((child) => ({ id: child.id, customFields: child.customFields })),
+      );
       const amountCents = separated?.familyResponsibilityCents ?? (familyOnly ? invoice.totalCents : null);
       return [invoice.id, {
         amountCents,
@@ -2666,7 +2672,11 @@ async function renderLivePage(
       ? parentBalanceNeedsResponsibilityReview({
           accountBalanceCents: billingAccount.balanceCents,
           agencyLedgerEntries,
-          invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(billingAccount.invoices),
+          invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(
+            billingAccount.invoices,
+            ...(family?.children.map((child) => ({ id: child.id, customFields: child.customFields })) ?? []),
+            ...invoiceChildren.map((child) => ({ id: child.id, customFields: child.customFields })),
+          ),
           responsibilityEvidence: [
             billingAccount.customFields,
             family?.customFields,
@@ -3624,7 +3634,7 @@ async function renderLivePage(
                   billingEmail: true,
                   centerId: true,
                   customFields: true,
-                  children: { select: { customFields: true } },
+                  children: { select: { id: true, customFields: true } },
                   _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
                 },
               },
@@ -4054,7 +4064,11 @@ async function renderLivePage(
             status: invoice.status,
             dueDate: invoice.dueDate,
             totalCents: invoice.totalCents,
-            responsibilityReviewRequired: !invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents) && parentBalanceNeedsResponsibilityReview({
+            responsibilityReviewRequired: !invoiceResponsibilityReviewExempt(
+              invoice.customFields,
+              invoice.totalCents,
+              ...invoice.billingAccount.family.children.map((child) => ({ id: child.id, customFields: child.customFields })),
+            ) && parentBalanceNeedsResponsibilityReview({
               accountBalanceCents: invoice.billingAccount.balanceCents,
               agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
               invoiceId: invoice.id,

@@ -101,7 +101,7 @@ async function POSTHandler(request: NextRequest) {
       guardians: {
         select: { id: true, fullName: true, email: true, userId: true },
       },
-      children: { select: { customFields: true } },
+      children: { select: { id: true, customFields: true } },
       billingAccount: {
         select: {
           id: true,
@@ -182,7 +182,11 @@ async function POSTHandler(request: NextRequest) {
   if (invoice.totalCents <= 0) {
     return NextResponse.json({ ok: false, error: "Invoice total must be greater than zero." }, { status: 400 });
   }
-  if (!invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents) && paymentCollectionResponsibilityHoldRequired({
+  if (!invoiceResponsibilityReviewExempt(
+    invoice.customFields,
+    invoice.totalCents,
+    ...family.children.map((child) => ({ id: child.id, customFields: child.customFields })),
+  ) && paymentCollectionResponsibilityHoldRequired({
     accountBalanceCents: billingAccount.balanceCents,
     agencyLedgerEntries,
     invoiceId: invoice.id,

@@ -1220,7 +1220,7 @@ async function separateInvoiceResponsibility(user: CurrentBillingUser, body: Rec
                 id: true,
                 centerId: true,
                 customFields: true,
-                children: { select: { customFields: true } },
+                children: { select: { id: true, customFields: true } },
               },
             },
           },
@@ -1267,8 +1267,12 @@ async function separateInvoiceResponsibility(user: CurrentBillingUser, body: Rec
       agencyName,
     });
     if (validationError) throw new Error(`RESPONSIBILITY_SPLIT_BLOCKED:${validationError}`);
-    if (invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents)) {
-      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:Product purchases do not use agency tuition responsibility.");
+    if (invoiceResponsibilityReviewExempt(
+      invoice.customFields,
+      invoice.totalCents,
+      ...invoice.billingAccount.family.children.map((child) => ({ id: child.id, customFields: child.customFields })),
+    )) {
+      throw new Error("RESPONSIBILITY_SPLIT_BLOCKED:This invoice is already confirmed as family-only responsibility.");
     }
     if (!hasSubsidyResponsibilityEvidence(
       invoice.customFields,

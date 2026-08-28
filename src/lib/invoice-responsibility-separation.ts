@@ -106,7 +106,7 @@ export function allOpenInvoicesResponsibilitySeparated(invoices: Array<{
   status: string;
   totalCents: number;
   customFields: unknown;
-}>) {
+}>, ...assignmentEvidence: unknown[]) {
   const relevantInvoices = invoices.filter((invoice) => {
     if (productResponsibilityReviewExempt(record(invoice.customFields))) return false;
     if (invoice.status === "OPEN" && invoice.totalCents > 0) return true;
@@ -116,15 +116,16 @@ export function allOpenInvoicesResponsibilitySeparated(invoices: Array<{
   });
   return relevantInvoices.length > 0
     && relevantInvoices.every((invoice) => (
-      invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents)
+      invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents, ...assignmentEvidence)
       || invoiceResponsibilitySeparation(invoice.customFields) !== null
     ));
 }
 
-export function invoiceResponsibilityReviewExempt(customFields: unknown, currentInvoiceTotalCents?: number) {
+export function invoiceResponsibilityReviewExempt(customFields: unknown, currentInvoiceTotalCents?: number, ...assignmentEvidence: unknown[]) {
   const fields = record(customFields);
   return productResponsibilityReviewExempt(fields)
-    || confirmedNetFamilyTuitionInvoice(fields, currentInvoiceTotalCents);
+    || confirmedNetFamilyTuitionInvoice(fields, currentInvoiceTotalCents)
+    || confirmedFamilyOnlyTuitionAssignment(fields, currentInvoiceTotalCents, assignmentEvidence);
 }
 
 function productResponsibilityReviewExempt(fields: Record<string, unknown>) {
@@ -152,4 +153,53 @@ function confirmedNetFamilyTuitionInvoice(fields: Record<string, unknown>, curre
 
   return hasAgencyCredit
     || FAMILY_ONLY_TUITION_MARKER.test(text(fields.tuitionPlanName));
+}
+
+function confirmedFamilyOnlyTuitionAssignment(fields: Record<string, unknown>, currentInvoiceTotalCents: number | undefined, evidence: unknown[]) {
+  if (text(fields.chargeSource) !== "tuitionPlan") return false;
+  if (!Number.isInteger(currentInvoiceTotalCents) || (currentInvoiceTotalCents ?? -1) < 0) return false;
+  const invoiceChildIds = [
+    text(fields.childId),
+    ...(Array.isArray(fields.childIds) ? fields.childIds.map(text) : []),
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+  const invoicePlanId = text(fields.sourceId);
+  const invoiceWeekCount = Number.isInteger(fields.invoiceWeekCount) && Number(fields.invoiceWeekCount) > 0
+    ? Number(fields.invoiceWeekCount)
+    : 1;
+  if (!invoiceChildIds.length || !invoicePlanId) return false;
+
+  const assignmentAmounts = (value: unknown): number[] => {
+    if (Array.isArray(value)) return value.flatMap(assignmentAmounts);
+    if (!value || typeof value !== "object") return [];
+    const assignment = record(value);
+    const billingEvidenceApplies = assignment.tuitionBillingEnabled === true
+      || (
+        assignment.tuitionBillingEnabled === false
+        && text(assignment.tuitionBillingDisabledReason) === "enrollment_closed"
+      );
+    const ownAmount = (
+      text(assignment.tuitionFundingType).toLowerCase() === "family"
+      && billingEvidenceApplies
+      && text(assignment.tuitionPlanId) === invoicePlanId
+    ) ? cents(assignment.tuitionNetAmountCents) : null;
+    return [
+      ...(ownAmount === null ? [] : [ownAmount]),
+      ...Object.values(assignment).flatMap(assignmentAmounts),
+    ];
+  };
+
+  let possibleWeeklyTotals = new Set([0]);
+  for (const childId of invoiceChildIds) {
+    const matchingEvidence = evidence.find((value) => {
+      const evidenceId = text(record(value).id);
+      const childMatches = invoiceChildIds.length > 1 ? evidenceId === childId : (!evidenceId || evidenceId === childId);
+      return childMatches && assignmentAmounts(value).length > 0;
+    });
+    if (!matchingEvidence) return false;
+    const amounts = new Set(assignmentAmounts(matchingEvidence));
+    possibleWeeklyTotals = new Set(
+      [...possibleWeeklyTotals].flatMap((total) => [...amounts].map((amount) => total + amount)),
+    );
+  }
+  return [...possibleWeeklyTotals].some((total) => total * invoiceWeekCount === currentInvoiceTotalCents);
 }

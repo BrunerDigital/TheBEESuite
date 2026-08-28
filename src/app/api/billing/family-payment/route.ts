@@ -169,7 +169,7 @@ async function POSTHandler(request: NextRequest) {
           centerId: true,
           customFields: true,
           guardians: { select: { userId: true } },
-          children: { select: { customFields: true } },
+          children: { select: { id: true, customFields: true } },
         },
       },
     },
@@ -243,7 +243,10 @@ async function POSTHandler(request: NextRequest) {
   const responsibilityReviewRequired = parentCheckout && paymentCollectionResponsibilityHoldRequired({
     accountBalanceCents: billingAccount.balanceCents,
     agencyLedgerEntries,
-    invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(billingAccount.invoices),
+    invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(
+      billingAccount.invoices,
+      ...billingAccount.family.children.map((child) => ({ id: child.id, customFields: child.customFields })),
+    ),
     responsibilityEvidence: [
       billingAccount.customFields,
       billingAccount.family.customFields,

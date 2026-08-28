@@ -79,10 +79,10 @@ test("conversation direction is derived from role data inside the existing scope
   assert.match(routePage, /message\.sender\?\.role === UserRole\.AUTHORIZED_PICKUP/);
 });
 
-test("director inbox keeps school-scoped threads visible after a family has no current enrollment", () => {
+test("director inbox and recipient picker only include currently enrolled families", () => {
   assert.match(routePage, /const authorizedMessageCenterIds = messageCenterIdsForUser\(user\)/);
-  assert.match(routePage, /const messageFamilyScopeWhere:[\s\S]*?teacherMessageScope[\s\S]*?familyScopeWhere[\s\S]*?: visibleFamilyWhere\(messageCenterIds\)/);
-  assert.match(routePage, /buildVisibleMessageWhere\(\{[\s\S]*?familyScopeWhere: messageFamilyScopeWhere/);
+  assert.match(routePage, /const familyScopeWhere:[\s\S]*?children: \{ some: currentlyEnrolledChildWhere\(\) \}/);
+  assert.match(routePage, /buildVisibleMessageWhere\(\{[\s\S]*?familyScopeWhere,/);
   assert.match(routePage, /prisma\.family\.findMany\(\{[\s\S]*?where: familyScopeWhere/);
   assert.match(routePage, /centers\.filter\(\(center\) => messageCenterIds\.includes\(center\.id\)\)\.map/);
 });
@@ -95,9 +95,11 @@ test("director send and suggestion APIs enforce the same primary-school scope as
   assert.match(auth, /function messageCenterIdsForUser[\s\S]*?UserRole\.CENTER_DIRECTOR[\s\S]*?UserRole\.ASSISTANT_DIRECTOR[\s\S]*?\[user\.primaryCenterId\]/);
   assert.match(sendRoute, /const messageCenterIds = messageCenterIdsForUser\(user\)/);
   assert.match(sendRoute, /family\.centerId && messageCenterIds\.includes\(family\.centerId\)/);
+  assert.match(sendRoute, /children: \{ some: currentlyEnrolledChildWhere\(\) \}/);
   assert.match(sendRoute, /requestedCenterIds\.some\(\(centerId\) => !messageCenterIds\.includes\(centerId\)\)/);
   assert.match(suggestionsRoute, /const messageCenterIds = messageCenterIdsForUser\(user\)/);
   assert.match(suggestionsRoute, /family\.centerId && messageCenterIds\.includes\(family\.centerId\)/);
+  assert.match(suggestionsRoute, /children: \{ some: currentlyEnrolledChildWhere\(\) \}/);
 });
 
 test("parent portal presents messaging as one responsive school conversation", () => {

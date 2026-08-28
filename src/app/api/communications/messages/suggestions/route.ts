@@ -6,6 +6,7 @@ import {
   normalizeMessageBroadcastSegment,
 } from "@/lib/message-segmentation";
 import { canAccessFamilyRecord, canCreateFamilyMessage, canMessageClassroomFamily } from "@/lib/portal-guardrails";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -114,9 +115,11 @@ async function POSTHandler(request: NextRequest) {
     const candidates = await prisma.family.findMany({
       where: {
         ...(scopedCenterIds.length ? { centerId: { in: scopedCenterIds } } : {}),
-        ...(segment.classroomIds.length
-          ? { children: { some: { classroomId: { in: segment.classroomIds } } } }
-          : {}),
+        children: {
+          some: segment.classroomIds.length
+            ? { AND: [currentlyEnrolledChildWhere(), { classroomId: { in: segment.classroomIds } }] }
+            : currentlyEnrolledChildWhere(),
+        },
       },
       take: 1000,
       select: {
@@ -132,8 +135,8 @@ async function POSTHandler(request: NextRequest) {
     if (!familyId) {
       return NextResponse.json({ ok: false, error: "Family is required for reply suggestions." }, { status: 400 });
     }
-    const family = await prisma.family.findUnique({
-      where: { id: familyId },
+    const family = await prisma.family.findFirst({
+      where: { id: familyId, children: { some: currentlyEnrolledChildWhere() } },
       include: {
         guardians: { select: { userId: true, fullName: true } },
         children: { select: { classroomId: true } },

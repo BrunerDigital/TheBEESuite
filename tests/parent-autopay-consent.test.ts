@@ -8,6 +8,7 @@ test("parents control autopay consent and directors can only run enabled autopay
   const invoiceAction = readFileSync("src/components/invoice-stored-payment-button.tsx", "utf8");
   const invoicePaymentActions = readFileSync("src/lib/invoice-payment-actions.ts", "utf8");
   const paymentMethodRoute = readFileSync("src/app/api/billing/payment-method-session/route.ts", "utf8");
+  const publicPaymentMethodForm = readFileSync("src/components/payment-method-request-form.tsx", "utf8");
   const publicPaymentMethodRoute = readFileSync("src/app/api/billing/payment-method-request/session/route.ts", "utf8");
   const autopayRoute = readFileSync("src/app/api/billing/autopay/route.ts", "utf8");
   const autopayProcessor = readFileSync("src/lib/autopay-processing.ts", "utf8");
@@ -58,6 +59,7 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(stripeWebhook, /connectedAccountId === activeFamilyAccountId/);
   assert.match(stripeWebhook, /stripeConnectSavedMethodNeedsReauthorization/);
   assert.match(stripeWebhook, /requestedSetupMode === "preserve_existing" && !migrationSessionIsCurrent/);
+  assert.match(publicPaymentMethodForm, /reauthorization && reauthorizationPreservesAutopay[\s\S]*Autopay consent preserved/);
   assert.match(stripeWebhook, /from "Guardian"[\s\S]*where "familyId" = \$\{billingAccount\.family\.id\}[\s\S]*for update/);
   assert.match(stripeWebhook, /linkedGuardianUserIds: lockedGuardianLinks\.map/);
   assert.match(stripeWebhook, /await tx\.billingAccount\.updateMany/);

@@ -14,6 +14,7 @@ const DUPLICATE_PAYMENT_ID = "cmtbomvu4002pky04ze6usp5g";
 const APPLY = "--apply-reviewed-lila-w36-refund";
 const FINGERPRINT_PREFIX = "--reviewed-fingerprint=";
 const REASON = "Refund and void the later duplicate W36 tuition payment; preserve the earlier paid W36 invoice.";
+const ORIGINAL_RECONCILIATION_FINGERPRINT = "bc292a041bfcfe494847e03b0b895def6752868fd4dbbaec021d8084191ce9cd";
 
 function object(value: unknown) { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function numeric(value: unknown) { return typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : 0; }
@@ -33,19 +34,25 @@ async function loadState() {
   const duplicateFields = object(duplicate.customFields);
   const paymentFields = object(payment.customFields);
   invariant(duplicate.billingAccount.family.id === FAMILY_ID && duplicate.billingAccount.family.centerId === CENTER_ID, "Duplicate invoice family or school changed.");
-  invariant(preserved.status === PaymentStatus.PAID && duplicate.status === PaymentStatus.PAID && preserved.totalCents === 6_000 && duplicate.totalCents === 6_000, "Lila invoice amount or status changed.");
+  invariant(preserved.status === PaymentStatus.PAID && (duplicate.status === PaymentStatus.PAID || duplicate.status === PaymentStatus.OPEN || duplicate.status === PaymentStatus.VOID) && preserved.totalCents === 6_000 && duplicate.totalCents === 6_000, "Lila invoice amount or status changed.");
   invariant(preservedFields.billingPeriod === "2026-W36" && duplicateFields.billingPeriod === "2026-W36" && preservedFields.childId === CHILD_ID && duplicateFields.childId === CHILD_ID, "Lila W36 child scope changed.");
   invariant(preserved.ledgerEntries.some((entry) => entry.paymentId && entry.amountCents === -6_000), "Earlier Lila payment is not present to preserve.");
-  invariant(invoiceLedgerBalanceCents(duplicate.ledgerEntries) === 0 && duplicate.ledgerEntries.filter((entry) => entry.paymentId).length === 1, "Later Lila invoice is not exactly paid once.");
-  invariant(payment.status === PaymentStatus.PAID && payment.provider === "stripe" && payment.amountCents === 6_000 && payment.billingAccountId === duplicate.billingAccountId, "Later Lila payment is not an exact refundable Stripe payment.");
+  invariant(duplicate.ledgerEntries.filter((entry) => entry.paymentId).length === 1, "Later Lila invoice is not linked to exactly one payment.");
+  invariant((payment.status === PaymentStatus.PAID || payment.status === PaymentStatus.REFUNDED) && payment.provider === "stripe" && payment.amountCents === 6_000 && payment.billingAccountId === duplicate.billingAccountId, "Later Lila payment is not the exact reviewed Stripe payment.");
   invariant(paymentFields.invoiceId === DUPLICATE_INVOICE_ID && paymentFields.invoiceNumber === duplicate.number && String(paymentFields.stripePaymentIntentId ?? "").startsWith("pi_"), "Later Lila payment identity changed.");
-  invariant(numeric(paymentFields.stripeAmountRefundedCents) === 0 && paymentFields.stripePaymentIntentStatus === "succeeded", "Later Lila payment is not fully available for refund.");
+  const refunded = payment.status === PaymentStatus.REFUNDED && numeric(paymentFields.stripeAmountRefundedCents) >= 6_000;
+  const completed = refunded && duplicate.status === PaymentStatus.VOID && duplicateFields.reconciliationFingerprint === ORIGINAL_RECONCILIATION_FINGERPRINT && duplicate.ledgerEntries.some((entry) => entry.type === "invoice_void" && entry.amountCents === -6_000);
+  invariant(completed || (refunded && duplicate.status === PaymentStatus.OPEN) || (payment.status === PaymentStatus.PAID && duplicate.status === PaymentStatus.PAID && numeric(paymentFields.stripeAmountRefundedCents) === 0 && paymentFields.stripePaymentIntentStatus === "succeeded" && invoiceLedgerBalanceCents(duplicate.ledgerEntries) === 0), "Lila reconciliation is neither pending, resumable, nor complete.");
   const snapshot = { center, preserved: { id: preserved.id, number: preserved.number, status: preserved.status, totalCents: preserved.totalCents, customFields: preserved.customFields, ledgerEntries: preserved.ledgerEntries }, duplicate: { id: duplicate.id, number: duplicate.number, status: duplicate.status, totalCents: duplicate.totalCents, customFields: duplicate.customFields, ledgerEntries: duplicate.ledgerEntries, billingAccountId: duplicate.billingAccountId, balanceCents: duplicate.billingAccount.balanceCents }, payment };
-  return { center, preserved, duplicate, payment, snapshot, fingerprint: fingerprint(snapshot) };
+  return { center, preserved, duplicate, payment, refunded, completed, snapshot, fingerprint: fingerprint(snapshot) };
 }
 
 async function main() {
   const before = await loadState();
+  if (before.completed) {
+    console.log(JSON.stringify({ ok: true, alreadyCompleted: true, refundCents: 6_000, duplicateInvoiceStatus: before.duplicate.status, duplicatePaymentStatus: before.payment.status, preservedInvoiceStatus: before.preserved.status }, null, 2));
+    return;
+  }
   const apply = process.argv.includes(APPLY);
   console.log(JSON.stringify({ mode: apply ? "apply" : "dry_run", fingerprint: before.fingerprint, familyId: FAMILY_ID, childId: CHILD_ID, preservedInvoice: before.preserved.number, duplicateInvoice: before.duplicate.number, stripePaymentId: before.payment.id, refundCents: 6_000 }, null, 2));
   if (!apply) return;
@@ -54,9 +61,11 @@ async function main() {
   const dbUser = await prisma.user.findUnique({ where: { email: "brenden@kidcityusa.com" }, select: { id: true, tenantId: true, email: true, name: true, role: true, organizationId: true } });
   invariant(dbUser && dbUser.tenantId === before.center.organization.tenantId, "Billing audit actor or tenant changed.");
   const actor = { ...dbUser, mustResetPassword: false, centerIds: [CENTER_ID], primaryCenterId: CENTER_ID, assignedClassroomId: null, deviceSessionId: null, accessScope: "center", accessGrantCount: 1, profilePhotoUrl: null, branding: {} } as CurrentUser;
-  const refunded = await issueFamilyRefund(actor, { familyId: FAMILY_ID, amountCents: 6_000, reason: REASON, preferredPaymentIds: [DUPLICATE_PAYMENT_ID], operationId: `lila-eason-w36-duplicate:${DUPLICATE_INVOICE_ID}`, tenantId: dbUser.tenantId });
-  invariant(refunded.ok, `Lila duplicate refund failed: ${refunded.ok ? "unknown" : refunded.error}`);
-  invariant(refunded.totalCents === 6_000 && refunded.allocations.length === 1 && refunded.allocations[0].paymentId === DUPLICATE_PAYMENT_ID, "Refund allocation did not match the exact duplicate payment.");
+  if (!before.refunded) {
+    const refunded = await issueFamilyRefund(actor, { familyId: FAMILY_ID, amountCents: 6_000, reason: REASON, preferredPaymentIds: [DUPLICATE_PAYMENT_ID], operationId: `lila-eason-w36-duplicate:${DUPLICATE_INVOICE_ID}`, tenantId: dbUser.tenantId });
+    invariant(refunded.ok, `Lila duplicate refund failed: ${refunded.ok ? "unknown" : refunded.error}`);
+    invariant(refunded.totalCents === 6_000 && refunded.allocations.length === 1 && refunded.allocations[0].paymentId === DUPLICATE_PAYMENT_ID, "Refund allocation did not match the exact duplicate payment.");
+  }
 
   await prisma.$transaction(async (tx) => {
     const current = await tx.invoice.findUniqueOrThrow({ where: { id: DUPLICATE_INVOICE_ID }, include: { ledgerEntries: { select: { amountCents: true, paymentId: true } }, billingAccount: { select: { id: true, family: { select: { id: true, centerId: true } } } } } });

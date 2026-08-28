@@ -8,6 +8,7 @@ const TARGETS = [
 ];
 const APPLY = "--apply-reviewed-w36-paymentless-duplicates";
 const FINGERPRINT_PREFIX = "--reviewed-fingerprint=";
+const ORIGINAL_RECONCILIATION_FINGERPRINT = "0fd84f78ef839b47bf8730ac0866d094d2a491e9c7061e9ba6ff33b83984d2b3";
 function object(value: unknown) { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function stable(value: unknown): unknown { if (Array.isArray(value)) return value.map(stable); if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, stable(item)])); return value; }
 function fingerprint(value: unknown) { return createHash("sha256").update(JSON.stringify(stable(value))).digest("hex"); }
@@ -24,13 +25,14 @@ async function loadState() {
     invariant(duplicate && preserved, "A reviewed duplicate pair is missing.");
     const duplicateFields = object(duplicate.customFields);
     const preservedFields = object(preserved.customFields);
-    invariant(duplicate.status === PaymentStatus.PAID && duplicate.ledgerEntries.every((entry) => !entry.paymentId), `${duplicate.number} is no longer paymentless PAID.`);
-    invariant(duplicate.ledgerEntries.reduce((sum, entry) => sum + entry.amountCents, 0) === duplicate.totalCents, `${duplicate.number} ledger changed.`);
+    const alreadyCompleted = duplicate.status === PaymentStatus.VOID && object(duplicate.customFields).reconciliationFingerprint === ORIGINAL_RECONCILIATION_FINGERPRINT && duplicate.ledgerEntries.some((entry) => entry.type === "invoice_void" && entry.amountCents === -duplicate.totalCents);
+    invariant(alreadyCompleted || (duplicate.status === PaymentStatus.PAID && duplicate.ledgerEntries.every((entry) => !entry.paymentId)), `${duplicate.number} is neither a pending nor completed reviewed duplicate.`);
+    if (!alreadyCompleted) invariant(duplicate.ledgerEntries.reduce((sum, entry) => sum + entry.amountCents, 0) === duplicate.totalCents, `${duplicate.number} ledger changed.`);
     invariant(preserved.status === PaymentStatus.PAID && preserved.ledgerEntries.some((entry) => entry.paymentId && entry.amountCents === -preserved.totalCents), `${preserved.number} is not the exact paid invoice to preserve.`);
     invariant(duplicate.billingAccountId === preserved.billingAccountId && duplicate.totalCents === preserved.totalCents, "Duplicate pair account or amount changed.");
     invariant(duplicateFields.billingPeriod === "2026-W36" && preservedFields.billingPeriod === "2026-W36" && duplicateFields.childId === preservedFields.childId, "Duplicate pair period or child changed.");
-    return { duplicate, preserved };
-  });
+    return { duplicate, preserved, alreadyCompleted };
+  }).filter((item) => !item.alreadyCompleted);
   const snapshot = resolved.map(({ duplicate, preserved }) => ({ duplicate: { id: duplicate.id, number: duplicate.number, status: duplicate.status, totalCents: duplicate.totalCents, customFields: duplicate.customFields, ledgerEntries: duplicate.ledgerEntries, balanceCents: duplicate.billingAccount.balanceCents }, preserved: { id: preserved.id, number: preserved.number, status: preserved.status, totalCents: preserved.totalCents, ledgerEntries: preserved.ledgerEntries } }));
   return { resolved, snapshot, fingerprint: fingerprint(snapshot) };
 }

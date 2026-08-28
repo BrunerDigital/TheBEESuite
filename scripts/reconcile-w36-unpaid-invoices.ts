@@ -60,7 +60,12 @@ async function loadState(client = prisma) {
   });
   invariant(duplicates.length === DUPLICATE_IDS.length, "One or more exact duplicate invoices is missing.");
 
-  const targets = [...avon.map((invoice) => ({ invoice, reason: "Avon W36 tuition invoice rollback: live parent billing was not activated for this school." })), ...duplicates.map((invoice) => ({ invoice, reason: "W36 duplicate rollback: an earlier active invoice already billed the same child and period." }))];
+  for (const invoice of duplicates.filter((item) => item.status === PaymentStatus.VOID)) {
+    invariant(object(invoice.customFields).reconciliationFingerprint === ORIGINAL_RECONCILIATION_FINGERPRINT, `${invoice.number} was voided outside this reconciliation.`);
+    invariant(invoice.ledgerEntries.some((entry) => entry.type === "invoice_void" && entry.amountCents === -invoice.totalCents), `${invoice.number} is missing its exact compensating ledger entry.`);
+  }
+
+  const targets = [...avon.map((invoice) => ({ invoice, reason: "Avon W36 tuition invoice rollback: live parent billing was not activated for this school." })), ...duplicates.filter((invoice) => invoice.status === PaymentStatus.OPEN).map((invoice) => ({ invoice, reason: "W36 duplicate rollback: an earlier active invoice already billed the same child and period." }))];
   for (const target of targets) {
     const fields = object(target.invoice.customFields);
     invariant(target.invoice.status === PaymentStatus.OPEN, `${target.invoice.number} is no longer open.`);
@@ -115,6 +120,10 @@ async function main() {
   invariant(reviewed === before.fingerprint, "Apply requires the exact current dry-run fingerprint.");
   const actor = await prisma.user.findUnique({ where: { email: "brenden@kidcityusa.com" }, select: { id: true, tenantId: true, email: true } });
   invariant(actor, "Billing audit actor was not found.");
+  const targetCenterIds = [...new Set(before.targets.map((target) => target.invoice.billingAccount.family.centerId).filter((centerId): centerId is string => Boolean(centerId)))];
+  invariant(targetCenterIds.length === new Set(before.targets.map((target) => target.invoice.billingAccount.family.centerId)).size, "A target invoice has no school scope.");
+  const ownedCenters = await prisma.center.count({ where: { id: { in: targetCenterIds }, organization: { tenantId: actor.tenantId } } });
+  invariant(ownedCenters === targetCenterIds.length, "Billing audit actor does not own every target school tenant.");
   const appliedAt = new Date();
 
   for (const target of before.targets) {

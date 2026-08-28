@@ -3624,7 +3624,7 @@ async function renderLivePage(
                   billingEmail: true,
                   centerId: true,
                   customFields: true,
-                  children: { select: { customFields: true } },
+                  children: { select: { id: true, customFields: true } },
                   _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
                 },
               },
@@ -4054,7 +4054,11 @@ async function renderLivePage(
             status: invoice.status,
             dueDate: invoice.dueDate,
             totalCents: invoice.totalCents,
-            responsibilityReviewRequired: !invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents) && parentBalanceNeedsResponsibilityReview({
+            responsibilityReviewRequired: !invoiceResponsibilityReviewExempt(
+              invoice.customFields,
+              invoice.totalCents,
+              ...invoice.billingAccount.family.children.map((child) => ({ id: child.id, customFields: child.customFields })),
+            ) && parentBalanceNeedsResponsibilityReview({
               accountBalanceCents: invoice.billingAccount.balanceCents,
               agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
               invoiceId: invoice.id,

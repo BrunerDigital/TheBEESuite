@@ -227,7 +227,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
               centerId: true,
               customFields: true,
               guardians: { select: { userId: true } },
-              children: { select: { customFields: true } },
+              children: { select: { id: true, customFields: true } },
             },
           },
         },
@@ -394,7 +394,11 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
 
-    if (!invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents) && paymentCollectionResponsibilityHoldRequired({
+    if (!invoiceResponsibilityReviewExempt(
+      invoice.customFields,
+      invoice.totalCents,
+      ...invoice.billingAccount.family.children.map((child) => ({ id: child.id, customFields: child.customFields })),
+    ) && paymentCollectionResponsibilityHoldRequired({
       accountBalanceCents: invoice.billingAccount.balanceCents,
       agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
       invoiceId: invoice.id,

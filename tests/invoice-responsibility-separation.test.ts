@@ -34,6 +34,29 @@ test("a reviewed invoice separation preserves exact family, agency, and gross to
   });
 });
 
+test("an exact family-funded tuition assignment does not request a second responsibility split", () => {
+  const invoiceFields = {
+    chargeSource: "tuitionPlan",
+    childId: "child_granbury",
+    sourceId: "plan_parent_copay",
+  };
+  const child = {
+    id: "child_granbury",
+    customFields: {
+      tuitionFundingType: "family",
+      tuitionBillingEnabled: true,
+      tuitionPlanId: "plan_parent_copay",
+      tuitionNetAmountCents: 4_000,
+    },
+  };
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, child), true);
+  assert.equal(invoiceResponsibilityReviewExempt({ ...invoiceFields, invoiceWeekCount: 2 }, 8_000, child), true);
+  assert.equal(invoiceResponsibilityReviewExempt({ ...invoiceFields, invoiceWeekCount: 4 }, 16_000, child), true);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_001, child), false);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, { ...child, id: "another_child" }), false);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, { ...child, customFields: { ...child.customFields, tuitionPlanId: "another_plan" } }), false);
+});
+
 test("account review resolves only when every open invoice has an exact separation", () => {
   assert.equal(allOpenInvoicesResponsibilitySeparated([
     { status: "OPEN", totalCents: 2_000, customFields: { responsibilitySeparation: separation } },

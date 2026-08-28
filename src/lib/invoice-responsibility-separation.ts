@@ -106,7 +106,7 @@ export function allOpenInvoicesResponsibilitySeparated(invoices: Array<{
   status: string;
   totalCents: number;
   customFields: unknown;
-}>) {
+}>, ...assignmentEvidence: unknown[]) {
   const relevantInvoices = invoices.filter((invoice) => {
     if (productResponsibilityReviewExempt(record(invoice.customFields))) return false;
     if (invoice.status === "OPEN" && invoice.totalCents > 0) return true;
@@ -116,15 +116,16 @@ export function allOpenInvoicesResponsibilitySeparated(invoices: Array<{
   });
   return relevantInvoices.length > 0
     && relevantInvoices.every((invoice) => (
-      invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents)
+      invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents, ...assignmentEvidence)
       || invoiceResponsibilitySeparation(invoice.customFields) !== null
     ));
 }
 
-export function invoiceResponsibilityReviewExempt(customFields: unknown, currentInvoiceTotalCents?: number) {
+export function invoiceResponsibilityReviewExempt(customFields: unknown, currentInvoiceTotalCents?: number, ...assignmentEvidence: unknown[]) {
   const fields = record(customFields);
   return productResponsibilityReviewExempt(fields)
-    || confirmedNetFamilyTuitionInvoice(fields, currentInvoiceTotalCents);
+    || confirmedNetFamilyTuitionInvoice(fields, currentInvoiceTotalCents)
+    || confirmedFamilyOnlyTuitionAssignment(fields, currentInvoiceTotalCents, assignmentEvidence);
 }
 
 function productResponsibilityReviewExempt(fields: Record<string, unknown>) {
@@ -152,4 +153,33 @@ function confirmedNetFamilyTuitionInvoice(fields: Record<string, unknown>, curre
 
   return hasAgencyCredit
     || FAMILY_ONLY_TUITION_MARKER.test(text(fields.tuitionPlanName));
+}
+
+function confirmedFamilyOnlyTuitionAssignment(fields: Record<string, unknown>, currentInvoiceTotalCents: number | undefined, evidence: unknown[]) {
+  if (text(fields.chargeSource) !== "tuitionPlan") return false;
+  if (!Number.isInteger(currentInvoiceTotalCents) || (currentInvoiceTotalCents ?? -1) < 0) return false;
+  const invoiceChildId = text(fields.childId);
+  const invoicePlanId = text(fields.sourceId);
+  const invoiceWeekCount = Number.isInteger(fields.invoiceWeekCount) && Number(fields.invoiceWeekCount) > 0
+    ? Number(fields.invoiceWeekCount)
+    : 1;
+  if (!invoiceChildId || !invoicePlanId) return false;
+
+  const visit = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.some(visit);
+    if (!value || typeof value !== "object") return false;
+    const assignment = record(value);
+    if (
+      text(assignment.tuitionFundingType).toLowerCase() === "family"
+      && assignment.tuitionBillingEnabled === true
+      && text(assignment.tuitionPlanId) === invoicePlanId
+      && (cents(assignment.tuitionNetAmountCents) ?? -1) * invoiceWeekCount === currentInvoiceTotalCents
+    ) return true;
+    return Object.values(assignment).some(visit);
+  };
+
+  return evidence.some((value) => {
+    const item = record(value);
+    return (!text(item.id) || text(item.id) === invoiceChildId) && visit(value);
+  });
 }

@@ -339,7 +339,7 @@ async function processPayment(body: Record<string, unknown>) {
         select: { type: true, sourceSystem: true, amountCents: true, invoiceId: true, metadata: true },
       },
       family: {
-        select: { id: true, name: true, billingEmail: true, centerId: true, customFields: true, children: { select: { customFields: true } } },
+        select: { id: true, name: true, billingEmail: true, centerId: true, customFields: true, children: { select: { id: true, customFields: true } } },
       },
     },
   });
@@ -366,7 +366,11 @@ async function processPayment(body: Record<string, unknown>) {
     ...billingAccount.invoices.flatMap((item) => [item.customFields, item.items.map((line) => line.description)]),
   ];
   const responsibilityReviewRequired = invoice
-    ? !invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents) && paymentCollectionResponsibilityHoldRequired({
+    ? !invoiceResponsibilityReviewExempt(
+        invoice.customFields,
+        invoice.totalCents,
+        ...billingAccount.family.children.map((child) => ({ id: child.id, customFields: child.customFields })),
+      ) && paymentCollectionResponsibilityHoldRequired({
         accountBalanceCents: billingAccount.balanceCents,
         agencyLedgerEntries: billingAccount.ledgerEntries,
         invoiceId: invoice.id,

@@ -416,7 +416,17 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     const paymentMethod = paymentMethodManagementSummary({
       autopayPlaceholder: invoice.billingAccount.autopayPlaceholder,
       customFields: invoice.billingAccount.customFields,
+      activeConnectedAccountId: readStripeConnectedAccountId(center.customFields),
+      centerCustomFields: center.customFields,
     });
+    if (paymentMethod.paymentMethodReauthorizationRequired) {
+      results.push({
+        ...baseResult,
+        status: "skipped",
+        reason: "The saved payment method belongs to the school's prior payout account. The family must replace it before autopay can resume.",
+      });
+      continue;
+    }
     const canChargeSavedMethod = collectionMode === "stored_method"
       ? canChargeSavedPaymentMethod(paymentMethod)
       : canRunAutopay(paymentMethod);

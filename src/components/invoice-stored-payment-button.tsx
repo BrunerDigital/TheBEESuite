@@ -28,6 +28,7 @@ export type InvoiceStoredPaymentActionData = {
     family: { name: string; accountCategory: "current" | "past" };
     paymentMethodManagement: {
       autopayStatus: "enabled" | "disabled" | "pending";
+      paymentMethodReauthorizationRequired: boolean;
       hasStripeCustomer: boolean;
       hasSavedPaymentMethod: boolean;
       paymentMethodLabel: string | null;
@@ -67,6 +68,9 @@ function money(cents: number) {
 
 function disabledReason(invoice: InvoiceStoredPaymentActionData) {
   const method = invoice.billingAccount.paymentMethodManagement;
+  if (method.paymentMethodReauthorizationRequired) {
+    return "This saved payment method belongs to the school's prior payout account. The family must replace it before autopay can resume.";
+  }
   return invoiceAutopayBlockReason({
     accountCategory: invoice.billingAccount.family.accountCategory,
     invoiceStatus: invoice.status,

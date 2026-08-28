@@ -44,6 +44,7 @@ async function loadFamilyRefundPlan(
     familyId: string;
     amountCents: number;
     preferredPaymentIds?: string[];
+    restrictToPaymentIds?: string[];
   },
 ) {
   const account = await prisma.billingAccount.findUnique({
@@ -139,6 +140,7 @@ export async function issueFamilyRefund(
     amountCents: number;
     reason: string;
     preferredPaymentIds?: string[];
+    restrictToPaymentIds?: string[];
     operationId: string;
     tenantId?: string;
   },
@@ -147,6 +149,15 @@ export async function issueFamilyRefund(
   if (!prepared.ok) return prepared;
 
   const { account, refundPlan } = prepared;
+  if (input.restrictToPaymentIds?.length) {
+    const allowed = new Set(input.restrictToPaymentIds);
+    const selectedCents = refundPlan.allocations
+      .filter((allocation) => allowed.has(allocation.payment.id))
+      .reduce((total, allocation) => total + allocation.amountCents, 0);
+    if (selectedCents < input.amountCents || refundPlan.allocations.some((allocation) => !allowed.has(allocation.payment.id))) {
+      return { ok: false, status: 409, error: "The selected payment can no longer cover the exact refund amount." };
+    }
+  }
   const allocations: RefundAllocation[] = [];
   for (const planned of refundPlan.allocations) {
     const payment = planned.payment;

@@ -4,17 +4,7 @@ import { useEffect } from "react";
 import { reportClientError } from "@/components/client-error-reporter";
 import Link from "next/link";
 import "./globals.css";
-
-const CLIENT_LOAD_RECOVERY_KEY = "bee-suite-client-load-recovery-at";
-const CLIENT_LOAD_RECOVERY_WINDOW_MS = 60_000;
-
-function isRecoverableClientLoadFailure(error: Error) {
-  const assetLoadFailure = error.name === "ChunkLoadError"
-    || /failed to load chunk|loading chunk .* failed/i.test(error.message);
-  const parentNetworkFailure = window.location.pathname.startsWith("/parent-portal")
-    && /load failed|network error|failed to fetch/i.test(error.message);
-  return assetLoadFailure || parentNetworkFailure;
-}
+import { isRecoverableClientLoadFailure, recoverClientAssetsAndReload } from "@/lib/client-load-recovery";
 
 export default function GlobalError({
   error,
@@ -27,14 +17,7 @@ export default function GlobalError({
     reportClientError(error, "react.global_error", { digest: error.digest });
     if (!isRecoverableClientLoadFailure(error)) return;
 
-    try {
-      const lastRecoveryAt = Number(window.sessionStorage.getItem(CLIENT_LOAD_RECOVERY_KEY) || "0");
-      if (Date.now() - lastRecoveryAt < CLIENT_LOAD_RECOVERY_WINDOW_MS) return;
-      window.sessionStorage.setItem(CLIENT_LOAD_RECOVERY_KEY, String(Date.now()));
-    } catch {
-      return;
-    }
-    window.location.reload();
+    void recoverClientAssetsAndReload();
   }, [error]);
 
   return (

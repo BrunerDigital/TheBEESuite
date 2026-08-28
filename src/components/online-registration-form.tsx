@@ -430,7 +430,8 @@ export function OnlineRegistrationForm({
 
   function submitRegistration(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const payload = collectForm(event.currentTarget);
+    const formElement = event.currentTarget;
+    const payload = collectForm(formElement);
     setResult(null);
     startTransition(async () => {
       const response = await fetch("/api/registration", {
@@ -443,7 +444,7 @@ export function OnlineRegistrationForm({
         setResult(json ?? { error: "Registration could not be submitted." });
         return;
       }
-      event.currentTarget.reset();
+      formElement.reset();
       setResult(json);
     });
   }

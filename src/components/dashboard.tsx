@@ -227,15 +227,15 @@ function fteReportHref(centerId: string, weekStart?: string | null) {
 }
 
 function formatDashboardMoney(value: number | null | undefined) {
-  return value === null || value === undefined ? "Not set" : `$${value.toLocaleString()}`;
+  return value === null || value === undefined ? "Not set" : `$${value.toLocaleString("en-US")}`;
 }
 
 function formatDashboardPercent(value: number | null | undefined) {
-  return value === null || value === undefined ? "Not set" : `${value.toLocaleString()}%`;
+  return value === null || value === undefined ? "Not set" : `${value.toLocaleString("en-US")}%`;
 }
 
 function formatDashboardNumber(value: number | null | undefined) {
-  return value === null || value === undefined ? "Not set" : value.toLocaleString();
+  return value === null || value === undefined ? "Not set" : value.toLocaleString("en-US");
 }
 
 function formatDashboardDateTime(value: string | null | undefined, timeZone: string) {
@@ -320,7 +320,7 @@ function ExecutiveLensDashboard({
           <div className="rounded-xl border bg-background/50 p-4">
             <div className="text-xs text-muted-foreground">Average occupancy</div>
             <div className="mt-2 text-3xl font-semibold">{averageOccupancy}%</div>
-            <p className="mt-1 text-xs text-muted-foreground">{totalOpenSeats.toLocaleString()} open seats across visible schools</p>
+            <p className="mt-1 text-xs text-muted-foreground">{totalOpenSeats.toLocaleString("en-US")} open seats across visible schools</p>
             <Progress className="mt-3" value={averageOccupancy} />
           </div>
           <div className="rounded-xl border bg-background/50 p-4">
@@ -494,9 +494,9 @@ function ExecutiveLensDashboard({
                 <TableBody>
                   {metrics.fteSubmissions.map((submission) => {
                     const href = fteReportHref(submission.centerId, submission.weekStart);
-                    const startsLabel = submission.newStarts === null ? "Starts not set" : `${submission.newStarts.toLocaleString()} starts`;
-                    const withdrawalsLabel = submission.withdrawals === null ? "Withdrawn not set" : `${submission.withdrawals.toLocaleString()} withdrawn`;
-                    const preregisteredLabel = submission.preregisteredChildren === null ? "Preregistered not set" : `${submission.preregisteredChildren.toLocaleString()} preregistered`;
+                    const startsLabel = submission.newStarts === null ? "Starts not set" : `${submission.newStarts.toLocaleString("en-US")} starts`;
+                    const withdrawalsLabel = submission.withdrawals === null ? "Withdrawn not set" : `${submission.withdrawals.toLocaleString("en-US")} withdrawn`;
+                    const preregisteredLabel = submission.preregisteredChildren === null ? "Preregistered not set" : `${submission.preregisteredChildren.toLocaleString("en-US")} preregistered`;
                     return (
                       <TableRow key={submission.id}>
                         <TableCell className="max-w-[18rem] whitespace-normal">
@@ -510,8 +510,8 @@ function ExecutiveLensDashboard({
                           <div className="text-xs text-muted-foreground">{submission.weekEnd ? `Ends ${submission.weekEnd}` : "Week end not set"}</div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="font-medium">{submission.fteCount.toLocaleString()} FTE</div>
-                          <div className="text-xs text-muted-foreground">{submission.enrolledCount.toLocaleString()} enrolled · {submission.fullTimeCount.toLocaleString()} FT · {submission.partTimeCount.toLocaleString()} PT</div>
+                          <div className="font-medium">{submission.fteCount.toLocaleString("en-US")} FTE</div>
+                          <div className="text-xs text-muted-foreground">{submission.enrolledCount.toLocaleString("en-US")} enrolled · {submission.fullTimeCount.toLocaleString("en-US")} FT · {submission.partTimeCount.toLocaleString("en-US")} PT</div>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="font-medium">{formatDashboardMoney(submission.totalBilledAmount)}</div>
@@ -594,7 +594,7 @@ function ExecutiveLensDashboard({
                       <TableRow key={summary.id}>
                         <TableCell className="font-medium">{compactSchoolName(summary.schoolName)}</TableCell>
                         <TableCell>{summary.periodStart} to {summary.periodEnd}</TableCell>
-                        <TableCell className="text-right">{summary.employeeCount.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{summary.employeeCount.toLocaleString("en-US")}</TableCell>
                         <TableCell className="text-right">
                           {formatStaffDecimalHours(summary.regularMinutes)} / {formatStaffDecimalHours(summary.overtimeMinutes)}
                         </TableCell>
@@ -678,7 +678,7 @@ function ExecutiveLensDashboard({
             <div key={school.id} className="grid gap-2">
               <div className="flex items-center justify-between gap-3 text-sm">
                 <span className="truncate font-medium">{compactSchoolName(school.name)}</span>
-                <span className="text-muted-foreground">${school.revenueDollars.toLocaleString()}</span>
+                <span className="text-muted-foreground">${school.revenueDollars.toLocaleString("en-US")}</span>
               </div>
               <Progress value={(school.revenueDollars / maxRevenueDollars) * 100} />
             </div>
@@ -1340,7 +1340,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     <td>{school.staff}</td>
                     <td>{school.leads}</td>
                     <td>{school.toursToday}</td>
-                    <td>${school.revenueDollars.toLocaleString()}</td>
+                    <td>${school.revenueDollars.toLocaleString("en-US")}</td>
                     <td>{school.fteCount ?? 0}</td>
                     <td>{school.fteSubmitted ? school.fteStatus : "Missing"}</td>
                   </tr>
@@ -1356,8 +1356,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     <td>{week.week}</td>
                     <td>{week.submitted}</td>
                     <td>{week.missing}</td>
-                    <td>{week.fteTotal.toLocaleString()}</td>
-                    <td>{week.enrolledTotal.toLocaleString()}</td>
+                    <td>{week.fteTotal.toLocaleString("en-US")}</td>
+                    <td>{week.enrolledTotal.toLocaleString("en-US")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1370,8 +1370,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   <tr key={submission.id}>
                     <td>{submission.schoolName}</td>
                     <td>{submission.weekStart}</td>
-                    <td>{submission.fteCount.toLocaleString()}</td>
-                    <td>{submission.enrolledCount.toLocaleString()}</td>
+                    <td>{submission.fteCount.toLocaleString("en-US")}</td>
+                    <td>{submission.enrolledCount.toLocaleString("en-US")}</td>
                     <td>{formatDashboardMoney(submission.totalBilledAmount)}</td>
                     <td>{formatDashboardMoney(submission.payrollAmount)}</td>
                     <td>{formatDashboardNumber(submission.newStarts)}</td>
@@ -1398,7 +1398,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     <td>{point.leads}</td>
                     <td>{point.tours}</td>
                     <td>{point.enrolled}</td>
-                    <td>${point.revenue.toLocaleString()}</td>
+                    <td>${point.revenue.toLocaleString("en-US")}</td>
                   </tr>
                 ))}
               </tbody>

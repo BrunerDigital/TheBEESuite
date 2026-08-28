@@ -79,6 +79,19 @@ test("an exact family-funded tuition assignment does not request a second respon
       tuitionBillingDisabledReason: "director_disabled",
     },
   }), false);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    ...invoiceFields,
+    childId: undefined,
+    childIds: ["child_granbury", "child_sibling"],
+  }, 7_000, child, {
+    id: "child_sibling",
+    customFields: { ...child.customFields, tuitionNetAmountCents: 3_000 },
+  }), true);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    ...invoiceFields,
+    childId: undefined,
+    childIds: ["child_granbury", "child_sibling"],
+  }, 7_000, child), false);
 });
 
 test("account review resolves only when every open invoice has an exact separation", () => {

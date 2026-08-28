@@ -158,16 +158,25 @@ function confirmedNetFamilyTuitionInvoice(fields: Record<string, unknown>, curre
 function confirmedFamilyOnlyTuitionAssignment(fields: Record<string, unknown>, currentInvoiceTotalCents: number | undefined, evidence: unknown[]) {
   if (text(fields.chargeSource) !== "tuitionPlan") return false;
   if (!Number.isInteger(currentInvoiceTotalCents) || (currentInvoiceTotalCents ?? -1) < 0) return false;
-  const invoiceChildId = text(fields.childId);
+  const invoiceChildIds = [
+    text(fields.childId),
+    ...(Array.isArray(fields.childIds) ? fields.childIds.map(text) : []),
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
   const invoicePlanId = text(fields.sourceId);
   const invoiceWeekCount = Number.isInteger(fields.invoiceWeekCount) && Number(fields.invoiceWeekCount) > 0
     ? Number(fields.invoiceWeekCount)
     : 1;
-  if (!invoiceChildId || !invoicePlanId) return false;
+  if (!invoiceChildIds.length || !invoicePlanId) return false;
 
-  const visit = (value: unknown): boolean => {
-    if (Array.isArray(value)) return value.some(visit);
-    if (!value || typeof value !== "object") return false;
+  const assignmentAmount = (value: unknown): number | null => {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const amount = assignmentAmount(item);
+        if (amount !== null) return amount;
+      }
+      return null;
+    }
+    if (!value || typeof value !== "object") return null;
     const assignment = record(value);
     const billingEvidenceApplies = assignment.tuitionBillingEnabled === true
       || (
@@ -178,13 +187,23 @@ function confirmedFamilyOnlyTuitionAssignment(fields: Record<string, unknown>, c
       text(assignment.tuitionFundingType).toLowerCase() === "family"
       && billingEvidenceApplies
       && text(assignment.tuitionPlanId) === invoicePlanId
-      && (cents(assignment.tuitionNetAmountCents) ?? -1) * invoiceWeekCount === currentInvoiceTotalCents
-    ) return true;
-    return Object.values(assignment).some(visit);
+    ) return cents(assignment.tuitionNetAmountCents);
+    for (const item of Object.values(assignment)) {
+      const amount = assignmentAmount(item);
+      if (amount !== null) return amount;
+    }
+    return null;
   };
 
-  return evidence.some((value) => {
-    const item = record(value);
-    return (!text(item.id) || text(item.id) === invoiceChildId) && visit(value);
-  });
+  let weeklyTotalCents = 0;
+  for (const childId of invoiceChildIds) {
+    const matchingEvidence = evidence.find((value) => {
+      const evidenceId = text(record(value).id);
+      const childMatches = invoiceChildIds.length > 1 ? evidenceId === childId : (!evidenceId || evidenceId === childId);
+      return childMatches && assignmentAmount(value) !== null;
+    });
+    if (!matchingEvidence) return false;
+    weeklyTotalCents += assignmentAmount(matchingEvidence) ?? 0;
+  }
+  return weeklyTotalCents * invoiceWeekCount === currentInvoiceTotalCents;
 }

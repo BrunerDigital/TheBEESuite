@@ -381,7 +381,10 @@ async function processPayment(body: Record<string, unknown>) {
     : paymentCollectionResponsibilityHoldRequired({
         accountBalanceCents: billingAccount.balanceCents,
         agencyLedgerEntries: billingAccount.ledgerEntries,
-        invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(billingAccount.invoices),
+        invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(
+          billingAccount.invoices,
+          ...billingAccount.family.children.map((child) => ({ id: child.id, customFields: child.customFields })),
+        ),
         responsibilityEvidence,
       });
   if (responsibilityReviewRequired) {

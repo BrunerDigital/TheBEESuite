@@ -2573,7 +2573,11 @@ async function renderLivePage(
         invoiceTotalCents: invoice.totalCents,
         customFields: invoice.customFields,
       });
-      const familyOnly = invoiceResponsibilityReviewExempt(invoice.customFields, invoice.totalCents);
+      const familyOnly = invoiceResponsibilityReviewExempt(
+        invoice.customFields,
+        invoice.totalCents,
+        ...(family?.children.map((child) => ({ id: child.id, customFields: child.customFields })) ?? []),
+      );
       const amountCents = separated?.familyResponsibilityCents ?? (familyOnly ? invoice.totalCents : null);
       return [invoice.id, {
         amountCents,
@@ -2666,7 +2670,10 @@ async function renderLivePage(
       ? parentBalanceNeedsResponsibilityReview({
           accountBalanceCents: billingAccount.balanceCents,
           agencyLedgerEntries,
-          invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(billingAccount.invoices),
+          invoiceResponsibilitySeparated: allOpenInvoicesResponsibilitySeparated(
+            billingAccount.invoices,
+            ...(family?.children.map((child) => ({ id: child.id, customFields: child.customFields })) ?? []),
+          ),
           responsibilityEvidence: [
             billingAccount.customFields,
             family?.customFields,

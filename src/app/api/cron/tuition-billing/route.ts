@@ -103,7 +103,7 @@ async function GETHandler(request: NextRequest) {
   const dueChildren = candidateChildren.flatMap((entry) => {
     const plan = plansById.get(entry.planId);
     if (!plan || plan.centerId !== entry.child.family.centerId) return [];
-    const amountCents = plan.amountCents ?? entry.snapshotAmountCents;
+    const amountCents = plan.amountCents > 0 ? plan.amountCents : entry.snapshotAmountCents;
     const tuitionAdditionalChargesTotalCents = totalTuitionAdditionalChargesCents(normalizeTuitionAdditionalCharges(entry.fields.tuitionAdditionalCharges));
     const tuitionCreditsTotalCents = totalTuitionCreditsCents(normalizeTuitionCredits(entry.fields.tuitionCredits));
     if (tuitionCreditsTotalCents >= amountCents + tuitionAdditionalChargesTotalCents) {
@@ -126,7 +126,7 @@ async function GETHandler(request: NextRequest) {
     if (!shouldCreateRecurringTuitionInvoice({
       enabled: true,
       planId: entry.planId,
-      amountCents: plan?.amountCents ?? entry.snapshotAmountCents,
+      amountCents: plan.amountCents > 0 ? plan.amountCents : entry.snapshotAmountCents,
       startsPeriod,
       billingPeriod,
       billingDay,
@@ -148,7 +148,7 @@ async function GETHandler(request: NextRequest) {
       const results = await Promise.allSettled(batch.map(async (entry) => {
         const plan = plansById.get(entry.planId);
         const description = clean(entry.fields.tuitionBillingDescription) || plan?.name || clean(entry.fields.tuitionPlanName) || "Tuition";
-        const amountCents = plan?.amountCents ?? entry.snapshotAmountCents;
+        const amountCents = plan && plan.amountCents > 0 ? plan.amountCents : entry.snapshotAmountCents;
         const tuitionAdditionalCharges = normalizeTuitionAdditionalCharges(entry.fields.tuitionAdditionalCharges);
         const tuitionAdditionalChargesTotalCents = totalTuitionAdditionalChargesCents(tuitionAdditionalCharges);
         const tuitionCredits = normalizeTuitionCredits(entry.fields.tuitionCredits);

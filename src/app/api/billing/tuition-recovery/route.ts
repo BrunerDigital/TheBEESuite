@@ -101,7 +101,7 @@ async function POSTHandler(request: NextRequest) {
     if (!shouldCreateRecurringTuitionInvoice({
       enabled: true,
       planId: entry.planId,
-      amountCents: plan.amountCents ?? entry.snapshotAmountCents,
+      amountCents: plan.amountCents > 0 ? plan.amountCents : entry.snapshotAmountCents,
       startsPeriod,
       billingPeriod,
       billingDay: WEEKLY_TUITION_AUTOBILL_DAY,
@@ -141,7 +141,7 @@ async function POSTHandler(request: NextRequest) {
       const results = await Promise.allSettled(batch.map(async (entry) => {
         const plan = plansById.get(entry.planId);
         const description = clean(entry.fields.tuitionBillingDescription) || plan?.name || clean(entry.fields.tuitionPlanName) || "Tuition";
-        const amountCents = plan?.amountCents ?? entry.snapshotAmountCents;
+        const amountCents = plan && plan.amountCents > 0 ? plan.amountCents : entry.snapshotAmountCents;
         const tuitionAdditionalCharges = normalizeTuitionAdditionalCharges(entry.fields.tuitionAdditionalCharges);
         const tuitionAdditionalChargesTotalCents = totalTuitionAdditionalChargesCents(tuitionAdditionalCharges);
         const tuitionCredits = normalizeTuitionCredits(entry.fields.tuitionCredits);

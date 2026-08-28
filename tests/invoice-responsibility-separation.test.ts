@@ -30,6 +30,12 @@ test("parent responsibility evidence covers every open account invoice beyond th
   );
 });
 
+test("tuition assignment edits retain immutable evidence for existing invoices", () => {
+  const source = readFileSync(new URL("../src/app/api/billing/tuition-assignments/route.ts", import.meta.url), "utf8");
+  assert.ok((source.match(/tuitionAssignmentHistory,/g) ?? []).length >= 2);
+  assert.match(source, /const priorSnapshot = clean\(existingFields\.tuitionPlanId\)/);
+});
+
 test("a reviewed invoice separation preserves exact family, agency, and gross totals", () => {
   assert.deepEqual(invoiceResponsibilitySeparation({ responsibilitySeparation: separation }), separation);
   assert.deepEqual(responsibilitySeparatedBillingAmounts({
@@ -79,6 +85,16 @@ test("an exact family-funded tuition assignment does not request a second respon
       tuitionBillingDisabledReason: "director_disabled",
     },
   }), false);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, {
+    ...child,
+    customFields: {
+      tuitionPlanId: "new_plan",
+      tuitionNetAmountCents: 9_000,
+      tuitionFundingType: "family",
+      tuitionBillingEnabled: true,
+      tuitionAssignmentHistory: [child.customFields],
+    },
+  }), true);
   assert.equal(invoiceResponsibilityReviewExempt({
     ...invoiceFields,
     childId: undefined,

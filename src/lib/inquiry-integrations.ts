@@ -144,6 +144,7 @@ export async function sendInquiryNotificationEmail(
     subject,
     text: lines.join("\n"),
     fromName: "The BEE Suite",
+    disableClickTracking: true,
     categories: ["inquiry_notification"],
     customArgs: {
       leadId: String(payload.leadId || ""),

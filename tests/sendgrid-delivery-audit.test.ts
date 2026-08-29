@@ -24,4 +24,9 @@ test("every SendGrid sender is covered by IntegrationDelivery auditing", () => {
   });
   assert.deepEqual(missing, [], `Unaudited SendGrid senders: ${missing.join(", ")}`);
   assert.match(readFileSync("src/app/api/inquiries/route.ts", "utf8"), /provider:\s*["']sendgrid["']/);
+  assert.match(
+    readFileSync("src/lib/inquiry-integrations.ts", "utf8"),
+    /sendEmail\(\{[\s\S]*?disableClickTracking:\s*true,[\s\S]*?categories:\s*\["inquiry_notification"\]/,
+    "inquiry notification links must bypass SendGrid's tracking-domain rewrite",
+  );
 });

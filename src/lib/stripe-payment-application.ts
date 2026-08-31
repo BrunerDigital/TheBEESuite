@@ -166,7 +166,7 @@ async function applyRegistrationPaymentCompletion(
   }
 }
 
-async function applyBalancePaymentToOpenInvoices(
+export async function applyFamilyBalancePaymentToOpenInvoices(
   tx: Prisma.TransactionClient,
   input: {
     billingAccountId: string;
@@ -708,7 +708,7 @@ export async function applySucceededStripeFamilyBalancePayment(
       }),
     },
   });
-  const appliedInvoiceIds = await applyBalancePaymentToOpenInvoices(tx, {
+  const appliedInvoiceIds = await applyFamilyBalancePaymentToOpenInvoices(tx, {
     billingAccountId: payment.billingAccountId,
     paymentId: payment.id,
     amountCents: payment.amountCents,

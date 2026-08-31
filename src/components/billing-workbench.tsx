@@ -942,6 +942,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         created?: number;
         skipped?: number;
         totalCents?: number;
+        appliedInvoiceIds?: string[];
         warning?: string | null;
         pendingApproval?: boolean;
       } | null;
@@ -951,7 +952,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       }
       if (payload.mode === "manualCheckPayment") {
         const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
-        setStatusMessage(`${total} check payment posted to the family ledger.`);
+        const appliedCount = json?.appliedInvoiceIds?.length ?? 0;
+        setStatusMessage(`${total} check payment posted.${appliedCount ? ` ${appliedCount} open invoice${appliedCount === 1 ? " was" : "s were"} marked paid.` : " The family balance was updated."}`);
         setCheckAmountDollars("");
         setCheckNumber("");
         setCheckNotes("");
@@ -961,7 +963,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       }
       if (payload.mode === "manualCashPayment") {
         const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
-        setStatusMessage(`${total} cash payment posted to the family ledger.`);
+        const appliedCount = json?.appliedInvoiceIds?.length ?? 0;
+        setStatusMessage(`${total} cash payment posted.${appliedCount ? ` ${appliedCount} open invoice${appliedCount === 1 ? " was" : "s were"} marked paid.` : " The family balance was updated."}`);
         setCashAmountDollars("");
         setCashReference("");
         setCashNotes("");
@@ -971,7 +974,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       }
       if (payload.mode === "payrollDeductionPayment") {
         const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
-        setStatusMessage(`${total} verified payroll deduction posted to the family ledger.`);
+        const appliedCount = json?.appliedInvoiceIds?.length ?? 0;
+        setStatusMessage(`${total} verified payroll deduction posted.${appliedCount ? ` ${appliedCount} open invoice${appliedCount === 1 ? " was" : "s were"} marked paid.` : " The family balance was updated."}`);
         setPayrollAmountDollars("");
         setPayrollReference("");
         setPayrollNotes("");
@@ -2522,7 +2526,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           <TabsContent value="check" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <div>
               <div className="text-sm font-medium">Record a payment received by check</div>
-              <p className="mt-1 text-xs text-muted-foreground">This posts a completed manual payment and reduces the family ledger balance. Keep the physical check according to the school&apos;s deposit policy.</p>
+              <p className="mt-1 text-xs text-muted-foreground">This posts a completed payment, reduces the family balance, and automatically marks fully covered oldest invoices paid. Keep the physical check according to the school&apos;s deposit policy.</p>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
@@ -2551,7 +2555,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           <TabsContent value="cash" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <div>
               <div className="text-sm font-medium">Record a payment received in cash</div>
-              <p className="mt-1 text-xs text-muted-foreground">This posts a completed cash payment, immediately reduces the selected family balance, and adds an auditable ledger credit.</p>
+              <p className="mt-1 text-xs text-muted-foreground">This posts a completed cash payment, reduces the family balance, and automatically marks fully covered oldest invoices paid. Only an amount beyond all outstanding charges remains as account credit.</p>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
@@ -2580,7 +2584,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           <TabsContent value="payroll" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <div>
               <div className="text-sm font-medium">Record childcare already withheld through payroll</div>
-              <p className="mt-1 text-xs text-muted-foreground">Use this only after payroll confirms the deduction. It is an offline family payment—not a discount or employer benefit—and it reduces the family ledger once with an auditable pay-period reference.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Use this only after payroll confirms the deduction. It is an offline family payment—not a discount or employer benefit—and it reduces the family balance once, automatically marks fully covered oldest invoices paid, and keeps an auditable pay-period reference.</p>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">

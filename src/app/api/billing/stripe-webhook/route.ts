@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
-import { checkoutApplicationGuard } from "@/lib/billing-guardrails";
+import { checkoutApplicationGuard, stripePaymentIntentFailureDisposition } from "@/lib/billing-guardrails";
 import {
   createStripeSoftwareSubscription,
   ensureStripeSoftwareRecurringPrice,
@@ -1696,14 +1696,8 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
     return NextResponse.json({ ok: true, ignored: true, reason: "Missing payment metadata." });
   }
   const collectionMode = clean(metadata.collectionMode);
-  const failedStatus = collectionMode === "autopay"
-    ? "autopay_failed"
-    : collectionMode === "stored_method"
-      ? "stored_method_failed"
-      : collectionMode === "director_saved_method"
-        ? "director_saved_method_failed"
-        : "payment_intent_failed";
   let failureApplied = false;
+  let recoverableCheckoutFailure = false;
   let paymentFound = false;
   let storedBillingAccountId: string | null = null;
   let verifiedInvoiceId: string | null = null;
@@ -1727,10 +1721,15 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
         });
         verifiedInvoiceId = verifiedInvoice?.id ?? null;
       }
+      const disposition = stripePaymentIntentFailureDisposition({
+        collectionMode,
+        customFields: currentFields,
+      });
+      recoverableCheckoutFailure = disposition.recoverableCheckout;
       const failedPayment = await tx.payment.updateMany({
         where: { id: metadata.paymentId, status: { in: [PaymentStatus.DRAFT, PaymentStatus.FAILED] } },
         data: {
-          status: PaymentStatus.FAILED,
+          status: disposition.paymentStatus,
           customFields: {
             ...currentFields,
             stripePaymentIntentId: paymentIntent.id,
@@ -1740,7 +1739,7 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
             stripeFailureMessage: paymentIntent.last_payment_error?.message || null,
             failedAt: new Date().toISOString(),
             collectionMode: collectionMode || null,
-            status: failedStatus,
+            status: disposition.customStatus,
           },
         },
       });
@@ -1778,10 +1777,19 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
           ? "billing.stored_method.failed"
           : collectionMode === "director_saved_method"
             ? "billing.family_payment.payment_intent_failed"
-          : "billing.payment_intent.failed",
+          : recoverableCheckoutFailure
+            ? "billing.checkout.payment_method_retry_required"
+            : "billing.payment_intent.failed",
     );
   } else if (clean(metadata.paymentScope) === "family_balance" && metadata.billingAccountId) {
-    await writeBillingAccountSystemAudit(metadata.billingAccountId, event.id, paymentIntent.id, "billing.family_payment.payment_intent_failed");
+    await writeBillingAccountSystemAudit(
+      metadata.billingAccountId,
+      event.id,
+      paymentIntent.id,
+      recoverableCheckoutFailure
+        ? "billing.family_payment.checkout_payment_method_retry_required"
+        : "billing.family_payment.payment_intent_failed",
+    );
   }
   return NextResponse.json({ ok: true });
 }

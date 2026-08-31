@@ -58,8 +58,10 @@ export function stripeCheckoutDraftConnectedAccountId(
     : fallbackConnectedAccountId || null;
 }
 
-function isOpenUnpaidDraftSession(session: StripeCheckoutSessionSnapshot) {
-  return session.status === "open" && session.paymentStatus === "unpaid" && !session.paymentIntentId;
+function isRecoverableOpenUnpaidDraftSession(session: StripeCheckoutSessionSnapshot) {
+  return session.status === "open"
+    && session.paymentStatus === "unpaid"
+    && (!session.paymentIntentId || session.paymentIntentStatus === "requires_payment_method");
 }
 
 export function stripeCheckoutDraftReplacementReason({
@@ -83,7 +85,7 @@ export function stripeCheckoutDraftReplacementReason({
   expectedCheckoutTotalCents?: number | null;
   expectedFeeDisclosureVersion?: string | null;
 }) {
-  if (!isOpenUnpaidDraftSession(session)) return null;
+  if (!isRecoverableOpenUnpaidDraftSession(session)) return null;
   if (
     typeof expectedAmountCents === "number" &&
     Number.isFinite(expectedAmountCents) &&
@@ -132,7 +134,7 @@ export function stripeCheckoutDraftClearReason(
   const isStaleOpen =
     session.status === "open" &&
     session.paymentStatus === "unpaid" &&
-    !session.paymentIntentId &&
+    (!session.paymentIntentId || session.paymentIntentStatus === "requires_payment_method") &&
     ageMs !== null &&
     ageMs >= staleOpenAfterMs;
   if (isStaleOpen) return "stale_open" as const;
@@ -291,7 +293,7 @@ export async function resolveStripeCheckoutDraftBlocker({
   });
 
   const refreshedPayment = { ...payment, customFields: refreshedFields };
-  if (isOpenUnpaidDraftSession(session) && session.url) {
+  if (isRecoverableOpenUnpaidDraftSession(session) && session.url) {
     return {
       blocked: false as const,
       resumed: true as const,

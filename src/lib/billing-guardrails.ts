@@ -93,6 +93,36 @@ export function isActiveStripeAutopayPayment(payment: {
     fields.status === "stored_method_succeeded_pending_webhook";
 }
 
+export function stripePaymentIntentFailureDisposition({
+  collectionMode,
+  customFields,
+}: {
+  collectionMode?: string | null;
+  customFields?: unknown;
+}) {
+  const fields = jsonRecord(customFields);
+  const normalizedCollectionMode = stringField(collectionMode);
+  const failedStatus = normalizedCollectionMode === "autopay"
+    ? "autopay_failed"
+    : normalizedCollectionMode === "stored_method"
+      ? "stored_method_failed"
+      : normalizedCollectionMode === "director_saved_method"
+        ? "director_saved_method_failed"
+        : "payment_intent_failed";
+  const checkoutStatus = stringField(fields.status);
+  const checkoutSessionId = stringField(fields.stripeCheckoutSessionId);
+  const recoverableCheckout = Boolean(checkoutSessionId)
+    && (checkoutStatus === "checkout_created" || checkoutStatus === "checkout_pending")
+    && normalizedCollectionMode !== "autopay"
+    && normalizedCollectionMode !== "stored_method"
+    && normalizedCollectionMode !== "director_saved_method";
+  return {
+    paymentStatus: recoverableCheckout ? PaymentStatus.DRAFT : PaymentStatus.FAILED,
+    customStatus: recoverableCheckout ? "checkout_created" : failedStatus,
+    recoverableCheckout,
+  };
+}
+
 export function checkoutApplicationGuard(input: {
   invoiceStatus: PaymentStatus;
   invoiceBillingAccountId: string;

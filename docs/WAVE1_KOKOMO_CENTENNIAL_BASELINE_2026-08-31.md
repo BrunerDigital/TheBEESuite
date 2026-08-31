@@ -1,8 +1,11 @@
 # Wave 1 Kokomo and Centennial Baseline
 
-Generated: August 31, 2026  
-Mode: read-only production inspection  
-Primary full-workflow school: **Kid City USA - Kokomo**  
+Generated: August 31, 2026
+
+Mode: read-only production inspection
+
+Primary full-workflow school: **Kid City USA - Kokomo**
+
 Cross-brand isolation school: **Miss Honey's Learning Center - Centennial**
 
 ## Decision and purpose

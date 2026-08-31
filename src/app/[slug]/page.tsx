@@ -352,6 +352,17 @@ function stringField(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function paymentAppliedInvoiceIds(customFields: unknown) {
+  const fields = recordFromJson(customFields);
+  const invoiceId = stringField(fields.invoiceId);
+  const appliedInvoiceIds = Array.isArray(fields.appliedInvoiceIds)
+    ? fields.appliedInvoiceIds
+      .map((value) => stringField(value))
+      .filter((value): value is string => Boolean(value))
+    : [];
+  return [...new Set([...(invoiceId ? [invoiceId] : []), ...appliedInvoiceIds])];
+}
+
 function numberField(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -2549,6 +2560,33 @@ async function renderLivePage(
         })
       : [];
     const invoiceChildNames = new Map(invoiceChildren.map((child) => [child.id, child.fullName]));
+    const parentPaymentInvoiceIds = [...new Set(
+      (billingAccount?.payments ?? []).flatMap((payment) => paymentAppliedInvoiceIds(payment.customFields)),
+    )];
+    const parentPaymentInvoices = parentPaymentInvoiceIds.length && billingAccount
+      ? await prisma.invoice.findMany({
+          where: { id: { in: parentPaymentInvoiceIds }, billingAccountId: billingAccount.id },
+          select: { id: true, number: true },
+        })
+      : [];
+    const parentPaymentInvoiceNumberById = new Map(parentPaymentInvoices.map((invoice) => [invoice.id, invoice.number]));
+    const parentPayments = (billingAccount?.payments ?? []).map((payment) => {
+      const fields = recordFromJson(payment.customFields);
+      const invoiceNumbers = paymentAppliedInvoiceIds(fields)
+        .map((invoiceId) => parentPaymentInvoiceNumberById.get(invoiceId))
+        .filter((number): number is string => Boolean(number));
+      return {
+        ...payment,
+        invoiceNumber: invoiceNumbers.length === 1 ? invoiceNumbers[0] : null,
+        paymentReferenceLabel: invoiceNumbers.length === 1
+          ? `Invoice ${invoiceNumbers[0]}`
+          : invoiceNumbers.length > 1
+            ? `Invoices ${invoiceNumbers.join(", ")}`
+            : fields.paymentScope === "family_balance"
+              ? "Family balance payment"
+              : "Family account payment",
+      };
+    });
     const pendingPaymentByInvoiceId = new Map<string, Omit<ReturnType<typeof activeStripeCheckoutPaymentSummary>, "amountCents">>();
     for (const payment of billingAccount?.payments ?? []) {
       if (!isActiveStripeCheckoutPayment(payment)) continue;
@@ -2714,7 +2752,7 @@ async function renderLivePage(
         paymentMethodReauthorizationPreservesAutopay={paymentMethodReauthorizationPreservesAutopay}
         parentBalanceReviewRequired={parentBalanceReviewRequired}
         parentBalanceVisibilityConfirmed={parentBalanceVisibilityConfirmed}
-        payments={billingAccount?.payments ?? []}
+        payments={parentPayments}
         latestLedgerEntry={latestLedgerEntry}
         ledgerEntries={billingAccount?.ledgerEntries.slice(0, PARENT_LEDGER_PAGE_SIZE) ?? []}
         ledgerPagination={{

@@ -20,6 +20,12 @@ test("parent invoice documents include DCFSA service evidence", () => {
   assert.match(page, /Family responsibility/);
   assert.match(page, /familyDocumentAmountCents/);
   assert.match(portal, /InvoicePrintButton/);
+  assert.match(portal, /View \/ print invoice/);
+  assert.match(portal, /PaymentReceiptPrintButton/);
+  assert.match(portal, /View \/ print receipt/);
+  assert.match(page, /paymentAppliedInvoiceIds/);
+  assert.match(page, /appliedInvoiceIds/);
+  assert.match(page, /paymentReferenceLabel/);
   assert.match(portal, /Purchase Invoice/);
   assert.match(print, /School EIN/);
   assert.match(print, /Service period/);

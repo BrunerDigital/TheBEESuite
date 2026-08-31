@@ -159,7 +159,15 @@ export function LedgerPrintButton({ entries, schools }: { entries: BillingLedger
   );
 }
 
-export function PaymentReceiptPrintButton({ payment, schools }: { payment: BillingPaymentReceipt; schools: BillingReceiptSchool[] }) {
+export function PaymentReceiptPrintButton({
+  payment,
+  schools,
+  buttonLabel = "Receipt",
+}: {
+  payment: BillingPaymentReceipt;
+  schools: BillingReceiptSchool[];
+  buttonLabel?: string;
+}) {
   const timeZone = useSchoolTimeZone(payment.billingAccount.family.centerId);
   const { active, generatedAt, print } = usePrintableReport();
   const school = schoolForCenterId(schools, payment.billingAccount.family.centerId);
@@ -170,7 +178,7 @@ export function PaymentReceiptPrintButton({ payment, schools }: { payment: Billi
       <ReportPrintStyles />
       <Button type="button" variant="outline" size="sm" onClick={print} disabled={!paid}>
         <Printer data-icon="inline-start" />
-        Receipt
+        {buttonLabel}
       </Button>
       <PrintableReport active={active} label="Printable customer payment receipt">
         <header style={{ marginBottom: 20 }}>
@@ -228,11 +236,13 @@ export function InvoicePrintButton({
   familyName,
   schoolName,
   schoolEin,
+  buttonLabel = "Invoice",
 }: {
   invoice: BillingInvoiceDocument;
   familyName: string;
   schoolName: string | null;
   schoolEin: string | null;
+  buttonLabel?: string;
 }) {
   const timeZone = useSchoolTimeZone();
   const { active, generatedAt, print } = usePrintableReport();
@@ -242,7 +252,7 @@ export function InvoicePrintButton({
       <ReportPrintStyles />
       <Button type="button" variant="outline" size="sm" onClick={print}>
         <Printer data-icon="inline-start" />
-        Invoice
+        {buttonLabel}
       </Button>
       <PrintableReport active={active} label={`Printable invoice ${invoice.number}`}>
         <header style={{ marginBottom: 20 }}>

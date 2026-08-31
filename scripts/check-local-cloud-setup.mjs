@@ -49,7 +49,7 @@ const remote = run("git", ["remote", "get-url", "origin"]);
 const status = run("git", ["status", "--short"]);
 const head = run("git", ["rev-parse", "HEAD"]);
 const upstream = run("git", ["rev-parse", "@{upstream}"]);
-const branchReady = branch === "main" || branch.startsWith("work/");
+const branchReady = branch === "main" || branch.startsWith("work/") || branch.startsWith("initiative/");
 
 lines.push(statusLine(branchReady, "Git branch", branch || "unknown"));
 lines.push(statusLine(remote === expected.gitRemote, "GitHub remote", remote || "missing"));
@@ -63,7 +63,12 @@ lines.push(
 if (existsSync(".vercel/project.json")) {
   const project = readJson(".vercel/project.json");
   lines.push(statusLine(project.projectId === expected.vercelProjectId, "Vercel project", project.projectName || project.projectId));
-  lines.push(statusLine(project.orgId === expected.vercelOrgId, "Vercel team", project.orgId));
+  lines.push(statusLine(project.orgId === expected.vercelOrgId, "Vercel owner", project.orgId));
+} else if (existsSync(".vercel/repo.json")) {
+  const repo = readJson(".vercel/repo.json");
+  const project = repo.projects?.find((candidate) => candidate.directory === ".") ?? repo.projects?.[0];
+  lines.push(statusLine(project?.id === expected.vercelProjectId, "Vercel project", project?.name || project?.id || "missing"));
+  lines.push(statusLine(project?.orgId === expected.vercelOrgId, "Vercel owner", project?.orgId || "missing"));
 } else {
   lines.push(statusLine(false, "Vercel project", "run npm run cloud:link"));
 }

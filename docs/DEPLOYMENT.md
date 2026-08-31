@@ -8,7 +8,7 @@ The BEE Suite production app is deployed on Vercel from GitHub and uses Supabase
 
 - Live app: `https://thebeesuite.io`
 - Vercel project: `the-bee-suite`
-- Vercel scope: `brunerdigitals-projects`
+- Vercel owner: `brunerdigital` (current CLI commands do not require a scope flag)
 - GitHub repository: `BrunerDigital/TheBEESuite`
 - Framework: Next.js 16.2.11 App Router
 - Production build command: `npm run vercel-build`
@@ -53,9 +53,9 @@ Invoke-WebRequest -Uri "https://thebeesuite.io/api/health" -UseBasicParsing
 Useful CLI commands:
 
 ```bash
-npx vercel ls --scope brunerdigitals-projects
-npx vercel inspect <deployment-url-or-id> --scope brunerdigitals-projects
-npx vercel redeploy <deployment-id> --target production --scope brunerdigitals-projects
+npx vercel ls
+npx vercel inspect <deployment-url-or-id>
+npx vercel redeploy <deployment-id> --target production
 npx vercel logs <deployment-id> --since 15m --level error
 npx vercel logs <deployment-id> --since 15m --status-code 500
 ```

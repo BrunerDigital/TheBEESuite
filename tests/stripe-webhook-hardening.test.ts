@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { stripeWebhookSecretFingerprint, verifyStripeSignature } from "../src/lib/integrations";
+import { stripePaymentIntentFailureDisposition } from "../src/lib/billing-guardrails";
 import { succeededFamilyBalancePaymentClaim } from "../src/lib/stripe-payment-application";
 import { STRIPE_WEBHOOK_SUPPORTED_EVENT_TYPES, stripeWebhookObjectForRouting } from "../src/lib/stripe-webhook-event-types";
 import {
@@ -86,6 +87,39 @@ test("a succeeded family payment recovers only the same previously failed Paymen
     storedStripePaymentIntentId: "pi_succeeded",
     succeededStripePaymentIntentId: "pi_succeeded",
   }).reason, "payment_already_applied");
+});
+
+test("Checkout payment-method failures stay recoverable without weakening off-session failures", () => {
+  assert.deepEqual(stripePaymentIntentFailureDisposition({
+    collectionMode: "parent_checkout",
+    customFields: {
+      status: "checkout_created",
+      stripeCheckoutSessionId: "cs_retryable",
+    },
+  }), {
+    paymentStatus: "DRAFT",
+    customStatus: "checkout_created",
+    recoverableCheckout: true,
+  });
+  assert.deepEqual(stripePaymentIntentFailureDisposition({
+    collectionMode: "autopay",
+    customFields: {
+      status: "autopay_processing",
+      stripeCheckoutSessionId: "cs_not_recoverable",
+    },
+  }), {
+    paymentStatus: "FAILED",
+    customStatus: "autopay_failed",
+    recoverableCheckout: false,
+  });
+  assert.deepEqual(stripePaymentIntentFailureDisposition({
+    collectionMode: "director_saved_method",
+    customFields: { status: "director_saved_method_processing" },
+  }), {
+    paymentStatus: "FAILED",
+    customStatus: "director_saved_method_failed",
+    recoverableCheckout: false,
+  });
 });
 
 test("concurrent deliveries reserve exactly one durable receipt", async () => {

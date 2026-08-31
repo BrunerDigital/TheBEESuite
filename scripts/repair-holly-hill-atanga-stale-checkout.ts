@@ -239,7 +239,7 @@ async function main() {
     const updated = await tx.payment.updateMany({
       where: {
         id: lockedTarget.id,
-        billingAccountId: locked.family.billingAccount!.id,
+        billingAccountId: before.family.billingAccount!.id,
         provider: "stripe",
         status: PaymentStatus.DRAFT,
         externalIdPlaceholder: targetSessionId,

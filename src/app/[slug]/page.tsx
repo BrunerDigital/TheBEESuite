@@ -2470,6 +2470,7 @@ async function renderLivePage(
     const parentPortalFamily = family
       ? {
           ...family,
+          centerId: resolvedParentCenterId,
           children: family.children.map((child) => {
             const attendance = parentAttendanceByChild.get(child.id);
             const latestCheck = parentLatestCheckByChild.get(child.id);
@@ -2577,7 +2578,7 @@ async function renderLivePage(
         .filter((number): number is string => Boolean(number));
       return {
         ...payment,
-        invoiceNumber: invoiceNumbers.length === 1 ? invoiceNumbers[0] : null,
+        invoiceNumber: invoiceNumbers.length ? invoiceNumbers.join(", ") : null,
         paymentReferenceLabel: invoiceNumbers.length === 1
           ? `Invoice ${invoiceNumbers[0]}`
           : invoiceNumbers.length > 1

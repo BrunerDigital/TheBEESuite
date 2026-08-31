@@ -213,7 +213,7 @@ export function PaymentReceiptPrintButton({
               <td>{payment.paymentReferenceLabel}</td>
             </tr>
             <tr>
-              <th>Invoice</th>
+              <th>Invoice reference</th>
               <td>{payment.invoiceNumber ?? "Not linked"}</td>
             </tr>
             <tr>

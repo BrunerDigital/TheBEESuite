@@ -26,8 +26,11 @@ test("parent invoice documents include DCFSA service evidence", () => {
   assert.match(page, /paymentAppliedInvoiceIds/);
   assert.match(page, /appliedInvoiceIds/);
   assert.match(page, /paymentReferenceLabel/);
+  assert.match(page, /invoiceNumbers\.join\(", "\)/);
+  assert.match(page, /centerId: resolvedParentCenterId/);
   assert.match(portal, /Purchase Invoice/);
   assert.match(print, /School EIN/);
+  assert.match(print, /Invoice reference/);
   assert.match(print, /Service period/);
   assert.match(print, /Amount/);
 });

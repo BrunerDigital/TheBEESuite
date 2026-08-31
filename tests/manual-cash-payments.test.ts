@@ -37,6 +37,16 @@ test("cash payments atomically record payment, ledger credit, and balance", () =
   assert.match(cashHandler, /amountCents: -amountCents/);
   assert.match(cashHandler, /balanceAfterCents: updatedAccount\.balanceCents/);
   assert.match(cashHandler, /action: "billing\.cash_payment\.created"/);
+  assert.match(cashHandler, /settleOpenInvoicesForOfflinePayment/);
+  assert.match(cashHandler, /appliedInvoiceIds/);
+});
+
+test("every offline family payment settles fully covered oldest open invoices", () => {
+  const offlineHandlers = section(invoicesRoute, "async function createManualCheckPayment", "async function refundStripePayment");
+
+  assert.equal(offlineHandlers.match(/settleOpenInvoicesForOfflinePayment\(tx/g)?.length, 3);
+  assert.match(invoicesRoute, /applyFamilyBalancePaymentToOpenInvoices/);
+  assert.match(invoicesRoute, /invoiceApplicationStatus: "applied_to_open_invoices"/);
 });
 
 test("directors can enter cash details and families see a clear payment label", () => {
@@ -44,6 +54,7 @@ test("directors can enter cash details and families see a clear payment label", 
   assert.match(workbench, /mode: "manualCashPayment"/);
   assert.match(workbench, /Post Cash Payment/);
   assert.match(workbench, /Receipt \/ reference/);
+  assert.match(workbench, /automatically marks fully covered oldest invoices paid/);
   assert.match(parentPortal, /provider === "manual_cash"\) return "Cash payment"/);
 });
 

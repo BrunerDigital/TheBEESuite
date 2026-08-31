@@ -29,6 +29,7 @@ import {
   hasSubsidyResponsibilityEvidence,
   parentVisibleBillingBalanceCents,
 } from "@/lib/parent-billing-visibility";
+import { applyFamilyBalancePaymentToOpenInvoices } from "@/lib/stripe-payment-application";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -497,6 +498,38 @@ async function manualFamilyPaymentExceedsVisibleBalance(familyId: string, amount
   });
 }
 
+async function settleOpenInvoicesForOfflinePayment(
+  tx: Prisma.TransactionClient,
+  input: {
+    paymentId: string;
+    billingAccountId: string;
+    amountCents: number;
+    paidAt: Date;
+    accountBalanceAfterCents: number;
+  },
+) {
+  const appliedInvoiceIds = await applyFamilyBalancePaymentToOpenInvoices(tx, input);
+  if (!appliedInvoiceIds.length) return appliedInvoiceIds;
+
+  const payment = await tx.payment.findUniqueOrThrow({
+    where: { id: input.paymentId },
+    select: { customFields: true },
+  });
+  await tx.payment.update({
+    where: { id: input.paymentId },
+    data: {
+      customFields: {
+        ...jsonObject(payment.customFields),
+        appliedInvoiceIds,
+        appliedInvoiceCount: appliedInvoiceIds.length,
+        invoiceApplicationStatus: "applied_to_open_invoices",
+        status: "paid",
+      },
+    },
+  });
+  return appliedInvoiceIds;
+}
+
 async function createManualCheckPayment(user: CurrentBillingUser, body: Record<string, unknown>) {
   const familyAccess = await assertFamilyAccess(user, clean(body.familyId));
   if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
@@ -553,7 +586,14 @@ async function createManualCheckPayment(user: CurrentBillingUser, body: Record<s
         metadata: { checkNumber, notes: notes || null, enteredBy: user.email },
       },
     });
-    return { payment, entry };
+    const appliedInvoiceIds = await settleOpenInvoicesForOfflinePayment(tx, {
+      paymentId: payment.id,
+      billingAccountId: account.id,
+      amountCents,
+      paidAt,
+      accountBalanceAfterCents: updatedAccount.balanceCents,
+    });
+    return { payment, entry, appliedInvoiceIds };
   });
 
   await writeAuditLog(user, {
@@ -563,7 +603,13 @@ async function createManualCheckPayment(user: CurrentBillingUser, body: Record<s
     resourceId: result.payment.id,
     metadata: { familyId: familyAccess.family.id, amountCents, checkNumber },
   });
-  return NextResponse.json({ ok: true, totalCents: amountCents, payment: result.payment, entry: result.entry });
+  return NextResponse.json({
+    ok: true,
+    totalCents: amountCents,
+    payment: result.payment,
+    entry: result.entry,
+    appliedInvoiceIds: result.appliedInvoiceIds,
+  });
 }
 
 async function createManualCashPayment(user: CurrentBillingUser, body: Record<string, unknown>) {
@@ -625,7 +671,14 @@ async function createManualCashPayment(user: CurrentBillingUser, body: Record<st
         },
       },
     });
-    return { payment, entry };
+    const appliedInvoiceIds = await settleOpenInvoicesForOfflinePayment(tx, {
+      paymentId: payment.id,
+      billingAccountId: account.id,
+      amountCents,
+      paidAt,
+      accountBalanceAfterCents: updatedAccount.balanceCents,
+    });
+    return { payment, entry, appliedInvoiceIds };
   });
 
   await writeAuditLog(user, {
@@ -639,7 +692,13 @@ async function createManualCashPayment(user: CurrentBillingUser, body: Record<st
       reference: reference || null,
     },
   });
-  return NextResponse.json({ ok: true, totalCents: amountCents, payment: result.payment, entry: result.entry });
+  return NextResponse.json({
+    ok: true,
+    totalCents: amountCents,
+    payment: result.payment,
+    entry: result.entry,
+    appliedInvoiceIds: result.appliedInvoiceIds,
+  });
 }
 
 class PayrollReferenceConflictError extends Error {}
@@ -658,7 +717,7 @@ async function createPayrollDeductionPayment(user: CurrentBillingUser, body: Rec
   const notes = clean(body.notes);
   const normalizedReference = payrollReference.toLowerCase().replace(/\s+/g, " ");
 
-  let result: { payment: { id: string }; entry: { id: string }; alreadyRecorded: boolean };
+  let result: { payment: { id: string }; entry: { id: string }; alreadyRecorded: boolean; appliedInvoiceIds: string[] };
   try {
     result = await prisma.$transaction(async (tx) => {
       const account = await tx.billingAccount.upsert({
@@ -676,7 +735,7 @@ async function createPayrollDeductionPayment(user: CurrentBillingUser, body: Rec
         if (!existingEntry.payment || existingEntry.amountCents !== -amountCents || existingEntry.payment.amountCents !== amountCents) {
           throw new PayrollReferenceConflictError("That payroll reference is already used for a different amount on this family account.");
         }
-        return { payment: existingEntry.payment, entry: existingEntry, alreadyRecorded: true };
+        return { payment: existingEntry.payment, entry: existingEntry, alreadyRecorded: true, appliedInvoiceIds: [] };
       }
       const payment = await tx.payment.create({
         data: {
@@ -714,6 +773,13 @@ async function createPayrollDeductionPayment(user: CurrentBillingUser, body: Rec
           metadata: { payrollReference, notes: notes || null, enteredBy: user.email },
         },
       });
+      const appliedInvoiceIds = await settleOpenInvoicesForOfflinePayment(tx, {
+        paymentId: payment.id,
+        billingAccountId: account.id,
+        amountCents,
+        paidAt,
+        accountBalanceAfterCents: updatedAccount.balanceCents,
+      });
       await tx.auditLog.create({
         data: {
           tenantId: user.tenantId,
@@ -725,7 +791,7 @@ async function createPayrollDeductionPayment(user: CurrentBillingUser, body: Rec
           metadata: { familyId: familyAccess.family.id, amountCents, payrollReference, payrollWithheldAt: paidAt.toISOString() },
         },
       });
-      return { payment, entry, alreadyRecorded: false };
+      return { payment, entry, alreadyRecorded: false, appliedInvoiceIds };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) {
     if (error instanceof PayrollReferenceConflictError) {
@@ -734,7 +800,14 @@ async function createPayrollDeductionPayment(user: CurrentBillingUser, body: Rec
     throw error;
   }
 
-  return NextResponse.json({ ok: true, totalCents: amountCents, payment: result.payment, entry: result.entry, alreadyRecorded: result.alreadyRecorded });
+  return NextResponse.json({
+    ok: true,
+    totalCents: amountCents,
+    payment: result.payment,
+    entry: result.entry,
+    alreadyRecorded: result.alreadyRecorded,
+    appliedInvoiceIds: result.appliedInvoiceIds,
+  });
 }
 
 async function refundStripePayment(user: CurrentBillingUser, body: Record<string, unknown>) {

@@ -325,6 +325,24 @@ test("Stripe checkout draft clear rules preserve real processing payments", () =
   }, now), "stale_open");
 
   assert.equal(stripeCheckoutDraftClearReason({
+    id: "cs_open_retryable_old",
+    status: "open",
+    paymentStatus: "unpaid",
+    createdAt: "2026-07-02T20:00:00.000Z",
+    paymentIntentId: "pi_requires_method",
+    paymentIntentStatus: "requires_payment_method",
+  }, now), "stale_open");
+
+  assert.equal(stripeCheckoutDraftClearReason({
+    id: "cs_open_processing_old",
+    status: "open",
+    paymentStatus: "unpaid",
+    createdAt: "2026-07-02T20:00:00.000Z",
+    paymentIntentId: "pi_processing",
+    paymentIntentStatus: "processing",
+  }, now), null);
+
+  assert.equal(stripeCheckoutDraftClearReason({
     id: "cs_open_recent",
     status: "open",
     paymentStatus: "unpaid",

@@ -582,11 +582,10 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   if (submission.form.type !== "online_registration") {
     return NextResponse.json({ ok: false, error: "This form submission is not an online registration packet." }, { status: 400 });
   }
-  const transitionError = registrationReviewTransitionError(
-    registrationReviewFromData(submission.data).status,
-    action,
-  );
-  if (transitionError) {
+  const existingReviewStatus = registrationReviewFromData(submission.data).status;
+  const retryParentSetup = action === "APPROVED" && inviteParent && existingReviewStatus === "approved";
+  const transitionError = registrationReviewTransitionError(existingReviewStatus, action);
+  if (transitionError && !retryParentSetup) {
     return NextResponse.json({ ok: false, error: transitionError }, { status: 409 });
   }
   const submissionId = submission.id;
@@ -616,6 +615,68 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   }
   if (!canAccessAllCenters(user) && !canAccessCenter(user, center.id)) {
     return NextResponse.json({ ok: false, error: "You do not have access to this registration packet." }, { status: 403 });
+  }
+
+  if (retryParentSetup) {
+    const family = submission.familyId
+      ? await prisma.family.findFirst({
+          where: { id: submission.familyId, centerId: center.id },
+          select: {
+            id: true,
+            name: true,
+            guardians: {
+              orderBy: { createdAt: "asc" },
+              select: { id: true, fullName: true, email: true, customFields: true },
+            },
+          },
+        })
+      : null;
+    if (!family) {
+      return NextResponse.json({ ok: false, error: "Approved registration family was not found." }, { status: 409 });
+    }
+
+    const results = [];
+    for (const guardian of family.guardians) {
+      results.push(await createParentPortalInvite({
+        requestUrl: request.url,
+        user,
+        center,
+        family,
+        guardian,
+      }));
+    }
+    const successes = results.filter((result) => result.ok);
+    const parentInvite = {
+      ok: successes.length > 0,
+      error: successes.length ? undefined : results.find((result) => !result.ok)?.error ?? "Parent portal setup retry failed.",
+      emailSent: successes.some((result) => result.emailSent),
+      setupLinkIssued: successes.some((result) => result.setupLinkIssued),
+      credentialCreated: successes.some((result) => result.credentialCreated),
+      invitedCount: successes.length,
+      failedCount: results.length - successes.length,
+      results,
+    };
+    await writeAuditLog(user, {
+      centerId: center.id,
+      action: "registration.parent_setup_retried",
+      resource: "FormSubmission",
+      resourceId: submission.id,
+      metadata: {
+        familyId: family.id,
+        invitedCount: parentInvite.invitedCount,
+        failedCount: parentInvite.failedCount,
+      },
+    });
+    return NextResponse.json(
+      {
+        ok: parentInvite.ok,
+        reviewStatus: "approved",
+        retryParentSetup: true,
+        parentInvite,
+        error: parentInvite.ok ? undefined : parentInvite.error,
+      },
+      { status: parentInvite.ok ? 200 : 502 },
+    );
   }
 
   if (action === "REJECTED") {

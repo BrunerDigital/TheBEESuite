@@ -2576,8 +2576,34 @@ async function renderLivePage(
         })
       : [];
     const parentPaymentInvoiceNumberById = new Map(parentPaymentInvoices.map((invoice) => [invoice.id, invoice.number]));
+    const parentPaymentCenterIds = [...new Set(
+      (billingAccount?.payments ?? [])
+        .map((payment) => stringField(recordFromJson(payment.customFields).centerId))
+        .filter((centerId): centerId is string => Boolean(centerId)),
+    )];
+    const parentPaymentCenters = parentPaymentCenterIds.length
+      ? await prisma.center.findMany({
+          where: {
+            id: { in: parentPaymentCenterIds },
+            organization: { tenantId: user.tenantId },
+          },
+          select: {
+            id: true,
+            name: true,
+            crmLocationId: true,
+            city: true,
+            state: true,
+            timezone: true,
+            customFields: true,
+          },
+        })
+      : [];
+    const parentPaymentCenterById = new Map(parentPaymentCenters.map((center) => [center.id, center]));
     const parentPayments = (billingAccount?.payments ?? []).map((payment) => {
       const fields = recordFromJson(payment.customFields);
+      const paymentCenterId = stringField(fields.centerId) || resolvedParentCenterId;
+      const paymentCenter = (paymentCenterId ? parentPaymentCenterById.get(paymentCenterId) : null)
+        ?? (paymentCenterId === familyCenter?.id ? familyCenter : null);
       const invoiceNumbers = paymentAppliedInvoiceIds(fields)
         .map((invoiceId) => parentPaymentInvoiceNumberById.get(invoiceId))
         .filter((number): number is string => Boolean(number));
@@ -2590,6 +2616,10 @@ async function renderLivePage(
         amountCents: checkoutTotalCents ?? payment.amountCents,
         principalAmountCents: payment.amountCents,
         processingRecoveryCents,
+        centerId: paymentCenterId,
+        centerName: paymentCenter ? formatCenterName(paymentCenter) : null,
+        centerEin: paymentCenter ? readSchoolEin(paymentCenter.customFields) : null,
+        centerTimeZone: paymentCenter ? readCenterLocationTimeZone(paymentCenter) : null,
         externalIdPlaceholder: stringField(fields.reference)
           || stringField(fields.payrollReference)
           || stringField(fields.checkNumber)

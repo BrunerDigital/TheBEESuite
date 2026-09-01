@@ -103,6 +103,7 @@
     "kidcity:complete-stripe-accounts": "tsx -r tsconfig-paths/register scripts/complete-kidcity-stripe-account-setup.ts",
     "kidcity:prepare-kokomo-payout": "tsx -r tsconfig-paths/register scripts/prepare-kokomo-payout-onboarding.ts",
     "billing:ensure-uniform-products": "tsx -r tsconfig-paths/register scripts/ensure-student-uniform-products.ts",
+    "billing:reconcile-offline-invoices": "tsx scripts/reconcile-historical-offline-invoice-applications.ts",
     "parents:prepare-payer-portals": "tsx -r tsconfig-paths/register scripts/prepare-payer-portal-accounts.ts",
     "stripe:reconcile-school-processing-fees": "tsx scripts/reconcile-stripe-school-processing-fees.ts"
   },

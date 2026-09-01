@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { CurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -7,7 +7,6 @@ import {
   generateSupabasePasswordRecoveryLink,
   getAppBaseUrl,
   getParentPortalPasswordResetRedirectUrl,
-  updateSupabaseAuthUserPasswordByEmail,
 } from "@/lib/supabase-auth";
 
 export const PARENT_SETUP_LINK_TTL_MS = 60 * 60 * 1000;
@@ -54,18 +53,11 @@ export async function issueParentPortalSetupLink({
 }) {
   const issuedAt = new Date();
   const expiresAt = new Date(issuedAt.getTime() + PARENT_SETUP_LINK_TTL_MS);
-  // Supabase invalidates existing recovery tokens when an admin changes the
-  // user's password. Secure the prior credential first, then generate the link
-  // that will actually be delivered. This function only runs after an
-  // authorized school user explicitly sends a setup link.
-  const transitioned = await updateSupabaseAuthUserPasswordByEmail({
-    email,
-    password: randomBytes(48).toString("base64url"),
-    metadataSource: "parent_setup_transition",
-  });
-  if (!transitioned.ok) {
-    return { ok: false as const, error: transitioned.error || "Parent password setup could not be secured." };
-  }
+  // Do not rotate the existing credential before the recovery link is
+  // delivered. A provider failure must not leave an active parent locked out,
+  // and Supabase password changes invalidate recovery tokens generated earlier.
+  // The app-level reset gate and session-version increment are committed only
+  // after a usable recovery token exists.
   const recovery = await generateSupabasePasswordRecoveryLink({
     email,
     redirectTo: getParentPortalPasswordResetRedirectUrl(requestUrl),

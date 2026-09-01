@@ -2581,8 +2581,15 @@ async function renderLivePage(
       const invoiceNumbers = paymentAppliedInvoiceIds(fields)
         .map((invoiceId) => parentPaymentInvoiceNumberById.get(invoiceId))
         .filter((number): number is string => Boolean(number));
+      const checkoutTotalCents = numberField(fields.checkoutTotalCents);
+      const processingRecoveryCents = checkoutTotalCents === null
+        ? 0
+        : Math.max(0, checkoutTotalCents - payment.amountCents);
       return {
         ...payment,
+        amountCents: checkoutTotalCents ?? payment.amountCents,
+        principalAmountCents: payment.amountCents,
+        processingRecoveryCents,
         externalIdPlaceholder: stringField(fields.reference)
           || stringField(fields.payrollReference)
           || stringField(fields.checkNumber)

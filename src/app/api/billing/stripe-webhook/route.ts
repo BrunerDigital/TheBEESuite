@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
+import { achFailurePresentation, isAchPaymentProcessing, isAchReturnReason, isReturnedStripePayment } from "@/lib/ach-payment-lifecycle";
 import { checkoutApplicationGuard, stripePaymentIntentFailureDisposition } from "@/lib/billing-guardrails";
 import {
   createStripeSoftwareSubscription,
   ensureStripeSoftwareRecurringPrice,
   readStripeConnectedAccountId,
+  retrieveStripePaymentIntent,
   retrieveStripeConnectedAccount,
   retrieveStripePaymentMethod,
   retrieveStripeSetupIntent,
@@ -25,7 +27,7 @@ import { prisma } from "@/lib/prisma";
 import { saveSoftwareSubscriptionSnapshot } from "@/lib/school-software-subscriptions";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
-import { stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
+import { readStripeConnectMigration, stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
 import { stripeCustomerCustomFieldPatch } from "@/lib/stripe-customer-scope";
 import {
   isStripeWebhookAccountEvent,
@@ -155,8 +157,9 @@ type StripePaymentIntentObject = {
   id: string;
   object: "payment_intent";
   amount?: number;
+  customer?: string | null;
   status?: string;
-  last_payment_error?: { message?: string } | null;
+  last_payment_error?: { code?: string; decline_code?: string; message?: string } | null;
   metadata?: StripeMetadata;
 };
 
@@ -225,6 +228,29 @@ function metadataOf(value: { metadata?: unknown }) {
   return jsonObject(value.metadata) as StripeMetadata;
 }
 
+function isAchPaymentMetadata(metadata: StripeMetadata) {
+  return clean(metadata.paymentMethodCategory) === "ach"
+    || clean(metadata.requestedPaymentMethodCategory) === "ach";
+}
+
+function processingPaymentLifecycleStatus(input: {
+  achProcessing: boolean;
+  collectionMode: string;
+  currentStatus: string;
+}) {
+  if (!input.achProcessing) return input.currentStatus || "payment_processing";
+  if (input.collectionMode === "autopay" || input.currentStatus.startsWith("autopay_")) {
+    return "autopay_processing";
+  }
+  if (input.collectionMode === "stored_method" || input.currentStatus.startsWith("stored_method_")) {
+    return "stored_method_processing";
+  }
+  if (input.collectionMode === "director_saved_method" || input.currentStatus.startsWith("director_saved_method_")) {
+    return "director_saved_method_processing";
+  }
+  return "paid_processing";
+}
+
 function accountEventType(type: string) {
   return isStripeWebhookAccountEvent(type);
 }
@@ -289,6 +315,122 @@ async function reserveStripeWebhookEvent(event: StripeWebhookEvent) {
 function safeReceiptReason(reason: unknown, fallback: string) {
   const value = clean(reason).toLowerCase().replace(/[^a-z0-9_.-]+/g, "_").slice(0, 120);
   return value || fallback;
+}
+
+async function findScopedPaymentIntentPayment(
+  tx: Pick<Prisma.TransactionClient, "payment" | "center">,
+  input: {
+    event: StripeWebhookEvent;
+    metadata: StripeMetadata;
+    paymentId: string;
+    paymentIntent: StripePaymentIntentObject;
+    matchedTenantId: string | null;
+  },
+) {
+  const payment = await tx.payment.findUnique({
+    where: { id: input.paymentId },
+    select: {
+      status: true,
+      provider: true,
+      billingAccountId: true,
+      amountCents: true,
+      customFields: true,
+      billingAccount: {
+        select: {
+          family: { select: { id: true, centerId: true } },
+        },
+      },
+    },
+  });
+  if (!payment) return { payment: null, currentFields: {}, reason: "payment_not_found" } as const;
+
+  let currentFields = jsonObject(payment.customFields);
+  let scopedPayment = payment;
+  const centerId = payment.billingAccount.family.centerId;
+  const center = centerId
+    ? await tx.center.findUnique({
+        where: { id: centerId },
+        select: { id: true, customFields: true, organization: { select: { tenantId: true } } },
+      })
+    : null;
+  const tenantId = center?.organization.tenantId || null;
+  const storedConnectedAccountId = clean(currentFields.stripeConnectedAccountId);
+  const centerConnectedAccountId = clean(readStripeConnectedAccountId(center?.customFields));
+  const eventConnectedAccountId = clean(input.event.account);
+  const storedPaymentIntentId = clean(currentFields.stripePaymentIntentId);
+  const expectedAmountCents = metadataCents(currentFields.checkoutTotalCents) || payment.amountCents;
+  const expectedCustomerId = clean(currentFields.stripeCustomerId);
+  const metadataBillingAccountId = clean(input.metadata.billingAccountId);
+  const centerFields = jsonObject(center?.customFields);
+  const migration = readStripeConnectMigration(centerFields);
+  const retainedSourceAccountMatches = (
+    centerFields.stripeConnectMigrationSourceAccountRetainedForReconciliation === true
+    && Boolean(migration.cutoverAt)
+    && migration.sourceAccountId === storedConnectedAccountId
+    && migration.targetAccountId === centerConnectedAccountId
+  );
+  if (
+    !center
+    || !tenantId
+    || clean(input.metadata.tenantId) !== tenantId
+    || (input.matchedTenantId && input.matchedTenantId !== tenantId)
+    || (metadataBillingAccountId && metadataBillingAccountId !== payment.billingAccountId)
+    || clean(input.metadata.familyId) !== payment.billingAccount.family.id
+    || clean(input.metadata.centerId) !== center.id
+    || clean(input.metadata.stripeConnectedAccountId) !== storedConnectedAccountId
+    || (centerConnectedAccountId !== storedConnectedAccountId && !retainedSourceAccountMatches)
+    || eventConnectedAccountId !== storedConnectedAccountId
+    || (storedPaymentIntentId && storedPaymentIntentId !== input.paymentIntent.id)
+    || numeric(input.paymentIntent.amount) !== expectedAmountCents
+    || (expectedCustomerId && clean(input.paymentIntent.customer) !== expectedCustomerId)
+  ) {
+    return { payment: null, currentFields, reason: "payment_intent_scope_mismatch" } as const;
+  }
+
+  if (!storedPaymentIntentId) {
+    if (payment.provider !== "stripe" || payment.status !== PaymentStatus.DRAFT) {
+      return { payment: null, currentFields, reason: "payment_intent_scope_mismatch" } as const;
+    }
+    const boundFields = { ...currentFields, stripePaymentIntentId: input.paymentIntent.id };
+    const bound = await tx.payment.updateMany({
+      where: {
+        id: input.paymentId,
+        provider: "stripe",
+        status: PaymentStatus.DRAFT,
+        customFields: {
+          equals: payment.customFields === null ? Prisma.DbNull : payment.customFields,
+        },
+      },
+      data: { customFields: boundFields as Prisma.InputJsonObject },
+    });
+    if (bound.count === 1) {
+      currentFields = boundFields;
+      scopedPayment = { ...payment, customFields: boundFields };
+    } else {
+      const winner = await tx.payment.findUnique({
+        where: { id: input.paymentId },
+        select: {
+          status: true,
+          provider: true,
+          billingAccountId: true,
+          amountCents: true,
+          customFields: true,
+          billingAccount: { select: { family: { select: { id: true, centerId: true } } } },
+        },
+      });
+      const winnerFields = jsonObject(winner?.customFields);
+      if (
+        !winner
+        || clean(winnerFields.stripePaymentIntentId) !== input.paymentIntent.id
+        || clean(winnerFields.stripeConnectedAccountId) !== storedConnectedAccountId
+      ) {
+        return { payment: null, currentFields: winnerFields, reason: "payment_intent_scope_raced" } as const;
+      }
+      currentFields = winnerFields;
+      scopedPayment = winner;
+    }
+  }
+  return { payment: scopedPayment, currentFields, reason: null } as const;
 }
 
 async function finalizeStripeWebhookReceipt(event: StripeWebhookEvent, status: string, reason?: unknown) {
@@ -371,6 +513,28 @@ async function handleTerminalStoreCheckoutEvent(event: StripeWebhookEvent, sessi
 
 function isDuplicateWebhookEvent(error: unknown) {
   return isStripeWebhookReceiptUniqueConflict(error);
+}
+
+function stripeEventIsNewerThanStored(
+  event: StripeWebhookEvent,
+  customFields: unknown,
+  allowSameSecond = false,
+) {
+  const storedEventCreatedAt = Date.parse(clean(jsonObject(customFields).stripeEventCreatedAt));
+  if (!Number.isFinite(storedEventCreatedAt)) return true;
+  const incomingEventCreatedAt = event.created ? event.created * 1000 : Number.NaN;
+  return Number.isFinite(incomingEventCreatedAt) && (
+    incomingEventCreatedAt > storedEventCreatedAt
+    || (allowSameSecond && incomingEventCreatedAt === storedEventCreatedAt)
+  );
+}
+
+function stripeEventMatchesStoredSecond(event: StripeWebhookEvent, customFields: unknown) {
+  const storedEventCreatedAt = Date.parse(clean(jsonObject(customFields).stripeEventCreatedAt));
+  const incomingEventCreatedAt = event.created ? event.created * 1000 : Number.NaN;
+  return Number.isFinite(storedEventCreatedAt)
+    && Number.isFinite(incomingEventCreatedAt)
+    && incomingEventCreatedAt === storedEventCreatedAt;
 }
 
 async function findPaymentForStripeObject(
@@ -558,6 +722,8 @@ async function handleFamilyBalancePaymentSucceeded(
     stripeAmountTotalCents?: number | null;
     auditAction: string;
     descriptionFallback: string;
+    matchedTenantId?: string | null;
+    paymentIntent?: StripePaymentIntentObject;
   },
 ) {
   let applied = false;
@@ -567,17 +733,25 @@ async function handleFamilyBalancePaymentSucceeded(
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
-      const currentPayment = await tx.payment.findUnique({
-        where: { id: input.paymentId },
-        select: {
-          status: true,
-          billingAccountId: true,
-          amountCents: true,
-          customFields: true,
-        },
-      });
+      const scopedPayment = event.type.startsWith("payment_intent.")
+        ? input.paymentIntent
+          ? await findScopedPaymentIntentPayment(tx, {
+              event,
+              metadata: input.metadata,
+              paymentId: input.paymentId,
+              paymentIntent: input.paymentIntent,
+              matchedTenantId: input.matchedTenantId || null,
+            })
+          : { payment: null, currentFields: {}, reason: "payment_intent_snapshot_missing" } as const
+        : null;
+      const currentPayment = scopedPayment
+        ? scopedPayment.payment
+        : await tx.payment.findUnique({
+            where: { id: input.paymentId },
+            select: { status: true, billingAccountId: true, amountCents: true, customFields: true },
+          });
       if (!currentPayment) {
-        ignoredReason = "payment_not_found";
+        ignoredReason = scopedPayment?.reason || "payment_not_found";
         return;
       }
       billingAccountId = currentPayment.billingAccountId;
@@ -624,6 +798,7 @@ async function handleFamilyBalancePaymentSucceeded(
             ...productPaymentMetadata(input.metadata),
             recoveredFromFailedAttempt: claim.recoveredFromFailedAttempt,
             recoveredStripePaymentIntentId: claim.recoveredFromFailedAttempt ? stripePaymentIntentId : null,
+            provisionalCreditActive: false,
             status: "paid",
           },
         },
@@ -706,6 +881,7 @@ async function handleFamilyBalancePaymentSucceeded(
               appliedInvoiceIds,
               appliedInvoiceCount: appliedInvoiceIds.length,
               invoiceApplicationStatus: "applied_to_open_invoices",
+              provisionalCreditActive: false,
               status: "paid",
             } as Prisma.InputJsonObject,
           },
@@ -1611,13 +1787,19 @@ async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, sessi
       await prisma.$transaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event);
         const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
+        const currentFields = jsonObject(currentPayment?.customFields);
+        const failure = achFailurePresentation({
+          customFields: currentFields,
+          metadata,
+          failureCode: clean(currentFields.stripeFailureCode) || null,
+        });
         await tx.payment.update({
           where: { id: paymentId },
           data: {
             status: PaymentStatus.FAILED,
             externalIdPlaceholder: session.id,
             customFields: {
-              ...jsonObject(currentPayment?.customFields),
+              ...currentFields,
               paymentScope: "family_balance",
               stripeCheckoutSessionId: session.id,
               stripePaymentIntentId: session.payment_intent || null,
@@ -1626,7 +1808,10 @@ async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, sessi
               stripePaymentStatus: session.payment_status || null,
               stripeAmountTotalCents: session.amount_total ?? null,
               failedAt: new Date().toISOString(),
-              status: "checkout_failed",
+              returnedAt: failure.returned ? new Date().toISOString() : null,
+              provisionalCreditActive: false,
+              retryAvailable: failure.retryAvailable || currentFields.retryAvailable === true,
+              status: failure.customStatus || "checkout_failed",
             },
           },
         });
@@ -1647,22 +1832,34 @@ async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, sessi
     try {
       await prisma.$transaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event, "pending");
-        const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
-        await tx.payment.update({
-          where: { id: paymentId },
-          data: {
+        const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { status: true, customFields: true } });
+        if (!currentPayment || currentPayment.status !== PaymentStatus.DRAFT) return;
+        const currentFields = jsonObject(currentPayment?.customFields);
+        if (!stripeEventIsNewerThanStored(event, currentFields)) return;
+        const achProcessing = isAchPaymentMetadata(metadata);
+        await tx.payment.updateMany({
+          where: {
+            id: paymentId,
             status: PaymentStatus.DRAFT,
+            customFields: {
+              equals: currentPayment.customFields === null ? Prisma.DbNull : currentPayment.customFields,
+            },
+          },
+          data: {
             externalIdPlaceholder: session.id,
             customFields: {
-              ...jsonObject(currentPayment?.customFields),
+              ...currentFields,
               paymentScope: "family_balance",
               stripeCheckoutSessionId: session.id,
               stripePaymentIntentId: session.payment_intent || null,
               stripeEventId: event.id,
               stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
               stripePaymentStatus: session.payment_status || null,
+              stripePaymentIntentStatus: clean(currentFields.stripePaymentIntentStatus) || (achProcessing ? "processing" : null),
               stripeAmountTotalCents: session.amount_total ?? null,
-              status: "checkout_pending",
+              submittedAt: achProcessing ? new Date().toISOString() : currentFields.submittedAt || null,
+              provisionalCreditActive: achProcessing,
+              status: achProcessing ? "paid_processing" : "checkout_pending",
             },
           },
         });
@@ -1690,13 +1887,139 @@ async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, sessi
   });
 }
 
-async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentIntent: StripePaymentIntentObject) {
+async function handlePaymentIntentProcessing(
+  event: StripeWebhookEvent,
+  paymentIntent: StripePaymentIntentObject,
+  matchedTenantId: string | null,
+) {
   const metadata = metadataOf(paymentIntent);
-  if (!metadata.paymentId) {
+  const paymentId = clean(metadata.paymentId);
+  if (!paymentId) {
+    return NextResponse.json({ ok: true, ignored: true, reason: "Missing payment metadata." });
+  }
+
+  let billingAccountId: string | null = null;
+  let invoiceId: string | null = null;
+  let applied = false;
+  let ignoredReason: string | null = null;
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event, "pending");
+      const scopedPayment = await findScopedPaymentIntentPayment(tx, {
+        event,
+        metadata,
+        paymentId,
+        paymentIntent,
+        matchedTenantId,
+      });
+      const payment = scopedPayment.payment;
+      if (!payment) {
+        ignoredReason = scopedPayment.reason;
+        return;
+      }
+      if (payment.status !== PaymentStatus.DRAFT) return;
+      billingAccountId = payment.billingAccountId;
+      const currentFields = scopedPayment.currentFields;
+      if (!stripeEventIsNewerThanStored(event, currentFields)) return;
+      const candidateInvoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId);
+      if (candidateInvoiceId) {
+        const verifiedInvoice = await tx.invoice.findFirst({
+          where: { id: candidateInvoiceId, billingAccountId: payment.billingAccountId },
+          select: { id: true },
+        });
+        invoiceId = verifiedInvoice?.id ?? null;
+      }
+      const achProcessing = isAchPaymentMetadata({
+        ...metadata,
+        paymentMethodCategory: clean(metadata.paymentMethodCategory) || clean(currentFields.paymentMethodCategory),
+        requestedPaymentMethodCategory: clean(metadata.requestedPaymentMethodCategory) || clean(currentFields.requestedPaymentMethodCategory),
+      });
+      const lifecycleStatus = processingPaymentLifecycleStatus({
+        achProcessing,
+        collectionMode: clean(metadata.collectionMode) || clean(currentFields.collectionMode),
+        currentStatus: clean(currentFields.status),
+      });
+      const updated = await tx.payment.updateMany({
+        where: {
+          id: paymentId,
+          status: PaymentStatus.DRAFT,
+          customFields: {
+            equals: payment.customFields === null ? Prisma.DbNull : payment.customFields,
+          },
+        },
+        data: {
+          externalIdPlaceholder: paymentIntent.id,
+          customFields: {
+            ...currentFields,
+            stripePaymentIntentId: paymentIntent.id,
+            stripePaymentIntentStatus: paymentIntent.status || "processing",
+            stripeEventId: event.id,
+            stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
+            submittedAt: currentFields.submittedAt || new Date().toISOString(),
+            provisionalCreditActive: achProcessing,
+            status: lifecycleStatus,
+          } as Prisma.InputJsonObject,
+        },
+      });
+      applied = updated.count === 1;
+    });
+  } catch (error) {
+    if (isDuplicateWebhookEvent(error)) return NextResponse.json({ ok: true, duplicate: true });
+    throw error;
+  }
+
+  if (applied && invoiceId) {
+    await writeSystemAudit(invoiceId, event.id, paymentIntent.id, "billing.payment_intent.processing");
+  } else if (applied && billingAccountId) {
+    await writeBillingAccountSystemAudit(billingAccountId, event.id, paymentIntent.id, "billing.family_payment.payment_intent_processing");
+  }
+  return NextResponse.json({ ok: true, pending: applied, ...(ignoredReason ? { ignored: true, reason: ignoredReason } : {}) });
+}
+
+async function handlePaymentIntentFailed(
+  event: StripeWebhookEvent,
+  paymentIntent: StripePaymentIntentObject,
+  matchedTenantId: string | null,
+) {
+  const metadata = metadataOf(paymentIntent);
+  const paymentId = clean(metadata.paymentId);
+  if (!paymentId) {
     return NextResponse.json({ ok: true, ignored: true, reason: "Missing payment metadata." });
   }
   const collectionMode = clean(metadata.collectionMode);
+  const canceled = event.type === "payment_intent.canceled";
+  let sameSecondLiveIntentStatus: string | undefined;
+  const scopedCandidate = await findScopedPaymentIntentPayment(prisma, {
+    event,
+    metadata,
+    paymentId,
+    paymentIntent,
+    matchedTenantId,
+  });
+  if (!scopedCandidate.payment) {
+    return NextResponse.json({ ok: true, ignored: true, reason: scopedCandidate.reason });
+  }
+  const sameSecondCandidate = scopedCandidate.payment;
+  if (
+    sameSecondCandidate
+    && isAchPaymentProcessing(sameSecondCandidate)
+    && stripeEventMatchesStoredSecond(event, sameSecondCandidate.customFields)
+  ) {
+    const currentIntent = await retrieveStripePaymentIntent({
+      paymentIntentId: paymentIntent.id,
+      connectedAccountId: clean(metadata.stripeConnectedAccountId) || undefined,
+      tenantId: clean(metadata.tenantId) || undefined,
+    });
+    sameSecondLiveIntentStatus = clean(currentIntent.paymentIntent?.status) || undefined;
+    if (!currentIntent.ok || !sameSecondLiveIntentStatus) {
+      return NextResponse.json(
+        { ok: false, error: "Payment status verification is temporarily unavailable." },
+        { status: 503 },
+      );
+    }
+  }
   let failureApplied = false;
+  let achReturned = false;
   let recoverableCheckoutFailure = false;
   let paymentFound = false;
   let storedBillingAccountId: string | null = null;
@@ -1705,14 +2028,29 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
-      const currentPayment = await tx.payment.findUnique({
-        where: { id: metadata.paymentId },
-        select: { billingAccountId: true, customFields: true },
+      const scopedPayment = await findScopedPaymentIntentPayment(tx, {
+        event,
+        metadata,
+        paymentId,
+        paymentIntent,
+        matchedTenantId,
       });
+      const currentPayment = scopedPayment.payment;
       if (!currentPayment) return;
       paymentFound = true;
       storedBillingAccountId = currentPayment.billingAccountId;
       const currentFields = jsonObject(currentPayment.customFields);
+      if (canceled && isReturnedStripePayment(currentPayment)) return;
+      if (!canceled && clean(currentFields.status) === "payment_canceled") return;
+      if (isAchPaymentProcessing(currentPayment) && stripeEventMatchesStoredSecond(event, currentFields)) {
+        if (!sameSecondLiveIntentStatus) throw new Error("Same-second PaymentIntent status was not verified.");
+        if (sameSecondLiveIntentStatus !== clean(paymentIntent.status)) return;
+      }
+      const offSessionCollection = collectionMode === "autopay"
+        || collectionMode === "stored_method"
+        || collectionMode === "director_saved_method";
+      if (canceled && !offSessionCollection && !isAchPaymentProcessing(currentPayment)) return;
+      if (!stripeEventIsNewerThanStored(event, currentFields, true)) return;
       const candidateInvoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId);
       if (candidateInvoiceId) {
         const verifiedInvoice = await tx.invoice.findFirst({
@@ -1725,21 +2063,50 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
         collectionMode,
         customFields: currentFields,
       });
-      recoverableCheckoutFailure = disposition.recoverableCheckout;
+      const failureCode = clean(paymentIntent.last_payment_error?.code)
+        || clean(paymentIntent.last_payment_error?.decline_code)
+        || null;
+      const achFailure = canceled
+        ? {
+            returned: false,
+            retryAvailable: true,
+            failureCode: "payment_canceled",
+            customStatus: "payment_canceled",
+          }
+        : achFailurePresentation({
+            customFields: currentFields,
+            metadata,
+            failureCode,
+          });
+      achReturned = achFailure.returned;
+      recoverableCheckoutFailure = disposition.recoverableCheckout && !achFailure.returned;
       const failedPayment = await tx.payment.updateMany({
-        where: { id: metadata.paymentId, status: { in: [PaymentStatus.DRAFT, PaymentStatus.FAILED] } },
+        where: {
+          id: metadata.paymentId,
+          status: { in: [PaymentStatus.DRAFT, PaymentStatus.FAILED] },
+          customFields: {
+            equals: currentPayment.customFields === null ? Prisma.DbNull : currentPayment.customFields,
+          },
+        },
         data: {
-          status: disposition.paymentStatus,
+          status: canceled || achFailure.returned ? PaymentStatus.FAILED : disposition.paymentStatus,
           customFields: {
             ...currentFields,
             stripePaymentIntentId: paymentIntent.id,
             stripeEventId: event.id,
             stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
             stripePaymentIntentStatus: paymentIntent.status || null,
-            stripeFailureMessage: paymentIntent.last_payment_error?.message || null,
+            stripeFailureCode: achFailure.failureCode,
+            stripeFailureMessage: canceled
+              ? "Payment was canceled before settlement."
+              : paymentIntent.last_payment_error?.message || null,
             failedAt: new Date().toISOString(),
+            canceledAt: canceled ? new Date().toISOString() : null,
+            returnedAt: achFailure.returned ? new Date().toISOString() : null,
+            provisionalCreditActive: false,
+            retryAvailable: achFailure.retryAvailable,
             collectionMode: collectionMode || null,
-            status: disposition.customStatus,
+            status: achFailure.customStatus || disposition.customStatus,
           },
         },
       });
@@ -1766,12 +2133,16 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
     return NextResponse.json({ ok: true, ignored: true, reason: paymentFound ? "payment_not_chargeable" : "payment_not_found" });
   }
 
-  if (metadata.invoiceId) {
+  if (verifiedInvoiceId) {
     await writeSystemAudit(
-      metadata.invoiceId,
+      verifiedInvoiceId,
       event.id,
       paymentIntent.id,
-      collectionMode === "autopay"
+      canceled
+        ? "billing.payment_intent.canceled"
+        : achReturned
+        ? "billing.ach_payment.returned"
+        : collectionMode === "autopay"
         ? "billing.autopay.failed"
         : collectionMode === "stored_method"
           ? "billing.stored_method.failed"
@@ -1781,12 +2152,16 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
             ? "billing.checkout.payment_method_retry_required"
             : "billing.payment_intent.failed",
     );
-  } else if (clean(metadata.paymentScope) === "family_balance" && metadata.billingAccountId) {
+  } else if (storedBillingAccountId) {
     await writeBillingAccountSystemAudit(
-      metadata.billingAccountId,
+      storedBillingAccountId,
       event.id,
       paymentIntent.id,
-      recoverableCheckoutFailure
+      canceled
+        ? "billing.family_payment.payment_intent_canceled"
+        : achReturned
+        ? "billing.family_payment.ach_returned"
+        : recoverableCheckoutFailure
         ? "billing.family_payment.checkout_payment_method_retry_required"
         : "billing.family_payment.payment_intent_failed",
     );
@@ -1794,7 +2169,11 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
   return NextResponse.json({ ok: true });
 }
 
-async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIntent: StripePaymentIntentObject) {
+async function handlePaymentIntentSucceeded(
+  event: StripeWebhookEvent,
+  paymentIntent: StripePaymentIntentObject,
+  matchedTenantId: string | null,
+) {
   const metadata = metadataOf(paymentIntent);
   const invoiceId = metadata.invoiceId;
   const paymentId = metadata.paymentId;
@@ -1808,6 +2187,8 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
       stripeAmountTotalCents: paymentIntent.amount ?? null,
       auditAction: "billing.family_payment.payment_intent_succeeded",
       descriptionFallback: clean(metadata.collectionMode) === "director_saved_method" ? "Director saved method payment" : "Parent payment",
+      matchedTenantId,
+      paymentIntent,
     });
   }
   if (!invoiceId || !paymentId) {
@@ -1823,16 +2204,20 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
-      const currentPayment = await tx.payment.findUnique({
-        where: { id: paymentId },
-        select: { status: true, billingAccountId: true, amountCents: true, customFields: true },
+      const scopedPayment = await findScopedPaymentIntentPayment(tx, {
+        event,
+        metadata,
+        paymentId,
+        paymentIntent,
+        matchedTenantId,
       });
+      const currentPayment = scopedPayment.payment;
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
         select: { status: true, billingAccountId: true, totalCents: true, customFields: true },
       });
       if (!currentPayment || !invoice) {
-        ignoredReason = currentPayment ? "invoice_not_found" : "payment_not_found";
+        ignoredReason = currentPayment ? "invoice_not_found" : scopedPayment.reason;
         return;
       }
       const currentPaymentFields = jsonObject(currentPayment.customFields);
@@ -1938,6 +2323,7 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
             checkoutTotalCents: Number(metadata.checkoutTotalCents || paymentIntent.amount || 0) || null,
             applicationFeeAmountCents: Number(metadata.applicationFeeAmountCents || 0) || 0,
             collectionMode: collectionMode || null,
+            provisionalCreditActive: false,
             status: "paid",
           },
         },
@@ -2184,6 +2570,7 @@ async function handleDisputeLifecycle(event: StripeWebhookEvent, dispute: Stripe
         ledgerActiveAfterEvent = false;
       }
 
+      const achReturned = ledgerActiveAfterEvent && isAchReturnReason(dispute.reason);
       await tx.payment.update({
         where: { id: payment.id },
         data: {
@@ -2197,7 +2584,10 @@ async function handleDisputeLifecycle(event: StripeWebhookEvent, dispute: Stripe
             stripePaymentIntentId: clean(dispute.payment_intent) || currentFields.stripePaymentIntentId || null,
             stripeEventId: event.id,
             stripeDisputeLedgerActive: ledgerActiveAfterEvent,
-            status: ledgerActiveAfterEvent ? "disputed" : dispute.status === "won" ? "paid" : "dispute_closed",
+            returnedAt: achReturned ? new Date().toISOString() : currentFields.returnedAt || null,
+            provisionalCreditActive: false,
+            retryAvailable: achReturned && clean(dispute.reason) === "insufficient_funds",
+            status: achReturned ? "payment_returned" : ledgerActiveAfterEvent ? "disputed" : dispute.status === "won" ? "paid" : "dispute_closed",
           },
         },
       });
@@ -2378,11 +2768,15 @@ async function dispatchAuthenticatedEvent(
   }
 
   if (event.type === "payment_intent.succeeded") {
-    return handlePaymentIntentSucceeded(event, event.data.object as StripePaymentIntentObject);
+    return handlePaymentIntentSucceeded(event, event.data.object as StripePaymentIntentObject, matchedTenantId);
   }
 
-  if (event.type === "payment_intent.payment_failed") {
-    return handlePaymentIntentFailed(event, event.data.object as StripePaymentIntentObject);
+  if (event.type === "payment_intent.processing") {
+    return handlePaymentIntentProcessing(event, event.data.object as StripePaymentIntentObject, matchedTenantId);
+  }
+
+  if (event.type === "payment_intent.payment_failed" || event.type === "payment_intent.canceled") {
+    return handlePaymentIntentFailed(event, event.data.object as StripePaymentIntentObject, matchedTenantId);
   }
 
   if (event.type === "setup_intent.succeeded") {
@@ -2433,13 +2827,19 @@ async function dispatchAuthenticatedEvent(
       await prisma.$transaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event);
         const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
+        const currentFields = jsonObject(currentPayment?.customFields);
+        const failure = achFailurePresentation({
+          customFields: currentFields,
+          metadata: session.metadata,
+          failureCode: clean(currentFields.stripeFailureCode) || null,
+        });
         await tx.payment.update({
           where: { id: paymentId },
           data: {
             status: PaymentStatus.FAILED,
             externalIdPlaceholder: session.id,
             customFields: {
-              ...jsonObject(currentPayment?.customFields),
+              ...currentFields,
               stripeCheckoutSessionId: session.id,
               stripePaymentIntentId: session.payment_intent || null,
               stripeEventId: event.id,
@@ -2447,7 +2847,10 @@ async function dispatchAuthenticatedEvent(
               stripePaymentStatus: session.payment_status || null,
               stripeAmountTotalCents: session.amount_total ?? null,
               failedAt: new Date().toISOString(),
-              status: "checkout_failed",
+              returnedAt: failure.returned ? new Date().toISOString() : null,
+              provisionalCreditActive: false,
+              retryAvailable: failure.retryAvailable || currentFields.retryAvailable === true,
+              status: failure.customStatus || "checkout_failed",
             },
           },
         });
@@ -2466,21 +2869,33 @@ async function dispatchAuthenticatedEvent(
     try {
       await prisma.$transaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event, "pending");
-        const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
-        await tx.payment.update({
-          where: { id: paymentId },
-          data: {
+        const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { status: true, customFields: true } });
+        if (!currentPayment || currentPayment.status !== PaymentStatus.DRAFT) return;
+        const currentFields = jsonObject(currentPayment?.customFields);
+        if (!stripeEventIsNewerThanStored(event, currentFields)) return;
+        const achProcessing = isAchPaymentMetadata(session.metadata ?? {});
+        await tx.payment.updateMany({
+          where: {
+            id: paymentId,
             status: PaymentStatus.DRAFT,
+            customFields: {
+              equals: currentPayment.customFields === null ? Prisma.DbNull : currentPayment.customFields,
+            },
+          },
+          data: {
             externalIdPlaceholder: session.id,
             customFields: {
-              ...jsonObject(currentPayment?.customFields),
+              ...currentFields,
               stripeCheckoutSessionId: session.id,
               stripePaymentIntentId: session.payment_intent || null,
               stripeEventId: event.id,
               stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
               stripePaymentStatus: session.payment_status || null,
+              stripePaymentIntentStatus: clean(currentFields.stripePaymentIntentStatus) || (achProcessing ? "processing" : null),
               stripeAmountTotalCents: session.amount_total ?? null,
-              status: "checkout_pending",
+              submittedAt: achProcessing ? new Date().toISOString() : currentFields.submittedAt || null,
+              provisionalCreditActive: achProcessing,
+              status: achProcessing ? "paid_processing" : "checkout_pending",
             },
           },
         });
@@ -2593,6 +3008,7 @@ async function dispatchAuthenticatedEvent(
             checkoutTotalCents: Number(session.metadata?.checkoutTotalCents || session.amount_total || 0) || null,
             applicationFeeAmountCents: Number(session.metadata?.applicationFeeAmountCents || 0) || 0,
             ...productPaymentMetadata(session.metadata ?? {}),
+            provisionalCreditActive: false,
             status: "paid",
           },
         },

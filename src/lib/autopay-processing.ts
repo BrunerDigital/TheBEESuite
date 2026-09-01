@@ -797,6 +797,9 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     const accepted = intent.ok && (intentStatus === "succeeded" || intentStatus === "processing");
     let appliedImmediately = false;
     let immediateApplicationReason: string | null = null;
+    let terminalPaymentStatus: PaymentStatus | null = null;
+    let terminalPaymentReason: string | null = null;
+    let effectiveStripePaymentIntentId = intent.paymentIntent?.id || null;
 
     if (accepted && intentStatus === "succeeded" && intent.paymentIntent?.id) {
       const application = await prisma.$transaction((tx) => applySucceededStripeInvoicePayment(tx, {
@@ -811,8 +814,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       appliedImmediately = application.applied;
       immediateApplicationReason = application.reason;
     } else {
-      await prisma.payment.update({
-        where: { id: payment.id },
+      const submissionUpdate = await prisma.payment.updateMany({
+        where: { id: payment.id, status: PaymentStatus.DRAFT },
         data: {
           status: accepted ? PaymentStatus.DRAFT : PaymentStatus.FAILED,
           externalIdPlaceholder: intent.paymentIntent?.id || intent.error || `${statusPrefix}_payment_intent_failed`,
@@ -826,13 +829,31 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           }),
         },
       });
+      if (submissionUpdate.count !== 1) {
+        const winningPayment = await prisma.payment.findUnique({
+          where: { id: payment.id },
+          select: { status: true, externalIdPlaceholder: true, customFields: true },
+        });
+        terminalPaymentStatus = winningPayment?.status ?? PaymentStatus.FAILED;
+        const winningFields = jsonRecord(winningPayment?.customFields);
+        effectiveStripePaymentIntentId = clean(winningFields.stripePaymentIntentId)
+          || clean(winningPayment?.externalIdPlaceholder)
+          || effectiveStripePaymentIntentId;
+        if (terminalPaymentStatus === PaymentStatus.PAID) {
+          appliedImmediately = true;
+        } else {
+          terminalPaymentReason = "The payment processor reported a failed or returned payment while this request was finishing.";
+        }
+      }
     }
+
+    const processingAccepted = !terminalPaymentStatus && accepted && intentStatus === "processing";
 
     const auditAction = appliedImmediately
       ? collectionMode === "stored_method"
         ? "billing.stored_method.completed"
         : "billing.autopay.completed"
-      : accepted
+      : processingAccepted
         ? collectionMode === "stored_method"
           ? "billing.stored_method.payment_intent_created"
           : "billing.autopay.payment_intent_created"
@@ -850,13 +871,13 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         resourceId: invoice.id,
         metadata: jsonInput({
           paymentId: payment.id,
-          stripePaymentIntentId: intent.paymentIntent?.id || null,
+          stripePaymentIntentId: effectiveStripePaymentIntentId,
           invoiceAmountCents: invoice.totalCents,
           accountCreditAppliedCents: creditAllocation.accountCreditAppliedCents,
           stripeChargePrincipalCents: creditAllocation.stripeChargePrincipalCents,
           checkoutTotalCents: amounts.checkoutTotalCents,
-          status: intentStatus,
-          error: intent.ok ? null : intent.error || null,
+          status: terminalPaymentStatus ?? intentStatus,
+          error: appliedImmediately || processingAccepted ? null : intent.error || terminalPaymentReason || immediateApplicationReason,
           appliedImmediately,
           immediateApplicationReason,
         }),
@@ -866,22 +887,24 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
 
     const resultStatus: AutopayRunResultStatus = appliedImmediately
       ? "paid"
-      : accepted && intentStatus === "processing"
+      : processingAccepted
         ? "processing"
         : "failed";
     const resultReason = appliedImmediately
       ? creditAllocation.accountCreditAppliedCents > 0
         ? "Account credit was applied first; only the remaining balance was submitted for payment."
         : "Payment confirmed and the Bee Suite ledger was updated."
-      : accepted && intentStatus === "processing"
+      : processingAccepted
         ? creditAllocation.accountCreditAppliedCents > 0
           ? "Account credit is reserved for this invoice; the remaining bank payment is processing."
           : "Bank payment is processing; the ledger will update when the payment processor confirms settlement."
-        : immediateApplicationReason
+        : terminalPaymentReason
+          ? terminalPaymentReason
+          : immediateApplicationReason
           ? `Payment succeeded with the processor but could not be applied automatically: ${immediateApplicationReason}.`
           : intent.error || `${collectionLabel} could not be submitted.`;
 
-    if (appliedImmediately || (accepted && intentStatus === "processing")) {
+    if (appliedImmediately || processingAccepted) {
       availableCreditByAccountId.set(
         invoice.billingAccountId,
         Math.max(0, availableCreditCents - creditAllocation.accountCreditAppliedCents),
@@ -895,7 +918,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       status: resultStatus,
       reason: resultReason,
       paymentId: payment.id,
-      stripePaymentIntentId: intent.paymentIntent?.id || null,
+      stripePaymentIntentId: effectiveStripePaymentIntentId,
     });
   }
 

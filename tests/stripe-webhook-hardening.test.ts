@@ -169,6 +169,8 @@ test("supported reconciliation matrix includes payment, invoice, subscription, d
     "invoice.paid",
     "invoice.payment_action_required",
     "invoice.payment_failed",
+    "payment_intent.processing",
+    "payment_intent.canceled",
     "payment_intent.payment_failed",
     "payment_intent.succeeded",
     "payout.created",
@@ -182,6 +184,165 @@ test("supported reconciliation matrix includes payment, invoice, subscription, d
     "v2.core.account[identity].updated",
     "v2.core.account[requirements].updated",
   ].sort());
+});
+
+test("unpaid Checkout snapshots cannot reopen settled or returned payments", async () => {
+  const source = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  const pendingTransitions = source.match(
+    /updateMany\(\{\s*where: \{\s*id: paymentId,\s*status: PaymentStatus\.DRAFT,\s*customFields: \{\s*equals: currentPayment\.customFields === null \? Prisma\.DbNull : currentPayment\.customFields,[\s\S]*?data: \{\s*externalIdPlaceholder: session\.id/g,
+  ) ?? [];
+  assert.equal(pendingTransitions.length, 2);
+});
+
+test("stale Checkout completion cannot overwrite a newer recoverable failure", async () => {
+  const source = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.equal(
+    source.match(/if \(!stripeEventIsNewerThanStored\(event, currentFields\)\) return/g)?.length,
+    3,
+  );
+  assert.match(source, /if \(!stripeEventIsNewerThanStored\(event, currentFields, true\)\) return/);
+});
+
+test("parent ledger query includes every provisional ACH processing state", async () => {
+  const source = await readFile("src/app/[slug]/page.tsx", "utf8");
+  for (const status of [
+    "paid_processing",
+    "autopay_processing",
+    "stored_method_processing",
+    "director_saved_method_processing",
+  ]) {
+    assert.match(source, new RegExp(`equals: "${status}"`));
+  }
+});
+
+test("off-session request completion cannot overwrite webhook terminal states", async () => {
+  const autopay = await readFile("src/lib/autopay-processing.ts", "utf8");
+  const familyPayment = await readFile("src/app/api/billing/family-payment/route.ts", "utf8");
+  assert.match(autopay, /payment\.updateMany\(\{\s*where: \{ id: payment\.id, status: PaymentStatus\.DRAFT \}/);
+  assert.match(autopay, /submissionUpdate\.count !== 1[\s\S]*payment\.findUnique[\s\S]*terminalPaymentStatus/);
+  assert.match(autopay, /terminalPaymentStatus === PaymentStatus\.PAID[\s\S]*appliedImmediately = true/);
+  assert.match(autopay, /processingAccepted[\s\S]*blockedBillingAccountIds\.add/);
+  assert.equal(
+    familyPayment.match(/payment\.updateMany\(\{\s*where: \{ id: payment\.id, status: PaymentStatus\.DRAFT \}/g)?.length,
+    2,
+  );
+  assert.match(familyPayment, /submissionUpdate\.count !== 1[\s\S]*payment\.findUnique[\s\S]*terminalPaymentStatus/);
+  assert.match(familyPayment, /terminalFailure[\s\S]*status: "failed"/);
+});
+
+test("canceled processing PaymentIntents clear provisional payment state", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /event\.type === "payment_intent\.payment_failed" \|\| event\.type === "payment_intent\.canceled"/);
+  assert.match(route, /const canceled = event\.type === "payment_intent\.canceled"/);
+  assert.match(route, /failureCode: "payment_canceled"[\s\S]*customStatus: "payment_canceled"/);
+  assert.match(route, /provisionalCreditActive: false/);
+});
+
+test("processing webhooks preserve collection-specific credit reservations", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /processingPaymentLifecycleStatus[\s\S]*"autopay_processing"[\s\S]*"stored_method_processing"/);
+  assert.match(route, /collectionMode: clean\(metadata\.collectionMode\) \|\| clean\(currentFields\.collectionMode\)/);
+  assert.match(route, /status: lifecycleStatus/);
+});
+
+test("processing webhooks are scoped to the payment's tenant, school account, and PaymentIntent", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /handlePaymentIntentProcessing\([\s\S]*matchedTenantId: string \| null/);
+  assert.match(route, /clean\(input\.metadata\.tenantId\) !== tenantId/);
+  assert.match(route, /input\.matchedTenantId && input\.matchedTenantId !== tenantId/);
+  assert.match(route, /eventConnectedAccountId !== storedConnectedAccountId/);
+  assert.match(route, /centerConnectedAccountId !== storedConnectedAccountId/);
+  assert.match(route, /storedPaymentIntentId !== input\.paymentIntent\.id/);
+  assert.match(route, /payment_intent_scope_mismatch/);
+});
+
+test("every PaymentIntent lifecycle event uses the same school ownership guard", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /async function findScopedPaymentIntentPayment/);
+  assert.match(route, /handlePaymentIntentSucceeded\(event, event\.data\.object as StripePaymentIntentObject, matchedTenantId\)/);
+  assert.match(route, /handlePaymentIntentFailed\(event, event\.data\.object as StripePaymentIntentObject, matchedTenantId\)/);
+  assert.ok((route.match(/findScopedPaymentIntentPayment\(/g) || []).length >= 6);
+});
+
+test("PaymentIntent ownership supports invoice metadata, first-event binding, and retained migration sources", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /metadataBillingAccountId && metadataBillingAccountId !== payment\.billingAccountId/);
+  assert.match(route, /!storedPaymentIntentId[\s\S]*stripePaymentIntentId: input\.paymentIntent\.id/);
+  assert.match(route, /provider: "stripe"[\s\S]*status: PaymentStatus\.DRAFT[\s\S]*equals: payment\.customFields/);
+  assert.match(route, /stripeConnectMigrationSourceAccountRetainedForReconciliation/);
+  assert.match(route, /migration\.sourceAccountId === storedConnectedAccountId/);
+  assert.match(route, /centerConnectedAccountId !== storedConnectedAccountId && !retainedSourceAccountMatches/);
+});
+
+test("PaymentIntent scope validates economics and audits only verified local resources", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /numeric\(input\.paymentIntent\.amount\) !== expectedAmountCents/);
+  assert.match(route, /expectedCustomerId && clean\(input\.paymentIntent\.customer\) !== expectedCustomerId/);
+  assert.match(route, /where: \{ id: candidateInvoiceId, billingAccountId: payment\.billingAccountId \}/);
+  assert.match(route, /if \(verifiedInvoiceId\)[\s\S]*writeSystemAudit\([\s\S]*verifiedInvoiceId/);
+  assert.match(route, /else if \(storedBillingAccountId\)[\s\S]*writeBillingAccountSystemAudit\([\s\S]*storedBillingAccountId/);
+});
+
+test("stale or concurrent processing webhooks cannot overwrite a newer failure", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /if \(!stripeEventIsNewerThanStored\(event, currentFields\)\) return/);
+  assert.match(route, /customFields: \{\s*equals: payment\.customFields === null \? Prisma\.DbNull : payment\.customFields/);
+});
+
+test("cancellation preserves an already-recorded ACH return", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /if \(canceled && isReturnedStripePayment\(currentPayment\)\) return/);
+});
+
+test("cancellation leaves abandoned Checkout drafts for expiration handling", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /if \(canceled && !offSessionCollection && !isAchPaymentProcessing\(currentPayment\)\) return/);
+});
+
+test("stale failures cannot overwrite any newer payment lifecycle state", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /if \(!stripeEventIsNewerThanStored\(event, currentFields\)\) return/);
+  assert.match(route, /equals: currentPayment\.customFields === null \? Prisma\.DbNull : currentPayment\.customFields/);
+});
+
+test("same-second terminal events use lifecycle precedence instead of arbitrary ordering", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /allowSameSecond && incomingEventCreatedAt === storedEventCreatedAt/);
+  assert.match(route, /if \(!canceled && clean\(currentFields\.status\) === "payment_canceled"\) return/);
+  assert.match(route, /if \(!stripeEventIsNewerThanStored\(event, currentFields, true\)\) return/);
+});
+
+test("same-second failures verify the current PaymentIntent before replacing ACH processing", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /retrieveStripePaymentIntent\(\{/);
+  assert.match(route, /sameSecondLiveIntentStatus !== clean\(paymentIntent\.status\)/);
+  assert.match(route, /Payment status verification is temporarily unavailable/);
+});
+
+test("later Checkout failures preserve insufficient-funds retry state", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.equal(
+    route.match(/failureCode: clean\(currentFields\.stripeFailureCode\) \|\| null/g)?.length,
+    2,
+  );
+  assert.equal(
+    route.match(/retryAvailable: failure\.retryAvailable \|\| currentFields\.retryAvailable === true/g)?.length,
+    2,
+  );
+});
+
+test("parent invoice status maps off-session and ACH processing payments", async () => {
+  const source = await readFile("src/app/[slug]/page.tsx", "utf8");
+  assert.match(
+    source,
+    /!isActiveStripeCheckoutPayment\(payment\)[\s\S]*!isActiveStripeAutopayPayment\(payment\)[\s\S]*!isAchPaymentProcessing\(payment\)/,
+  );
+});
+
+test("ACH return audits require an actual submitted return transition", async () => {
+  const source = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(source, /achReturned\s*\? "billing\.ach_payment\.returned"/);
+  assert.match(source, /achReturned\s*\? "billing\.family_payment\.ach_returned"/);
 });
 
 test("Accounts v2 thin events route by related_object without requiring snapshot data", () => {

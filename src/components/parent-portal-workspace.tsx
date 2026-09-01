@@ -400,6 +400,7 @@ type Props = {
   }>;
   centerName?: string | null;
   centerEin?: string | null;
+  centerTimeZone?: string | null;
   classroomTeachers?: ClassroomTeacherRecipient[];
   demoMode?: boolean;
   previewMode?: boolean;
@@ -751,6 +752,7 @@ function ParentPortalWorkspaceView({
   availableFamilies = [],
   centerName = null,
   centerEin = null,
+  centerTimeZone = null,
   classroomTeachers = [],
   demoMode,
   previewMode = false,
@@ -3059,6 +3061,7 @@ function ParentPortalWorkspaceView({
                                     },
                                   }}
                                   schools={[{ id: family.centerId ?? "", name: centerName ?? "School", ein: centerEin ?? null }]}
+                                  schoolTimeZone={centerTimeZone ?? undefined}
                                 />
                               </div>
                             ) : null}
@@ -3179,6 +3182,7 @@ function ParentPortalWorkspaceView({
                                 },
                               }}
                               schools={[{ id: family.centerId ?? "", name: centerName ?? "School", ein: centerEin ?? null }]}
+                              schoolTimeZone={centerTimeZone ?? undefined}
                             />
                           </div>
                         ) : null}

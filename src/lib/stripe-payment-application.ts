@@ -331,6 +331,40 @@ export async function applyAccountCreditToInvoice(
     };
   }
 
+  const applicationExternalId = `account-credit:invoice:${invoice.id}`;
+  const existingApplication = await tx.ledgerEntry.findFirst({
+    where: {
+      sourceSystem: "bee_suite",
+      externalId: applicationExternalId,
+    },
+    select: {
+      billingAccountId: true,
+      invoiceId: true,
+      paymentId: true,
+      type: true,
+      metadata: true,
+    },
+  });
+  const existingApplicationFields = jsonRecord(existingApplication?.metadata);
+  const existingApplicationMatches = Boolean(
+    existingApplication
+    && existingApplication.billingAccountId === invoice.billingAccountId
+    && existingApplication.invoiceId === invoice.id
+    && existingApplication.paymentId === null
+    && existingApplication.type === "account_credit_application"
+    && centsFrom(existingApplicationFields.accountCreditAppliedCents) === allocation.accountCreditAppliedCents
+    && centsFrom(existingApplicationFields.invoiceTotalCents) === invoice.totalCents
+    && centsFrom(existingApplicationFields.stripeChargePrincipalCents) === 0
+    && existingApplicationFields.fullyCoveredByCredit === true
+  );
+  if (existingApplication && !existingApplicationMatches) {
+    return {
+      applied: false,
+      reason: "account_credit_application_conflict",
+      billingAccountId: invoice.billingAccountId,
+    };
+  }
+
   const paidAt = input.appliedAt ?? new Date();
   const invoiceFields = jsonRecord(invoice.customFields);
   const claim = await tx.invoice.updateMany({
@@ -351,25 +385,27 @@ export async function applyAccountCreditToInvoice(
     return { applied: false, reason: "invoice_already_paid", billingAccountId: invoice.billingAccountId };
   }
 
-  await tx.ledgerEntry.create({
-    data: {
-      billingAccountId: invoice.billingAccountId,
-      invoiceId: invoice.id,
-      paymentId: null,
-      type: "account_credit_application",
-      description: "Account credit applied",
-      amountCents: 0,
-      balanceAfterCents: account.balanceCents,
-      sourceSystem: "bee_suite",
-      externalId: `account-credit:invoice:${invoice.id}`,
-      metadata: inputJson({
-        accountCreditAppliedCents: allocation.accountCreditAppliedCents,
-        invoiceTotalCents: invoice.totalCents,
-        stripeChargePrincipalCents: 0,
-        fullyCoveredByCredit: true,
-      }),
-    },
-  });
+  if (!existingApplication) {
+    await tx.ledgerEntry.create({
+      data: {
+        billingAccountId: invoice.billingAccountId,
+        invoiceId: invoice.id,
+        paymentId: null,
+        type: "account_credit_application",
+        description: "Account credit applied",
+        amountCents: 0,
+        balanceAfterCents: account.balanceCents,
+        sourceSystem: "bee_suite",
+        externalId: applicationExternalId,
+        metadata: inputJson({
+          accountCreditAppliedCents: allocation.accountCreditAppliedCents,
+          invoiceTotalCents: invoice.totalCents,
+          stripeChargePrincipalCents: 0,
+          fullyCoveredByCredit: true,
+        }),
+      },
+    });
+  }
   await applyRegistrationPaymentCompletion(tx, {
     invoiceId: invoice.id,
     paymentId: null,

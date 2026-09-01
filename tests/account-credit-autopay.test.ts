@@ -98,3 +98,24 @@ test("autopay and its webhook preserve the credit-first contract", () => {
   }
 });
 
+
+test("reopened invoices with an existing credit application reconcile idempotently", () => {
+  const source = readFileSync("src/lib/stripe-payment-application.ts", "utf8");
+  const applyCredit = source.slice(
+    source.indexOf("export async function applyAccountCreditToInvoice"),
+    source.indexOf("export async function applySucceededStripeInvoicePayment"),
+  );
+
+  assert.match(applyCredit, /applicationExternalId/);
+  assert.match(applyCredit, /ledgerEntry\.findFirst/);
+  assert.match(applyCredit, /existingApplicationMatches/);
+  assert.match(applyCredit, /paymentId: true/);
+  assert.match(applyCredit, /existingApplicationFields\.accountCreditAppliedCents/);
+  assert.match(applyCredit, /existingApplicationFields\.stripeChargePrincipalCents/);
+  assert.match(applyCredit, /existingApplicationFields\.fullyCoveredByCredit === true/);
+  assert.match(applyCredit, /if \(!existingApplication\) \{[\s\S]*ledgerEntry\.create/);
+  assert.ok(
+    applyCredit.indexOf("ledgerEntry.findFirst") < applyCredit.indexOf("invoice.updateMany"),
+    "existing credit applications must be detected before an open invoice is claimed",
+  );
+});

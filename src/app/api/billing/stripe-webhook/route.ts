@@ -397,11 +397,18 @@ function isDuplicateWebhookEvent(error: unknown) {
   return isStripeWebhookReceiptUniqueConflict(error);
 }
 
-function stripeEventIsNewerThanStored(event: StripeWebhookEvent, customFields: unknown) {
+function stripeEventIsNewerThanStored(
+  event: StripeWebhookEvent,
+  customFields: unknown,
+  allowSameSecond = false,
+) {
   const storedEventCreatedAt = Date.parse(clean(jsonObject(customFields).stripeEventCreatedAt));
   if (!Number.isFinite(storedEventCreatedAt)) return true;
   const incomingEventCreatedAt = event.created ? event.created * 1000 : Number.NaN;
-  return Number.isFinite(incomingEventCreatedAt) && incomingEventCreatedAt > storedEventCreatedAt;
+  return Number.isFinite(incomingEventCreatedAt) && (
+    incomingEventCreatedAt > storedEventCreatedAt
+    || (allowSameSecond && incomingEventCreatedAt === storedEventCreatedAt)
+  );
 }
 
 async function findPaymentForStripeObject(
@@ -1839,11 +1846,12 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       storedBillingAccountId = currentPayment.billingAccountId;
       const currentFields = jsonObject(currentPayment.customFields);
       if (canceled && isReturnedStripePayment(currentPayment)) return;
+      if (!canceled && clean(currentFields.status) === "payment_canceled") return;
       const offSessionCollection = collectionMode === "autopay"
         || collectionMode === "stored_method"
         || collectionMode === "director_saved_method";
       if (canceled && !offSessionCollection && !isAchPaymentProcessing(currentPayment)) return;
-      if (!stripeEventIsNewerThanStored(event, currentFields)) return;
+      if (!stripeEventIsNewerThanStored(event, currentFields, true)) return;
       const candidateInvoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId);
       if (candidateInvoiceId) {
         const verifiedInvoice = await tx.invoice.findFirst({

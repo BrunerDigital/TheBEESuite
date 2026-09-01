@@ -198,8 +198,9 @@ test("stale Checkout completion cannot overwrite a newer recoverable failure", a
   const source = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   assert.equal(
     source.match(/if \(!stripeEventIsNewerThanStored\(event, currentFields\)\) return/g)?.length,
-    4,
+    3,
   );
+  assert.match(source, /if \(!stripeEventIsNewerThanStored\(event, currentFields, true\)\) return/);
 });
 
 test("parent ledger query includes every provisional ACH processing state", async () => {
@@ -264,6 +265,13 @@ test("stale failures cannot overwrite any newer payment lifecycle state", async 
   const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   assert.match(route, /if \(!stripeEventIsNewerThanStored\(event, currentFields\)\) return/);
   assert.match(route, /equals: currentPayment\.customFields === null \? Prisma\.DbNull : currentPayment\.customFields/);
+});
+
+test("same-second terminal events use lifecycle precedence instead of arbitrary ordering", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /allowSameSecond && incomingEventCreatedAt === storedEventCreatedAt/);
+  assert.match(route, /if \(!canceled && clean\(currentFields\.status\) === "payment_canceled"\) return/);
+  assert.match(route, /if \(!stripeEventIsNewerThanStored\(event, currentFields, true\)\) return/);
 });
 
 test("later Checkout failures preserve insufficient-funds retry state", async () => {

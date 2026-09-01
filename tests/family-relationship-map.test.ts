@@ -50,10 +50,12 @@ function familyRecord(overrides: Partial<EditableFamilyRecord> = {}): EditableFa
 function renderMap(
   family: EditableFamilyRecord,
   duplicateFamilyCount = 0,
+  hasSelectedPersonDuplicateCandidate = false,
 ) {
   return renderToString(React.createElement(FamilyRelationshipMap, {
     family,
     duplicateFamilyCount,
+    hasSelectedPersonDuplicateCandidate,
     onSelectGuardian: () => true,
     onSelectChild: () => true,
     onSelectPickup: () => true,
@@ -182,4 +184,12 @@ test("relationship review signals normalize emails and count each candidate fami
   assert.match(html, /1 possible duplicate family record matches the selected household/);
   assert.match(html, /Confirm school scope and supporting evidence before merging/);
   assert.doesNotMatch(mapSource, /duplicateCounts\.families \+ duplicateCounts\.guardians \+ duplicateCounts\.children/);
+});
+
+test("relationship review does not hide a selected guardian or child duplicate", () => {
+  const html = renderMap(familyRecord(), 0, true);
+
+  assert.match(html, /selected guardian or child has a possible duplicate person record/);
+  assert.doesNotMatch(html, /No displayed review signals/);
+  assert.doesNotMatch(html, /possible duplicate family record/);
 });

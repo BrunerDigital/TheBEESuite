@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
-import { achFailurePresentation, isAchReturnReason } from "@/lib/ach-payment-lifecycle";
+import { achFailurePresentation, isAchReturnReason, isReturnedStripePayment } from "@/lib/ach-payment-lifecycle";
 import { checkoutApplicationGuard, stripePaymentIntentFailureDisposition } from "@/lib/billing-guardrails";
 import {
   createStripeSoftwareSubscription,
@@ -1749,6 +1749,11 @@ async function handlePaymentIntentProcessing(event: StripeWebhookEvent, paymentI
       if (!payment || payment.status !== PaymentStatus.DRAFT) return;
       billingAccountId = payment.billingAccountId;
       const currentFields = jsonObject(payment.customFields);
+      const storedEventCreatedAt = Date.parse(clean(currentFields.stripeEventCreatedAt));
+      const processingEventCreatedAt = event.created ? event.created * 1000 : Number.NaN;
+      if (Number.isFinite(storedEventCreatedAt) && (
+        !Number.isFinite(processingEventCreatedAt) || processingEventCreatedAt <= storedEventCreatedAt
+      )) return;
       invoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId) || null;
       const achProcessing = isAchPaymentMetadata({
         ...metadata,
@@ -1761,7 +1766,13 @@ async function handlePaymentIntentProcessing(event: StripeWebhookEvent, paymentI
         currentStatus: clean(currentFields.status),
       });
       const updated = await tx.payment.updateMany({
-        where: { id: paymentId, status: PaymentStatus.DRAFT },
+        where: {
+          id: paymentId,
+          status: PaymentStatus.DRAFT,
+          customFields: {
+            equals: payment.customFields === null ? Prisma.DbNull : payment.customFields,
+          },
+        },
         data: {
           externalIdPlaceholder: paymentIntent.id,
           customFields: {
@@ -1810,12 +1821,13 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       await recordStripeWebhookEvent(tx, event);
       const currentPayment = await tx.payment.findUnique({
         where: { id: metadata.paymentId },
-        select: { billingAccountId: true, customFields: true },
+        select: { status: true, provider: true, billingAccountId: true, customFields: true },
       });
       if (!currentPayment) return;
       paymentFound = true;
       storedBillingAccountId = currentPayment.billingAccountId;
       const currentFields = jsonObject(currentPayment.customFields);
+      if (canceled && isReturnedStripePayment(currentPayment)) return;
       const candidateInvoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId);
       if (candidateInvoiceId) {
         const verifiedInvoice = await tx.invoice.findFirst({

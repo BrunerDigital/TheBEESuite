@@ -236,6 +236,17 @@ test("processing webhooks preserve collection-specific credit reservations", asy
   assert.match(route, /status: lifecycleStatus/);
 });
 
+test("stale or concurrent processing webhooks cannot overwrite a newer failure", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /processingEventCreatedAt <= storedEventCreatedAt/);
+  assert.match(route, /customFields: \{\s*equals: payment\.customFields === null \? Prisma\.DbNull : payment\.customFields/);
+});
+
+test("cancellation preserves an already-recorded ACH return", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /if \(canceled && isReturnedStripePayment\(currentPayment\)\) return/);
+});
+
 test("later Checkout failures preserve insufficient-funds retry state", async () => {
   const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   assert.equal(

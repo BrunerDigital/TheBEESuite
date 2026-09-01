@@ -307,6 +307,26 @@ test("active Stripe checkout summary identifies ACH processing state", () => {
   assert.match(activeStripeCheckoutPaymentMessage(payment), /bank payment is already processing/i);
 });
 
+test("unsubmitted bank Checkout uses pending wording until Stripe confirms processing", () => {
+  const message = activeStripeCheckoutPaymentMessage({
+    id: "pay_unsubmitted_ach",
+    amountCents: 25500,
+    externalIdPlaceholder: "cs_live_unsubmitted",
+    customFields: {
+      status: "checkout_created",
+      paymentMethodCategory: "ach",
+    },
+  });
+
+  assert.match(message, /checkout session is already pending/i);
+  assert.doesNotMatch(message, /Paid — processing/i);
+});
+
+test("Stripe checkout refresh preserves a confirmed paid-processing lifecycle", () => {
+  const source = readFileSync("src/lib/stripe-checkout-drafts.ts", "utf8");
+  assert.match(source, /fields\.status === "paid_processing" \? "paid_processing" : "checkout_pending"/);
+});
+
 test("Stripe checkout draft clear rules preserve real processing payments", () => {
   const now = new Date("2026-07-02T21:00:00.000Z");
 

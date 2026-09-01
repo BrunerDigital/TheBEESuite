@@ -70,7 +70,6 @@ export function achFailurePresentation(input: {
     previousStatus === "payment_returned"
     || previousStatus === "ach_returned"
     || previousStatus === "paid_processing"
-    || previousStatus === "checkout_pending"
     || previousStatus.endsWith("_processing")
     || text(record(input.customFields).stripePaymentIntentStatus) === "processing"
   );

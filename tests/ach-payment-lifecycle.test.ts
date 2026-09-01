@@ -58,6 +58,21 @@ test("an insufficient-funds ACH result becomes returned and retryable", () => {
   });
 });
 
+test("an unsubmitted ACH checkout failure is not mislabeled as a bank return", () => {
+  assert.deepEqual(achFailurePresentation({
+    customFields: {
+      requestedPaymentMethodCategory: "ach",
+      status: "checkout_pending",
+    },
+    failureCode: "payment_method_unactivated",
+  }), {
+    returned: false,
+    retryAvailable: false,
+    failureCode: "payment_method_unactivated",
+    customStatus: null,
+  });
+});
+
 test("returned ACH attempts remain visible without being treated as paid", () => {
   const payment = {
     status: "FAILED",

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
+import { provisionalAchCreditCents } from "@/lib/ach-payment-lifecycle";
 import { canAccessCenter, canManageBilling, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import {
   activeStripeCheckoutPaymentMessage,
@@ -270,6 +271,7 @@ async function POSTHandler(request: NextRequest) {
         agencyLedgerEntries,
         requestedAmountCents,
         responsibilityReviewRequired,
+        provisionalCreditCents: provisionalAchCreditCents(draftStripePayments),
       })
     : requestedAmountCents > 0 ? requestedAmountCents : billingAccount.balanceCents;
   if (amountCents <= 0) {

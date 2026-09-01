@@ -7,7 +7,8 @@ export function FamilyRelationshipMapPreview({ family }: { family: EditableFamil
   return (
     <FamilyRelationshipMap
       family={family}
-      duplicateCounts={{ families: 0, guardians: 1, children: 0 }}
+      duplicateFamilyCount={1}
+      hasSelectedPersonDuplicateCandidate
       onSelectGuardian={() => true}
       onSelectChild={() => true}
       onSelectPickup={() => true}

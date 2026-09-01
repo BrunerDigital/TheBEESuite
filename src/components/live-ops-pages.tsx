@@ -1889,6 +1889,7 @@ export type EnrollmentPipelineData = {
     id: string;
     status: string;
     reviewStatus: RegistrationReviewStatus;
+    parentSetupRetryPending: boolean;
     registrationPayment: RegistrationPaymentStatus;
     submittedAt: Date | string | null;
     summary: string;
@@ -1998,6 +1999,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
                       submissionId={submission.id}
                       status={submission.status}
                       reviewStatus={submission.reviewStatus}
+                      parentSetupRetryPending={submission.parentSetupRetryPending}
                       preview={submission.preview}
                     />
                   </TableCell>
@@ -3665,6 +3667,7 @@ export type FormsPageData = {
     id: string;
     status: string;
     reviewStatus: RegistrationReviewStatus;
+    parentSetupRetryPending: boolean;
     registrationPayment: RegistrationPaymentStatus;
     summary: string;
     details: string;
@@ -3770,6 +3773,7 @@ export function FormsPage({ data }: { data: FormsPageData }) {
                         submissionId={submission.id}
                         status={submission.status}
                         reviewStatus={submission.reviewStatus}
+                        parentSetupRetryPending={submission.parentSetupRetryPending}
                         preview={submission.preview ?? { sections: [], destinations: [] }}
                       />
                     ) : (

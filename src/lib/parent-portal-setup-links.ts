@@ -54,17 +54,10 @@ export async function issueParentPortalSetupLink({
 }) {
   const issuedAt = new Date();
   const expiresAt = new Date(issuedAt.getTime() + PARENT_SETUP_LINK_TTL_MS);
-  const recovery = await generateSupabasePasswordRecoveryLink({
-    email,
-    redirectTo: getParentPortalPasswordResetRedirectUrl(requestUrl),
-  });
-  if (!recovery.ok) {
-    return { ok: false as const, error: recovery.error || "Parent password setup link could not be created." };
-  }
-  // Generate the recovery capability before replacing the prior credential so
-  // a provider failure cannot lock out an existing parent. This function only
-  // runs when an authorized school user explicitly sends a setup link; merely
-  // deploying the code changes no real credential.
+  // Supabase invalidates existing recovery tokens when an admin changes the
+  // user's password. Secure the prior credential first, then generate the link
+  // that will actually be delivered. This function only runs after an
+  // authorized school user explicitly sends a setup link.
   const transitioned = await updateSupabaseAuthUserPasswordByEmail({
     email,
     password: randomBytes(48).toString("base64url"),
@@ -72,6 +65,13 @@ export async function issueParentPortalSetupLink({
   });
   if (!transitioned.ok) {
     return { ok: false as const, error: transitioned.error || "Parent password setup could not be secured." };
+  }
+  const recovery = await generateSupabasePasswordRecoveryLink({
+    email,
+    redirectTo: getParentPortalPasswordResetRedirectUrl(requestUrl),
+  });
+  if (!recovery.ok) {
+    return { ok: false as const, error: recovery.error || "Parent password setup link could not be created." };
   }
 
   const tokenFingerprint = parentSetupTokenFingerprint(recovery.tokenHash);

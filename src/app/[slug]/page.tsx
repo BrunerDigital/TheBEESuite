@@ -2350,6 +2350,11 @@ async function renderLivePage(
         where: { id: resolvedParentCenterId ?? "__none__" },
         select: {
           id: true,
+          name: true,
+          crmLocationId: true,
+          city: true,
+          state: true,
+          timezone: true,
           customFields: true,
           organization: {
             select: {
@@ -2765,8 +2770,9 @@ async function renderLivePage(
         dailyReports={parentDailyReports}
         incidents={incidents}
         messages={signedMessages}
-        centerName={parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
-        centerEin={parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
+        centerName={familyCenter ? formatCenterName(familyCenter) : parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
+        centerEin={familyCenter ? readSchoolEin(familyCenter.customFields) : parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
+        centerTimeZone={familyCenter ? readCenterLocationTimeZone(familyCenter) : parentServiceDay.timeZone}
         classroomTeachers={classroomTeachers}
         documents={signedDocuments}
         media={signedMedia}

@@ -157,6 +157,7 @@ type StripePaymentIntentObject = {
   id: string;
   object: "payment_intent";
   amount?: number;
+  customer?: string | null;
   status?: string;
   last_payment_error?: { code?: string; decline_code?: string; message?: string } | null;
   metadata?: StripeMetadata;
@@ -322,7 +323,7 @@ async function findScopedPaymentIntentPayment(
     event: StripeWebhookEvent;
     metadata: StripeMetadata;
     paymentId: string;
-    paymentIntentId: string;
+    paymentIntent: StripePaymentIntentObject;
     matchedTenantId: string | null;
   },
 ) {
@@ -357,6 +358,8 @@ async function findScopedPaymentIntentPayment(
   const centerConnectedAccountId = clean(readStripeConnectedAccountId(center?.customFields));
   const eventConnectedAccountId = clean(input.event.account);
   const storedPaymentIntentId = clean(currentFields.stripePaymentIntentId);
+  const expectedAmountCents = metadataCents(currentFields.checkoutTotalCents) || payment.amountCents;
+  const expectedCustomerId = clean(currentFields.stripeCustomerId);
   const metadataBillingAccountId = clean(input.metadata.billingAccountId);
   const centerFields = jsonObject(center?.customFields);
   const migration = readStripeConnectMigration(centerFields);
@@ -377,7 +380,9 @@ async function findScopedPaymentIntentPayment(
     || clean(input.metadata.stripeConnectedAccountId) !== storedConnectedAccountId
     || (centerConnectedAccountId !== storedConnectedAccountId && !retainedSourceAccountMatches)
     || eventConnectedAccountId !== storedConnectedAccountId
-    || (storedPaymentIntentId && storedPaymentIntentId !== input.paymentIntentId)
+    || (storedPaymentIntentId && storedPaymentIntentId !== input.paymentIntent.id)
+    || numeric(input.paymentIntent.amount) !== expectedAmountCents
+    || (expectedCustomerId && clean(input.paymentIntent.customer) !== expectedCustomerId)
   ) {
     return { payment: null, currentFields, reason: "payment_intent_scope_mismatch" } as const;
   }
@@ -386,7 +391,7 @@ async function findScopedPaymentIntentPayment(
     if (payment.provider !== "stripe" || payment.status !== PaymentStatus.DRAFT) {
       return { payment: null, currentFields, reason: "payment_intent_scope_mismatch" } as const;
     }
-    const boundFields = { ...currentFields, stripePaymentIntentId: input.paymentIntentId };
+    const boundFields = { ...currentFields, stripePaymentIntentId: input.paymentIntent.id };
     const bound = await tx.payment.updateMany({
       where: {
         id: input.paymentId,
@@ -416,7 +421,7 @@ async function findScopedPaymentIntentPayment(
       const winnerFields = jsonObject(winner?.customFields);
       if (
         !winner
-        || clean(winnerFields.stripePaymentIntentId) !== input.paymentIntentId
+        || clean(winnerFields.stripePaymentIntentId) !== input.paymentIntent.id
         || clean(winnerFields.stripeConnectedAccountId) !== storedConnectedAccountId
       ) {
         return { payment: null, currentFields: winnerFields, reason: "payment_intent_scope_raced" } as const;
@@ -718,6 +723,7 @@ async function handleFamilyBalancePaymentSucceeded(
     auditAction: string;
     descriptionFallback: string;
     matchedTenantId?: string | null;
+    paymentIntent?: StripePaymentIntentObject;
   },
 ) {
   let applied = false;
@@ -728,13 +734,15 @@ async function handleFamilyBalancePaymentSucceeded(
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       const scopedPayment = event.type.startsWith("payment_intent.")
-        ? await findScopedPaymentIntentPayment(tx, {
-            event,
-            metadata: input.metadata,
-            paymentId: input.paymentId,
-            paymentIntentId: input.stripePaymentIntentId || "",
-            matchedTenantId: input.matchedTenantId || null,
-          })
+        ? input.paymentIntent
+          ? await findScopedPaymentIntentPayment(tx, {
+              event,
+              metadata: input.metadata,
+              paymentId: input.paymentId,
+              paymentIntent: input.paymentIntent,
+              matchedTenantId: input.matchedTenantId || null,
+            })
+          : { payment: null, currentFields: {}, reason: "payment_intent_snapshot_missing" } as const
         : null;
       const currentPayment = scopedPayment
         ? scopedPayment.payment
@@ -1901,7 +1909,7 @@ async function handlePaymentIntentProcessing(
         event,
         metadata,
         paymentId,
-        paymentIntentId: paymentIntent.id,
+        paymentIntent,
         matchedTenantId,
       });
       const payment = scopedPayment.payment;
@@ -1913,7 +1921,14 @@ async function handlePaymentIntentProcessing(
       billingAccountId = payment.billingAccountId;
       const currentFields = scopedPayment.currentFields;
       if (!stripeEventIsNewerThanStored(event, currentFields)) return;
-      invoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId) || null;
+      const candidateInvoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId);
+      if (candidateInvoiceId) {
+        const verifiedInvoice = await tx.invoice.findFirst({
+          where: { id: candidateInvoiceId, billingAccountId: payment.billingAccountId },
+          select: { id: true },
+        });
+        invoiceId = verifiedInvoice?.id ?? null;
+      }
       const achProcessing = isAchPaymentMetadata({
         ...metadata,
         paymentMethodCategory: clean(metadata.paymentMethodCategory) || clean(currentFields.paymentMethodCategory),
@@ -1978,7 +1993,7 @@ async function handlePaymentIntentFailed(
     event,
     metadata,
     paymentId,
-    paymentIntentId: paymentIntent.id,
+    paymentIntent,
     matchedTenantId,
   });
   if (!scopedCandidate.payment) {
@@ -2017,7 +2032,7 @@ async function handlePaymentIntentFailed(
         event,
         metadata,
         paymentId,
-        paymentIntentId: paymentIntent.id,
+        paymentIntent,
         matchedTenantId,
       });
       const currentPayment = scopedPayment.payment;
@@ -2118,9 +2133,9 @@ async function handlePaymentIntentFailed(
     return NextResponse.json({ ok: true, ignored: true, reason: paymentFound ? "payment_not_chargeable" : "payment_not_found" });
   }
 
-  if (metadata.invoiceId) {
+  if (verifiedInvoiceId) {
     await writeSystemAudit(
-      metadata.invoiceId,
+      verifiedInvoiceId,
       event.id,
       paymentIntent.id,
       canceled
@@ -2137,9 +2152,9 @@ async function handlePaymentIntentFailed(
             ? "billing.checkout.payment_method_retry_required"
             : "billing.payment_intent.failed",
     );
-  } else if (clean(metadata.paymentScope) === "family_balance" && metadata.billingAccountId) {
+  } else if (storedBillingAccountId) {
     await writeBillingAccountSystemAudit(
-      metadata.billingAccountId,
+      storedBillingAccountId,
       event.id,
       paymentIntent.id,
       canceled
@@ -2173,6 +2188,7 @@ async function handlePaymentIntentSucceeded(
       auditAction: "billing.family_payment.payment_intent_succeeded",
       descriptionFallback: clean(metadata.collectionMode) === "director_saved_method" ? "Director saved method payment" : "Parent payment",
       matchedTenantId,
+      paymentIntent,
     });
   }
   if (!invoiceId || !paymentId) {
@@ -2192,7 +2208,7 @@ async function handlePaymentIntentSucceeded(
         event,
         metadata,
         paymentId,
-        paymentIntentId: paymentIntent.id,
+        paymentIntent,
         matchedTenantId,
       });
       const currentPayment = scopedPayment.payment;

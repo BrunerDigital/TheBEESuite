@@ -252,7 +252,7 @@ test("processing webhooks are scoped to the payment's tenant, school account, an
   assert.match(route, /input\.matchedTenantId && input\.matchedTenantId !== tenantId/);
   assert.match(route, /eventConnectedAccountId !== storedConnectedAccountId/);
   assert.match(route, /centerConnectedAccountId !== storedConnectedAccountId/);
-  assert.match(route, /storedPaymentIntentId !== input\.paymentIntentId/);
+  assert.match(route, /storedPaymentIntentId !== input\.paymentIntent\.id/);
   assert.match(route, /payment_intent_scope_mismatch/);
 });
 
@@ -267,11 +267,20 @@ test("every PaymentIntent lifecycle event uses the same school ownership guard",
 test("PaymentIntent ownership supports invoice metadata, first-event binding, and retained migration sources", async () => {
   const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   assert.match(route, /metadataBillingAccountId && metadataBillingAccountId !== payment\.billingAccountId/);
-  assert.match(route, /!storedPaymentIntentId[\s\S]*stripePaymentIntentId: input\.paymentIntentId/);
+  assert.match(route, /!storedPaymentIntentId[\s\S]*stripePaymentIntentId: input\.paymentIntent\.id/);
   assert.match(route, /provider: "stripe"[\s\S]*status: PaymentStatus\.DRAFT[\s\S]*equals: payment\.customFields/);
   assert.match(route, /stripeConnectMigrationSourceAccountRetainedForReconciliation/);
   assert.match(route, /migration\.sourceAccountId === storedConnectedAccountId/);
   assert.match(route, /centerConnectedAccountId !== storedConnectedAccountId && !retainedSourceAccountMatches/);
+});
+
+test("PaymentIntent scope validates economics and audits only verified local resources", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /numeric\(input\.paymentIntent\.amount\) !== expectedAmountCents/);
+  assert.match(route, /expectedCustomerId && clean\(input\.paymentIntent\.customer\) !== expectedCustomerId/);
+  assert.match(route, /where: \{ id: candidateInvoiceId, billingAccountId: payment\.billingAccountId \}/);
+  assert.match(route, /if \(verifiedInvoiceId\)[\s\S]*writeSystemAudit\([\s\S]*verifiedInvoiceId/);
+  assert.match(route, /else if \(storedBillingAccountId\)[\s\S]*writeBillingAccountSystemAudit\([\s\S]*storedBillingAccountId/);
 });
 
 test("stale or concurrent processing webhooks cannot overwrite a newer failure", async () => {

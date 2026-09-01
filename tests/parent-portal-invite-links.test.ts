@@ -68,6 +68,17 @@ test("parent setup link issuance cannot strand an active parent after provider f
   );
 });
 
+test("registration setup links randomize only new parent credentials", () => {
+  const provisioning = readFileSync(new URL("../src/lib/parent-portal-logins.ts", import.meta.url), "utf8");
+  const registrationReview = readFileSync(new URL("../src/app/api/registration/[id]/review/route.ts", import.meta.url), "utf8");
+  assert.match(registrationReview, /randomizeNewCredential:\s*true/);
+  assert.match(provisioning, /prepareWithoutInvite \|\| randomizeNewCredential/);
+  assert.match(
+    provisioning,
+    /updateExistingPassword:\s*resetToInitialPassword \|\| \(randomizeNewCredential && !existingUser\)/,
+  );
+});
+
 test("direct parent invitations preflight ProCare data and activate prepared accounts only when invited", () => {
   const source = readFileSync(new URL("../src/app/api/parent/invitations/route.ts", import.meta.url), "utf8");
   assert.match(source, /evaluateParentInvitationReadiness/);

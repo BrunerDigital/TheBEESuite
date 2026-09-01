@@ -23,6 +23,7 @@ export const STRIPE_WEBHOOK_PAYMENT_EVENT_TYPES = [
   "checkout.session.async_payment_succeeded",
   "checkout.session.async_payment_failed",
   "checkout.session.expired",
+  "payment_intent.processing",
   "payment_intent.succeeded",
   "payment_intent.payment_failed",
   "setup_intent.succeeded",

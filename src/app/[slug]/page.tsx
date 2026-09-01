@@ -168,6 +168,7 @@ import {
   paymentMethodManagementSummary,
 } from "@/lib/payment-method-management";
 import { currentFamilyBillingMatch } from "@/lib/invoice-payment-actions";
+import { provisionalAchCreditCents } from "@/lib/ach-payment-lifecycle";
 import {
   normalizeDirectorInvoiceStatus,
   paymentStatusForDirectorInvoiceStatus,
@@ -2229,7 +2230,13 @@ async function renderLivePage(
                   OR: [
                     { customFields: { path: ["status"], equals: "checkout_created" } },
                     { customFields: { path: ["status"], equals: "checkout_pending" } },
+                    { customFields: { path: ["status"], equals: "paid_processing" } },
                   ],
+                },
+                {
+                  provider: "stripe",
+                  status: PaymentStatus.FAILED,
+                  customFields: { path: ["status"], equals: "payment_returned" },
                 },
               ],
             },
@@ -2749,11 +2756,14 @@ async function renderLivePage(
     );
     const parentReplyToMessageId = firstSearchParam(searchParams.replyToMessageId) || "";
     const parentReplySubject = firstSearchParam(searchParams.subject) || "";
+    const pendingAchCreditCents = billingAccount
+      ? provisionalAchCreditCents(billingAccount.payments)
+      : 0;
     const parentBalanceCents = billingAccount
-      ? parentVisibleBillingBalanceCents({
+      ? Math.max(0, parentVisibleBillingBalanceCents({
           accountBalanceCents: billingAccount.balanceCents,
           agencyLedgerEntries,
-        })
+        }) - pendingAchCreditCents)
       : 0;
     const parentBalanceReviewRequired = billingAccount
       ? parentBalanceNeedsResponsibilityReview({

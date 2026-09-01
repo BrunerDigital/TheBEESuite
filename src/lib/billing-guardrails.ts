@@ -11,7 +11,9 @@ export function isActiveStripeCheckoutPayment(payment: {
 }) {
   if (payment.provider !== "stripe" || payment.status !== PaymentStatus.DRAFT) return false;
   const fields = jsonRecord(payment.customFields);
-  return fields.status === "checkout_pending" || fields.status === "checkout_created";
+  return fields.status === "checkout_pending"
+    || fields.status === "checkout_created"
+    || fields.status === "paid_processing";
 }
 
 function stringField(value: unknown) {
@@ -70,8 +72,8 @@ export function activeStripeCheckoutPaymentMessage(
   const isBankPayment = category === "ach" || category === "link_bank" || Boolean(summary.bankAccountVerificationMethod);
   if (isBankPayment) {
     return scope === "family_balance"
-      ? "A bank payment is already processing for this family balance. ACH bank payments can take a few business days to settle; the balance will update after the payment processor confirms the funds."
-      : "A bank payment is already processing for this invoice. ACH bank payments can take a few business days to settle; the invoice will update after the payment processor confirms the funds.";
+      ? "A bank payment is already processing for this family balance and is marked Paid — processing. It can take a few business days to settle."
+      : "A bank payment is already processing for this invoice and is marked Paid — processing. It can take a few business days to settle.";
   }
   return scope === "family_balance"
     ? "A balance checkout session is already pending for this family. Complete or expire it before creating another balance checkout."

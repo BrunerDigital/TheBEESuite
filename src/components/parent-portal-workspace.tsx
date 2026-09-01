@@ -66,6 +66,11 @@ import type { MessageAttachmentView } from "@/lib/message-attachments";
 import { replySubject } from "@/lib/message-reply-routing";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { isParentVisiblePayment } from "@/lib/parent-billing-visibility";
+import {
+  isAchPaymentProcessing,
+  isReturnedStripePayment,
+  returnedPaymentRetryAvailable,
+} from "@/lib/ach-payment-lifecycle";
 import type { ParentPortalTodayState } from "@/lib/parent-portal-today";
 import {
   PARENT_PORTAL_FAMILY_SECTIONS,
@@ -551,15 +556,18 @@ function pendingPaymentCategory(
   payment: Pick<
     PendingInvoicePayment,
     "paymentMethodCategory" | "requestedPaymentMethodCategory"
-  >,
+  > | null | undefined,
 ) {
   return (
-    payment.paymentMethodCategory || payment.requestedPaymentMethodCategory
+    payment?.paymentMethodCategory || payment?.requestedPaymentMethodCategory
   );
 }
 
 function pendingPaymentMessage(payment: PendingInvoicePayment) {
   const label = paymentMethodCategoryLabel(pendingPaymentCategory(payment));
+  if (pendingPaymentCategory(payment) === "ach") {
+    return "Paid — processing by ACH. Your balance has been provisionally credited while the bank transfer settles. If the bank returns it, the amount due will automatically be restored.";
+  }
   if (label === "Debit or credit card") {
     return "A card checkout is already pending for this invoice. Complete or expire it before starting another checkout.";
   }
@@ -574,6 +582,7 @@ function paymentFields(payment: Payment) {
 }
 
 function isProcessingPayment(payment: Payment) {
+  if (isAchPaymentProcessing(payment)) return true;
   const status = textField(paymentFields(payment).status);
   return (
     payment.status === "DRAFT" &&
@@ -582,6 +591,12 @@ function isProcessingPayment(payment: Payment) {
 }
 
 function paymentListLabel(payment: Payment, timeZone: string) {
+  if (isReturnedStripePayment(payment)) {
+    return returnedPaymentRetryAvailable(payment)
+      ? "Payment returned · Retry available"
+      : "Payment returned";
+  }
+  if (isAchPaymentProcessing(payment)) return "Paid — processing · ACH";
   if (isProcessingPayment(payment)) {
     const fields = paymentFields(payment);
     const category =
@@ -3038,7 +3053,10 @@ function ParentPortalWorkspaceView({
                   <div className="mb-2 text-sm font-medium">Recent payments</div>
                   <div className="space-y-2">
                     {parentVisiblePayments.slice(0, 5).map((payment) => {
-                      const completed = payment.status === "PAID";
+                      const returned = isReturnedStripePayment(payment);
+                      const completed = payment.status === "PAID" && !returned;
+                      const provisionallyCredited = isAchPaymentProcessing(payment);
+                      const credited = completed || provisionallyCredited;
                       return (
                         <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
                           <div>
@@ -3078,8 +3096,8 @@ function ParentPortalWorkspaceView({
                               </div>
                             ) : null}
                           </div>
-                          <span className={completed ? "font-medium text-emerald-700 dark:text-emerald-300" : "font-medium text-muted-foreground"}>
-                            {completed ? "−" : ""}{money(payment.amountCents)}
+                          <span className={credited ? "font-medium text-emerald-700 dark:text-emerald-300" : "font-medium text-muted-foreground"}>
+                            {credited ? "−" : ""}{money(payment.amountCents)}
                           </span>
                         </div>
                       );
@@ -3161,7 +3179,10 @@ function ParentPortalWorkspaceView({
               </div>
               <div className="space-y-2">
                 {parentVisiblePayments.slice(0, 5).map((payment) => {
-                  const completed = payment.status === "PAID";
+                  const returned = isReturnedStripePayment(payment);
+                  const completed = payment.status === "PAID" && !returned;
+                  const provisionallyCredited = isAchPaymentProcessing(payment);
+                  const credited = completed || provisionallyCredited;
                   return (
                     <div
                       key={payment.id}
@@ -3207,12 +3228,12 @@ function ParentPortalWorkspaceView({
                       </div>
                       <span
                         className={
-                          completed
+                          credited
                             ? "font-medium text-emerald-700 dark:text-emerald-300"
                             : "font-medium text-muted-foreground"
                         }
                       >
-                        {completed ? "−" : ""}
+                        {credited ? "−" : ""}
                         {money(payment.amountCents)}
                       </span>
                     </div>
@@ -3400,7 +3421,11 @@ function ParentPortalWorkspaceView({
             {!nextOpenInvoice && firstPendingOpenInvoice?.pendingPayment ? (
               <Alert>
                 <AlertCircle className="size-4" />
-                <AlertTitle>Payment Processing</AlertTitle>
+                <AlertTitle>
+                  {pendingPaymentCategory(firstPendingOpenInvoice.pendingPayment) === "ach"
+                    ? "Paid — processing"
+                    : "Payment processing"}
+                </AlertTitle>
                 <AlertDescription>
                   {firstPendingOpenInvoice.number}:{" "}
                   {pendingPaymentMessage(
@@ -3641,7 +3666,9 @@ function ParentPortalWorkspaceView({
                     }
                   >
                     {invoiceHasPendingPayment
-                      ? "Processing"
+                      ? pendingPaymentCategory(invoice.pendingPayment) === "ach"
+                        ? "Paid — processing"
+                        : "Processing"
                       : displayTokenLabel(invoice.status)}
                   </Badge>
                   {typeof invoice.familyDocumentAmountCents === "number" ? <InvoicePrintButton

@@ -87,6 +87,17 @@ test("returned ACH attempts remain visible without being treated as paid", () =>
   assert.equal(returnedPaymentRetryAvailable(payment), true);
 });
 
+test("a debit-not-authorized ACH dispute is presented as a returned payment", () => {
+  assert.equal(isReturnedStripePayment({
+    status: "PAID",
+    provider: "stripe",
+    customFields: {
+      stripeDisputeLedgerActive: true,
+      stripeDisputeReason: "debit_not_authorized",
+    },
+  }), true);
+});
+
 test("director payment attempts explain ACH settlement without claiming zero submissions", async () => {
   const source = await readFile("src/components/live-ops-pages.tsx", "utf8");
   assert.match(source, /Paid — processing/);

@@ -29,6 +29,7 @@ const ACH_PROCESSING_STATUSES = new Set([
 
 const ACH_RETURN_REASONS = new Set([
   "insufficient_funds",
+  "debit_not_authorized",
   "incorrect_account_details",
   "bank_cannot_process",
   "bank_can't_process",

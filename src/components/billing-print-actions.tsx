@@ -31,6 +31,8 @@ export type BillingLedgerPrintEntry = {
 export type BillingPaymentReceipt = {
   id: string;
   amountCents: number;
+  principalAmountCents?: number | null;
+  processingRecoveryCents?: number | null;
   status: string;
   provider: string;
   externalIdPlaceholder: string | null;
@@ -92,6 +94,7 @@ function paymentTypeLabel(provider: string) {
   if (provider === "stripe_terminal") return "In-person card payment";
   if (provider === "manual_cash") return "Cash payment";
   if (provider === "manual_check") return "Check payment";
+  if (provider === "manual_payroll_deduction") return "Payroll deduction";
   return "Other payment";
 }
 
@@ -207,6 +210,18 @@ export function PaymentReceiptPrintButton({
               <th>Amount paid</th>
               <td>{money(payment.amountCents)}</td>
             </tr>
+            {payment.processingRecoveryCents && payment.processingRecoveryCents > 0 ? (
+              <>
+                <tr>
+                  <th>Family account payment</th>
+                  <td>{money(payment.principalAmountCents ?? payment.amountCents)}</td>
+                </tr>
+                <tr>
+                  <th>Processing recovery</th>
+                  <td>{money(payment.processingRecoveryCents)}</td>
+                </tr>
+              </>
+            ) : null}
             <tr>
               <th>Status</th>
               <td>{displayLabel(payment.status)}</td>

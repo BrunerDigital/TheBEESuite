@@ -198,7 +198,7 @@ test("stale Checkout completion cannot overwrite a newer recoverable failure", a
   const source = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   assert.equal(
     source.match(/if \(!stripeEventIsNewerThanStored\(event, currentFields\)\) return/g)?.length,
-    3,
+    4,
   );
 });
 
@@ -260,9 +260,9 @@ test("cancellation leaves abandoned Checkout drafts for expiration handling", as
   assert.match(route, /if \(canceled && !offSessionCollection && !isAchPaymentProcessing\(currentPayment\)\) return/);
 });
 
-test("stale failures cannot overwrite newer terminal failure states", async () => {
+test("stale failures cannot overwrite any newer payment lifecycle state", async () => {
   const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
-  assert.match(route, /currentPayment\.status === PaymentStatus\.FAILED && !stripeEventIsNewerThanStored\(event, currentFields\)/);
+  assert.match(route, /if \(!stripeEventIsNewerThanStored\(event, currentFields\)\) return/);
   assert.match(route, /equals: currentPayment\.customFields === null \? Prisma\.DbNull : currentPayment\.customFields/);
 });
 

@@ -1843,7 +1843,7 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
         || collectionMode === "stored_method"
         || collectionMode === "director_saved_method";
       if (canceled && !offSessionCollection && !isAchPaymentProcessing(currentPayment)) return;
-      if (currentPayment.status === PaymentStatus.FAILED && !stripeEventIsNewerThanStored(event, currentFields)) return;
+      if (!stripeEventIsNewerThanStored(event, currentFields)) return;
       const candidateInvoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId);
       if (candidateInvoiceId) {
         const verifiedInvoice = await tx.invoice.findFirst({

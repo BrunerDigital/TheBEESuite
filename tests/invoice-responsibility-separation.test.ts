@@ -139,6 +139,20 @@ test("account review resolves only when every open invoice has an exact separati
   }, 1_900), true);
   assert.equal(invoiceResponsibilityReviewExempt({
     chargeSource: "tuitionPlan",
+    tuitionPlanName: "CCAP Parent Fee Monthly $463.00",
+    grossTuitionCents: 46_300,
+    netTuitionCents: 46_300,
+    tuitionCreditsTotalCents: 0,
+  }, 46_300), true);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
+    tuitionPlanName: "After School - No Parent Fee - $22.40",
+    grossTuitionCents: 2_240,
+    netTuitionCents: 2_240,
+    tuitionCreditsTotalCents: 0,
+  }, 2_240), false);
+  assert.equal(invoiceResponsibilityReviewExempt({
+    chargeSource: "tuitionPlan",
     tuitionPlanName: "Weekly tuition",
     grossTuitionCents: 23_800,
     netTuitionCents: 12_000,

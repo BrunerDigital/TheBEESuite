@@ -80,6 +80,12 @@ test("director payment attempts explain ACH settlement without claiming zero sub
   assert.match(source, /After settlement/);
 });
 
+test("director ACH settling count uses the complete draft payment scope", async () => {
+  const source = await readFile("src/app/[slug]/page.tsx", "utf8");
+  assert.match(source, /const \[paymentRows, processingAchRows,/);
+  assert.match(source, /processingAchRows\.filter\(\(payment\) => isAchPaymentProcessing\(payment\)\)\.length/);
+});
+
 test("parent provisional balance uses the complete active ACH set, not the recent-payment cap", async () => {
   const source = await readFile("src/app/[slug]/page.tsx", "utf8");
   assert.match(source, /const \[billingAccount, provisionalAchPaymentRows,/);

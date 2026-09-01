@@ -4248,7 +4248,7 @@ async function renderLivePage(
     const currentBillingAccountWhere = visibleCurrentBillingAccountWhere(visibleCenterIds);
     const paymentWhere = visiblePaymentWhere(visibleCenterIds);
     const currentInvoiceWhere = visibleCurrentInvoiceWhere(visibleCenterIds);
-    const [paymentRows, total, paid, failed, draft, payoutCenters, paymentMethodAccounts, dueOpenInvoices] = await Promise.all([
+    const [paymentRows, processingAchRows, total, paid, failed, draft, payoutCenters, paymentMethodAccounts, dueOpenInvoices] = await Promise.all([
       prisma.payment.findMany({
         where: paymentWhere,
         orderBy: [{ paidAt: "desc" }, { id: "desc" }],
@@ -4260,6 +4260,10 @@ async function renderLivePage(
             },
           },
         },
+      }),
+      prisma.payment.findMany({
+        where: { ...paymentWhere, provider: "stripe", status: PaymentStatus.DRAFT },
+        select: { amountCents: true, status: true, provider: true, customFields: true },
       }),
       prisma.payment.count({ where: paymentWhere }),
       prisma.payment.count({ where: { ...paymentWhere, status: PaymentStatus.PAID } }),
@@ -4344,7 +4348,7 @@ async function renderLivePage(
     const dunningReady = payments.filter((payment) => payment.dunningStatus === "ready").length;
     const dunningWaiting = payments.filter((payment) => payment.dunningStatus === "waiting").length;
     const dunningMaxed = payments.filter((payment) => payment.dunningStatus === "maxed").length;
-    const processingAch = payments.filter((payment) => isAchPaymentProcessing(payment)).length;
+    const processingAch = processingAchRows.filter((payment) => isAchPaymentProcessing(payment)).length;
     const paymentCentersById = new Map(payoutCenters.map((center) => [center.id, center]));
     const paymentSummary = (account: {
       autopayPlaceholder: boolean;

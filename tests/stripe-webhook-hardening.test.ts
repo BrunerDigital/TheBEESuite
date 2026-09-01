@@ -209,6 +209,9 @@ test("off-session request completion cannot overwrite webhook terminal states", 
   const autopay = await readFile("src/lib/autopay-processing.ts", "utf8");
   const familyPayment = await readFile("src/app/api/billing/family-payment/route.ts", "utf8");
   assert.match(autopay, /payment\.updateMany\(\{\s*where: \{ id: payment\.id, status: PaymentStatus\.DRAFT \}/);
+  assert.match(autopay, /submissionUpdate\.count !== 1[\s\S]*payment\.findUnique[\s\S]*terminalPaymentStatus/);
+  assert.match(autopay, /terminalPaymentStatus === PaymentStatus\.PAID[\s\S]*appliedImmediately = true/);
+  assert.match(autopay, /processingAccepted[\s\S]*blockedBillingAccountIds\.add/);
   assert.equal(
     familyPayment.match(/payment\.updateMany\(\{\s*where: \{ id: payment\.id, status: PaymentStatus\.DRAFT \}/g)?.length,
     2,

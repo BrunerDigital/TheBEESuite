@@ -1638,7 +1638,11 @@ async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, sessi
         await recordStripeWebhookEvent(tx, event);
         const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
         const currentFields = jsonObject(currentPayment?.customFields);
-        const failure = achFailurePresentation({ customFields: currentFields, metadata });
+        const failure = achFailurePresentation({
+          customFields: currentFields,
+          metadata,
+          failureCode: clean(currentFields.stripeFailureCode) || null,
+        });
         await tx.payment.update({
           where: { id: paymentId },
           data: {
@@ -1656,7 +1660,7 @@ async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, sessi
               failedAt: new Date().toISOString(),
               returnedAt: failure.returned ? new Date().toISOString() : null,
               provisionalCreditActive: false,
-              retryAvailable: failure.retryAvailable,
+              retryAvailable: failure.retryAvailable || currentFields.retryAvailable === true,
               status: failure.customStatus || "checkout_failed",
             },
           },
@@ -2573,7 +2577,11 @@ async function dispatchAuthenticatedEvent(
         await recordStripeWebhookEvent(tx, event);
         const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
         const currentFields = jsonObject(currentPayment?.customFields);
-        const failure = achFailurePresentation({ customFields: currentFields, metadata: session.metadata });
+        const failure = achFailurePresentation({
+          customFields: currentFields,
+          metadata: session.metadata,
+          failureCode: clean(currentFields.stripeFailureCode) || null,
+        });
         await tx.payment.update({
           where: { id: paymentId },
           data: {
@@ -2590,7 +2598,7 @@ async function dispatchAuthenticatedEvent(
               failedAt: new Date().toISOString(),
               returnedAt: failure.returned ? new Date().toISOString() : null,
               provisionalCreditActive: false,
-              retryAvailable: failure.retryAvailable,
+              retryAvailable: failure.retryAvailable || currentFields.retryAvailable === true,
               status: failure.customStatus || "checkout_failed",
             },
           },

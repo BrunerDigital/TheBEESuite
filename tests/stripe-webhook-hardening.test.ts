@@ -236,6 +236,18 @@ test("processing webhooks preserve collection-specific credit reservations", asy
   assert.match(route, /status: lifecycleStatus/);
 });
 
+test("later Checkout failures preserve insufficient-funds retry state", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.equal(
+    route.match(/failureCode: clean\(currentFields\.stripeFailureCode\) \|\| null/g)?.length,
+    2,
+  );
+  assert.equal(
+    route.match(/retryAvailable: failure\.retryAvailable \|\| currentFields\.retryAvailable === true/g)?.length,
+    2,
+  );
+});
+
 test("parent invoice status maps off-session and ACH processing payments", async () => {
   const source = await readFile("src/app/[slug]/page.tsx", "utf8");
   assert.match(

@@ -264,6 +264,16 @@ test("every PaymentIntent lifecycle event uses the same school ownership guard",
   assert.ok((route.match(/findScopedPaymentIntentPayment\(/g) || []).length >= 6);
 });
 
+test("PaymentIntent ownership supports invoice metadata, first-event binding, and retained migration sources", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /metadataBillingAccountId && metadataBillingAccountId !== payment\.billingAccountId/);
+  assert.match(route, /!storedPaymentIntentId[\s\S]*stripePaymentIntentId: input\.paymentIntentId/);
+  assert.match(route, /provider: "stripe"[\s\S]*status: PaymentStatus\.DRAFT[\s\S]*equals: payment\.customFields/);
+  assert.match(route, /stripeConnectMigrationSourceAccountRetainedForReconciliation/);
+  assert.match(route, /migration\.sourceAccountId === storedConnectedAccountId/);
+  assert.match(route, /centerConnectedAccountId !== storedConnectedAccountId && !retainedSourceAccountMatches/);
+});
+
 test("stale or concurrent processing webhooks cannot overwrite a newer failure", async () => {
   const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   assert.match(route, /if \(!stripeEventIsNewerThanStored\(event, currentFields\)\) return/);

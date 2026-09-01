@@ -27,7 +27,7 @@ import { prisma } from "@/lib/prisma";
 import { saveSoftwareSubscriptionSnapshot } from "@/lib/school-software-subscriptions";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
-import { stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
+import { readStripeConnectMigration, stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
 import { stripeCustomerCustomFieldPatch } from "@/lib/stripe-customer-scope";
 import {
   isStripeWebhookAccountEvent,
@@ -343,7 +343,8 @@ async function findScopedPaymentIntentPayment(
   });
   if (!payment) return { payment: null, currentFields: {}, reason: "payment_not_found" } as const;
 
-  const currentFields = jsonObject(payment.customFields);
+  let currentFields = jsonObject(payment.customFields);
+  let scopedPayment = payment;
   const centerId = payment.billingAccount.family.centerId;
   const center = centerId
     ? await tx.center.findUnique({
@@ -356,22 +357,75 @@ async function findScopedPaymentIntentPayment(
   const centerConnectedAccountId = clean(readStripeConnectedAccountId(center?.customFields));
   const eventConnectedAccountId = clean(input.event.account);
   const storedPaymentIntentId = clean(currentFields.stripePaymentIntentId);
+  const metadataBillingAccountId = clean(input.metadata.billingAccountId);
+  const centerFields = jsonObject(center?.customFields);
+  const migration = readStripeConnectMigration(centerFields);
+  const retainedSourceAccountMatches = (
+    centerFields.stripeConnectMigrationSourceAccountRetainedForReconciliation === true
+    && Boolean(migration.cutoverAt)
+    && migration.sourceAccountId === storedConnectedAccountId
+    && migration.targetAccountId === centerConnectedAccountId
+  );
   if (
     !center
     || !tenantId
     || clean(input.metadata.tenantId) !== tenantId
     || (input.matchedTenantId && input.matchedTenantId !== tenantId)
-    || clean(input.metadata.billingAccountId) !== payment.billingAccountId
+    || (metadataBillingAccountId && metadataBillingAccountId !== payment.billingAccountId)
     || clean(input.metadata.familyId) !== payment.billingAccount.family.id
     || clean(input.metadata.centerId) !== center.id
     || clean(input.metadata.stripeConnectedAccountId) !== storedConnectedAccountId
-    || centerConnectedAccountId !== storedConnectedAccountId
+    || (centerConnectedAccountId !== storedConnectedAccountId && !retainedSourceAccountMatches)
     || eventConnectedAccountId !== storedConnectedAccountId
-    || storedPaymentIntentId !== input.paymentIntentId
+    || (storedPaymentIntentId && storedPaymentIntentId !== input.paymentIntentId)
   ) {
     return { payment: null, currentFields, reason: "payment_intent_scope_mismatch" } as const;
   }
-  return { payment, currentFields, reason: null } as const;
+
+  if (!storedPaymentIntentId) {
+    if (payment.provider !== "stripe" || payment.status !== PaymentStatus.DRAFT) {
+      return { payment: null, currentFields, reason: "payment_intent_scope_mismatch" } as const;
+    }
+    const boundFields = { ...currentFields, stripePaymentIntentId: input.paymentIntentId };
+    const bound = await tx.payment.updateMany({
+      where: {
+        id: input.paymentId,
+        provider: "stripe",
+        status: PaymentStatus.DRAFT,
+        customFields: {
+          equals: payment.customFields === null ? Prisma.DbNull : payment.customFields,
+        },
+      },
+      data: { customFields: boundFields as Prisma.InputJsonObject },
+    });
+    if (bound.count === 1) {
+      currentFields = boundFields;
+      scopedPayment = { ...payment, customFields: boundFields };
+    } else {
+      const winner = await tx.payment.findUnique({
+        where: { id: input.paymentId },
+        select: {
+          status: true,
+          provider: true,
+          billingAccountId: true,
+          amountCents: true,
+          customFields: true,
+          billingAccount: { select: { family: { select: { id: true, centerId: true } } } },
+        },
+      });
+      const winnerFields = jsonObject(winner?.customFields);
+      if (
+        !winner
+        || clean(winnerFields.stripePaymentIntentId) !== input.paymentIntentId
+        || clean(winnerFields.stripeConnectedAccountId) !== storedConnectedAccountId
+      ) {
+        return { payment: null, currentFields: winnerFields, reason: "payment_intent_scope_raced" } as const;
+      }
+      currentFields = winnerFields;
+      scopedPayment = winner;
+    }
+  }
+  return { payment: scopedPayment, currentFields, reason: null } as const;
 }
 
 async function finalizeStripeWebhookReceipt(event: StripeWebhookEvent, status: string, reason?: unknown) {

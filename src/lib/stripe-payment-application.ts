@@ -337,9 +337,27 @@ export async function applyAccountCreditToInvoice(
       sourceSystem: "bee_suite",
       externalId: applicationExternalId,
     },
-    select: { invoiceId: true },
+    select: {
+      billingAccountId: true,
+      invoiceId: true,
+      paymentId: true,
+      type: true,
+      metadata: true,
+    },
   });
-  if (existingApplication && existingApplication.invoiceId !== invoice.id) {
+  const existingApplicationFields = jsonRecord(existingApplication?.metadata);
+  const existingApplicationMatches = Boolean(
+    existingApplication
+    && existingApplication.billingAccountId === invoice.billingAccountId
+    && existingApplication.invoiceId === invoice.id
+    && existingApplication.paymentId === null
+    && existingApplication.type === "account_credit_application"
+    && centsFrom(existingApplicationFields.accountCreditAppliedCents) === allocation.accountCreditAppliedCents
+    && centsFrom(existingApplicationFields.invoiceTotalCents) === invoice.totalCents
+    && centsFrom(existingApplicationFields.stripeChargePrincipalCents) === 0
+    && existingApplicationFields.fullyCoveredByCredit === true
+  );
+  if (existingApplication && !existingApplicationMatches) {
     return {
       applied: false,
       reason: "account_credit_application_conflict",

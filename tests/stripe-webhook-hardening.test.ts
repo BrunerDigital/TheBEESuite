@@ -238,13 +238,24 @@ test("processing webhooks preserve collection-specific credit reservations", asy
 
 test("stale or concurrent processing webhooks cannot overwrite a newer failure", async () => {
   const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
-  assert.match(route, /processingEventCreatedAt <= storedEventCreatedAt/);
+  assert.match(route, /if \(!stripeEventIsNewerThanStored\(event, currentFields\)\) return/);
   assert.match(route, /customFields: \{\s*equals: payment\.customFields === null \? Prisma\.DbNull : payment\.customFields/);
 });
 
 test("cancellation preserves an already-recorded ACH return", async () => {
   const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   assert.match(route, /if \(canceled && isReturnedStripePayment\(currentPayment\)\) return/);
+});
+
+test("cancellation leaves abandoned Checkout drafts for expiration handling", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /if \(canceled && !offSessionCollection && !isAchPaymentProcessing\(currentPayment\)\) return/);
+});
+
+test("stale failures cannot overwrite newer terminal failure states", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /currentPayment\.status === PaymentStatus\.FAILED && !stripeEventIsNewerThanStored\(event, currentFields\)/);
+  assert.match(route, /equals: currentPayment\.customFields === null \? Prisma\.DbNull : currentPayment\.customFields/);
 });
 
 test("later Checkout failures preserve insufficient-funds retry state", async () => {

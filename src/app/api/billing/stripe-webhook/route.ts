@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
-import { achFailurePresentation, isAchReturnReason, isReturnedStripePayment } from "@/lib/ach-payment-lifecycle";
+import { achFailurePresentation, isAchPaymentProcessing, isAchReturnReason, isReturnedStripePayment } from "@/lib/ach-payment-lifecycle";
 import { checkoutApplicationGuard, stripePaymentIntentFailureDisposition } from "@/lib/billing-guardrails";
 import {
   createStripeSoftwareSubscription,
@@ -395,6 +395,13 @@ async function handleTerminalStoreCheckoutEvent(event: StripeWebhookEvent, sessi
 
 function isDuplicateWebhookEvent(error: unknown) {
   return isStripeWebhookReceiptUniqueConflict(error);
+}
+
+function stripeEventIsNewerThanStored(event: StripeWebhookEvent, customFields: unknown) {
+  const storedEventCreatedAt = Date.parse(clean(jsonObject(customFields).stripeEventCreatedAt));
+  if (!Number.isFinite(storedEventCreatedAt)) return true;
+  const incomingEventCreatedAt = event.created ? event.created * 1000 : Number.NaN;
+  return Number.isFinite(incomingEventCreatedAt) && incomingEventCreatedAt > storedEventCreatedAt;
 }
 
 async function findPaymentForStripeObject(
@@ -1749,11 +1756,7 @@ async function handlePaymentIntentProcessing(event: StripeWebhookEvent, paymentI
       if (!payment || payment.status !== PaymentStatus.DRAFT) return;
       billingAccountId = payment.billingAccountId;
       const currentFields = jsonObject(payment.customFields);
-      const storedEventCreatedAt = Date.parse(clean(currentFields.stripeEventCreatedAt));
-      const processingEventCreatedAt = event.created ? event.created * 1000 : Number.NaN;
-      if (Number.isFinite(storedEventCreatedAt) && (
-        !Number.isFinite(processingEventCreatedAt) || processingEventCreatedAt <= storedEventCreatedAt
-      )) return;
+      if (!stripeEventIsNewerThanStored(event, currentFields)) return;
       invoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId) || null;
       const achProcessing = isAchPaymentMetadata({
         ...metadata,
@@ -1821,13 +1824,18 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       await recordStripeWebhookEvent(tx, event);
       const currentPayment = await tx.payment.findUnique({
         where: { id: metadata.paymentId },
-        select: { status: true, provider: true, billingAccountId: true, customFields: true },
+        select: { status: true, provider: true, amountCents: true, billingAccountId: true, customFields: true },
       });
       if (!currentPayment) return;
       paymentFound = true;
       storedBillingAccountId = currentPayment.billingAccountId;
       const currentFields = jsonObject(currentPayment.customFields);
       if (canceled && isReturnedStripePayment(currentPayment)) return;
+      const offSessionCollection = collectionMode === "autopay"
+        || collectionMode === "stored_method"
+        || collectionMode === "director_saved_method";
+      if (canceled && !offSessionCollection && !isAchPaymentProcessing(currentPayment)) return;
+      if (currentPayment.status === PaymentStatus.FAILED && !stripeEventIsNewerThanStored(event, currentFields)) return;
       const candidateInvoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId);
       if (candidateInvoiceId) {
         const verifiedInvoice = await tx.invoice.findFirst({
@@ -1858,7 +1866,13 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       achReturned = achFailure.returned;
       recoverableCheckoutFailure = disposition.recoverableCheckout && !achFailure.returned;
       const failedPayment = await tx.payment.updateMany({
-        where: { id: metadata.paymentId, status: { in: [PaymentStatus.DRAFT, PaymentStatus.FAILED] } },
+        where: {
+          id: metadata.paymentId,
+          status: { in: [PaymentStatus.DRAFT, PaymentStatus.FAILED] },
+          customFields: {
+            equals: currentPayment.customFields === null ? Prisma.DbNull : currentPayment.customFields,
+          },
+        },
         data: {
           status: canceled || achFailure.returned ? PaymentStatus.FAILED : disposition.paymentStatus,
           customFields: {

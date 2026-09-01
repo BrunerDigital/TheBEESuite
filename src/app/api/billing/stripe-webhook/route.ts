@@ -1760,7 +1760,11 @@ async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, sessi
   });
 }
 
-async function handlePaymentIntentProcessing(event: StripeWebhookEvent, paymentIntent: StripePaymentIntentObject) {
+async function handlePaymentIntentProcessing(
+  event: StripeWebhookEvent,
+  paymentIntent: StripePaymentIntentObject,
+  matchedTenantId: string | null,
+) {
   const metadata = metadataOf(paymentIntent);
   const paymentId = clean(metadata.paymentId);
   if (!paymentId) {
@@ -1770,16 +1774,54 @@ async function handlePaymentIntentProcessing(event: StripeWebhookEvent, paymentI
   let billingAccountId: string | null = null;
   let invoiceId: string | null = null;
   let applied = false;
+  let ignoredReason: string | null = null;
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event, "pending");
       const payment = await tx.payment.findUnique({
         where: { id: paymentId },
-        select: { status: true, billingAccountId: true, customFields: true },
+        select: {
+          status: true,
+          billingAccountId: true,
+          customFields: true,
+          billingAccount: {
+            select: {
+              family: { select: { id: true, centerId: true } },
+            },
+          },
+        },
       });
       if (!payment || payment.status !== PaymentStatus.DRAFT) return;
       billingAccountId = payment.billingAccountId;
       const currentFields = jsonObject(payment.customFields);
+      const centerId = payment.billingAccount.family.centerId;
+      const center = centerId
+        ? await tx.center.findUnique({
+            where: { id: centerId },
+            select: { id: true, customFields: true, organization: { select: { tenantId: true } } },
+          })
+        : null;
+      const tenantId = center?.organization.tenantId || null;
+      const storedConnectedAccountId = clean(currentFields.stripeConnectedAccountId);
+      const centerConnectedAccountId = readStripeConnectedAccountId(center?.customFields);
+      const eventConnectedAccountId = clean(event.account);
+      const storedPaymentIntentId = clean(currentFields.stripePaymentIntentId);
+      if (
+        !center
+        || !tenantId
+        || clean(metadata.tenantId) !== tenantId
+        || (matchedTenantId && matchedTenantId !== tenantId)
+        || clean(metadata.billingAccountId) !== payment.billingAccountId
+        || clean(metadata.familyId) !== payment.billingAccount.family.id
+        || clean(metadata.centerId) !== center.id
+        || clean(metadata.stripeConnectedAccountId) !== storedConnectedAccountId
+        || centerConnectedAccountId !== storedConnectedAccountId
+        || eventConnectedAccountId !== storedConnectedAccountId
+        || storedPaymentIntentId !== paymentIntent.id
+      ) {
+        ignoredReason = "payment_intent_scope_mismatch";
+        return;
+      }
       if (!stripeEventIsNewerThanStored(event, currentFields)) return;
       invoiceId = clean(currentFields.invoiceId) || clean(metadata.invoiceId) || null;
       const achProcessing = isAchPaymentMetadata({
@@ -1826,7 +1868,7 @@ async function handlePaymentIntentProcessing(event: StripeWebhookEvent, paymentI
   } else if (applied && billingAccountId) {
     await writeBillingAccountSystemAudit(billingAccountId, event.id, paymentIntent.id, "billing.family_payment.payment_intent_processing");
   }
-  return NextResponse.json({ ok: true, pending: applied });
+  return NextResponse.json({ ok: true, pending: applied, ...(ignoredReason ? { ignored: true, reason: ignoredReason } : {}) });
 }
 
 async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentIntent: StripePaymentIntentObject) {
@@ -2599,7 +2641,7 @@ async function dispatchAuthenticatedEvent(
   }
 
   if (event.type === "payment_intent.processing") {
-    return handlePaymentIntentProcessing(event, event.data.object as StripePaymentIntentObject);
+    return handlePaymentIntentProcessing(event, event.data.object as StripePaymentIntentObject, matchedTenantId);
   }
 
   if (event.type === "payment_intent.payment_failed" || event.type === "payment_intent.canceled") {

@@ -245,6 +245,17 @@ test("processing webhooks preserve collection-specific credit reservations", asy
   assert.match(route, /status: lifecycleStatus/);
 });
 
+test("processing webhooks are scoped to the payment's tenant, school account, and PaymentIntent", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /handlePaymentIntentProcessing\([\s\S]*matchedTenantId: string \| null/);
+  assert.match(route, /clean\(metadata\.tenantId\) !== tenantId/);
+  assert.match(route, /matchedTenantId && matchedTenantId !== tenantId/);
+  assert.match(route, /eventConnectedAccountId !== storedConnectedAccountId/);
+  assert.match(route, /centerConnectedAccountId !== storedConnectedAccountId/);
+  assert.match(route, /storedPaymentIntentId !== paymentIntent\.id/);
+  assert.match(route, /payment_intent_scope_mismatch/);
+});
+
 test("stale or concurrent processing webhooks cannot overwrite a newer failure", async () => {
   const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   assert.match(route, /if \(!stripeEventIsNewerThanStored\(event, currentFields\)\) return/);

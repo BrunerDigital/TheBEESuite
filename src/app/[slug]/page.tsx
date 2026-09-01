@@ -171,6 +171,7 @@ import {
 import { currentFamilyBillingMatch } from "@/lib/invoice-payment-actions";
 import {
   isAchPaymentProcessing,
+  isReturnedStripePayment,
   provisionalAchCreditCents,
   visibleBalanceAfterProvisionalAchCredit,
 } from "@/lib/ach-payment-lifecycle";
@@ -4263,7 +4264,7 @@ async function renderLivePage(
     const currentBillingAccountWhere = visibleCurrentBillingAccountWhere(visibleCenterIds);
     const paymentWhere = visiblePaymentWhere(visibleCenterIds);
     const currentInvoiceWhere = visibleCurrentInvoiceWhere(visibleCenterIds);
-    const [paymentRows, processingAchRows, total, paid, failed, draft, payoutCenters, paymentMethodAccounts, dueOpenInvoices] = await Promise.all([
+    const [paymentRows, processingAchRows, returnedPaymentRows, total, paid, failed, draft, payoutCenters, paymentMethodAccounts, dueOpenInvoices] = await Promise.all([
       prisma.payment.findMany({
         where: paymentWhere,
         orderBy: [{ paidAt: "desc" }, { id: "desc" }],
@@ -4279,6 +4280,18 @@ async function renderLivePage(
       prisma.payment.findMany({
         where: { ...paymentWhere, provider: "stripe", status: PaymentStatus.DRAFT },
         select: { amountCents: true, status: true, provider: true, customFields: true },
+      }),
+      prisma.payment.findMany({
+        where: {
+          ...paymentWhere,
+          provider: "stripe",
+          status: { in: [PaymentStatus.PAID, PaymentStatus.FAILED] },
+          OR: [
+            { customFields: { path: ["status"], equals: "payment_returned" } },
+            { customFields: { path: ["stripeDisputeLedgerActive"], equals: true } },
+          ],
+        },
+        select: { status: true, provider: true, customFields: true },
       }),
       prisma.payment.count({ where: paymentWhere }),
       prisma.payment.count({ where: { ...paymentWhere, status: PaymentStatus.PAID } }),
@@ -4364,6 +4377,9 @@ async function renderLivePage(
     const dunningWaiting = payments.filter((payment) => payment.dunningStatus === "waiting").length;
     const dunningMaxed = payments.filter((payment) => payment.dunningStatus === "maxed").length;
     const processingAch = processingAchRows.filter((payment) => isAchPaymentProcessing(payment)).length;
+    const returnedPayments = returnedPaymentRows.filter((payment) => isReturnedStripePayment(payment));
+    const returnedPaid = returnedPayments.filter((payment) => payment.status === PaymentStatus.PAID).length;
+    const returnedFailed = returnedPayments.filter((payment) => payment.status === PaymentStatus.FAILED).length;
     const paymentCentersById = new Map(payoutCenters.map((center) => [center.id, center]));
     const paymentSummary = (account: {
       autopayPlaceholder: boolean;
@@ -4414,8 +4430,9 @@ async function renderLivePage(
           payments,
           stats: {
             total,
-            paid,
-            failed,
+            paid: Math.max(0, paid - returnedPaid),
+            failed: Math.max(0, failed - returnedFailed),
+            returned: returnedPayments.length,
             draft: Math.max(0, draft - processingAch),
             processingAch,
             stripeConfigured,

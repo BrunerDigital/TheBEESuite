@@ -5449,6 +5449,7 @@ export type PaymentsPageData = {
     total: number;
     paid: number;
     failed: number;
+    returned: number;
     draft: number;
     processingAch: number;
     stripeConfigured: boolean;
@@ -5486,10 +5487,11 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
           Review parent payment status, follow-up needs, and each school&apos;s payout readiness.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-7">
+      <div className="grid gap-4 md:grid-cols-8">
         <StatCard label="Payment records" value={data.stats.total} />
         <StatCard label="Paid" value={data.stats.paid} />
         <StatCard label="Failed" value={data.stats.failed} />
+        <StatCard label="Returned" value={data.stats.returned} />
         <StatCard label="Draft/checkout" value={data.stats.draft} />
         <StatCard label="ACH settling" value={data.stats.processingAch} />
         <StatCard label="Payment processing" value={data.stats.stripeConfigured && data.stats.webhookConfigured ? "Ready" : "Setup needed"} />

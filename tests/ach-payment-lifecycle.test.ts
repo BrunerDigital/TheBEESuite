@@ -120,6 +120,14 @@ test("director ACH settling count uses the complete draft payment scope", async 
   assert.match(source, /processingAchRows\.filter\(\(payment\) => isAchPaymentProcessing\(payment\)\)\.length/);
 });
 
+test("director payment totals separate returned funds from paid and failed", async () => {
+  const source = await readFile("src/app/[slug]/page.tsx", "utf8");
+  assert.match(source, /const returnedPayments = returnedPaymentRows\.filter\(\(payment\) => isReturnedStripePayment\(payment\)\)/);
+  assert.match(source, /paid: Math\.max\(0, paid - returnedPaid\)/);
+  assert.match(source, /failed: Math\.max\(0, failed - returnedFailed\)/);
+  assert.match(source, /returned: returnedPayments\.length/);
+});
+
 test("parent provisional balance uses the complete active ACH set, not the recent-payment cap", async () => {
   const source = await readFile("src/app/[slug]/page.tsx", "utf8");
   assert.match(source, /const \[billingAccount, activeParentPaymentRows,/);

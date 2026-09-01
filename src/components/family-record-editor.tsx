@@ -1247,11 +1247,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
         {selectedFamily ? (
           <FamilyRelationshipMap
             family={selectedFamily}
-            duplicateCounts={{
-              families: duplicateCandidates.length,
-              guardians: guardianDuplicateCandidates.length,
-              children: childDuplicateCandidates.length,
-            }}
+            duplicateFamilyCount={duplicateCandidates.length}
             onSelectGuardian={selectGuardianFromRelationshipMap}
             onSelectChild={selectChildFromRelationshipMap}
             onSelectPickup={selectPickupFromRelationshipMap}

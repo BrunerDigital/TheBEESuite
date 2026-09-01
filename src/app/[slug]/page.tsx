@@ -169,7 +169,11 @@ import {
   paymentMethodManagementSummary,
 } from "@/lib/payment-method-management";
 import { currentFamilyBillingMatch } from "@/lib/invoice-payment-actions";
-import { isAchPaymentProcessing, provisionalAchCreditCents } from "@/lib/ach-payment-lifecycle";
+import {
+  isAchPaymentProcessing,
+  provisionalAchCreditCents,
+  visibleBalanceAfterProvisionalAchCredit,
+} from "@/lib/ach-payment-lifecycle";
 import {
   normalizeDirectorInvoiceStatus,
   paymentStatusForDirectorInvoiceStatus,
@@ -2203,7 +2207,7 @@ async function renderLivePage(
     const parentVisibleLedgerWhere: Prisma.LedgerEntryWhereInput = {
       NOT: agencyOnlyLedgerWhere,
     };
-    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs, classroomTeacherRows] = await prisma.$transaction([
+    const [billingAccount, provisionalAchPaymentRows, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs, classroomTeacherRows] = await prisma.$transaction([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -2264,6 +2268,21 @@ async function renderLivePage(
             select: { id: true, type: true, description: true, effectiveAt: true },
           },
         },
+      }),
+      prisma.payment.findMany({
+        where: {
+          billingAccount: { familyId },
+          provider: "stripe",
+          status: PaymentStatus.DRAFT,
+          OR: [
+            { customFields: { path: ["status"], equals: "checkout_pending" } },
+            { customFields: { path: ["status"], equals: "paid_processing" } },
+            { customFields: { path: ["status"], equals: "autopay_processing" } },
+            { customFields: { path: ["status"], equals: "stored_method_processing" } },
+            { customFields: { path: ["status"], equals: "director_saved_method_processing" } },
+          ],
+        },
+        select: { amountCents: true, status: true, provider: true, customFields: true },
       }),
       prisma.ledgerEntry.findFirst({
         where: { billingAccount: { familyId }, AND: [parentVisibleLedgerWhere] },
@@ -2764,14 +2783,12 @@ async function renderLivePage(
     );
     const parentReplyToMessageId = firstSearchParam(searchParams.replyToMessageId) || "";
     const parentReplySubject = firstSearchParam(searchParams.subject) || "";
-    const pendingAchCreditCents = billingAccount
-      ? provisionalAchCreditCents(billingAccount.payments)
-      : 0;
+    const pendingAchCreditCents = provisionalAchCreditCents(provisionalAchPaymentRows);
     const parentBalanceCents = billingAccount
-      ? Math.max(0, parentVisibleBillingBalanceCents({
+      ? visibleBalanceAfterProvisionalAchCredit(parentVisibleBillingBalanceCents({
           accountBalanceCents: billingAccount.balanceCents,
           agencyLedgerEntries,
-        }) - pendingAchCreditCents)
+        }), pendingAchCreditCents)
       : 0;
     const parentBalanceReviewRequired = billingAccount
       ? parentBalanceNeedsResponsibilityReview({

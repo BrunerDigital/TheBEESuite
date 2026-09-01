@@ -7,6 +7,7 @@ import {
   isReturnedStripePayment,
   provisionalAchCreditCents,
   returnedPaymentRetryAvailable,
+  visibleBalanceAfterProvisionalAchCredit,
 } from "../src/lib/ach-payment-lifecycle";
 
 test("submitted ACH payments provisionally credit the visible family balance", () => {
@@ -32,6 +33,13 @@ test("an abandoned ACH checkout is not provisionally credited", () => {
     provider: "stripe",
     customFields: { requestedPaymentMethodCategory: "ach", status: "checkout_created" },
   }), false);
+});
+
+test("provisional ACH relief preserves existing family credits and clamps positive balances", () => {
+  assert.equal(visibleBalanceAfterProvisionalAchCredit(-48_00, 0), -48_00);
+  assert.equal(visibleBalanceAfterProvisionalAchCredit(-48_00, 20_00), -48_00);
+  assert.equal(visibleBalanceAfterProvisionalAchCredit(2475_00, 2475_00), 0);
+  assert.equal(visibleBalanceAfterProvisionalAchCredit(100_00, 150_00), 0);
 });
 
 test("an insufficient-funds ACH result becomes returned and retryable", () => {
@@ -70,4 +78,10 @@ test("director payment attempts explain ACH settlement without claiming zero sub
   assert.match(source, /ACH submitted once; bank settlement pending\./);
   assert.match(source, /No failed retries/);
   assert.match(source, /After settlement/);
+});
+
+test("parent provisional balance uses the complete active ACH set, not the recent-payment cap", async () => {
+  const source = await readFile("src/app/[slug]/page.tsx", "utf8");
+  assert.match(source, /const \[billingAccount, provisionalAchPaymentRows,/);
+  assert.match(source, /provisionalAchCreditCents\(provisionalAchPaymentRows\)/);
 });

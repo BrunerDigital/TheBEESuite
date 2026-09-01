@@ -51,6 +51,12 @@ export function provisionalAchCreditCents(payments: PaymentLifecycleRecord[]) {
   );
 }
 
+export function visibleBalanceAfterProvisionalAchCredit(balanceCents: number, pendingCreditCents: number) {
+  const balance = Math.round(balanceCents);
+  if (balance <= 0) return balance;
+  return Math.max(0, balance - Math.max(0, Math.round(pendingCreditCents)));
+}
+
 export function achFailurePresentation(input: {
   customFields?: unknown;
   metadata?: unknown;

@@ -127,6 +127,7 @@ export async function ensureParentPortalLoginForGuardian({
   linkedReason,
   registrationApproval = false,
   resetToInitialPassword = false,
+  randomizeNewCredential = false,
   inviteMode = PARENT_PORTAL_INVITE_MODE,
   prepareWithoutInvite = false,
 }: {
@@ -135,6 +136,7 @@ export async function ensureParentPortalLoginForGuardian({
   linkedReason?: string;
   registrationApproval?: boolean;
   resetToInitialPassword?: boolean;
+  randomizeNewCredential?: boolean;
   inviteMode?: string;
   prepareWithoutInvite?: boolean;
 }): Promise<ParentPortalProvisionResult> {
@@ -196,12 +198,12 @@ export async function ensureParentPortalLoginForGuardian({
   const authUser = await upsertSupabaseAuthUserWithPassword({
     email,
     name: guardian.fullName,
-    password: prepareWithoutInvite
+    password: prepareWithoutInvite || randomizeNewCredential
       ? randomBytes(48).toString("base64url")
       : DEFAULT_PARENT_INITIAL_PASSWORD,
     role: UserRole.PARENT_GUARDIAN,
     source: PARENT_PORTAL_INVITE_MODE,
-    updateExistingPassword: resetToInitialPassword,
+    updateExistingPassword: resetToInitialPassword || (randomizeNewCredential && !existingUser),
   });
   const credentialCreated = !("alreadyExisted" in authUser && authUser.alreadyExisted);
 

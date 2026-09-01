@@ -126,5 +126,5 @@ test("parent message direction comes from the family-scoped server query", () =>
   assert.match(routePage, /prisma\.message\.findMany\(\{[\s\S]*?where: \{ familyId \}/);
   assert.match(routePage, /sender: \{ select: \{ name: true, role: true \} \}/);
   assert.match(routePage, /isFromFamily: message\.sender\?\.role === UserRole\.PARENT_GUARDIAN/);
-  assert.match(routePage, /centerName=\{parentPortalCenterName \? formatCenterName\(parentPortalCenterName\) : null\}/);
+  assert.match(routePage, /centerName=\{familyCenter \? formatCenterName\(familyCenter\)/);
 });

@@ -352,6 +352,17 @@ function stringField(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function paymentAppliedInvoiceIds(customFields: unknown) {
+  const fields = recordFromJson(customFields);
+  const invoiceId = stringField(fields.invoiceId);
+  const appliedInvoiceIds = Array.isArray(fields.appliedInvoiceIds)
+    ? fields.appliedInvoiceIds
+      .map((value) => stringField(value))
+      .filter((value): value is string => Boolean(value))
+    : [];
+  return [...new Set([...(invoiceId ? [invoiceId] : []), ...appliedInvoiceIds])];
+}
+
 function numberField(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -2339,6 +2350,11 @@ async function renderLivePage(
         where: { id: resolvedParentCenterId ?? "__none__" },
         select: {
           id: true,
+          name: true,
+          crmLocationId: true,
+          city: true,
+          state: true,
+          timezone: true,
           customFields: true,
           organization: {
             select: {
@@ -2459,6 +2475,7 @@ async function renderLivePage(
     const parentPortalFamily = family
       ? {
           ...family,
+          centerId: resolvedParentCenterId,
           children: family.children.map((child) => {
             const attendance = parentAttendanceByChild.get(child.id);
             const latestCheck = parentLatestCheckByChild.get(child.id);
@@ -2549,6 +2566,74 @@ async function renderLivePage(
         })
       : [];
     const invoiceChildNames = new Map(invoiceChildren.map((child) => [child.id, child.fullName]));
+    const parentPaymentInvoiceIds = [...new Set(
+      (billingAccount?.payments ?? []).flatMap((payment) => paymentAppliedInvoiceIds(payment.customFields)),
+    )];
+    const parentPaymentInvoices = parentPaymentInvoiceIds.length && billingAccount
+      ? await prisma.invoice.findMany({
+          where: { id: { in: parentPaymentInvoiceIds }, billingAccountId: billingAccount.id },
+          select: { id: true, number: true },
+        })
+      : [];
+    const parentPaymentInvoiceNumberById = new Map(parentPaymentInvoices.map((invoice) => [invoice.id, invoice.number]));
+    const parentPaymentCenterIds = [...new Set(
+      (billingAccount?.payments ?? [])
+        .map((payment) => stringField(recordFromJson(payment.customFields).centerId))
+        .filter((centerId): centerId is string => Boolean(centerId)),
+    )];
+    const parentPaymentCenters = parentPaymentCenterIds.length
+      ? await prisma.center.findMany({
+          where: {
+            id: { in: parentPaymentCenterIds },
+            organization: { tenantId: user.tenantId },
+          },
+          select: {
+            id: true,
+            name: true,
+            crmLocationId: true,
+            city: true,
+            state: true,
+            timezone: true,
+            customFields: true,
+          },
+        })
+      : [];
+    const parentPaymentCenterById = new Map(parentPaymentCenters.map((center) => [center.id, center]));
+    const parentPayments = (billingAccount?.payments ?? []).map((payment) => {
+      const fields = recordFromJson(payment.customFields);
+      const paymentCenterId = stringField(fields.centerId) || resolvedParentCenterId;
+      const paymentCenter = (paymentCenterId ? parentPaymentCenterById.get(paymentCenterId) : null)
+        ?? (paymentCenterId === familyCenter?.id ? familyCenter : null);
+      const invoiceNumbers = paymentAppliedInvoiceIds(fields)
+        .map((invoiceId) => parentPaymentInvoiceNumberById.get(invoiceId))
+        .filter((number): number is string => Boolean(number));
+      const checkoutTotalCents = numberField(fields.checkoutTotalCents);
+      const processingRecoveryCents = checkoutTotalCents === null
+        ? 0
+        : Math.max(0, checkoutTotalCents - payment.amountCents);
+      return {
+        ...payment,
+        amountCents: checkoutTotalCents ?? payment.amountCents,
+        principalAmountCents: payment.amountCents,
+        processingRecoveryCents,
+        centerId: paymentCenterId,
+        centerName: paymentCenter ? formatCenterName(paymentCenter) : null,
+        centerEin: paymentCenter ? readSchoolEin(paymentCenter.customFields) : null,
+        centerTimeZone: paymentCenter ? readCenterLocationTimeZone(paymentCenter) : null,
+        externalIdPlaceholder: stringField(fields.reference)
+          || stringField(fields.payrollReference)
+          || stringField(fields.checkNumber)
+          || payment.externalIdPlaceholder,
+        invoiceNumber: invoiceNumbers.length ? invoiceNumbers.join(", ") : null,
+        paymentReferenceLabel: fields.paymentScope === "family_balance"
+          ? "Family balance payment"
+          : invoiceNumbers.length === 1
+            ? `Invoice ${invoiceNumbers[0]}`
+            : invoiceNumbers.length > 1
+              ? `Invoices ${invoiceNumbers.join(", ")}`
+              : "Family account payment",
+      };
+    });
     const pendingPaymentByInvoiceId = new Map<string, Omit<ReturnType<typeof activeStripeCheckoutPaymentSummary>, "amountCents">>();
     for (const payment of billingAccount?.payments ?? []) {
       if (!isActiveStripeCheckoutPayment(payment)) continue;
@@ -2714,7 +2799,7 @@ async function renderLivePage(
         paymentMethodReauthorizationPreservesAutopay={paymentMethodReauthorizationPreservesAutopay}
         parentBalanceReviewRequired={parentBalanceReviewRequired}
         parentBalanceVisibilityConfirmed={parentBalanceVisibilityConfirmed}
-        payments={billingAccount?.payments ?? []}
+        payments={parentPayments}
         latestLedgerEntry={latestLedgerEntry}
         ledgerEntries={billingAccount?.ledgerEntries.slice(0, PARENT_LEDGER_PAGE_SIZE) ?? []}
         ledgerPagination={{
@@ -2726,8 +2811,9 @@ async function renderLivePage(
         dailyReports={parentDailyReports}
         incidents={incidents}
         messages={signedMessages}
-        centerName={parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
-        centerEin={parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
+        centerName={familyCenter ? formatCenterName(familyCenter) : parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
+        centerEin={familyCenter ? readSchoolEin(familyCenter.customFields) : parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
+        centerTimeZone={familyCenter ? readCenterLocationTimeZone(familyCenter) : parentServiceDay.timeZone}
         classroomTeachers={classroomTeachers}
         documents={signedDocuments}
         media={signedMedia}

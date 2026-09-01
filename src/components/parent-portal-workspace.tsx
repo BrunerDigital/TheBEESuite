@@ -5,7 +5,7 @@ import type { ComponentPropsWithoutRef, Dispatch, SetStateAction } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
-import { InvoicePrintButton } from "@/components/billing-print-actions";
+import { InvoicePrintButton, PaymentReceiptPrintButton } from "@/components/billing-print-actions";
 import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import {
   AlertCircle,
@@ -137,10 +137,18 @@ type Invoice = {
 type Payment = {
   id: string;
   amountCents: number;
+  principalAmountCents?: number | null;
+  processingRecoveryCents?: number | null;
+  centerId?: string | null;
+  centerName?: string | null;
+  centerEin?: string | null;
+  centerTimeZone?: string | null;
   status: string;
   provider: string;
   paidAt: string | Date | null;
   externalIdPlaceholder?: string | null;
+  invoiceNumber?: string | null;
+  paymentReferenceLabel?: string;
   customFields?: unknown;
 };
 
@@ -205,6 +213,7 @@ type Incident = {
 
 type PortalFamily = {
   id: string;
+  centerId?: string | null;
   name: string;
   billingEmail: string | null;
   guardians: Array<{
@@ -397,6 +406,7 @@ type Props = {
   }>;
   centerName?: string | null;
   centerEin?: string | null;
+  centerTimeZone?: string | null;
   classroomTeachers?: ClassroomTeacherRecipient[];
   demoMode?: boolean;
   previewMode?: boolean;
@@ -748,6 +758,7 @@ function ParentPortalWorkspaceView({
   availableFamilies = [],
   centerName = null,
   centerEin = null,
+  centerTimeZone = null,
   classroomTeachers = [],
   demoMode,
   previewMode = false,
@@ -3030,9 +3041,43 @@ function ParentPortalWorkspaceView({
                       const completed = payment.status === "PAID";
                       return (
                         <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
-                          <span className="text-muted-foreground">
-                            {paymentProviderLabel(payment.provider)} · {paymentListLabel(payment, timeZone)}
-                          </span>
+                          <div>
+                            <span className="text-muted-foreground">
+                              {paymentProviderLabel(payment.provider)} · {paymentListLabel(payment, timeZone)}
+                            </span>
+                            {completed && family ? (
+                              <div className="mt-2">
+                                <PaymentReceiptPrintButton
+                                  buttonLabel="View / print receipt"
+                                  payment={{
+                                    id: payment.id,
+                                    amountCents: payment.amountCents,
+                                    principalAmountCents: payment.principalAmountCents ?? null,
+                                    processingRecoveryCents: payment.processingRecoveryCents ?? null,
+                                    status: payment.status,
+                                    provider: payment.provider,
+                                    paidAt: payment.paidAt,
+                                    externalIdPlaceholder: payment.externalIdPlaceholder ?? null,
+                                    invoiceNumber: payment.invoiceNumber ?? null,
+                                    paymentReferenceLabel: payment.paymentReferenceLabel ?? "Family account payment",
+                                    billingAccount: {
+                                      family: {
+                                        name: family.name,
+                                        billingEmail: family.billingEmail,
+                                        centerId: payment.centerId ?? family.centerId ?? null,
+                                      },
+                                    },
+                                  }}
+                                  schools={[{
+                                    id: payment.centerId ?? family.centerId ?? "",
+                                    name: payment.centerName ?? centerName ?? "School",
+                                    ein: payment.centerEin ?? centerEin ?? null,
+                                  }]}
+                                  schoolTimeZone={payment.centerTimeZone ?? centerTimeZone ?? undefined}
+                                />
+                              </div>
+                            ) : null}
+                          </div>
                           <span className={completed ? "font-medium text-emerald-700 dark:text-emerald-300" : "font-medium text-muted-foreground"}>
                             {completed ? "−" : ""}{money(payment.amountCents)}
                           </span>
@@ -3122,10 +3167,44 @@ function ParentPortalWorkspaceView({
                       key={payment.id}
                       className="grid grid-cols-[1fr_auto] gap-3 text-sm"
                     >
-                      <span className="text-muted-foreground">
-                        {paymentProviderLabel(payment.provider)} ·{" "}
-                        {paymentListLabel(payment, timeZone)}
-                      </span>
+                      <div>
+                        <span className="text-muted-foreground">
+                          {paymentProviderLabel(payment.provider)} ·{" "}
+                          {paymentListLabel(payment, timeZone)}
+                        </span>
+                        {completed && family ? (
+                          <div className="mt-2">
+                            <PaymentReceiptPrintButton
+                              buttonLabel="View / print receipt"
+                              payment={{
+                                id: payment.id,
+                                amountCents: payment.amountCents,
+                                principalAmountCents: payment.principalAmountCents ?? null,
+                                processingRecoveryCents: payment.processingRecoveryCents ?? null,
+                                status: payment.status,
+                                provider: payment.provider,
+                                paidAt: payment.paidAt,
+                                externalIdPlaceholder: payment.externalIdPlaceholder ?? null,
+                                invoiceNumber: payment.invoiceNumber ?? null,
+                                paymentReferenceLabel: payment.paymentReferenceLabel ?? "Family account payment",
+                                billingAccount: {
+                                  family: {
+                                    name: family.name,
+                                    billingEmail: family.billingEmail,
+                                    centerId: payment.centerId ?? family.centerId ?? null,
+                                  },
+                                },
+                              }}
+                              schools={[{
+                                id: payment.centerId ?? family.centerId ?? "",
+                                name: payment.centerName ?? centerName ?? "School",
+                                ein: payment.centerEin ?? centerEin ?? null,
+                              }]}
+                              schoolTimeZone={payment.centerTimeZone ?? centerTimeZone ?? undefined}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
                       <span
                         className={
                           completed
@@ -3582,6 +3661,7 @@ function ParentPortalWorkspaceView({
                     familyName={family.name}
                     schoolName={centerName}
                     schoolEin={centerEin}
+                    buttonLabel="View / print invoice"
                   /> : null}
                   {invoice.productCheckoutAvailable &&
                   invoice.status === "OPEN" &&

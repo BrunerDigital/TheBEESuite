@@ -443,6 +443,7 @@ async function createParentPortalInvite(input: {
       linkedBy: input.user.email,
       linkedReason: "registration_approval",
       registrationApproval: true,
+      randomizeNewCredential: true,
     });
     if (!parentPortal.ok) {
       return {

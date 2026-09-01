@@ -248,12 +248,20 @@ test("processing webhooks preserve collection-specific credit reservations", asy
 test("processing webhooks are scoped to the payment's tenant, school account, and PaymentIntent", async () => {
   const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   assert.match(route, /handlePaymentIntentProcessing\([\s\S]*matchedTenantId: string \| null/);
-  assert.match(route, /clean\(metadata\.tenantId\) !== tenantId/);
-  assert.match(route, /matchedTenantId && matchedTenantId !== tenantId/);
+  assert.match(route, /clean\(input\.metadata\.tenantId\) !== tenantId/);
+  assert.match(route, /input\.matchedTenantId && input\.matchedTenantId !== tenantId/);
   assert.match(route, /eventConnectedAccountId !== storedConnectedAccountId/);
   assert.match(route, /centerConnectedAccountId !== storedConnectedAccountId/);
-  assert.match(route, /storedPaymentIntentId !== paymentIntent\.id/);
+  assert.match(route, /storedPaymentIntentId !== input\.paymentIntentId/);
   assert.match(route, /payment_intent_scope_mismatch/);
+});
+
+test("every PaymentIntent lifecycle event uses the same school ownership guard", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /async function findScopedPaymentIntentPayment/);
+  assert.match(route, /handlePaymentIntentSucceeded\(event, event\.data\.object as StripePaymentIntentObject, matchedTenantId\)/);
+  assert.match(route, /handlePaymentIntentFailed\(event, event\.data\.object as StripePaymentIntentObject, matchedTenantId\)/);
+  assert.ok((route.match(/findScopedPaymentIntentPayment\(/g) || []).length >= 6);
 });
 
 test("stale or concurrent processing webhooks cannot overwrite a newer failure", async () => {

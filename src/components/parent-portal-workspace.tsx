@@ -563,10 +563,22 @@ function pendingPaymentCategory(
   );
 }
 
+function isConfirmedAchPendingPayment(payment: PendingInvoicePayment | null | undefined) {
+  if (!payment) return false;
+  if (pendingPaymentCategory(payment) !== "ach") return false;
+  const status = (textField(payment.status) || "").toLowerCase();
+  const stripeStatus = (textField(payment.stripePaymentIntentStatus) || "").toLowerCase();
+  return status === "paid_processing"
+    || (status.endsWith("_processing") && stripeStatus === "processing");
+}
+
 function pendingPaymentMessage(payment: PendingInvoicePayment) {
   const label = paymentMethodCategoryLabel(pendingPaymentCategory(payment));
-  if (pendingPaymentCategory(payment) === "ach") {
+  if (isConfirmedAchPendingPayment(payment)) {
     return "Paid — processing by ACH. Your balance has been provisionally credited while the bank transfer settles. If the bank returns it, the amount due will automatically be restored.";
+  }
+  if (pendingPaymentCategory(payment) === "ach") {
+    return "ACH submission is pending. It will be marked Paid — processing only after Stripe confirms that the bank transfer is processing.";
   }
   if (label === "Debit or credit card") {
     return "A card checkout is already pending for this invoice. Complete or expire it before starting another checkout.";
@@ -3422,7 +3434,7 @@ function ParentPortalWorkspaceView({
               <Alert>
                 <AlertCircle className="size-4" />
                 <AlertTitle>
-                  {pendingPaymentCategory(firstPendingOpenInvoice.pendingPayment) === "ach"
+                  {isConfirmedAchPendingPayment(firstPendingOpenInvoice.pendingPayment)
                     ? "Paid — processing"
                     : "Payment processing"}
                 </AlertTitle>
@@ -3666,7 +3678,7 @@ function ParentPortalWorkspaceView({
                     }
                   >
                     {invoiceHasPendingPayment
-                      ? pendingPaymentCategory(invoice.pendingPayment) === "ach"
+                      ? isConfirmedAchPendingPayment(invoice.pendingPayment)
                         ? "Paid — processing"
                         : "Processing"
                       : displayTokenLabel(invoice.status)}

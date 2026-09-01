@@ -21,11 +21,7 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   family: EditableFamilyRecord;
-  duplicateCounts: {
-    families: number;
-    guardians: number;
-    children: number;
-  };
+  duplicateFamilyCount: number;
   onSelectGuardian: (guardianId: string) => boolean;
   onSelectChild: (childId: string) => boolean;
   onSelectPickup: (pickupId: string) => boolean;
@@ -119,7 +115,7 @@ function scrollToEditor(sectionId: string, focusId: string, select: () => boolea
 
 export function FamilyRelationshipMap({
   family,
-  duplicateCounts,
+  duplicateFamilyCount,
   onSelectGuardian,
   onSelectChild,
   onSelectPickup,
@@ -129,7 +125,6 @@ export function FamilyRelationshipMap({
   const portalAccountGuardians = family.guardians.filter((guardian) => guardian.userId);
   const childrenNeedingEnrollmentSetup = family.children.filter(needsEnrollmentSetup);
   const custodyReviewRequired = hasCustodyWarning(family);
-  const duplicateTotal = duplicateCounts.families + duplicateCounts.guardians + duplicateCounts.children;
   const billingEmail = normalizedEmail(family.billingEmail);
   const billingEmailMatchesGuardian = Boolean(
     billingEmail && family.guardians.some((guardian) => normalizedEmail(guardian.email) === billingEmail),
@@ -141,8 +136,8 @@ export function FamilyRelationshipMap({
     childrenNeedingEnrollmentSetup.length
       ? `${childrenNeedingEnrollmentSetup.length} current child${childrenNeedingEnrollmentSetup.length === 1 ? " needs" : "ren need"} a classroom assignment.`
       : null,
-    duplicateTotal
-      ? `${duplicateTotal} possible duplicate candidate${duplicateTotal === 1 ? " relates" : "s relate"} to the selected family, guardian, or child records. Confirm school scope and supporting evidence before merging.`
+    duplicateFamilyCount
+      ? `${duplicateFamilyCount} possible duplicate family record${duplicateFamilyCount === 1 ? " matches" : "s match"} the selected household. Confirm school scope and supporting evidence before merging.`
       : null,
     custodyReviewRequired ? `${CUSTODY_WARNING_LABEL} is required before related changes.` : null,
   ].filter((signal): signal is string => Boolean(signal));

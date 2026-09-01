@@ -54,15 +54,17 @@ test("parent portal invite links fall back to request origin", () => {
   );
 });
 
-test("parent setup links are generated after credential rotation", () => {
+test("parent setup link issuance cannot strand an active parent after provider failure", () => {
   const source = readFileSync(new URL("../src/lib/parent-portal-setup-links.ts", import.meta.url), "utf8");
   const issueLink = source.slice(
     source.indexOf("export async function issueParentPortalSetupLink"),
     source.indexOf("export async function recordParentPortalSetupLinkDelivery"),
   );
+  assert.match(issueLink, /generateSupabasePasswordRecoveryLink/);
+  assert.doesNotMatch(issueLink, /updateSupabaseAuthUserPasswordByEmail|randomBytes/);
   assert.ok(
-    issueLink.indexOf("updateSupabaseAuthUserPasswordByEmail") < issueLink.indexOf("generateSupabasePasswordRecoveryLink"),
-    "credential rotation must happen before generating the delivered recovery token",
+    issueLink.indexOf("generateSupabasePasswordRecoveryLink") < issueLink.indexOf("sessionVersion: { increment: 1 }"),
+    "the usable recovery token must exist before the app reset gate is committed",
   );
 });
 

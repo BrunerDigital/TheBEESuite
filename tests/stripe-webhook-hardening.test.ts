@@ -170,6 +170,7 @@ test("supported reconciliation matrix includes payment, invoice, subscription, d
     "invoice.payment_action_required",
     "invoice.payment_failed",
     "payment_intent.processing",
+    "payment_intent.canceled",
     "payment_intent.payment_failed",
     "payment_intent.succeeded",
     "payout.created",
@@ -216,6 +217,16 @@ test("off-session request completion cannot overwrite webhook terminal states", 
     familyPayment.match(/payment\.updateMany\(\{\s*where: \{ id: payment\.id, status: PaymentStatus\.DRAFT \}/g)?.length,
     2,
   );
+  assert.match(familyPayment, /submissionUpdate\.count !== 1[\s\S]*payment\.findUnique[\s\S]*terminalPaymentStatus/);
+  assert.match(familyPayment, /terminalFailure[\s\S]*status: "failed"/);
+});
+
+test("canceled processing PaymentIntents clear provisional payment state", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /event\.type === "payment_intent\.payment_failed" \|\| event\.type === "payment_intent\.canceled"/);
+  assert.match(route, /const canceled = event\.type === "payment_intent\.canceled"/);
+  assert.match(route, /failureCode: "payment_canceled"[\s\S]*customStatus: "payment_canceled"/);
+  assert.match(route, /provisionalCreditActive: false/);
 });
 
 test("parent invoice status maps off-session and ACH processing payments", async () => {

@@ -665,6 +665,7 @@ async function POSTHandler(request: NextRequest) {
 
     let appliedImmediately = false;
     let immediateApplicationReason: string | null = null;
+    let terminalPaymentStatus: PaymentStatus | null = null;
     if (intent.paymentIntent.status === "succeeded") {
       const application = await prisma.$transaction((tx) => applySucceededStripeFamilyBalancePayment(tx, {
         paymentId: payment.id,
@@ -686,7 +687,7 @@ async function POSTHandler(request: NextRequest) {
     }
 
     if (!appliedImmediately) {
-      await prisma.payment.updateMany({
+      const submissionUpdate = await prisma.payment.updateMany({
         where: { id: payment.id, status: PaymentStatus.DRAFT },
         data: {
           externalIdPlaceholder: intent.paymentIntent.id,
@@ -703,11 +704,25 @@ async function POSTHandler(request: NextRequest) {
           }),
         },
       });
+      if (submissionUpdate.count !== 1) {
+        const winningPayment = await prisma.payment.findUnique({
+          where: { id: payment.id },
+          select: { status: true },
+        });
+        terminalPaymentStatus = winningPayment?.status ?? PaymentStatus.FAILED;
+        appliedImmediately = terminalPaymentStatus === PaymentStatus.PAID;
+      }
     }
+
+    const terminalFailure = terminalPaymentStatus !== null && terminalPaymentStatus !== PaymentStatus.PAID;
 
     await writeAuditLog(user, {
       centerId: center.id,
-      action: appliedImmediately ? "billing.family_payment.payment_intent_succeeded" : "billing.family_payment.payment_intent_created",
+      action: appliedImmediately
+        ? "billing.family_payment.payment_intent_succeeded"
+        : terminalFailure
+          ? "billing.family_payment.payment_intent_failed"
+          : "billing.family_payment.payment_intent_created",
       resource: "BillingAccount",
       resourceId: billingAccount.id,
       metadata: {
@@ -718,8 +733,19 @@ async function POSTHandler(request: NextRequest) {
         paymentMethodCategory: amounts.paymentMethodCategory,
         appliedImmediately,
         immediateApplicationReason,
+        terminalPaymentStatus,
       },
     });
+
+    if (terminalFailure) {
+      return NextResponse.json({
+        ok: false,
+        status: "failed",
+        error: "The payment failed or was returned before processing finished. It can be retried.",
+        paymentId: payment.id,
+        stripePaymentIntentId: intent.paymentIntent.id,
+      }, { status: 409 });
+    }
 
     return NextResponse.json({
       ok: true,

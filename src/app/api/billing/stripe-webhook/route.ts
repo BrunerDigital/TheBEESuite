@@ -1770,6 +1770,7 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
     return NextResponse.json({ ok: true, ignored: true, reason: "Missing payment metadata." });
   }
   const collectionMode = clean(metadata.collectionMode);
+  const canceled = event.type === "payment_intent.canceled";
   let failureApplied = false;
   let achReturned = false;
   let recoverableCheckoutFailure = false;
@@ -1803,17 +1804,24 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       const failureCode = clean(paymentIntent.last_payment_error?.code)
         || clean(paymentIntent.last_payment_error?.decline_code)
         || null;
-      const achFailure = achFailurePresentation({
-        customFields: currentFields,
-        metadata,
-        failureCode,
-      });
+      const achFailure = canceled
+        ? {
+            returned: false,
+            retryAvailable: true,
+            failureCode: "payment_canceled",
+            customStatus: "payment_canceled",
+          }
+        : achFailurePresentation({
+            customFields: currentFields,
+            metadata,
+            failureCode,
+          });
       achReturned = achFailure.returned;
       recoverableCheckoutFailure = disposition.recoverableCheckout && !achFailure.returned;
       const failedPayment = await tx.payment.updateMany({
         where: { id: metadata.paymentId, status: { in: [PaymentStatus.DRAFT, PaymentStatus.FAILED] } },
         data: {
-          status: achFailure.returned ? PaymentStatus.FAILED : disposition.paymentStatus,
+          status: canceled || achFailure.returned ? PaymentStatus.FAILED : disposition.paymentStatus,
           customFields: {
             ...currentFields,
             stripePaymentIntentId: paymentIntent.id,
@@ -1821,8 +1829,11 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
             stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
             stripePaymentIntentStatus: paymentIntent.status || null,
             stripeFailureCode: achFailure.failureCode,
-            stripeFailureMessage: paymentIntent.last_payment_error?.message || null,
+            stripeFailureMessage: canceled
+              ? "Payment was canceled before settlement."
+              : paymentIntent.last_payment_error?.message || null,
             failedAt: new Date().toISOString(),
+            canceledAt: canceled ? new Date().toISOString() : null,
             returnedAt: achFailure.returned ? new Date().toISOString() : null,
             provisionalCreditActive: false,
             retryAvailable: achFailure.retryAvailable,
@@ -1859,7 +1870,9 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       metadata.invoiceId,
       event.id,
       paymentIntent.id,
-      achReturned
+      canceled
+        ? "billing.payment_intent.canceled"
+        : achReturned
         ? "billing.ach_payment.returned"
         : collectionMode === "autopay"
         ? "billing.autopay.failed"
@@ -1876,7 +1889,9 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       metadata.billingAccountId,
       event.id,
       paymentIntent.id,
-      achReturned
+      canceled
+        ? "billing.family_payment.payment_intent_canceled"
+        : achReturned
         ? "billing.family_payment.ach_returned"
         : recoverableCheckoutFailure
         ? "billing.family_payment.checkout_payment_method_retry_required"
@@ -2482,7 +2497,7 @@ async function dispatchAuthenticatedEvent(
     return handlePaymentIntentProcessing(event, event.data.object as StripePaymentIntentObject);
   }
 
-  if (event.type === "payment_intent.payment_failed") {
+  if (event.type === "payment_intent.payment_failed" || event.type === "payment_intent.canceled") {
     return handlePaymentIntentFailed(event, event.data.object as StripePaymentIntentObject);
   }
 

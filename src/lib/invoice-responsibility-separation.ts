@@ -134,7 +134,8 @@ function productResponsibilityReviewExempt(fields: Record<string, unknown>) {
     || text(fields.chargeSource) === "product";
 }
 
-const FAMILY_ONLY_TUITION_MARKER = /\b(?:co-?pay|parent responsibility|family responsibility)\b/i;
+const FAMILY_ONLY_TUITION_MARKER = /\b(?:co-?pay|parent (?:responsibility|fee)|family responsibility)\b/i;
+const NO_PARENT_FEE_MARKER = /\bno parent fee\b/i;
 
 function confirmedNetFamilyTuitionInvoice(fields: Record<string, unknown>, currentInvoiceTotalCents?: number) {
   if (text(fields.chargeSource) !== "tuitionPlan") return false;
@@ -151,8 +152,12 @@ function confirmedNetFamilyTuitionInvoice(fields: Record<string, unknown>, curre
     return text(credit.category) === "agency_discount" && (cents(credit.amountCents) ?? 0) > 0;
   });
 
+  const tuitionPlanName = text(fields.tuitionPlanName);
   return hasAgencyCredit
-    || FAMILY_ONLY_TUITION_MARKER.test(text(fields.tuitionPlanName));
+    || (
+      FAMILY_ONLY_TUITION_MARKER.test(tuitionPlanName)
+      && !NO_PARENT_FEE_MARKER.test(tuitionPlanName)
+    );
 }
 
 function confirmedFamilyOnlyTuitionAssignment(fields: Record<string, unknown>, currentInvoiceTotalCents: number | undefined, evidence: unknown[]) {

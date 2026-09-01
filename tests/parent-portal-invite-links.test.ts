@@ -74,6 +74,9 @@ test("setup-link flows randomize only new parent credentials", () => {
   const documentRequests = readFileSync(new URL("../src/lib/parent-document-requests.ts", import.meta.url), "utf8");
   assert.match(registrationReview, /randomizeNewCredential:\s*true/);
   assert.match(documentRequests, /linkedReason:\s*"parent_document_request",[\s\S]*randomizeNewCredential:\s*true/);
+  assert.match(documentRequests, /login\.requiresSetupLink/);
+  assert.match(provisioning, /existingUser\?\.mustResetPassword && !resetToInitialPassword/);
+  assert.match(provisioning, /requiresSetupLink,/);
   assert.match(provisioning, /prepareWithoutInvite \|\| randomizeNewCredential/);
   assert.match(
     provisioning,

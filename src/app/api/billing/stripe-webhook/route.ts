@@ -231,6 +231,24 @@ function isAchPaymentMetadata(metadata: StripeMetadata) {
     || clean(metadata.requestedPaymentMethodCategory) === "ach";
 }
 
+function processingPaymentLifecycleStatus(input: {
+  achProcessing: boolean;
+  collectionMode: string;
+  currentStatus: string;
+}) {
+  if (!input.achProcessing) return input.currentStatus || "payment_processing";
+  if (input.collectionMode === "autopay" || input.currentStatus.startsWith("autopay_")) {
+    return "autopay_processing";
+  }
+  if (input.collectionMode === "stored_method" || input.currentStatus.startsWith("stored_method_")) {
+    return "stored_method_processing";
+  }
+  if (input.collectionMode === "director_saved_method" || input.currentStatus.startsWith("director_saved_method_")) {
+    return "director_saved_method_processing";
+  }
+  return "paid_processing";
+}
+
 function accountEventType(type: string) {
   return isStripeWebhookAccountEvent(type);
 }
@@ -1733,6 +1751,11 @@ async function handlePaymentIntentProcessing(event: StripeWebhookEvent, paymentI
         paymentMethodCategory: clean(metadata.paymentMethodCategory) || clean(currentFields.paymentMethodCategory),
         requestedPaymentMethodCategory: clean(metadata.requestedPaymentMethodCategory) || clean(currentFields.requestedPaymentMethodCategory),
       });
+      const lifecycleStatus = processingPaymentLifecycleStatus({
+        achProcessing,
+        collectionMode: clean(metadata.collectionMode) || clean(currentFields.collectionMode),
+        currentStatus: clean(currentFields.status),
+      });
       const updated = await tx.payment.updateMany({
         where: { id: paymentId, status: PaymentStatus.DRAFT },
         data: {
@@ -1745,7 +1768,7 @@ async function handlePaymentIntentProcessing(event: StripeWebhookEvent, paymentI
             stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
             submittedAt: currentFields.submittedAt || new Date().toISOString(),
             provisionalCreditActive: achProcessing,
-            status: achProcessing ? "paid_processing" : clean(currentFields.status) || "payment_processing",
+            status: lifecycleStatus,
           } as Prisma.InputJsonObject,
         },
       });

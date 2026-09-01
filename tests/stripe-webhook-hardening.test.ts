@@ -229,6 +229,13 @@ test("canceled processing PaymentIntents clear provisional payment state", async
   assert.match(route, /provisionalCreditActive: false/);
 });
 
+test("processing webhooks preserve collection-specific credit reservations", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /processingPaymentLifecycleStatus[\s\S]*"autopay_processing"[\s\S]*"stored_method_processing"/);
+  assert.match(route, /collectionMode: clean\(metadata\.collectionMode\) \|\| clean\(currentFields\.collectionMode\)/);
+  assert.match(route, /status: lifecycleStatus/);
+});
+
 test("parent invoice status maps off-session and ACH processing payments", async () => {
   const source = await readFile("src/app/[slug]/page.tsx", "utf8");
   assert.match(

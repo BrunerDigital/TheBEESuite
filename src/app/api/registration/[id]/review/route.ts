@@ -625,7 +625,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
             id: true,
             name: true,
             guardians: {
-              orderBy: { createdAt: "asc" },
+              orderBy: { fullName: "asc" },
               select: { id: true, fullName: true, email: true, customFields: true },
             },
           },

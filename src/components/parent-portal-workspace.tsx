@@ -139,6 +139,10 @@ type Payment = {
   amountCents: number;
   principalAmountCents?: number | null;
   processingRecoveryCents?: number | null;
+  centerId?: string | null;
+  centerName?: string | null;
+  centerEin?: string | null;
+  centerTimeZone?: string | null;
   status: string;
   provider: string;
   paidAt: string | Date | null;
@@ -3060,12 +3064,16 @@ function ParentPortalWorkspaceView({
                                       family: {
                                         name: family.name,
                                         billingEmail: family.billingEmail,
-                                        centerId: family.centerId ?? null,
+                                        centerId: payment.centerId ?? family.centerId ?? null,
                                       },
                                     },
                                   }}
-                                  schools={[{ id: family.centerId ?? "", name: centerName ?? "School", ein: centerEin ?? null }]}
-                                  schoolTimeZone={centerTimeZone ?? undefined}
+                                  schools={[{
+                                    id: payment.centerId ?? family.centerId ?? "",
+                                    name: payment.centerName ?? centerName ?? "School",
+                                    ein: payment.centerEin ?? centerEin ?? null,
+                                  }]}
+                                  schoolTimeZone={payment.centerTimeZone ?? centerTimeZone ?? undefined}
                                 />
                               </div>
                             ) : null}
@@ -3183,12 +3191,16 @@ function ParentPortalWorkspaceView({
                                   family: {
                                     name: family.name,
                                     billingEmail: family.billingEmail,
-                                    centerId: family.centerId ?? null,
+                                    centerId: payment.centerId ?? family.centerId ?? null,
                                   },
                                 },
                               }}
-                              schools={[{ id: family.centerId ?? "", name: centerName ?? "School", ein: centerEin ?? null }]}
-                              schoolTimeZone={centerTimeZone ?? undefined}
+                              schools={[{
+                                id: payment.centerId ?? family.centerId ?? "",
+                                name: payment.centerName ?? centerName ?? "School",
+                                ein: payment.centerEin ?? centerEin ?? null,
+                              }]}
+                              schoolTimeZone={payment.centerTimeZone ?? centerTimeZone ?? undefined}
                             />
                           </div>
                         ) : null}

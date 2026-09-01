@@ -1,10 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
+import { expectedVercelProject, readVercelProjectLink } from "./vercel-project-link.mjs";
 
 const expected = {
   gitRemote: "https://github.com/BrunerDigital/TheBEESuite.git",
-  vercelProjectId: "prj_7hJhGdgUtCmonOXuOudqm7D48dmz",
-  vercelOrgId: "team_h6ZwzwfpcrqR0oglI4xFdnaM",
+  vercelProjectId: expectedVercelProject.projectId,
+  vercelOrgId: expectedVercelProject.orgId,
   supabaseRef: "nqjrlktoewiueiwrubas",
 };
 
@@ -60,17 +61,13 @@ lines.push(
     : formatLine("INFO", "Upstream sync", "publish this branch with git push -u origin HEAD")
 );
 
-if (existsSync(".vercel/project.json")) {
-  const project = readJson(".vercel/project.json");
-  lines.push(statusLine(project.projectId === expected.vercelProjectId, "Vercel project", project.projectName || project.projectId));
-  lines.push(statusLine(project.orgId === expected.vercelOrgId, "Vercel owner", project.orgId));
-} else if (existsSync(".vercel/repo.json")) {
-  const repo = readJson(".vercel/repo.json");
-  const project = repo.projects?.find((candidate) => candidate.directory === ".") ?? repo.projects?.[0];
-  lines.push(statusLine(project?.id === expected.vercelProjectId, "Vercel project", project?.name || project?.id || "missing"));
-  lines.push(statusLine(project?.orgId === expected.vercelOrgId, "Vercel owner", project?.orgId || "missing"));
+const vercelProject = readVercelProjectLink();
+if (vercelProject) {
+  lines.push(statusLine(vercelProject.projectId === expected.vercelProjectId, "Vercel project", vercelProject.name || vercelProject.projectId));
+  lines.push(statusLine(vercelProject.orgId === expected.vercelOrgId, "Vercel owner", vercelProject.orgId));
 } else {
   lines.push(statusLine(false, "Vercel project", "run npm run cloud:link"));
+  lines.push(statusLine(false, "Vercel owner", "exact root-directory link missing"));
 }
 
 if (existsSync(".mcp.json")) {

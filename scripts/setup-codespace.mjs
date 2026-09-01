@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { isExpectedVercelProject, readVercelProjectLink } from "./vercel-project-link.mjs";
 
 const isCodespace = process.env.CODESPACES === "true";
 
@@ -54,7 +55,8 @@ if (!vercelReady && process.env.VERCEL_TOKEN) {
 }
 report(vercelReady, "Vercel authentication", vercelReady ? "CLI account is active" : "add the VERCEL_TOKEN Codespaces secret");
 
-const linked = existsSync(".vercel/project.json") || existsSync(".vercel/repo.json");
+const linkedProject = readVercelProjectLink();
+const linked = isExpectedVercelProject(linkedProject);
 report(linked, "Vercel project link", linked ? "the-bee-suite" : "run npm run cloud:link after adding VERCEL_TOKEN");
 
 const envReady = existsSync(".env.local");

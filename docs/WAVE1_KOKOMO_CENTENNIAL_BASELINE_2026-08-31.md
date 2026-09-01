@@ -6,7 +6,15 @@ Mode: read-only production inspection
 
 Primary full-workflow school: **Kid City USA - Kokomo**
 
+- Tenant ID: `cmp4evl4v00006arspz79fggn`
+- Center ID: `cmp4ewela003u6alw9ii7uffs`
+- Location ID: `Kid City USA - IN | Kokomo`
+
 Cross-brand isolation school: **Miss Honey's Learning Center - Centennial**
+
+- Tenant ID: `cms3g2rje00006a7wfmqdl6um`
+- Center ID: `cms3g2the000i6a7wdd8pa20s`
+- Location ID: `Miss Honey's Learning Center - CO | Centennial`
 
 ## Decision and purpose
 
@@ -33,7 +41,6 @@ Overall automated result: **BLOCKED** for the selected four-module set.
 
 - 12 classrooms.
 - 26 families and 39 children.
-- No centerless families.
 - No current children missing classroom assignments.
 - 46 guardians in the school-scoped readiness row; 42 have linked parent login users.
 - All school-scoped guardians counted by the readiness row have kiosk PINs.
@@ -64,7 +71,6 @@ Overall automated result: **BLOCKED** for the selected four-module set.
 
 - 7 classrooms.
 - 163 family records and 146 child records.
-- No centerless families.
 - No current children missing classroom assignments.
 - 94 guardians in the school-scoped readiness row; 92 have valid invitation emails, 89 have usable phones, 88 have linked parent login users, and 80 have kiosk PINs.
 - Active center grants: one center director and fourteen teachers.
@@ -95,7 +101,7 @@ Use synthetic/non-customer accounts stored in the approved credential manager. D
 For each supported role, prove:
 
 - the intended dashboard and module destinations open;
-- ordinary actions work inside the assigned school and role;
+- only separately approved, reversible synthetic actions work inside the assigned school and role;
 - Kokomo credentials cannot read or mutate Centennial records;
 - Centennial credentials cannot read or mutate Kokomo records;
 - parent and pickup credentials remain limited to exact linked family/children;
@@ -104,6 +110,8 @@ For each supported role, prove:
 - auditor accounts cannot mutate through UI, API, direct URLs, exports, bulk actions, or AI;
 - tenant-wide roles switch school context deliberately and preserve brand-specific presentation and provider scope;
 - logout, session revocation, password recovery, device sessions, installed-app caches, and retry behavior remain isolated.
+
+Production smoke execution requires a separate exact action allowlist and test window. The preview must name every permitted mutation, its synthetic fixture, cleanup path, provider test-mode or suppression behavior, and post-test verification. Attendance, messages, invitations, billing, payments, provider sends, and other live-school mutations remain prohibited unless that exact action is independently approved.
 
 ## Authorization still required before smoke-account creation
 
@@ -116,8 +124,11 @@ The selected schools are now exact. Before creating real production smoke identi
 - Supabase Auth and Prisma records to be created;
 - password/secret-manager and forced-reset policy;
 - invitation/email behavior (prefer no live email unless explicitly approved);
+- exact smoke action allowlist, test window, mutation limits, provider suppression/test mode, and rollback for each synthetic fixture;
 - expiry, cleanup, and post-test verification.
 
 ## Release/setup status
 
-The master setup PR is green in CI and Vercel preview but branch policy requires an approving review. Auto-merge is disabled and no administrator bypass was used. Wave 1 analysis may continue read-only while that approval is pending.
+The master setup PR was merged through branch protection as commit `cf08f253b3aab847f6280365229ea5abb1768258`. Its CI and Vercel preview checks passed; final canonical production, health, and log evidence is recorded during release closeout. It is no longer a Wave 1 approval blocker.
+
+The school-scoped readiness command does not prove a global centerless-family count because unassigned records are outside a selected-center query. This baseline therefore makes no centerless-family pass claim; a separate source-to-center reconciliation is required before using that condition as rollout evidence.

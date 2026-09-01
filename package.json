@@ -14,7 +14,7 @@
     "build": "next build",
     "vercel-build": "prisma generate && npm run lint && npm run typecheck && npm test && next build",
     "start": "next start",
-    "cloud:link": "npx vercel@54.14.0 link --yes --project the-bee-suite --scope brunerdigitals-projects",
+    "cloud:link": "npx vercel@54.14.0 link --yes --project the-bee-suite",
     "cloud:env": "npm run cloud:env:prod && node scripts/sync-local-env.mjs",
     "cloud:env:development": "npx vercel@54.14.0 env pull .env.development.pulled.local --environment=development --yes",
     "cloud:env:preview": "npx vercel@54.14.0 env pull .env.preview.pulled.local --environment=preview --yes",

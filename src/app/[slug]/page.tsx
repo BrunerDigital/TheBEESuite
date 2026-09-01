@@ -2585,6 +2585,7 @@ async function renderLivePage(
         ...payment,
         externalIdPlaceholder: stringField(fields.reference)
           || stringField(fields.payrollReference)
+          || stringField(fields.checkNumber)
           || payment.externalIdPlaceholder,
         invoiceNumber: invoiceNumbers.length ? invoiceNumbers.join(", ") : null,
         paymentReferenceLabel: fields.paymentScope === "family_balance"

@@ -1,7 +1,7 @@
 ALTER TABLE "SubsidyRemittance"
-ADD COLUMN "reversedAt" TIMESTAMP(3),
-ADD COLUMN "reversedById" TEXT,
-ADD COLUMN "reversalReason" TEXT;
+ADD COLUMN IF NOT EXISTS "reversedAt" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "reversedById" TEXT,
+ADD COLUMN IF NOT EXISTS "reversalReason" TEXT;
 
-CREATE INDEX "SubsidyRemittance_claimId_reversedAt_idx"
+CREATE INDEX IF NOT EXISTS "SubsidyRemittance_claimId_reversedAt_idx"
 ON "SubsidyRemittance"("claimId", "reversedAt");

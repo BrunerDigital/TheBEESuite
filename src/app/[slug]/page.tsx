@@ -2583,6 +2583,9 @@ async function renderLivePage(
         .filter((number): number is string => Boolean(number));
       return {
         ...payment,
+        externalIdPlaceholder: stringField(fields.reference)
+          || stringField(fields.payrollReference)
+          || payment.externalIdPlaceholder,
         invoiceNumber: invoiceNumbers.length ? invoiceNumbers.join(", ") : null,
         paymentReferenceLabel: fields.paymentScope === "family_balance"
           ? "Family balance payment"

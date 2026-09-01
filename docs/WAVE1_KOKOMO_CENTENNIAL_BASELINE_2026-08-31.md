@@ -1,6 +1,8 @@
 # Wave 1 Kokomo and Centennial Baseline
 
-Generated: August 31, 2026
+Baseline generated: August 31, 2026, from read-only production inspection at repository commit `082710f6`
+
+Updated: September 1, 2026 at 23:10 UTC; immutable school identifiers were reverified read-only and release status was updated through merge commit `cf08f253b3aab847f6280365229ea5abb1768258`
 
 Mode: read-only production inspection
 

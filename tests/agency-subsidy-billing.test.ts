@@ -25,6 +25,21 @@ test("agency requirements are normalized and deduplicated", () => {
   ]);
 });
 
+test("agency remittance corrections replay safely in both migration ledgers", () => {
+  const migrationNames = [
+    "20260824150000_agency_remittance_corrections",
+    "20260824173000_active_agency_remittance_reference",
+  ];
+
+  for (const migrationName of migrationNames) {
+    const prismaMigration = readFileSync(`prisma/migrations/${migrationName}/migration.sql`, "utf8");
+    const supabaseMigration = readFileSync(`supabase/migrations/${migrationName}.sql`, "utf8");
+    assert.equal(supabaseMigration, prismaMigration);
+    assert.doesNotMatch(prismaMigration, /\b(?:ADD COLUMN|CREATE (?:UNIQUE )?INDEX|DROP INDEX)\s+"/);
+    assert.match(prismaMigration, /IF (?:NOT )?EXISTS/);
+  }
+});
+
 test("claim math and identifiers are deterministic", () => {
   assert.equal(normalizeStateCode(" in "), "IN");
   assert.equal(normalizeStateCode("Indiana"), "");

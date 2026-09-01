@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   achFailurePresentation,
@@ -61,4 +62,12 @@ test("returned ACH attempts remain visible without being treated as paid", () =>
   };
   assert.equal(isReturnedStripePayment(payment), true);
   assert.equal(returnedPaymentRetryAvailable(payment), true);
+});
+
+test("director payment attempts explain ACH settlement without claiming zero submissions", async () => {
+  const source = await readFile("src/components/live-ops-pages.tsx", "utf8");
+  assert.match(source, /Paid — processing/);
+  assert.match(source, /ACH submitted once; bank settlement pending\./);
+  assert.match(source, /No failed retries/);
+  assert.match(source, /After settlement/);
 });

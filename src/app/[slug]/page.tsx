@@ -4327,6 +4327,7 @@ async function renderLivePage(
     const dunningReady = payments.filter((payment) => payment.dunningStatus === "ready").length;
     const dunningWaiting = payments.filter((payment) => payment.dunningStatus === "waiting").length;
     const dunningMaxed = payments.filter((payment) => payment.dunningStatus === "maxed").length;
+    const processingAch = payments.filter((payment) => isAchPaymentProcessing(payment)).length;
     const paymentCentersById = new Map(payoutCenters.map((center) => [center.id, center]));
     const paymentSummary = (account: {
       autopayPlaceholder: boolean;
@@ -4379,7 +4380,8 @@ async function renderLivePage(
             total,
             paid,
             failed,
-            draft,
+            draft: Math.max(0, draft - processingAch),
+            processingAch,
             stripeConfigured,
             webhookConfigured: stripeWebhookConfigured,
             payoutReadyCenters,

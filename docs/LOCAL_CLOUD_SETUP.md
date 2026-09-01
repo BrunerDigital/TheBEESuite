@@ -6,7 +6,7 @@ This workspace is configured for connected development without using the product
 
 - GitHub repo: `BrunerDigital/TheBEESuite`
 - Vercel project: `the-bee-suite`
-- Vercel team: `brunerdigitals-projects`
+- Vercel owner: `brunerdigital` (link the existing project without a team scope flag)
 - Vercel project id: `prj_7hJhGdgUtCmonOXuOudqm7D48dmz`
 - Supabase project: `TheBEESuite`
 - Supabase project ref: `nqjrlktoewiueiwrubas`

@@ -4,7 +4,7 @@ This repository provides Node 24, GitHub CLI, Docker, pinned Vercel commands, an
 
 ## One-time setup
 
-1. In Vercel, create a personal CLI token for the `brunerdigitals-projects` team.
+1. In Vercel, sign in as the `brunerdigital` project owner and create a personal CLI token with access to the existing `the-bee-suite` project.
 2. In GitHub, open **Settings > Codespaces > Secrets > New secret**.
 3. Create a secret named `VERCEL_TOKEN`, paste the Vercel token, and grant it access only to `BrunerDigital/TheBEESuite`.
 4. Rebuild the Codespace so the repository's `.devcontainer/devcontainer.json` is applied.

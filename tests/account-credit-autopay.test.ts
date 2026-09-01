@@ -107,8 +107,8 @@ test("reopened invoices with an existing credit application reconcile idempotent
   );
 
   assert.match(applyCredit, /applicationExternalId/);
-  assert.match(applyCredit, /ledgerEntry\\.findFirst/);
-  assert.match(applyCredit, /if \\(!existingApplication\\) \\{[\\s\\S]*ledgerEntry\\.create/);
+  assert.match(applyCredit, /ledgerEntry\.findFirst/);
+  assert.match(applyCredit, /if \(!existingApplication\) \{[\s\S]*ledgerEntry\.create/);
   assert.ok(
     applyCredit.indexOf("ledgerEntry.findFirst") < applyCredit.indexOf("invoice.updateMany"),
     "existing credit applications must be detected before an open invoice is claimed",

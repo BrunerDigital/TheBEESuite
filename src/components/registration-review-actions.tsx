@@ -22,10 +22,11 @@ type Props = {
   submissionId: string;
   status: string;
   reviewStatus: string;
+  parentSetupRetryPending: boolean;
   preview: RegistrationReviewPreview;
 };
 
-export function RegistrationReviewActions({ submissionId, status, reviewStatus, preview }: Props) {
+export function RegistrationReviewActions({ submissionId, status, reviewStatus, parentSetupRetryPending, preview }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
@@ -191,7 +192,7 @@ export function RegistrationReviewActions({ submissionId, status, reviewStatus, 
             <CheckCircle2 className="size-4" />
             Confirmed and filed
           </span>
-          {reviewStatus === "approved" ? (
+          {reviewStatus === "approved" && parentSetupRetryPending ? (
             <Button
               type="button"
               size="sm"

@@ -1689,11 +1689,19 @@ async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, sessi
     try {
       await prisma.$transaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event, "pending");
-        const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
+        const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { status: true, customFields: true } });
+        if (!currentPayment || currentPayment.status !== PaymentStatus.DRAFT) return;
         const currentFields = jsonObject(currentPayment?.customFields);
+        if (!stripeEventIsNewerThanStored(event, currentFields)) return;
         const achProcessing = isAchPaymentMetadata(metadata);
         await tx.payment.updateMany({
-          where: { id: paymentId, status: PaymentStatus.DRAFT },
+          where: {
+            id: paymentId,
+            status: PaymentStatus.DRAFT,
+            customFields: {
+              equals: currentPayment.customFields === null ? Prisma.DbNull : currentPayment.customFields,
+            },
+          },
           data: {
             externalIdPlaceholder: session.id,
             customFields: {
@@ -2644,11 +2652,19 @@ async function dispatchAuthenticatedEvent(
     try {
       await prisma.$transaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event, "pending");
-        const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
+        const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { status: true, customFields: true } });
+        if (!currentPayment || currentPayment.status !== PaymentStatus.DRAFT) return;
         const currentFields = jsonObject(currentPayment?.customFields);
+        if (!stripeEventIsNewerThanStored(event, currentFields)) return;
         const achProcessing = isAchPaymentMetadata(session.metadata ?? {});
         await tx.payment.updateMany({
-          where: { id: paymentId, status: PaymentStatus.DRAFT },
+          where: {
+            id: paymentId,
+            status: PaymentStatus.DRAFT,
+            customFields: {
+              equals: currentPayment.customFields === null ? Prisma.DbNull : currentPayment.customFields,
+            },
+          },
           data: {
             externalIdPlaceholder: session.id,
             customFields: {

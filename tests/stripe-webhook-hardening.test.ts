@@ -189,9 +189,17 @@ test("supported reconciliation matrix includes payment, invoice, subscription, d
 test("unpaid Checkout snapshots cannot reopen settled or returned payments", async () => {
   const source = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   const pendingTransitions = source.match(
-    /updateMany\(\{\s*where: \{ id: paymentId, status: PaymentStatus\.DRAFT \},\s*data: \{\s*externalIdPlaceholder: session\.id/g,
+    /updateMany\(\{\s*where: \{\s*id: paymentId,\s*status: PaymentStatus\.DRAFT,\s*customFields: \{\s*equals: currentPayment\.customFields === null \? Prisma\.DbNull : currentPayment\.customFields,[\s\S]*?data: \{\s*externalIdPlaceholder: session\.id/g,
   ) ?? [];
   assert.equal(pendingTransitions.length, 2);
+});
+
+test("stale Checkout completion cannot overwrite a newer recoverable failure", async () => {
+  const source = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.equal(
+    source.match(/if \(!stripeEventIsNewerThanStored\(event, currentFields\)\) return/g)?.length,
+    3,
+  );
 });
 
 test("parent ledger query includes every provisional ACH processing state", async () => {

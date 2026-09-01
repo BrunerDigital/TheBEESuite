@@ -646,16 +646,31 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       }));
     }
     const successes = results.filter((result) => result.ok);
+    const allSucceeded = results.length > 0 && successes.length === results.length;
     const parentInvite = {
-      ok: successes.length > 0,
-      error: successes.length ? undefined : results.find((result) => !result.ok)?.error ?? "Parent portal setup retry failed.",
-      emailSent: successes.some((result) => result.emailSent),
+      ok: allSucceeded,
+      error: allSucceeded ? undefined : results.find((result) => !result.ok)?.error ?? "One or more parent portal setup retries failed.",
+      emailSent: allSucceeded && successes.every((result) => result.emailSent),
       setupLinkIssued: successes.some((result) => result.setupLinkIssued),
       credentialCreated: successes.some((result) => result.credentialCreated),
       invitedCount: successes.length,
       failedCount: results.length - successes.length,
       results,
     };
+    await prisma.formSubmission.update({
+      where: { id: submission.id },
+      data: {
+        data: mergedSubmissionData(submission.data, {
+          parentPortalSetup: {
+            requested: true,
+            status: parentInvite.ok ? "sent" : "pending",
+            lastAttemptAt: new Date().toISOString(),
+            invitedCount: parentInvite.invitedCount,
+            failedCount: parentInvite.failedCount,
+          },
+        }),
+      },
+    });
     await writeAuditLog(user, {
       centerId: center.id,
       action: "registration.parent_setup_retried",
@@ -1249,6 +1264,25 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       results,
     };
   }
+
+  await prisma.formSubmission.update({
+    where: { id: submissionId },
+    data: {
+      data: mergedSubmissionData(approval.submission.data, {
+        parentPortalSetup: {
+          requested: inviteParent,
+          status: !inviteParent
+            ? "not_requested"
+            : parentInvite.ok && (parentInvite.failedCount ?? 0) === 0 && parentInvite.emailSent
+              ? "sent"
+              : "pending",
+          lastAttemptAt: new Date().toISOString(),
+          invitedCount: parentInvite.invitedCount ?? 0,
+          failedCount: parentInvite.failedCount ?? 0,
+        },
+      }),
+    },
+  });
 
   const checklist = buildEnrollmentChecklist({
     applicationReviewed: true,

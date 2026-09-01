@@ -36,6 +36,9 @@ test("parent invoice documents include DCFSA service evidence", () => {
   assert.match(print, /schoolTimeZone \?\? contextTimeZone/);
   assert.match(portal, /Purchase Invoice/);
   assert.match(print, /School EIN/);
+  assert.match(page, /checkoutTotalCents \?\? payment\.amountCents/);
+  assert.match(print, /Processing recovery/);
+  assert.match(print, /manual_payroll_deduction/);
   assert.match(print, /Invoice reference/);
   assert.match(print, /Service period/);
   assert.match(print, /Amount/);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
+import { provisionalAchCreditCents } from "@/lib/ach-payment-lifecycle";
 import { canAccessCenter, canManageBilling, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import {
   activeStripeCheckoutPaymentMessage,
@@ -270,6 +271,7 @@ async function POSTHandler(request: NextRequest) {
         agencyLedgerEntries,
         requestedAmountCents,
         responsibilityReviewRequired,
+        provisionalCreditCents: provisionalAchCreditCents(draftStripePayments),
       })
     : requestedAmountCents > 0 ? requestedAmountCents : billingAccount.balanceCents;
   if (amountCents <= 0) {
@@ -637,8 +639,8 @@ async function POSTHandler(request: NextRequest) {
       tenantId: user.tenantId,
     });
     if (!intent.ok || !intent.paymentIntent?.id) {
-      await prisma.payment.update({
-        where: { id: payment.id },
+      await prisma.payment.updateMany({
+        where: { id: payment.id, status: PaymentStatus.DRAFT },
         data: {
           status: PaymentStatus.FAILED,
           externalIdPlaceholder: intent.id || intent.error || "stripe_payment_intent_failed",
@@ -665,6 +667,7 @@ async function POSTHandler(request: NextRequest) {
 
     let appliedImmediately = false;
     let immediateApplicationReason: string | null = null;
+    let terminalPaymentStatus: PaymentStatus | null = null;
     if (intent.paymentIntent.status === "succeeded") {
       const application = await prisma.$transaction((tx) => applySucceededStripeFamilyBalancePayment(tx, {
         paymentId: payment.id,
@@ -686,8 +689,8 @@ async function POSTHandler(request: NextRequest) {
     }
 
     if (!appliedImmediately) {
-      await prisma.payment.update({
-        where: { id: payment.id },
+      const submissionUpdate = await prisma.payment.updateMany({
+        where: { id: payment.id, status: PaymentStatus.DRAFT },
         data: {
           externalIdPlaceholder: intent.paymentIntent.id,
           customFields: jsonInput({
@@ -703,11 +706,25 @@ async function POSTHandler(request: NextRequest) {
           }),
         },
       });
+      if (submissionUpdate.count !== 1) {
+        const winningPayment = await prisma.payment.findUnique({
+          where: { id: payment.id },
+          select: { status: true },
+        });
+        terminalPaymentStatus = winningPayment?.status ?? PaymentStatus.FAILED;
+        appliedImmediately = terminalPaymentStatus === PaymentStatus.PAID;
+      }
     }
+
+    const terminalFailure = terminalPaymentStatus !== null && terminalPaymentStatus !== PaymentStatus.PAID;
 
     await writeAuditLog(user, {
       centerId: center.id,
-      action: appliedImmediately ? "billing.family_payment.payment_intent_succeeded" : "billing.family_payment.payment_intent_created",
+      action: appliedImmediately
+        ? "billing.family_payment.payment_intent_succeeded"
+        : terminalFailure
+          ? "billing.family_payment.payment_intent_failed"
+          : "billing.family_payment.payment_intent_created",
       resource: "BillingAccount",
       resourceId: billingAccount.id,
       metadata: {
@@ -718,8 +735,19 @@ async function POSTHandler(request: NextRequest) {
         paymentMethodCategory: amounts.paymentMethodCategory,
         appliedImmediately,
         immediateApplicationReason,
+        terminalPaymentStatus,
       },
     });
+
+    if (terminalFailure) {
+      return NextResponse.json({
+        ok: false,
+        status: "failed",
+        error: "The payment failed or was returned before processing finished. It can be retried.",
+        paymentId: payment.id,
+        stripePaymentIntentId: intent.paymentIntent.id,
+      }, { status: 409 });
+    }
 
     return NextResponse.json({
       ok: true,

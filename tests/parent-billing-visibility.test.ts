@@ -152,6 +152,21 @@ test("parent checkout cannot charge a negative or agency-only balance", () => {
   }), 0);
 });
 
+test("parent checkout caps a stale request at the balance left after submitted ACH", () => {
+  assert.equal(parentPaymentAmountCents({
+    accountBalanceCents: 2475_00,
+    agencyLedgerEntries: [],
+    requestedAmountCents: 2475_00,
+    provisionalCreditCents: 2475_00,
+  }), 0);
+  assert.equal(parentPaymentAmountCents({
+    accountBalanceCents: 2475_00,
+    agencyLedgerEntries: [],
+    requestedAmountCents: 2475_00,
+    provisionalCreditCents: 2000_00,
+  }), 475_00);
+});
+
 test("a parent can choose an account payment while the agency split is under review", () => {
   assert.equal(parentPaymentAmountCents({
     accountBalanceCents: 50_000,

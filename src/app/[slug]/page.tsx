@@ -117,6 +117,7 @@ import { countCenterBillableUsers } from "@/lib/school-software-subscriptions";
 import { buildGuardianKioskCredential, kioskPathForCenter } from "@/lib/kiosk-credentials";
 import {
   activeStripeCheckoutPaymentSummary,
+  isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
   jsonRecord,
 } from "@/lib/billing-guardrails";
@@ -168,6 +169,12 @@ import {
   paymentMethodManagementSummary,
 } from "@/lib/payment-method-management";
 import { currentFamilyBillingMatch } from "@/lib/invoice-payment-actions";
+import {
+  isAchPaymentProcessing,
+  isReturnedStripePayment,
+  provisionalAchCreditCents,
+  visibleBalanceAfterProvisionalAchCredit,
+} from "@/lib/ach-payment-lifecycle";
 import {
   normalizeDirectorInvoiceStatus,
   paymentStatusForDirectorInvoiceStatus,
@@ -2201,7 +2208,7 @@ async function renderLivePage(
     const parentVisibleLedgerWhere: Prisma.LedgerEntryWhereInput = {
       NOT: agencyOnlyLedgerWhere,
     };
-    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs, classroomTeacherRows] = await prisma.$transaction([
+    const [billingAccount, activeParentPaymentRows, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs, classroomTeacherRows] = await prisma.$transaction([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -2229,7 +2236,16 @@ async function renderLivePage(
                   OR: [
                     { customFields: { path: ["status"], equals: "checkout_created" } },
                     { customFields: { path: ["status"], equals: "checkout_pending" } },
+                    { customFields: { path: ["status"], equals: "paid_processing" } },
+                    { customFields: { path: ["status"], equals: "autopay_processing" } },
+                    { customFields: { path: ["status"], equals: "stored_method_processing" } },
+                    { customFields: { path: ["status"], equals: "director_saved_method_processing" } },
                   ],
+                },
+                {
+                  provider: "stripe",
+                  status: PaymentStatus.FAILED,
+                  customFields: { path: ["status"], equals: "payment_returned" },
                 },
               ],
             },
@@ -2252,6 +2268,36 @@ async function renderLivePage(
             take: PARENT_LEDGER_PAGE_SIZE + 1,
             select: { id: true, type: true, description: true, effectiveAt: true },
           },
+        },
+      }),
+      prisma.payment.findMany({
+        where: {
+          billingAccount: { familyId },
+          provider: "stripe",
+          status: PaymentStatus.DRAFT,
+          OR: [
+            { customFields: { path: ["status"], equals: "checkout_created" } },
+            { customFields: { path: ["status"], equals: "checkout_pending" } },
+            { customFields: { path: ["status"], equals: "paid_processing" } },
+            { customFields: { path: ["status"], equals: "autopay_pending" } },
+            { customFields: { path: ["status"], equals: "autopay_processing" } },
+            { customFields: { path: ["status"], equals: "autopay_succeeded_pending_webhook" } },
+            { customFields: { path: ["status"], equals: "stored_method_pending" } },
+            { customFields: { path: ["status"], equals: "stored_method_processing" } },
+            { customFields: { path: ["status"], equals: "stored_method_succeeded_pending_webhook" } },
+            { customFields: { path: ["status"], equals: "director_saved_method_pending" } },
+            { customFields: { path: ["status"], equals: "director_saved_method_processing" } },
+            { customFields: { path: ["status"], equals: "director_saved_method_succeeded_pending_webhook" } },
+          ],
+        },
+        orderBy: [{ paidAt: "desc" }, { id: "desc" }],
+        select: {
+          id: true,
+          amountCents: true,
+          status: true,
+          provider: true,
+          externalIdPlaceholder: true,
+          customFields: true,
         },
       }),
       prisma.ledgerEntry.findFirst({
@@ -2637,8 +2683,12 @@ async function renderLivePage(
       };
     });
     const pendingPaymentByInvoiceId = new Map<string, Omit<ReturnType<typeof activeStripeCheckoutPaymentSummary>, "amountCents">>();
-    for (const payment of billingAccount?.payments ?? []) {
-      if (!isActiveStripeCheckoutPayment(payment)) continue;
+    for (const payment of activeParentPaymentRows) {
+      if (
+        !isActiveStripeCheckoutPayment(payment)
+        && !isActiveStripeAutopayPayment(payment)
+        && !isAchPaymentProcessing(payment)
+      ) continue;
       const fields = jsonRecord(payment.customFields);
       const invoiceId = stringField(fields.invoiceId);
       if (!invoiceId || pendingPaymentByInvoiceId.has(invoiceId)) continue;
@@ -2749,11 +2799,12 @@ async function renderLivePage(
     );
     const parentReplyToMessageId = firstSearchParam(searchParams.replyToMessageId) || "";
     const parentReplySubject = firstSearchParam(searchParams.subject) || "";
+    const pendingAchCreditCents = provisionalAchCreditCents(activeParentPaymentRows);
     const parentBalanceCents = billingAccount
-      ? parentVisibleBillingBalanceCents({
+      ? visibleBalanceAfterProvisionalAchCredit(parentVisibleBillingBalanceCents({
           accountBalanceCents: billingAccount.balanceCents,
           agencyLedgerEntries,
-        })
+        }), pendingAchCreditCents)
       : 0;
     const parentBalanceReviewRequired = billingAccount
       ? parentBalanceNeedsResponsibilityReview({
@@ -4213,7 +4264,7 @@ async function renderLivePage(
     const currentBillingAccountWhere = visibleCurrentBillingAccountWhere(visibleCenterIds);
     const paymentWhere = visiblePaymentWhere(visibleCenterIds);
     const currentInvoiceWhere = visibleCurrentInvoiceWhere(visibleCenterIds);
-    const [paymentRows, total, paid, failed, draft, payoutCenters, paymentMethodAccounts, dueOpenInvoices] = await Promise.all([
+    const [paymentRows, processingAchRows, returnedPaymentRows, total, paid, failed, draft, payoutCenters, paymentMethodAccounts, dueOpenInvoices] = await Promise.all([
       prisma.payment.findMany({
         where: paymentWhere,
         orderBy: [{ paidAt: "desc" }, { id: "desc" }],
@@ -4225,6 +4276,22 @@ async function renderLivePage(
             },
           },
         },
+      }),
+      prisma.payment.findMany({
+        where: { ...paymentWhere, provider: "stripe", status: PaymentStatus.DRAFT },
+        select: { amountCents: true, status: true, provider: true, customFields: true },
+      }),
+      prisma.payment.findMany({
+        where: {
+          ...paymentWhere,
+          provider: "stripe",
+          status: { in: [PaymentStatus.PAID, PaymentStatus.FAILED] },
+          OR: [
+            { customFields: { path: ["status"], equals: "payment_returned" } },
+            { customFields: { path: ["stripeDisputeLedgerActive"], equals: true } },
+          ],
+        },
+        select: { status: true, provider: true, customFields: true },
       }),
       prisma.payment.count({ where: paymentWhere }),
       prisma.payment.count({ where: { ...paymentWhere, status: PaymentStatus.PAID } }),
@@ -4309,6 +4376,10 @@ async function renderLivePage(
     const dunningReady = payments.filter((payment) => payment.dunningStatus === "ready").length;
     const dunningWaiting = payments.filter((payment) => payment.dunningStatus === "waiting").length;
     const dunningMaxed = payments.filter((payment) => payment.dunningStatus === "maxed").length;
+    const processingAch = processingAchRows.filter((payment) => isAchPaymentProcessing(payment)).length;
+    const returnedPayments = returnedPaymentRows.filter((payment) => isReturnedStripePayment(payment));
+    const returnedPaid = returnedPayments.filter((payment) => payment.status === PaymentStatus.PAID).length;
+    const returnedFailed = returnedPayments.filter((payment) => payment.status === PaymentStatus.FAILED).length;
     const paymentCentersById = new Map(payoutCenters.map((center) => [center.id, center]));
     const paymentSummary = (account: {
       autopayPlaceholder: boolean;
@@ -4359,9 +4430,11 @@ async function renderLivePage(
           payments,
           stats: {
             total,
-            paid,
-            failed,
-            draft,
+            paid: Math.max(0, paid - returnedPaid),
+            failed: Math.max(0, failed - returnedFailed),
+            returned: returnedPayments.length,
+            draft: Math.max(0, draft - processingAch),
+            processingAch,
             stripeConfigured,
             webhookConfigured: stripeWebhookConfigured,
             payoutReadyCenters,

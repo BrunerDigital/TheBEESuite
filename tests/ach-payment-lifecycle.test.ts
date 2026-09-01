@@ -88,6 +88,7 @@ test("director ACH settling count uses the complete draft payment scope", async 
 
 test("parent provisional balance uses the complete active ACH set, not the recent-payment cap", async () => {
   const source = await readFile("src/app/[slug]/page.tsx", "utf8");
-  assert.match(source, /const \[billingAccount, provisionalAchPaymentRows,/);
-  assert.match(source, /provisionalAchCreditCents\(provisionalAchPaymentRows\)/);
+  assert.match(source, /const \[billingAccount, activeParentPaymentRows,/);
+  assert.match(source, /provisionalAchCreditCents\(activeParentPaymentRows\)/);
+  assert.match(source, /for \(const payment of activeParentPaymentRows\)/);
 });

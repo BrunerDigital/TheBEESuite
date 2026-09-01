@@ -135,7 +135,7 @@ test("parent portal resolves billing warnings through the current child's school
 
 test("parent portal data fanout stays within the production database pool", () => {
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
-  const start = page.indexOf("const [billingAccount, provisionalAchPaymentRows, latestLedgerEntry");
+  const start = page.indexOf("const [billingAccount, activeParentPaymentRows, latestLedgerEntry");
   const end = page.indexOf("const [signedDocuments, signedMedia, signedMessages]", start);
   assert.ok(start >= 0 && end > start, "parent portal data fanout block was not found");
   const fanout = page.slice(start, end);

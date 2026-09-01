@@ -2207,7 +2207,7 @@ async function renderLivePage(
     const parentVisibleLedgerWhere: Prisma.LedgerEntryWhereInput = {
       NOT: agencyOnlyLedgerWhere,
     };
-    const [billingAccount, provisionalAchPaymentRows, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs, classroomTeacherRows] = await prisma.$transaction([
+    const [billingAccount, activeParentPaymentRows, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs, classroomTeacherRows] = await prisma.$transaction([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -2275,14 +2275,29 @@ async function renderLivePage(
           provider: "stripe",
           status: PaymentStatus.DRAFT,
           OR: [
+            { customFields: { path: ["status"], equals: "checkout_created" } },
             { customFields: { path: ["status"], equals: "checkout_pending" } },
             { customFields: { path: ["status"], equals: "paid_processing" } },
+            { customFields: { path: ["status"], equals: "autopay_pending" } },
             { customFields: { path: ["status"], equals: "autopay_processing" } },
+            { customFields: { path: ["status"], equals: "autopay_succeeded_pending_webhook" } },
+            { customFields: { path: ["status"], equals: "stored_method_pending" } },
             { customFields: { path: ["status"], equals: "stored_method_processing" } },
+            { customFields: { path: ["status"], equals: "stored_method_succeeded_pending_webhook" } },
+            { customFields: { path: ["status"], equals: "director_saved_method_pending" } },
             { customFields: { path: ["status"], equals: "director_saved_method_processing" } },
+            { customFields: { path: ["status"], equals: "director_saved_method_succeeded_pending_webhook" } },
           ],
         },
-        select: { amountCents: true, status: true, provider: true, customFields: true },
+        orderBy: [{ paidAt: "desc" }, { id: "desc" }],
+        select: {
+          id: true,
+          amountCents: true,
+          status: true,
+          provider: true,
+          externalIdPlaceholder: true,
+          customFields: true,
+        },
       }),
       prisma.ledgerEntry.findFirst({
         where: { billingAccount: { familyId }, AND: [parentVisibleLedgerWhere] },
@@ -2667,7 +2682,7 @@ async function renderLivePage(
       };
     });
     const pendingPaymentByInvoiceId = new Map<string, Omit<ReturnType<typeof activeStripeCheckoutPaymentSummary>, "amountCents">>();
-    for (const payment of billingAccount?.payments ?? []) {
+    for (const payment of activeParentPaymentRows) {
       if (
         !isActiveStripeCheckoutPayment(payment)
         && !isActiveStripeAutopayPayment(payment)
@@ -2783,7 +2798,7 @@ async function renderLivePage(
     );
     const parentReplyToMessageId = firstSearchParam(searchParams.replyToMessageId) || "";
     const parentReplySubject = firstSearchParam(searchParams.subject) || "";
-    const pendingAchCreditCents = provisionalAchCreditCents(provisionalAchPaymentRows);
+    const pendingAchCreditCents = provisionalAchCreditCents(activeParentPaymentRows);
     const parentBalanceCents = billingAccount
       ? visibleBalanceAfterProvisionalAchCredit(parentVisibleBillingBalanceCents({
           accountBalanceCents: billingAccount.balanceCents,

@@ -116,6 +116,7 @@ async function ensureParentPortalLoginForRecipient({
   const login = await ensureParentPortalLoginForGuardian({
     guardianId: primaryGuardian.id,
     linkedReason: "parent_document_request",
+    randomizeNewCredential: true,
   });
   if (!login.ok) {
     return { ok: false as const, error: login.reason };
@@ -127,6 +128,7 @@ async function ensureParentPortalLoginForRecipient({
     created: login.created,
     reactivated: login.reactivated,
     credentialCreated: login.credentialCreated,
+    requiresSetupLink: login.requiresSetupLink,
   };
 }
 
@@ -219,7 +221,7 @@ export async function sendParentDocumentRequestEmailForDocument({
     if (login.created || login.reactivated) parentAccountsLinked += 1;
     if (login.userId) linkedUserIds.add(login.userId);
 
-    const needsSetupLink = login.created || login.reactivated || login.credentialCreated;
+    const needsSetupLink = login.created || login.reactivated || login.credentialCreated || login.requiresSetupLink;
     const setupLink = needsSetupLink
       ? await issueParentPortalSetupLink({
           requestUrl,

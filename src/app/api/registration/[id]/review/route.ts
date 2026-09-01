@@ -443,6 +443,7 @@ async function createParentPortalInvite(input: {
       linkedBy: input.user.email,
       linkedReason: "registration_approval",
       registrationApproval: true,
+      randomizeNewCredential: true,
     });
     if (!parentPortal.ok) {
       return {
@@ -581,11 +582,10 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   if (submission.form.type !== "online_registration") {
     return NextResponse.json({ ok: false, error: "This form submission is not an online registration packet." }, { status: 400 });
   }
-  const transitionError = registrationReviewTransitionError(
-    registrationReviewFromData(submission.data).status,
-    action,
-  );
-  if (transitionError) {
+  const existingReviewStatus = registrationReviewFromData(submission.data).status;
+  const retryParentSetup = action === "APPROVED" && inviteParent && existingReviewStatus === "approved";
+  const transitionError = registrationReviewTransitionError(existingReviewStatus, action);
+  if (transitionError && !retryParentSetup) {
     return NextResponse.json({ ok: false, error: transitionError }, { status: 409 });
   }
   const submissionId = submission.id;
@@ -615,6 +615,83 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   }
   if (!canAccessAllCenters(user) && !canAccessCenter(user, center.id)) {
     return NextResponse.json({ ok: false, error: "You do not have access to this registration packet." }, { status: 403 });
+  }
+
+  if (retryParentSetup) {
+    const family = submission.familyId
+      ? await prisma.family.findFirst({
+          where: { id: submission.familyId, centerId: center.id },
+          select: {
+            id: true,
+            name: true,
+            guardians: {
+              orderBy: { fullName: "asc" },
+              select: { id: true, fullName: true, email: true, customFields: true },
+            },
+          },
+        })
+      : null;
+    if (!family) {
+      return NextResponse.json({ ok: false, error: "Approved registration family was not found." }, { status: 409 });
+    }
+
+    const results = [];
+    for (const guardian of family.guardians) {
+      results.push(await createParentPortalInvite({
+        requestUrl: request.url,
+        user,
+        center,
+        family,
+        guardian,
+      }));
+    }
+    const successes = results.filter((result) => result.ok);
+    const allSucceeded = results.length > 0 && successes.length === results.length;
+    const parentInvite = {
+      ok: allSucceeded,
+      error: allSucceeded ? undefined : results.find((result) => !result.ok)?.error ?? "One or more parent portal setup retries failed.",
+      emailSent: allSucceeded && successes.every((result) => result.emailSent),
+      setupLinkIssued: successes.some((result) => result.setupLinkIssued),
+      credentialCreated: successes.some((result) => result.credentialCreated),
+      invitedCount: successes.length,
+      failedCount: results.length - successes.length,
+      results,
+    };
+    await prisma.formSubmission.update({
+      where: { id: submission.id },
+      data: {
+        data: mergedSubmissionData(submission.data, {
+          parentPortalSetup: {
+            requested: true,
+            status: parentInvite.ok ? "sent" : "pending",
+            lastAttemptAt: new Date().toISOString(),
+            invitedCount: parentInvite.invitedCount,
+            failedCount: parentInvite.failedCount,
+          },
+        }),
+      },
+    });
+    await writeAuditLog(user, {
+      centerId: center.id,
+      action: "registration.parent_setup_retried",
+      resource: "FormSubmission",
+      resourceId: submission.id,
+      metadata: {
+        familyId: family.id,
+        invitedCount: parentInvite.invitedCount,
+        failedCount: parentInvite.failedCount,
+      },
+    });
+    return NextResponse.json(
+      {
+        ok: parentInvite.ok,
+        reviewStatus: "approved",
+        retryParentSetup: true,
+        parentInvite,
+        error: parentInvite.ok ? undefined : parentInvite.error,
+      },
+      { status: parentInvite.ok ? 200 : 502 },
+    );
   }
 
   if (action === "REJECTED") {
@@ -1187,6 +1264,25 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       results,
     };
   }
+
+  await prisma.formSubmission.update({
+    where: { id: submissionId },
+    data: {
+      data: mergedSubmissionData(approval.submission.data, {
+        parentPortalSetup: {
+          requested: inviteParent,
+          status: !inviteParent
+            ? "not_requested"
+            : parentInvite.ok && (parentInvite.failedCount ?? 0) === 0 && parentInvite.emailSent
+              ? "sent"
+              : "pending",
+          lastAttemptAt: new Date().toISOString(),
+          invitedCount: parentInvite.invitedCount ?? 0,
+          failedCount: parentInvite.failedCount ?? 0,
+        },
+      }),
+    },
+  });
 
   const checklist = buildEnrollmentChecklist({
     applicationReviewed: true,

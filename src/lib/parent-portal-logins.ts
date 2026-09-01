@@ -13,6 +13,7 @@ type ParentPortalProvisionResult =
       created: boolean;
       reactivated: boolean;
       credentialCreated: boolean;
+      requiresSetupLink: boolean;
     }
   | { ok: false; reason: string; status?: number };
 
@@ -127,6 +128,7 @@ export async function ensureParentPortalLoginForGuardian({
   linkedReason,
   registrationApproval = false,
   resetToInitialPassword = false,
+  randomizeNewCredential = false,
   inviteMode = PARENT_PORTAL_INVITE_MODE,
   prepareWithoutInvite = false,
 }: {
@@ -135,6 +137,7 @@ export async function ensureParentPortalLoginForGuardian({
   linkedReason?: string;
   registrationApproval?: boolean;
   resetToInitialPassword?: boolean;
+  randomizeNewCredential?: boolean;
   inviteMode?: string;
   prepareWithoutInvite?: boolean;
 }): Promise<ParentPortalProvisionResult> {
@@ -184,7 +187,7 @@ export async function ensureParentPortalLoginForGuardian({
 
   const existingUser = await prisma.user.findFirst({
     where: { email: { equals: email, mode: "insensitive" } },
-    select: { id: true, tenantId: true, role: true, isActive: true },
+    select: { id: true, tenantId: true, role: true, isActive: true, mustResetPassword: true },
   });
   if (existingUser && existingUser.tenantId !== center.organization.tenantId) {
     return { ok: false, status: 409, reason: "user_tenant_mismatch" };
@@ -196,14 +199,17 @@ export async function ensureParentPortalLoginForGuardian({
   const authUser = await upsertSupabaseAuthUserWithPassword({
     email,
     name: guardian.fullName,
-    password: prepareWithoutInvite
+    password: prepareWithoutInvite || randomizeNewCredential
       ? randomBytes(48).toString("base64url")
       : DEFAULT_PARENT_INITIAL_PASSWORD,
     role: UserRole.PARENT_GUARDIAN,
     source: PARENT_PORTAL_INVITE_MODE,
-    updateExistingPassword: resetToInitialPassword,
+    updateExistingPassword: resetToInitialPassword || (randomizeNewCredential && !existingUser),
   });
   const credentialCreated = !("alreadyExisted" in authUser && authUser.alreadyExisted);
+  const requiresSetupLink = prepareWithoutInvite
+    || (randomizeNewCredential && credentialCreated)
+    || Boolean(existingUser?.mustResetPassword && !resetToInitialPassword);
 
   const parentUser = existingUser
     ? await prisma.user.update({
@@ -214,7 +220,7 @@ export async function ensureParentPortalLoginForGuardian({
         role: UserRole.PARENT_GUARDIAN,
         isActive: true,
         organizationId: center.organizationId,
-        mustResetPassword: prepareWithoutInvite,
+        mustResetPassword: requiresSetupLink,
         sessionVersion: { increment: 1 },
       },
       select: { id: true },
@@ -227,7 +233,7 @@ export async function ensureParentPortalLoginForGuardian({
         name: guardian.fullName,
         role: UserRole.PARENT_GUARDIAN,
         isActive: true,
-        mustResetPassword: prepareWithoutInvite,
+        mustResetPassword: requiresSetupLink,
       },
       select: { id: true },
     });
@@ -257,6 +263,7 @@ export async function ensureParentPortalLoginForGuardian({
     created: !existingUser,
     reactivated: Boolean(existingUser && !existingUser.isActive),
     credentialCreated,
+    requiresSetupLink,
   };
 }
 

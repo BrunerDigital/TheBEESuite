@@ -22,10 +22,11 @@ type Props = {
   submissionId: string;
   status: string;
   reviewStatus: string;
+  parentSetupRetryPending: boolean;
   preview: RegistrationReviewPreview;
 };
 
-export function RegistrationReviewActions({ submissionId, status, reviewStatus, preview }: Props) {
+export function RegistrationReviewActions({ submissionId, status, reviewStatus, parentSetupRetryPending, preview }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
@@ -36,7 +37,7 @@ export function RegistrationReviewActions({ submissionId, status, reviewStatus, 
   const [isPending, startTransition] = useTransition();
   const canReview = status !== "APPROVED" && reviewStatus !== "approved";
 
-  function review(nextStatus: "APPROVED" | "REJECTED") {
+  function review(nextStatus: "APPROVED" | "REJECTED", retryParentSetup = false) {
     startTransition(async () => {
       setMessage("");
       setError("");
@@ -46,8 +47,8 @@ export function RegistrationReviewActions({ submissionId, status, reviewStatus, 
         body: JSON.stringify({
           status: nextStatus,
           note,
-          inviteParent: nextStatus === "APPROVED" ? inviteParent : false,
-          confirmed: nextStatus === "APPROVED" ? confirmed : false,
+          inviteParent: nextStatus === "APPROVED" ? retryParentSetup || inviteParent : false,
+          confirmed: nextStatus === "APPROVED" ? retryParentSetup || confirmed : false,
         }),
       });
       const json = await response.json().catch(() => null) as {
@@ -186,10 +187,25 @@ export function RegistrationReviewActions({ submissionId, status, reviewStatus, 
           </Button>
         </>
       ) : (
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <CheckCircle2 className="size-4" />
-          Confirmed and filed
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <CheckCircle2 className="size-4" />
+            Confirmed and filed
+          </span>
+          {reviewStatus === "approved" && parentSetupRetryPending ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isPending}
+              aria-busy={isPending}
+              onClick={() => review("APPROVED", true)}
+            >
+              <Send data-icon="inline-start" />
+              {isPending ? "Sending…" : "Retry parent setup"}
+            </Button>
+          ) : null}
+        </div>
       )}
       {reviewStatus !== "submitted" ? (
         <div className="text-xs text-muted-foreground">Review status: {reviewStatus}</div>

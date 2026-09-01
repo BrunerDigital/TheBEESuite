@@ -54,6 +54,18 @@ test("parent portal invite links fall back to request origin", () => {
   );
 });
 
+test("parent setup links are generated after credential rotation", () => {
+  const source = readFileSync(new URL("../src/lib/parent-portal-setup-links.ts", import.meta.url), "utf8");
+  const issueLink = source.slice(
+    source.indexOf("export async function issueParentPortalSetupLink"),
+    source.indexOf("export async function recordParentPortalSetupLinkDelivery"),
+  );
+  assert.ok(
+    issueLink.indexOf("updateSupabaseAuthUserPasswordByEmail") < issueLink.indexOf("generateSupabasePasswordRecoveryLink"),
+    "credential rotation must happen before generating the delivered recovery token",
+  );
+});
+
 test("direct parent invitations preflight ProCare data and activate prepared accounts only when invited", () => {
   const source = readFileSync(new URL("../src/app/api/parent/invitations/route.ts", import.meta.url), "utf8");
   assert.match(source, /evaluateParentInvitationReadiness/);

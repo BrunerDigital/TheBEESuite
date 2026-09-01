@@ -500,6 +500,11 @@ export function registrationReviewFromData(data: unknown): {
   };
 }
 
+export function registrationParentSetupRetryPending(data: unknown) {
+  const setup = asRecord(asRecord(data).parentPortalSetup);
+  return setup.status === "pending";
+}
+
 export function registrationSubmissionSummary(data: unknown) {
   const record = asRecord(data);
   const child = cleanText(record.childFullName) || "Child";

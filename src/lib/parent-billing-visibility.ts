@@ -135,10 +135,15 @@ export function parentPaymentAmountCents(input: {
   agencyLedgerEntries: AgencyLedgerEntry[];
   requestedAmountCents?: number;
   responsibilityReviewRequired?: boolean;
+  provisionalCreditCents?: number;
 }) {
-  const maximumParentPaymentCents = input.responsibilityReviewRequired
+  const settledParentBalanceCents = input.responsibilityReviewRequired
     ? Math.max(0, input.accountBalanceCents)
     : Math.max(0, parentVisibleBillingBalanceCents(input));
+  const maximumParentPaymentCents = Math.max(
+    0,
+    settledParentBalanceCents - Math.max(0, Math.round(input.provisionalCreditCents ?? 0)),
+  );
   const requestedAmountCents = Math.max(0, Math.round(input.requestedAmountCents ?? 0));
 
   if (input.responsibilityReviewRequired && requestedAmountCents <= 0) return 0;

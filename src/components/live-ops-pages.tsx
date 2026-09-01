@@ -38,6 +38,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  isAchPaymentProcessing,
+  isReturnedStripePayment,
+  returnedPaymentRetryAvailable,
+} from "@/lib/ach-payment-lifecycle";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoTip } from "@/components/ui/info-tip";
@@ -1889,6 +1894,7 @@ export type EnrollmentPipelineData = {
     id: string;
     status: string;
     reviewStatus: RegistrationReviewStatus;
+    parentSetupRetryPending: boolean;
     registrationPayment: RegistrationPaymentStatus;
     submittedAt: Date | string | null;
     summary: string;
@@ -1998,6 +2004,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
                       submissionId={submission.id}
                       status={submission.status}
                       reviewStatus={submission.reviewStatus}
+                      parentSetupRetryPending={submission.parentSetupRetryPending}
                       preview={submission.preview}
                     />
                   </TableCell>
@@ -3665,6 +3672,7 @@ export type FormsPageData = {
     id: string;
     status: string;
     reviewStatus: RegistrationReviewStatus;
+    parentSetupRetryPending: boolean;
     registrationPayment: RegistrationPaymentStatus;
     summary: string;
     details: string;
@@ -3770,6 +3778,7 @@ export function FormsPage({ data }: { data: FormsPageData }) {
                         submissionId={submission.id}
                         status={submission.status}
                         reviewStatus={submission.reviewStatus}
+                        parentSetupRetryPending={submission.parentSetupRetryPending}
                         preview={submission.preview ?? { sections: [], destinations: [] }}
                       />
                     ) : (
@@ -5424,6 +5433,7 @@ export type PaymentsPageData = {
     amountCents: number;
     status: string;
     provider: string;
+    customFields: unknown;
     externalIdPlaceholder: string | null;
     paidAt: Date | string | null;
     dunningStatus: string;
@@ -5439,7 +5449,9 @@ export type PaymentsPageData = {
     total: number;
     paid: number;
     failed: number;
+    returned: number;
     draft: number;
+    processingAch: number;
     stripeConfigured: boolean;
     webhookConfigured: boolean;
     payoutReadyCenters: number;
@@ -5475,11 +5487,13 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
           Review parent payment status, follow-up needs, and each school&apos;s payout readiness.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-8">
         <StatCard label="Payment records" value={data.stats.total} />
         <StatCard label="Paid" value={data.stats.paid} />
         <StatCard label="Failed" value={data.stats.failed} />
+        <StatCard label="Returned" value={data.stats.returned} />
         <StatCard label="Draft/checkout" value={data.stats.draft} />
+        <StatCard label="ACH settling" value={data.stats.processingAch} />
         <StatCard label="Payment processing" value={data.stats.stripeConfigured && data.stats.webhookConfigured ? "Ready" : "Setup needed"} />
         <StatCard label="Payout schools" value={`${data.stats.payoutReadyCenters}/${data.stats.payoutStartedCenters}`} detail="ready / started" />
       </div>
@@ -5519,8 +5533,16 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.payments.map((payment, index) => (
-                <TableRow key={payment.id} className="group">
+              {data.payments.map((payment, index) => {
+                const achProcessing = isAchPaymentProcessing(payment);
+                const returned = isReturnedStripePayment(payment);
+                const retryAvailable = returnedPaymentRetryAvailable(payment);
+                const statusLabel = returned
+                  ? "Payment returned"
+                  : achProcessing
+                    ? "Paid — processing"
+                    : formatRecordLabel(payment.status);
+                return <TableRow key={payment.id} className="group">
                   <TableCell>
                     <Link
                       href={familyRecordHref(payment.billingAccount.family, null, payment.billingAccount.family.name)}
@@ -5532,21 +5554,32 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                     <div className="text-xs text-muted-foreground">{payment.billingAccount.family.billingEmail ?? "No billing email"}</div>
                   </TableCell>
                   <TableCell>{formatRecordLabel(payment.provider)}</TableCell>
-                  <TableCell><Badge variant={payment.status === "PAID" ? "default" : "outline"}>{formatRecordLabel(payment.status)}</Badge></TableCell>
+                  <TableCell><Badge variant={payment.status === "PAID" || achProcessing ? "default" : "outline"}>{statusLabel}</Badge></TableCell>
                   <TableCell>{money(payment.amountCents)}</TableCell>
-                  <TableCell>{formatDateTime(payment.paidAt, payment)}</TableCell>
+                  <TableCell>{achProcessing ? "Processing" : returned ? "Returned" : formatDateTime(payment.paidAt, payment)}</TableCell>
                   <TableCell>
-                    <Badge variant={payment.dunningStatus === "ready" || payment.dunningStatus === "maxed" ? "destructive" : "outline"}>
-                      {formatRecordLabel(payment.dunningStatus)}
-                    </Badge>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {payment.dunningAttemptCount} attempt{payment.dunningAttemptCount === 1 ? "" : "s"}
-                    </div>
+                    {achProcessing ? <>
+                      <Badge variant="outline">Not needed</Badge>
+                      <div className="mt-1 text-xs text-muted-foreground">No failed retries</div>
+                    </> : <>
+                      <Badge variant={payment.dunningStatus === "ready" || payment.dunningStatus === "maxed" ? "destructive" : "outline"}>
+                        {formatRecordLabel(payment.dunningStatus)}
+                      </Badge>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {payment.dunningAttemptCount} failed attempt{payment.dunningAttemptCount === 1 ? "" : "s"}
+                      </div>
+                    </>}
                   </TableCell>
                   <TableCell className="max-w-sm whitespace-normal text-xs text-muted-foreground">
-                    <div>{payment.failureMessage ?? "No failure details available"}</div>
+                    <div>{achProcessing
+                      ? "ACH submitted once; bank settlement pending."
+                      : returned
+                        ? retryAvailable ? "Bank returned the payment. Retry available." : "Bank returned the payment."
+                        : payment.failureMessage ?? "No failure details available"}</div>
                     <div className="mt-1">
-                      {payment.dunningStatus === "waiting"
+                      {achProcessing
+                        ? payment.paymentReferenceLabel
+                        : payment.dunningStatus === "waiting"
                         ? <>Next reminder: {formatDateTime(payment.dunningNextAttemptAt, payment)}</>
                         : payment.dunningStatus === "maxed"
                           ? "Manual office follow-up needed"
@@ -5558,7 +5591,9 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                   </TableCell>
                   <TableCell className="max-w-xs truncate">{payment.externalIdPlaceholder ?? ""}</TableCell>
                   <TableCell>
-                    <PaymentReceiptPrintButton payment={receiptPayments[index]} schools={data.receiptSchools} />
+                    {achProcessing
+                      ? <span className="text-xs text-muted-foreground">After settlement</span>
+                      : <PaymentReceiptPrintButton payment={receiptPayments[index]} schools={data.receiptSchools} />}
                   </TableCell>
                   <TableCell>
                     <Link href={billingRecordHref(payment.billingAccount.family, payment.billingAccount.family.name)} className={buttonVariants({ variant: "outline", size: "sm" })}>
@@ -5566,8 +5601,8 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                       Billing
                     </Link>
                   </TableCell>
-                </TableRow>
-              ))}
+                </TableRow>;
+              })}
               {!data.payments.length ? (
                 <TableRow>
                   <TableCell colSpan={10} className="text-muted-foreground">No payment attempts have been recorded yet.</TableCell>

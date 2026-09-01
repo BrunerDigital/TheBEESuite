@@ -285,7 +285,7 @@ export async function resolveStripeCheckoutDraftBlocker({
     stripePaymentIntentStatus: session.paymentIntentStatus || fields.stripePaymentIntentStatus || null,
   };
   if (session.status === "complete" && session.paymentStatus === "unpaid" && session.paymentIntentStatus === "processing") {
-    refreshedFields.status = "checkout_pending";
+    refreshedFields.status = fields.status === "paid_processing" ? "paid_processing" : "checkout_pending";
   }
   await prisma.payment.update({
     where: { id: payment.id },

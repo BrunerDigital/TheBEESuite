@@ -117,6 +117,7 @@ import { countCenterBillableUsers } from "@/lib/school-software-subscriptions";
 import { buildGuardianKioskCredential, kioskPathForCenter } from "@/lib/kiosk-credentials";
 import {
   activeStripeCheckoutPaymentSummary,
+  isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
   jsonRecord,
 } from "@/lib/billing-guardrails";
@@ -169,6 +170,12 @@ import {
 } from "@/lib/payment-method-management";
 import { currentFamilyBillingMatch } from "@/lib/invoice-payment-actions";
 import {
+  isAchPaymentProcessing,
+  isReturnedStripePayment,
+  provisionalAchCreditCents,
+  visibleBalanceAfterProvisionalAchCredit,
+} from "@/lib/ach-payment-lifecycle";
+import {
   normalizeDirectorInvoiceStatus,
   paymentStatusForDirectorInvoiceStatus,
 } from "@/lib/director-invoice-status";
@@ -205,6 +212,7 @@ import {
   asRecord,
   buildRegistrationReviewPreview,
   cleanText,
+  registrationParentSetupRetryPending,
   registrationReviewFromData,
   registrationSubmissionSummary,
   summarizeEnrollmentChecklist,
@@ -350,6 +358,17 @@ function recordFromJson(value: unknown): Record<string, unknown> {
 
 function stringField(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function paymentAppliedInvoiceIds(customFields: unknown) {
+  const fields = recordFromJson(customFields);
+  const invoiceId = stringField(fields.invoiceId);
+  const appliedInvoiceIds = Array.isArray(fields.appliedInvoiceIds)
+    ? fields.appliedInvoiceIds
+      .map((value) => stringField(value))
+      .filter((value): value is string => Boolean(value))
+    : [];
+  return [...new Set([...(invoiceId ? [invoiceId] : []), ...appliedInvoiceIds])];
 }
 
 function numberField(value: unknown) {
@@ -1378,6 +1397,7 @@ async function renderLivePage(
               id: submission.id,
               status: submission.status,
               reviewStatus: registrationReviewFromData(submission.data).status,
+              parentSetupRetryPending: registrationParentSetupRetryPending(submission.data),
               registrationPayment: registrationPaymentFromData(submission.data),
               preview: buildRegistrationReviewPreview(submission.data),
               submittedAt: submission.submittedAt,
@@ -2188,7 +2208,7 @@ async function renderLivePage(
     const parentVisibleLedgerWhere: Prisma.LedgerEntryWhereInput = {
       NOT: agencyOnlyLedgerWhere,
     };
-    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs, classroomTeacherRows] = await prisma.$transaction([
+    const [billingAccount, activeParentPaymentRows, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, parentAttendanceRecords, parentCheckLogs, classroomTeacherRows] = await prisma.$transaction([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -2216,7 +2236,16 @@ async function renderLivePage(
                   OR: [
                     { customFields: { path: ["status"], equals: "checkout_created" } },
                     { customFields: { path: ["status"], equals: "checkout_pending" } },
+                    { customFields: { path: ["status"], equals: "paid_processing" } },
+                    { customFields: { path: ["status"], equals: "autopay_processing" } },
+                    { customFields: { path: ["status"], equals: "stored_method_processing" } },
+                    { customFields: { path: ["status"], equals: "director_saved_method_processing" } },
                   ],
+                },
+                {
+                  provider: "stripe",
+                  status: PaymentStatus.FAILED,
+                  customFields: { path: ["status"], equals: "payment_returned" },
                 },
               ],
             },
@@ -2239,6 +2268,36 @@ async function renderLivePage(
             take: PARENT_LEDGER_PAGE_SIZE + 1,
             select: { id: true, type: true, description: true, effectiveAt: true },
           },
+        },
+      }),
+      prisma.payment.findMany({
+        where: {
+          billingAccount: { familyId },
+          provider: "stripe",
+          status: PaymentStatus.DRAFT,
+          OR: [
+            { customFields: { path: ["status"], equals: "checkout_created" } },
+            { customFields: { path: ["status"], equals: "checkout_pending" } },
+            { customFields: { path: ["status"], equals: "paid_processing" } },
+            { customFields: { path: ["status"], equals: "autopay_pending" } },
+            { customFields: { path: ["status"], equals: "autopay_processing" } },
+            { customFields: { path: ["status"], equals: "autopay_succeeded_pending_webhook" } },
+            { customFields: { path: ["status"], equals: "stored_method_pending" } },
+            { customFields: { path: ["status"], equals: "stored_method_processing" } },
+            { customFields: { path: ["status"], equals: "stored_method_succeeded_pending_webhook" } },
+            { customFields: { path: ["status"], equals: "director_saved_method_pending" } },
+            { customFields: { path: ["status"], equals: "director_saved_method_processing" } },
+            { customFields: { path: ["status"], equals: "director_saved_method_succeeded_pending_webhook" } },
+          ],
+        },
+        orderBy: [{ paidAt: "desc" }, { id: "desc" }],
+        select: {
+          id: true,
+          amountCents: true,
+          status: true,
+          provider: true,
+          externalIdPlaceholder: true,
+          customFields: true,
         },
       }),
       prisma.ledgerEntry.findFirst({
@@ -2339,6 +2398,11 @@ async function renderLivePage(
         where: { id: resolvedParentCenterId ?? "__none__" },
         select: {
           id: true,
+          name: true,
+          crmLocationId: true,
+          city: true,
+          state: true,
+          timezone: true,
           customFields: true,
           organization: {
             select: {
@@ -2459,6 +2523,7 @@ async function renderLivePage(
     const parentPortalFamily = family
       ? {
           ...family,
+          centerId: resolvedParentCenterId,
           children: family.children.map((child) => {
             const attendance = parentAttendanceByChild.get(child.id);
             const latestCheck = parentLatestCheckByChild.get(child.id);
@@ -2549,9 +2614,81 @@ async function renderLivePage(
         })
       : [];
     const invoiceChildNames = new Map(invoiceChildren.map((child) => [child.id, child.fullName]));
+    const parentPaymentInvoiceIds = [...new Set(
+      (billingAccount?.payments ?? []).flatMap((payment) => paymentAppliedInvoiceIds(payment.customFields)),
+    )];
+    const parentPaymentInvoices = parentPaymentInvoiceIds.length && billingAccount
+      ? await prisma.invoice.findMany({
+          where: { id: { in: parentPaymentInvoiceIds }, billingAccountId: billingAccount.id },
+          select: { id: true, number: true },
+        })
+      : [];
+    const parentPaymentInvoiceNumberById = new Map(parentPaymentInvoices.map((invoice) => [invoice.id, invoice.number]));
+    const parentPaymentCenterIds = [...new Set(
+      (billingAccount?.payments ?? [])
+        .map((payment) => stringField(recordFromJson(payment.customFields).centerId))
+        .filter((centerId): centerId is string => Boolean(centerId)),
+    )];
+    const parentPaymentCenters = parentPaymentCenterIds.length
+      ? await prisma.center.findMany({
+          where: {
+            id: { in: parentPaymentCenterIds },
+            organization: { tenantId: user.tenantId },
+          },
+          select: {
+            id: true,
+            name: true,
+            crmLocationId: true,
+            city: true,
+            state: true,
+            timezone: true,
+            customFields: true,
+          },
+        })
+      : [];
+    const parentPaymentCenterById = new Map(parentPaymentCenters.map((center) => [center.id, center]));
+    const parentPayments = (billingAccount?.payments ?? []).map((payment) => {
+      const fields = recordFromJson(payment.customFields);
+      const paymentCenterId = stringField(fields.centerId) || resolvedParentCenterId;
+      const paymentCenter = (paymentCenterId ? parentPaymentCenterById.get(paymentCenterId) : null)
+        ?? (paymentCenterId === familyCenter?.id ? familyCenter : null);
+      const invoiceNumbers = paymentAppliedInvoiceIds(fields)
+        .map((invoiceId) => parentPaymentInvoiceNumberById.get(invoiceId))
+        .filter((number): number is string => Boolean(number));
+      const checkoutTotalCents = numberField(fields.checkoutTotalCents);
+      const processingRecoveryCents = checkoutTotalCents === null
+        ? 0
+        : Math.max(0, checkoutTotalCents - payment.amountCents);
+      return {
+        ...payment,
+        amountCents: checkoutTotalCents ?? payment.amountCents,
+        principalAmountCents: payment.amountCents,
+        processingRecoveryCents,
+        centerId: paymentCenterId,
+        centerName: paymentCenter ? formatCenterName(paymentCenter) : null,
+        centerEin: paymentCenter ? readSchoolEin(paymentCenter.customFields) : null,
+        centerTimeZone: paymentCenter ? readCenterLocationTimeZone(paymentCenter) : null,
+        externalIdPlaceholder: stringField(fields.reference)
+          || stringField(fields.payrollReference)
+          || stringField(fields.checkNumber)
+          || payment.externalIdPlaceholder,
+        invoiceNumber: invoiceNumbers.length ? invoiceNumbers.join(", ") : null,
+        paymentReferenceLabel: fields.paymentScope === "family_balance"
+          ? "Family balance payment"
+          : invoiceNumbers.length === 1
+            ? `Invoice ${invoiceNumbers[0]}`
+            : invoiceNumbers.length > 1
+              ? `Invoices ${invoiceNumbers.join(", ")}`
+              : "Family account payment",
+      };
+    });
     const pendingPaymentByInvoiceId = new Map<string, Omit<ReturnType<typeof activeStripeCheckoutPaymentSummary>, "amountCents">>();
-    for (const payment of billingAccount?.payments ?? []) {
-      if (!isActiveStripeCheckoutPayment(payment)) continue;
+    for (const payment of activeParentPaymentRows) {
+      if (
+        !isActiveStripeCheckoutPayment(payment)
+        && !isActiveStripeAutopayPayment(payment)
+        && !isAchPaymentProcessing(payment)
+      ) continue;
       const fields = jsonRecord(payment.customFields);
       const invoiceId = stringField(fields.invoiceId);
       if (!invoiceId || pendingPaymentByInvoiceId.has(invoiceId)) continue;
@@ -2662,11 +2799,12 @@ async function renderLivePage(
     );
     const parentReplyToMessageId = firstSearchParam(searchParams.replyToMessageId) || "";
     const parentReplySubject = firstSearchParam(searchParams.subject) || "";
+    const pendingAchCreditCents = provisionalAchCreditCents(activeParentPaymentRows);
     const parentBalanceCents = billingAccount
-      ? parentVisibleBillingBalanceCents({
+      ? visibleBalanceAfterProvisionalAchCredit(parentVisibleBillingBalanceCents({
           accountBalanceCents: billingAccount.balanceCents,
           agencyLedgerEntries,
-        })
+        }), pendingAchCreditCents)
       : 0;
     const parentBalanceReviewRequired = billingAccount
       ? parentBalanceNeedsResponsibilityReview({
@@ -2714,7 +2852,7 @@ async function renderLivePage(
         paymentMethodReauthorizationPreservesAutopay={paymentMethodReauthorizationPreservesAutopay}
         parentBalanceReviewRequired={parentBalanceReviewRequired}
         parentBalanceVisibilityConfirmed={parentBalanceVisibilityConfirmed}
-        payments={billingAccount?.payments ?? []}
+        payments={parentPayments}
         latestLedgerEntry={latestLedgerEntry}
         ledgerEntries={billingAccount?.ledgerEntries.slice(0, PARENT_LEDGER_PAGE_SIZE) ?? []}
         ledgerPagination={{
@@ -2726,8 +2864,9 @@ async function renderLivePage(
         dailyReports={parentDailyReports}
         incidents={incidents}
         messages={signedMessages}
-        centerName={parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
-        centerEin={parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
+        centerName={familyCenter ? formatCenterName(familyCenter) : parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
+        centerEin={familyCenter ? readSchoolEin(familyCenter.customFields) : parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
+        centerTimeZone={familyCenter ? readCenterLocationTimeZone(familyCenter) : parentServiceDay.timeZone}
         classroomTeachers={classroomTeachers}
         documents={signedDocuments}
         media={signedMedia}
@@ -4125,7 +4264,7 @@ async function renderLivePage(
     const currentBillingAccountWhere = visibleCurrentBillingAccountWhere(visibleCenterIds);
     const paymentWhere = visiblePaymentWhere(visibleCenterIds);
     const currentInvoiceWhere = visibleCurrentInvoiceWhere(visibleCenterIds);
-    const [paymentRows, total, paid, failed, draft, payoutCenters, paymentMethodAccounts, dueOpenInvoices] = await Promise.all([
+    const [paymentRows, processingAchRows, returnedPaymentRows, total, paid, failed, draft, payoutCenters, paymentMethodAccounts, dueOpenInvoices] = await Promise.all([
       prisma.payment.findMany({
         where: paymentWhere,
         orderBy: [{ paidAt: "desc" }, { id: "desc" }],
@@ -4137,6 +4276,22 @@ async function renderLivePage(
             },
           },
         },
+      }),
+      prisma.payment.findMany({
+        where: { ...paymentWhere, provider: "stripe", status: PaymentStatus.DRAFT },
+        select: { amountCents: true, status: true, provider: true, customFields: true },
+      }),
+      prisma.payment.findMany({
+        where: {
+          ...paymentWhere,
+          provider: "stripe",
+          status: { in: [PaymentStatus.PAID, PaymentStatus.FAILED] },
+          OR: [
+            { customFields: { path: ["status"], equals: "payment_returned" } },
+            { customFields: { path: ["stripeDisputeLedgerActive"], equals: true } },
+          ],
+        },
+        select: { status: true, provider: true, customFields: true },
       }),
       prisma.payment.count({ where: paymentWhere }),
       prisma.payment.count({ where: { ...paymentWhere, status: PaymentStatus.PAID } }),
@@ -4221,6 +4376,10 @@ async function renderLivePage(
     const dunningReady = payments.filter((payment) => payment.dunningStatus === "ready").length;
     const dunningWaiting = payments.filter((payment) => payment.dunningStatus === "waiting").length;
     const dunningMaxed = payments.filter((payment) => payment.dunningStatus === "maxed").length;
+    const processingAch = processingAchRows.filter((payment) => isAchPaymentProcessing(payment)).length;
+    const returnedPayments = returnedPaymentRows.filter((payment) => isReturnedStripePayment(payment));
+    const returnedPaid = returnedPayments.filter((payment) => payment.status === PaymentStatus.PAID).length;
+    const returnedFailed = returnedPayments.filter((payment) => payment.status === PaymentStatus.FAILED).length;
     const paymentCentersById = new Map(payoutCenters.map((center) => [center.id, center]));
     const paymentSummary = (account: {
       autopayPlaceholder: boolean;
@@ -4271,9 +4430,11 @@ async function renderLivePage(
           payments,
           stats: {
             total,
-            paid,
-            failed,
-            draft,
+            paid: Math.max(0, paid - returnedPaid),
+            failed: Math.max(0, failed - returnedFailed),
+            returned: returnedPayments.length,
+            draft: Math.max(0, draft - processingAch),
+            processingAch,
             stripeConfigured,
             webhookConfigured: stripeWebhookConfigured,
             payoutReadyCenters,
@@ -6245,6 +6406,7 @@ async function renderLivePage(
             signaturePlaceholder: submission.signaturePlaceholder,
             form: submission.form,
             reviewStatus: registrationReviewFromData(submission.data).status,
+            parentSetupRetryPending: registrationParentSetupRetryPending(submission.data),
             registrationPayment: registrationPaymentFromData(submission.data),
             summary: registrationSubmissionSummary(submission.data),
             details: safeFormSubmissionDetails(submission.data),

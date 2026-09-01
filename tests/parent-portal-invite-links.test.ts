@@ -54,6 +54,43 @@ test("parent portal invite links fall back to request origin", () => {
   );
 });
 
+test("parent setup link issuance cannot strand an active parent after provider failure", () => {
+  const source = readFileSync(new URL("../src/lib/parent-portal-setup-links.ts", import.meta.url), "utf8");
+  const issueLink = source.slice(
+    source.indexOf("export async function issueParentPortalSetupLink"),
+    source.indexOf("export async function recordParentPortalSetupLinkDelivery"),
+  );
+  assert.match(issueLink, /generateSupabasePasswordRecoveryLink/);
+  assert.doesNotMatch(issueLink, /updateSupabaseAuthUserPasswordByEmail|randomBytes/);
+  assert.ok(
+    issueLink.indexOf("generateSupabasePasswordRecoveryLink") < issueLink.indexOf("sessionVersion: { increment: 1 }"),
+    "the usable recovery token must exist before the app reset gate is committed",
+  );
+});
+
+test("setup-link flows randomize only new parent credentials", () => {
+  const provisioning = readFileSync(new URL("../src/lib/parent-portal-logins.ts", import.meta.url), "utf8");
+  const registrationReview = readFileSync(new URL("../src/app/api/registration/[id]/review/route.ts", import.meta.url), "utf8");
+  const registrationActions = readFileSync(new URL("../src/components/registration-review-actions.tsx", import.meta.url), "utf8");
+  const documentRequests = readFileSync(new URL("../src/lib/parent-document-requests.ts", import.meta.url), "utf8");
+  assert.match(registrationReview, /randomizeNewCredential:\s*true/);
+  assert.match(registrationReview, /retryParentSetup/);
+  assert.match(registrationReview, /registration\.parent_setup_retried/);
+  assert.match(registrationReview, /status: parentInvite\.ok \? "sent" : "pending"/);
+  assert.match(registrationReview, /successes\.length === results\.length/);
+  assert.match(registrationActions, /parentSetupRetryPending/);
+  assert.match(registrationActions, /Retry parent setup/);
+  assert.match(documentRequests, /linkedReason:\s*"parent_document_request",[\s\S]*randomizeNewCredential:\s*true/);
+  assert.match(documentRequests, /login\.requiresSetupLink/);
+  assert.match(provisioning, /existingUser\?\.mustResetPassword && !resetToInitialPassword/);
+  assert.match(provisioning, /requiresSetupLink,/);
+  assert.match(provisioning, /prepareWithoutInvite \|\| randomizeNewCredential/);
+  assert.match(
+    provisioning,
+    /updateExistingPassword:\s*resetToInitialPassword \|\| \(randomizeNewCredential && !existingUser\)/,
+  );
+});
+
 test("direct parent invitations preflight ProCare data and activate prepared accounts only when invited", () => {
   const source = readFileSync(new URL("../src/app/api/parent/invitations/route.ts", import.meta.url), "utf8");
   assert.match(source, /evaluateParentInvitationReadiness/);

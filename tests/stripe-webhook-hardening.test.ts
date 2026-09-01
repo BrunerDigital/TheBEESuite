@@ -274,6 +274,13 @@ test("same-second terminal events use lifecycle precedence instead of arbitrary 
   assert.match(route, /if \(!stripeEventIsNewerThanStored\(event, currentFields, true\)\) return/);
 });
 
+test("same-second failures verify the current PaymentIntent before replacing ACH processing", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /retrieveStripePaymentIntent\(\{/);
+  assert.match(route, /sameSecondLiveIntentStatus !== clean\(paymentIntent\.status\)/);
+  assert.match(route, /Payment status verification is temporarily unavailable/);
+});
+
 test("later Checkout failures preserve insufficient-funds retry state", async () => {
   const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   assert.equal(

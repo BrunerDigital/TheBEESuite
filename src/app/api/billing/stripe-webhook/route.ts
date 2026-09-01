@@ -6,6 +6,7 @@ import {
   createStripeSoftwareSubscription,
   ensureStripeSoftwareRecurringPrice,
   readStripeConnectedAccountId,
+  retrieveStripePaymentIntent,
   retrieveStripeConnectedAccount,
   retrieveStripePaymentMethod,
   retrieveStripeSetupIntent,
@@ -409,6 +410,14 @@ function stripeEventIsNewerThanStored(
     incomingEventCreatedAt > storedEventCreatedAt
     || (allowSameSecond && incomingEventCreatedAt === storedEventCreatedAt)
   );
+}
+
+function stripeEventMatchesStoredSecond(event: StripeWebhookEvent, customFields: unknown) {
+  const storedEventCreatedAt = Date.parse(clean(jsonObject(customFields).stripeEventCreatedAt));
+  const incomingEventCreatedAt = event.created ? event.created * 1000 : Number.NaN;
+  return Number.isFinite(storedEventCreatedAt)
+    && Number.isFinite(incomingEventCreatedAt)
+    && incomingEventCreatedAt === storedEventCreatedAt;
 }
 
 async function findPaymentForStripeObject(
@@ -1827,6 +1836,29 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
   }
   const collectionMode = clean(metadata.collectionMode);
   const canceled = event.type === "payment_intent.canceled";
+  let sameSecondLiveIntentStatus: string | undefined;
+  const sameSecondCandidate = await prisma.payment.findUnique({
+    where: { id: metadata.paymentId },
+    select: { amountCents: true, status: true, provider: true, customFields: true },
+  });
+  if (
+    sameSecondCandidate
+    && isAchPaymentProcessing(sameSecondCandidate)
+    && stripeEventMatchesStoredSecond(event, sameSecondCandidate.customFields)
+  ) {
+    const currentIntent = await retrieveStripePaymentIntent({
+      paymentIntentId: paymentIntent.id,
+      connectedAccountId: clean(metadata.stripeConnectedAccountId) || undefined,
+      tenantId: clean(metadata.tenantId) || undefined,
+    });
+    sameSecondLiveIntentStatus = clean(currentIntent.paymentIntent?.status) || undefined;
+    if (!currentIntent.ok || !sameSecondLiveIntentStatus) {
+      return NextResponse.json(
+        { ok: false, error: "Payment status verification is temporarily unavailable." },
+        { status: 503 },
+      );
+    }
+  }
   let failureApplied = false;
   let achReturned = false;
   let recoverableCheckoutFailure = false;
@@ -1847,6 +1879,10 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       const currentFields = jsonObject(currentPayment.customFields);
       if (canceled && isReturnedStripePayment(currentPayment)) return;
       if (!canceled && clean(currentFields.status) === "payment_canceled") return;
+      if (isAchPaymentProcessing(currentPayment) && stripeEventMatchesStoredSecond(event, currentFields)) {
+        if (!sameSecondLiveIntentStatus) throw new Error("Same-second PaymentIntent status was not verified.");
+        if (sameSecondLiveIntentStatus !== clean(paymentIntent.status)) return;
+      }
       const offSessionCollection = collectionMode === "autopay"
         || collectionMode === "stored_method"
         || collectionMode === "director_saved_method";

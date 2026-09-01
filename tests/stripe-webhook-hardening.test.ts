@@ -185,6 +185,26 @@ test("supported reconciliation matrix includes payment, invoice, subscription, d
   ].sort());
 });
 
+test("unpaid Checkout snapshots cannot reopen settled or returned payments", async () => {
+  const source = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  const pendingTransitions = source.match(
+    /updateMany\(\{\s*where: \{ id: paymentId, status: PaymentStatus\.DRAFT \},\s*data: \{\s*externalIdPlaceholder: session\.id/g,
+  ) ?? [];
+  assert.equal(pendingTransitions.length, 2);
+});
+
+test("parent ledger query includes every provisional ACH processing state", async () => {
+  const source = await readFile("src/app/[slug]/page.tsx", "utf8");
+  for (const status of [
+    "paid_processing",
+    "autopay_processing",
+    "stored_method_processing",
+    "director_saved_method_processing",
+  ]) {
+    assert.match(source, new RegExp(`equals: "${status}"`));
+  }
+});
+
 test("Accounts v2 thin events route by related_object without requiring snapshot data", () => {
   assert.deepEqual(stripeWebhookObjectForRouting({
     id: "evt_test_thin",

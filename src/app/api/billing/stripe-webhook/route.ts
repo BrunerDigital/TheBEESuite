@@ -1663,10 +1663,9 @@ async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, sessi
         const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
         const currentFields = jsonObject(currentPayment?.customFields);
         const achProcessing = isAchPaymentMetadata(metadata);
-        await tx.payment.update({
-          where: { id: paymentId },
+        await tx.payment.updateMany({
+          where: { id: paymentId, status: PaymentStatus.DRAFT },
           data: {
-            status: PaymentStatus.DRAFT,
             externalIdPlaceholder: session.id,
             customFields: {
               ...currentFields,
@@ -2574,10 +2573,9 @@ async function dispatchAuthenticatedEvent(
         const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
         const currentFields = jsonObject(currentPayment?.customFields);
         const achProcessing = isAchPaymentMetadata(session.metadata ?? {});
-        await tx.payment.update({
-          where: { id: paymentId },
+        await tx.payment.updateMany({
+          where: { id: paymentId, status: PaymentStatus.DRAFT },
           data: {
-            status: PaymentStatus.DRAFT,
             externalIdPlaceholder: session.id,
             customFields: {
               ...currentFields,

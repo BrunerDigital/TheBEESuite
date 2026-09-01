@@ -2231,6 +2231,9 @@ async function renderLivePage(
                     { customFields: { path: ["status"], equals: "checkout_created" } },
                     { customFields: { path: ["status"], equals: "checkout_pending" } },
                     { customFields: { path: ["status"], equals: "paid_processing" } },
+                    { customFields: { path: ["status"], equals: "autopay_processing" } },
+                    { customFields: { path: ["status"], equals: "stored_method_processing" } },
+                    { customFields: { path: ["status"], equals: "director_saved_method_processing" } },
                   ],
                 },
                 {

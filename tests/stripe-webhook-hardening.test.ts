@@ -205,6 +205,30 @@ test("parent ledger query includes every provisional ACH processing state", asyn
   }
 });
 
+test("off-session request completion cannot overwrite webhook terminal states", async () => {
+  const autopay = await readFile("src/lib/autopay-processing.ts", "utf8");
+  const familyPayment = await readFile("src/app/api/billing/family-payment/route.ts", "utf8");
+  assert.match(autopay, /payment\.updateMany\(\{\s*where: \{ id: payment\.id, status: PaymentStatus\.DRAFT \}/);
+  assert.equal(
+    familyPayment.match(/payment\.updateMany\(\{\s*where: \{ id: payment\.id, status: PaymentStatus\.DRAFT \}/g)?.length,
+    2,
+  );
+});
+
+test("parent invoice status maps off-session and ACH processing payments", async () => {
+  const source = await readFile("src/app/[slug]/page.tsx", "utf8");
+  assert.match(
+    source,
+    /!isActiveStripeCheckoutPayment\(payment\)[\s\S]*!isActiveStripeAutopayPayment\(payment\)[\s\S]*!isAchPaymentProcessing\(payment\)/,
+  );
+});
+
+test("ACH return audits require an actual submitted return transition", async () => {
+  const source = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(source, /achReturned\s*\? "billing\.ach_payment\.returned"/);
+  assert.match(source, /achReturned\s*\? "billing\.family_payment\.ach_returned"/);
+});
+
 test("Accounts v2 thin events route by related_object without requiring snapshot data", () => {
   assert.deepEqual(stripeWebhookObjectForRouting({
     id: "evt_test_thin",

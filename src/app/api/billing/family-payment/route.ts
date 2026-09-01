@@ -637,8 +637,8 @@ async function POSTHandler(request: NextRequest) {
       tenantId: user.tenantId,
     });
     if (!intent.ok || !intent.paymentIntent?.id) {
-      await prisma.payment.update({
-        where: { id: payment.id },
+      await prisma.payment.updateMany({
+        where: { id: payment.id, status: PaymentStatus.DRAFT },
         data: {
           status: PaymentStatus.FAILED,
           externalIdPlaceholder: intent.id || intent.error || "stripe_payment_intent_failed",
@@ -686,8 +686,8 @@ async function POSTHandler(request: NextRequest) {
     }
 
     if (!appliedImmediately) {
-      await prisma.payment.update({
-        where: { id: payment.id },
+      await prisma.payment.updateMany({
+        where: { id: payment.id, status: PaymentStatus.DRAFT },
         data: {
           externalIdPlaceholder: intent.paymentIntent.id,
           customFields: jsonInput({

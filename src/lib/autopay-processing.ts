@@ -811,8 +811,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       appliedImmediately = application.applied;
       immediateApplicationReason = application.reason;
     } else {
-      await prisma.payment.update({
-        where: { id: payment.id },
+      await prisma.payment.updateMany({
+        where: { id: payment.id, status: PaymentStatus.DRAFT },
         data: {
           status: accepted ? PaymentStatus.DRAFT : PaymentStatus.FAILED,
           externalIdPlaceholder: intent.paymentIntent?.id || intent.error || `${statusPrefix}_payment_intent_failed`,

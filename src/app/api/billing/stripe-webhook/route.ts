@@ -1771,6 +1771,7 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
   }
   const collectionMode = clean(metadata.collectionMode);
   let failureApplied = false;
+  let achReturned = false;
   let recoverableCheckoutFailure = false;
   let paymentFound = false;
   let storedBillingAccountId: string | null = null;
@@ -1807,6 +1808,7 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
         metadata,
         failureCode,
       });
+      achReturned = achFailure.returned;
       recoverableCheckoutFailure = disposition.recoverableCheckout && !achFailure.returned;
       const failedPayment = await tx.payment.updateMany({
         where: { id: metadata.paymentId, status: { in: [PaymentStatus.DRAFT, PaymentStatus.FAILED] } },
@@ -1857,7 +1859,7 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       metadata.invoiceId,
       event.id,
       paymentIntent.id,
-      isAchPaymentMetadata(metadata)
+      achReturned
         ? "billing.ach_payment.returned"
         : collectionMode === "autopay"
         ? "billing.autopay.failed"
@@ -1874,7 +1876,7 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
       metadata.billingAccountId,
       event.id,
       paymentIntent.id,
-      isAchPaymentMetadata(metadata)
+      achReturned
         ? "billing.family_payment.ach_returned"
         : recoverableCheckoutFailure
         ? "billing.family_payment.checkout_payment_method_retry_required"

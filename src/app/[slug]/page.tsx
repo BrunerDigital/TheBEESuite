@@ -117,6 +117,7 @@ import { countCenterBillableUsers } from "@/lib/school-software-subscriptions";
 import { buildGuardianKioskCredential, kioskPathForCenter } from "@/lib/kiosk-credentials";
 import {
   activeStripeCheckoutPaymentSummary,
+  isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
   jsonRecord,
 } from "@/lib/billing-guardrails";
@@ -168,7 +169,7 @@ import {
   paymentMethodManagementSummary,
 } from "@/lib/payment-method-management";
 import { currentFamilyBillingMatch } from "@/lib/invoice-payment-actions";
-import { provisionalAchCreditCents } from "@/lib/ach-payment-lifecycle";
+import { isAchPaymentProcessing, provisionalAchCreditCents } from "@/lib/ach-payment-lifecycle";
 import {
   normalizeDirectorInvoiceStatus,
   paymentStatusForDirectorInvoiceStatus,
@@ -2648,7 +2649,11 @@ async function renderLivePage(
     });
     const pendingPaymentByInvoiceId = new Map<string, Omit<ReturnType<typeof activeStripeCheckoutPaymentSummary>, "amountCents">>();
     for (const payment of billingAccount?.payments ?? []) {
-      if (!isActiveStripeCheckoutPayment(payment)) continue;
+      if (
+        !isActiveStripeCheckoutPayment(payment)
+        && !isActiveStripeAutopayPayment(payment)
+        && !isAchPaymentProcessing(payment)
+      ) continue;
       const fields = jsonRecord(payment.customFields);
       const invoiceId = stringField(fields.invoiceId);
       if (!invoiceId || pendingPaymentByInvoiceId.has(invoiceId)) continue;

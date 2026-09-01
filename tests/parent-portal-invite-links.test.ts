@@ -76,6 +76,9 @@ test("setup-link flows randomize only new parent credentials", () => {
   assert.match(registrationReview, /randomizeNewCredential:\s*true/);
   assert.match(registrationReview, /retryParentSetup/);
   assert.match(registrationReview, /registration\.parent_setup_retried/);
+  assert.match(registrationReview, /status: parentInvite\.ok \? "sent" : "pending"/);
+  assert.match(registrationReview, /successes\.length === results\.length/);
+  assert.match(registrationActions, /parentSetupRetryPending/);
   assert.match(registrationActions, /Retry parent setup/);
   assert.match(documentRequests, /linkedReason:\s*"parent_document_request",[\s\S]*randomizeNewCredential:\s*true/);
   assert.match(documentRequests, /login\.requiresSetupLink/);

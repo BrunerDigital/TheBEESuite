@@ -19,8 +19,8 @@ The following work may proceed across the master completion initiative:
 - create migrations and provider-configuration instructions without applying production migrations or changing providers;
 - run local tests, static analysis, production builds, non-mutating readiness scripts, and synthetic/local browser tests;
 - open pull requests, address review feedback, and prepare protected releases;
-- merge an otherwise approved and green scoped pull request through the normal protected process;
-- deploy merged technical changes and verify intended commit, Vercel Ready state, canonical aliases, health, logs, and non-mutating changed flows;
+- after request-specific release authorization, merge an otherwise approved and green scoped pull request through the normal protected process;
+- after request-specific release authorization, deploy merged technical changes and verify intended commit, Vercel Ready state, canonical aliases, health, logs, and non-mutating changed flows;
 - create preview-only, dry-run-first, fingerprinted audit and reconciliation tooling;
 - update canonical repository documentation and evidence packets;
 - preserve unrelated work, production data, identities, payments, messages, invitations, providers, and cutover state.

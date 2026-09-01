@@ -68,10 +68,12 @@ test("parent setup link issuance cannot strand an active parent after provider f
   );
 });
 
-test("registration setup links randomize only new parent credentials", () => {
+test("setup-link flows randomize only new parent credentials", () => {
   const provisioning = readFileSync(new URL("../src/lib/parent-portal-logins.ts", import.meta.url), "utf8");
   const registrationReview = readFileSync(new URL("../src/app/api/registration/[id]/review/route.ts", import.meta.url), "utf8");
+  const documentRequests = readFileSync(new URL("../src/lib/parent-document-requests.ts", import.meta.url), "utf8");
   assert.match(registrationReview, /randomizeNewCredential:\s*true/);
+  assert.match(documentRequests, /linkedReason:\s*"parent_document_request",[\s\S]*randomizeNewCredential:\s*true/);
   assert.match(provisioning, /prepareWithoutInvite \|\| randomizeNewCredential/);
   assert.match(
     provisioning,

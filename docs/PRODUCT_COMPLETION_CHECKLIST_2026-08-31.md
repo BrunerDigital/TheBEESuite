@@ -342,4 +342,3 @@ For a checklist area to be complete, all of the following must be true:
 - documentation and support ownership match the current UI;
 - any external or business activation has a named approver and explicit evidence;
 - the released commit is Ready on canonical production aliases with healthy logs and changed-flow verification.
-

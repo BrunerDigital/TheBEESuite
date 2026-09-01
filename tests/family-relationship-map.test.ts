@@ -49,11 +49,11 @@ function familyRecord(overrides: Partial<EditableFamilyRecord> = {}): EditableFa
 
 function renderMap(
   family: EditableFamilyRecord,
-  duplicateCounts = { families: 0, guardians: 0, children: 0 },
+  duplicateFamilyCount = 0,
 ) {
   return renderToString(React.createElement(FamilyRelationshipMap, {
     family,
-    duplicateCounts,
+    duplicateFamilyCount,
     onSelectGuardian: () => true,
     onSelectChild: () => true,
     onSelectPickup: () => true,
@@ -172,13 +172,14 @@ test("relationship map keeps custody guidance private and avoids portal-auth ove
   assert.doesNotMatch(html, /Relationships clear|No Relationship Conflicts Detected|Portal access is ready/);
 });
 
-test("relationship review signals normalize emails and scope duplicate wording to selected records", () => {
+test("relationship review signals normalize emails and count each candidate family once", () => {
   const html = renderMap(
     familyRecord(),
-    { families: 0, guardians: 1, children: 0 },
+    1,
   );
 
   assert.doesNotMatch(html, /billing email does not match/);
-  assert.match(html, /1 possible duplicate candidate relates to the selected family, guardian, or child records/);
+  assert.match(html, /1 possible duplicate family record matches the selected household/);
   assert.match(html, /Confirm school scope and supporting evidence before merging/);
+  assert.doesNotMatch(mapSource, /duplicateCounts\.families \+ duplicateCounts\.guardians \+ duplicateCounts\.children/);
 });

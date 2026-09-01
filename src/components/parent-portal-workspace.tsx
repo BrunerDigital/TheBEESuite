@@ -137,6 +137,8 @@ type Invoice = {
 type Payment = {
   id: string;
   amountCents: number;
+  principalAmountCents?: number | null;
+  processingRecoveryCents?: number | null;
   status: string;
   provider: string;
   paidAt: string | Date | null;
@@ -3046,6 +3048,8 @@ function ParentPortalWorkspaceView({
                                   payment={{
                                     id: payment.id,
                                     amountCents: payment.amountCents,
+                                    principalAmountCents: payment.principalAmountCents ?? null,
+                                    processingRecoveryCents: payment.processingRecoveryCents ?? null,
                                     status: payment.status,
                                     provider: payment.provider,
                                     paidAt: payment.paidAt,
@@ -3167,6 +3171,8 @@ function ParentPortalWorkspaceView({
                               payment={{
                                 id: payment.id,
                                 amountCents: payment.amountCents,
+                                principalAmountCents: payment.principalAmountCents ?? null,
+                                processingRecoveryCents: payment.processingRecoveryCents ?? null,
                                 status: payment.status,
                                 provider: payment.provider,
                                 paidAt: payment.paidAt,

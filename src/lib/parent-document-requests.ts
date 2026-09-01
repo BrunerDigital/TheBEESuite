@@ -116,6 +116,7 @@ async function ensureParentPortalLoginForRecipient({
   const login = await ensureParentPortalLoginForGuardian({
     guardianId: primaryGuardian.id,
     linkedReason: "parent_document_request",
+    randomizeNewCredential: true,
   });
   if (!login.ok) {
     return { ok: false as const, error: login.reason };

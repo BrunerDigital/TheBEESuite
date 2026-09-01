@@ -71,8 +71,12 @@ test("parent setup link issuance cannot strand an active parent after provider f
 test("setup-link flows randomize only new parent credentials", () => {
   const provisioning = readFileSync(new URL("../src/lib/parent-portal-logins.ts", import.meta.url), "utf8");
   const registrationReview = readFileSync(new URL("../src/app/api/registration/[id]/review/route.ts", import.meta.url), "utf8");
+  const registrationActions = readFileSync(new URL("../src/components/registration-review-actions.tsx", import.meta.url), "utf8");
   const documentRequests = readFileSync(new URL("../src/lib/parent-document-requests.ts", import.meta.url), "utf8");
   assert.match(registrationReview, /randomizeNewCredential:\s*true/);
+  assert.match(registrationReview, /retryParentSetup/);
+  assert.match(registrationReview, /registration\.parent_setup_retried/);
+  assert.match(registrationActions, /Retry parent setup/);
   assert.match(documentRequests, /linkedReason:\s*"parent_document_request",[\s\S]*randomizeNewCredential:\s*true/);
   assert.match(documentRequests, /login\.requiresSetupLink/);
   assert.match(provisioning, /existingUser\?\.mustResetPassword && !resetToInitialPassword/);

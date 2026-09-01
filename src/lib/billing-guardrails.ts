@@ -70,7 +70,9 @@ export function activeStripeCheckoutPaymentMessage(
   const summary = activeStripeCheckoutPaymentSummary(payment);
   const category = summary.paymentMethodCategory || summary.requestedPaymentMethodCategory;
   const isBankPayment = category === "ach" || category === "link_bank" || Boolean(summary.bankAccountVerificationMethod);
-  if (isBankPayment) {
+  const confirmedBankProcessing = summary.status === "paid_processing"
+    || summary.stripePaymentIntentStatus === "processing";
+  if (isBankPayment && confirmedBankProcessing) {
     return scope === "family_balance"
       ? "A bank payment is already processing for this family balance and is marked Paid — processing. It can take a few business days to settle."
       : "A bank payment is already processing for this invoice and is marked Paid — processing. It can take a few business days to settle.";

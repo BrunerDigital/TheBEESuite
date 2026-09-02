@@ -49,6 +49,7 @@ import { AuthLikePage } from "@/components/module-page";
 import { AssetHubWorkspace } from "@/components/asset-hub-workspace";
 import { ParentPortalWorkspace } from "@/components/parent-portal-workspace";
 import { ParentPortalAccessBlocked } from "@/components/parent-portal-access-blocked";
+import { ParentPortalPaymentReturn } from "@/components/parent-portal-payment-return";
 import { AuthorizedPickupAccessBlocked, AuthorizedPickupWorkspace } from "@/components/authorized-pickup-workspace";
 import {
   SchoolSetupCommandCenter,
@@ -94,7 +95,7 @@ import { childScheduleClassification, fteScheduledDaysPerWeek, scheduledDaysPerW
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
-import { getParentPortalPaymentFamilyScope, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
+import { getParentPortalPaymentFamilyScope, getParentPortalPaymentReturn, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
 import { readStripeConnectMigration, stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
 import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
@@ -2107,6 +2108,14 @@ async function renderLivePage(
       ? await getParentPortalPaymentFamilyScope(user.id, user.tenantId, requestedParentFamilyId)
       : null;
     if (requestedParentFamilyScope && !requestedParentFamilyScope.ok) {
+      const paymentReturn = await getParentPortalPaymentReturn(user.id, user.tenantId, {
+        familyId: requestedParentFamilyId,
+        paymentStatus: firstSearchParam(searchParams.payment),
+        stripeCheckoutSessionId: firstSearchParam(searchParams.session_id),
+        invoiceId: firstSearchParam(searchParams.invoice),
+        familyPaymentId: firstSearchParam(searchParams.familyPayment),
+      });
+      if (paymentReturn) return <ParentPortalPaymentReturn />;
       return <ParentPortalAccessBlocked />;
     }
     const parentPortalTenantCenterIds = user.role === UserRole.PARENT_GUARDIAN
@@ -2911,7 +2920,7 @@ async function renderLivePage(
         classroomTeachers={paymentContinuityAccess ? [] : classroomTeachers}
         documents={paymentContinuityAccess ? [] : signedDocuments}
         media={signedMedia}
-        announcements={announcements}
+        announcements={paymentContinuityAccess ? [] : announcements}
         uniformProducts={[]}
         currentGuardianId={linkedGuardian?.id ?? null}
         kioskCredentials={paymentContinuityAccess ? [] : kioskCredentials}

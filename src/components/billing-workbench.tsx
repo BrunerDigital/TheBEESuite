@@ -794,6 +794,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function sendPaymentMethodRequest(intent: "payment_steps" | "instant_bank_verification" | "payment_method_reauthorization" = "payment_steps") {
     if (!selectedFamily) return setErrorMessage("Choose a family before sending a payment form.");
+    if (selectedFamilyIsPast) return setErrorMessage("Payment method links are unavailable for a past family account. Use a one-time payment method instead.");
     const requestEmails = intent === "payment_method_reauthorization"
       ? selectedPaymentMethod?.paymentMethodReauthorizationRecipientEmails ?? []
       : selectedPaymentRequestEmails;
@@ -1851,16 +1852,16 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </div>
               <div className="flex flex-wrap gap-2">
                 {selectedPaymentMethod?.paymentMethodReauthorizationRequired ? (
-                  <Button disabled={isPending || !selectedFamily || !selectedPaymentMethod.paymentMethodReauthorizationRecipientEmails.length} onClick={() => sendPaymentMethodRequest("payment_method_reauthorization")}>
+                  <Button disabled={isPending || !selectedFamily || selectedFamilyIsPast || !selectedPaymentMethod.paymentMethodReauthorizationRecipientEmails.length} onClick={() => sendPaymentMethodRequest("payment_method_reauthorization")}>
                     <Send data-icon="inline-start" />
                     Send replacement method link
                   </Button>
                 ) : null}
-                <Button disabled={isPending || !selectedFamily || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("instant_bank_verification")}>
+                <Button disabled={isPending || !selectedFamily || selectedFamilyIsPast || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("instant_bank_verification")}>
                   <Building2 data-icon="inline-start" />
                   Send bank verification link
                 </Button>
-                <Button disabled={isPending || !selectedFamily || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("payment_steps")} variant="outline">
+                <Button disabled={isPending || !selectedFamily || selectedFamilyIsPast || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("payment_steps")} variant="outline">
                   <Send data-icon="inline-start" />
                   Send payment link
                 </Button>

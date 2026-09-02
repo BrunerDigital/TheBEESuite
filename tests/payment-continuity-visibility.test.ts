@@ -7,6 +7,7 @@ import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 
 const page = readFileSync(new URL("../src/app/[slug]/page.tsx", import.meta.url), "utf8");
 const parentPortal = readFileSync(new URL("../src/components/parent-portal-workspace.tsx", import.meta.url), "utf8");
+const paymentReturn = readFileSync(new URL("../src/components/parent-portal-payment-return.tsx", import.meta.url), "utf8");
 const billingWorkbench = readFileSync(new URL("../src/components/billing-workbench.tsx", import.meta.url), "utf8");
 
 test("payment continuity includes current families and past families with a payable balance or invoice", () => {
@@ -53,7 +54,28 @@ test("payment continuity is isolated from general parent mutations and non-payme
   assert.match(familyPaymentRoute, /method === "saved_method"[\s\S]*getParentPortalFamilyScope[\s\S]*getParentPortalPaymentFamilyScope/);
   assert.match(page, /familyId: parentPortalContentFamilyId/);
   assert.match(page, /messages=\{paymentContinuityAccess \? \[\] : signedMessages\}/);
+  assert.match(page, /announcements=\{paymentContinuityAccess \? \[\] : announcements\}/);
   assert.match(page, /accountDeletionRequest=\{paymentContinuityAccess \? null : accountDeletionRequest\}/);
+});
+
+test("a verified checkout return stays available after the final balance clears", () => {
+  const familyScope = readFileSync(new URL("../src/lib/parent-portal-family-scope.ts", import.meta.url), "utf8");
+  assert.match(page, /getParentPortalPaymentReturn\(user\.id, user\.tenantId/);
+  assert.match(familyScope, /stripeCheckoutSessionId[\s\S]*customFields: \{ path: \["stripeCheckoutSessionId"\], equals: stripeCheckoutSessionId \}/);
+  assert.match(familyScope, /guardians: \{ some: \{ userId \} \}/);
+  assert.match(familyScope, /parentPortalTenantFamilyWhere\(tenantCenterIds\)/);
+  assert.match(paymentReturn, /Payment submitted/);
+  assert.match(paymentReturn, /Please do not submit the payment again while it is processing/);
+});
+
+test("past families cannot receive payment-method setup links", () => {
+  const requestRoute = readFileSync(new URL("../src/app/api/billing/payment-method-requests/route.ts", import.meta.url), "utf8");
+  assert.match(billingWorkbench, /if \(selectedFamilyIsPast\) return setErrorMessage\("Payment method links are unavailable/);
+  assert.match(billingWorkbench, /disabled=\{isPending \|\| !selectedFamily \|\| selectedFamilyIsPast \|\| !selectedPaymentMethod\.paymentMethodReauthorizationRecipientEmails\.length\}/);
+  assert.match(billingWorkbench, /disabled=\{isPending \|\| !selectedFamily \|\| selectedFamilyIsPast \|\| !selectedPaymentRequestEmails\.length\}[\s\S]*sendPaymentMethodRequest\("instant_bank_verification"\)/);
+  assert.match(billingWorkbench, /disabled=\{isPending \|\| !selectedFamily \|\| selectedFamilyIsPast \|\| !selectedPaymentRequestEmails\.length\}[\s\S]*sendPaymentMethodRequest\("payment_steps"\)/);
+  assert.match(requestRoute, /children: \{ where: currentlyEnrolledChildWhere\(\) \}/);
+  assert.match(requestRoute, /if \(family\._count\.children === 0\)/);
 });
 
 test("director billing finds past payable accounts but keeps them payment-only", () => {

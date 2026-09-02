@@ -160,3 +160,48 @@ export async function getParentPortalPaymentFamilyScope(userId: string, tenantId
     currentChildCount: guardian.family._count.children,
   })), requestedFamilyId);
 }
+
+export async function getParentPortalPaymentReturn(
+  userId: string,
+  tenantId: string,
+  input: {
+    familyId?: string | null;
+    paymentStatus?: string | null;
+    stripeCheckoutSessionId?: string | null;
+    invoiceId?: string | null;
+    familyPaymentId?: string | null;
+  },
+) {
+  const familyId = input.familyId?.trim() ?? "";
+  const stripeCheckoutSessionId = input.stripeCheckoutSessionId?.trim() ?? "";
+  const familyPaymentId = input.familyPaymentId?.trim() ?? "";
+  const invoiceId = input.invoiceId?.trim() ?? "";
+  if (input.paymentStatus !== "success" || !familyId || !stripeCheckoutSessionId || (!familyPaymentId && !invoiceId)) {
+    return null;
+  }
+
+  const tenantCenterIds = await getParentPortalTenantCenterIds(tenantId);
+  const payment = await prisma.payment.findFirst({
+    where: {
+      AND: [
+        familyPaymentId
+          ? { id: familyPaymentId }
+          : { customFields: { path: ["invoiceId"], equals: invoiceId } },
+        { customFields: { path: ["stripeCheckoutSessionId"], equals: stripeCheckoutSessionId } },
+        {
+          billingAccount: {
+            family: {
+              AND: [
+                { id: familyId },
+                { guardians: { some: { userId } } },
+                parentPortalTenantFamilyWhere(tenantCenterIds),
+              ],
+            },
+          },
+        },
+      ],
+    },
+    select: { id: true },
+  });
+  return payment ? { familyId, paymentId: payment.id } : null;
+}

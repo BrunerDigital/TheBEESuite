@@ -272,6 +272,7 @@ function ScopeContextLink({
     ) : (
       <button
         type="button"
+        aria-label={`${label}. ${detail}. Change workspace.`}
         className={cn(
           "group flex min-w-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/[0.07] p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           mobile && "mx-auto w-full max-w-xl border-border/70 bg-card/75 px-3 py-2 shadow-sm",

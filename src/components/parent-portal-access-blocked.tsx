@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 export function ParentPortalAccessBlocked() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 py-10">
+      <div>
+        <p className="text-sm font-semibold text-primary">Parent portal</p>
+        <h1 className="mt-2 text-balance text-3xl font-semibold tracking-tight">Family access needs review</h1>
+      </div>
       <Alert className="border-amber-500/40 bg-amber-500/10">
         <AlertTriangle />
         <AlertTitle>Your family link needs review</AlertTitle>

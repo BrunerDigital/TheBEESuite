@@ -44,6 +44,7 @@ import {
 import { matchStripeWebhookSecret } from "@/lib/stripe-webhook-readiness";
 import {
   applySucceededStripeFamilyBalancePayment,
+  applySucceededStripeInvoicePayment,
   succeededFamilyBalancePaymentClaim,
 } from "@/lib/stripe-payment-application";
 import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
@@ -2199,6 +2200,7 @@ async function handlePaymentIntentSucceeded(
   const isAutopay = collectionMode === "autopay";
   const isStoredMethod = collectionMode === "stored_method";
   let applied = false;
+  let creditedToFamilyBalance = false;
   let ignoredReason: string | null = null;
 
   try {
@@ -2240,6 +2242,33 @@ async function handlePaymentIntentSucceeded(
         accountCreditAppliedCents,
       });
       if (!guard.ok) {
+        if (guard.reason === "invoice_not_open") {
+          const recovery = await applySucceededStripeFamilyBalancePayment(tx, {
+            paymentId,
+            externalId: paymentIntent.id,
+            stripePaymentIntentId: paymentIntent.id,
+            stripePaymentStatus: paymentIntent.status || null,
+            stripePaymentIntentStatus: paymentIntent.status || null,
+            stripeAmountTotalCents: paymentIntent.amount ?? null,
+            stripeEventId: event.id,
+            stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
+            metadata: {
+              ...metadata,
+              paymentScope: "family_balance",
+              creditedAfterInvoiceClosure: "true",
+              originalInvoiceId: invoiceId,
+            },
+            descriptionFallback: isAutopay
+              ? "Autopay payment received after invoice closure"
+              : isStoredMethod
+                ? "Saved method payment received after invoice closure"
+                : "Payment received after invoice closure",
+          });
+          applied = recovery.applied;
+          creditedToFamilyBalance = recovery.applied;
+          ignoredReason = recovery.reason;
+          return;
+        }
         ignoredReason = guard.reason;
         await tx.payment.update({
           where: { id: paymentId },
@@ -2279,24 +2308,21 @@ async function handlePaymentIntentSucceeded(
         },
       });
       if (invoiceClaim.count !== 1) {
-        ignoredReason = "invoice_already_paid";
-        await tx.payment.update({
-          where: { id: paymentId },
-          data: {
-            status: PaymentStatus.VOID,
-            externalIdPlaceholder: paymentIntent.id,
-            customFields: {
-              ...jsonObject(currentPayment.customFields),
-              stripePaymentIntentId: paymentIntent.id,
-              stripeEventId: event.id,
-              stripePaymentIntentStatus: paymentIntent.status || null,
-              stripeAmountTotalCents: paymentIntent.amount ?? null,
-              ignoredReason,
-              requiresManualReview: true,
-              status: "payment_intent_ignored",
-            },
-          },
+        const recovery = await applySucceededStripeInvoicePayment(tx, {
+          invoiceId,
+          paymentId,
+          externalId: paymentIntent.id,
+          stripePaymentIntentId: paymentIntent.id,
+          stripePaymentIntentStatus: paymentIntent.status || null,
+          stripeAmountTotalCents: paymentIntent.amount ?? null,
+          stripeEventId: event.id,
+          stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
+          metadata,
+          appliedAt: paidAt,
         });
+        applied = recovery.applied || recovery.reason === "payment_already_applied";
+        creditedToFamilyBalance = applied && recovery.applicationScope === "family_balance";
+        ignoredReason = recovery.reason;
         return;
       }
 
@@ -2411,7 +2437,17 @@ async function handlePaymentIntentSucceeded(
     invoiceId,
     event.id,
     paymentIntent.id,
-    isAutopay ? "billing.autopay.completed" : isStoredMethod ? "billing.stored_method.completed" : "billing.payment_intent.succeeded",
+    creditedToFamilyBalance
+      ? isAutopay
+        ? "billing.autopay.overpayment_recorded"
+        : isStoredMethod
+          ? "billing.stored_method.overpayment_recorded"
+          : "billing.payment_intent.overpayment_recorded"
+      : isAutopay
+        ? "billing.autopay.completed"
+        : isStoredMethod
+          ? "billing.stored_method.completed"
+          : "billing.payment_intent.succeeded",
   );
   return NextResponse.json({ ok: true });
 }

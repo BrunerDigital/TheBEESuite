@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
+import { allocateAccountCreditToInvoice, availableAccountCreditCents } from "@/lib/account-credit-autopay";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageBilling, getCurrentUser, type CurrentUser } from "@/lib/auth";
-import { jsonRecord } from "@/lib/billing-guardrails";
+import {
+  activeStripeAccountCreditReservationCents,
+  isStripeSubmissionUnknownPayment,
+  jsonRecord,
+} from "@/lib/billing-guardrails";
 import {
   createStripeTerminalLocation,
   createStripeTerminalPaymentIntent,
@@ -37,6 +42,7 @@ import {
   applySucceededStripeFamilyBalancePayment,
   applySucceededStripeInvoicePayment,
 } from "@/lib/stripe-payment-application";
+import { createStripePaymentClaim, reconcileIdempotentStripeSubmission } from "@/lib/stripe-payment-claims";
 
 export const runtime = "nodejs";
 
@@ -48,6 +54,17 @@ function int(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return Math.round(value);
   const parsed = Number.parseInt(clean(value), 10);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function storedCents(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : fallback;
+}
+
+function storedBoolean(value: unknown, fallback: boolean) {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return fallback;
 }
 
 function jsonInput(value: Record<string, unknown>): Prisma.InputJsonObject {
@@ -153,10 +170,64 @@ async function verifyConnectedAccount(tenantId: string, connectedAccountId: stri
 
 async function GETHandler(request: NextRequest) {
   const centerId = clean(request.nextUrl.searchParams.get("centerId"));
-  const amountCents = int(request.nextUrl.searchParams.get("amountCents"));
+  const requestedAmountCents = int(request.nextUrl.searchParams.get("amountCents"));
+  const billingAccountId = clean(request.nextUrl.searchParams.get("billingAccountId"));
+  const familyId = clean(request.nextUrl.searchParams.get("familyId"));
+  const invoiceId = clean(request.nextUrl.searchParams.get("invoiceId"));
   const context = await authorizedCenter(centerId);
   if (!("user" in context)) return context.response;
+  const readiness = await verifyConnectedAccount(context.user.tenantId, context.connectedAccountId);
+  if (!readiness.ok) return readiness.response;
   const locationId = terminalLocationId(context.center.customFields);
+  let amountCents = requestedAmountCents;
+  let accountCreditAppliedCents = 0;
+  let paymentRequired = requestedAmountCents > 0;
+  if (invoiceId) {
+    const invoice = await prisma.invoice.findFirst({
+      where: {
+        id: invoiceId,
+        billingAccountId,
+        billingAccount: { familyId, family: { centerId: context.center.id } },
+      },
+      select: {
+        totalCents: true,
+        status: true,
+        billingAccount: { select: { balanceCents: true } },
+      },
+    });
+    if (!invoice || invoice.status !== PaymentStatus.OPEN) {
+      return NextResponse.json({ ok: false, error: "The selected invoice is no longer available for payment." }, { status: 409 });
+    }
+    const [openInvoiceTotal, draftPayments] = await Promise.all([
+      prisma.invoice.aggregate({
+        where: { billingAccountId, status: PaymentStatus.OPEN, totalCents: { gt: 0 } },
+        _sum: { totalCents: true },
+      }),
+      prisma.payment.findMany({
+        where: {
+          billingAccountId,
+          provider: { in: ["stripe", "stripe_terminal"] },
+          status: PaymentStatus.DRAFT,
+        },
+        select: { status: true, provider: true, customFields: true },
+      }),
+    ]);
+    const reservedCreditCents = draftPayments.reduce(
+      (total, payment) => total + activeStripeAccountCreditReservationCents(payment),
+      0,
+    );
+    const allocation = allocateAccountCreditToInvoice({
+      invoiceTotalCents: invoice.totalCents,
+      availableCreditCents: availableAccountCreditCents({
+        balanceCents: invoice.billingAccount.balanceCents,
+        openInvoiceTotalCents: openInvoiceTotal._sum.totalCents ?? 0,
+        reservedCreditCents,
+      }),
+    });
+    amountCents = allocation.stripeChargePrincipalCents;
+    accountCreditAppliedCents = allocation.accountCreditAppliedCents;
+    paymentRequired = !allocation.fullyCoveredByCredit;
+  }
   const waiveBeeSuitePaymentOperationsFee = shouldWaiveStripePaymentOperationsFee({
     tenantSlug: context.center.organization.tenant.slug,
     tenantName: context.center.organization.tenant.name,
@@ -165,13 +236,22 @@ async function GETHandler(request: NextRequest) {
   });
   const amounts = amountCents > 0
     ? getStripeCheckoutAmounts(amountCents, {
-        paymentMethodCategory: "card",
+        paymentMethodCategory: "card_present",
         waiveBeeSuitePaymentOperationsFee,
-        schoolPaysStripeFeesDirectly: jsonRecord(context.center.customFields).stripeFeesCollector === "stripe",
+        schoolPaysStripeFeesDirectly: stripeConnectedAccountPaysFeesDirectly(readiness.account),
       })
-    : null;
+    : {
+        invoiceAmountCents: 0,
+        parentSurchargeAmountCents: 0,
+        parentProcessingRecoveryAmountCents: 0,
+        schoolProcessingFeeAmountCents: 0,
+        beeSuitePaymentOperationsFeeAmountCents: 0,
+        checkoutTotalCents: 0,
+        applicationFeeAmountCents: 0,
+      };
+  const previewAmounts = { ...amounts, accountCreditAppliedCents, paymentRequired };
   if (!locationId) {
-    return NextResponse.json({ ok: true, locationConfigured: false, readers: [], amounts });
+    return NextResponse.json({ ok: true, locationConfigured: false, readers: [], amounts: previewAmounts });
   }
   const result = await listStripeTerminalReaders({
     locationId,
@@ -188,7 +268,7 @@ async function GETHandler(request: NextRequest) {
     ok: true,
     locationConfigured: true,
     readers: result.readers ?? [],
-    amounts,
+    amounts: previewAmounts,
     hardwareNote: "The web app uses Stripe smart readers over the network. USB card-reader data connections require Stripe's Android SDK.",
   });
 }
@@ -277,54 +357,14 @@ async function processPayment(body: Record<string, unknown>) {
   const billingAccountId = clean(body.billingAccountId);
   const familyId = clean(body.familyId);
   const invoiceId = clean(body.invoiceId);
-  const readerId = clean(body.readerId);
+  const requestedReaderId = clean(body.readerId);
   const context = await authorizedCenter(centerId);
   if (!("user" in context)) return context.response;
-  const paymentReadiness = stripeSchoolReadinessFlowFromFields({
-    customFields: context.center.customFields,
-    centerName: context.center.name,
-  });
-  if (!paymentReadiness.canAcceptParentPayments) {
-    return NextResponse.json(
-      { ok: false, error: paymentReadiness.explanation, paymentReadiness },
-      { status: 403 },
-    );
-  }
-  const readiness = await verifyConnectedAccount(context.user.tenantId, context.connectedAccountId);
-  if (!readiness.ok) return readiness.response;
   if (body.parentPresent !== true) {
     return NextResponse.json(
       { ok: false, error: "Confirm that the parent is present and can review the total shown on the reader." },
       { status: 400 },
     );
-  }
-
-  const locationId = terminalLocationId(context.center.customFields);
-  if (!locationId) {
-    return NextResponse.json({ ok: false, error: "Register a card reader for this school first." }, { status: 400 });
-  }
-  if (!readerId.startsWith("tmr_")) {
-    return NextResponse.json({ ok: false, error: "Choose a registered card reader." }, { status: 400 });
-  }
-  const reader = await retrieveStripeTerminalReader({
-    readerId,
-    connectedAccountId: context.connectedAccountId,
-    tenantId: context.user.tenantId,
-  });
-  if (!reader.ok || !reader.reader) {
-    return NextResponse.json(
-      { ok: false, error: reader.error || "The selected card reader could not be verified." },
-      { status: reader.configured ? 502 : 503 },
-    );
-  }
-  if (reader.reader.locationId !== locationId) {
-    return NextResponse.json({ ok: false, error: "That card reader is registered to a different school." }, { status: 403 });
-  }
-  if (reader.reader.status !== "online") {
-    return NextResponse.json({ ok: false, error: "The selected card reader is offline. Connect it to the network and try again." }, { status: 409 });
-  }
-  if (reader.reader.actionStatus === "in_progress") {
-    return NextResponse.json({ ok: false, error: "The selected card reader is already processing another action." }, { status: 409 });
   }
 
   const billingAccount = await prisma.billingAccount.findFirst({
@@ -353,11 +393,69 @@ async function processPayment(body: Record<string, unknown>) {
         select: { id: true, number: true, totalCents: true, status: true, customFields: true, items: { select: { description: true } } },
       })
     : null;
-  if (invoiceId && !invoice) {
+  const activePayments = await prisma.payment.findMany({
+    where: { billingAccountId: billingAccount.id, provider: "stripe_terminal", status: PaymentStatus.DRAFT },
+    select: { id: true, amountCents: true, status: true, provider: true, customFields: true },
+  });
+  const retryableTerminalSubmission = activePayments.find((payment) => {
+    const fields = jsonRecord(payment.customFields);
+    return fields.paymentScope === (invoiceId ? "invoice" : "family_balance")
+      && clean(fields.invoiceId) === invoiceId
+      && isStripeSubmissionUnknownPayment(payment);
+  });
+  const retryableTerminalFields = jsonRecord(retryableTerminalSubmission?.customFields);
+  const paymentIsInvoice = retryableTerminalSubmission
+    ? retryableTerminalFields.paymentScope === "invoice"
+    : Boolean(invoice);
+  const paymentInvoiceId = clean(retryableTerminalFields.invoiceId) || invoice?.id || "";
+  if (!retryableTerminalSubmission && invoiceId && !invoice) {
     return NextResponse.json({ ok: false, error: "The selected invoice was not found for this family." }, { status: 404 });
   }
-  if (invoice && invoice.status !== PaymentStatus.OPEN) {
+  if (!retryableTerminalSubmission && invoice && invoice.status !== PaymentStatus.OPEN) {
     return NextResponse.json({ ok: false, error: "The selected invoice is no longer open." }, { status: 409 });
+  }
+  const connectedAccountId = clean(retryableTerminalFields.stripeConnectedAccountId) || context.connectedAccountId;
+  const readerId = clean(retryableTerminalFields.stripeTerminalReaderId)
+    || clean(retryableTerminalFields.readerId)
+    || requestedReaderId;
+  const paymentReadiness = stripeSchoolReadinessFlowFromFields({
+    customFields: context.center.customFields,
+    centerName: context.center.name,
+  });
+  if (!retryableTerminalSubmission && !paymentReadiness.canAcceptParentPayments) {
+    return NextResponse.json(
+      { ok: false, error: paymentReadiness.explanation, paymentReadiness },
+      { status: 403 },
+    );
+  }
+  const readiness = await verifyConnectedAccount(context.user.tenantId, connectedAccountId);
+  if (!readiness.ok) return readiness.response;
+  const locationId = terminalLocationId(context.center.customFields);
+  if (!retryableTerminalSubmission && !locationId) {
+    return NextResponse.json({ ok: false, error: "Register a card reader for this school first." }, { status: 400 });
+  }
+  if (!readerId.startsWith("tmr_")) {
+    return NextResponse.json({ ok: false, error: "Choose a registered card reader." }, { status: 400 });
+  }
+  const reader = await retrieveStripeTerminalReader({
+    readerId,
+    connectedAccountId,
+    tenantId: context.user.tenantId,
+  });
+  if (!reader.ok || !reader.reader) {
+    return NextResponse.json(
+      { ok: false, error: reader.error || "The selected card reader could not be verified." },
+      { status: reader.configured ? 502 : 503 },
+    );
+  }
+  if (!retryableTerminalSubmission && reader.reader.locationId !== locationId) {
+    return NextResponse.json({ ok: false, error: "That card reader is registered to a different school." }, { status: 403 });
+  }
+  if (reader.reader.status !== "online") {
+    return NextResponse.json({ ok: false, error: "The selected card reader is offline. Connect it to the network and try again." }, { status: 409 });
+  }
+  if (reader.reader.actionStatus === "in_progress") {
+    return NextResponse.json({ ok: false, error: "The selected card reader is already processing another action." }, { status: 409 });
   }
   const responsibilityEvidence = [
     billingAccount.customFields,
@@ -387,7 +485,7 @@ async function processPayment(body: Record<string, unknown>) {
         ),
         responsibilityEvidence,
       });
-  if (responsibilityReviewRequired) {
+  if (!retryableTerminalSubmission && responsibilityReviewRequired) {
     return NextResponse.json({ ok: false, error: "Separate family and agency responsibility before collecting an in-person card payment." }, { status: 409 });
   }
   const requestedAmountCents = int(body.amountCents);
@@ -395,27 +493,40 @@ async function processPayment(body: Record<string, unknown>) {
     accountBalanceCents: billingAccount.balanceCents,
     agencyLedgerEntries: billingAccount.ledgerEntries,
   });
-  if (!invoice && requestedAmountCents > familyVisibleBalanceCents) {
+  if (!retryableTerminalSubmission && !invoice && requestedAmountCents > familyVisibleBalanceCents) {
     return NextResponse.json({ ok: false, error: "The in-person payment cannot exceed the family-responsibility balance." }, { status: 409 });
   }
-  const amountCents = invoice?.totalCents ?? (requestedAmountCents > 0 ? requestedAmountCents : familyVisibleBalanceCents);
-  if (amountCents <= 0) {
-    return NextResponse.json({ ok: false, error: "Payment amount must be greater than zero." }, { status: 400 });
-  }
-
-  const activePayments = await prisma.payment.findMany({
-    where: { billingAccountId: billingAccount.id, provider: "stripe_terminal", status: PaymentStatus.DRAFT },
-    select: { id: true, customFields: true },
-  });
-  const activePayment = activePayments.find((payment) => {
-    const fields = jsonRecord(payment.customFields);
-    return clean(fields.status).startsWith("terminal_") && clean(fields.status) !== "terminal_failed";
-  });
-  if (activePayment) {
+  const openInvoiceTotalCents = billingAccount.invoices
+    .filter((item) => item.status === PaymentStatus.OPEN)
+    .reduce((total, item) => total + item.totalCents, 0);
+  const currentInvoiceCreditAllocation = invoice
+    ? allocateAccountCreditToInvoice({
+        invoiceTotalCents: invoice.totalCents,
+        availableCreditCents: availableAccountCreditCents({
+          balanceCents: billingAccount.balanceCents,
+          openInvoiceTotalCents,
+        }),
+      })
+    : null;
+  const invoiceCreditAllocation = retryableTerminalSubmission
+    ? {
+        invoiceTotalCents: storedCents(retryableTerminalFields.invoiceTotalCents, invoice?.totalCents ?? retryableTerminalSubmission.amountCents),
+        accountCreditAppliedCents: storedCents(retryableTerminalFields.accountCreditAppliedCents, 0),
+        stripeChargePrincipalCents: retryableTerminalSubmission.amountCents,
+        fullyCoveredByCredit: false,
+      }
+    : currentInvoiceCreditAllocation;
+  if (!retryableTerminalSubmission && invoiceCreditAllocation?.fullyCoveredByCredit) {
     return NextResponse.json(
-      { ok: false, error: "This family already has an in-person card payment waiting on a reader.", paymentId: activePayment.id },
+      { ok: false, error: "Available account credit already covers this invoice; no card payment is needed." },
       { status: 409 },
     );
+  }
+  const amountCents = retryableTerminalSubmission?.amountCents
+    ?? invoiceCreditAllocation?.stripeChargePrincipalCents
+    ?? (requestedAmountCents > 0 ? requestedAmountCents : familyVisibleBalanceCents);
+  if (amountCents <= 0) {
+    return NextResponse.json({ ok: false, error: "Payment amount must be greater than zero." }, { status: 400 });
   }
 
   const waiveBeeSuitePaymentOperationsFee = shouldWaiveStripePaymentOperationsFee({
@@ -424,71 +535,158 @@ async function processPayment(body: Record<string, unknown>) {
     brandSlug: context.center.organization.brand?.slug,
     brandName: context.center.organization.brand?.name,
   });
-  const amounts = getStripeCheckoutAmounts(amountCents, {
+  const calculatedAmounts = getStripeCheckoutAmounts(amountCents, {
     paymentMethodCategory: "card_present",
     waiveBeeSuitePaymentOperationsFee,
     schoolPaysStripeFeesDirectly: stripeConnectedAccountPaysFeesDirectly(readiness.account),
   });
-  const description = clean(body.description) || "In-person tuition payment";
-  const payment = await prisma.payment.create({
-    data: {
-      billingAccountId: billingAccount.id,
+  const amounts = retryableTerminalSubmission
+    ? {
+        ...calculatedAmounts,
+        invoiceAmountCents: storedCents(retryableTerminalFields.invoiceAmountCents, calculatedAmounts.invoiceAmountCents),
+        parentSurchargeAmountCents: storedCents(retryableTerminalFields.parentSurchargeAmountCents, calculatedAmounts.parentSurchargeAmountCents),
+        parentProcessingRecoveryAmountCents: storedCents(retryableTerminalFields.parentProcessingRecoveryAmountCents, calculatedAmounts.parentProcessingRecoveryAmountCents),
+        schoolProcessingFeeAmountCents: storedCents(retryableTerminalFields.schoolProcessingFeeAmountCents, calculatedAmounts.schoolProcessingFeeAmountCents),
+        beeSuitePaymentOperationsFeeAmountCents: storedCents(retryableTerminalFields.beeSuitePaymentOperationsFeeAmountCents, calculatedAmounts.beeSuitePaymentOperationsFeeAmountCents),
+        checkoutTotalCents: storedCents(retryableTerminalFields.checkoutTotalCents, calculatedAmounts.checkoutTotalCents),
+        applicationFeeAmountCents: storedCents(retryableTerminalFields.applicationFeeAmountCents, calculatedAmounts.applicationFeeAmountCents),
+      }
+    : calculatedAmounts;
+  const description = clean(retryableTerminalFields.description) || clean(body.description) || "In-person tuition payment";
+  const stripeInvoiceNumber = clean(retryableTerminalFields.stripeInvoiceNumber)
+    || invoice?.number || `${billingAccount.family.name} family balance`;
+  const stripeCenterName = clean(retryableTerminalFields.stripeCenterName) || context.center.name;
+  const stripeCustomerEmail = Object.prototype.hasOwnProperty.call(retryableTerminalFields, "stripeCustomerEmail")
+    ? clean(retryableTerminalFields.stripeCustomerEmail) || null
+    : billingAccount.family.billingEmail;
+  const effectiveFeeWaived = storedBoolean(retryableTerminalFields.beeSuitePaymentOperationsFeeWaived, waiveBeeSuitePaymentOperationsFee);
+  const effectiveRequestedByUserId = clean(retryableTerminalFields.requestedByUserId) || context.user.id;
+  const effectiveEnvironment = clean(retryableTerminalFields.environment)
+    || process.env.VERCEL_ENV || process.env.NODE_ENV || "development";
+  const paymentClaim = await createStripePaymentClaim({
+    billingAccountId: billingAccount.id,
+    scope: paymentIsInvoice ? "invoice_collection" : "family_balance",
+    invoiceId: paymentInvoiceId || null,
+    existingPaymentId: retryableTerminalSubmission?.id,
+    expectedInvoiceTotalCents: invoice?.totalCents ?? null,
+    expectedAccountCreditAppliedCents: invoiceCreditAllocation?.accountCreditAppliedCents ?? 0,
+    paymentData: {
       amountCents,
       status: PaymentStatus.DRAFT,
       provider: "stripe_terminal",
       externalIdPlaceholder: "payment_intent_pending",
       customFields: jsonInput({
-        paymentScope: invoice ? "invoice" : "family_balance",
-        invoiceId: invoice?.id || null,
+        tenantId: context.user.tenantId,
+        paymentScope: paymentIsInvoice ? "invoice" : "family_balance",
+        invoiceId: paymentInvoiceId || null,
         centerId: context.center.id,
         familyId: billingAccount.family.id,
         readerId,
+        stripeTerminalReaderId: readerId,
+        stripeConnectedAccountId: connectedAccountId,
+        stripeInvoiceNumber,
+        stripeCenterName,
+        stripeCustomerEmail,
         collectionMode: "director_card_present",
         description,
+        invoiceTotalCents: invoiceCreditAllocation?.invoiceTotalCents ?? amountCents,
+        invoiceAmountCents: amounts.invoiceAmountCents,
+        accountCreditAppliedCents: invoiceCreditAllocation?.accountCreditAppliedCents ?? 0,
+        stripeChargePrincipalCents: amountCents,
+        parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
+        parentProcessingRecoveryAmountCents: amounts.parentProcessingRecoveryAmountCents,
+        schoolProcessingFeeAmountCents: amounts.schoolProcessingFeeAmountCents,
+        beeSuitePaymentOperationsFeeAmountCents: amounts.beeSuitePaymentOperationsFeeAmountCents,
+        beeSuitePaymentOperationsFeeWaived: effectiveFeeWaived,
+        checkoutTotalCents: amounts.checkoutTotalCents,
+        applicationFeeAmountCents: amounts.applicationFeeAmountCents,
+        requestedByUserId: effectiveRequestedByUserId,
+        environment: effectiveEnvironment,
         status: "terminal_intent_pending",
       }),
     },
   });
+  if (!paymentClaim.created) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: paymentClaim.reason === "invoice_not_open"
+          ? "The selected invoice is no longer open."
+          : paymentClaim.reason === "invoice_amount_changed"
+            ? "The invoice amount changed before the card payment could start. Review the invoice and try again."
+          : paymentClaim.reason === "family_balance_changed"
+            ? "The family balance changed before the card payment could start. Review the balance and try again."
+            : "This family already has another online or in-person payment in progress.",
+        paymentId: paymentClaim.blockingPaymentId,
+      },
+      { status: 409 },
+    );
+  }
+  const payment = paymentClaim.payment;
+  const paymentFields = jsonRecord(payment.customFields);
   const metadata = {
-    tenantId: context.user.tenantId,
-    paymentScope: invoice ? "invoice" : "family_balance",
+    tenantId: clean(paymentFields.tenantId) || context.user.tenantId,
+    paymentScope: clean(paymentFields.paymentScope) || (paymentIsInvoice ? "invoice" : "family_balance"),
     billingAccountId: billingAccount.id,
-    familyId: billingAccount.family.id,
+    familyId: clean(paymentFields.familyId) || billingAccount.family.id,
     centerId: context.center.id,
-    invoiceId: invoice?.id || "",
+    invoiceId: clean(paymentFields.invoiceId) || paymentInvoiceId,
     paymentId: payment.id,
-    stripeConnectedAccountId: context.connectedAccountId,
+    stripeConnectedAccountId: clean(paymentFields.stripeConnectedAccountId) || connectedAccountId,
     stripeChargeType: "direct",
-    stripeTerminalReaderId: readerId,
-    invoiceAmountCents: String(amounts.invoiceAmountCents),
-    parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
-    parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
-    schoolProcessingFeeAmountCents: String(amounts.schoolProcessingFeeAmountCents),
-    beeSuitePaymentOperationsFeeAmountCents: String(amounts.beeSuitePaymentOperationsFeeAmountCents),
-    beeSuitePaymentOperationsFeeWaived: String(waiveBeeSuitePaymentOperationsFee),
+    stripeTerminalReaderId: clean(paymentFields.stripeTerminalReaderId) || readerId,
+    invoiceAmountCents: String(storedCents(paymentFields.invoiceAmountCents, amounts.invoiceAmountCents)),
+    invoiceTotalCents: String(storedCents(paymentFields.invoiceTotalCents, invoiceCreditAllocation?.invoiceTotalCents ?? amountCents)),
+    accountCreditAppliedCents: String(storedCents(paymentFields.accountCreditAppliedCents, invoiceCreditAllocation?.accountCreditAppliedCents ?? 0)),
+    stripeChargePrincipalCents: String(storedCents(paymentFields.stripeChargePrincipalCents, amountCents)),
+    parentSurchargeAmountCents: String(storedCents(paymentFields.parentSurchargeAmountCents, amounts.parentSurchargeAmountCents)),
+    parentProcessingRecoveryAmountCents: String(storedCents(paymentFields.parentProcessingRecoveryAmountCents, amounts.parentProcessingRecoveryAmountCents)),
+    schoolProcessingFeeAmountCents: String(storedCents(paymentFields.schoolProcessingFeeAmountCents, amounts.schoolProcessingFeeAmountCents)),
+    beeSuitePaymentOperationsFeeAmountCents: String(storedCents(paymentFields.beeSuitePaymentOperationsFeeAmountCents, amounts.beeSuitePaymentOperationsFeeAmountCents)),
+    beeSuitePaymentOperationsFeeWaived: String(storedBoolean(paymentFields.beeSuitePaymentOperationsFeeWaived, effectiveFeeWaived)),
     requestedPaymentMethodCategory: "card_present",
     paymentMethodCategory: "card_present",
-    checkoutTotalCents: String(amounts.checkoutTotalCents),
-    applicationFeeAmountCents: String(amounts.applicationFeeAmountCents),
+    checkoutTotalCents: String(storedCents(paymentFields.checkoutTotalCents, amounts.checkoutTotalCents)),
+    applicationFeeAmountCents: String(storedCents(paymentFields.applicationFeeAmountCents, amounts.applicationFeeAmountCents)),
     collectionMode: "director_card_present",
-    description,
+    description: clean(paymentFields.description) || description,
     source: "director_dashboard",
-    requestedByUserId: context.user.id,
+    requestedByUserId: clean(paymentFields.requestedByUserId) || effectiveRequestedByUserId,
     parentPresentConfirmed: "true",
-    environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
+    environment: clean(paymentFields.environment) || effectiveEnvironment,
   };
-  const intent = await createStripeTerminalPaymentIntent({
+  const submission = await reconcileIdempotentStripeSubmission(() => createStripeTerminalPaymentIntent({
     amountCents: amounts.checkoutTotalCents,
     invoiceAmountCents: amounts.invoiceAmountCents,
-    invoiceNumber: invoice?.number || `${billingAccount.family.name} family balance`,
-    centerName: context.center.name,
-    customerEmail: billingAccount.family.billingEmail,
+    invoiceNumber: stripeInvoiceNumber,
+    centerName: stripeCenterName,
+    customerEmail: stripeCustomerEmail,
     metadata,
-    connectedAccountId: context.connectedAccountId,
+    connectedAccountId,
     applicationFeeAmountCents: amounts.applicationFeeAmountCents,
     idempotencyKey: `terminal-payment:intent:${payment.id}`,
     tenantId: context.user.tenantId,
-  });
+  }));
+  if (!submission.resolved) {
+    await prisma.payment.updateMany({
+      where: { id: payment.id, status: PaymentStatus.DRAFT },
+      data: {
+        customFields: jsonInput({
+          ...paymentFields,
+          ...metadata,
+          status: "terminal_submission_unknown",
+          submissionStateUnknownAt: new Date().toISOString(),
+          submissionRetryUsesPaymentId: payment.id,
+        }),
+      },
+    });
+    return NextResponse.json({
+      ok: false,
+      error: "The processor response was interrupted. This exact card-present attempt will be reconciled before any retry.",
+      paymentId: payment.id,
+    }, { status: 503 });
+  }
+  const intent = submission.value;
   if (!intent.ok || !intent.paymentIntent?.id) {
     await prisma.payment.update({
       where: { id: payment.id },
@@ -503,26 +701,51 @@ async function processPayment(body: Record<string, unknown>) {
       { status: intent.configured ? 502 : 503 },
     );
   }
+  const terminalPaymentIntent = intent.paymentIntent;
 
   await prisma.payment.update({
     where: { id: payment.id },
     data: {
-      externalIdPlaceholder: intent.paymentIntent.id,
+      externalIdPlaceholder: terminalPaymentIntent.id,
       customFields: jsonInput({
         ...metadata,
-        stripePaymentIntentId: intent.paymentIntent.id,
-        stripePaymentIntentStatus: intent.paymentIntent.status || null,
+        stripePaymentIntentId: terminalPaymentIntent.id,
+        stripePaymentIntentStatus: terminalPaymentIntent.status || null,
         status: "terminal_ready",
       }),
     },
   });
-  const processed = await processStripeTerminalPaymentIntent({
+  const readerSubmission = await reconcileIdempotentStripeSubmission(() => processStripeTerminalPaymentIntent({
     readerId,
-    paymentIntentId: intent.paymentIntent.id,
-    connectedAccountId: context.connectedAccountId,
+    paymentIntentId: terminalPaymentIntent.id,
+    connectedAccountId,
     tenantId: context.user.tenantId,
     idempotencyKey: `terminal-payment:reader:${payment.id}`,
-  });
+  }));
+  if (!readerSubmission.resolved) {
+    await prisma.payment.updateMany({
+      where: { id: payment.id, status: PaymentStatus.DRAFT },
+      data: {
+        externalIdPlaceholder: terminalPaymentIntent.id,
+        customFields: jsonInput({
+          ...metadata,
+          stripePaymentIntentId: terminalPaymentIntent.id,
+          stripePaymentIntentStatus: terminalPaymentIntent.status || null,
+          status: "terminal_reader_submission_unknown",
+          readerSubmissionStateUnknownAt: new Date().toISOString(),
+          submissionRetryUsesPaymentId: payment.id,
+        }),
+      },
+    });
+    return NextResponse.json({
+      ok: false,
+      status: "processing",
+      error: "The reader response was interrupted. This exact card-present attempt is being reconciled.",
+      paymentId: payment.id,
+      stripePaymentIntentId: terminalPaymentIntent.id,
+    }, { status: 503 });
+  }
+  const processed = readerSubmission.value;
   if (!processed.ok || !processed.reader) {
     await prisma.payment.update({
       where: { id: payment.id },
@@ -530,8 +753,8 @@ async function processPayment(body: Record<string, unknown>) {
         status: PaymentStatus.FAILED,
         customFields: jsonInput({
           ...metadata,
-          stripePaymentIntentId: intent.paymentIntent.id,
-          stripePaymentIntentStatus: intent.paymentIntent.status || null,
+          stripePaymentIntentId: terminalPaymentIntent.id,
+          stripePaymentIntentStatus: terminalPaymentIntent.status || null,
           status: "terminal_failed",
           stripeError: processed.error || null,
         }),
@@ -547,8 +770,8 @@ async function processPayment(body: Record<string, unknown>) {
     data: {
       customFields: jsonInput({
         ...metadata,
-        stripePaymentIntentId: intent.paymentIntent.id,
-        stripePaymentIntentStatus: intent.paymentIntent.status || null,
+        stripePaymentIntentId: terminalPaymentIntent.id,
+        stripePaymentIntentStatus: terminalPaymentIntent.status || null,
         stripeTerminalReaderId: processed.reader.id,
         stripeTerminalReaderActionStatus: processed.reader.actionStatus,
         status: "terminal_processing",
@@ -558,11 +781,11 @@ async function processPayment(body: Record<string, unknown>) {
   await writeAuditLog(context.user, {
     centerId: context.center.id,
     action: "billing.terminal.payment_started",
-    resource: invoice ? "Invoice" : "BillingAccount",
-    resourceId: invoice?.id || billingAccount.id,
+    resource: paymentIsInvoice ? "Invoice" : "BillingAccount",
+    resourceId: paymentInvoiceId || billingAccount.id,
     metadata: {
       paymentId: payment.id,
-      stripePaymentIntentId: intent.paymentIntent.id,
+      stripePaymentIntentId: terminalPaymentIntent.id,
       stripeTerminalReaderId: readerId,
       amountCents,
       checkoutTotalCents: amounts.checkoutTotalCents,
@@ -572,7 +795,7 @@ async function processPayment(body: Record<string, unknown>) {
     ok: true,
     status: "processing",
     paymentId: payment.id,
-    stripePaymentIntentId: intent.paymentIntent.id,
+    stripePaymentIntentId: terminalPaymentIntent.id,
     reader: processed.reader,
   });
 }
@@ -602,6 +825,7 @@ async function paymentStatus(body: Record<string, unknown>) {
   const context = await authorizedCenter(payment.billingAccount.family.centerId);
   if (!("user" in context)) return context.response;
   const fields = jsonRecord(payment.customFields);
+  const paymentConnectedAccountId = clean(fields.stripeConnectedAccountId) || context.connectedAccountId;
   const paymentIntentId = clean(fields.stripePaymentIntentId);
   if (!paymentIntentId.startsWith("pi_")) {
     return NextResponse.json({ ok: false, error: "The payment is missing its processor confirmation reference." }, { status: 409 });
@@ -614,7 +838,7 @@ async function paymentStatus(body: Record<string, unknown>) {
   }
   const intent = await retrieveStripePaymentIntent({
     paymentIntentId,
-    connectedAccountId: context.connectedAccountId,
+    connectedAccountId: paymentConnectedAccountId,
     tenantId: context.user.tenantId,
   });
   if (!intent.ok || !intent.paymentIntent) {
@@ -663,13 +887,55 @@ async function paymentStatus(body: Record<string, unknown>) {
   }
 
   const readerId = clean(fields.stripeTerminalReaderId);
-  const reader = readerId
+  let reader = readerId
     ? await retrieveStripeTerminalReader({
         readerId,
-        connectedAccountId: context.connectedAccountId,
+        connectedAccountId: paymentConnectedAccountId,
         tenantId: context.user.tenantId,
       })
     : null;
+  if (
+    fields.status === "terminal_reader_submission_unknown"
+    && readerId
+    && reader?.reader?.actionStatus !== "in_progress"
+    && reader?.reader?.actionStatus !== "failed"
+  ) {
+    const recovery = await reconcileIdempotentStripeSubmission(() => processStripeTerminalPaymentIntent({
+      readerId,
+      paymentIntentId,
+      connectedAccountId: paymentConnectedAccountId,
+      tenantId: context.user.tenantId,
+      idempotencyKey: `terminal-payment:reader:${payment.id}`,
+    }));
+    if (!recovery.resolved) {
+      return NextResponse.json({
+        ok: true,
+        status: "processing",
+        paymentId: payment.id,
+        paymentIntentStatus: intent.paymentIntent.status,
+        reader: reader?.reader || null,
+      }, { status: 202 });
+    }
+    if (!recovery.value.ok || !recovery.value.reader) {
+      await prisma.payment.updateMany({
+        where: { id: payment.id, status: PaymentStatus.DRAFT },
+        data: {
+          status: PaymentStatus.FAILED,
+          customFields: jsonInput({
+            ...fields,
+            stripePaymentIntentStatus: intent.paymentIntent.status || null,
+            status: "terminal_failed",
+            stripeError: recovery.value.error || null,
+          }),
+        },
+      });
+      return NextResponse.json(
+        { ok: false, status: "failed", paymentId: payment.id, error: recovery.value.error || "The reader could not start the card-present payment." },
+        { status: recovery.value.configured ? 502 : 503 },
+      );
+    }
+    reader = recovery.value;
+  }
   const readerFailure = reader?.reader?.actionStatus === "failed";
   const terminalStatus = readerFailure || intent.paymentIntent.status === "canceled" ? "failed" : "processing";
   await prisma.payment.update({

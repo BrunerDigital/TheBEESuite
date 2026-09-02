@@ -27,8 +27,10 @@ type TerminalReader = {
 
 type TerminalAmounts = {
   invoiceAmountCents: number;
+  accountCreditAppliedCents: number;
   parentProcessingRecoveryAmountCents: number;
   checkoutTotalCents: number;
+  paymentRequired: boolean;
 };
 
 type Props = {
@@ -71,7 +73,7 @@ export function StripeTerminalPayment({
   const [readerId, setReaderId] = useState(previewMode ? "preview-reader" : "");
   const [registrationCode, setRegistrationCode] = useState("");
   const [readerLabel, setReaderLabel] = useState("");
-  const [amounts, setAmounts] = useState<TerminalAmounts | null>(previewMode ? { invoiceAmountCents: amountCents, parentProcessingRecoveryAmountCents: 0, checkoutTotalCents: amountCents } : null);
+  const [amounts, setAmounts] = useState<TerminalAmounts | null>(previewMode ? { invoiceAmountCents: amountCents, accountCreditAppliedCents: 0, parentProcessingRecoveryAmountCents: 0, checkoutTotalCents: amountCents, paymentRequired: true } : null);
   const [parentPresent, setParentPresent] = useState(false);
   const [paymentId, setPaymentId] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "processing" | "succeeded" | "failed">("idle");
@@ -86,7 +88,7 @@ export function StripeTerminalPayment({
     setStatus("loading");
     setError("");
     const response = await fetch(
-      `/api/billing/terminal-payment?centerId=${encodeURIComponent(centerId)}&amountCents=${amountCents}`,
+      `/api/billing/terminal-payment?centerId=${encodeURIComponent(centerId)}&billingAccountId=${encodeURIComponent(billingAccountId)}&familyId=${encodeURIComponent(familyId)}&invoiceId=${encodeURIComponent(invoiceId || "")}&amountCents=${amountCents}`,
       { cache: "no-store" },
     );
     const json = await response.json().catch(() => null) as {
@@ -106,7 +108,7 @@ export function StripeTerminalPayment({
       ? current
       : nextReaders.find((reader) => reader.status === "online")?.id || nextReaders[0]?.id || "");
     setStatus("idle");
-  }, [amountCents, centerId, previewMode]);
+  }, [amountCents, billingAccountId, centerId, familyId, invoiceId, previewMode]);
 
   useEffect(() => {
     if (!active || !paymentId || status !== "processing") return;
@@ -125,7 +127,7 @@ export function StripeTerminalPayment({
         router.refresh();
         return;
       }
-      if (!response.ok || json?.status === "failed" || json?.status === "review") {
+      if ((!response.ok && json?.status !== "processing") || json?.status === "failed" || json?.status === "review") {
         setStatus("failed");
         setError(json?.error || "The in-person card payment did not complete.");
       }
@@ -210,7 +212,15 @@ export function StripeTerminalPayment({
         parentPresent: true,
       }),
     });
-    const json = await response.json().catch(() => null) as { error?: string; paymentId?: string } | null;
+    const json = await response.json().catch(() => null) as { error?: string; paymentId?: string; status?: string } | null;
+    if (json?.paymentId && json.status === "processing") {
+      setPaymentId(json.paymentId);
+      setStatus("processing");
+      setMessage(response.ok
+        ? "Reader ready. Ask the parent to tap, insert, or swipe their card."
+        : "The reader response was interrupted. The original payment attempt is being reconciled; do not start another payment.");
+      return;
+    }
     if (!response.ok || !json?.paymentId) {
       setStatus("failed");
       setError(json?.error || "The reader payment could not be started.");
@@ -229,6 +239,7 @@ export function StripeTerminalPayment({
     !readerBusy &&
     parentPresent &&
     amountCents > 0 &&
+    amounts?.paymentRequired === true &&
     status !== "loading" &&
     status !== "processing",
   );
@@ -248,8 +259,8 @@ export function StripeTerminalPayment({
       <div className="space-y-4">
             <div className="grid gap-2 rounded-lg border bg-muted/25 p-3 sm:grid-cols-3">
               <div>
-                <div className="text-xs text-muted-foreground">Account payment</div>
-                <div className="font-medium">{money(amountCents)}</div>
+                <div className="text-xs text-muted-foreground">Card payment</div>
+                <div className="font-medium">{money(amounts?.invoiceAmountCents ?? amountCents)}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Card recovery</div>
@@ -260,6 +271,15 @@ export function StripeTerminalPayment({
                 <div className="font-medium">{money(amounts?.checkoutTotalCents ?? amountCents)}</div>
               </div>
             </div>
+
+            {(amounts?.accountCreditAppliedCents ?? 0) > 0 ? (
+              <Alert>
+                <AlertTitle>Account credit applied</AlertTitle>
+                <AlertDescription>
+                  {money(amounts!.accountCreditAppliedCents)} in existing account credit is applied before the card charge.
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
             {readers.length ? (
               <div className="space-y-2">
@@ -358,7 +378,13 @@ export function StripeTerminalPayment({
             ) : null}
             <Button type="button" disabled={!canProcess} onClick={startPayment}>
               {status === "loading" || status === "processing" ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <CreditCard data-icon="inline-start" />}
-              {status === "processing" ? "Waiting for card" : status === "loading" ? "Starting…" : `Charge ${money(amounts?.checkoutTotalCents ?? amountCents)}`}
+              {status === "processing"
+                ? "Waiting for card"
+                : status === "loading"
+                  ? "Starting…"
+                  : amounts?.paymentRequired === false
+                    ? "Covered by account credit"
+                    : `Charge ${money(amounts?.checkoutTotalCents ?? amountCents)}`}
             </Button>
           </div>
     </>

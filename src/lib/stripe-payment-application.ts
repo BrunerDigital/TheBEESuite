@@ -3,7 +3,11 @@ import {
   allocateAccountCreditToInvoice,
   availableAccountCreditCents,
 } from "@/lib/account-credit-autopay";
-import { checkoutApplicationGuard, jsonRecord } from "@/lib/billing-guardrails";
+import {
+  activeStripeAccountCreditReservationCents,
+  checkoutApplicationGuard,
+  jsonRecord,
+} from "@/lib/billing-guardrails";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 
 type PaymentMetadata = Record<string, unknown>;
@@ -243,6 +247,7 @@ export async function applyFamilyBalancePaymentToOpenInvoices(
 export type StripePaymentApplicationResult = {
   applied: boolean;
   reason: string | null;
+  applicationScope?: "invoice" | "family_balance";
   billingAccountId?: string | null;
   appliedInvoiceIds?: string[];
 };
@@ -293,10 +298,10 @@ export async function applyAccountCreditToInvoice(
     tx.payment.findMany({
       where: {
         billingAccountId: initialInvoice.billingAccountId,
-        provider: "stripe",
+        provider: { in: ["stripe", "stripe_terminal"] },
         status: PaymentStatus.DRAFT,
       },
-      select: { customFields: true },
+      select: { status: true, provider: true, customFields: true },
     }),
   ]);
   if (!invoice || !account) {
@@ -306,12 +311,10 @@ export async function applyAccountCreditToInvoice(
     return { applied: false, reason: "invoice_already_paid", billingAccountId: invoice.billingAccountId };
   }
 
-  const reservedCreditCents = draftPayments.reduce((total, payment) => {
-    const fields = jsonRecord(payment.customFields);
-    const status = clean(fields.status);
-    if (!status.endsWith("_pending") && !status.endsWith("_processing")) return total;
-    return total + centsFrom(fields.accountCreditAppliedCents);
-  }, 0);
+  const reservedCreditCents = draftPayments.reduce(
+    (total, payment) => total + activeStripeAccountCreditReservationCents(payment),
+    0,
+  );
   const availableCreditCents = availableAccountCreditCents({
     balanceCents: account.balanceCents,
     openInvoiceTotalCents: openInvoiceTotal._sum.totalCents ?? 0,
@@ -437,11 +440,11 @@ export async function applySucceededStripeInvoicePayment(
   },
 ): Promise<StripePaymentApplicationResult> {
   const metadata = input.metadata ?? {};
-  const currentPayment = await tx.payment.findUnique({
+  let currentPayment = await tx.payment.findUnique({
     where: { id: input.paymentId },
     select: { status: true, billingAccountId: true, amountCents: true, customFields: true },
   });
-  const invoice = await tx.invoice.findUnique({
+  let invoice = await tx.invoice.findUnique({
     where: { id: input.invoiceId },
     select: { status: true, billingAccountId: true, totalCents: true, customFields: true },
   });
@@ -449,9 +452,31 @@ export async function applySucceededStripeInvoicePayment(
     return { applied: false, reason: currentPayment ? "invoice_not_found" : "payment_not_found" };
   }
 
+  await tx.$queryRaw(
+    Prisma.sql`SELECT "id" FROM "BillingAccount" WHERE "id" = ${currentPayment.billingAccountId} FOR UPDATE`,
+  );
+  [currentPayment, invoice] = await Promise.all([
+    tx.payment.findUnique({
+      where: { id: input.paymentId },
+      select: { status: true, billingAccountId: true, amountCents: true, customFields: true },
+    }),
+    tx.invoice.findUnique({
+      where: { id: input.invoiceId },
+      select: { status: true, billingAccountId: true, totalCents: true, customFields: true },
+    }),
+  ]);
+  if (!currentPayment || !invoice) {
+    return { applied: false, reason: currentPayment ? "invoice_not_found" : "payment_not_found" };
+  }
+
   const currentFields = jsonRecord(currentPayment.customFields);
   if (currentPayment.status === PaymentStatus.PAID && clean(currentFields.stripePaymentIntentId) === input.stripePaymentIntentId) {
-    return { applied: false, reason: "payment_already_applied", billingAccountId: currentPayment.billingAccountId };
+    return {
+      applied: false,
+      reason: "payment_already_applied",
+      applicationScope: currentFields.paymentScope === "family_balance" ? "family_balance" : "invoice",
+      billingAccountId: currentPayment.billingAccountId,
+    };
   }
 
   const accountCreditAppliedCents = centsFrom(metadata.accountCreditAppliedCents);
@@ -465,6 +490,33 @@ export async function applySucceededStripeInvoicePayment(
     accountCreditAppliedCents,
   });
   if (!guard.ok) {
+    // Stripe has confirmed that money moved. If another payment closed the
+    // invoice first, preserve the provider truth as an account-level credit
+    // instead of marking the successful payment void.
+    if (guard.reason === "invoice_not_open") {
+      const recovery = await applySucceededStripeFamilyBalancePayment(tx, {
+        paymentId: input.paymentId,
+        externalId: input.externalId,
+        stripePaymentIntentId: input.stripePaymentIntentId,
+        stripePaymentStatus: input.stripePaymentIntentStatus,
+        stripePaymentIntentStatus: input.stripePaymentIntentStatus,
+        stripeAmountTotalCents: input.stripeAmountTotalCents,
+        stripeEventId: input.stripeEventId,
+        stripeEventCreatedAt: input.stripeEventCreatedAt,
+        metadata: {
+          ...metadata,
+          paymentScope: "family_balance",
+          creditedAfterInvoiceClosure: true,
+          originalInvoiceId: input.invoiceId,
+        },
+        descriptionFallback: `${collectionPaymentDescription(clean(metadata.collectionMode) || null)} received after invoice closure`,
+        appliedAt: input.appliedAt,
+      });
+      return {
+        ...recovery,
+        applicationScope: recovery.applied ? "family_balance" : recovery.applicationScope,
+      };
+    }
     await tx.payment.update({
       where: { id: input.paymentId },
       data: {
@@ -613,7 +665,7 @@ export async function applySucceededStripeInvoicePayment(
     paidAt,
     invoiceCustomFields: invoice.customFields,
   });
-  return { applied: true, reason: null, billingAccountId: payment.billingAccountId };
+  return { applied: true, reason: null, applicationScope: "invoice", billingAccountId: payment.billingAccountId };
 }
 
 export async function applySucceededStripeFamilyBalancePayment(
@@ -633,7 +685,20 @@ export async function applySucceededStripeFamilyBalancePayment(
   },
 ): Promise<StripePaymentApplicationResult> {
   const metadata = input.metadata ?? {};
-  const currentPayment = await tx.payment.findUnique({
+  let currentPayment = await tx.payment.findUnique({
+    where: { id: input.paymentId },
+    select: {
+      status: true,
+      billingAccountId: true,
+      amountCents: true,
+      customFields: true,
+    },
+  });
+  if (!currentPayment) return { applied: false, reason: "payment_not_found" };
+  await tx.$queryRaw(
+    Prisma.sql`SELECT "id" FROM "BillingAccount" WHERE "id" = ${currentPayment.billingAccountId} FOR UPDATE`,
+  );
+  currentPayment = await tx.payment.findUnique({
     where: { id: input.paymentId },
     select: {
       status: true,
@@ -699,7 +764,12 @@ export async function applySucceededStripeFamilyBalancePayment(
       latestPayment?.status === PaymentStatus.PAID
       && clean(latestFields.stripePaymentIntentId) === input.stripePaymentIntentId
     ) {
-      return { applied: false, reason: "payment_already_applied", billingAccountId: currentPayment.billingAccountId };
+      return {
+        applied: false,
+        reason: "payment_already_applied",
+        applicationScope: "family_balance",
+        billingAccountId: currentPayment.billingAccountId,
+      };
     }
     if (
       claim.claimStatus === PaymentStatus.DRAFT
@@ -773,6 +843,7 @@ export async function applySucceededStripeFamilyBalancePayment(
   return {
     applied: true,
     reason: null,
+    applicationScope: "family_balance",
     billingAccountId: payment.billingAccountId,
     appliedInvoiceIds,
   };

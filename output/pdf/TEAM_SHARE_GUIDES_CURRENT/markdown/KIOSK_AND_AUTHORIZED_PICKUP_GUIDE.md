@@ -1,6 +1,6 @@
 # Kiosk And Authorized Pickup Guide - The BEE Suite
 
-Last updated: August 24, 2026
+Last updated: September 2, 2026
 
 Audience: directors, front desk staff, parents, guardians, authorized pickups, and staff using the lobby kiosk.
 

@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "Help and Step-by-Step Guides | The BEE Suite",
   description:
-    "Step-by-step help for Parent Portal setup, payments, school administration, classroom use, and check-in.",
+    "Step-by-step help for Parent Portal setup, family and agency payments, school administration, classroom use, and check-in.",
 };
 
 type ResourceGuide = {
@@ -351,6 +351,28 @@ const guides: ResourceGuide[] = [
     ],
   },
   {
+    id: "agency-payment-reconciliation",
+    audience: "Directors and billing administrators",
+    title: "Agency Payment & Reconciliation",
+    summary: "Match an approved agency claim, record an ACH, check, or portal remittance, and prove the agency receivable reconciled without changing family responsibility.",
+    graphicSrc: "/brand/the-bee-suite/sop-graphics/current/director-desktop-operations-guide.png",
+    graphicAlt: "Director desktop guide for exact school, billing, and reconciliation work",
+    icon: Landmark,
+    steps: [
+      "Sign in at https://thebeesuite.io/directors, confirm the exact school, then go to Billing & Payments > Billing & invoices > Agency receivables.",
+      "Continue only when the school-specific agency program shows Ready and the provider/vendor, submission, and payment setup are documented.",
+      "Match the agency, child, authorization, service period, approved claim, amount, paid date, method, and unique remittance reference to the agency evidence.",
+      "Use Record remittance on an approved or partially paid claim. Never use a family cash/check payment or a Stripe payout as substitute evidence.",
+      "Refresh and verify the claim paid amount and status, remittance history, agency ledger application when a matching receivable exists, and unchanged parent-visible family responsibility.",
+      "Reverse an incorrect remittance with a correction reason, then enter the corrected record. Keep the original evidence and stop when any allocation is unclear.",
+    ],
+    visual: [
+      { label: "Match", detail: "Claim and remittance evidence", icon: FileText },
+      { label: "Record", detail: "Approved agency payment", icon: Landmark },
+      { label: "Reconcile", detail: "Claim, ledger, and family view", icon: CheckCircle2 },
+    ],
+  },
+  {
     id: "billing-admin",
     audience: "Billing administrators",
     title: "Billing Admin Guide",
@@ -500,6 +522,12 @@ function GuideSection({ guide }: { guide: ResourceGuide }) {
           {guide.id === "director-data-clean-start" ? (
             <Button className="mt-4" nativeButton={false} render={<Link href="/resources/director-data-clean-start" />}>
               Open the shareable director guide
+              <ArrowRight data-icon="inline-end" />
+            </Button>
+          ) : null}
+          {guide.id === "agency-payment-reconciliation" ? (
+            <Button className="mt-4" nativeButton={false} render={<Link href="/resources/agency-payment-reconciliation" />}>
+              Open the complete agency SOP
               <ArrowRight data-icon="inline-end" />
             </Button>
           ) : null}

@@ -1,6 +1,6 @@
 # Billing Admin SOP - The BEE Suite
 
-Last updated: August 24, 2026
+Last updated: September 2, 2026
 
 Audience: billing admins, school directors handling billing, accounting users, and launch support.
 
@@ -252,11 +252,16 @@ Card details are encrypted by Stripe hardware and never enter The BEE Suite. Sma
 
 ## Subsidy Or Agency Payments
 
-1. Confirm agency payer, authorization number, coverage dates, and expected amount.
-2. Post agency payment to the correct family or child.
-3. Keep family copay separate from agency portion when configured.
-4. Include reference numbers when available.
-5. Do not write off balances without director or accounting approval.
+Use `docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md` or the public guide at `https://thebeesuite.io/resources/agency-payment-reconciliation` for the complete workflow.
+
+1. Open `Billing & Payments` -> `Billing & invoices` -> `Agency receivables` for the exact school.
+2. Confirm the school-specific agency program shows `Ready`.
+3. Match the approved claim to the agency, child, authorization, service period, amount, paid date, and remittance reference.
+4. Use `Record remittance` on the approved claim. Do not use the family cash/check payment action for agency money.
+5. Refresh and verify the claim paid amount/status, remittance history, matching agency ledger application, and unchanged parent-visible family responsibility.
+6. Reverse an incorrect remittance with a correction reason, then enter the corrected record. Never delete or overwrite payment evidence.
+
+Stop when a bank deposit or Stripe payout cannot be tied to an exact approved claim and agency remittance notice. Do not write off or shift a balance to the family without separate director or accounting approval.
 
 ## Reconciliation Procedure
 

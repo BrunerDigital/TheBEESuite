@@ -22,7 +22,7 @@ test("recurring tuition uses the child assignment and cadence across family, enr
   assert.match(billing, /setAssignmentTuitionPlanId\(assignedPlan\?\.id \?\? ""\)/);
   assert.match(billing, /Tuition rate setup\{selectedFamily \? ` · \$\{selectedFamily\.name\}` : ""\}/);
   assert.match(billing, /const \[billingAction, setBillingAction\] = useState\("recurring"\)/);
-  assert.match(billing, /<Tabs value=\{billingAction\} onValueChange=\{setBillingAction\}>/);
+  assert.match(billing, /<Tabs[\s\S]*id="billing-actions"[\s\S]*value=\{billingAction\}[\s\S]*onValueChange=\{\(value\) =>/);
   assert.match(billing, /Set each child’s recurring tuition/);
   assert.match(billing, /Whole family \(one-time charge only\)/);
   assert.match(billing, /combine with other rates using the same cadence/);

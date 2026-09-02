@@ -18,6 +18,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
+import { CollapsiblePanel } from "@/components/workspace-preferences";
 import { parseExecutiveBulkImportCsv, summarizeExecutiveBulkImport } from "@/lib/executive-bulk-import";
 import {
   validateExecutiveCenterForm,
@@ -752,6 +754,23 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
           </Alert>
         ) : null}
 
+        <WorkspaceSectionDirectory
+          id="corporate-admin-directory"
+          description="Review the current organization without opening every table, or jump directly to the specific administrative form needed for a change."
+          reviewDestinations={[
+            { href: "#executive-schools", label: "Schools", description: `${activeSchools.length} active · ${sortedCenters.length} total` },
+            { href: "#existing-user-accounts", label: "User accounts", description: `${sortedUsers.length} account${sortedUsers.length === 1 ? "" : "s"} in scope` },
+            { href: "#admin-owner-groups", label: "Owner groups", description: `${sortedOwnerGroups.length} group${sortedOwnerGroups.length === 1 ? "" : "s"}` },
+          ]}
+          actionDestinations={[
+            { href: "#admin-school-editor", label: "Add or edit a school" },
+            { href: "#admin-user-editor", label: "Add or edit access" },
+            { href: "#admin-owner-groups", label: "Update owner group" },
+            { href: "#admin-password-controls", label: "Password and sessions" },
+            { href: "#admin-bulk-import", label: "Bulk import" },
+          ]}
+        />
+
         <div className="grid gap-4 xl:grid-cols-2">
           <Card className="xl:col-span-2">
             <CardHeader>
@@ -764,6 +783,13 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
               </CardDescription>
             </CardHeader>
             <CardContent>
+              <CollapsiblePanel
+                id="executive-schools"
+                title="School directory"
+                summary={`${activeSchools.length} active · ${sortedCenters.length - activeSchools.length} archived or inactive`}
+                className="scroll-mt-28"
+                defaultCollapsed
+              >
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -825,10 +851,11 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                   ) : null}
                 </TableBody>
               </Table>
+              </CollapsiblePanel>
             </CardContent>
           </Card>
 
-          <Card className="xl:col-span-2">
+          <Card id="admin-bulk-import" className="scroll-mt-28 xl:col-span-2">
             <CardHeader>
               <CardTitle as="h3" className="flex items-center gap-2 text-lg">
                 <FileUp className="size-5 text-primary" />
@@ -927,7 +954,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="admin-school-editor" className="scroll-mt-28">
             <CardHeader>
               <CardTitle as="h3" className="flex items-center gap-2 text-lg">
                 <MapPin className="size-5 text-primary" />
@@ -1037,7 +1064,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="admin-user-editor" className="scroll-mt-28">
             <CardHeader>
               <CardTitle as="h3" className="flex items-center gap-2 text-lg">
                 <UserPlus className="size-5 text-primary" />
@@ -1159,6 +1186,12 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
             <CardDescription>Review and update active and inactive user accounts.</CardDescription>
           </CardHeader>
           <CardContent>
+            <CollapsiblePanel
+              id="existing-user-directory"
+              title="Account directory"
+              summary={`${sortedUsers.filter((user) => user.isActive).length} active · ${sortedUsers.filter((user) => !user.isActive).length} inactive`}
+              defaultCollapsed
+            >
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1229,11 +1262,12 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                 ) : null}
               </TableBody>
             </Table>
+            </CollapsiblePanel>
           </CardContent>
         </Card>
 
         <div className="grid gap-4 xl:grid-cols-2">
-          <Card>
+          <Card id="admin-owner-groups" className="scroll-mt-28">
             <CardHeader>
               <CardTitle as="h3" className="flex items-center gap-2 text-lg">
                 <Building2 className="size-5 text-primary" />
@@ -1357,7 +1391,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="admin-password-controls" className="scroll-mt-28">
             <CardHeader>
               <CardTitle as="h3" className="flex items-center gap-2 text-lg">
                 <KeyRound className="size-5 text-primary" />

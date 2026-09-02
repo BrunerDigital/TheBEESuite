@@ -11,6 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserAvatar } from "@/components/user-avatar";
+import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
+import { CollapsiblePanel } from "@/components/workspace-preferences";
 import {
   centsToDollarInput,
   estimatedHourlyGrossPayCents,
@@ -1127,7 +1129,30 @@ export function StaffManagementPanel({
               </AlertDescription>
             </Alert>
           ) : null}
-          <section className="grid gap-3 xl:grid-cols-3">
+          <WorkspaceSectionDirectory
+            id="staff-workspace-directory"
+            description="Open current staffing information only when you need it, or jump straight to the exact assignment, time-card, profile, certification, or schedule task."
+            reviewDestinations={[
+              { href: "#staff-coverage", label: "Classroom coverage", description: `${coverageSummaries.length} classroom${coverageSummaries.length === 1 ? "" : "s"} in view` },
+              { href: "#staff-payroll", label: "Payroll summary", description: `${formatStaffDecimalHours(staffHoursTotalMinutes)} total hours in this period` },
+            ]}
+            actionDestinations={[
+              { href: "#staff-assignment", label: "Assign classroom coverage" },
+              { href: "#staff-time-clock", label: "Edit a time card" },
+              { href: "#staff-profile", label: "Add or edit staff" },
+              { href: "#staff-certification", label: "Update certification" },
+              { href: "#staff-schedule", label: "Update schedule" },
+            ]}
+          />
+
+          <CollapsiblePanel
+            id="staff-coverage"
+            title="Classroom coverage"
+            summary={`${coverageSummaries.filter((item) => item.warning !== "none").length} need attention · ${coverageSummaries.length} total classrooms`}
+            className="scroll-mt-28"
+            contentClassName="grid gap-3 xl:grid-cols-3"
+            defaultCollapsed
+          >
             {coverageSummaries.slice(0, 9).map((summary) => (
               <div key={summary.classroomId} className="rounded-xl border bg-background/40 p-3">
                 <div className="flex items-start justify-between gap-2">
@@ -1168,9 +1193,9 @@ export function StaffManagementPanel({
                 </Button>
               </div>
             ) : null}
-          </section>
+          </CollapsiblePanel>
 
-          <section className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <section id="staff-assignment" className="scroll-mt-28 grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="mb-3">
                 <div className="text-sm font-medium">Quick classroom assignment</div>
@@ -1292,7 +1317,7 @@ export function StaffManagementPanel({
             </form>
           </section>
 
-          <section className="rounded-xl border bg-background/40 p-4">
+          <section id="staff-time-clock" className="scroll-mt-28 rounded-xl border bg-background/40 p-4">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-medium">Staff time clock</div>
@@ -1485,7 +1510,14 @@ export function StaffManagementPanel({
             </div>
           </section>
 
-          <section className="rounded-xl border bg-background/40 p-4">
+          <CollapsiblePanel
+            id="staff-payroll"
+            title="Payroll time cards"
+            summary={`${formatStaffDecimalHours(staffHoursRegularMinutes)} regular · ${formatStaffDecimalHours(staffHoursOvertimeMinutes)} overtime · ${staffClockedInCount} clocked in`}
+            className="scroll-mt-28"
+            contentClassName="p-4"
+            defaultCollapsed
+          >
             <style>{`
               @media print {
                 @page {
@@ -1882,9 +1914,9 @@ export function StaffManagementPanel({
                 </article>
               ))}
             </div>
-          </section>
+          </CollapsiblePanel>
 
-          <form className="space-y-4" onSubmit={saveTeacher}>
+          <form id="staff-profile" className="scroll-mt-28 space-y-4" onSubmit={saveTeacher}>
             {selectedTeacher ? (
               <div className="flex items-center gap-3 rounded-xl border bg-background/40 p-3">
                 <UserAvatar name={selectedTeacher.user.name} src={selectedTeacher.user.profilePhotoUrl} size="lg" />
@@ -2114,7 +2146,7 @@ export function StaffManagementPanel({
         </CardContent>
       </Card>
 
-      <Card className="glass-panel">
+      <Card id="staff-certification" className="glass-panel scroll-mt-28">
         <CardHeader>
           <CardTitle as="h2">Certification</CardTitle>
           <CardDescription>Add CPR, first aid, background, training, or licensing documentation reminders.</CardDescription>
@@ -2163,7 +2195,7 @@ export function StaffManagementPanel({
         </CardContent>
       </Card>
 
-      <Card className="glass-panel lg:col-span-2">
+      <Card id="staff-schedule" className="glass-panel scroll-mt-28 lg:col-span-2">
         <CardHeader>
           <CardTitle as="h2">
             <CalendarClock data-icon="inline-start" />

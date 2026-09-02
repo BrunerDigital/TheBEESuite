@@ -228,6 +228,8 @@ test("director and executive account visibility remains limited to authorized ce
   assert.equal(canViewAccountBalances("READ_ONLY_AUDITOR"), true);
   assert.equal(canViewAccountBalances("TEACHER"), false);
   assert.equal(isExecutiveAccountBalanceView({ role: "BRAND_ADMIN", accessScope: "tenant" }), true);
+  assert.equal(isExecutiveAccountBalanceView({ role: "BRAND_ADMIN", accessScope: "tenant", workspace: { mode: "center" } }), false);
+  assert.equal(isExecutiveAccountBalanceView({ role: "PLATFORM_OWNER", accessScope: "platform", workspace: { mode: "center" } }), false);
   assert.equal(isExecutiveAccountBalanceView({ role: "REGIONAL_MANAGER", accessScope: "scoped" }), false);
 
   assert.deepEqual(accountBalanceCenterIds({

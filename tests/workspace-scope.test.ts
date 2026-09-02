@@ -65,3 +65,30 @@ test("workspace scope gives teachers and families role-appropriate context", () 
     href: "/parent-portal",
   });
 });
+
+test("workspace scope clearly distinguishes a selected school from All locations", () => {
+  assert.deepEqual(workspaceScopeContext({
+    role: "BRAND_ADMIN",
+    accessScope: "tenant",
+    centerCount: 12,
+    workspace: { mode: "all", label: "All locations", detail: "12 schools", canSwitch: true },
+  }), {
+    kind: "portfolio",
+    label: "All locations",
+    detail: "12 schools · Brand Admin",
+    href: "/workspace?next=%2Fdashboard",
+  });
+
+  assert.deepEqual(workspaceScopeContext({
+    role: "BRAND_ADMIN",
+    accessScope: "tenant",
+    centerCount: 1,
+    primaryCenterName: "Downtown",
+    workspace: { mode: "center", label: "Downtown", detail: "Kokomo, IN", canSwitch: true },
+  }), {
+    kind: "school",
+    label: "Downtown",
+    detail: "Kokomo, IN · Brand Admin",
+    href: "/workspace?next=%2Fdashboard",
+  });
+});

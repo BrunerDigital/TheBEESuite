@@ -126,6 +126,7 @@ type AccountBalanceAccessSubject =
   | {
       role?: string | null;
       accessScope?: string | null;
+      workspace?: { mode?: string | null } | null;
     };
 
 const accountBalanceRoles = new Set([
@@ -157,8 +158,9 @@ export function canViewAccountBalances(subject: AccountBalanceAccessSubject) {
 export function isExecutiveAccountBalanceView(subject: AccountBalanceAccessSubject) {
   const role = accessRole(subject);
   if (!role || !executiveAccountBalanceRoles.has(role)) return false;
-  if (role === "PLATFORM_OWNER") return true;
   if (typeof subject === "string" || subject == null) return false;
+  if (subject.workspace?.mode === "center") return false;
+  if (role === "PLATFORM_OWNER") return true;
   return subject.accessScope === "tenant" || subject.accessScope === "platform";
 }
 

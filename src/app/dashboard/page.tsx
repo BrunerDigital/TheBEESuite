@@ -34,6 +34,7 @@ import { directorLaunchChecklistTasksForPayoutSetup, readCompletedSetupChecklist
 import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
+import { workspaceSelectionRedirect } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,8 @@ export default async function DashboardPage() {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect(loginHrefForNextPath("/dashboard"));
   if (requiresPasswordResetGate(user)) redirect("/reset-password?force=1&next=/dashboard");
+  const workspaceRedirect = workspaceSelectionRedirect(user.workspace, "/dashboard");
+  if (workspaceRedirect) redirect(workspaceRedirect);
 
   const centerWhere = { ...getDashboardCenterScopeWhere(user), status: { not: "closed" } };
   const centers = await prisma.center.findMany({
@@ -992,6 +995,13 @@ export default async function DashboardPage() {
     { id: "messages", label: "Family Messages", count: unreadMessages, detail: "Unread family conversations that may need a response.", href: "/family-detail?view=messages", tone: "standard" as const },
   ];
   const live: LiveDashboardData = {
+    role: user.role,
+    accessScope: user.accessScope,
+    workspace: user.workspace ? {
+      mode: user.workspace.mode,
+      label: user.workspace.label,
+      detail: user.workspace.detail,
+    } : undefined,
     kpis: [
       { label: "Active children", value: activeChildren.toLocaleString(), trend: `${centers.length} visible centers`, tone: "emerald" },
       { label: "Enrollment capacity", value: capacity.toLocaleString(), trend: `${totalOpenSeats.toLocaleString()} open seats`, tone: "sky" },

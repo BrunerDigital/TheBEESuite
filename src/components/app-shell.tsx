@@ -76,6 +76,9 @@ import {
   type ParentPortalView,
 } from "@/lib/parent-portal-navigation";
 import type { WorkspaceScopeContext } from "@/lib/workspace-scope";
+import type { WorkspaceState } from "@/lib/workspace-selection";
+import { WorkspaceSelector } from "@/components/workspace-selector";
+import { navigationNeighborhoodLabel, roleExperienceFor } from "@/lib/role-experience";
 
 type ShellUser = {
   id?: string;
@@ -89,7 +92,10 @@ type ShellUser = {
   timeZone?: string;
   timeZonesByCenterId?: Record<string, string>;
   scopeContext?: WorkspaceScopeContext;
+  workspace?: WorkspaceState;
 };
+
+type ShellNavItem = readonly [string, string, typeof Home];
 
 const parentPortalShellItems = [
   {
@@ -235,12 +241,74 @@ function ScopeContextLink({
   previewHrefBase?: string;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [currentHash, setCurrentHash] = useState("");
+  const query = searchParams.toString();
+  useEffect(() => {
+    const syncHash = () => setCurrentHash(window.location.hash);
+    syncHash();
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
+  }, [pathname, query]);
   const context = currentUser?.scopeContext;
   if (!context) return null;
   const label = shellUserViewText(context.label, currentUser);
   const detail = shellUserViewText(context.detail, currentUser);
   const staticFamilyScope = isParentFacingUser(currentUser) && context.kind === "family";
   const href = previewSafeShellHref(context.href, previewMode, previewHrefBase, pathname);
+  const currentPath = `${pathname}${query ? `?${query}` : ""}${currentHash}`;
+  const canSwitchWorkspace = Boolean(currentUser?.workspace?.canSwitch);
+
+  if (canSwitchWorkspace && currentUser?.workspace) {
+    const trigger = compact ? (
+      <button
+        type="button"
+        aria-label={`${label}. ${detail}. Change workspace.`}
+        className="grid size-11 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary transition-colors hover:border-primary/50 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ScopeIcon kind={context.kind} className="size-5" />
+      </button>
+    ) : (
+      <button
+        type="button"
+        className={cn(
+          "group flex min-w-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/[0.07] p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          mobile && "mx-auto w-full max-w-xl border-border/70 bg-card/75 px-3 py-2 shadow-sm",
+        )}
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
+          <ScopeIcon kind={context.kind} className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold">{label}</span>
+          <span className="block truncate text-xs text-muted-foreground">{detail}</span>
+        </span>
+        <ChevronDown className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
+      </button>
+    );
+
+    return (
+      <Dialog open={workspaceOpen} onOpenChange={setWorkspaceOpen}>
+        <DialogTrigger render={trigger} />
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Change workspace</DialogTitle>
+            <DialogDescription>
+              Choose one authorized location for street-level work, or All locations for the company-wide view.
+            </DialogDescription>
+          </DialogHeader>
+          <WorkspaceSelector
+            workspace={currentUser.workspace}
+            nextPath={currentPath}
+            compact
+            onSelected={() => setWorkspaceOpen(false)}
+            previewMode={previewMode}
+          />
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   if (compact) {
     if (staticFamilyScope) {
@@ -321,9 +389,10 @@ function SidebarRail({ currentUser, onLogout, previewMode = false, previewHrefBa
   const parentFacing = isParentFacingUser(currentUser);
   const parentNavigationItems = parentPortalShellItemsForUser(currentUser);
   const { activeView, familyId } = useParentPortalNavigationState(previewMode);
+  const primaryNavigation = new Set(roleExperienceFor(currentUser?.role).primaryNavigation);
   const visibleItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
-    .filter((item) => canAccessShellModule(currentUser, item.slug));
+    .filter((item) => primaryNavigation.has(item.slug) && canAccessShellModule(currentUser, item.slug));
   const brandHref = parentFacing
     ? parentPortalShellHref("home", previewMode, previewHrefBase, pathname, familyId)
     : previewSafeShellHref("/", previewMode, previewHrefBase, pathname);
@@ -683,16 +752,56 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
   const parentNavigationItems = parentPortalShellItemsForUser(currentUser);
   const parentNavigationLabel = currentUser?.role === "AUTHORIZED_PICKUP" ? "Pickup access" : "Family portal";
   const { activeView, familyId } = useParentPortalNavigationState(previewMode);
-  const descriptionBySlug = new Map(modules.map((module) => [module.slug, module.description]));
+  const descriptionBySlug = new Map<string, string>(modules.map((module) => [module.slug, module.description]));
+  const primaryNavigation = new Set(roleExperienceFor(currentUser?.role).primaryNavigation);
+  const allNavigationItems: ShellNavItem[] = [];
+  for (const group of navGroups) {
+    for (const item of group.items) allNavigationItems.push(item as ShellNavItem);
+  }
+  const primaryItems = allNavigationItems
+    .filter(([, slug]) => primaryNavigation.has(slug) && canAccessShellModule(currentUser, slug));
   const visibleNavGroups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter(([, slug]) => canAccessShellModule(currentUser, slug)),
+      items: group.items.filter(([, slug]) => !primaryNavigation.has(slug) && canAccessShellModule(currentUser, slug)),
     }))
     .filter((group) => group.items.length);
   const brandHref = parentFacing
     ? parentPortalShellHref("home", previewMode, previewHrefBase, pathname, familyId)
     : previewSafeShellHref("/", previewMode, previewHrefBase, pathname);
+
+  function renderWorkspaceNavItem([label, slug, Icon]: ShellNavItem) {
+    const targetHref = shellModuleHref(currentUser, slug);
+    const href = previewSafeShellHref(targetHref, previewMode, previewHrefBase, pathname);
+    const active = !previewMode && (pathname === targetHref || (slug === "dashboard" && pathname === "/center-dashboard"));
+    const description = descriptionBySlug.get(slug) ?? `Go to ${label}.`;
+    return (
+      <Tooltip key={slug}>
+        <TooltipTrigger
+          render={
+            <Link
+              href={href}
+              onClick={close}
+              aria-current={active ? "page" : undefined}
+              aria-description={description}
+              className={cn(
+                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                active &&
+                  "bg-sidebar-accent pl-4 text-sidebar-accent-foreground shadow-sm before:absolute before:left-1.5 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-primary",
+              )}
+            />
+          }
+        >
+          <Icon data-icon="inline-start" />
+          <span className="truncate">{label}</span>
+        </TooltipTrigger>
+        <TooltipContent side="right" align="start" className="max-w-80 flex-col items-start gap-0.5 px-3 py-2 text-xs leading-5">
+          <span className="font-semibold">{label}</span>
+          <span className="text-background/80">{description}</span>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -738,47 +847,42 @@ function SidebarNav({ close, currentUser, onLogout, previewMode = false, preview
                 })}
               </div>
             </div>
-          ) : visibleNavGroups.map((group) => (
-            <div key={group.title} className="flex flex-col gap-2">
-              <div className="px-3 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                {group.title}
+          ) : (
+            <>
+              <div className="flex flex-col gap-2">
+                <div className="px-3 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Your street
+                </div>
+                <div className="flex flex-col gap-1">
+                  {primaryItems.map(renderWorkspaceNavItem)}
+                </div>
               </div>
-              <div className="flex flex-col gap-1">
-                {group.items.map(([label, slug, Icon]) => {
-                  const targetHref = shellModuleHref(currentUser, slug);
-                  const href = previewSafeShellHref(targetHref, previewMode, previewHrefBase, pathname);
-                  const active = !previewMode && (pathname === targetHref || (slug === "dashboard" && pathname === "/center-dashboard"));
-                  const description = descriptionBySlug.get(slug) ?? `Go to ${label}.`;
-                  return (
-                    <Tooltip key={slug}>
-                      <TooltipTrigger
-                        render={
-                          <Link
-                            href={href}
-                            onClick={close}
-                            aria-current={active ? "page" : undefined}
-                            aria-description={description}
-                            className={cn(
-                              "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                              active &&
-                                "bg-sidebar-accent pl-4 text-sidebar-accent-foreground shadow-sm before:absolute before:left-1.5 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-primary",
-                            )}
-                          />
-                        }
-                      >
-                        <Icon data-icon="inline-start" />
-                        <span className="truncate">{label}</span>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" align="start" className="max-w-80 flex-col items-start gap-0.5 px-3 py-2 text-xs leading-5">
-                        <span className="font-semibold">{label}</span>
-                        <span className="text-background/80">{description}</span>
-                      </TooltipContent>
-                    </Tooltip>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+              {visibleNavGroups.length ? (
+                <div className="flex flex-col gap-2 border-t pt-4">
+                  <div className="px-3 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Explore more
+                  </div>
+                  {visibleNavGroups.map((group) => {
+                    const containsActiveDestination = group.items.some(([, slug]) => {
+                      const targetHref = shellModuleHref(currentUser, slug);
+                      return pathname === targetHref;
+                    });
+                    return (
+                      <details key={group.title} className="group rounded-xl border border-transparent open:border-border/70 open:bg-background/35" open={containsActiveDestination || undefined}>
+                        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                          <span>{navigationNeighborhoodLabel(group.title)}</span>
+                          <ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
+                        </summary>
+                        <div className="flex flex-col gap-1 px-1 pb-2">
+                          {group.items.map(renderWorkspaceNavItem)}
+                        </div>
+                      </details>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </>
+          )}
         </nav>
       </ScrollArea>
       {currentUser && onLogout ? (
@@ -1091,9 +1195,11 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
   const activeSearchResults = searchResponse.query === trimmedSearchQuery ? searchResponse.results : [];
   const activeSearchError = searchResponse.query === trimmedSearchQuery ? searchResponse.error : "";
   const searchPending = trimmedSearchQuery.length >= 2 && searchResponse.query !== trimmedSearchQuery;
+  const workspacePending = Boolean(currentUser?.workspace?.required);
   const hasRoleBottomNav = roleUsesBottomNavigation(currentUser);
   const parentFacing = isParentFacingUser(currentUser);
   const showWorkspaceTools = !previewMode && !parentFacing;
+  const showActiveWorkspaceTools = showWorkspaceTools && !workspacePending;
   const showNotificationTools = Boolean(currentUser && !previewMode);
   const visualDomain = workspaceVisualDomain(pathname, currentUser?.role);
   const visibleCommandItems = navGroups
@@ -1191,7 +1297,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
 
 
   useEffect(() => {
-    if (!showWorkspaceTools) return;
+    if (!showActiveWorkspaceTools) return;
 
     function handleSearchShortcut(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
@@ -1205,7 +1311,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
 
     window.addEventListener("keydown", handleSearchShortcut);
     return () => window.removeEventListener("keydown", handleSearchShortcut);
-  }, [showWorkspaceTools]);
+  }, [showActiveWorkspaceTools]);
 
   async function logout() {
     try {
@@ -1245,13 +1351,13 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
       <a href="#workspace-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-xl">
         Skip to main content
       </a>
-      <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-20 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl lg:block xl:hidden">
+      {!workspacePending ? <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-20 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl lg:block xl:hidden">
         <SidebarRail currentUser={currentUser} onLogout={previewMode ? undefined : logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
-      </aside>
-      <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl xl:block">
+      </aside> : null}
+      {!workspacePending ? <aside className="app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl xl:block">
         <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
-      </aside>
-      <div className="min-w-0 lg:pl-20 xl:pl-72">
+      </aside> : null}
+      <div className={cn("min-w-0", !workspacePending && "lg:pl-20 xl:pl-72")}>
         <header className="app-header sticky top-0 z-10 min-w-0 border-b bg-background/75 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
           <div className="flex min-h-16 min-w-0 items-center gap-2 px-3 sm:px-4 lg:px-6">
             {parentFacing ? (
@@ -1261,6 +1367,14 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                 compact
                 size="sm"
                 className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+              />
+            ) : workspacePending ? (
+              <BrandLogo
+                href="/workspace"
+                branding={currentUser?.branding}
+                compact
+                size="sm"
+                className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             ) : <Sheet>
               <SheetTrigger
@@ -1275,7 +1389,12 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                 <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
               </SheetContent>
             </Sheet>}
-            {showWorkspaceTools ? <div className="hidden min-w-0 flex-1 items-center lg:flex">
+            {showActiveWorkspaceTools && currentUser?.scopeContext ? (
+              <div className="hidden w-56 shrink-0 lg:block xl:hidden 2xl:block 2xl:w-64">
+                <ScopeContextLink currentUser={currentUser} previewMode={previewMode} previewHrefBase={previewHrefBase} />
+              </div>
+            ) : null}
+            {showActiveWorkspaceTools ? <div className="hidden min-w-0 flex-1 items-center lg:flex">
               <div className="relative min-w-0 w-full max-w-2xl">
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <Input
@@ -1345,7 +1464,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
               </div>
             </div> : null}
             <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
-              {showWorkspaceTools ? <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
+              {showActiveWorkspaceTools ? <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
                 <DialogTrigger render={<Button variant="outline" size="icon" aria-label="Search The BEE Suite" className="touch-manipulation lg:hidden" />}>
                   <Search aria-hidden="true" />
                 </DialogTrigger>
@@ -1382,7 +1501,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
               </Dialog> : null}
               {canViewDataReadiness ? <DataReadinessContextBadge summary={readinessSummary} context={readinessContext} /> : null}
               {currentUser && !previewMode ? <LiveRefreshStatus role={currentUser.role} /> : null}
-              {showWorkspaceTools ? (
+              {showActiveWorkspaceTools ? (
                 <div className="hidden lg:block">
                   <Dialog>
                     <Tooltip>
@@ -1451,7 +1570,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
               )}
             </div>
           </div>
-          {currentUser?.scopeContext && !parentFacing ? (
+          {currentUser?.scopeContext && !parentFacing && !workspacePending ? (
             <div className="border-t border-border/60 px-3 py-2 lg:hidden">
               <ScopeContextLink currentUser={currentUser} mobile previewMode={previewMode} previewHrefBase={previewHrefBase} />
             </div>
@@ -1462,7 +1581,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
           {children}
         </main>
       </div>
-      <RoleBottomNav currentUser={currentUser} previewMode={previewMode} previewHrefBase={previewHrefBase} />
+      <RoleBottomNav currentUser={workspacePending ? undefined : currentUser} previewMode={previewMode} previewHrefBase={previewHrefBase} />
     </div>
     </SchoolTimeZoneProvider>
   );

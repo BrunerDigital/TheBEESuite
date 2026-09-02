@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { prisma } from "@/lib/prisma";
+import { workspaceSelectionRedirect } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,8 @@ export default async function CheckInLauncherPage() {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect(loginHrefForNextPath("/check-in"));
   if (requiresPasswordResetGate(user)) redirect("/reset-password?force=1&next=/check-in");
+  const workspaceRedirect = workspaceSelectionRedirect(user.workspace, "/check-in");
+  if (workspaceRedirect) redirect(workspaceRedirect);
 
   const centers = await prisma.center.findMany({
     where: { ...getLeadScopeWhere(user), status: { not: "closed" } },

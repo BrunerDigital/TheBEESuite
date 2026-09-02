@@ -7,6 +7,7 @@ import { canViewCrmLeads, getCurrentUser, getLeadScopeWhere, requiresPasswordRes
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { prisma } from "@/lib/prisma";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
+import { workspaceSelectionRedirect } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,8 @@ export default async function CrmLeadsPage({
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect(loginHrefForNextPath("/crm-leads"));
   if (requiresPasswordResetGate(user)) redirect("/reset-password?force=1&next=/crm-leads");
+  const workspaceRedirect = workspaceSelectionRedirect(user.workspace, "/crm-leads");
+  if (workspaceRedirect) redirect(workspaceRedirect);
   if (!canViewCrmLeads(user)) notFound();
 
   const centers = await prisma.center.findMany({

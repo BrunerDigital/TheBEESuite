@@ -3,15 +3,18 @@ import { Activity, BadgeDollarSign, BellRing, CheckCircle2, Clock3, CreditCard, 
 import { AppShell } from "@/components/app-shell";
 import { AutomationWorkflowBuilder, type AutomationWorkflowBuilderData } from "@/components/automation-workflow-builder";
 import { DevicePreviewGuard } from "@/components/device-preview-guard";
+import { ExecutiveDashboard } from "@/components/dashboard";
 import { KioskCheckIn } from "@/components/kiosk-check-in";
 import { ParentPortalWorkspace } from "@/components/parent-portal-workspace";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { executiveParentPortalDemo } from "@/lib/executive-demo-data";
+import { centers as demoCenters, kpis as demoKpis, pipelineStages as demoPipelineStages } from "@/lib/demo-data";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
+import type { WorkspaceState } from "@/lib/workspace-selection";
 
-type PreviewRole = "director" | "parent" | "pickup" | "teacher" | "executive" | "regional" | "billing" | "auditor" | "workflow" | "kiosk" | "kiosk-staff";
+type PreviewRole = "director" | "role-dashboard" | "parent" | "pickup" | "teacher" | "executive" | "regional" | "billing" | "auditor" | "workflow" | "kiosk" | "kiosk-staff";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +39,25 @@ const metrics = [
   { label: "Open follow-ups", value: "2", detail: "Review before pickup", Icon: BellRing },
   { label: "Collected today", value: "$18,420", detail: "Current families only", Icon: BadgeDollarSign },
 ];
+
+const previewPortfolioWorkspace: WorkspaceState = {
+  mode: "all",
+  selection: "all",
+  activeCenterId: null,
+  label: "All locations",
+  detail: "3 schools in your authorized workspace",
+  companyLabel: "Sunshine Learning Group",
+  required: false,
+  canSwitch: true,
+  canSelectAll: true,
+  invalidSelection: false,
+  authorizedCenterCount: 3,
+  options: [
+    { id: "preview-center", name: "Sunshine Academy", detail: "Carmel, IN", companyName: "Sunshine Learning Group" },
+    { id: "preview-center-two", name: "Little Harbor", detail: "Fishers, IN", companyName: "Sunshine Learning Group" },
+    { id: "preview-center-three", name: "Maple Grove", detail: "Westfield, IN", companyName: "Sunshine Learning Group" },
+  ],
+};
 
 function DirectorPreview() {
   return (
@@ -247,6 +269,24 @@ function PickupPreview() {
 }
 
 function ShellPreview({ role, screen, familySection }: { role: Exclude<PreviewRole, "kiosk" | "kiosk-staff">; screen?: string; familySection?: string }) {
+  if (role === "role-dashboard") {
+    return (
+      <AppShell previewMode previewHrefBase="/device-preview?view=role-dashboard" currentUser={{ name: "Avery Thompson", email: "avery@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", workspace: { ...previewPortfolioWorkspace, mode: "fixed", selection: "center:preview-center", activeCenterId: "preview-center", label: "Sunshine Academy", detail: "Carmel, IN", canSwitch: false, canSelectAll: false, authorizedCenterCount: 1, options: previewPortfolioWorkspace.options.slice(0, 1) }, scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Center Director · 1 school", href: "/dashboard" } }}>
+        <ExecutiveDashboard live={{
+          role: "CENTER_DIRECTOR",
+          accessScope: "center",
+          workspace: { mode: "fixed", label: "Sunshine Academy", detail: "Carmel, IN" },
+          kpis: demoKpis,
+          pipelineStages: demoPipelineStages,
+          centers: demoCenters,
+          aiSummary: "Attendance is steady. Review two pickup notes before the afternoon transition.",
+          notifications: ["Two daily reports need review", "One enrollment follow-up is due today"],
+          visibleLenses: ["director"],
+          asOfLabel: "Safe preview data",
+        }} />
+      </AppShell>
+    );
+  }
   if (role === "parent") {
     return <AppShell previewMode previewHrefBase="/device-preview?view=parent" currentUser={{ name: "Jordan Rivera", email: "parent@example.com", role: "PARENT_GUARDIAN", timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "family", label: "Rivera Family", detail: "Sunshine Academy", href: "/parent-portal" } }}><ParentPreview screen={screen} familySection={familySection} /></AppShell>;
   }
@@ -258,13 +298,13 @@ function ShellPreview({ role, screen, familySection }: { role: Exclude<PreviewRo
   }
   if (role === "executive" || role === "regional") {
     const regional = role === "regional";
-    return <AppShell previewMode previewHrefBase={`/device-preview?view=${role}`} currentUser={{ name: regional ? "Riley Morgan" : "Casey Bennett", email: `${role}@example.com`, role: regional ? "REGIONAL_MANAGER" : "PLATFORM_OWNER", accessScope: regional ? "tenant" : "platform", centerIds: ["preview-center", "preview-center-two"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "portfolio", label: regional ? "North region" : "All schools", detail: regional ? "5 schools · Regional Manager" : "14 schools · Platform Owner", href: "/multi-location-dashboard" } }}><PortfolioPreview regional={regional} /></AppShell>;
+    return <AppShell previewMode previewHrefBase={`/device-preview?view=${role}`} currentUser={{ name: regional ? "Riley Morgan" : "Casey Bennett", email: `${role}@example.com`, role: regional ? "REGIONAL_MANAGER" : "PLATFORM_OWNER", accessScope: regional ? "tenant" : "platform", centerIds: ["preview-center", "preview-center-two", "preview-center-three"], timeZone: "America/Indiana/Indianapolis", workspace: previewPortfolioWorkspace, scopeContext: { kind: "portfolio", label: "All locations", detail: regional ? "3 schools · Regional Manager" : "3 schools · Platform Owner", href: "/multi-location-dashboard" } }}><PortfolioPreview regional={regional} /></AppShell>;
   }
   if (role === "billing") {
     return <AppShell previewMode previewHrefBase="/device-preview?view=billing" currentUser={{ name: "Jamie Patel", email: "billing@example.com", role: "BILLING_ADMIN", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Billing Admin · 1 school", href: "/billing-invoices" } }}><BillingPreview /></AppShell>;
   }
   if (role === "auditor") {
-    return <AppShell previewMode previewHrefBase="/device-preview?view=auditor" currentUser={{ name: "Alex Kim", email: "auditor@example.com", role: "READ_ONLY_AUDITOR", accessScope: "tenant", centerIds: ["preview-center", "preview-center-two"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "portfolio", label: "School portfolio", detail: "14 schools · Read Only Auditor", href: "/multi-location-dashboard" } }}><AuditorPreview /></AppShell>;
+    return <AppShell previewMode previewHrefBase="/device-preview?view=auditor" currentUser={{ name: "Alex Kim", email: "auditor@example.com", role: "READ_ONLY_AUDITOR", accessScope: "tenant", centerIds: ["preview-center", "preview-center-two", "preview-center-three"], timeZone: "America/Indiana/Indianapolis", workspace: previewPortfolioWorkspace, scopeContext: { kind: "portfolio", label: "All locations", detail: "3 schools · Read Only Auditor", href: "/multi-location-dashboard" } }}><AuditorPreview /></AppShell>;
   }
   if (role === "workflow") {
     return <AppShell previewMode previewHrefBase="/device-preview?view=workflow" currentUser={{ name: "Avery Thompson", email: "avery@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Center Director · 1 school", href: "/dashboard" } }}><AutomationWorkflowBuilder data={workflowData} readOnly /></AppShell>;
@@ -276,7 +316,7 @@ export default async function DevicePreviewPage({ searchParams }: { searchParams
   if (process.env.NODE_ENV !== "development") notFound();
 
   const { view, screen, section } = await searchParams;
-  const role: PreviewRole = view === "parent" || view === "pickup" || view === "teacher" || view === "executive" || view === "regional" || view === "billing" || view === "auditor" || view === "workflow" || view === "kiosk" || view === "kiosk-staff" ? view : "director";
+  const role: PreviewRole = view === "role-dashboard" || view === "parent" || view === "pickup" || view === "teacher" || view === "executive" || view === "regional" || view === "billing" || view === "auditor" || view === "workflow" || view === "kiosk" || view === "kiosk-staff" ? view : "director";
   if (role === "kiosk" || role === "kiosk-staff") {
     return <DevicePreviewGuard><KioskCheckIn previewMode familyOnly={role === "kiosk"} center={{ id: "preview-center", name: "Sunshine Academy", place: "Carmel, Indiana", timeZone: "America/Indiana/Indianapolis" }} initialMode={role === "kiosk-staff" ? "staff" : "family"} /></DevicePreviewGuard>;
   }

@@ -10,6 +10,12 @@ import { prisma } from "@/lib/prisma";
 import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 import { workspaceScopeContext, type WorkspaceScopeContext } from "@/lib/workspace-scope";
 import { readCenterLocationTimeZone } from "@/lib/attendance-state";
+import {
+  effectiveCenterIdsForWorkspace,
+  resolveWorkspaceState,
+  type WorkspaceSelectionValue,
+  type WorkspaceState,
+} from "@/lib/workspace-selection";
 
 export const SESSION_COOKIE = "bee_suite_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
@@ -21,6 +27,7 @@ export type AppSession = {
   exp: number;
   sessionVersion?: number;
   deviceSessionId?: string;
+  workspaceSelection?: WorkspaceSelectionValue;
 };
 
 export type CurrentUser = {
@@ -32,6 +39,7 @@ export type CurrentUser = {
   organizationId: string | null;
   mustResetPassword: boolean;
   centerIds: string[];
+  authorizedCenterIds?: string[];
   primaryCenterId: string | null;
   assignedClassroomId: string | null;
   deviceSessionId: string | null;
@@ -42,6 +50,7 @@ export type CurrentUser = {
   timeZone?: string;
   timeZonesByCenterId?: Record<string, string>;
   scopeContext?: WorkspaceScopeContext;
+  workspace?: WorkspaceState;
 };
 
 export function requiresPasswordResetGate(user: { mustResetPassword: boolean; role: UserRole }) {
@@ -161,6 +170,7 @@ function verifySignature(data: string, signature: string) {
 export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "role"> & {
   sessionVersion?: number;
   deviceSessionId?: string | null;
+  workspaceSelection?: WorkspaceSelectionValue | null;
 }) {
   const payload: AppSession = {
     userId: user.id,
@@ -169,6 +179,7 @@ export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "rol
     exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
     sessionVersion: readSessionVersion(user.sessionVersion),
     deviceSessionId: user.deviceSessionId ?? undefined,
+    workspaceSelection: user.workspaceSelection ?? undefined,
   };
   const data = base64Url(JSON.stringify(payload));
   return `${data}.${sign(data)}`;
@@ -310,7 +321,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
   if (!(await sessionDeviceIsActive(session, user.tenantId))) return null;
   if (requiresPasswordResetGate(user) && !options.allowPasswordResetRequired) return null;
 
-  const brandName =
+  const identityBrandName =
     user.organization?.brand?.settings?.brandName ??
     user.organization?.brand?.name ??
     user.organization?.name ??
@@ -354,33 +365,88 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
   centerIds = hasProfileCenterAssignment
     ? [profileCenterIds[0], ...centerIds.filter((centerId) => centerId !== profileCenterIds[0]).sort()]
     : [...centerIds].sort();
+  const authorizedCenterIds = [...centerIds];
 
-  const timeZoneCenters = centerIds.length
+  const authorizedCenters = authorizedCenterIds.length
     ? await prisma.center.findMany({
-        where: { id: { in: centerIds } },
-        select: { id: true, name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
+        where: { id: { in: authorizedCenterIds } },
+        orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          crmLocationId: true,
+          city: true,
+          state: true,
+          postalCode: true,
+          timezone: true,
+          customFields: true,
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              tenantId: true,
+              tenant: { select: { name: true, slug: true } },
+              brand: {
+                select: {
+                  name: true,
+                  slug: true,
+                  settings: { select: { brandName: true } },
+                },
+              },
+            },
+          },
+        },
       })
     : [];
-  const timeZonesByCenterId = Object.fromEntries(timeZoneCenters.map((center) => [center.id, readCenterLocationTimeZone(center)]));
-  const primaryCenter = timeZoneCenters.find((center) => center.id === centerIds[0]) ?? null;
+  const workspace = resolveWorkspaceState({
+    role: user.role,
+    authorizedCenters: authorizedCenters.map((center) => ({
+      id: center.id,
+      name: center.crmLocationId ?? center.name,
+      detail: [
+        user.role === UserRole.PLATFORM_OWNER ? center.organization.tenant.name : null,
+        [center.city, center.state].filter(Boolean).join(", "),
+      ].filter(Boolean).join(" · ") || "Authorized school",
+      companyName: center.organization.tenant.name,
+    })),
+    requestedSelection: session.workspaceSelection,
+  });
+  centerIds = effectiveCenterIdsForWorkspace(workspace, authorizedCenterIds);
+  const effectiveCenters = authorizedCenters.filter((center) => centerIds.includes(center.id));
+  const timeZonesByCenterId = Object.fromEntries(effectiveCenters.map((center) => [center.id, readCenterLocationTimeZone(center)]));
+  const primaryCenter = authorizedCenters.find((center) => center.id === workspace.activeCenterId)
+    ?? effectiveCenters.find((center) => center.id === centerIds[0])
+    ?? null;
+  const selectedPlatformCenter = user.role === UserRole.PLATFORM_OWNER && workspace.activeCenterId
+    ? primaryCenter
+    : null;
+  const effectiveTenant = selectedPlatformCenter?.organization.tenant ?? user.tenant;
+  const effectiveOrganizationId = selectedPlatformCenter?.organization.id ?? user.organizationId;
+  const effectiveOrganizationName = selectedPlatformCenter?.organization.name ?? user.organization?.name;
+  const effectiveBrand = selectedPlatformCenter?.organization.brand ?? user.organization?.brand;
+  const effectiveBrandName = effectiveBrand?.settings?.brandName
+    ?? effectiveBrand?.name
+    ?? effectiveOrganizationName
+    ?? identityBrandName;
   const branding = resolveWorkspaceBranding({
-    tenantName: user.tenant.name,
-    tenantSlug: user.tenant.slug,
-    brandName,
-    brandSlug: user.organization?.brand?.slug,
-    organizationName: user.organization?.name,
+    tenantName: effectiveTenant.name,
+    tenantSlug: effectiveTenant.slug,
+    brandName: effectiveBrandName,
+    brandSlug: effectiveBrand?.slug,
+    organizationName: effectiveOrganizationName,
     email: user.email,
   });
 
   return {
     id: user.id,
-    tenantId: user.tenantId,
+    tenantId: selectedPlatformCenter?.organization.tenantId ?? user.tenantId,
     email: user.email,
     name: user.name,
     role: user.role,
-    organizationId: user.organizationId,
+    organizationId: effectiveOrganizationId,
     mustResetPassword: user.mustResetPassword,
     centerIds,
+    authorizedCenterIds,
     primaryCenterId: centerIds[0] ?? null,
     assignedClassroomId: user.staffProfile?.classroomId ?? null,
     deviceSessionId: session.deviceSessionId ?? null,
@@ -396,7 +462,9 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
       centerCount: centerIds.length,
       primaryCenterName: primaryCenter?.crmLocationId ?? primaryCenter?.name,
       classroomName: user.staffProfile?.classroom?.name,
+      workspace,
     }),
+    workspace,
   };
 }
 
@@ -463,7 +531,12 @@ export async function requireCurrentUser() {
   return user;
 }
 
-export function canAccessAllCenters(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "accessScope">>) {
+export function canAccessAllCenters(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "accessScope" | "workspace">>) {
+  if (user.workspace) {
+    return user.workspace.mode === "all"
+      && (user.accessScope === "platform" || user.accessScope === "tenant")
+      && canUseTenantWideAccessRole(user.role);
+  }
   if (user.role === UserRole.PLATFORM_OWNER) return true;
   if (user.accessScope) return user.accessScope === "tenant" && canUseTenantWideAccessRole(user.role);
   return tenantWideAccessRoles.has(user.role);
@@ -481,7 +554,7 @@ export function messageCenterIdsForUser(
 }
 
 export function getLeadScopeWhere(user: CurrentUser) {
-  if (user.role === UserRole.PLATFORM_OWNER) return {};
+  if (user.role === UserRole.PLATFORM_OWNER && canAccessAllCenters(user)) return {};
   if (canAccessAllCenters(user)) {
     return {
       organization: {
@@ -510,7 +583,8 @@ export function getDashboardCenterScopeWhere(user: CurrentUser) {
   return getLeadScopeWhere(user);
 }
 
-export function canAccessCenter(user: Pick<CurrentUser, "role" | "accessScope" | "centerIds">, centerId: string) {
+export function canAccessCenter(user: Pick<CurrentUser, "role" | "accessScope" | "centerIds"> & Partial<Pick<CurrentUser, "workspace">>, centerId: string) {
+  if (user.workspace) return user.centerIds.includes(centerId);
   return (
     user.role === UserRole.PLATFORM_OWNER ||
     (user.accessScope === "tenant" && canUseTenantWideAccessRole(user.role)) ||

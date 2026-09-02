@@ -8,6 +8,7 @@ import {
   BadgeDollarSign,
   CalendarCheck,
   CheckCircle2,
+  ChevronDown,
   FileWarning,
   MessageSquare,
   Printer,
@@ -46,11 +47,14 @@ import type { AccountsReceivableSnapshot, AccountsReceivableSummary } from "@/li
 import type { DashboardWidgetId, DashboardWidgetView } from "@/lib/dashboard-widgets";
 import { prioritizeFteFollowUp } from "@/lib/corporate-dashboard";
 import { formatMoneyCents } from "@/lib/staff-compensation";
-import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
+import { analytics, centers, classrooms, kpis, leads, messages, modules, notifications, pipelineStages } from "@/lib/demo-data";
 import { directorLaunchChecklistTasks, teacherProfileChecklistTasks, type SetupChecklistKey, type SetupChecklistTask } from "@/lib/setup-checklists";
 import { formatStaffDecimalHours } from "@/lib/staff-kiosk";
 import { cn } from "@/lib/utils";
 import { STAFF_MESSAGING_HREF, staffMessagingHref } from "@/lib/messaging-navigation";
+import { roleExperienceFor } from "@/lib/role-experience";
+import { accessibleModuleRouteSlug } from "@/lib/rbac";
+import { dataReadinessCenterEnabled } from "@/lib/honeyglass";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
 const kpiWidgetIds: readonly DashboardWidgetId[] = [
@@ -79,6 +83,13 @@ function withQueryParam(href: string, key: string, value: string | number | null
 }
 
 export type LiveDashboardData = {
+  role?: string;
+  accessScope?: string;
+  workspace?: {
+    mode: "pending" | "all" | "center" | "fixed";
+    label: string;
+    detail: string;
+  };
   kpis: typeof kpis;
   pipelineStages: typeof pipelineStages;
   centers: typeof centers;
@@ -1140,12 +1151,13 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const isPickupDashboard = visibleLenses.length === 1 && visibleLenses.includes("pickup");
   const isDirectorDashboard = visibleLenses.includes("director");
   const isExecutiveDashboard = Boolean(live?.executiveMetrics);
-  const dashboardTitle = isTeacherDashboard
-    ? "Classroom overview"
-    : isBillingDashboard
-      ? "Billing overview"
-      : isParentDashboard || isPickupDashboard
-        ? "Family overview"
+  const roleExperience = roleExperienceFor(live?.role);
+  const dashboardTitle = live?.workspace?.mode === "all"
+    ? `${roleExperience.homeLabel} — All locations`
+    : live?.workspace?.mode === "center" && live.workspace.label
+      ? `Today at ${live.workspace.label}`
+      : live?.role
+        ? roleExperience.homeLabel
         : "School operations overview";
   const commandCenterDescription = isTeacherDashboard
     ? "Classroom attendance, daily reports, incident notes, family messages, and ratio awareness for your assigned room."
@@ -1155,7 +1167,9 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         ? "Your family portal, child updates, messages, documents, invoices, and payment actions."
         : isPickupDashboard
           ? "Authorized pickup access, child status, approved pickup details, and family account updates."
-          : "Review enrollment, classroom operations, billing, required records, and family communication across your schools.";
+          : live?.workspace?.mode === "all"
+            ? "Review company-wide exceptions and current performance, then move into a specific school when an action needs a single-location context."
+            : "Review today’s priorities, current school activity, and the actions that need follow-up now.";
   const aiBriefHref = isTeacherDashboard ? "/teacher-portal" : isBillingDashboard ? STAFF_MESSAGING_HREF : isParentDashboard || isPickupDashboard ? "/parent-portal" : "/ai-command";
   const visibleSnapshotPipeline = showEnrollment ? dashboardPipeline : [];
   const visibleSnapshotLeads = isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? dashboardLeads : [];
@@ -1205,6 +1219,26 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     .filter((lens) => ["platform", "brand", "regional", "director", "billing"].includes(lens))
     .map((lens) => lens.replaceAll("_", " "))
     .join(", ") || live?.dashboardWidgetRoleLabel || "Dashboard";
+  const primaryActionItems = roleExperience.primaryActions
+    .map((slug) => ({ slug, resolvedSlug: accessibleModuleRouteSlug({
+      role: live?.role,
+      accessScope: live?.accessScope,
+      workspace: live?.workspace,
+    }, slug) }))
+    .filter(({ slug, resolvedSlug }) => (
+      Boolean(resolvedSlug)
+      && (slug !== "data-readiness" || dataReadinessCenterEnabled())
+    ))
+    .map(({ slug, resolvedSlug }) => {
+      const moduleDefinition = modules.find((item) => item.slug === slug);
+      return {
+        slug,
+        label: moduleDefinition?.title ?? slug.replaceAll("-", " "),
+        description: moduleDefinition?.description ?? "Open this authorized workspace.",
+        href: resolvedSlug === "dashboard" ? "/dashboard" : `/${resolvedSlug}`,
+      };
+    })
+    .slice(0, 4);
 
   function renderKpiCard({ kpi, Icon, widgetId }: (typeof dashboardKpiRows)[number], valueClassName: string, honeycomb = false) {
     const href = widgetSummaries[widgetId]?.href ?? "/dashboard";
@@ -1516,24 +1550,66 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 {commandCenterDescription}
               </p>
             </div>
-            <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2 lg:flex lg:flex-wrap">
+            <div className="grid w-full grid-cols-1 gap-2 sm:w-auto">
                 {canPrintDashboard ? <Button type="button" className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" variant="outline" onClick={printDashboard}>
                   <Printer data-icon="inline-start" aria-hidden="true" />
                   Print dashboard
                 </Button> : null}
-                {showAiBrief ? <Button className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" nativeButton={false} render={<Link href={aiBriefHref} />}>
-                  <MessageSquare data-icon="inline-start" aria-hidden="true" />
-                  {isTeacherDashboard ? "Open teacher portal" : isBillingDashboard ? "Open messages" : isParentDashboard || isPickupDashboard ? "Open family portal" : "Review AI brief"}
-                </Button> : null}
-                {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? <Button className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" variant="outline" nativeButton={false} render={<Link href="/crm-leads" />}>
-                  <ArrowUpRight data-icon="inline-start" aria-hidden="true" />
-                  Open pipeline
-                </Button> : null}
-                {(isDirectorDashboard || isExecutiveDashboard) && live?.dataReadiness ? <Button className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto" variant="outline" nativeButton={false} render={<Link href="/data-readiness" />}>
-                  <ShieldCheck data-icon="inline-start" aria-hidden="true" />
-                  {isExecutiveDashboard ? "Migration data workbook" : "School migration setup"}
-                </Button> : null}
             </div>
+          </div>
+          <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+            <Card className="border-amber-500/25 bg-amber-500/[0.04]">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2 text-lg font-semibold" id="dashboard-needs-attention">
+                  <ShieldAlert className="size-5 text-amber-600" aria-hidden="true" />
+                  Needs attention
+                </div>
+                <CardDescription>Current exceptions and incomplete work in this workspace.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {actionQueue.length ? (
+                  <ul className="grid gap-2" aria-labelledby="dashboard-needs-attention">
+                    {actionQueue.slice(0, 3).map((item, index) => (
+                      <li key={`${index}-${notificationText(item)}`}>
+                        <Link href="/notifications" className="flex min-h-11 items-center justify-between gap-3 rounded-lg border bg-background/70 px-3 py-2 text-sm transition-colors hover:border-primary/40 hover:bg-primary/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                          <span>{notificationText(item)}</span>
+                          <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="flex min-h-20 items-center gap-3 rounded-xl border bg-background/60 p-4 text-sm text-muted-foreground">
+                    <CheckCircle2 className="size-5 shrink-0 text-emerald-600" aria-hidden="true" />
+                    No current exceptions are visible in this workspace.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="text-lg font-semibold" id="dashboard-primary-actions">Primary actions</div>
+                <CardDescription>The most common destinations for your role.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2" aria-labelledby="dashboard-primary-actions">
+                {primaryActionItems.map((item, index) => (
+                  <Link
+                    key={item.slug}
+                    href={item.href}
+                    className={cn(
+                      "group flex min-h-14 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition-colors hover:border-primary/45 hover:bg-primary/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      index === 0 && "border-primary/35 bg-primary/[0.08]",
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold capitalize">{item.label}</span>
+                      <span className="mt-0.5 block line-clamp-1 text-xs text-muted-foreground">{item.description}</span>
+                    </span>
+                    <ArrowUpRight className="size-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" />
+                  </Link>
+                ))}
+              </CardContent>
+            </Card>
           </div>
           <div className={showAiBrief ? "grid min-w-0 gap-5 min-[112rem]:grid-cols-[minmax(0,1fr)_28rem] min-[112rem]:gap-6" : "grid min-w-0 gap-5"}>
             {topKpiRows.length ? (
@@ -1580,6 +1656,15 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
 
       {isDirectorDashboard && live?.reviewInbox ? <DirectorReviewInbox items={live.reviewInbox} /> : null}
 
+      <details className="group rounded-2xl border bg-card/65">
+        <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 rounded-2xl px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-6 [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="block text-base font-semibold">Explore dashboard details</span>
+            <span className="mt-0.5 block text-sm text-muted-foreground">Reports, setup, trends, and less-frequent workspace tools.</span>
+          </span>
+          <ChevronDown className="size-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
+        <div className="grid gap-5 border-t p-4 sm:gap-6 sm:p-6">
       {isDirectorDashboard ? (
         <Card className="border-sky-500/30 bg-sky-500/5">
           <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
@@ -1665,7 +1750,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
       ) : null}
 
       <Tabs defaultValue={defaultLens} className="min-w-0 flex flex-col gap-4">
-        <TabsList className="w-full justify-start overflow-x-auto">
+        {visibleLenses.length > 1 ? <TabsList className="w-full justify-start overflow-x-auto">
           {visibleLenses.includes("platform") ? <TabsTrigger value="platform">Platform admin</TabsTrigger> : null}
           {visibleLenses.includes("brand") ? <TabsTrigger value="brand">Brand admin</TabsTrigger> : null}
           {visibleLenses.includes("regional") ? <TabsTrigger value="regional">Regional</TabsTrigger> : null}
@@ -1674,7 +1759,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           {visibleLenses.includes("teacher") ? <TabsTrigger value="teacher">Teacher</TabsTrigger> : null}
           {visibleLenses.includes("parent") ? <TabsTrigger value="parent">Parent</TabsTrigger> : null}
           {visibleLenses.includes("pickup") ? <TabsTrigger value="pickup">Pickup</TabsTrigger> : null}
-        </TabsList>
+        </TabsList> : null}
         {visibleLenses.includes("director") ? <TabsContent value="director" className="mt-0 min-w-0">
           <div className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_22rem]">
             <div className="grid min-w-0 gap-6">
@@ -2169,6 +2254,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           ]}
         />
       ) : null}
+        </div>
+      </details>
     </div>
   );
 }

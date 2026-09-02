@@ -78,15 +78,25 @@ type CollapsibleCardProps = {
   headerClassName?: string;
   titleClassName?: string;
   defaultCollapsed?: boolean;
+  forceExpanded?: boolean;
 };
 
-function usePersistedCollapsed(id: string, defaultCollapsed: boolean) {
+function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpanded = false) {
   const key = storageKey("collapsed", id);
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const [collapsed, setCollapsed] = useState(forceExpanded ? false : defaultCollapsed);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     let cancelled = false;
+    if (forceExpanded) {
+      window.localStorage.removeItem(key);
+      window.queueMicrotask(() => {
+        if (!cancelled) setCollapsed(false);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
     window.queueMicrotask(() => {
       if (cancelled) return;
       const stored = window.localStorage.getItem(key);
@@ -96,16 +106,21 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean) {
     return () => {
       cancelled = true;
     };
-  }, [key]);
+  }, [forceExpanded, key]);
 
   const setPersistedCollapsed = useCallback((next: boolean) => {
+    if (forceExpanded) {
+      setCollapsed(false);
+      return;
+    }
     setCollapsed(next);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(key, next ? "1" : "0");
     }
-  }, [key]);
+  }, [forceExpanded, key]);
 
   const toggleCollapsed = useCallback(() => {
+    if (forceExpanded) return;
     setCollapsed((current) => {
       const next = !current;
       if (typeof window !== "undefined") {
@@ -113,19 +128,19 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean) {
       }
       return next;
     });
-  }, [key]);
+  }, [forceExpanded, key]);
 
   const expand = useCallback(() => setPersistedCollapsed(false), [setPersistedCollapsed]);
 
-  return { collapsed, expand, toggleCollapsed };
+  return { collapsed: forceExpanded ? false : collapsed, expand, toggleCollapsed };
 }
 
 function useExpandForHash(id: string, expand: () => void) {
   useEffect(() => {
-    function expandAndFocusTarget() {
+    function expandAndFocusTarget(targetHash: string) {
       let target = "";
       try {
-        target = decodeURIComponent(window.location.hash.slice(1));
+        target = decodeURIComponent(targetHash.slice(1));
       } catch {
         return;
       }
@@ -138,9 +153,25 @@ function useExpandForHash(id: string, expand: () => void) {
       });
     }
 
-    expandAndFocusTarget();
-    window.addEventListener("hashchange", expandAndFocusTarget);
-    return () => window.removeEventListener("hashchange", expandAndFocusTarget);
+    function expandFromAnchorClick(event: MouseEvent) {
+      if (!(event.target instanceof Element)) return;
+      const anchor = event.target.closest<HTMLAnchorElement>('a[href^="#"]');
+      const href = anchor?.getAttribute("href");
+      if (!href) return;
+      expandAndFocusTarget(href);
+    }
+
+    function expandFromLocationHash() {
+      expandAndFocusTarget(window.location.hash);
+    }
+
+    expandFromLocationHash();
+    window.addEventListener("hashchange", expandFromLocationHash);
+    document.addEventListener("click", expandFromAnchorClick);
+    return () => {
+      window.removeEventListener("hashchange", expandFromLocationHash);
+      document.removeEventListener("click", expandFromAnchorClick);
+    };
   }, [expand, id]);
 }
 
@@ -158,9 +189,10 @@ export function CollapsibleCard({
   headerClassName,
   titleClassName,
   defaultCollapsed = false,
+  forceExpanded = false,
 }: CollapsibleCardProps) {
   const contentId = useId();
-  const { collapsed, expand, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
+  const { collapsed, expand, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed, forceExpanded);
   useExpandForHash(id, expand);
 
   return (
@@ -184,7 +216,7 @@ export function CollapsibleCard({
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {headerActions}
-            <Tooltip>
+            {!forceExpanded ? <Tooltip>
               <TooltipTrigger
                 render={(
                   <Button
@@ -201,7 +233,7 @@ export function CollapsibleCard({
                 {collapsed ? <ChevronRight /> : <ChevronDown />}
               </TooltipTrigger>
               <TooltipContent>{collapsed ? "Expand" : "Collapse"}</TooltipContent>
-            </Tooltip>
+            </Tooltip> : null}
           </div>
         </div>
         {!collapsed ? headerAfter : null}

@@ -6,7 +6,7 @@ import {
   normalizeCrmLocationId,
   parseCrmLocationId,
 } from "@/lib/active-school-locations";
-import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canAdministerCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { type AccessGrantTarget } from "@/lib/access-grant-guardrails";
 import { parseExecutiveBulkImportCsv, type ExecutiveBulkImportRow } from "@/lib/executive-bulk-import";
 import { prisma } from "@/lib/prisma";
@@ -279,7 +279,7 @@ async function saveCenter(payload: Payload, actor: Awaited<ReturnType<typeof req
       select: { id: true, crmLocationId: true, locationId: true, customFields: true },
     });
     if (!existingCenter) throw new Error("Center not found.");
-    if (!canAccessCenter(actor, centerId)) throw new Error("You do not have access to update this center.");
+    if (!canAdministerCenter(actor, centerId)) throw new Error("You do not have access to update this center.");
   }
 
   if (crmLocationId || locationId) {
@@ -376,7 +376,7 @@ async function setCenterStatus(payload: Payload, actor: Awaited<ReturnType<typeo
   const centerId = clean(payload.centerId);
   const status = clean(payload.status);
   if (!centerId || !editableCenterStatuses.has(status)) throw new Error("Center and supported status are required.");
-  if (!canAccessCenter(actor, centerId)) throw new Error("You do not have access to this center.");
+  if (!canAdministerCenter(actor, centerId)) throw new Error("You do not have access to this center.");
 
   const center = await prisma.center.findFirst({
     where: { id: centerId, organization: { tenantId: actor.tenantId } },
@@ -580,7 +580,7 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
   const ownerGroupId = clean(payload.ownerGroupId);
   let center: Prisma.CenterGetPayload<{ include: { organization: true } }> | null = null;
   if (centerId) {
-    if (!canAccessCenter(actor, centerId)) throw new Error("You do not have access to this center.");
+    if (!canAdministerCenter(actor, centerId)) throw new Error("You do not have access to this center.");
     center = await prisma.center.findFirst({
       where: { id: centerId, organization: { tenantId: actor.tenantId } },
       include: { organization: true },

@@ -449,7 +449,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     organizationId: effectiveOrganizationId,
     mustResetPassword: user.mustResetPassword,
     centerIds,
-    authorizedCenterIds: selectableCenterIds,
+    authorizedCenterIds,
     primaryCenterId: centerIds[0] ?? null,
     assignedClassroomId: user.staffProfile?.classroomId ?? null,
     deviceSessionId: session.deviceSessionId ?? null,
@@ -593,6 +593,18 @@ export function canAccessCenter(user: Pick<CurrentUser, "role" | "accessScope" |
     (user.accessScope === "tenant" && canUseTenantWideAccessRole(user.role)) ||
     user.centerIds.includes(centerId)
   );
+}
+
+export function canAdministerCenter(
+  user: Pick<CurrentUser, "centerIds"> & Partial<Pick<CurrentUser, "authorizedCenterIds">> & {
+    workspace?: { mode?: WorkspaceState["mode"] };
+  },
+  centerId: string,
+) {
+  if (user.workspace?.mode === "center" || user.workspace?.mode === "fixed") {
+    return user.centerIds.includes(centerId);
+  }
+  return (user.authorizedCenterIds ?? user.centerIds).includes(centerId);
 }
 
 export function canManageCrmLeads(user: Pick<CurrentUser, "role">) {

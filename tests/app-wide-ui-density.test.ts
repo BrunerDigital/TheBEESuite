@@ -12,7 +12,8 @@ test("shared collapsible sections expose accessible persisted controls and conci
   assert.match(source, /aria-controls=\{contentId\}/);
   assert.match(source, /collapsedSummary \|\| description/);
   assert.match(source, /data-collapsible-panel="true"/);
-  assert.match(source, /window\.addEventListener\("hashchange", expandAndFocusTarget\)/);
+  assert.match(source, /window\.addEventListener\("hashchange", expandFromLocationHash\)/);
+  assert.match(source, /document\.addEventListener\("click", expandFromAnchorClick\)/);
   assert.match(source, /element\?\.focus\(\{ preventScroll: true \}\)/);
 });
 

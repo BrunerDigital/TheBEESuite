@@ -3912,6 +3912,7 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
             headerActions={<Badge variant="outline">{formatRecordLabel(child.enrollmentStatus)}</Badge>}
             contentClassName="grid gap-4"
             defaultCollapsed={!hasCustodyWarning(child.family)}
+            forceExpanded={hasCustodyWarning(child.family)}
           >
               {hasCustodyWarning(child.family) ? (
                 <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">

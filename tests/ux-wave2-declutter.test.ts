@@ -67,5 +67,6 @@ test("teacher document detail cards stay compact unless a custody warning needs 
 
   assert.match(source, /id=\{`teacher-document-child-\$\{child\.id\}`\}/);
   assert.match(source, /defaultCollapsed=\{!hasCustodyWarning\(child\.family\)\}/);
+  assert.match(source, /forceExpanded=\{hasCustodyWarning\(child\.family\)\}/);
   assert.match(source, /id="teacher-visible-files"[\s\S]*?defaultCollapsed/);
 });

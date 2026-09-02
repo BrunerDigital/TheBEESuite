@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { UserRole } from "@prisma/client";
-import { canAccessAllCenters, canAccessCenter, createSessionToken, verifySessionToken } from "@/lib/auth";
+import { canAccessAllCenters, canAccessCenter, canAdministerCenter, createSessionToken, verifySessionToken } from "@/lib/auth";
 import { dashboardLensesForRole } from "@/lib/rbac";
 import {
   effectiveCenterIdsForWorkspace,
@@ -55,6 +55,15 @@ test("closed and inactive locations are not selectable workspaces", () => {
   assert.equal(stale.mode, "pending");
   assert.equal(stale.invalidSelection, true);
   assert.deepEqual(effectiveCenterIdsForWorkspace(stale, stale.options.map((center) => center.id)), []);
+
+  const allLocationsAdmin = {
+    centerIds: ["school_a", "school_b"],
+    authorizedCenterIds: ["school_a", "school_b", "school_closed"],
+    workspace: { mode: "all" } as const,
+  };
+  const singleLocationAdmin = { ...allLocationsAdmin, centerIds: ["school_a"], workspace: { mode: "center" } as const };
+  assert.equal(canAdministerCenter(allLocationsAdmin, "school_closed"), true);
+  assert.equal(canAdministerCenter(singleLocationAdmin, "school_closed"), false);
 });
 
 test("specific and all-location workspaces narrow the effective server scope", () => {

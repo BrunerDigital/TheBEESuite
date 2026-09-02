@@ -62,6 +62,7 @@ const dashboardViewsStorageKey = "bee-suite.dashboard.savedViews.v1";
 const dashboardViewsEventName = "bee-suite-dashboard-saved-views";
 let dashboardViewsRawSnapshot = "";
 let dashboardViewsSnapshot: DashboardSnapshotView[] = [];
+const serverDashboardViewsSnapshot: DashboardSnapshotView[] = [];
 
 const dateRangeLabels: Record<SnapshotDateRange, string> = {
   "7": "Last 7 days",
@@ -112,7 +113,7 @@ function getDashboardViewsSnapshot() {
 }
 
 function getServerDashboardViewsSnapshot() {
-  return [];
+  return serverDashboardViewsSnapshot;
 }
 
 function subscribeDashboardViews(callback: () => void) {

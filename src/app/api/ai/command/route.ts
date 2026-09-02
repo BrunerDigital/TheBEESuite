@@ -62,7 +62,7 @@ function centerIdFilter(centerIds: string[]) {
 }
 
 function centerWhereForUser(user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>): Prisma.CenterWhereInput {
-  if (user.role === UserRole.PLATFORM_OWNER) return { status: { not: "closed" } };
+  if (user.role === UserRole.PLATFORM_OWNER && canAccessAllCenters(user)) return { status: { not: "closed" } };
   if (canAccessAllCenters(user)) {
     return { organization: { tenantId: user.tenantId }, status: { not: "closed" } };
   }

@@ -20,6 +20,7 @@ import {
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { prisma } from "@/lib/prisma";
 import { readStripeConnectMigration } from "@/lib/stripe-connect-migration";
+import { workspaceSelectionRedirect } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,8 @@ export default async function StripeReauthorizationPage({
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect(loginHrefForNextPath(nextPath));
   if (requiresPasswordResetGate(user)) redirect(`/reset-password?force=1&next=${encodeURIComponent(nextPath)}`);
+  const workspaceRedirect = workspaceSelectionRedirect(user.workspace, nextPath);
+  if (workspaceRedirect) redirect(workspaceRedirect);
   if (!centerId) notFound();
   const center = await prisma.center.findUnique({
     where: { id: centerId },

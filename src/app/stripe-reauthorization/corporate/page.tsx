@@ -10,6 +10,7 @@ import { readStripeConnectMigration, type StripeConnectMigrationStatus } from "@
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CORPORATE_STRIPE_PORTFOLIO_EMAIL, CORPORATE_STRIPE_PORTFOLIO_PATH } from "@/lib/stripe-payout-setup-flow";
+import { workspaceSelectionRedirect } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,8 @@ export default async function CorporateStripeReauthorizationPage() {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect(loginHrefForNextPath(CORPORATE_STRIPE_PORTFOLIO_PATH));
   if (requiresPasswordResetGate(user)) redirect(`/reset-password?force=1&next=${encodeURIComponent(CORPORATE_STRIPE_PORTFOLIO_PATH)}`);
+  const workspaceRedirect = workspaceSelectionRedirect(user.workspace, CORPORATE_STRIPE_PORTFOLIO_PATH);
+  if (workspaceRedirect) redirect(workspaceRedirect);
   if (!canManageBilling(user) && !canManageOperations(user)) notFound();
 
   const now = new Date();

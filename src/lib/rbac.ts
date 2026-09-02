@@ -12,6 +12,7 @@ type AccessSubject =
       email?: string | null;
       accessScope?: string | null;
       centerIds?: string[] | null;
+      workspace?: { mode?: string | null } | null;
     };
 
 const enrollmentRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR"]);
@@ -168,6 +169,8 @@ export function accessibleModuleRouteSlug(subject: AccessSubject, requestedSlug:
 
 export function dashboardLensesForRole(subject: AccessSubject) {
   const role = getRole(subject);
+  const workspaceMode = typeof subject === "object" && subject ? subject.workspace?.mode : null;
+  if (isExecutiveRole(role) && workspaceMode === "center") return ["director"] as const;
   if (role === "READ_ONLY_AUDITOR") return ["regional"] as const;
   if (!hasTenantWideUiAccess(subject)) {
     if (role === "TEACHER") return ["teacher"] as const;
@@ -176,8 +179,8 @@ export function dashboardLensesForRole(subject: AccessSubject) {
     if (role === "BILLING_ADMIN") return ["billing"] as const;
     return ["director"] as const;
   }
-  if (role === "PLATFORM_OWNER") return ["platform", "brand", "regional", "director"] as const;
-  if (role === "BRAND_ADMIN") return ["brand", "regional", "director"] as const;
-  if (role === "REGIONAL_MANAGER") return ["regional", "director"] as const;
+  if (role === "PLATFORM_OWNER") return ["platform"] as const;
+  if (role === "BRAND_ADMIN") return ["brand"] as const;
+  if (role === "REGIONAL_MANAGER") return ["regional"] as const;
   return ["director"] as const;
 }

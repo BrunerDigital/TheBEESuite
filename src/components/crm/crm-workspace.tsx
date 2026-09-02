@@ -173,6 +173,7 @@ const maxEmailAttachmentCount = 5;
 const maxEmailAttachmentBytes = 8 * 1024 * 1024;
 let crmSavedViewsRawSnapshot = "";
 let crmSavedViewsSnapshot: CrmSavedView[] = [];
+const serverCrmSavedViewsSnapshot: CrmSavedView[] = [];
 
 const scoreFilterLabels: Record<ScoreFilter, string> = {
   all: "All scores",
@@ -471,7 +472,7 @@ function getCrmSavedViewsSnapshot() {
 }
 
 function getServerCrmSavedViewsSnapshot() {
-  return [];
+  return serverCrmSavedViewsSnapshot;
 }
 
 function subscribeCrmSavedViews(callback: () => void) {

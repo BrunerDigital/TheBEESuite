@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
 import { canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
 import { processAutopayInvoices } from "@/lib/autopay-processing";
 import { prisma } from "@/lib/prisma";
@@ -61,13 +60,19 @@ async function POSTHandler(request: NextRequest) {
   if (processStoredMethod) {
     return NextResponse.json({ ok: false, error: "A saved payment method can only be run after the parent enables autopay." }, { status: 403 });
   }
+  if (chargeMode && user.workspace?.mode === "all") {
+    return NextResponse.json({
+      ok: false,
+      error: "Choose one location from the workspace menu before running an autopay charge. All locations is available for review and dry runs only.",
+    }, { status: 409 });
+  }
 
   if (centerId) {
     if (!canAccessCenter(user, centerId)) {
       return NextResponse.json({ ok: false, error: "You do not have access to this school." }, { status: 403 });
     }
     centerIds = [centerId];
-  } else if (user.role !== UserRole.PLATFORM_OWNER) {
+  } else {
     centerIds = user.centerIds.length ? user.centerIds : ["__no_authorized_center__"];
   }
 

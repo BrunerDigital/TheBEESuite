@@ -224,6 +224,7 @@ import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
 import { readStaffClockState, readStaffClockSummary, readStaffContactEmail, readStaffKioskPinHash } from "@/lib/staff-kiosk";
 import { estimatedHourlyGrossPayCents, readStaffCompensation } from "@/lib/staff-compensation";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
+import { workspaceSelectionRedirect } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 
@@ -5582,7 +5583,7 @@ async function renderLivePage(
         { provider: { notIn: MARKETING_INTEGRATION_PROVIDERS }, scopeKey: "tenant" },
       ],
     } satisfies Prisma.IntegrationWhereInput;
-    const deliveryWhere: Prisma.IntegrationDeliveryWhereInput = user.role === UserRole.PLATFORM_OWNER
+    const deliveryWhere: Prisma.IntegrationDeliveryWhereInput = user.role === UserRole.PLATFORM_OWNER && tenantWide
       ? {}
       : tenantWide
         ? { tenantId: user.tenantId }
@@ -6921,6 +6922,8 @@ export async function renderAuthenticatedModulePage(
   if (requiresPasswordResetGate(user)) {
     redirect(`/reset-password?force=1&next=${encodeURIComponent(authenticationNextPath)}`);
   }
+  const workspaceRedirect = workspaceSelectionRedirect(user.workspace, authenticationNextPath);
+  if (workspaceRedirect) redirect(workspaceRedirect);
   if (terminalStoreReturn) {
     return <AppShell currentUser={user}>
       <TerminalStoreReturnPage status={terminalStoreReturn} />

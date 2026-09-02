@@ -2088,7 +2088,7 @@ async function POSTHandler(request: NextRequest) {
   const visibleCenterRows = await prisma.center.findMany({
     where: {
       status: { not: "closed" },
-      ...(user.role === "PLATFORM_OWNER" ? {} : { id: { in: user.centerIds.length ? user.centerIds : ["__none__"] } }),
+      id: { in: user.centerIds.length ? user.centerIds : ["__none__"] },
     },
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
     select: {

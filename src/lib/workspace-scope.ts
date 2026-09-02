@@ -5,12 +5,21 @@ export type WorkspaceScopeContext = {
   href: string;
 };
 
+type WorkspaceStateInput = {
+  mode: "pending" | "all" | "center" | "fixed";
+  label: string;
+  detail: string;
+  companyLabel?: string;
+  canSwitch: boolean;
+};
+
 type WorkspaceScopeInput = {
   role: string;
   accessScope?: string | null;
   centerCount: number;
   primaryCenterName?: string | null;
   classroomName?: string | null;
+  workspace?: WorkspaceStateInput | null;
 };
 
 function roleLabel(role: string) {
@@ -48,6 +57,33 @@ export function workspaceScopeContext(input: WorkspaceScopeInput): WorkspaceScop
       label: classroomName ?? primaryCenterName ?? "Assigned classroom",
       detail: classroomName && primaryCenterName ? `${primaryCenterName} · Teacher` : "Teacher workspace",
       href: "/teacher-portal",
+    };
+  }
+
+  if (input.workspace?.mode === "pending") {
+    return {
+      kind: "workspace",
+      label: input.workspace.label,
+      detail: input.workspace.detail,
+      href: "/workspace?next=%2Fdashboard",
+    };
+  }
+
+  if (input.workspace?.mode === "all") {
+    return {
+      kind: "portfolio",
+      label: "All locations",
+      detail: `${input.workspace.companyLabel ? `${input.workspace.companyLabel} · ` : ""}${locationCount(centerCount)} · ${readableRole}`,
+      href: "/workspace?next=%2Fdashboard",
+    };
+  }
+
+  if (input.workspace?.mode === "center") {
+    return {
+      kind: "school",
+      label: input.workspace.label,
+      detail: `${input.workspace.companyLabel ? `${input.workspace.companyLabel} · ` : ""}${input.workspace.detail} · ${readableRole}`,
+      href: "/workspace?next=%2Fdashboard",
     };
   }
 

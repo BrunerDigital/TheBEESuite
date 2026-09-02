@@ -15,7 +15,7 @@ test("parent daily reports are complete, concise, and visible without expansion"
 });
 
 test("parents can choose only teachers from their children's current classrooms", () => {
-  assert.match(parentPage, /classroomTeachers=\{classroomTeachers\}/);
+  assert.match(parentPage, /classroomTeachers=\{paymentContinuityAccess \? \[\] : classroomTeachers\}/);
   assert.match(parentPage, /sentAt: \{ not: null \}/);
   assert.match(parentPage, /role: UserRole\.TEACHER/);
   assert.match(parentPage, /classroomId: \{ in: parentClassroomIds/);

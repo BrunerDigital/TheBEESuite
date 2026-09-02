@@ -35,7 +35,7 @@ import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readiness-flow";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
-import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import { getParentPortalPaymentFamilyScope } from "@/lib/parent-portal-family-scope";
 import { invoiceResponsibilityReviewExempt, invoiceResponsibilitySeparation } from "@/lib/invoice-responsibility-separation";
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
@@ -182,7 +182,7 @@ async function POSTHandler(request: NextRequest) {
 
   const { invoice, centerId } = access;
   const parentFamilyScope = userIsParentGuardian && !userCanManageBilling
-    ? await getParentPortalFamilyScope(user.id, user.tenantId, invoice.billingAccount.family.id)
+    ? await getParentPortalPaymentFamilyScope(user.id, user.tenantId, invoice.billingAccount.family.id)
     : null;
   if (parentFamilyScope && !parentFamilyScope.ok) {
     return NextResponse.json({ ok: false, error: "Your family link needs review before payment can continue." }, { status: 409 });

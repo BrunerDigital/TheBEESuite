@@ -3284,14 +3284,16 @@ function ParentPortalWorkspaceView({
                 ) : null}
               </div>
             </div>
-            <ParentPortalDocumentLink
-              href={workspaceHref("family", { familyId: family.id, section: "billing", hash: null })}
-              className="flex min-h-16 items-center gap-3 rounded-2xl border bg-background/55 p-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary"><CreditCard className="size-5" aria-hidden="true" /></span>
-              <span className="min-w-0 flex-1"><span className="block font-semibold">Billing settings</span><span className="block truncate text-xs text-muted-foreground">Payment methods, billing email &amp; autopay</span></span>
-              <ArrowRight className="size-5 shrink-0 text-primary" aria-hidden="true" />
-            </ParentPortalDocumentLink>
+            {!paymentContinuityAccess ? (
+              <ParentPortalDocumentLink
+                href={workspaceHref("family", { familyId: family.id, section: "billing", hash: null })}
+                className="flex min-h-16 items-center gap-3 rounded-2xl border bg-background/55 p-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary"><CreditCard className="size-5" aria-hidden="true" /></span>
+                <span className="min-w-0 flex-1"><span className="block font-semibold">Billing settings</span><span className="block truncate text-xs text-muted-foreground">Payment methods, billing email &amp; autopay</span></span>
+                <ArrowRight className="size-5 shrink-0 text-primary" aria-hidden="true" />
+              </ParentPortalDocumentLink>
+            ) : null}
             {showFamilyPaymentPanel ? (
               <div className="rounded-xl border bg-primary/10 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">

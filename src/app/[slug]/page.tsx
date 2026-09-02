@@ -94,7 +94,7 @@ import { childScheduleClassification, fteScheduledDaysPerWeek, scheduledDaysPerW
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
-import { getParentPortalFamilyScope, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
+import { getParentPortalPaymentFamilyScope, getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere } from "@/lib/parent-portal-family-scope";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
 import { readStripeConnectMigration, stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
 import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
@@ -2104,7 +2104,7 @@ async function renderLivePage(
     const requestedParentFamilyId = firstSearchParam(searchParams.familyId) || null;
     const requestedLedgerPage = boundedPage(searchParams.ledgerPage);
     const requestedParentFamilyScope = user.role === UserRole.PARENT_GUARDIAN && requestedParentFamilyId
-      ? await getParentPortalFamilyScope(user.id, user.tenantId, requestedParentFamilyId)
+      ? await getParentPortalPaymentFamilyScope(user.id, user.tenantId, requestedParentFamilyId)
       : null;
     if (requestedParentFamilyScope && !requestedParentFamilyScope.ok) {
       return <ParentPortalAccessBlocked />;
@@ -2132,9 +2132,9 @@ async function renderLivePage(
       : [];
     const selectedParentFamilyId = requestedParentFamilyId && linkedParentFamilies.some((item) => item.id === requestedParentFamilyId)
       ? requestedParentFamilyId
-      : linkedParentFamilies[0]?.id ?? null;
+      : linkedParentFamilies.find((item) => item.children.length > 0)?.id ?? linkedParentFamilies[0]?.id ?? null;
     const parentFamilyScope = user.role === UserRole.PARENT_GUARDIAN
-      ? requestedParentFamilyScope ?? await getParentPortalFamilyScope(user.id, user.tenantId, selectedParentFamilyId)
+      ? requestedParentFamilyScope ?? await getParentPortalPaymentFamilyScope(user.id, user.tenantId, selectedParentFamilyId)
       : null;
     if (parentFamilyScope && !parentFamilyScope.ok) {
       return <ParentPortalAccessBlocked />;
@@ -2203,9 +2203,8 @@ async function renderLivePage(
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
     const paymentContinuityAccess = Boolean(family && family.children.length === 0);
-    const resolvedParentPortalView = paymentContinuityAccess && !requestedParentPortalView
-      ? "payments"
-      : parentPortalView;
+    const resolvedParentPortalView = paymentContinuityAccess ? "payments" : parentPortalView;
+    const parentPortalContentFamilyId = paymentContinuityAccess ? "__payment_continuity__" : familyId;
     const parentClassroomIds = Array.from(new Set(
       family?.children.map((child) => child.classroomId).filter((id): id is string => Boolean(id)) ?? [],
     ));
@@ -2372,7 +2371,7 @@ async function renderLivePage(
         },
       }),
       prisma.message.findMany({
-        where: { familyId },
+        where: { familyId: parentPortalContentFamilyId },
         orderBy: { createdAt: "desc" },
         take: 20,
         select: {
@@ -2386,7 +2385,7 @@ async function renderLivePage(
         },
       }),
       prisma.document.findMany({
-        where: { OR: [{ familyId }, { childId: { in: childIds.length ? childIds : ["__none__"] } }] },
+        where: { OR: [{ familyId: parentPortalContentFamilyId }, { childId: { in: childIds.length ? childIds : ["__none__"] } }] },
         orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }],
         take: 20,
         select: { id: true, name: true, type: true, status: true, expiresAt: true, storageKey: true },
@@ -2506,7 +2505,7 @@ async function renderLivePage(
     const parentPortalCenterName = resolvedParentCenterId
       ? centers.find((center) => center.id === resolvedParentCenterId)
       : null;
-    const kioskCredentials = user.role === UserRole.PARENT_GUARDIAN && family
+    const kioskCredentials = user.role === UserRole.PARENT_GUARDIAN && family && !paymentContinuityAccess
       ? family.guardians
           .filter((guardian) => guardian.userId === user.id)
           .map((guardian) => buildGuardianKioskCredential({
@@ -2537,7 +2536,13 @@ async function renderLivePage(
     const parentChildProfilePhotoUrls = new Map(await Promise.all((family?.children ?? []).map(async (child) => [child.id, await signedChildProfilePhotoUrl(child.customFields)] as const)));
     const parentPortalFamily = family
       ? {
-          ...family,
+          ...(paymentContinuityAccess
+            ? {
+                id: family.id,
+                name: family.name,
+                billingEmail: family.billingEmail,
+              }
+            : family),
           centerId: resolvedParentCenterId,
           children: family.children.map((child) => {
             const attendance = parentAttendanceByChild.get(child.id);
@@ -2562,20 +2567,38 @@ async function renderLivePage(
               }),
             };
           }),
-          guardians: family.guardians.map((guardian) => {
-            const safeGuardian = { ...guardian };
-            delete (safeGuardian as { checkInPinHash?: string | null }).checkInPinHash;
-            delete (safeGuardian as { checkInPinSetAt?: Date | null }).checkInPinSetAt;
-            return safeGuardian;
-          }),
+          guardians: family.guardians
+            .filter((guardian) => !paymentContinuityAccess || guardian.userId === user.id)
+            .map((guardian) => {
+              if (paymentContinuityAccess) {
+                return {
+                  id: guardian.id,
+                  userId: guardian.userId,
+                  fullName: guardian.fullName,
+                  email: guardian.email,
+                  phone: guardian.phone,
+                  relation: guardian.relation,
+                  preferredCommunication: guardian.preferredCommunication,
+                };
+              }
+              const safeGuardian = { ...guardian };
+              delete (safeGuardian as { checkInPinHash?: string | null }).checkInPinHash;
+              delete (safeGuardian as { checkInPinSetAt?: Date | null }).checkInPinSetAt;
+              return safeGuardian;
+            }),
+          pickups: paymentContinuityAccess ? [] : family.pickups,
+          emergencyContacts: paymentContinuityAccess ? [] : family.emergencyContacts,
         }
       : null;
     const linkedGuardian = user.role === UserRole.PARENT_GUARDIAN
       ? parentPortalFamily?.guardians.find((guardian) => guardian.userId === user.id) ?? null
       : null;
+    const linkedGuardianRecord = user.role === UserRole.PARENT_GUARDIAN
+      ? family?.guardians.find((guardian) => guardian.userId === user.id) ?? null
+      : null;
     const linkedGuardianCustomFields =
-      linkedGuardian?.customFields && typeof linkedGuardian.customFields === "object" && !Array.isArray(linkedGuardian.customFields)
-        ? linkedGuardian.customFields
+      linkedGuardianRecord?.customFields && typeof linkedGuardianRecord.customFields === "object" && !Array.isArray(linkedGuardianRecord.customFields)
+        ? linkedGuardianRecord.customFields
         : {};
     const notificationPreferences =
       linkedGuardianCustomFields.notificationPreferences &&
@@ -2855,11 +2878,13 @@ async function renderLivePage(
         billingAccount={billingAccount ? {
           id: billingAccount.id,
           balanceCents: parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed ? 0 : parentBalanceCents,
-          autopayPlaceholder: billingAccount.autopayPlaceholder,
-          paymentMethodManagement: paymentMethodManagementSummary({
-            autopayPlaceholder: billingAccount.autopayPlaceholder,
-            customFields: billingAccount.customFields,
-          }),
+          autopayPlaceholder: paymentContinuityAccess ? false : billingAccount.autopayPlaceholder,
+          paymentMethodManagement: paymentContinuityAccess
+            ? undefined
+            : paymentMethodManagementSummary({
+                autopayPlaceholder: billingAccount.autopayPlaceholder,
+                customFields: billingAccount.customFields,
+              }),
         } : null}
         invoices={parentInvoices}
         checkoutReadiness={parentCheckoutReadiness}
@@ -2879,20 +2904,20 @@ async function renderLivePage(
         }}
         dailyReports={parentDailyReports}
         incidents={incidents}
-        messages={signedMessages}
+        messages={paymentContinuityAccess ? [] : signedMessages}
         centerName={familyCenter ? formatCenterName(familyCenter) : parentPortalCenterName ? formatCenterName(parentPortalCenterName) : null}
         centerEin={familyCenter ? readSchoolEin(familyCenter.customFields) : parentPortalCenter ? readSchoolEin(parentPortalCenter.customFields) : null}
         centerTimeZone={familyCenter ? readCenterLocationTimeZone(familyCenter) : parentServiceDay.timeZone}
-        classroomTeachers={classroomTeachers}
-        documents={signedDocuments}
+        classroomTeachers={paymentContinuityAccess ? [] : classroomTeachers}
+        documents={paymentContinuityAccess ? [] : signedDocuments}
         media={signedMedia}
         announcements={announcements}
         uniformProducts={[]}
         currentGuardianId={linkedGuardian?.id ?? null}
-        kioskCredentials={kioskCredentials}
+        kioskCredentials={paymentContinuityAccess ? [] : kioskCredentials}
         notificationPreferences={notificationPreferences}
-        accountDeletionRequest={accountDeletionRequest}
-        replyDraft={parentReplyToMessageId
+        accountDeletionRequest={paymentContinuityAccess ? null : accountDeletionRequest}
+        replyDraft={!paymentContinuityAccess && parentReplyToMessageId
           ? {
               replyToMessageId: parentReplyToMessageId,
               subject: parentReplySubject || null,

@@ -465,6 +465,29 @@ export async function applySucceededStripeInvoicePayment(
     accountCreditAppliedCents,
   });
   if (!guard.ok) {
+    // Stripe has confirmed that money moved. If another payment closed the
+    // invoice first, preserve the provider truth as an account-level credit
+    // instead of marking the successful payment void.
+    if (guard.reason === "invoice_not_open") {
+      return applySucceededStripeFamilyBalancePayment(tx, {
+        paymentId: input.paymentId,
+        externalId: input.externalId,
+        stripePaymentIntentId: input.stripePaymentIntentId,
+        stripePaymentStatus: input.stripePaymentIntentStatus,
+        stripePaymentIntentStatus: input.stripePaymentIntentStatus,
+        stripeAmountTotalCents: input.stripeAmountTotalCents,
+        stripeEventId: input.stripeEventId,
+        stripeEventCreatedAt: input.stripeEventCreatedAt,
+        metadata: {
+          ...metadata,
+          paymentScope: "family_balance",
+          creditedAfterInvoiceClosure: true,
+          originalInvoiceId: input.invoiceId,
+        },
+        descriptionFallback: `${collectionPaymentDescription(clean(metadata.collectionMode) || null)} received after invoice closure`,
+        appliedAt: input.appliedAt,
+      });
+    }
     await tx.payment.update({
       where: { id: input.paymentId },
       data: {

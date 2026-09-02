@@ -2199,6 +2199,7 @@ async function handlePaymentIntentSucceeded(
   const isAutopay = collectionMode === "autopay";
   const isStoredMethod = collectionMode === "stored_method";
   let applied = false;
+  let creditedToFamilyBalance = false;
   let ignoredReason: string | null = null;
 
   try {
@@ -2240,6 +2241,33 @@ async function handlePaymentIntentSucceeded(
         accountCreditAppliedCents,
       });
       if (!guard.ok) {
+        if (guard.reason === "invoice_not_open") {
+          const recovery = await applySucceededStripeFamilyBalancePayment(tx, {
+            paymentId,
+            externalId: paymentIntent.id,
+            stripePaymentIntentId: paymentIntent.id,
+            stripePaymentStatus: paymentIntent.status || null,
+            stripePaymentIntentStatus: paymentIntent.status || null,
+            stripeAmountTotalCents: paymentIntent.amount ?? null,
+            stripeEventId: event.id,
+            stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
+            metadata: {
+              ...metadata,
+              paymentScope: "family_balance",
+              creditedAfterInvoiceClosure: "true",
+              originalInvoiceId: invoiceId,
+            },
+            descriptionFallback: isAutopay
+              ? "Autopay payment received after invoice closure"
+              : isStoredMethod
+                ? "Saved method payment received after invoice closure"
+                : "Payment received after invoice closure",
+          });
+          applied = recovery.applied;
+          creditedToFamilyBalance = recovery.applied;
+          ignoredReason = recovery.reason;
+          return;
+        }
         ignoredReason = guard.reason;
         await tx.payment.update({
           where: { id: paymentId },
@@ -2411,7 +2439,17 @@ async function handlePaymentIntentSucceeded(
     invoiceId,
     event.id,
     paymentIntent.id,
-    isAutopay ? "billing.autopay.completed" : isStoredMethod ? "billing.stored_method.completed" : "billing.payment_intent.succeeded",
+    creditedToFamilyBalance
+      ? isAutopay
+        ? "billing.autopay.overpayment_recorded"
+        : isStoredMethod
+          ? "billing.stored_method.overpayment_recorded"
+          : "billing.payment_intent.overpayment_recorded"
+      : isAutopay
+        ? "billing.autopay.completed"
+        : isStoredMethod
+          ? "billing.stored_method.completed"
+          : "billing.payment_intent.succeeded",
   );
   return NextResponse.json({ ok: true });
 }

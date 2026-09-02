@@ -89,6 +89,15 @@ test("a succeeded family payment recovers only the same previously failed Paymen
   }).reason, "payment_already_applied");
 });
 
+test("provider-confirmed invoice overpayments remain visible as family account credit", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  const application = await readFile("src/lib/stripe-payment-application.ts", "utf8");
+  assert.match(route, /guard\.reason === "invoice_not_open"[\s\S]*applySucceededStripeFamilyBalancePayment/);
+  assert.match(route, /billing\.autopay\.overpayment_recorded/);
+  assert.match(application, /guard\.reason === "invoice_not_open"[\s\S]*applySucceededStripeFamilyBalancePayment/);
+  assert.match(application, /creditedAfterInvoiceClosure/);
+});
+
 test("Checkout payment-method failures stay recoverable without weakening off-session failures", () => {
   assert.deepEqual(stripePaymentIntentFailureDisposition({
     collectionMode: "parent_checkout",

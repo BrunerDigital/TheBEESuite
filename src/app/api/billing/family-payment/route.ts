@@ -87,6 +87,32 @@ function familyPaymentMethod(value: unknown): FamilyPaymentMethod {
   return "card_checkout";
 }
 
+function storedPaymentMethodCategory(value: unknown): StripePaymentMethodCategory | null {
+  const category = clean(value);
+  return category === "default" || category === "card" || category === "ach" || category === "link_bank"
+    ? category
+    : null;
+}
+
+function storedCents(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : fallback;
+}
+
+function unknownSubmissionMethod(fields: Record<string, unknown>, fallback: FamilyPaymentMethod): FamilyPaymentMethod {
+  if (fields.status === "director_saved_method_submission_unknown") return "saved_method";
+  const storedMethod = clean(fields.familyPaymentMethod);
+  if (storedMethod === "card_checkout" || storedMethod === "instant_bank_checkout" || storedMethod === "ach_checkout") {
+    return storedMethod;
+  }
+  const category = storedPaymentMethodCategory(fields.requestedPaymentMethodCategory)
+    || storedPaymentMethodCategory(fields.paymentMethodCategory);
+  if (category === "link_bank") return "instant_bank_checkout";
+  if (category === "ach") return "ach_checkout";
+  if (category === "card") return "card_checkout";
+  return fallback;
+}
+
 function checkoutCategory(method: FamilyPaymentMethod): StripePaymentMethodCategory {
   if (method === "card_checkout") return "card";
   if (method === "instant_bank_checkout") return "link_bank";
@@ -144,7 +170,7 @@ async function POSTHandler(request: NextRequest) {
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const billingAccountId = clean(body.billingAccountId);
   const familyId = clean(body.familyId);
-  const method = familyPaymentMethod(body.method);
+  let method = familyPaymentMethod(body.method);
   const parentFamilyScope = userIsParentGuardian && !userCanManageBilling
     ? method === "saved_method"
       ? await getParentPortalFamilyScope(user.id, user.tenantId, familyId || null)
@@ -157,7 +183,6 @@ async function POSTHandler(request: NextRequest) {
   const returnPath = safeReturnPath(body.returnPath, parentCheckout ? "/parent-portal" : "/billing-invoices");
   const description = parentCheckout ? "Family balance payment" : clean(body.description) || "Tuition payment";
   const source = parentCheckout ? "parent_portal" : clean(body.source) || "director_dashboard";
-  const collectionMode = checkoutCollectionMode(method, body.collectionMode, userCanManageBilling);
 
   const billingAccount = await prisma.billingAccount.findFirst({
     where: billingAccountId ? { id: billingAccountId } : { familyId },
@@ -194,10 +219,6 @@ async function POSTHandler(request: NextRequest) {
   if (!accessGuard.ok || !centerId) {
     return NextResponse.json({ ok: false, error: "You do not have access to this family." }, { status: 403 });
   }
-  if (parentCheckout && method === "saved_method") {
-    return NextResponse.json({ ok: false, error: "Parents must confirm payment through secure checkout." }, { status: 400 });
-  }
-
   const draftStripePayments = await prisma.payment.findMany({
     where: {
       billingAccountId: billingAccount.id,
@@ -206,6 +227,27 @@ async function POSTHandler(request: NextRequest) {
     },
     select: { id: true, amountCents: true, customFields: true, externalIdPlaceholder: true, provider: true, status: true },
   });
+  const retryableFamilySubmission = draftStripePayments.find((item) => {
+    const fields = jsonRecord(item.customFields);
+    return fields.paymentScope === "family_balance"
+      && item.provider === "stripe"
+      && isStripeSubmissionUnknownPayment(item);
+  });
+  const retryableFamilyFields = jsonRecord(retryableFamilySubmission?.customFields);
+  if (retryableFamilySubmission) {
+    method = unknownSubmissionMethod(retryableFamilyFields, method);
+  }
+  if (parentCheckout && method === "saved_method") {
+    return NextResponse.json({
+      ok: false,
+      error: retryableFamilySubmission
+        ? "A school-submitted payment is still being reconciled. Wait for the school to confirm its result before making another payment."
+        : "Parents must confirm payment through secure checkout.",
+      paymentId: retryableFamilySubmission?.id,
+    }, { status: retryableFamilySubmission ? 409 : 400 });
+  }
+  const collectionMode = clean(retryableFamilyFields.collectionMode)
+    || checkoutCollectionMode(method, body.collectionMode, userCanManageBilling);
   const activeInvoicePayment = parentCheckout
     ? draftStripePayments.find((item) => {
         const fields = jsonRecord(item.customFields);
@@ -227,7 +269,7 @@ async function POSTHandler(request: NextRequest) {
   const parentAmountProvided = typeof body.amountCents === "number"
     || clean(body.amountCents) !== ""
     || clean(body.amountDollars) !== "";
-  if (parentCheckout && parentAmountProvided && requestedAmountCents <= 0) {
+  if (!retryableFamilySubmission && parentCheckout && parentAmountProvided && requestedAmountCents <= 0) {
     return NextResponse.json(
       { ok: false, error: "Payment amount must be greater than zero.", code: "parent_account_payment_amount_invalid" },
       { status: 400 },
@@ -259,7 +301,7 @@ async function POSTHandler(request: NextRequest) {
       ...billingAccount.invoices.flatMap((invoice) => [invoice.customFields, invoice.items.map((item) => item.description)]),
     ],
   });
-  if (responsibilityReviewRequired) {
+  if (responsibilityReviewRequired && !retryableFamilySubmission) {
     return NextResponse.json(
       {
         ok: false,
@@ -269,15 +311,17 @@ async function POSTHandler(request: NextRequest) {
       { status: 409 },
     );
   }
-  const amountCents = parentCheckout
-    ? parentPaymentAmountCents({
-        accountBalanceCents: billingAccount.balanceCents,
-        agencyLedgerEntries,
-        requestedAmountCents,
-        responsibilityReviewRequired,
-        provisionalCreditCents: provisionalAchCreditCents(draftStripePayments),
-      })
-    : requestedAmountCents > 0 ? requestedAmountCents : billingAccount.balanceCents;
+  const amountCents = retryableFamilySubmission
+    ? retryableFamilySubmission.amountCents
+    : parentCheckout
+      ? parentPaymentAmountCents({
+          accountBalanceCents: billingAccount.balanceCents,
+          agencyLedgerEntries,
+          requestedAmountCents,
+          responsibilityReviewRequired,
+          provisionalCreditCents: provisionalAchCreditCents(draftStripePayments),
+        })
+      : requestedAmountCents > 0 ? requestedAmountCents : billingAccount.balanceCents;
   if (amountCents <= 0) {
     return NextResponse.json({ ok: false, error: "Payment amount must be greater than zero." }, { status: 400 });
   }
@@ -334,14 +378,19 @@ async function POSTHandler(request: NextRequest) {
   const billingAccountFields = jsonRecord(billingAccount.customFields);
   const activeConnectedAccountId = readStripeConnectedAccountId(center.customFields);
   const savedPaymentMethodConnectedAccountId = clean(billingAccountFields.stripeDefaultPaymentMethodConnectedAccountId);
-  const connectedAccountId = method === "saved_method"
-    ? stripeConnectSavedMethodAccount({
-        activeAccountId: activeConnectedAccountId,
-        savedMethodAccountId: savedPaymentMethodConnectedAccountId,
-        centerCustomFields: center.customFields,
-      })
-    : activeConnectedAccountId;
-  if (method === "saved_method" && savedPaymentMethodConnectedAccountId && !connectedAccountId) {
+  const persistedConnectedAccountId = Object.prototype.hasOwnProperty.call(retryableFamilyFields, "stripeConnectedAccountId")
+    ? clean(retryableFamilyFields.stripeConnectedAccountId) || null
+    : undefined;
+  const connectedAccountId = persistedConnectedAccountId !== undefined
+    ? persistedConnectedAccountId
+    : method === "saved_method"
+      ? stripeConnectSavedMethodAccount({
+          activeAccountId: activeConnectedAccountId,
+          savedMethodAccountId: savedPaymentMethodConnectedAccountId,
+          centerCustomFields: center.customFields,
+        })
+      : activeConnectedAccountId;
+  if (!retryableFamilySubmission && method === "saved_method" && savedPaymentMethodConnectedAccountId && !connectedAccountId) {
     return NextResponse.json(
       { ok: false, error: "This saved payment method belongs to the school's prior payout account. Replace it before making a saved-method payment." },
       { status: 409 },
@@ -445,7 +494,8 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
-  let stripeCustomerId = stripeCustomerIdForAccount(billingAccountFields, connectedAccountId);
+  let stripeCustomerId = clean(retryableFamilyFields.stripeCustomerId)
+    || stripeCustomerIdForAccount(billingAccountFields, connectedAccountId);
   if (!stripeCustomerId) {
     if (method === "saved_method") {
       return NextResponse.json(
@@ -505,13 +555,14 @@ async function POSTHandler(request: NextRequest) {
       ...stripeCustomerCustomFieldPatch(billingAccountFields, stripeCustomerId, connectedAccountId),
     },
   });
-  const requestedPaymentMethodCategory = method === "saved_method"
-    ? paymentMethodAutopayCategory(savedPaymentMethod)
-    : checkoutCategory(method);
-  const paymentMethodConfigurationId = getStripePaymentMethodConfigurationId(requestedPaymentMethodCategory);
+  const requestedPaymentMethodCategory = storedPaymentMethodCategory(retryableFamilyFields.requestedPaymentMethodCategory)
+    || storedPaymentMethodCategory(retryableFamilyFields.paymentMethodCategory)
+    || (method === "saved_method" ? paymentMethodAutopayCategory(savedPaymentMethod) : checkoutCategory(method));
+  const paymentMethodConfigurationId = clean(retryableFamilyFields.stripePaymentMethodConfigurationId)
+    || getStripePaymentMethodConfigurationId(requestedPaymentMethodCategory);
   const usesSpecificFeePolicy = requiresStripePaymentMethodConfiguration(requestedPaymentMethodCategory);
   const requirePaymentMethodConfiguration = process.env.STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES === "true";
-  if (method !== "saved_method" && usesSpecificFeePolicy && requirePaymentMethodConfiguration && !paymentMethodConfigurationId) {
+  if (!retryableFamilySubmission && method !== "saved_method" && usesSpecificFeePolicy && requirePaymentMethodConfiguration && !paymentMethodConfigurationId) {
     return NextResponse.json(
       {
         ok: false,
@@ -528,11 +579,23 @@ async function POSTHandler(request: NextRequest) {
     brandSlug: center.organization.brand?.slug,
     brandName: center.organization.brand?.name,
   });
-  const amounts = getStripeCheckoutAmounts(amountCents, {
+  const calculatedAmounts = getStripeCheckoutAmounts(amountCents, {
     paymentMethodCategory: requestedPaymentMethodCategory,
     waiveBeeSuitePaymentOperationsFee,
     schoolPaysStripeFeesDirectly,
   });
+  const amounts = retryableFamilySubmission
+    ? {
+        ...calculatedAmounts,
+        invoiceAmountCents: storedCents(retryableFamilyFields.invoiceAmountCents, calculatedAmounts.invoiceAmountCents),
+        parentSurchargeAmountCents: storedCents(retryableFamilyFields.parentSurchargeAmountCents, calculatedAmounts.parentSurchargeAmountCents),
+        parentProcessingRecoveryAmountCents: storedCents(retryableFamilyFields.parentProcessingRecoveryAmountCents, calculatedAmounts.parentProcessingRecoveryAmountCents),
+        schoolProcessingFeeAmountCents: storedCents(retryableFamilyFields.schoolProcessingFeeAmountCents, calculatedAmounts.schoolProcessingFeeAmountCents),
+        beeSuitePaymentOperationsFeeAmountCents: storedCents(retryableFamilyFields.beeSuitePaymentOperationsFeeAmountCents, calculatedAmounts.beeSuitePaymentOperationsFeeAmountCents),
+        checkoutTotalCents: storedCents(retryableFamilyFields.checkoutTotalCents, calculatedAmounts.checkoutTotalCents),
+        applicationFeeAmountCents: storedCents(retryableFamilyFields.applicationFeeAmountCents, calculatedAmounts.applicationFeeAmountCents),
+      }
+    : calculatedAmounts;
 
   let currentBillingAccountFields: Record<string, unknown> = {
     ...billingAccountFields,
@@ -588,15 +651,17 @@ async function POSTHandler(request: NextRequest) {
     requestedPaymentMethodCategory,
     paymentMethodCategory: amounts.paymentMethodCategory,
     paymentMethodConfigurationMissing: String(method !== "saved_method" && usesSpecificFeePolicy && !paymentMethodConfigurationId),
+    stripePaymentMethodConfigurationId: paymentMethodConfigurationId || "",
+    familyPaymentMethod: method,
     checkoutTotalCents: String(amounts.checkoutTotalCents),
     applicationFeeAmountCents: String(amounts.applicationFeeAmountCents),
     feeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
-    description,
+    description: clean(retryableFamilyFields.description) || description,
     collectionMode,
-    source,
+    source: clean(retryableFamilyFields.source) || source,
     responsibilityReviewRequired: String(responsibilityReviewRequired),
-    requestedByUserId: user.id,
-    environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
+    requestedByUserId: clean(retryableFamilyFields.requestedByUserId) || user.id,
+    environment: clean(retryableFamilyFields.environment) || process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
   };
 
   const activeFamilyCheckout = draftStripePayments.find((item) => {
@@ -638,16 +703,12 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
-  const retryableFamilySubmission = draftStripePayments.find((item) => {
-    const fields = jsonRecord(item.customFields);
-    return fields.paymentScope === "family_balance"
-      && item.provider === "stripe"
-      && item.amountCents === amountCents
-      && isStripeSubmissionUnknownPayment(item);
-  });
-
   if (method === "saved_method") {
-    if (!canChargeSavedPaymentMethod(savedPaymentMethod) || !savedPaymentMethod.stripeDefaultPaymentMethodId) {
+    const stripePaymentMethodId = clean(retryableFamilyFields.stripePaymentMethodId)
+      || savedPaymentMethod.stripeDefaultPaymentMethodId;
+    const stripePaymentMethodType = clean(retryableFamilyFields.stripePaymentMethodType)
+      || savedPaymentMethod.paymentMethodType;
+    if ((!retryableFamilySubmission && !canChargeSavedPaymentMethod(savedPaymentMethod)) || !stripePaymentMethodId) {
       return NextResponse.json(
         { ok: false, error: "This family does not have a selected payment method saved yet." },
         { status: 400 },
@@ -667,6 +728,8 @@ async function POSTHandler(request: NextRequest) {
         customFields: jsonInput({
           ...metadata,
           paymentMethodLabel: savedPaymentMethod.paymentMethodLabel || null,
+          stripePaymentMethodId,
+          stripePaymentMethodType: stripePaymentMethodType || null,
           collectionMode: "director_saved_method",
           status: "director_saved_method_pending",
         }),
@@ -687,8 +750,8 @@ async function POSTHandler(request: NextRequest) {
       invoiceNumber: paymentLabel,
       centerName: center.name,
       customerId: stripeCustomerId,
-      paymentMethodId: savedPaymentMethod.stripeDefaultPaymentMethodId!,
-      paymentMethodType: savedPaymentMethod.paymentMethodType,
+      paymentMethodId: stripePaymentMethodId,
+      paymentMethodType: stripePaymentMethodType,
       customerEmail: billingAccount.family.billingEmail,
       metadata: {
         ...metadata,

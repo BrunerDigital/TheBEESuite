@@ -52,11 +52,18 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(paymentClaims, /invoice\.totalCents !== expectedInvoiceTotalCents/);
   assert.match(paymentClaims, /freshAllocation\.stripeChargePrincipalCents !== requestedAmountCents/);
   assert.match(paymentClaims, /existingPaymentId/);
+  const claimCreation = paymentClaims.slice(paymentClaims.indexOf("export async function createStripePaymentClaim"));
+  assert.ok(
+    claimCreation.indexOf("if (existingPaymentId)") < claimCreation.indexOf('if (scope === "invoice_collection")'),
+    "unknown submissions must be recovered before validating a replacement against current payable state",
+  );
   assert.match(paymentClaims, /reconcileIdempotentStripeSubmission/);
   assert.match(paymentClaims, /TransactionIsolationLevel\.Serializable/);
   assert.match(processing, /_submission_unknown/);
   assert.match(familyPayment, /checkout_submission_unknown/);
   assert.match(familyPayment, /director_saved_method_submission_unknown/);
+  assert.match(familyPayment, /amountCents = retryableFamilySubmission[\s\S]*retryableFamilySubmission\.amountCents/);
+  assert.doesNotMatch(familyPayment, /item\.amountCents === amountCents[\s\S]*isStripeSubmissionUnknownPayment\(item\)/);
   assert.match(terminalPayment, /createStripePaymentClaim/);
   assert.match(terminalPayment, /scope: invoice \? "invoice_collection" : "family_balance"/);
   assert.match(terminalPayment, /terminal_submission_unknown/);

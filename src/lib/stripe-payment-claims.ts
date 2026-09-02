@@ -6,6 +6,7 @@ import {
   isActiveStripeCheckoutPayment,
   isActiveStripeFamilyBalancePayment,
   isActiveStripeTerminalPayment,
+  isStripeSubmissionUnknownPayment,
   jsonRecord,
 } from "@/lib/billing-guardrails";
 import { prisma } from "@/lib/prisma";
@@ -91,6 +92,33 @@ export async function createStripePaymentClaim({
     }
 
     const requestedAmountCents = Number(paymentData.amountCents) || 0;
+    if (existingPaymentId) {
+      const existingPayment = draftPayments.find((payment) => payment.id === existingPaymentId);
+      const existingFields = jsonRecord(existingPayment?.customFields);
+      const scopeMatches = scope === "family_balance"
+        ? Boolean(existingPayment && isActiveStripeFamilyBalancePayment(existingPayment))
+        : Boolean(
+            existingPayment
+            && invoiceId
+            && existingFields.invoiceId === invoiceId
+            && (
+              isActiveStripeCheckoutPayment(existingPayment)
+              || isActiveStripeAutopayPayment(existingPayment)
+              || isActiveStripeTerminalPayment(existingPayment)
+              || isStripeSubmissionUnknownPayment(existingPayment)
+            ),
+          );
+      if (
+        !existingPayment
+        || !scopeMatches
+        || existingPayment.amountCents !== requestedAmountCents
+        || existingPayment.provider !== paymentData.provider
+      ) {
+        return { created: false as const, reason: "payment_claim_changed" as const, blockingPaymentId: existingPaymentId };
+      }
+      return { created: true as const, payment: await tx.payment.findUniqueOrThrow({ where: { id: existingPaymentId } }) };
+    }
+
     if (scope === "invoice_collection") {
       const lockedInvoices = invoiceId
         ? await tx.$queryRaw<Array<{ billingAccountId: string; status: PaymentStatus; totalCents: number }>>(
@@ -128,18 +156,6 @@ export async function createStripePaymentClaim({
       return { created: false as const, reason: "family_balance_changed" as const, blockingPaymentId: null };
     }
 
-    if (existingPaymentId) {
-      const existingPayment = draftPayments.find((payment) => payment.id === existingPaymentId);
-      if (
-        !existingPayment
-        || existingPayment.amountCents !== requestedAmountCents
-        || existingPayment.provider !== paymentData.provider
-      ) {
-        return { created: false as const, reason: "payment_claim_changed" as const, blockingPaymentId: existingPaymentId };
-      }
-      return { created: true as const, payment: await tx.payment.findUniqueOrThrow({ where: { id: existingPaymentId } }) };
-    }
-
     const payment = await tx.payment.create({
       data: { ...paymentData, billingAccountId },
     });
@@ -147,16 +163,36 @@ export async function createStripePaymentClaim({
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
-export async function reconcileIdempotentStripeSubmission<T>(submit: () => Promise<T>) {
+type StripeSubmissionResult = {
+  ok: boolean;
+  providerStatus?: number;
+  acceptanceUnknown?: boolean;
+};
+
+export function isAmbiguousStripeSubmissionResult(result: StripeSubmissionResult) {
+  return !result.ok && (result.acceptanceUnknown === true || (result.providerStatus ?? 0) >= 500);
+}
+
+export async function reconcileIdempotentStripeSubmission<T extends StripeSubmissionResult>(submit: () => Promise<T>) {
+  let firstResponseUnresolved = false;
   try {
-    return { resolved: true as const, value: await submit(), retried: false };
+    const value = await submit();
+    if (!isAmbiguousStripeSubmissionResult(value)) {
+      return { resolved: true as const, value, retried: false };
+    }
+    firstResponseUnresolved = true;
   } catch {
-    try {
-      // Repeating the exact request with the same payment-derived idempotency
-      // key returns the original Stripe object when the first response was lost.
-      return { resolved: true as const, value: await submit(), retried: true };
-    } catch {
+    firstResponseUnresolved = true;
+  }
+  try {
+    // Repeating the exact request with the same payment-derived idempotency
+    // key returns the original Stripe object when the first response was lost.
+    const value = await submit();
+    if (firstResponseUnresolved && !value.ok) {
       return { resolved: false as const, value: null, retried: true };
     }
+    return { resolved: true as const, value, retried: true };
+  } catch {
+    return { resolved: false as const, value: null, retried: true };
   }
 }

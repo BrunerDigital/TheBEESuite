@@ -185,4 +185,5 @@ test("Terminal API and workbench enforce school scope and describe the web USB b
   assert.match(component, /In-Person Card Reader/);
   assert.match(workbench, /selectedCenter\?\.hardwareTerminalConfigured/);
   assert.match(dashboard, /hardwareTerminalConfigured:[\s\S]*stripeTerminalLocationId/);
+  assert.match(readFileSync("src/lib/integrations.ts", "utf8"), /acceptanceUnknown: response\.status >= 500/);
 });

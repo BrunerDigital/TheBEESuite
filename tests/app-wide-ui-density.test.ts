@@ -14,6 +14,7 @@ test("shared collapsible sections expose accessible persisted controls and conci
   assert.match(source, /data-collapsible-panel="true"/);
   assert.match(source, /window\.addEventListener\("hashchange", expandFromLocationHash\)/);
   assert.match(source, /document\.addEventListener\("click", expandFromAnchorClick\)/);
+  assert.match(source, /container\.contains\(destination\)/);
   assert.match(source, /element\?\.focus\(\{ preventScroll: true \}\)/);
 });
 
@@ -25,6 +26,7 @@ test("teacher portal opens focused tasks from a compact landing view", async () 
   assert.match(source, /id="teacher-profile-setup"[\s\S]*?defaultCollapsed=\{profileReady\}/);
   assert.match(source, /id="teacher-roster"[\s\S]*?title="Roster"[\s\S]*?defaultCollapsed/);
   assert.match(source, /id="teacher-daily-report"[\s\S]*?title="Daily Report"[\s\S]*?defaultCollapsed/);
+  assert.match(source, /id="teacher-quick-log" tabIndex=\{-1\}/);
   assert.match(source, /id="teacher-attendance"[\s\S]*?defaultCollapsed/);
   assert.match(source, /id="teacher-location"[\s\S]*?defaultCollapsed/);
   assert.match(source, /id="teacher-photo"[\s\S]*?defaultCollapsed/);

@@ -6,7 +6,7 @@ import {
   normalizeCrmLocationId,
   parseCrmLocationId,
 } from "@/lib/active-school-locations";
-import { canAccessAllCenters, canAdministerCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
+import { canAdministerAllCenters, canAdministerCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { type AccessGrantTarget } from "@/lib/access-grant-guardrails";
 import { parseExecutiveBulkImportCsv, type ExecutiveBulkImportRow } from "@/lib/executive-bulk-import";
 import { prisma } from "@/lib/prisma";
@@ -108,7 +108,7 @@ async function requireExecutiveAccess() {
       headers: { "Content-Type": "application/json" },
     });
   }
-  if (!canManageOperations(user) || !canAccessAllCenters(user) || user.role === UserRole.READ_ONLY_AUDITOR) {
+  if (!canManageOperations(user) || !canAdministerAllCenters(user) || user.role === UserRole.READ_ONLY_AUDITOR) {
     throw new Response(JSON.stringify({ ok: false, error: "Executive admin access is required." }), {
       status: 403,
       headers: { "Content-Type": "application/json" },

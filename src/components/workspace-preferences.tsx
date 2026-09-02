@@ -144,10 +144,12 @@ function useExpandForHash(id: string, expand: () => void) {
       } catch {
         return;
       }
-      if (target !== id) return;
+      const container = document.getElementById(id);
+      const destination = document.getElementById(target);
+      if (target !== id && (!container || !destination || !container.contains(destination))) return;
       expand();
       window.requestAnimationFrame(() => {
-        const element = document.getElementById(id);
+        const element = document.getElementById(target) ?? document.getElementById(id);
         element?.scrollIntoView({ block: "start" });
         element?.focus({ preventScroll: true });
       });

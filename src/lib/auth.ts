@@ -545,6 +545,18 @@ export function canAccessAllCenters(user: Pick<CurrentUser, "role"> & Partial<Pi
   return tenantWideAccessRoles.has(user.role);
 }
 
+export function canAdministerAllCenters(
+  user: Pick<CurrentUser, "role" | "centerIds"> & Partial<Pick<CurrentUser, "accessScope" | "authorizedCenterIds">> & {
+    workspace?: { mode?: WorkspaceState["mode"] };
+  },
+) {
+  const hasTenantAuthority = (user.accessScope === "platform" || user.accessScope === "tenant")
+    && canUseTenantWideAccessRole(user.role);
+  if (!hasTenantAuthority) return false;
+  if (!user.workspace) return true;
+  return user.workspace.mode === "all" || user.workspace.mode === "fixed";
+}
+
 export function messageCenterIdsForUser(
   user: Pick<CurrentUser, "role" | "centerIds" | "primaryCenterId">,
 ) {

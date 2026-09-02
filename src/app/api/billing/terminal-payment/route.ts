@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageBilling, getCurrentUser, type CurrentUser } from "@/lib/auth";
-import { jsonRecord } from "@/lib/billing-guardrails";
+import { isStripeSubmissionUnknownPayment, jsonRecord } from "@/lib/billing-guardrails";
 import {
   createStripeTerminalLocation,
   createStripeTerminalPaymentIntent,
@@ -37,6 +37,7 @@ import {
   applySucceededStripeFamilyBalancePayment,
   applySucceededStripeInvoicePayment,
 } from "@/lib/stripe-payment-application";
+import { createStripePaymentClaim, reconcileIdempotentStripeSubmission } from "@/lib/stripe-payment-claims";
 
 export const runtime = "nodejs";
 
@@ -405,18 +406,15 @@ async function processPayment(body: Record<string, unknown>) {
 
   const activePayments = await prisma.payment.findMany({
     where: { billingAccountId: billingAccount.id, provider: "stripe_terminal", status: PaymentStatus.DRAFT },
-    select: { id: true, customFields: true },
+    select: { id: true, amountCents: true, status: true, provider: true, customFields: true },
   });
-  const activePayment = activePayments.find((payment) => {
+  const retryableTerminalSubmission = activePayments.find((payment) => {
     const fields = jsonRecord(payment.customFields);
-    return clean(fields.status).startsWith("terminal_") && clean(fields.status) !== "terminal_failed";
+    return payment.amountCents === amountCents
+      && fields.paymentScope === (invoice ? "invoice" : "family_balance")
+      && clean(fields.invoiceId) === (invoice?.id || "")
+      && isStripeSubmissionUnknownPayment(payment);
   });
-  if (activePayment) {
-    return NextResponse.json(
-      { ok: false, error: "This family already has an in-person card payment waiting on a reader.", paymentId: activePayment.id },
-      { status: 409 },
-    );
-  }
 
   const waiveBeeSuitePaymentOperationsFee = shouldWaiveStripePaymentOperationsFee({
     tenantSlug: context.center.organization.tenant.slug,
@@ -430,9 +428,12 @@ async function processPayment(body: Record<string, unknown>) {
     schoolPaysStripeFeesDirectly: stripeConnectedAccountPaysFeesDirectly(readiness.account),
   });
   const description = clean(body.description) || "In-person tuition payment";
-  const payment = await prisma.payment.create({
-    data: {
-      billingAccountId: billingAccount.id,
+  const paymentClaim = await createStripePaymentClaim({
+    billingAccountId: billingAccount.id,
+    scope: invoice ? "invoice_collection" : "family_balance",
+    invoiceId: invoice?.id || null,
+    existingPaymentId: retryableTerminalSubmission?.id,
+    paymentData: {
       amountCents,
       status: PaymentStatus.DRAFT,
       provider: "stripe_terminal",
@@ -449,6 +450,21 @@ async function processPayment(body: Record<string, unknown>) {
       }),
     },
   });
+  if (!paymentClaim.created) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: paymentClaim.reason === "invoice_not_open"
+          ? "The selected invoice is no longer open."
+          : paymentClaim.reason === "family_balance_changed"
+            ? "The family balance changed before the card payment could start. Review the balance and try again."
+            : "This family already has another online or in-person payment in progress.",
+        paymentId: paymentClaim.blockingPaymentId,
+      },
+      { status: 409 },
+    );
+  }
+  const payment = paymentClaim.payment;
   const metadata = {
     tenantId: context.user.tenantId,
     paymentScope: invoice ? "invoice" : "family_balance",
@@ -477,7 +493,7 @@ async function processPayment(body: Record<string, unknown>) {
     parentPresentConfirmed: "true",
     environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
   };
-  const intent = await createStripeTerminalPaymentIntent({
+  const submission = await reconcileIdempotentStripeSubmission(() => createStripeTerminalPaymentIntent({
     amountCents: amounts.checkoutTotalCents,
     invoiceAmountCents: amounts.invoiceAmountCents,
     invoiceNumber: invoice?.number || `${billingAccount.family.name} family balance`,
@@ -488,7 +504,26 @@ async function processPayment(body: Record<string, unknown>) {
     applicationFeeAmountCents: amounts.applicationFeeAmountCents,
     idempotencyKey: `terminal-payment:intent:${payment.id}`,
     tenantId: context.user.tenantId,
-  });
+  }));
+  if (!submission.resolved) {
+    await prisma.payment.updateMany({
+      where: { id: payment.id, status: PaymentStatus.DRAFT },
+      data: {
+        customFields: jsonInput({
+          ...metadata,
+          status: "terminal_submission_unknown",
+          submissionStateUnknownAt: new Date().toISOString(),
+          submissionRetryUsesPaymentId: payment.id,
+        }),
+      },
+    });
+    return NextResponse.json({
+      ok: false,
+      error: "The processor response was interrupted. This exact card-present attempt will be reconciled before any retry.",
+      paymentId: payment.id,
+    }, { status: 503 });
+  }
+  const intent = submission.value;
   if (!intent.ok || !intent.paymentIntent?.id) {
     await prisma.payment.update({
       where: { id: payment.id },

@@ -9,6 +9,7 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const processing = readFileSync("src/lib/autopay-processing.ts", "utf8");
   const familyPayment = readFileSync("src/app/api/billing/family-payment/route.ts", "utf8");
+  const terminalPayment = readFileSync("src/app/api/billing/terminal-payment/route.ts", "utf8");
   const paymentClaims = readFileSync("src/lib/stripe-payment-claims.ts", "utf8");
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
   const paymentRequests = readFileSync("src/app/api/billing/payment-method-requests/route.ts", "utf8");
@@ -44,7 +45,17 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(familyPayment, /createStripePaymentClaim/);
   assert.match(familyPayment, /scope: "family_balance"/);
   assert.match(paymentClaims, /FROM "BillingAccount"[\s\S]*FOR UPDATE/);
+  assert.match(paymentClaims, /provider: \{ in: \["stripe", "stripe_terminal"\] \}/);
+  assert.match(paymentClaims, /invoice\.status !== PaymentStatus\.OPEN/);
+  assert.match(paymentClaims, /existingPaymentId/);
+  assert.match(paymentClaims, /reconcileIdempotentStripeSubmission/);
   assert.match(paymentClaims, /TransactionIsolationLevel\.Serializable/);
+  assert.match(processing, /_submission_unknown/);
+  assert.match(familyPayment, /checkout_submission_unknown/);
+  assert.match(familyPayment, /director_saved_method_submission_unknown/);
+  assert.match(terminalPayment, /createStripePaymentClaim/);
+  assert.match(terminalPayment, /scope: invoice \? "invoice_collection" : "family_balance"/);
+  assert.match(terminalPayment, /terminal_submission_unknown/);
   assert.ok(
     familyPayment.indexOf("const activeFamilyCheckout") < familyPayment.lastIndexOf('if (method === "saved_method")'),
     "expired family Checkout drafts must be reconciled before saved-method claims",

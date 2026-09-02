@@ -16,6 +16,12 @@ type StripePaymentClaimCandidate = {
   customFields: unknown;
 };
 
+function isActiveStripeTerminalPayment(payment: StripePaymentClaimCandidate) {
+  if (payment.provider !== "stripe_terminal" || payment.status !== PaymentStatus.DRAFT) return false;
+  const status = jsonRecord(payment.customFields).status;
+  return typeof status === "string" && status.startsWith("terminal_") && status !== "terminal_failed";
+}
+
 export function stripePaymentClaimConflict({
   scope,
   invoiceId,
@@ -31,7 +37,7 @@ export function stripePaymentClaimConflict({
     if (
       invoiceId &&
       fields.invoiceId === invoiceId &&
-      (isActiveStripeCheckoutPayment(payment) || isActiveStripeAutopayPayment(payment))
+      (isActiveStripeCheckoutPayment(payment) || isActiveStripeAutopayPayment(payment) || isActiveStripeTerminalPayment(payment))
     ) {
       return "active_invoice_payment" as const;
     }
@@ -40,6 +46,7 @@ export function stripePaymentClaimConflict({
 
   if (isActiveStripeFamilyBalancePayment(payment)) return "active_family_balance" as const;
   if (isActiveStripeAutopayPayment(payment)) return "active_invoice_collection" as const;
+  if (isActiveStripeTerminalPayment(payment)) return "active_invoice_collection" as const;
   const fields = jsonRecord(payment.customFields);
   if (fields.invoiceId && isActiveStripeCheckoutPayment(payment)) return "active_invoice_collection" as const;
   return null;
@@ -49,16 +56,18 @@ export async function createStripePaymentClaim({
   billingAccountId,
   scope,
   invoiceId,
+  existingPaymentId,
   paymentData,
 }: {
   billingAccountId: string;
   scope: StripePaymentClaimScope;
   invoiceId?: string | null;
+  existingPaymentId?: string | null;
   paymentData: Omit<Prisma.PaymentUncheckedCreateInput, "billingAccountId">;
 }) {
   return prisma.$transaction(async (tx) => {
-    const lockedAccounts = await tx.$queryRaw<Array<{ id: string }>>(
-      Prisma.sql`SELECT "id" FROM "BillingAccount" WHERE "id" = ${billingAccountId} FOR UPDATE`,
+    const lockedAccounts = await tx.$queryRaw<Array<{ id: string; balanceCents: number }>>(
+      Prisma.sql`SELECT "id", "balanceCents" FROM "BillingAccount" WHERE "id" = ${billingAccountId} FOR UPDATE`,
     );
     if (lockedAccounts.length !== 1) {
       return { created: false as const, reason: "billing_account_not_found" as const, blockingPaymentId: null };
@@ -67,16 +76,44 @@ export async function createStripePaymentClaim({
     const draftPayments = await tx.payment.findMany({
       where: {
         billingAccountId,
-        provider: "stripe",
+        provider: { in: ["stripe", "stripe_terminal"] },
         status: PaymentStatus.DRAFT,
       },
-      select: { id: true, status: true, provider: true, customFields: true },
+      select: { id: true, amountCents: true, status: true, provider: true, customFields: true },
     });
     for (const payment of draftPayments) {
+      if (payment.id === existingPaymentId) continue;
       const reason = stripePaymentClaimConflict({ scope, invoiceId, payment });
       if (reason) {
         return { created: false as const, reason, blockingPaymentId: payment.id };
       }
+    }
+
+    const requestedAmountCents = Number(paymentData.amountCents) || 0;
+    if (scope === "invoice_collection") {
+      const invoice = invoiceId
+        ? await tx.invoice.findUnique({
+            where: { id: invoiceId },
+            select: { billingAccountId: true, status: true },
+          })
+        : null;
+      if (!invoice || invoice.billingAccountId !== billingAccountId || invoice.status !== PaymentStatus.OPEN) {
+        return { created: false as const, reason: "invoice_not_open" as const, blockingPaymentId: null };
+      }
+    } else if (requestedAmountCents <= 0 || requestedAmountCents > lockedAccounts[0].balanceCents) {
+      return { created: false as const, reason: "family_balance_changed" as const, blockingPaymentId: null };
+    }
+
+    if (existingPaymentId) {
+      const existingPayment = draftPayments.find((payment) => payment.id === existingPaymentId);
+      if (
+        !existingPayment
+        || existingPayment.amountCents !== requestedAmountCents
+        || existingPayment.provider !== paymentData.provider
+      ) {
+        return { created: false as const, reason: "payment_claim_changed" as const, blockingPaymentId: existingPaymentId };
+      }
+      return { created: true as const, payment: await tx.payment.findUniqueOrThrow({ where: { id: existingPaymentId } }) };
     }
 
     const payment = await tx.payment.create({
@@ -84,4 +121,18 @@ export async function createStripePaymentClaim({
     });
     return { created: true as const, payment };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function reconcileIdempotentStripeSubmission<T>(submit: () => Promise<T>) {
+  try {
+    return { resolved: true as const, value: await submit(), retried: false };
+  } catch {
+    try {
+      // Repeating the exact request with the same payment-derived idempotency
+      // key returns the original Stripe object when the first response was lost.
+      return { resolved: true as const, value: await submit(), retried: true };
+    } catch {
+      return { resolved: false as const, value: null, retried: true };
+    }
+  }
 }

@@ -7,6 +7,7 @@ import {
   activeStripeCheckoutPaymentMessage,
   activeStripeCheckoutPaymentSummary,
   isActiveStripeCheckoutPayment,
+  isStripeSubmissionUnknownPayment,
   jsonRecord,
 } from "@/lib/billing-guardrails";
 import {
@@ -43,7 +44,7 @@ import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
-import { createStripePaymentClaim } from "@/lib/stripe-payment-claims";
+import { createStripePaymentClaim, reconcileIdempotentStripeSubmission } from "@/lib/stripe-payment-claims";
 import { allOpenInvoicesResponsibilitySeparated } from "@/lib/invoice-responsibility-separation";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
@@ -637,6 +638,14 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
+  const retryableFamilySubmission = draftStripePayments.find((item) => {
+    const fields = jsonRecord(item.customFields);
+    return fields.paymentScope === "family_balance"
+      && item.provider === "stripe"
+      && item.amountCents === amountCents
+      && isStripeSubmissionUnknownPayment(item);
+  });
+
   if (method === "saved_method") {
     if (!canChargeSavedPaymentMethod(savedPaymentMethod) || !savedPaymentMethod.stripeDefaultPaymentMethodId) {
       return NextResponse.json(
@@ -647,6 +656,9 @@ async function POSTHandler(request: NextRequest) {
     const paymentClaim = await createStripePaymentClaim({
       billingAccountId: billingAccount.id,
       scope: "family_balance",
+      existingPaymentId: jsonRecord(retryableFamilySubmission?.customFields).status === "director_saved_method_submission_unknown"
+        ? retryableFamilySubmission?.id
+        : null,
       paymentData: {
         amountCents,
         status: PaymentStatus.DRAFT,
@@ -668,14 +680,14 @@ async function POSTHandler(request: NextRequest) {
       }, { status: 409 });
     }
     const payment = paymentClaim.payment;
-    const intent = await createStripeOffSessionPaymentIntent({
+    const submission = await reconcileIdempotentStripeSubmission(() => createStripeOffSessionPaymentIntent({
       amountCents: amounts.checkoutTotalCents,
       invoiceAmountCents: amounts.invoiceAmountCents,
       parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
       invoiceNumber: paymentLabel,
       centerName: center.name,
       customerId: stripeCustomerId,
-      paymentMethodId: savedPaymentMethod.stripeDefaultPaymentMethodId,
+      paymentMethodId: savedPaymentMethod.stripeDefaultPaymentMethodId!,
       paymentMethodType: savedPaymentMethod.paymentMethodType,
       customerEmail: billingAccount.family.billingEmail,
       metadata: {
@@ -688,7 +700,26 @@ async function POSTHandler(request: NextRequest) {
       idempotencyKey: `family-payment:intent:${payment.id}`,
       descriptionLabel: "director saved-method payment",
       tenantId: user.tenantId,
-    });
+    }));
+    if (!submission.resolved) {
+      await prisma.payment.updateMany({
+        where: { id: payment.id, status: PaymentStatus.DRAFT },
+        data: {
+          customFields: jsonInput({
+            ...jsonRecord(payment.customFields),
+            status: "director_saved_method_submission_unknown",
+            submissionStateUnknownAt: new Date().toISOString(),
+            submissionRetryUsesPaymentId: payment.id,
+          }),
+        },
+      });
+      return NextResponse.json({
+        ok: false,
+        error: "The processor response was interrupted. This exact payment attempt will be reconciled before any retry.",
+        paymentId: payment.id,
+      }, { status: 503 });
+    }
+    const intent = submission.value;
     if (!intent.ok || !intent.paymentIntent?.id) {
       await prisma.payment.updateMany({
         where: { id: payment.id, status: PaymentStatus.DRAFT },
@@ -813,6 +844,9 @@ async function POSTHandler(request: NextRequest) {
   const paymentClaim = await createStripePaymentClaim({
     billingAccountId: billingAccount.id,
     scope: "family_balance",
+    existingPaymentId: jsonRecord(retryableFamilySubmission?.customFields).status === "checkout_submission_unknown"
+      ? retryableFamilySubmission?.id
+      : null,
     paymentData: {
       amountCents,
       status: PaymentStatus.DRAFT,
@@ -841,7 +875,7 @@ async function POSTHandler(request: NextRequest) {
     "{CHECKOUT_SESSION_ID}",
   );
   const cancelPath = appendQuery(appendQuery(returnPath, "payment", "cancelled"), "familyPayment", payment.id);
-  const session = await createStripeCheckoutSession({
+  const submission = await reconcileIdempotentStripeSubmission(() => createStripeCheckoutSession({
     amountCents: amounts.checkoutTotalCents,
     invoiceAmountCents: amounts.invoiceAmountCents,
     parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
@@ -865,7 +899,26 @@ async function POSTHandler(request: NextRequest) {
     onBehalfOfConnectedAccount: process.env.STRIPE_CHECKOUT_ON_BEHALF_OF === "true",
     idempotencyKey: `family-payment:checkout:${payment.id}`,
     tenantId: user.tenantId,
-  });
+  }));
+  if (!submission.resolved) {
+    await prisma.payment.updateMany({
+      where: { id: payment.id, status: PaymentStatus.DRAFT },
+      data: {
+        customFields: jsonInput({
+          ...jsonRecord(payment.customFields),
+          status: "checkout_submission_unknown",
+          submissionStateUnknownAt: new Date().toISOString(),
+          submissionRetryUsesPaymentId: payment.id,
+        }),
+      },
+    });
+    return NextResponse.json({
+      ok: false,
+      error: "The processor response was interrupted. This exact checkout attempt will be reconciled before any retry.",
+      paymentId: payment.id,
+    }, { status: 503 });
+  }
+  const session = submission.value;
   if (!session.ok || !session.url) {
     await prisma.payment.update({
       where: { id: payment.id },

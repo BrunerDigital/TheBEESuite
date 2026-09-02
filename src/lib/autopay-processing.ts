@@ -7,6 +7,7 @@ import {
   isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
   isActiveStripeFamilyBalancePayment,
+  isStripeSubmissionUnknownPayment,
   jsonRecord,
 } from "@/lib/billing-guardrails";
 import {
@@ -35,7 +36,7 @@ import {
 import { stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
 import { stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
-import { createStripePaymentClaim } from "@/lib/stripe-payment-claims";
+import { createStripePaymentClaim, reconcileIdempotentStripeSubmission } from "@/lib/stripe-payment-claims";
 import {
   applyAccountCreditToInvoice,
   applySucceededStripeInvoicePayment,
@@ -318,7 +319,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     billingAccountIds.length
       ? prisma.payment.findMany({
           where: {
-            provider: "stripe",
+            provider: { in: ["stripe", "stripe_terminal"] },
             billingAccountId: { in: billingAccountIds },
             status: PaymentStatus.DRAFT,
           },
@@ -476,11 +477,14 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     }
 
     const attempts = paymentsByInvoiceId.get(invoice.id) ?? [];
+    const recoverableSubmissionPayment = attempts.find(isStripeSubmissionUnknownPayment);
     if (attempts.some((payment) => payment.status === PaymentStatus.PAID)) {
       results.push({ ...baseResult, status: "skipped", reason: "Invoice already has a completed online payment." });
       continue;
     }
-    if (attempts.some((payment) => isActiveStripeCheckoutPayment(payment) || isActiveStripeAutopayPayment(payment))) {
+    if (attempts.some((payment) =>
+      payment.id !== recoverableSubmissionPayment?.id
+      && (isActiveStripeCheckoutPayment(payment) || isActiveStripeAutopayPayment(payment)))) {
       results.push({ ...baseResult, status: "skipped", reason: "Invoice already has a pending payment attempt." });
       continue;
     }
@@ -826,6 +830,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       billingAccountId: invoice.billingAccountId,
       scope: "invoice_collection",
       invoiceId: invoice.id,
+      existingPaymentId: recoverableSubmissionPayment?.id,
       paymentData: {
         amountCents: creditAllocation.stripeChargePrincipalCents,
         status: PaymentStatus.DRAFT,
@@ -872,13 +877,15 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         status: "skipped",
         reason: paymentClaim.reason === "active_family_balance"
           ? "A family balance payment became pending before submission; no autopay debit was created."
+          : paymentClaim.reason === "invoice_not_open"
+            ? "The invoice is no longer open; no autopay debit was created."
           : "Another payment attempt became active before submission; no autopay debit was created.",
       });
       continue;
     }
     const payment = paymentClaim.payment;
 
-    const intent = await createStripeOffSessionPaymentIntent({
+    const submission = await reconcileIdempotentStripeSubmission(() => createStripeOffSessionPaymentIntent({
       amountCents: amounts.checkoutTotalCents,
       invoiceAmountCents: amounts.invoiceAmountCents,
       parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
@@ -921,11 +928,34 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       idempotencyKey: `${collectionMode}:${payment.id}`,
       descriptionLabel: collectionLabel,
       tenantId,
-    });
+    }));
+    if (!submission.resolved) {
+      await prisma.payment.updateMany({
+        where: { id: payment.id, status: PaymentStatus.DRAFT },
+        data: {
+          customFields: jsonInput({
+            ...jsonRecord(payment.customFields),
+            status: `${statusPrefix}_submission_unknown`,
+            submissionStateUnknownAt: new Date().toISOString(),
+            submissionRetryUsesPaymentId: payment.id,
+          }),
+        },
+      });
+      blockedBillingAccountIds.add(invoice.billingAccountId);
+      results.push({
+        ...baseResult,
+        status: "failed",
+        reason: "The processor response was interrupted. This exact payment attempt will be reconciled before any retry.",
+        paymentId: payment.id,
+      });
+      continue;
+    }
+    const intent = submission.value;
 
     const intentStatus = intent.paymentIntent?.status || null;
     const accepted = intent.ok && (intentStatus === "succeeded" || intentStatus === "processing");
     let appliedImmediately = false;
+    let appliedAsAccountCredit = false;
     let immediateApplicationReason: string | null = null;
     let terminalPaymentStatus: PaymentStatus | null = null;
     let terminalPaymentReason: string | null = null;
@@ -941,7 +971,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         stripeAmountTotalCents: intent.paymentIntent?.amountCents ?? amounts.checkoutTotalCents,
         metadata: jsonRecord(payment.customFields),
       }));
-      appliedImmediately = application.applied;
+      appliedImmediately = application.applied || application.reason === "payment_already_applied";
+      appliedAsAccountCredit = appliedImmediately && application.applicationScope === "family_balance";
       immediateApplicationReason = application.reason;
     } else {
       const submissionUpdate = await prisma.payment.updateMany({
@@ -979,7 +1010,11 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
 
     const processingAccepted = !terminalPaymentStatus && accepted && intentStatus === "processing";
 
-    const auditAction = appliedImmediately
+    const auditAction = appliedAsAccountCredit
+      ? collectionMode === "stored_method"
+        ? "billing.stored_method.overpayment_recorded"
+        : "billing.autopay.overpayment_recorded"
+      : appliedImmediately
       ? collectionMode === "stored_method"
         ? "billing.stored_method.completed"
         : "billing.autopay.completed"
@@ -1009,6 +1044,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           status: terminalPaymentStatus ?? intentStatus,
           error: appliedImmediately || processingAccepted ? null : intent.error || terminalPaymentReason || immediateApplicationReason,
           appliedImmediately,
+          appliedAsAccountCredit,
           immediateApplicationReason,
         }),
       },
@@ -1021,7 +1057,9 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         ? "processing"
         : "failed";
     const resultReason = appliedImmediately
-      ? creditAllocation.accountCreditAppliedCents > 0
+      ? appliedAsAccountCredit
+        ? "Payment confirmed after the invoice closed and was recorded as family account credit for refund or review."
+        : creditAllocation.accountCreditAppliedCents > 0
         ? "Account credit was applied first; only the remaining balance was submitted for payment."
         : "Payment confirmed and the Bee Suite ledger was updated."
       : processingAccepted

@@ -14,12 +14,12 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Image as RLImage
-from reportlab.platypus import CondPageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import CondPageBreak, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output" / "pdf" / "TEAM_SHARE_GUIDES_CURRENT"
-PUBLICATION_DATE = "August 24, 2026"
+PUBLICATION_DATE = "September 2, 2026"
 
 FILES = [
     Path("docs/BEE_SUITE_COMPLETE_GUIDE.md"),
@@ -28,6 +28,7 @@ FILES = [
     Path("docs/sops/DIRECTOR_SOP.md"),
     Path("docs/sops/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE.md"),
     Path("docs/sops/BILLING_ADMIN_SOP.md"),
+    Path("docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md"),
     Path("docs/sops/TEACHER_SOP.md"),
     Path("docs/sops/PARENT_PORTAL_SOP.md"),
     Path("docs/sops/PARENT_PORTAL_INSTALL_GUIDE.md"),
@@ -119,6 +120,8 @@ def build_pdf(md: Path, pdf: Path) -> None:
             in_code = not in_code; i += 1; continue
         if in_code:
             code_lines.append(line); i += 1; continue
+        if line.strip() == "<!-- pagebreak -->":
+            story.append(PageBreak()); i += 1; continue
         image_match = re.fullmatch(r"!\[([^\]]*)\]\(([^)]+)\)", line.strip())
         if image_match:
             alt, target = image_match.group(1), image_match.group(2).strip()
@@ -232,6 +235,9 @@ def main() -> None:
     ).replace(
         "3. Send parent guides only after family links and invitation readiness are approved.\n4. Send payment guidance only after the named school's billing and payment gates are approved.\n5. Use the migration email sequence",
         "4. Send parent guides only after family links and invitation readiness are approved.\n5. Send payment guidance only after the named school's billing and payment gates are approved.\n6. Use the migration email sequence",
+    ).replace(
+        "5. Send payment guidance only after the named school's billing and payment gates are approved.\n6. Use the migration email sequence",
+        "5. Send payment guidance only after the named school's billing and payment gates are approved.\n6. Send `AGENCY_SUBSIDY_BILLING_OPERATIONS.pdf` before a school records an agency remittance; the named program, claim, and accounting evidence must be ready first.\n7. Use the migration email sequence",
     )
     (OUT / "README.md").write_text(readme, encoding="utf-8")
     build_pdf(OUT / "README.md", OUT / "TEAM_SHARE_GUIDES_INDEX.pdf")

@@ -13,6 +13,7 @@ const currentGuides = [
   "docs/sops/EXECUTIVE_ADMIN_SOP.md",
   "docs/sops/DIRECTOR_SOP.md",
   "docs/sops/BILLING_ADMIN_SOP.md",
+  "docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md",
   "docs/sops/TEACHER_SOP.md",
   "docs/sops/PARENT_PORTAL_SOP.md",
   "docs/sops/PARENT_PORTAL_INSTALL_GUIDE.md",
@@ -20,10 +21,10 @@ const currentGuides = [
   "docs/sops/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md",
 ];
 
-test("current guides carry an approved August 2026 revision and exclude superseded workflow copy", () => {
+test("current guides carry an approved revision and exclude superseded workflow copy", () => {
   for (const path of currentGuides) {
     const content = readFileSync(path, "utf8");
-    assert.match(content, /August (?:11|24), 2026/, path);
+    assert.match(content, /(?:August (?:11|24)|September 2), 2026/, path);
     assert.doesNotMatch(content, /creates? (?:a |the )?Friday invoice/i, path);
     assert.doesNotMatch(content, /bank payment is the preferred payment method/i, path);
     assert.doesNotMatch(content, /create your password.*setup link/i, path);
@@ -70,11 +71,28 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
   assert.match(resources, /id: "director-data-clean-start"/);
   assert.match(resources, /A blank field is not proof that none exists/);
   assert.match(resources, /keep agency responsibility separate from the parent's family balance/);
+  assert.match(resources, /id: "agency-payment-reconciliation"/);
+  assert.match(resources, /Record remittance on an approved or partially paid claim/);
   assert.match(resources, /object-contain/);
   assert.match(resources, /Tap a screen to open the full view/);
   assert.doesNotMatch(resources, /Section link/);
   assert.doesNotMatch(resources, /Captured July 27, 2026/);
   assert.doesNotMatch(resources, /warning banners and developer controls excluded/);
+});
+
+test("agency payment SOP has a stable public route and evidence-first reconciliation steps", () => {
+  const resources = readFileSync("src/app/resources/page.tsx", "utf8");
+  const guide = readFileSync("src/app/resources/agency-payment-reconciliation/page.tsx", "utf8");
+  const sop = readFileSync("docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md", "utf8");
+
+  assert.match(resources, /href="\/resources\/agency-payment-reconciliation"/);
+  assert.match(guide, /Agency Payment And Reconciliation SOP/);
+  assert.match(guide, /Do not use a Stripe payout or a bank deposit by itself as remittance proof/);
+  assert.match(guide, /Review complete - save/);
+  assert.match(guide, /parent-visible family responsibility stays unchanged/);
+  assert.match(sop, /claim-by-claim allocation/);
+  assert.match(sop, /Do not post a second manual family payment/);
+  assert.match(sop, /Reverse an incorrect remittance/);
 });
 
 test("director clean-start guide has a stable public route with steps, FAQs, and stop conditions", () => {
@@ -194,7 +212,7 @@ test("role SOPs cover the current August UI and workflow baseline", () => {
   const inviteUi = readFileSync("src/components/parent-portal-invite-button.tsx", "utf8");
 
   for (const [name, content] of Object.entries({ director, billing, parent, teacher, executive, manual })) {
-    assert.match(content, /August (?:11|24), 2026/, name);
+    assert.match(content, /(?:August (?:11|24)|September 2), 2026/, name);
   }
 
   assert.match(director, /Add Family, Parent \+ Child/);
@@ -204,6 +222,8 @@ test("role SOPs cover the current August UI and workflow baseline", () => {
   assert.match(director, /four-week tuition cadence/i);
   assert.match(billing, /Void invoice/i);
   assert.match(billing, /school absorbs Stripe processing costs/i);
+  assert.match(billing, /agency-payment-reconciliation/);
+  assert.match(billing, /Do not use the family cash\/check payment action for agency money/);
   assert.match(parent, /current password is preserved/i);
   assert.match(teacher, /https:\/\/thebeesuite\.io\/teachers/);
   assert.match(executive, /school filter/);
@@ -264,7 +284,8 @@ test("director clean-start guide is bundled in both current PDF packets", () => 
   const transitionBuilder = readFileSync("scripts/build-school-transition-email-packet.py", "utf8");
 
   assert.match(teamBuilder, /Path\("docs\/sops\/DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE\.md"\)/);
-  assert.match(teamBuilder, /PUBLICATION_DATE = "August 24, 2026"/);
+  assert.match(teamBuilder, /Path\("docs\/AGENCY_SUBSIDY_BILLING_OPERATIONS\.md"\)/);
+  assert.match(teamBuilder, /PUBLICATION_DATE = "September 2, 2026"/);
   assert.match(transitionBuilder, /"DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE\.pdf": "02_DIRECTOR_PROCARE_DATA_CLEAN_START_GUIDE\.pdf"/);
   assert.match(transitionBuilder, /shutil\.copy2\(MANIFEST, OUT \/ "README\.md"\)/);
 });

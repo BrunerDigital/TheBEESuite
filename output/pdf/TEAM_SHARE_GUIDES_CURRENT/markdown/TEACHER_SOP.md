@@ -1,6 +1,6 @@
 # Teacher SOP - The BEE Suite
 
-Last updated: August 24, 2026
+Last updated: September 2, 2026
 
 Audience: teachers and classroom staff using The BEE Suite for attendance, daily reports, media, incidents, messages, and staff kiosk workflows.
 

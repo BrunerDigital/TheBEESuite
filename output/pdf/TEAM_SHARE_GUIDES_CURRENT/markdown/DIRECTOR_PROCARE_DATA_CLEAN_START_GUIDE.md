@@ -1,6 +1,6 @@
 # Director's School Data Clean-Start Checklist - The BEE Suite
 
-**Updated:** August 24, 2026
+**Updated:** September 2, 2026
 
 > CURRENT GUIDE
 >

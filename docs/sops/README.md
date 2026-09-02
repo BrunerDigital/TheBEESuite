@@ -1,6 +1,6 @@
 # The BEE Suite Role SOP Library
 
-Last updated: August 24, 2026
+Last updated: September 2, 2026
 
 Use these SOPs when training a school team or sending role-specific instructions before a launch, parent portal rollout, billing rollout, or kiosk rollout.
 
@@ -39,7 +39,7 @@ When the UI, permissions, labels, routes, or workflow guardrails change, update 
 
 1. Executives and owners: send `SCHOOL_SYSTEM_OPERATING_MANUAL.md` and `EXECUTIVE_ADMIN_SOP.md` first.
 2. Directors and assistant directors: send `DIRECTOR_SOP.md` after the school workspace, classrooms, users, billing readiness, and launch checklist are reviewed.
-3. Billing admins: send `BILLING_ADMIN_SOP.md` before payment method requests, tuition runs, card/bank payments, autopay, or Terminal payments are promoted.
+3. Billing admins: send `BILLING_ADMIN_SOP.md` before payment method requests, tuition runs, card/bank payments, autopay, or Terminal payments are promoted. Add `../AGENCY_SUBSIDY_BILLING_OPERATIONS.md` before a school records agency remittances.
 4. Teachers: send `TEACHER_SOP.md` after teacher accounts, classroom assignments, and rosters are confirmed.
 5. Parents and guardians: send `PARENT_PORTAL_INSTALL_GUIDE.md`, `PARENT_PORTAL_SOP.md`, and `PARENT_ACH_PAYMENT_GUIDE.md` only after guardian emails are correct and parent access is ready.
 6. Authorized pickups and front desk staff: send `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` before the lobby kiosk is live.
@@ -52,6 +52,7 @@ When the UI, permissions, labels, routes, or workflow guardrails change, update 
 - `docs/sops/EXECUTIVE_ADMIN_SOP.md` - executive setup, multi-location oversight, FTE review, payment readiness, integrations, permissions, and support access.
 - `docs/sops/DIRECTOR_SOP.md` - director daily operations, families, classrooms, billing oversight, parent portal launch, documents, communications, and escalation.
 - `docs/sops/BILLING_ADMIN_SOP.md` - school-scoped tuition plans, Thursday invoice scheduling, card/bank choices, autopay, Terminal payments, failed payments, dunning, and reconciliation.
+- `docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md` - exact agency program, authorization, claim, remittance, reconciliation, reversal, and stop/escalation procedure.
 - `docs/sops/TEACHER_SOP.md` - classroom attendance, daily reports, media, incidents, messages, staff kiosk, and offline queue behavior.
 - `docs/sops/PARENT_PORTAL_INSTALL_GUIDE.md` - parent device install instructions for iPhone, iPad, Android, Fire tablet, and desktop.
 - `docs/sops/PARENT_PORTAL_SOP.md` - parent login, family dashboard, invoices, documents, messages, incident acknowledgements, and troubleshooting.

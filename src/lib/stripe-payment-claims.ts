@@ -1,4 +1,5 @@
 import { PaymentStatus, Prisma } from "@prisma/client";
+import { allocateAccountCreditToInvoice, availableAccountCreditCents } from "@/lib/account-credit-autopay";
 import {
   isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
@@ -57,12 +58,16 @@ export async function createStripePaymentClaim({
   scope,
   invoiceId,
   existingPaymentId,
+  expectedInvoiceTotalCents,
+  expectedAccountCreditAppliedCents,
   paymentData,
 }: {
   billingAccountId: string;
   scope: StripePaymentClaimScope;
   invoiceId?: string | null;
   existingPaymentId?: string | null;
+  expectedInvoiceTotalCents?: number | null;
+  expectedAccountCreditAppliedCents?: number | null;
   paymentData: Omit<Prisma.PaymentUncheckedCreateInput, "billingAccountId">;
 }) {
   return prisma.$transaction(async (tx) => {
@@ -94,11 +99,34 @@ export async function createStripePaymentClaim({
       const invoice = invoiceId
         ? await tx.invoice.findUnique({
             where: { id: invoiceId },
-            select: { billingAccountId: true, status: true },
+            select: { billingAccountId: true, status: true, totalCents: true },
           })
         : null;
       if (!invoice || invoice.billingAccountId !== billingAccountId || invoice.status !== PaymentStatus.OPEN) {
         return { created: false as const, reason: "invoice_not_open" as const, blockingPaymentId: null };
+      }
+      const openInvoiceTotal = await tx.invoice.aggregate({
+        where: { billingAccountId, status: PaymentStatus.OPEN, totalCents: { gt: 0 } },
+        _sum: { totalCents: true },
+      });
+      const reservedCreditCents = draftPayments.reduce((sum, payment) => {
+        if (payment.id === existingPaymentId || !isActiveStripeAutopayPayment(payment)) return sum;
+        return sum + Math.max(0, Number(jsonRecord(payment.customFields).accountCreditAppliedCents) || 0);
+      }, 0);
+      const freshAllocation = allocateAccountCreditToInvoice({
+        invoiceTotalCents: invoice.totalCents,
+        availableCreditCents: availableAccountCreditCents({
+          balanceCents: lockedAccounts[0].balanceCents,
+          openInvoiceTotalCents: openInvoiceTotal._sum.totalCents ?? 0,
+          reservedCreditCents,
+        }),
+      });
+      if (
+        invoice.totalCents !== expectedInvoiceTotalCents
+        || freshAllocation.accountCreditAppliedCents !== (expectedAccountCreditAppliedCents ?? 0)
+        || freshAllocation.stripeChargePrincipalCents !== requestedAmountCents
+      ) {
+        return { created: false as const, reason: "invoice_amount_changed" as const, blockingPaymentId: null };
       }
     } else if (requestedAmountCents <= 0 || requestedAmountCents > lockedAccounts[0].balanceCents) {
       return { created: false as const, reason: "family_balance_changed" as const, blockingPaymentId: null };

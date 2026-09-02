@@ -37,7 +37,8 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(page, /activeConnectedAccountId: readStripeConnectedAccountId\(center\?\.customFields\)/);
   assert.match(processing, /if \(paymentMethod\.paymentMethodReauthorizationRequired\)/);
   assert.match(processing, /accountsWithActiveFamilyBalancePayments/);
-  assert.match(processing, /familyBalanceDraftPayments/);
+  assert.match(processing, /activeDraftPayments/);
+  assert.match(processing, /new Map\(\[\.\.\.payments, \.\.\.activeDraftPayments\]/);
   assert.match(processing, /await resolveStripeCheckoutDraftBlocker/);
   assert.doesNotMatch(processing, /now: asOf/);
   assert.match(processing, /createStripePaymentClaim/);
@@ -47,6 +48,8 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(paymentClaims, /FROM "BillingAccount"[\s\S]*FOR UPDATE/);
   assert.match(paymentClaims, /provider: \{ in: \["stripe", "stripe_terminal"\] \}/);
   assert.match(paymentClaims, /invoice\.status !== PaymentStatus\.OPEN/);
+  assert.match(paymentClaims, /invoice\.totalCents !== expectedInvoiceTotalCents/);
+  assert.match(paymentClaims, /freshAllocation\.stripeChargePrincipalCents !== requestedAmountCents/);
   assert.match(paymentClaims, /existingPaymentId/);
   assert.match(paymentClaims, /reconcileIdempotentStripeSubmission/);
   assert.match(paymentClaims, /TransactionIsolationLevel\.Serializable/);

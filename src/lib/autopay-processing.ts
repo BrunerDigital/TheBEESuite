@@ -304,7 +304,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
 
   const billingAccountIds = unique(invoices.map((invoice) => invoice.billingAccountId));
   const familyCenterIds = unique(invoices.map((invoice) => invoice.billingAccount.family.centerId));
-  const [payments, familyBalanceDraftPayments, centers, openInvoiceTotals] = await Promise.all([
+  const [payments, activeDraftPayments, centers, openInvoiceTotals] = await Promise.all([
     billingAccountIds.length
       ? prisma.payment.findMany({
           where: {
@@ -366,7 +366,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
 
   const centersById = new Map(centers.map((center) => [center.id, center]));
   const familyBalanceDraftsByAccountId = new Map<string, StripeFamilyBalanceDraft[]>();
-  for (const payment of familyBalanceDraftPayments) {
+  for (const payment of activeDraftPayments) {
     if (!isActiveStripeFamilyBalancePayment(payment)) continue;
     const list = familyBalanceDraftsByAccountId.get(payment.billingAccountId) ?? [];
     list.push(payment);
@@ -389,8 +389,11 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       accountsWithActiveFamilyBalancePayments.add(billingAccountId);
     }
   }
-  const paymentsByInvoiceId = new Map<string, typeof payments>();
-  for (const payment of payments) {
+  const paymentAttempts = Array.from(
+    new Map([...payments, ...activeDraftPayments].map((payment) => [payment.id, payment])).values(),
+  );
+  const paymentsByInvoiceId = new Map<string, typeof paymentAttempts>();
+  for (const payment of paymentAttempts) {
     const invoiceId = clean(jsonRecord(payment.customFields).invoiceId);
     if (!invoiceId) continue;
     const list = paymentsByInvoiceId.get(invoiceId) ?? [];
@@ -398,7 +401,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     paymentsByInvoiceId.set(invoiceId, list);
   }
   const reservedCreditByAccountId = new Map<string, number>();
-  for (const payment of payments) {
+  for (const payment of paymentAttempts) {
     if (!isActiveStripeAutopayPayment(payment)) continue;
     const fields = jsonRecord(payment.customFields);
     const reservedCents = Math.max(0, Number(fields.accountCreditAppliedCents) || 0);
@@ -831,6 +834,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       scope: "invoice_collection",
       invoiceId: invoice.id,
       existingPaymentId: recoverableSubmissionPayment?.id,
+      expectedInvoiceTotalCents: invoice.totalCents,
+      expectedAccountCreditAppliedCents: creditAllocation.accountCreditAppliedCents,
       paymentData: {
         amountCents: creditAllocation.stripeChargePrincipalCents,
         status: PaymentStatus.DRAFT,
@@ -879,6 +884,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           ? "A family balance payment became pending before submission; no autopay debit was created."
           : paymentClaim.reason === "invoice_not_open"
             ? "The invoice is no longer open; no autopay debit was created."
+          : paymentClaim.reason === "invoice_amount_changed"
+            ? "The invoice amount or available account credit changed before submission; no autopay debit was created."
           : "Another payment attempt became active before submission; no autopay debit was created.",
       });
       continue;

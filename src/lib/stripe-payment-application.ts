@@ -472,7 +472,7 @@ export async function applySucceededStripeInvoicePayment(
     return {
       applied: false,
       reason: "payment_already_applied",
-      applicationScope: currentFields.creditedAfterInvoiceClosure === true ? "family_balance" : "invoice",
+      applicationScope: currentFields.paymentScope === "family_balance" ? "family_balance" : "invoice",
       billingAccountId: currentPayment.billingAccountId,
     };
   }

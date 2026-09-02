@@ -433,6 +433,8 @@ async function processPayment(body: Record<string, unknown>) {
     scope: invoice ? "invoice_collection" : "family_balance",
     invoiceId: invoice?.id || null,
     existingPaymentId: retryableTerminalSubmission?.id,
+    expectedInvoiceTotalCents: invoice?.totalCents ?? null,
+    expectedAccountCreditAppliedCents: 0,
     paymentData: {
       amountCents,
       status: PaymentStatus.DRAFT,
@@ -456,6 +458,8 @@ async function processPayment(body: Record<string, unknown>) {
         ok: false,
         error: paymentClaim.reason === "invoice_not_open"
           ? "The selected invoice is no longer open."
+          : paymentClaim.reason === "invoice_amount_changed"
+            ? "The invoice amount changed before the card payment could start. Review the invoice and try again."
           : paymentClaim.reason === "family_balance_changed"
             ? "The family balance changed before the card payment could start. Review the balance and try again."
             : "This family already has another online or in-person payment in progress.",

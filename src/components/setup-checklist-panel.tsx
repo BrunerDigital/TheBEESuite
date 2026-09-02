@@ -104,7 +104,7 @@ export function SetupChecklistPanel({
             </Button>
           ) : null}
           {graphicHref ? (
-            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={graphicHref} target="_blank" />}>
+            <Button variant="outline" size="sm" nativeButton={false} render={<a href={graphicHref} target="_blank" rel="noreferrer" />}>
               <ArrowUpRight data-icon="inline-start" />
               Roadmap
             </Button>

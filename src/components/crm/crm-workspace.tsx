@@ -1201,8 +1201,8 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
           </table>
       </PrintableReport>
       <section className="overflow-hidden rounded-2xl border bg-card">
-        <div className="grid gap-0 xl:grid-cols-[1fr_22rem]">
-          <div className="p-5 sm:p-6">
+        <div className="grid min-w-0 gap-0 xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="min-w-0 p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-primary text-primary-foreground">{brandName} enrollment</Badge>
               <Badge variant="secondary">{filteredLeads.length.toLocaleString()} inquiries shown</Badge>
@@ -1239,7 +1239,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
               </div>
             </div>
           </div>
-          <div className="border-t bg-primary/10 p-5 xl:border-l xl:border-t-0">
+          <div className="min-w-0 border-t bg-primary/10 p-5 xl:border-l xl:border-t-0">
             <div className="flex items-center gap-3">
               <div className="relative size-20 shrink-0 overflow-hidden rounded-2xl border bg-black">
                 <Image src="/mr-bee.png" alt="Mr. Bee" fill className="object-contain p-1" />
@@ -1327,7 +1327,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                   <Paperclip className="size-4" />
                   Add files
                 </Label>
-                <Input
+                <input
                   id={emailAttachmentsId}
                   type="file"
                   multiple
@@ -1407,8 +1407,8 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
         </Alert>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
-        <div className="flex flex-col gap-4">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="flex min-w-0 flex-col gap-4">
           <Card>
             <CardContent className="flex flex-col gap-3 p-4">
               <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
@@ -1610,7 +1610,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
           </div>
         </div>
 
-        <aside className="flex flex-col gap-4">
+        <aside className="flex min-w-0 flex-col gap-4">
           <Card>
             <CardHeader>
               <CardTitle as="h2" className="flex items-center gap-2 text-base">

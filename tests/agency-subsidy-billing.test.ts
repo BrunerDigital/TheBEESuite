@@ -198,7 +198,7 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   assert.match(workspace, /centerIdRef\.current !== requestCenterId/);
   assert.match(workspace, /setPending\(true\); setClaimCursorByPage/);
   assert.match(workspace, /\.finally\(\(\) => \{ if \(active\) setPending\(false\); \}\)/);
-  assert.match(workspace, /<Label>Authorization<\/Label><Select value=\{authorizationId\} disabled=\{pending\}/);
+  assert.match(workspace, /<Label htmlFor="claim-authorization">Authorization<\/Label><Select value=\{authorizationId\} disabled=\{pending\}/);
   assert.match(route, /new ReadableStream<Uint8Array>/);
   assert.match(route, /orderBy: \{ id: "asc" \}/);
   assert.match(route, /take: 250/);

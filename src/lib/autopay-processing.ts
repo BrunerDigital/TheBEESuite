@@ -34,6 +34,7 @@ import {
 } from "@/lib/stripe-connect-readiness";
 import { stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
 import { stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
+import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
 import {
   applyAccountCreditToInvoice,
   applySucceededStripeInvoicePayment,
@@ -109,6 +110,65 @@ type TenantStripeConfig = {
   stripeConfigured: boolean;
   webhookConfigured: boolean;
 };
+
+type StripeFamilyBalanceDraft = {
+  id: string;
+  amountCents: number;
+  status: PaymentStatus;
+  provider: string;
+  externalIdPlaceholder: string | null;
+  customFields: unknown;
+};
+
+async function accountHasActiveFamilyBalancePayment({
+  billingAccountId,
+  connectedAccountId,
+  tenantId,
+  now,
+  candidates,
+  reconcileDrafts,
+}: {
+  billingAccountId: string;
+  connectedAccountId?: string | null;
+  tenantId?: string | null;
+  now: Date;
+  candidates?: StripeFamilyBalanceDraft[];
+  reconcileDrafts: boolean;
+}) {
+  const payments = candidates ?? await prisma.payment.findMany({
+    where: {
+      billingAccountId,
+      provider: "stripe",
+      status: PaymentStatus.DRAFT,
+    },
+    select: {
+      id: true,
+      amountCents: true,
+      status: true,
+      provider: true,
+      externalIdPlaceholder: true,
+      customFields: true,
+    },
+  });
+
+  for (const payment of payments) {
+    if (!isActiveStripeFamilyBalancePayment(payment)) continue;
+    // Dry runs remain read-only and conservatively treat unresolved drafts as
+    // active. A real collection run reconciles Stripe first so expired
+    // Checkout Sessions do not pause autopay indefinitely.
+    if (!reconcileDrafts) return true;
+    const blocker = await resolveStripeCheckoutDraftBlocker({
+      payment,
+      connectedAccountId,
+      tenantId,
+      scope: "family_balance",
+      now,
+    });
+    if (blocker.blocked || blocker.resumed) return true;
+  }
+
+  return false;
+}
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -241,7 +301,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
 
   const billingAccountIds = unique(invoices.map((invoice) => invoice.billingAccountId));
   const familyCenterIds = unique(invoices.map((invoice) => invoice.billingAccount.family.centerId));
-  const [payments, centers, openInvoiceTotals] = await Promise.all([
+  const [payments, familyBalanceDraftPayments, centers, openInvoiceTotals] = await Promise.all([
     billingAccountIds.length
       ? prisma.payment.findMany({
           where: {
@@ -251,6 +311,24 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           },
           select: { id: true, billingAccountId: true, status: true, provider: true, customFields: true },
           take: 1000,
+        })
+      : [],
+    billingAccountIds.length
+      ? prisma.payment.findMany({
+          where: {
+            provider: "stripe",
+            billingAccountId: { in: billingAccountIds },
+            status: PaymentStatus.DRAFT,
+          },
+          select: {
+            id: true,
+            amountCents: true,
+            billingAccountId: true,
+            status: true,
+            provider: true,
+            externalIdPlaceholder: true,
+            customFields: true,
+          },
         })
       : [],
     familyCenterIds.length
@@ -284,11 +362,30 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
   ]);
 
   const centersById = new Map(centers.map((center) => [center.id, center]));
-  const accountsWithActiveFamilyBalancePayments = new Set(
-    payments
-      .filter(isActiveStripeFamilyBalancePayment)
-      .map((payment) => payment.billingAccountId),
-  );
+  const familyBalanceDraftsByAccountId = new Map<string, StripeFamilyBalanceDraft[]>();
+  for (const payment of familyBalanceDraftPayments) {
+    if (!isActiveStripeFamilyBalancePayment(payment)) continue;
+    const list = familyBalanceDraftsByAccountId.get(payment.billingAccountId) ?? [];
+    list.push(payment);
+    familyBalanceDraftsByAccountId.set(payment.billingAccountId, list);
+  }
+  const accountsWithActiveFamilyBalancePayments = new Set<string>();
+  for (const [billingAccountId, candidates] of familyBalanceDraftsByAccountId) {
+    const representativeInvoice = invoices.find((invoice) => invoice.billingAccountId === billingAccountId);
+    const center = representativeInvoice?.billingAccount.family.centerId
+      ? centersById.get(representativeInvoice.billingAccount.family.centerId)
+      : null;
+    if (await accountHasActiveFamilyBalancePayment({
+      billingAccountId,
+      connectedAccountId: readStripeConnectedAccountId(center?.customFields),
+      tenantId: center?.organization.tenantId,
+      now: asOf,
+      candidates,
+      reconcileDrafts: !dryRun,
+    })) {
+      accountsWithActiveFamilyBalancePayments.add(billingAccountId);
+    }
+  }
   const paymentsByInvoiceId = new Map<string, typeof payments>();
   for (const payment of payments) {
     const invoiceId = clean(jsonRecord(payment.customFields).invoiceId);
@@ -762,6 +859,37 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         }),
       },
     });
+
+    // Close the race with a parent starting a family-balance Checkout after
+    // the run's initial snapshot but before Stripe receives an autopay debit.
+    const freshFamilyBalancePayment = await accountHasActiveFamilyBalancePayment({
+      billingAccountId: invoice.billingAccountId,
+      connectedAccountId,
+      tenantId,
+      now: new Date(),
+      reconcileDrafts: true,
+    });
+    if (freshFamilyBalancePayment) {
+      accountsWithActiveFamilyBalancePayments.add(invoice.billingAccountId);
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: PaymentStatus.VOID,
+          customFields: jsonInput({
+            ...jsonRecord(payment.customFields),
+            status: "autopay_skipped_family_balance_pending",
+            skippedAt: new Date().toISOString(),
+          }),
+        },
+      });
+      results.push({
+        ...baseResult,
+        status: "skipped",
+        reason: "A family balance payment became pending before submission; no autopay debit was created.",
+        paymentId: payment.id,
+      });
+      continue;
+    }
 
     const intent = await createStripeOffSessionPaymentIntent({
       amountCents: amounts.checkoutTotalCents,

@@ -16,6 +16,49 @@ export function isActiveStripeCheckoutPayment(payment: {
     || fields.status === "paid_processing";
 }
 
+export function isActiveStripeFamilyBalancePayment(payment: {
+  status: PaymentStatus;
+  provider: string;
+  customFields?: unknown;
+}) {
+  if (payment.status !== PaymentStatus.DRAFT) return false;
+  const fields = jsonRecord(payment.customFields);
+  if (fields.paymentScope !== "family_balance") return false;
+  if (payment.provider === "stripe_terminal") return isActiveStripeTerminalPayment(payment);
+  if (payment.provider !== "stripe") return false;
+  return isActiveStripeCheckoutPayment(payment)
+    || fields.status === "checkout_submission_unknown"
+    || fields.status === "director_saved_method_pending"
+    || fields.status === "director_saved_method_processing"
+    || fields.status === "director_saved_method_succeeded_pending_webhook"
+    || fields.status === "director_saved_method_submission_unknown";
+}
+
+export function isStripeSubmissionUnknownPayment(payment: {
+  status: PaymentStatus;
+  provider: string;
+  customFields?: unknown;
+}) {
+  if (payment.status !== PaymentStatus.DRAFT) return false;
+  const status = jsonRecord(payment.customFields).status;
+  return status === "autopay_submission_unknown"
+    || status === "stored_method_submission_unknown"
+    || status === "checkout_submission_unknown"
+    || status === "director_saved_method_submission_unknown"
+    || status === "terminal_submission_unknown"
+    || status === "terminal_reader_submission_unknown";
+}
+
+export function isActiveStripeTerminalPayment(payment: {
+  status: PaymentStatus;
+  provider: string;
+  customFields?: unknown;
+}) {
+  if (payment.provider !== "stripe_terminal" || payment.status !== PaymentStatus.DRAFT) return false;
+  const status = jsonRecord(payment.customFields).status;
+  return typeof status === "string" && status.startsWith("terminal_") && status !== "terminal_failed";
+}
+
 function stringField(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -92,9 +135,21 @@ export function isActiveStripeAutopayPayment(payment: {
   return fields.status === "autopay_pending" ||
     fields.status === "autopay_processing" ||
     fields.status === "autopay_succeeded_pending_webhook" ||
+    fields.status === "autopay_submission_unknown" ||
     fields.status === "stored_method_pending" ||
     fields.status === "stored_method_processing" ||
-    fields.status === "stored_method_succeeded_pending_webhook";
+    fields.status === "stored_method_succeeded_pending_webhook" ||
+    fields.status === "stored_method_submission_unknown";
+}
+
+export function activeStripeAccountCreditReservationCents(payment: {
+  status: PaymentStatus;
+  provider: string;
+  customFields?: unknown;
+}) {
+  if (!isActiveStripeAutopayPayment(payment) && !isActiveStripeTerminalPayment(payment)) return 0;
+  const value = numberLikeField(jsonRecord(payment.customFields).accountCreditAppliedCents);
+  return value === null ? 0 : Math.max(0, Math.round(value));
 }
 
 export function stripePaymentIntentFailureDisposition({

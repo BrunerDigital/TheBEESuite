@@ -4,17 +4,26 @@ import { test } from "node:test";
 import { PaymentStatus, UserRole } from "@prisma/client";
 import { startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "../src/lib/attendance-state";
 import {
+  activeStripeAccountCreditReservationCents,
   activeStripeCheckoutPaymentMessage,
   activeStripeCheckoutPaymentSummary,
   checkoutApplicationGuard,
   isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
+  isActiveStripeFamilyBalancePayment,
+  isActiveStripeTerminalPayment,
+  isStripeSubmissionUnknownPayment,
 } from "../src/lib/billing-guardrails";
 import {
   stripeCheckoutDraftClearReason,
   stripeCheckoutDraftConnectedAccountId,
   stripeCheckoutDraftReplacementReason,
 } from "../src/lib/stripe-checkout-drafts";
+import {
+  isAmbiguousStripeSubmissionResult,
+  reconcileIdempotentStripeSubmission,
+  stripePaymentClaimConflict,
+} from "../src/lib/stripe-payment-claims";
 import { demoAccountEmails, resolveLoginIdentifier } from "../src/lib/demo-accounts";
 import { hashGuardianPin, verifyGuardianPin } from "../src/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "../src/lib/operations-guardrails";
@@ -245,6 +254,176 @@ test("active Stripe checkout detection only blocks draft checkout sessions", () 
     provider: "stripe_mock",
     customFields: { status: "checkout_created" },
   }), false);
+});
+
+test("active family balance payments block overlapping invoice autopay", () => {
+  assert.equal(isActiveStripeTerminalPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe_terminal",
+    customFields: { status: "terminal_reader_submission_unknown", paymentScope: "invoice" },
+  }), true);
+  assert.equal(activeStripeAccountCreditReservationCents({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe_terminal",
+    customFields: { status: "terminal_reader_submission_unknown", accountCreditAppliedCents: "1250" },
+  }), 1250);
+  assert.equal(activeStripeAccountCreditReservationCents({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "autopay_submission_unknown", accountCreditAppliedCents: 800 },
+  }), 800);
+  assert.equal(activeStripeAccountCreditReservationCents({
+    status: PaymentStatus.FAILED,
+    provider: "stripe_terminal",
+    customFields: { status: "terminal_failed", accountCreditAppliedCents: 1250 },
+  }), 0);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "checkout_pending", paymentScope: "family_balance" },
+  }), true);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe_terminal",
+    customFields: { status: "terminal_reader_submission_unknown", paymentScope: "family_balance" },
+  }), true);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "director_saved_method_processing", paymentScope: "family_balance" },
+  }), true);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "paid_processing", paymentScope: "family_balance" },
+  }), true);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe_terminal",
+    customFields: { status: "terminal_processing", paymentScope: "family_balance" },
+  }), true);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "checkout_submission_unknown", paymentScope: "family_balance" },
+  }), true);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "checkout_pending", paymentScope: "invoice" },
+  }), false);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.PAID,
+    provider: "stripe",
+    customFields: { status: "paid", paymentScope: "family_balance" },
+  }), false);
+});
+
+test("Stripe payment claims mutually exclude family balance and invoice collection", () => {
+  assert.equal(stripePaymentClaimConflict({
+    scope: "invoice_collection",
+    invoiceId: "invoice_1",
+    payment: {
+      id: "family_payment",
+      status: PaymentStatus.DRAFT,
+      provider: "stripe",
+      customFields: { status: "director_saved_method_processing", paymentScope: "family_balance" },
+    },
+  }), "active_family_balance");
+
+  assert.equal(stripePaymentClaimConflict({
+    scope: "family_balance",
+    payment: {
+      id: "autopay_payment",
+      status: PaymentStatus.DRAFT,
+      provider: "stripe",
+      customFields: { status: "autopay_pending", invoiceId: "invoice_1" },
+    },
+  }), "active_invoice_collection");
+
+  assert.equal(stripePaymentClaimConflict({
+    scope: "family_balance",
+    payment: {
+      id: "terminal_payment",
+      status: PaymentStatus.DRAFT,
+      provider: "stripe_terminal",
+      customFields: { status: "terminal_processing", invoiceId: "invoice_1", paymentScope: "invoice" },
+    },
+  }), "active_invoice_collection");
+});
+
+test("unknown Stripe submissions stay active and retry the same idempotent request", async () => {
+  assert.equal(isStripeSubmissionUnknownPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "autopay_submission_unknown" },
+  }), true);
+  assert.equal(isStripeSubmissionUnknownPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe_terminal",
+    customFields: { status: "terminal_reader_submission_unknown" },
+  }), true);
+  assert.equal(isActiveStripeAutopayPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "autopay_submission_unknown" },
+  }), true);
+
+  let calls = 0;
+  const recovered = await reconcileIdempotentStripeSubmission(async () => {
+    calls += 1;
+    if (calls === 1) throw new Error("response lost");
+    return { ok: true, id: "pi_original" };
+  });
+  assert.deepEqual(recovered, { resolved: true, value: { ok: true, id: "pi_original" }, retried: true });
+  assert.equal(calls, 2);
+
+  const unresolved = await reconcileIdempotentStripeSubmission(async () => {
+    throw new Error("still unavailable");
+  });
+  assert.deepEqual(unresolved, { resolved: false, value: null, retried: true });
+
+  assert.equal(isAmbiguousStripeSubmissionResult({ ok: false, providerStatus: 500 }), true);
+  assert.equal(isAmbiguousStripeSubmissionResult({ ok: false, providerStatus: 402 }), false);
+  let httpCalls = 0;
+  const recoveredHttpFailure = await reconcileIdempotentStripeSubmission(async () => {
+    httpCalls += 1;
+    return httpCalls === 1
+      ? { ok: false, providerStatus: 500, acceptanceUnknown: true }
+      : { ok: true, id: "pi_from_idempotency_key" };
+  });
+  assert.deepEqual(recoveredHttpFailure, {
+    resolved: true,
+    value: { ok: true, id: "pi_from_idempotency_key" },
+    retried: true,
+  });
+
+  const unresolvedHttpFailure = await reconcileIdempotentStripeSubmission(async () => ({
+    ok: false,
+    providerStatus: 503,
+    acceptanceUnknown: true,
+  }));
+  assert.deepEqual(unresolvedHttpFailure, { resolved: false, value: null, retried: true });
+
+  let definitiveFailureCalls = 0;
+  const definitiveFailure = await reconcileIdempotentStripeSubmission(async () => {
+    definitiveFailureCalls += 1;
+    return { ok: false, providerStatus: 402 };
+  });
+  assert.deepEqual(definitiveFailure, {
+    resolved: true,
+    value: { ok: false, providerStatus: 402 },
+    retried: false,
+  });
+  assert.equal(definitiveFailureCalls, 1);
 });
 
 test("checkout draft resolution stays on the account where the session was created", () => {

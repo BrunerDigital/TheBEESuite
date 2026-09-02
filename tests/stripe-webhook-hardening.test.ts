@@ -89,6 +89,21 @@ test("a succeeded family payment recovers only the same previously failed Paymen
   }).reason, "payment_already_applied");
 });
 
+test("provider-confirmed invoice overpayments remain visible as family account credit", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  const application = await readFile("src/lib/stripe-payment-application.ts", "utf8");
+  const autopay = await readFile("src/lib/autopay-processing.ts", "utf8");
+  assert.match(route, /guard\.reason === "invoice_not_open"[\s\S]*applySucceededStripeFamilyBalancePayment/);
+  assert.match(route, /invoiceClaim\.count !== 1[\s\S]*applySucceededStripeInvoicePayment/);
+  assert.match(route, /billing\.autopay\.overpayment_recorded/);
+  assert.match(application, /guard\.reason === "invoice_not_open"[\s\S]*applySucceededStripeFamilyBalancePayment/);
+  assert.match(application, /creditedAfterInvoiceClosure/);
+  assert.match(application, /applicationScope: recovery\.applied \? "family_balance"/);
+  assert.match(autopay, /appliedAsAccountCredit/);
+  assert.match(autopay, /billing\.autopay\.overpayment_recorded/);
+  assert.match(autopay, /recorded as family account credit for refund or review/);
+});
+
 test("Checkout payment-method failures stay recoverable without weakening off-session failures", () => {
   assert.deepEqual(stripePaymentIntentFailureDisposition({
     collectionMode: "parent_checkout",
@@ -224,7 +239,7 @@ test("off-session request completion cannot overwrite webhook terminal states", 
   assert.match(autopay, /processingAccepted[\s\S]*blockedBillingAccountIds\.add/);
   assert.equal(
     familyPayment.match(/payment\.updateMany\(\{\s*where: \{ id: payment\.id, status: PaymentStatus\.DRAFT \}/g)?.length,
-    2,
+    4,
   );
   assert.match(familyPayment, /submissionUpdate\.count !== 1[\s\S]*payment\.findUnique[\s\S]*terminalPaymentStatus/);
   assert.match(familyPayment, /terminalFailure[\s\S]*status: "failed"/);

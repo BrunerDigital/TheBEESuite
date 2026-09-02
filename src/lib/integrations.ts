@@ -987,6 +987,8 @@ export async function createStripeCheckoutSession({
       ok: false,
       configured: true,
       provider: "stripe",
+      providerStatus: status,
+      acceptanceUnknown: status >= 500,
       error: json?.error?.message || `Payment processor returned ${status}.`,
     };
   }
@@ -1250,6 +1252,8 @@ export async function createStripeOffSessionPaymentIntent({
       provider: "stripe",
       id: paymentIntent?.id,
       paymentIntent,
+      providerStatus: response.status,
+      acceptanceUnknown: response.status >= 500,
       error: json?.error?.message || `Payment processor returned ${response.status}.`,
     };
   }
@@ -1523,6 +1527,8 @@ export async function createStripeTerminalPaymentIntent({
       ok: false,
       configured: true,
       provider: "stripe",
+      providerStatus: response.status,
+      acceptanceUnknown: response.status >= 500,
       error: json?.error?.message || `Payment processor returned ${response.status}.`,
     };
   }
@@ -1572,6 +1578,8 @@ export async function processStripeTerminalPaymentIntent({
       ok: false,
       configured: true,
       provider: "stripe",
+      providerStatus: response.status,
+      acceptanceUnknown: response.status >= 500,
       error: clean(asRecord(json?.error).message) || `Payment processor returned ${response.status}.`,
     };
   }

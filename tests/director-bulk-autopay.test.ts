@@ -46,6 +46,7 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(familyPayment, /createStripePaymentClaim/);
   assert.match(familyPayment, /scope: "family_balance"/);
   assert.match(paymentClaims, /FROM "BillingAccount"[\s\S]*FOR UPDATE/);
+  assert.match(paymentClaims, /FROM "Invoice"[\s\S]*FOR UPDATE/);
   assert.match(paymentClaims, /provider: \{ in: \["stripe", "stripe_terminal"\] \}/);
   assert.match(paymentClaims, /invoice\.status !== PaymentStatus\.OPEN/);
   assert.match(paymentClaims, /invoice\.totalCents !== expectedInvoiceTotalCents/);

@@ -96,12 +96,12 @@ export async function createStripePaymentClaim({
 
     const requestedAmountCents = Number(paymentData.amountCents) || 0;
     if (scope === "invoice_collection") {
-      const invoice = invoiceId
-        ? await tx.invoice.findUnique({
-            where: { id: invoiceId },
-            select: { billingAccountId: true, status: true, totalCents: true },
-          })
-        : null;
+      const lockedInvoices = invoiceId
+        ? await tx.$queryRaw<Array<{ billingAccountId: string; status: PaymentStatus; totalCents: number }>>(
+            Prisma.sql`SELECT "billingAccountId", "status", "totalCents" FROM "Invoice" WHERE "id" = ${invoiceId} FOR UPDATE`,
+          )
+        : [];
+      const invoice = lockedInvoices[0] ?? null;
       if (!invoice || invoice.billingAccountId !== billingAccountId || invoice.status !== PaymentStatus.OPEN) {
         return { created: false as const, reason: "invoice_not_open" as const, blockingPaymentId: null };
       }

@@ -4,6 +4,7 @@ import {
   availableAccountCreditCents,
 } from "@/lib/account-credit-autopay";
 import {
+  activeStripeAccountCreditReservationCents,
   isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
   isActiveStripeFamilyBalancePayment,
@@ -403,9 +404,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
   }
   const reservedCreditByAccountId = new Map<string, number>();
   for (const payment of paymentAttempts) {
-    if (!isActiveStripeAutopayPayment(payment) && !isActiveStripeTerminalPayment(payment)) continue;
-    const fields = jsonRecord(payment.customFields);
-    const reservedCents = Math.max(0, Number(fields.accountCreditAppliedCents) || 0);
+    const reservedCents = activeStripeAccountCreditReservationCents(payment);
     if (!reservedCents) continue;
     reservedCreditByAccountId.set(
       payment.billingAccountId,

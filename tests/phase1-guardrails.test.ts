@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { PaymentStatus, UserRole } from "@prisma/client";
 import { startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "../src/lib/attendance-state";
 import {
+  activeStripeAccountCreditReservationCents,
   activeStripeCheckoutPaymentMessage,
   activeStripeCheckoutPaymentSummary,
   checkoutApplicationGuard,
@@ -257,6 +258,21 @@ test("active family balance payments block overlapping invoice autopay", () => {
     provider: "stripe_terminal",
     customFields: { status: "terminal_reader_submission_unknown", paymentScope: "invoice" },
   }), true);
+  assert.equal(activeStripeAccountCreditReservationCents({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe_terminal",
+    customFields: { status: "terminal_reader_submission_unknown", accountCreditAppliedCents: "1250" },
+  }), 1250);
+  assert.equal(activeStripeAccountCreditReservationCents({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "autopay_submission_unknown", accountCreditAppliedCents: 800 },
+  }), 800);
+  assert.equal(activeStripeAccountCreditReservationCents({
+    status: PaymentStatus.FAILED,
+    provider: "stripe_terminal",
+    customFields: { status: "terminal_failed", accountCreditAppliedCents: 1250 },
+  }), 0);
 
   assert.equal(isActiveStripeFamilyBalancePayment({
     status: PaymentStatus.DRAFT,

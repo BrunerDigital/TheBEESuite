@@ -3,7 +3,11 @@ import { PaymentStatus, Prisma } from "@prisma/client";
 import { allocateAccountCreditToInvoice, availableAccountCreditCents } from "@/lib/account-credit-autopay";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageBilling, getCurrentUser, type CurrentUser } from "@/lib/auth";
-import { isStripeSubmissionUnknownPayment, jsonRecord } from "@/lib/billing-guardrails";
+import {
+  activeStripeAccountCreditReservationCents,
+  isStripeSubmissionUnknownPayment,
+  jsonRecord,
+} from "@/lib/billing-guardrails";
 import {
   createStripeTerminalLocation,
   createStripeTerminalPaymentIntent,
@@ -155,10 +159,64 @@ async function verifyConnectedAccount(tenantId: string, connectedAccountId: stri
 
 async function GETHandler(request: NextRequest) {
   const centerId = clean(request.nextUrl.searchParams.get("centerId"));
-  const amountCents = int(request.nextUrl.searchParams.get("amountCents"));
+  const requestedAmountCents = int(request.nextUrl.searchParams.get("amountCents"));
+  const billingAccountId = clean(request.nextUrl.searchParams.get("billingAccountId"));
+  const familyId = clean(request.nextUrl.searchParams.get("familyId"));
+  const invoiceId = clean(request.nextUrl.searchParams.get("invoiceId"));
   const context = await authorizedCenter(centerId);
   if (!("user" in context)) return context.response;
+  const readiness = await verifyConnectedAccount(context.user.tenantId, context.connectedAccountId);
+  if (!readiness.ok) return readiness.response;
   const locationId = terminalLocationId(context.center.customFields);
+  let amountCents = requestedAmountCents;
+  let accountCreditAppliedCents = 0;
+  let paymentRequired = requestedAmountCents > 0;
+  if (invoiceId) {
+    const invoice = await prisma.invoice.findFirst({
+      where: {
+        id: invoiceId,
+        billingAccountId,
+        billingAccount: { familyId, family: { centerId: context.center.id } },
+      },
+      select: {
+        totalCents: true,
+        status: true,
+        billingAccount: { select: { balanceCents: true } },
+      },
+    });
+    if (!invoice || invoice.status !== PaymentStatus.OPEN) {
+      return NextResponse.json({ ok: false, error: "The selected invoice is no longer available for payment." }, { status: 409 });
+    }
+    const [openInvoiceTotal, draftPayments] = await Promise.all([
+      prisma.invoice.aggregate({
+        where: { billingAccountId, status: PaymentStatus.OPEN, totalCents: { gt: 0 } },
+        _sum: { totalCents: true },
+      }),
+      prisma.payment.findMany({
+        where: {
+          billingAccountId,
+          provider: { in: ["stripe", "stripe_terminal"] },
+          status: PaymentStatus.DRAFT,
+        },
+        select: { status: true, provider: true, customFields: true },
+      }),
+    ]);
+    const reservedCreditCents = draftPayments.reduce(
+      (total, payment) => total + activeStripeAccountCreditReservationCents(payment),
+      0,
+    );
+    const allocation = allocateAccountCreditToInvoice({
+      invoiceTotalCents: invoice.totalCents,
+      availableCreditCents: availableAccountCreditCents({
+        balanceCents: invoice.billingAccount.balanceCents,
+        openInvoiceTotalCents: openInvoiceTotal._sum.totalCents ?? 0,
+        reservedCreditCents,
+      }),
+    });
+    amountCents = allocation.stripeChargePrincipalCents;
+    accountCreditAppliedCents = allocation.accountCreditAppliedCents;
+    paymentRequired = !allocation.fullyCoveredByCredit;
+  }
   const waiveBeeSuitePaymentOperationsFee = shouldWaiveStripePaymentOperationsFee({
     tenantSlug: context.center.organization.tenant.slug,
     tenantName: context.center.organization.tenant.name,
@@ -167,13 +225,22 @@ async function GETHandler(request: NextRequest) {
   });
   const amounts = amountCents > 0
     ? getStripeCheckoutAmounts(amountCents, {
-        paymentMethodCategory: "card",
+        paymentMethodCategory: "card_present",
         waiveBeeSuitePaymentOperationsFee,
-        schoolPaysStripeFeesDirectly: jsonRecord(context.center.customFields).stripeFeesCollector === "stripe",
+        schoolPaysStripeFeesDirectly: stripeConnectedAccountPaysFeesDirectly(readiness.account),
       })
-    : null;
+    : {
+        invoiceAmountCents: 0,
+        parentSurchargeAmountCents: 0,
+        parentProcessingRecoveryAmountCents: 0,
+        schoolProcessingFeeAmountCents: 0,
+        beeSuitePaymentOperationsFeeAmountCents: 0,
+        checkoutTotalCents: 0,
+        applicationFeeAmountCents: 0,
+      };
+  const previewAmounts = { ...amounts, accountCreditAppliedCents, paymentRequired };
   if (!locationId) {
-    return NextResponse.json({ ok: true, locationConfigured: false, readers: [], amounts });
+    return NextResponse.json({ ok: true, locationConfigured: false, readers: [], amounts: previewAmounts });
   }
   const result = await listStripeTerminalReaders({
     locationId,
@@ -190,7 +257,7 @@ async function GETHandler(request: NextRequest) {
     ok: true,
     locationConfigured: true,
     readers: result.readers ?? [],
-    amounts,
+    amounts: previewAmounts,
     hardwareNote: "The web app uses Stripe smart readers over the network. USB card-reader data connections require Stripe's Android SDK.",
   });
 }

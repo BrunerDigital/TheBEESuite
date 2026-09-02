@@ -63,8 +63,8 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(terminalPayment, /terminal_reader_submission_unknown/);
   assert.match(terminalPayment, /terminal-payment:reader:\$\{payment\.id\}/);
   assert.match(terminalPayment, /accountCreditAppliedCents: invoiceCreditAllocation\?\.accountCreditAppliedCents \?\? 0/);
-  assert.match(processing, /!isActiveStripeAutopayPayment\(payment\) && !isActiveStripeTerminalPayment\(payment\)/);
-  assert.match(paymentClaims, /!isActiveStripeAutopayPayment\(payment\) && !isActiveStripeTerminalPayment\(payment\)/);
+  assert.match(processing, /activeStripeAccountCreditReservationCents\(payment\)/);
+  assert.match(paymentClaims, /activeStripeAccountCreditReservationCents\(payment\)/);
   assert.ok(
     familyPayment.indexOf("const activeFamilyCheckout") < familyPayment.lastIndexOf('if (method === "saved_method")'),
     "expired family Checkout drafts must be reconciled before saved-method claims",

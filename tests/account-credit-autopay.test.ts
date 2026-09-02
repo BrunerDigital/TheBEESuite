@@ -81,6 +81,8 @@ test("autopay and its webhook preserve the credit-first contract", () => {
     /getStripeCheckoutAmounts\(creditAllocation\.stripeChargePrincipalCents,/,
     "Stripe fees and the payment intent must be based on the uncovered amount",
   );
+  assert.match(application, /provider: \{ in: \["stripe", "stripe_terminal"\] \}/);
+  assert.match(application, /activeStripeAccountCreditReservationCents\(payment\)/);
   assert.match(
     autopay,
     /amountCents: creditAllocation\.stripeChargePrincipalCents,/,

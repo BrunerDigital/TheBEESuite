@@ -142,6 +142,16 @@ export function isActiveStripeAutopayPayment(payment: {
     fields.status === "stored_method_submission_unknown";
 }
 
+export function activeStripeAccountCreditReservationCents(payment: {
+  status: PaymentStatus;
+  provider: string;
+  customFields?: unknown;
+}) {
+  if (!isActiveStripeAutopayPayment(payment) && !isActiveStripeTerminalPayment(payment)) return 0;
+  const value = numberLikeField(jsonRecord(payment.customFields).accountCreditAppliedCents);
+  return value === null ? 0 : Math.max(0, Math.round(value));
+}
+
 export function stripePaymentIntentFailureDisposition({
   collectionMode,
   customFields,

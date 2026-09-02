@@ -3,7 +3,11 @@ import {
   allocateAccountCreditToInvoice,
   availableAccountCreditCents,
 } from "@/lib/account-credit-autopay";
-import { checkoutApplicationGuard, jsonRecord } from "@/lib/billing-guardrails";
+import {
+  activeStripeAccountCreditReservationCents,
+  checkoutApplicationGuard,
+  jsonRecord,
+} from "@/lib/billing-guardrails";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 
 type PaymentMetadata = Record<string, unknown>;
@@ -294,10 +298,10 @@ export async function applyAccountCreditToInvoice(
     tx.payment.findMany({
       where: {
         billingAccountId: initialInvoice.billingAccountId,
-        provider: "stripe",
+        provider: { in: ["stripe", "stripe_terminal"] },
         status: PaymentStatus.DRAFT,
       },
-      select: { customFields: true },
+      select: { status: true, provider: true, customFields: true },
     }),
   ]);
   if (!invoice || !account) {
@@ -307,12 +311,10 @@ export async function applyAccountCreditToInvoice(
     return { applied: false, reason: "invoice_already_paid", billingAccountId: invoice.billingAccountId };
   }
 
-  const reservedCreditCents = draftPayments.reduce((total, payment) => {
-    const fields = jsonRecord(payment.customFields);
-    const status = clean(fields.status);
-    if (!status.endsWith("_pending") && !status.endsWith("_processing")) return total;
-    return total + centsFrom(fields.accountCreditAppliedCents);
-  }, 0);
+  const reservedCreditCents = draftPayments.reduce(
+    (total, payment) => total + activeStripeAccountCreditReservationCents(payment),
+    0,
+  );
   const availableCreditCents = availableAccountCreditCents({
     balanceCents: account.balanceCents,
     openInvoiceTotalCents: openInvoiceTotal._sum.totalCents ?? 0,

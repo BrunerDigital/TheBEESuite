@@ -1813,9 +1813,9 @@ function ParentPortalWorkspaceView({
     return (
       <Card className="shadow-none">
         <CardHeader>
-          <CardTitle as="h2">Parent Portal</CardTitle>
+          <CardTitle as="h1">Family access is not connected yet</CardTitle>
           <CardDescription>
-            No family profile is connected to this account yet.
+            Ask your school to connect this login to your family profile, then sign in again. No family or child information is shown until that connection is confirmed.
           </CardDescription>
         </CardHeader>
       </Card>

@@ -613,7 +613,7 @@ export function canAdministerCenter(
   },
   centerId: string,
 ) {
-  if (user.workspace?.mode === "center" || user.workspace?.mode === "fixed") {
+  if (user.workspace?.mode === "center") {
     return user.centerIds.includes(centerId);
   }
   return (user.authorizedCenterIds ?? user.centerIds).includes(centerId);

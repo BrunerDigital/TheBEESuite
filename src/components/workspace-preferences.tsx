@@ -157,10 +157,12 @@ function useExpandForHash(id: string, expand: () => void) {
 
     function expandFromAnchorClick(event: MouseEvent) {
       if (!(event.target instanceof Element)) return;
-      const anchor = event.target.closest<HTMLAnchorElement>('a[href^="#"]');
+      const anchor = event.target.closest<HTMLAnchorElement>("a[href]");
       const href = anchor?.getAttribute("href");
       if (!href) return;
-      expandAndFocusTarget(href);
+      const destination = new URL(href, window.location.href);
+      if (destination.origin !== window.location.origin || destination.pathname !== window.location.pathname || !destination.hash) return;
+      expandAndFocusTarget(destination.hash);
     }
 
     function expandFromLocationHash() {

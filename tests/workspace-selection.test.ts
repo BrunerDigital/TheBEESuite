@@ -61,9 +61,11 @@ test("closed and inactive locations are not selectable workspaces", () => {
     authorizedCenterIds: ["school_a", "school_b", "school_closed"],
     workspace: { mode: "all" } as const,
   };
-  const singleLocationAdmin = { ...allLocationsAdmin, centerIds: ["school_a"], workspace: { mode: "center" } as const };
+  const singleLocationAdmin = { ...allLocationsAdmin, centerIds: ["school_a"], workspace: { mode: "fixed" } as const };
+  const selectedLocationAdmin = { ...allLocationsAdmin, centerIds: ["school_a"], workspace: { mode: "center" } as const };
   assert.equal(canAdministerCenter(allLocationsAdmin, "school_closed"), true);
-  assert.equal(canAdministerCenter(singleLocationAdmin, "school_closed"), false);
+  assert.equal(canAdministerCenter(singleLocationAdmin, "school_closed"), true);
+  assert.equal(canAdministerCenter(selectedLocationAdmin, "school_closed"), false);
   assert.equal(canAdministerAllCenters({
     role: UserRole.BRAND_ADMIN,
     accessScope: "tenant",

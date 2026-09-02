@@ -1,6 +1,6 @@
 # The BEE Suite Team Share Guides
 
-Prepared August 24, 2026. This stable `CURRENT` folder replaces prior date-stamped packets and contains the canonical Markdown and PDF editions of the core product, role, onboarding, payment, kiosk, migration, and support guides.
+Prepared September 2, 2026. This stable `CURRENT` folder replaces prior date-stamped packets and contains the canonical Markdown and PDF editions of the core product, role, onboarding, payment, kiosk, migration, and support guides.
 
 ## Recommended send order
 
@@ -9,7 +9,8 @@ Prepared August 24, 2026. This stable `CURRENT` folder replaces prior date-stamp
 3. Send each person only the SOP for their role.
 4. Send parent guides only after family links and invitation readiness are approved.
 5. Send payment guidance only after the named school's billing and payment gates are approved.
-6. Use the migration email sequence for a controlled school launch; ProCare remains the source of truth until signed cutover.
+6. Send `AGENCY_SUBSIDY_BILLING_OPERATIONS.pdf` before a school records an agency remittance; the named program, claim, and accounting evidence must be ready first.
+7. Use the migration email sequence for a controlled school launch; ProCare remains the source of truth until signed cutover.
 
 ## Important status
 

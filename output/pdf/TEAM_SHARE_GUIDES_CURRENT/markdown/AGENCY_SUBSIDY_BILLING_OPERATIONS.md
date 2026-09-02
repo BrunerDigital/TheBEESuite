@@ -6,6 +6,10 @@ Audience: school directors, assistant directors, billing administrators, account
 
 ## Purpose
 
+> CURRENT GUIDE
+>
+> Confirm the correct school and an approved feature before following these steps.
+
 Use this SOP to prepare an agency claim, record an approved ACH, check, or agency-portal remittance, and prove that the payment reconciled to the correct agency receivable. The workflow keeps agency responsibility separate from the family's responsibility and never charges the family.
 
 Public step-by-step guide: `https://thebeesuite.io/resources/agency-payment-reconciliation`

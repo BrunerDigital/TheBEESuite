@@ -1,6 +1,6 @@
 # The BEE Suite: Complete Product, User, and Technical Guide
 
-**Documentation snapshot:** August 24, 2026
+**Documentation snapshot:** September 2, 2026
 
 **Purpose:** A single, narration-friendly explanation of what The BEE Suite is, what is included, who uses it, how information moves through it, and how the software is built.
 

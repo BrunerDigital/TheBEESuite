@@ -1,6 +1,6 @@
 # Director SOP - The BEE Suite
 
-Last updated: August 24, 2026
+Last updated: September 2, 2026
 
 Audience: center directors, assistant directors, and school operators responsible for daily use of The BEE Suite.
 

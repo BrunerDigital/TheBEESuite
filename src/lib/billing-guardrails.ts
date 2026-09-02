@@ -16,6 +16,16 @@ export function isActiveStripeCheckoutPayment(payment: {
     || fields.status === "paid_processing";
 }
 
+export function isActiveStripeFamilyBalancePayment(payment: {
+  status: PaymentStatus;
+  provider: string;
+  customFields?: unknown;
+}) {
+  if (!isActiveStripeCheckoutPayment(payment)) return false;
+  const fields = jsonRecord(payment.customFields);
+  return fields.paymentScope === "family_balance";
+}
+
 function stringField(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }

@@ -9,6 +9,7 @@ import {
   checkoutApplicationGuard,
   isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
+  isActiveStripeFamilyBalancePayment,
 } from "../src/lib/billing-guardrails";
 import {
   stripeCheckoutDraftClearReason,
@@ -244,6 +245,32 @@ test("active Stripe checkout detection only blocks draft checkout sessions", () 
     status: PaymentStatus.DRAFT,
     provider: "stripe_mock",
     customFields: { status: "checkout_created" },
+  }), false);
+});
+
+test("active family balance checkout blocks overlapping invoice autopay", () => {
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "checkout_pending", paymentScope: "family_balance" },
+  }), true);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "paid_processing", paymentScope: "family_balance" },
+  }), true);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "checkout_pending", paymentScope: "invoice" },
+  }), false);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.PAID,
+    provider: "stripe",
+    customFields: { status: "paid", paymentScope: "family_balance" },
   }), false);
 });
 

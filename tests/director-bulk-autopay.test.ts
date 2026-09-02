@@ -33,6 +33,8 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(processing, /hasMore/);
   assert.match(page, /activeConnectedAccountId: readStripeConnectedAccountId\(center\?\.customFields\)/);
   assert.match(processing, /if \(paymentMethod\.paymentMethodReauthorizationRequired\)/);
+  assert.match(processing, /accountsWithActiveFamilyBalancePayments/);
+  assert.match(processing, /A family balance payment is already pending or processing; autopay is paused for this account\./);
   assert.match(processing, /prior payout account/);
   assert.match(workbench, /sendPaymentMethodRequest\("payment_method_reauthorization"\)/);
   assert.match(workbench, /Send replacement method link/);

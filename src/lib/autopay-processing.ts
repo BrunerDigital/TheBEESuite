@@ -6,6 +6,7 @@ import {
 import {
   isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
+  isActiveStripeFamilyBalancePayment,
   jsonRecord,
 } from "@/lib/billing-guardrails";
 import {
@@ -283,6 +284,11 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
   ]);
 
   const centersById = new Map(centers.map((center) => [center.id, center]));
+  const accountsWithActiveFamilyBalancePayments = new Set(
+    payments
+      .filter(isActiveStripeFamilyBalancePayment)
+      .map((payment) => payment.billingAccountId),
+  );
   const paymentsByInvoiceId = new Map<string, typeof payments>();
   for (const payment of payments) {
     const invoiceId = clean(jsonRecord(payment.customFields).invoiceId);
@@ -357,6 +363,15 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         ...baseResult,
         status: "skipped",
         reason: "An earlier invoice for this family failed; account credit remains allocated to the oldest balance.",
+      });
+      continue;
+    }
+
+    if (accountsWithActiveFamilyBalancePayments.has(invoice.billingAccountId)) {
+      results.push({
+        ...baseResult,
+        status: "skipped",
+        reason: "A family balance payment is already pending or processing; autopay is paused for this account.",
       });
       continue;
     }

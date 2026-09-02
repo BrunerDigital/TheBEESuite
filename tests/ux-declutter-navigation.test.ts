@@ -44,10 +44,12 @@ test("staff review data collapses while editing destinations retain stable ancho
 test("family billing keeps routine tasks visible and secondary tasks expandable", () => {
   const billing = source("src/components/billing-workbench.tsx");
 
-  assert.match(billing, /aria-label="Common billing tasks"/);
+  assert.match(billing, /aria-label="Billing tasks"/);
   assert.match(billing, /id="billing-more-actions"/);
-  assert.match(billing, /summary="Invoice corrections, batch work, payroll deductions, refunds, agency claims, and adjustments"/);
-  assert.match(billing, /aria-label="More billing tasks"/);
+  assert.match(billing, /aria-expanded=\{moreBillingActionsExpanded\}/);
+  assert.match(billing, /aria-controls="billing-action-tabs"/);
+  assert.equal(billing.match(/<TabsList/g)?.length, 1);
+  assert.match(billing, /!moreBillingActionsExpanded && billingAction !== "edit" \? "hidden"/);
   assert.match(billing, /id="billing-family-overview"/);
   assert.match(billing, /id="billing-payment-methods"/);
   assert.match(billing, /id="billing-actions"/);

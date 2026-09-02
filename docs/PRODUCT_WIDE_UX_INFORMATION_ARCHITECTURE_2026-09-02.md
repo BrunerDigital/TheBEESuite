@@ -230,7 +230,7 @@ Implementation verification is recorded in the protected release handoff after f
 Pre-release implementation verification:
 
 - Focused workspace, role, navigation, access, and browser-store regressions: passed.
-- Complete repository suite: 1,490 passed, 0 failed.
+- Complete repository suite: 1,492 passed, 0 failed.
 - Production gate: Prisma generation, lint, TypeScript, complete tests, and optimized Next.js 16.2.12 build passed.
 - Final safe browser matrix: 40 checks across eight role experiences and five viewport sizes, 0 failed.
 - Interactive browser checks: actual shared dashboard component at 1,440 px and 360 px; workspace dialog and keyboard selection; mobile More sheet; progressive disclosure; parent deep link, back, forward, and refresh; zero relevant console errors and zero horizontal overflow.

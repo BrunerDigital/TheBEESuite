@@ -53,6 +53,8 @@ import { formatStaffDecimalHours } from "@/lib/staff-kiosk";
 import { cn } from "@/lib/utils";
 import { STAFF_MESSAGING_HREF, staffMessagingHref } from "@/lib/messaging-navigation";
 import { roleExperienceFor } from "@/lib/role-experience";
+import { accessibleModuleRouteSlug } from "@/lib/rbac";
+import { dataReadinessCenterEnabled } from "@/lib/honeyglass";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
 const kpiWidgetIds: readonly DashboardWidgetId[] = [
@@ -82,6 +84,7 @@ function withQueryParam(href: string, key: string, value: string | number | null
 
 export type LiveDashboardData = {
   role?: string;
+  accessScope?: string;
   workspace?: {
     mode: "pending" | "all" | "center" | "fixed";
     label: string;
@@ -1217,13 +1220,22 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     .map((lens) => lens.replaceAll("_", " "))
     .join(", ") || live?.dashboardWidgetRoleLabel || "Dashboard";
   const primaryActionItems = roleExperience.primaryActions
-    .map((slug) => {
+    .map((slug) => ({ slug, resolvedSlug: accessibleModuleRouteSlug({
+      role: live?.role,
+      accessScope: live?.accessScope,
+      workspace: live?.workspace,
+    }, slug) }))
+    .filter(({ slug, resolvedSlug }) => (
+      Boolean(resolvedSlug)
+      && (slug !== "data-readiness" || dataReadinessCenterEnabled())
+    ))
+    .map(({ slug, resolvedSlug }) => {
       const moduleDefinition = modules.find((item) => item.slug === slug);
       return {
         slug,
         label: moduleDefinition?.title ?? slug.replaceAll("-", " "),
         description: moduleDefinition?.description ?? "Open this authorized workspace.",
-        href: slug === "dashboard" ? "/dashboard" : `/${slug}`,
+        href: resolvedSlug === "dashboard" ? "/dashboard" : `/${resolvedSlug}`,
       };
     })
     .slice(0, 4);

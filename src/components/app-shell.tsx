@@ -243,14 +243,21 @@ function ScopeContextLink({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [currentHash, setCurrentHash] = useState("");
+  const query = searchParams.toString();
+  useEffect(() => {
+    const syncHash = () => setCurrentHash(window.location.hash);
+    syncHash();
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
+  }, [pathname, query]);
   const context = currentUser?.scopeContext;
   if (!context) return null;
   const label = shellUserViewText(context.label, currentUser);
   const detail = shellUserViewText(context.detail, currentUser);
   const staticFamilyScope = isParentFacingUser(currentUser) && context.kind === "family";
   const href = previewSafeShellHref(context.href, previewMode, previewHrefBase, pathname);
-  const query = searchParams.toString();
-  const currentPath = `${pathname}${query ? `?${query}` : ""}`;
+  const currentPath = `${pathname}${query ? `?${query}` : ""}${currentHash}`;
   const canSwitchWorkspace = Boolean(currentUser?.workspace?.canSwitch);
 
   if (canSwitchWorkspace && currentUser?.workspace) {

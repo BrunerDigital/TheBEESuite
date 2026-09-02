@@ -129,3 +129,14 @@ test("platform location selection carries the selected company context and large
   assert.match(selector, /workspace\.options\.length > 8/);
   assert.match(selector, /Search by school, city, or company/);
 });
+
+test("workspace switching retains browser fragments and dashboard actions honor feature availability", () => {
+  const shell = readFileSync("src/components/app-shell.tsx", "utf8");
+  const dashboard = readFileSync("src/components/dashboard.tsx", "utf8");
+
+  assert.match(shell, /const syncHash = \(\) => setCurrentHash\(window\.location\.hash\)/);
+  assert.match(shell, /window\.addEventListener\("hashchange", syncHash\)/);
+  assert.match(shell, /const currentPath = `\$\{pathname\}\$\{query \? `\?\$\{query\}` : ""\}\$\{currentHash\}`/);
+  assert.match(dashboard, /accessibleModuleRouteSlug\(\{/);
+  assert.match(dashboard, /slug !== "data-readiness" \|\| dataReadinessCenterEnabled\(\)/);
+});

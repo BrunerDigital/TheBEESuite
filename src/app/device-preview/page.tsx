@@ -274,6 +274,7 @@ function ShellPreview({ role, screen, familySection }: { role: Exclude<PreviewRo
       <AppShell previewMode previewHrefBase="/device-preview?view=role-dashboard" currentUser={{ name: "Avery Thompson", email: "avery@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", workspace: { ...previewPortfolioWorkspace, mode: "fixed", selection: "center:preview-center", activeCenterId: "preview-center", label: "Sunshine Academy", detail: "Carmel, IN", canSwitch: false, canSelectAll: false, authorizedCenterCount: 1, options: previewPortfolioWorkspace.options.slice(0, 1) }, scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Center Director · 1 school", href: "/dashboard" } }}>
         <ExecutiveDashboard live={{
           role: "CENTER_DIRECTOR",
+          accessScope: "center",
           workspace: { mode: "fixed", label: "Sunshine Academy", detail: "Carmel, IN" },
           kpis: demoKpis,
           pipelineStages: demoPipelineStages,

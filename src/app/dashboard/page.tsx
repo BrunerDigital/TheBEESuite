@@ -996,6 +996,7 @@ export default async function DashboardPage() {
   ];
   const live: LiveDashboardData = {
     role: user.role,
+    accessScope: user.accessScope,
     workspace: user.workspace ? {
       mode: user.workspace.mode,
       label: user.workspace.label,

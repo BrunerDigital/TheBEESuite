@@ -44,6 +44,7 @@ import {
 import { matchStripeWebhookSecret } from "@/lib/stripe-webhook-readiness";
 import {
   applySucceededStripeFamilyBalancePayment,
+  applySucceededStripeInvoicePayment,
   succeededFamilyBalancePaymentClaim,
 } from "@/lib/stripe-payment-application";
 import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
@@ -2307,24 +2308,21 @@ async function handlePaymentIntentSucceeded(
         },
       });
       if (invoiceClaim.count !== 1) {
-        ignoredReason = "invoice_already_paid";
-        await tx.payment.update({
-          where: { id: paymentId },
-          data: {
-            status: PaymentStatus.VOID,
-            externalIdPlaceholder: paymentIntent.id,
-            customFields: {
-              ...jsonObject(currentPayment.customFields),
-              stripePaymentIntentId: paymentIntent.id,
-              stripeEventId: event.id,
-              stripePaymentIntentStatus: paymentIntent.status || null,
-              stripeAmountTotalCents: paymentIntent.amount ?? null,
-              ignoredReason,
-              requiresManualReview: true,
-              status: "payment_intent_ignored",
-            },
-          },
+        const recovery = await applySucceededStripeInvoicePayment(tx, {
+          invoiceId,
+          paymentId,
+          externalId: paymentIntent.id,
+          stripePaymentIntentId: paymentIntent.id,
+          stripePaymentIntentStatus: paymentIntent.status || null,
+          stripeAmountTotalCents: paymentIntent.amount ?? null,
+          stripeEventId: event.id,
+          stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
+          metadata,
+          appliedAt: paidAt,
         });
+        applied = recovery.applied || recovery.reason === "payment_already_applied";
+        creditedToFamilyBalance = applied && recovery.applicationScope === "family_balance";
+        ignoredReason = recovery.reason;
         return;
       }
 

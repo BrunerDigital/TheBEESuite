@@ -94,6 +94,7 @@ test("provider-confirmed invoice overpayments remain visible as family account c
   const application = await readFile("src/lib/stripe-payment-application.ts", "utf8");
   const autopay = await readFile("src/lib/autopay-processing.ts", "utf8");
   assert.match(route, /guard\.reason === "invoice_not_open"[\s\S]*applySucceededStripeFamilyBalancePayment/);
+  assert.match(route, /invoiceClaim\.count !== 1[\s\S]*applySucceededStripeInvoicePayment/);
   assert.match(route, /billing\.autopay\.overpayment_recorded/);
   assert.match(application, /guard\.reason === "invoice_not_open"[\s\S]*applySucceededStripeFamilyBalancePayment/);
   assert.match(application, /creditedAfterInvoiceClosure/);

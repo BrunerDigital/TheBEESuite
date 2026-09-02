@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
+import { allocateAccountCreditToInvoice, availableAccountCreditCents } from "@/lib/account-credit-autopay";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageBilling, getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { isStripeSubmissionUnknownPayment, jsonRecord } from "@/lib/billing-guardrails";
@@ -399,7 +400,26 @@ async function processPayment(body: Record<string, unknown>) {
   if (!invoice && requestedAmountCents > familyVisibleBalanceCents) {
     return NextResponse.json({ ok: false, error: "The in-person payment cannot exceed the family-responsibility balance." }, { status: 409 });
   }
-  const amountCents = invoice?.totalCents ?? (requestedAmountCents > 0 ? requestedAmountCents : familyVisibleBalanceCents);
+  const openInvoiceTotalCents = billingAccount.invoices
+    .filter((item) => item.status === PaymentStatus.OPEN)
+    .reduce((total, item) => total + item.totalCents, 0);
+  const invoiceCreditAllocation = invoice
+    ? allocateAccountCreditToInvoice({
+        invoiceTotalCents: invoice.totalCents,
+        availableCreditCents: availableAccountCreditCents({
+          balanceCents: billingAccount.balanceCents,
+          openInvoiceTotalCents,
+        }),
+      })
+    : null;
+  if (invoiceCreditAllocation?.fullyCoveredByCredit) {
+    return NextResponse.json(
+      { ok: false, error: "Available account credit already covers this invoice; no card payment is needed." },
+      { status: 409 },
+    );
+  }
+  const amountCents = invoiceCreditAllocation?.stripeChargePrincipalCents
+    ?? (requestedAmountCents > 0 ? requestedAmountCents : familyVisibleBalanceCents);
   if (amountCents <= 0) {
     return NextResponse.json({ ok: false, error: "Payment amount must be greater than zero." }, { status: 400 });
   }
@@ -434,7 +454,7 @@ async function processPayment(body: Record<string, unknown>) {
     invoiceId: invoice?.id || null,
     existingPaymentId: retryableTerminalSubmission?.id,
     expectedInvoiceTotalCents: invoice?.totalCents ?? null,
-    expectedAccountCreditAppliedCents: 0,
+    expectedAccountCreditAppliedCents: invoiceCreditAllocation?.accountCreditAppliedCents ?? 0,
     paymentData: {
       amountCents,
       status: PaymentStatus.DRAFT,
@@ -481,6 +501,9 @@ async function processPayment(body: Record<string, unknown>) {
     stripeChargeType: "direct",
     stripeTerminalReaderId: readerId,
     invoiceAmountCents: String(amounts.invoiceAmountCents),
+    invoiceTotalCents: String(invoice?.totalCents ?? amountCents),
+    accountCreditAppliedCents: String(invoiceCreditAllocation?.accountCreditAppliedCents ?? 0),
+    stripeChargePrincipalCents: String(amountCents),
     parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
     parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
     schoolProcessingFeeAmountCents: String(amounts.schoolProcessingFeeAmountCents),

@@ -16,6 +16,7 @@ import {
   stripeCheckoutDraftConnectedAccountId,
   stripeCheckoutDraftReplacementReason,
 } from "../src/lib/stripe-checkout-drafts";
+import { stripePaymentClaimConflict } from "../src/lib/stripe-payment-claims";
 import { demoAccountEmails, resolveLoginIdentifier } from "../src/lib/demo-accounts";
 import { hashGuardianPin, verifyGuardianPin } from "../src/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "../src/lib/operations-guardrails";
@@ -248,11 +249,17 @@ test("active Stripe checkout detection only blocks draft checkout sessions", () 
   }), false);
 });
 
-test("active family balance checkout blocks overlapping invoice autopay", () => {
+test("active family balance payments block overlapping invoice autopay", () => {
   assert.equal(isActiveStripeFamilyBalancePayment({
     status: PaymentStatus.DRAFT,
     provider: "stripe",
     customFields: { status: "checkout_pending", paymentScope: "family_balance" },
+  }), true);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "director_saved_method_processing", paymentScope: "family_balance" },
   }), true);
 
   assert.equal(isActiveStripeFamilyBalancePayment({
@@ -272,6 +279,29 @@ test("active family balance checkout blocks overlapping invoice autopay", () => 
     provider: "stripe",
     customFields: { status: "paid", paymentScope: "family_balance" },
   }), false);
+});
+
+test("Stripe payment claims mutually exclude family balance and invoice collection", () => {
+  assert.equal(stripePaymentClaimConflict({
+    scope: "invoice_collection",
+    invoiceId: "invoice_1",
+    payment: {
+      id: "family_payment",
+      status: PaymentStatus.DRAFT,
+      provider: "stripe",
+      customFields: { status: "director_saved_method_processing", paymentScope: "family_balance" },
+    },
+  }), "active_family_balance");
+
+  assert.equal(stripePaymentClaimConflict({
+    scope: "family_balance",
+    payment: {
+      id: "autopay_payment",
+      status: PaymentStatus.DRAFT,
+      provider: "stripe",
+      customFields: { status: "autopay_pending", invoiceId: "invoice_1" },
+    },
+  }), "active_invoice_collection");
 });
 
 test("checkout draft resolution stays on the account where the session was created", () => {

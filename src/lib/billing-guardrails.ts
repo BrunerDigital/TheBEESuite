@@ -21,9 +21,13 @@ export function isActiveStripeFamilyBalancePayment(payment: {
   provider: string;
   customFields?: unknown;
 }) {
-  if (!isActiveStripeCheckoutPayment(payment)) return false;
+  if (payment.provider !== "stripe" || payment.status !== PaymentStatus.DRAFT) return false;
   const fields = jsonRecord(payment.customFields);
-  return fields.paymentScope === "family_balance";
+  if (fields.paymentScope !== "family_balance") return false;
+  return isActiveStripeCheckoutPayment(payment)
+    || fields.status === "director_saved_method_pending"
+    || fields.status === "director_saved_method_processing"
+    || fields.status === "director_saved_method_succeeded_pending_webhook";
 }
 
 function stringField(value: unknown) {

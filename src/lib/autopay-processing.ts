@@ -35,6 +35,7 @@ import {
 import { stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
 import { stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
+import { createStripePaymentClaim } from "@/lib/stripe-payment-claims";
 import {
   applyAccountCreditToInvoice,
   applySucceededStripeInvoicePayment,
@@ -157,6 +158,7 @@ async function accountHasActiveFamilyBalancePayment({
     // active. A real collection run reconciles Stripe first so expired
     // Checkout Sessions do not pause autopay indefinitely.
     if (!reconcileDrafts) return true;
+    if (!isActiveStripeCheckoutPayment(payment)) return true;
     const blocker = await resolveStripeCheckoutDraftBlocker({
       payment,
       connectedAccountId,
@@ -820,9 +822,11 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       });
     }
 
-    const payment = await prisma.payment.create({
-      data: {
-        billingAccountId: invoice.billingAccountId,
+    const paymentClaim = await createStripePaymentClaim({
+      billingAccountId: invoice.billingAccountId,
+      scope: "invoice_collection",
+      invoiceId: invoice.id,
+      paymentData: {
         amountCents: creditAllocation.stripeChargePrincipalCents,
         status: PaymentStatus.DRAFT,
         provider: "stripe",
@@ -859,37 +863,20 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         }),
       },
     });
-
-    // Close the race with a parent starting a family-balance Checkout after
-    // the run's initial snapshot but before Stripe receives an autopay debit.
-    const freshFamilyBalancePayment = await accountHasActiveFamilyBalancePayment({
-      billingAccountId: invoice.billingAccountId,
-      connectedAccountId,
-      tenantId,
-      now: new Date(),
-      reconcileDrafts: true,
-    });
-    if (freshFamilyBalancePayment) {
-      accountsWithActiveFamilyBalancePayments.add(invoice.billingAccountId);
-      await prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: PaymentStatus.VOID,
-          customFields: jsonInput({
-            ...jsonRecord(payment.customFields),
-            status: "autopay_skipped_family_balance_pending",
-            skippedAt: new Date().toISOString(),
-          }),
-        },
-      });
+    if (!paymentClaim.created) {
+      if (paymentClaim.reason === "active_family_balance") {
+        accountsWithActiveFamilyBalancePayments.add(invoice.billingAccountId);
+      }
       results.push({
         ...baseResult,
         status: "skipped",
-        reason: "A family balance payment became pending before submission; no autopay debit was created.",
-        paymentId: payment.id,
+        reason: paymentClaim.reason === "active_family_balance"
+          ? "A family balance payment became pending before submission; no autopay debit was created."
+          : "Another payment attempt became active before submission; no autopay debit was created.",
       });
       continue;
     }
+    const payment = paymentClaim.payment;
 
     const intent = await createStripeOffSessionPaymentIntent({
       amountCents: amounts.checkoutTotalCents,

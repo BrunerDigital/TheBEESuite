@@ -8,6 +8,8 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   const livePages = readFileSync("src/components/live-ops-pages.tsx", "utf8");
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const processing = readFileSync("src/lib/autopay-processing.ts", "utf8");
+  const familyPayment = readFileSync("src/app/api/billing/family-payment/route.ts", "utf8");
+  const paymentClaims = readFileSync("src/lib/stripe-payment-claims.ts", "utf8");
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
   const paymentRequests = readFileSync("src/app/api/billing/payment-method-requests/route.ts", "utf8");
 
@@ -36,8 +38,12 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(processing, /accountsWithActiveFamilyBalancePayments/);
   assert.match(processing, /familyBalanceDraftPayments/);
   assert.match(processing, /await resolveStripeCheckoutDraftBlocker/);
-  assert.match(processing, /const freshFamilyBalancePayment = await accountHasActiveFamilyBalancePayment/);
-  assert.match(processing, /autopay_skipped_family_balance_pending/);
+  assert.match(processing, /createStripePaymentClaim/);
+  assert.match(processing, /scope: "invoice_collection"/);
+  assert.match(familyPayment, /createStripePaymentClaim/);
+  assert.match(familyPayment, /scope: "family_balance"/);
+  assert.match(paymentClaims, /FROM "BillingAccount"[\s\S]*FOR UPDATE/);
+  assert.match(paymentClaims, /TransactionIsolationLevel\.Serializable/);
   assert.match(processing, /A family balance payment is already pending or processing; autopay is paused for this account\./);
   assert.match(processing, /prior payout account/);
   assert.match(workbench, /sendPaymentMethodRequest\("payment_method_reauthorization"\)/);

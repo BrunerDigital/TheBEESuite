@@ -43,6 +43,7 @@ import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
+import { createStripePaymentClaim } from "@/lib/stripe-payment-claims";
 import { allOpenInvoicesResponsibilitySeparated } from "@/lib/invoice-responsibility-separation";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeConnectSavedMethodAccount } from "@/lib/stripe-connect-migration";
@@ -604,9 +605,10 @@ async function POSTHandler(request: NextRequest) {
         { status: 400 },
       );
     }
-    const payment = await prisma.payment.create({
-      data: {
-        billingAccountId: billingAccount.id,
+    const paymentClaim = await createStripePaymentClaim({
+      billingAccountId: billingAccount.id,
+      scope: "family_balance",
+      paymentData: {
         amountCents,
         status: PaymentStatus.DRAFT,
         provider: "stripe",
@@ -619,6 +621,14 @@ async function POSTHandler(request: NextRequest) {
         }),
       },
     });
+    if (!paymentClaim.created) {
+      return NextResponse.json({
+        ok: false,
+        error: "Another payment is already pending or processing for this family. Wait for it to finish before submitting another payment.",
+        paymentId: paymentClaim.blockingPaymentId,
+      }, { status: 409 });
+    }
+    const payment = paymentClaim.payment;
     const intent = await createStripeOffSessionPaymentIntent({
       amountCents: amounts.checkoutTotalCents,
       invoiceAmountCents: amounts.invoiceAmountCents,
@@ -800,9 +810,10 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
-  const payment = await prisma.payment.create({
-    data: {
-      billingAccountId: billingAccount.id,
+  const paymentClaim = await createStripePaymentClaim({
+    billingAccountId: billingAccount.id,
+    scope: "family_balance",
+    paymentData: {
       amountCents,
       status: PaymentStatus.DRAFT,
       provider: "stripe",
@@ -815,6 +826,14 @@ async function POSTHandler(request: NextRequest) {
       }),
     },
   });
+  if (!paymentClaim.created) {
+    return NextResponse.json({
+      ok: false,
+      error: "Another payment is already pending or processing for this family. Wait for it to finish before submitting another payment.",
+      paymentId: paymentClaim.blockingPaymentId,
+    }, { status: 409 });
+  }
+  const payment = paymentClaim.payment;
 
   const successPath = appendRawQuery(
     appendQuery(appendQuery(returnPath, "payment", "success"), "familyPayment", payment.id),

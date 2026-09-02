@@ -10,6 +10,7 @@ import {
   isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
   isActiveStripeFamilyBalancePayment,
+  isActiveStripeTerminalPayment,
   isStripeSubmissionUnknownPayment,
 } from "../src/lib/billing-guardrails";
 import {
@@ -251,10 +252,22 @@ test("active Stripe checkout detection only blocks draft checkout sessions", () 
 });
 
 test("active family balance payments block overlapping invoice autopay", () => {
+  assert.equal(isActiveStripeTerminalPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe_terminal",
+    customFields: { status: "terminal_reader_submission_unknown", paymentScope: "invoice" },
+  }), true);
+
   assert.equal(isActiveStripeFamilyBalancePayment({
     status: PaymentStatus.DRAFT,
     provider: "stripe",
     customFields: { status: "checkout_pending", paymentScope: "family_balance" },
+  }), true);
+
+  assert.equal(isActiveStripeFamilyBalancePayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe_terminal",
+    customFields: { status: "terminal_reader_submission_unknown", paymentScope: "family_balance" },
   }), true);
 
   assert.equal(isActiveStripeFamilyBalancePayment({
@@ -332,6 +345,11 @@ test("unknown Stripe submissions stay active and retry the same idempotent reque
     status: PaymentStatus.DRAFT,
     provider: "stripe",
     customFields: { status: "autopay_submission_unknown" },
+  }), true);
+  assert.equal(isStripeSubmissionUnknownPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe_terminal",
+    customFields: { status: "terminal_reader_submission_unknown" },
   }), true);
   assert.equal(isActiveStripeAutopayPayment({
     status: PaymentStatus.DRAFT,

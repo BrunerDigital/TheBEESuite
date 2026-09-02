@@ -468,6 +468,9 @@ async function processPayment(body: Record<string, unknown>) {
         readerId,
         collectionMode: "director_card_present",
         description,
+        invoiceTotalCents: invoice?.totalCents ?? amountCents,
+        accountCreditAppliedCents: invoiceCreditAllocation?.accountCreditAppliedCents ?? 0,
+        stripeChargePrincipalCents: amountCents,
         status: "terminal_intent_pending",
       }),
     },
@@ -565,26 +568,51 @@ async function processPayment(body: Record<string, unknown>) {
       { status: intent.configured ? 502 : 503 },
     );
   }
+  const terminalPaymentIntent = intent.paymentIntent;
 
   await prisma.payment.update({
     where: { id: payment.id },
     data: {
-      externalIdPlaceholder: intent.paymentIntent.id,
+      externalIdPlaceholder: terminalPaymentIntent.id,
       customFields: jsonInput({
         ...metadata,
-        stripePaymentIntentId: intent.paymentIntent.id,
-        stripePaymentIntentStatus: intent.paymentIntent.status || null,
+        stripePaymentIntentId: terminalPaymentIntent.id,
+        stripePaymentIntentStatus: terminalPaymentIntent.status || null,
         status: "terminal_ready",
       }),
     },
   });
-  const processed = await processStripeTerminalPaymentIntent({
+  const readerSubmission = await reconcileIdempotentStripeSubmission(() => processStripeTerminalPaymentIntent({
     readerId,
-    paymentIntentId: intent.paymentIntent.id,
+    paymentIntentId: terminalPaymentIntent.id,
     connectedAccountId: context.connectedAccountId,
     tenantId: context.user.tenantId,
     idempotencyKey: `terminal-payment:reader:${payment.id}`,
-  });
+  }));
+  if (!readerSubmission.resolved) {
+    await prisma.payment.updateMany({
+      where: { id: payment.id, status: PaymentStatus.DRAFT },
+      data: {
+        externalIdPlaceholder: terminalPaymentIntent.id,
+        customFields: jsonInput({
+          ...metadata,
+          stripePaymentIntentId: terminalPaymentIntent.id,
+          stripePaymentIntentStatus: terminalPaymentIntent.status || null,
+          status: "terminal_reader_submission_unknown",
+          readerSubmissionStateUnknownAt: new Date().toISOString(),
+          submissionRetryUsesPaymentId: payment.id,
+        }),
+      },
+    });
+    return NextResponse.json({
+      ok: false,
+      status: "processing",
+      error: "The reader response was interrupted. This exact card-present attempt is being reconciled.",
+      paymentId: payment.id,
+      stripePaymentIntentId: terminalPaymentIntent.id,
+    }, { status: 503 });
+  }
+  const processed = readerSubmission.value;
   if (!processed.ok || !processed.reader) {
     await prisma.payment.update({
       where: { id: payment.id },
@@ -592,8 +620,8 @@ async function processPayment(body: Record<string, unknown>) {
         status: PaymentStatus.FAILED,
         customFields: jsonInput({
           ...metadata,
-          stripePaymentIntentId: intent.paymentIntent.id,
-          stripePaymentIntentStatus: intent.paymentIntent.status || null,
+          stripePaymentIntentId: terminalPaymentIntent.id,
+          stripePaymentIntentStatus: terminalPaymentIntent.status || null,
           status: "terminal_failed",
           stripeError: processed.error || null,
         }),
@@ -609,8 +637,8 @@ async function processPayment(body: Record<string, unknown>) {
     data: {
       customFields: jsonInput({
         ...metadata,
-        stripePaymentIntentId: intent.paymentIntent.id,
-        stripePaymentIntentStatus: intent.paymentIntent.status || null,
+        stripePaymentIntentId: terminalPaymentIntent.id,
+        stripePaymentIntentStatus: terminalPaymentIntent.status || null,
         stripeTerminalReaderId: processed.reader.id,
         stripeTerminalReaderActionStatus: processed.reader.actionStatus,
         status: "terminal_processing",
@@ -624,7 +652,7 @@ async function processPayment(body: Record<string, unknown>) {
     resourceId: invoice?.id || billingAccount.id,
     metadata: {
       paymentId: payment.id,
-      stripePaymentIntentId: intent.paymentIntent.id,
+      stripePaymentIntentId: terminalPaymentIntent.id,
       stripeTerminalReaderId: readerId,
       amountCents,
       checkoutTotalCents: amounts.checkoutTotalCents,
@@ -634,7 +662,7 @@ async function processPayment(body: Record<string, unknown>) {
     ok: true,
     status: "processing",
     paymentId: payment.id,
-    stripePaymentIntentId: intent.paymentIntent.id,
+    stripePaymentIntentId: terminalPaymentIntent.id,
     reader: processed.reader,
   });
 }
@@ -725,13 +753,55 @@ async function paymentStatus(body: Record<string, unknown>) {
   }
 
   const readerId = clean(fields.stripeTerminalReaderId);
-  const reader = readerId
+  let reader = readerId
     ? await retrieveStripeTerminalReader({
         readerId,
         connectedAccountId: context.connectedAccountId,
         tenantId: context.user.tenantId,
       })
     : null;
+  if (
+    fields.status === "terminal_reader_submission_unknown"
+    && readerId
+    && reader?.reader?.actionStatus !== "in_progress"
+    && reader?.reader?.actionStatus !== "failed"
+  ) {
+    const recovery = await reconcileIdempotentStripeSubmission(() => processStripeTerminalPaymentIntent({
+      readerId,
+      paymentIntentId,
+      connectedAccountId: context.connectedAccountId,
+      tenantId: context.user.tenantId,
+      idempotencyKey: `terminal-payment:reader:${payment.id}`,
+    }));
+    if (!recovery.resolved) {
+      return NextResponse.json({
+        ok: true,
+        status: "processing",
+        paymentId: payment.id,
+        paymentIntentStatus: intent.paymentIntent.status,
+        reader: reader?.reader || null,
+      }, { status: 202 });
+    }
+    if (!recovery.value.ok || !recovery.value.reader) {
+      await prisma.payment.updateMany({
+        where: { id: payment.id, status: PaymentStatus.DRAFT },
+        data: {
+          status: PaymentStatus.FAILED,
+          customFields: jsonInput({
+            ...fields,
+            stripePaymentIntentStatus: intent.paymentIntent.status || null,
+            status: "terminal_failed",
+            stripeError: recovery.value.error || null,
+          }),
+        },
+      });
+      return NextResponse.json(
+        { ok: false, status: "failed", paymentId: payment.id, error: recovery.value.error || "The reader could not start the card-present payment." },
+        { status: recovery.value.configured ? 502 : 503 },
+      );
+    }
+    reader = recovery.value;
+  }
   const readerFailure = reader?.reader?.actionStatus === "failed";
   const terminalStatus = readerFailure || intent.paymentIntent.status === "canceled" ? "failed" : "processing";
   await prisma.payment.update({

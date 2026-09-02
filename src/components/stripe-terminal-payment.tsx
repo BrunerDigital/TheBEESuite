@@ -125,7 +125,7 @@ export function StripeTerminalPayment({
         router.refresh();
         return;
       }
-      if (!response.ok || json?.status === "failed" || json?.status === "review") {
+      if ((!response.ok && json?.status !== "processing") || json?.status === "failed" || json?.status === "review") {
         setStatus("failed");
         setError(json?.error || "The in-person card payment did not complete.");
       }
@@ -210,7 +210,15 @@ export function StripeTerminalPayment({
         parentPresent: true,
       }),
     });
-    const json = await response.json().catch(() => null) as { error?: string; paymentId?: string } | null;
+    const json = await response.json().catch(() => null) as { error?: string; paymentId?: string; status?: string } | null;
+    if (json?.paymentId && json.status === "processing") {
+      setPaymentId(json.paymentId);
+      setStatus("processing");
+      setMessage(response.ok
+        ? "Reader ready. Ask the parent to tap, insert, or swipe their card."
+        : "The reader response was interrupted. The original payment attempt is being reconciled; do not start another payment.");
+      return;
+    }
     if (!response.ok || !json?.paymentId) {
       setStatus("failed");
       setError(json?.error || "The reader payment could not be started.");

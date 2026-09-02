@@ -24,11 +24,7 @@ export function isActiveStripeFamilyBalancePayment(payment: {
   if (payment.status !== PaymentStatus.DRAFT) return false;
   const fields = jsonRecord(payment.customFields);
   if (fields.paymentScope !== "family_balance") return false;
-  if (payment.provider === "stripe_terminal") {
-    return typeof fields.status === "string"
-      && fields.status.startsWith("terminal_")
-      && fields.status !== "terminal_failed";
-  }
+  if (payment.provider === "stripe_terminal") return isActiveStripeTerminalPayment(payment);
   if (payment.provider !== "stripe") return false;
   return isActiveStripeCheckoutPayment(payment)
     || fields.status === "checkout_submission_unknown"
@@ -49,7 +45,18 @@ export function isStripeSubmissionUnknownPayment(payment: {
     || status === "stored_method_submission_unknown"
     || status === "checkout_submission_unknown"
     || status === "director_saved_method_submission_unknown"
-    || status === "terminal_submission_unknown";
+    || status === "terminal_submission_unknown"
+    || status === "terminal_reader_submission_unknown";
+}
+
+export function isActiveStripeTerminalPayment(payment: {
+  status: PaymentStatus;
+  provider: string;
+  customFields?: unknown;
+}) {
+  if (payment.provider !== "stripe_terminal" || payment.status !== PaymentStatus.DRAFT) return false;
+  const status = jsonRecord(payment.customFields).status;
+  return typeof status === "string" && status.startsWith("terminal_") && status !== "terminal_failed";
 }
 
 function stringField(value: unknown) {

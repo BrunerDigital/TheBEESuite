@@ -4,6 +4,7 @@ import {
   isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
   isActiveStripeFamilyBalancePayment,
+  isActiveStripeTerminalPayment,
   jsonRecord,
 } from "@/lib/billing-guardrails";
 import { prisma } from "@/lib/prisma";
@@ -16,12 +17,6 @@ type StripePaymentClaimCandidate = {
   provider: string;
   customFields: unknown;
 };
-
-function isActiveStripeTerminalPayment(payment: StripePaymentClaimCandidate) {
-  if (payment.provider !== "stripe_terminal" || payment.status !== PaymentStatus.DRAFT) return false;
-  const status = jsonRecord(payment.customFields).status;
-  return typeof status === "string" && status.startsWith("terminal_") && status !== "terminal_failed";
-}
 
 export function stripePaymentClaimConflict({
   scope,
@@ -110,7 +105,10 @@ export async function createStripePaymentClaim({
         _sum: { totalCents: true },
       });
       const reservedCreditCents = draftPayments.reduce((sum, payment) => {
-        if (payment.id === existingPaymentId || !isActiveStripeAutopayPayment(payment)) return sum;
+        if (
+          payment.id === existingPaymentId
+          || (!isActiveStripeAutopayPayment(payment) && !isActiveStripeTerminalPayment(payment))
+        ) return sum;
         return sum + Math.max(0, Number(jsonRecord(payment.customFields).accountCreditAppliedCents) || 0);
       }, 0);
       const freshAllocation = allocateAccountCreditToInvoice({

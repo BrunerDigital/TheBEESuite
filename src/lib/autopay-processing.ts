@@ -7,6 +7,7 @@ import {
   isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
   isActiveStripeFamilyBalancePayment,
+  isActiveStripeTerminalPayment,
   isStripeSubmissionUnknownPayment,
   jsonRecord,
 } from "@/lib/billing-guardrails";
@@ -402,7 +403,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
   }
   const reservedCreditByAccountId = new Map<string, number>();
   for (const payment of paymentAttempts) {
-    if (!isActiveStripeAutopayPayment(payment)) continue;
+    if (!isActiveStripeAutopayPayment(payment) && !isActiveStripeTerminalPayment(payment)) continue;
     const fields = jsonRecord(payment.customFields);
     const reservedCents = Math.max(0, Number(fields.accountCreditAppliedCents) || 0);
     if (!reservedCents) continue;
@@ -487,7 +488,11 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     }
     if (attempts.some((payment) =>
       payment.id !== recoverableSubmissionPayment?.id
-      && (isActiveStripeCheckoutPayment(payment) || isActiveStripeAutopayPayment(payment)))) {
+      && (
+        isActiveStripeCheckoutPayment(payment)
+        || isActiveStripeAutopayPayment(payment)
+        || isActiveStripeTerminalPayment(payment)
+      ))) {
       results.push({ ...baseResult, status: "skipped", reason: "Invoice already has a pending payment attempt." });
       continue;
     }

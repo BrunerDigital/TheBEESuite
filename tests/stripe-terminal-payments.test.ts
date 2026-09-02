@@ -169,6 +169,11 @@ test("Terminal API and workbench enforce school scope and describe the web USB b
   assert.match(route, /allocateAccountCreditToInvoice/);
   assert.match(route, /invoiceCreditAllocation\?\.stripeChargePrincipalCents/);
   assert.match(route, /accountCreditAppliedCents: String\(invoiceCreditAllocation\?\.accountCreditAppliedCents \?\? 0\)/);
+  assert.match(route, /accountCreditAppliedCents: invoiceCreditAllocation\?\.accountCreditAppliedCents \?\? 0/);
+  assert.match(route, /terminal_reader_submission_unknown/);
+  assert.match(route, /reconcileIdempotentStripeSubmission\(\(\) => processStripeTerminalPaymentIntent/);
+  assert.match(component, /json\?\.paymentId && json\.status === "processing"/);
+  assert.match(component, /do not start another payment/);
   assert.match(route, /Available account credit already covers this invoice; no card payment is needed\./);
   assert.match(component, /direct USB data connection is available only through Stripe&apos;s Android mobile-reader SDK/);
   assert.match(component, /In-Person Card Reader/);

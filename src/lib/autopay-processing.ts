@@ -22,6 +22,7 @@ import {
   retrieveStripeConnectedAccount,
   shouldWaiveStripePaymentOperationsFee,
   stripeConnectedAccountPaysFeesDirectly,
+  type StripePaymentMethodCategory,
 } from "@/lib/integrations";
 import {
   canChargeSavedPaymentMethod,
@@ -179,6 +180,24 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function storedCents(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : fallback;
+}
+
+function storedBoolean(value: unknown, fallback: boolean) {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return fallback;
+}
+
+function storedPaymentMethodCategory(value: unknown): StripePaymentMethodCategory | null {
+  const category = clean(value);
+  return category === "default" || category === "card" || category === "ach" || category === "link_bank" || category === "card_present"
+    ? category
+    : null;
+}
+
 function jsonInput(value: Record<string, unknown>): Prisma.InputJsonObject {
   return value as Prisma.InputJsonObject;
 }
@@ -229,7 +248,6 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
   const asOf = safeDate(input.asOf);
   const limit = safeLimit(input.limit);
   const collectionMode = input.collectionMode === "stored_method" ? "stored_method" : "autopay";
-  const statusPrefix = collectionMode === "stored_method" ? "stored_method" : "autopay";
   const collectionLabel = collectionMode === "stored_method" ? "saved-method payment" : "autopay";
   const requireDueDate = input.requireDueDate !== false;
   const allowPlatformOnlyPayments = process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true";
@@ -314,7 +332,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
             billingAccountId: { in: billingAccountIds },
             status: { in: [PaymentStatus.DRAFT, PaymentStatus.PAID, PaymentStatus.FAILED] },
           },
-          select: { id: true, billingAccountId: true, status: true, provider: true, customFields: true },
+          select: { id: true, amountCents: true, billingAccountId: true, status: true, provider: true, customFields: true },
           take: 1000,
         })
       : [],
@@ -481,6 +499,14 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
 
     const attempts = paymentsByInvoiceId.get(invoice.id) ?? [];
     const recoverableSubmissionPayment = attempts.find(isStripeSubmissionUnknownPayment);
+    const recoverableSubmissionFields = jsonRecord(recoverableSubmissionPayment?.customFields);
+    const paymentCollectionMode = clean(recoverableSubmissionFields.collectionMode) === "stored_method"
+      ? "stored_method"
+      : clean(recoverableSubmissionFields.collectionMode) === "autopay"
+        ? "autopay"
+        : collectionMode;
+    const paymentStatusPrefix = paymentCollectionMode === "stored_method" ? "stored_method" : "autopay";
+    const paymentCollectionLabel = paymentCollectionMode === "stored_method" ? "saved-method payment" : "autopay";
     if (attempts.some((payment) => payment.status === PaymentStatus.PAID)) {
       results.push({ ...baseResult, status: "skipped", reason: "Invoice already has a completed online payment." });
       continue;
@@ -495,7 +521,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       results.push({ ...baseResult, status: "skipped", reason: "Invoice already has a pending payment attempt." });
       continue;
     }
-    if (!input.retryFailed && attempts.some(isAutopayFailureForInvoice)) {
+    if (!recoverableSubmissionPayment && !input.retryFailed && attempts.some(isAutopayFailureForInvoice)) {
       blockedBillingAccountIds.add(invoice.billingAccountId);
       results.push({ ...baseResult, status: "skipped", reason: `${collectionLabel} already failed for this invoice; parent follow-up is in dunning.` });
       continue;
@@ -506,7 +532,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     }
 
     const billingApproval = stripeSchoolBillingApproval({ customFields: center.customFields, centerName: center.name });
-    if (!billingApproval.approved) {
+    if (!recoverableSubmissionPayment && !billingApproval.approved) {
       results.push({ ...baseResult, status: "skipped", reason: billingApproval.blockingReason });
       continue;
     }
@@ -514,12 +540,12 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       customFields: center.customFields,
       centerName: center.name,
     });
-    if (!paymentReadiness.canAcceptParentPayments) {
+    if (!recoverableSubmissionPayment && !paymentReadiness.canAcceptParentPayments) {
       results.push({ ...baseResult, status: "skipped", reason: paymentReadiness.explanation });
       continue;
     }
 
-    if (!invoiceResponsibilityReviewExempt(
+    if (!recoverableSubmissionPayment && !invoiceResponsibilityReviewExempt(
       invoice.customFields,
       invoice.totalCents,
       ...invoice.billingAccount.family.children.map((child) => ({ id: child.id, customFields: child.customFields })),
@@ -548,7 +574,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       activeConnectedAccountId: readStripeConnectedAccountId(center.customFields),
       centerCustomFields: center.customFields,
     });
-    if (paymentMethod.paymentMethodReauthorizationRequired) {
+    if (!recoverableSubmissionPayment && paymentMethod.paymentMethodReauthorizationRequired) {
       results.push({
         ...baseResult,
         status: "skipped",
@@ -559,7 +585,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     const canChargeSavedMethod = collectionMode === "stored_method"
       ? canChargeSavedPaymentMethod(paymentMethod)
       : canRunAutopay(paymentMethod);
-    if (!canChargeSavedMethod) {
+    if (!recoverableSubmissionPayment && !canChargeSavedMethod) {
       results.push({
         ...baseResult,
         status: "skipped",
@@ -569,7 +595,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       });
       continue;
     }
-    if (collectionMode === "autopay") {
+    if (!recoverableSubmissionPayment && collectionMode === "autopay") {
       const consentUserId = clean(jsonRecord(invoice.billingAccount.customFields).autopayEnabledByUserId);
       const consentedPaymentMethodId = clean(jsonRecord(invoice.billingAccount.customFields).autopayPaymentMethodId);
       const consentIsFromLinkedGuardian = Boolean(
@@ -587,10 +613,18 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       }
     }
     const availableCreditCents = availableCreditByAccountId.get(invoice.billingAccountId) ?? 0;
-    const creditAllocation = allocateAccountCreditToInvoice({
+    const currentCreditAllocation = allocateAccountCreditToInvoice({
       invoiceTotalCents: invoice.totalCents,
       availableCreditCents,
     });
+    const creditAllocation = recoverableSubmissionPayment
+      ? {
+          invoiceTotalCents: storedCents(recoverableSubmissionFields.invoiceTotalCents, invoice.totalCents),
+          accountCreditAppliedCents: storedCents(recoverableSubmissionFields.accountCreditAppliedCents, 0),
+          stripeChargePrincipalCents: recoverableSubmissionPayment.amountCents,
+          fullyCoveredByCredit: false,
+        }
+      : currentCreditAllocation;
     baseResult = {
       ...baseResult,
       amountCents: creditAllocation.stripeChargePrincipalCents,
@@ -599,7 +633,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     };
 
     const expectedAmountCents = input.expectedAmountCentsByInvoiceId?.[invoice.id];
-    if (expectedAmountCents !== undefined && expectedAmountCents !== creditAllocation.stripeChargePrincipalCents) {
+    if (!recoverableSubmissionPayment && expectedAmountCents !== undefined && expectedAmountCents !== creditAllocation.stripeChargePrincipalCents) {
       results.push({
         ...baseResult,
         status: "skipped",
@@ -608,7 +642,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
 
-    if (creditAllocation.fullyCoveredByCredit) {
+    if (!recoverableSubmissionPayment && creditAllocation.fullyCoveredByCredit) {
       if (dryRun) {
         availableCreditByAccountId.set(
           invoice.billingAccountId,
@@ -673,14 +707,16 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
 
-    const autopayPaymentMethodCategory = paymentMethodAutopayCategory(paymentMethod);
+    const autopayPaymentMethodCategory = storedPaymentMethodCategory(recoverableSubmissionFields.requestedPaymentMethodCategory)
+      || storedPaymentMethodCategory(recoverableSubmissionFields.paymentMethodCategory)
+      || paymentMethodAutopayCategory(paymentMethod);
     let billingAccountFields = jsonRecord(invoice.billingAccount.customFields);
     const cardRecoveryRequiresAcceptance =
       autopayPaymentMethodCategory === "card" &&
       getStripeProcessingRecoveryAmount(creditAllocation.stripeChargePrincipalCents, "card") > 0;
     const oneTimeCardRecoveryAccepted =
       collectionMode === "stored_method" && input.cardProcessingRecoveryAccepted === true;
-    if (cardRecoveryRequiresAcceptance && !clean(billingAccountFields.cardProcessingRecoveryAcceptedAt) && !oneTimeCardRecoveryAccepted) {
+    if (!recoverableSubmissionPayment && cardRecoveryRequiresAcceptance && !clean(billingAccountFields.cardProcessingRecoveryAcceptedAt) && !oneTimeCardRecoveryAccepted) {
       results.push({
         ...baseResult,
         status: "skipped",
@@ -689,7 +725,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
     const cardRecoveryAcceptedAt =
-      cardRecoveryRequiresAcceptance && !clean(billingAccountFields.cardProcessingRecoveryAcceptedAt) && oneTimeCardRecoveryAccepted
+      !recoverableSubmissionPayment && cardRecoveryRequiresAcceptance && !clean(billingAccountFields.cardProcessingRecoveryAcceptedAt) && oneTimeCardRecoveryAccepted
         ? new Date().toISOString()
         : null;
 
@@ -706,12 +742,17 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
 
     const activeConnectedAccountId = readStripeConnectedAccountId(center.customFields);
     const savedMethodConnectedAccountId = clean(billingAccountFields.stripeDefaultPaymentMethodConnectedAccountId);
-    const connectedAccountId = stripeConnectSavedMethodAccount({
-      activeAccountId: activeConnectedAccountId,
-      savedMethodAccountId: savedMethodConnectedAccountId,
-      centerCustomFields: center.customFields,
-    });
-    if (savedMethodConnectedAccountId && !connectedAccountId) {
+    const persistedConnectedAccountId = Object.prototype.hasOwnProperty.call(recoverableSubmissionFields, "stripeConnectedAccountId")
+      ? clean(recoverableSubmissionFields.stripeConnectedAccountId) || null
+      : undefined;
+    const connectedAccountId = persistedConnectedAccountId !== undefined
+      ? persistedConnectedAccountId
+      : stripeConnectSavedMethodAccount({
+          activeAccountId: activeConnectedAccountId,
+          savedMethodAccountId: savedMethodConnectedAccountId,
+          centerCustomFields: center.customFields,
+        });
+    if (!recoverableSubmissionPayment && savedMethodConnectedAccountId && !connectedAccountId) {
       results.push({
         ...baseResult,
         status: "skipped",
@@ -720,12 +761,12 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
     let schoolPaysStripeFeesDirectly = jsonRecord(center.customFields).stripeFeesCollector === "stripe";
-    if (!connectedAccountId && !allowPlatformOnlyPayments) {
+    if (!recoverableSubmissionPayment && !connectedAccountId && !allowPlatformOnlyPayments) {
       results.push({ ...baseResult, status: "skipped", reason: "School payout account is not connected." });
       continue;
     }
 
-    if (connectedAccountId && requireActiveConnectedAccount) {
+    if (!recoverableSubmissionPayment && connectedAccountId && requireActiveConnectedAccount) {
       let accountReadiness = connectedAccountCache.get(connectedAccountId);
       if (!accountReadiness) {
         if (dryRun) {
@@ -787,7 +828,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       }
       schoolPaysStripeFeesDirectly = accountReadiness.schoolPaysStripeFeesDirectly;
     }
-    const scopedStripeCustomerId = stripeCustomerIdForAccount(billingAccountFields, connectedAccountId);
+    const scopedStripeCustomerId = clean(recoverableSubmissionFields.stripeCustomerId)
+      || stripeCustomerIdForAccount(billingAccountFields, connectedAccountId);
     if (!scopedStripeCustomerId) {
       results.push({
         ...baseResult,
@@ -805,11 +847,42 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       brandSlug: center.organization.brand?.slug,
       brandName: center.organization.brand?.name,
     });
-    const amounts = getStripeCheckoutAmounts(creditAllocation.stripeChargePrincipalCents, {
+    const calculatedAmounts = getStripeCheckoutAmounts(creditAllocation.stripeChargePrincipalCents, {
       paymentMethodCategory: autopayPaymentMethodCategory,
       waiveBeeSuitePaymentOperationsFee,
       schoolPaysStripeFeesDirectly,
     });
+    const amounts = recoverableSubmissionPayment
+      ? {
+          ...calculatedAmounts,
+          invoiceAmountCents: storedCents(recoverableSubmissionFields.invoiceAmountCents, calculatedAmounts.invoiceAmountCents),
+          parentSurchargeAmountCents: storedCents(recoverableSubmissionFields.parentSurchargeAmountCents, calculatedAmounts.parentSurchargeAmountCents),
+          parentProcessingRecoveryAmountCents: storedCents(recoverableSubmissionFields.parentProcessingRecoveryAmountCents, calculatedAmounts.parentProcessingRecoveryAmountCents),
+          schoolProcessingFeeAmountCents: storedCents(recoverableSubmissionFields.schoolProcessingFeeAmountCents, calculatedAmounts.schoolProcessingFeeAmountCents),
+          beeSuitePaymentOperationsFeeAmountCents: storedCents(recoverableSubmissionFields.beeSuitePaymentOperationsFeeAmountCents, calculatedAmounts.beeSuitePaymentOperationsFeeAmountCents),
+          checkoutTotalCents: storedCents(recoverableSubmissionFields.checkoutTotalCents, calculatedAmounts.checkoutTotalCents),
+          applicationFeeAmountCents: storedCents(recoverableSubmissionFields.applicationFeeAmountCents, calculatedAmounts.applicationFeeAmountCents),
+          paymentMethodCategory: storedPaymentMethodCategory(recoverableSubmissionFields.paymentMethodCategory) || calculatedAmounts.paymentMethodCategory,
+        }
+      : calculatedAmounts;
+    const stripePaymentMethodId = recoverableSubmissionPayment
+      ? clean(recoverableSubmissionFields.stripePaymentMethodId)
+      : paymentMethod.stripeDefaultPaymentMethodId;
+    const stripePaymentMethodType = recoverableSubmissionPayment
+      ? clean(recoverableSubmissionFields.stripePaymentMethodType) || null
+      : paymentMethod.paymentMethodType;
+    if (!stripePaymentMethodId) {
+      blockedBillingAccountIds.add(invoice.billingAccountId);
+      results.push({
+        ...baseResult,
+        status: "failed",
+        reason: recoverableSubmissionPayment
+          ? "The interrupted processor attempt is missing its original saved-method reference and was left active for safe review."
+          : `${paymentCollectionLabel} cannot run without a saved payment method.`,
+        paymentId: recoverableSubmissionPayment?.id || null,
+      });
+      continue;
+    }
 
     if (dryRun) {
       availableCreditByAccountId.set(
@@ -819,6 +892,24 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       results.push({ ...baseResult, status: "would_charge", reason: null });
       continue;
     }
+
+    const stripeInvoiceNumber = clean(recoverableSubmissionFields.stripeInvoiceNumber) || invoice.number;
+    const stripeCenterName = clean(recoverableSubmissionFields.stripeCenterName) || center.name;
+    const stripeCustomerEmail = Object.prototype.hasOwnProperty.call(recoverableSubmissionFields, "stripeCustomerEmail")
+      ? clean(recoverableSubmissionFields.stripeCustomerEmail) || null
+      : family.billingEmail;
+    const onBehalfOfConnectedAccount = storedBoolean(
+      recoverableSubmissionFields.onBehalfOfConnectedAccount,
+      process.env.STRIPE_CHECKOUT_ON_BEHALF_OF === "true",
+    );
+    const effectiveFeeWaived = storedBoolean(recoverableSubmissionFields.beeSuitePaymentOperationsFeeWaived, waiveBeeSuitePaymentOperationsFee);
+    const effectiveCardRecoveryAcceptedAt = clean(recoverableSubmissionFields.cardProcessingRecoveryAcceptedAt)
+      || cardRecoveryAcceptedAt || clean(billingAccountFields.cardProcessingRecoveryAcceptedAt) || null;
+    const effectiveCardRecoveryAcceptedByUserId = clean(recoverableSubmissionFields.cardProcessingRecoveryAcceptedByUserId)
+      || clean(billingAccountFields.cardProcessingRecoveryAcceptedByUserId) || input.requestedByUserId || null;
+    const effectiveRequestedByUserId = clean(recoverableSubmissionFields.requestedByUserId) || input.requestedByUserId || null;
+    const effectiveEnvironment = clean(recoverableSubmissionFields.environment)
+      || process.env.VERCEL_ENV || process.env.NODE_ENV || "development";
 
     if (cardRecoveryAcceptedAt) {
       billingAccountFields = {
@@ -846,6 +937,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         provider: "stripe",
         externalIdPlaceholder: "payment_intent_pending",
         customFields: jsonInput({
+          tenantId,
           invoiceId: invoice.id,
           invoiceNumber: invoice.number,
           familyId: family.id,
@@ -858,7 +950,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           parentProcessingRecoveryAmountCents: amounts.parentProcessingRecoveryAmountCents,
           schoolProcessingFeeAmountCents: amounts.schoolProcessingFeeAmountCents,
           beeSuitePaymentOperationsFeeAmountCents: amounts.beeSuitePaymentOperationsFeeAmountCents,
-          beeSuitePaymentOperationsFeeWaived: waiveBeeSuitePaymentOperationsFee,
+          beeSuitePaymentOperationsFeeWaived: effectiveFeeWaived,
           checkoutTotalCents: amounts.checkoutTotalCents,
           applicationFeeAmountCents: amounts.applicationFeeAmountCents,
           requestedPaymentMethodCategory: autopayPaymentMethodCategory,
@@ -866,14 +958,20 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           stripeConnectedAccountId: connectedAccountId || null,
           stripeCustomerId: scopedStripeCustomerId,
           stripeCustomerConnectedAccountId: connectedAccountId || null,
+          stripePaymentMethodId,
+          stripePaymentMethodType: stripePaymentMethodType || null,
+          stripeInvoiceNumber,
+          stripeCenterName,
+          stripeCustomerEmail,
+          onBehalfOfConnectedAccount,
           stripeChargeType: connectedAccountId ? "direct" : "platform",
-          collectionMode,
-          cardProcessingRecoveryAcceptedAt: clean(billingAccountFields.cardProcessingRecoveryAcceptedAt) || null,
-          cardProcessingRecoveryAcceptedByUserId: clean(billingAccountFields.cardProcessingRecoveryAcceptedByUserId) || input.requestedByUserId || null,
-          status: `${statusPrefix}_pending`,
+          collectionMode: paymentCollectionMode,
+          cardProcessingRecoveryAcceptedAt: effectiveCardRecoveryAcceptedAt,
+          cardProcessingRecoveryAcceptedByUserId: effectiveCardRecoveryAcceptedByUserId,
+          status: `${paymentStatusPrefix}_pending`,
           attemptedAt: new Date().toISOString(),
-          requestedByUserId: input.requestedByUserId || null,
-          environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
+          requestedByUserId: effectiveRequestedByUserId,
+          environment: effectiveEnvironment,
         }),
       },
     });
@@ -895,49 +993,51 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
     const payment = paymentClaim.payment;
+    const paymentFields = jsonRecord(payment.customFields);
+    const submissionMetadata = {
+      tenantId: clean(paymentFields.tenantId) || tenantId,
+      invoiceId: clean(paymentFields.invoiceId) || invoice.id,
+      paymentId: payment.id,
+      familyId: clean(paymentFields.familyId) || family.id,
+      centerId: clean(paymentFields.centerId) || center.id,
+      stripeConnectedAccountId: clean(paymentFields.stripeConnectedAccountId),
+      stripeCustomerId: clean(paymentFields.stripeCustomerId) || scopedStripeCustomerId,
+      stripeChargeType: clean(paymentFields.stripeChargeType) || (connectedAccountId ? "direct" : "platform"),
+      collectionMode: clean(paymentFields.collectionMode) || paymentCollectionMode,
+      invoiceTotalCents: String(storedCents(paymentFields.invoiceTotalCents, creditAllocation.invoiceTotalCents)),
+      invoiceAmountCents: String(storedCents(paymentFields.invoiceAmountCents, amounts.invoiceAmountCents)),
+      accountCreditAppliedCents: String(storedCents(paymentFields.accountCreditAppliedCents, creditAllocation.accountCreditAppliedCents)),
+      stripeChargePrincipalCents: String(storedCents(paymentFields.stripeChargePrincipalCents, creditAllocation.stripeChargePrincipalCents)),
+      parentSurchargeAmountCents: String(storedCents(paymentFields.parentSurchargeAmountCents, amounts.parentSurchargeAmountCents)),
+      parentProcessingRecoveryAmountCents: String(storedCents(paymentFields.parentProcessingRecoveryAmountCents, amounts.parentProcessingRecoveryAmountCents)),
+      schoolProcessingFeeAmountCents: String(storedCents(paymentFields.schoolProcessingFeeAmountCents, amounts.schoolProcessingFeeAmountCents)),
+      beeSuitePaymentOperationsFeeAmountCents: String(storedCents(paymentFields.beeSuitePaymentOperationsFeeAmountCents, amounts.beeSuitePaymentOperationsFeeAmountCents)),
+      beeSuitePaymentOperationsFeeWaived: String(storedBoolean(paymentFields.beeSuitePaymentOperationsFeeWaived, effectiveFeeWaived)),
+      requestedPaymentMethodCategory: clean(paymentFields.requestedPaymentMethodCategory) || autopayPaymentMethodCategory,
+      paymentMethodCategory: clean(paymentFields.paymentMethodCategory) || amounts.paymentMethodCategory,
+      checkoutTotalCents: String(storedCents(paymentFields.checkoutTotalCents, amounts.checkoutTotalCents)),
+      applicationFeeAmountCents: String(storedCents(paymentFields.applicationFeeAmountCents, amounts.applicationFeeAmountCents)),
+      cardProcessingRecoveryAcceptedAt: clean(paymentFields.cardProcessingRecoveryAcceptedAt),
+      cardProcessingRecoveryAcceptedByUserId: clean(paymentFields.cardProcessingRecoveryAcceptedByUserId),
+      environment: clean(paymentFields.environment) || effectiveEnvironment,
+    };
 
     const submission = await reconcileIdempotentStripeSubmission(() => createStripeOffSessionPaymentIntent({
       amountCents: amounts.checkoutTotalCents,
       invoiceAmountCents: amounts.invoiceAmountCents,
       parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
-      invoiceNumber: invoice.number,
-      centerName: center.name,
+      invoiceNumber: stripeInvoiceNumber,
+      centerName: stripeCenterName,
       customerId: scopedStripeCustomerId,
-      paymentMethodId: paymentMethod.stripeDefaultPaymentMethodId!,
-      paymentMethodType: paymentMethod.paymentMethodType,
-      customerEmail: family.billingEmail,
-      metadata: {
-        tenantId,
-        invoiceId: invoice.id,
-        paymentId: payment.id,
-        familyId: family.id,
-        centerId: center.id,
-        stripeConnectedAccountId: connectedAccountId || "",
-        stripeCustomerId: scopedStripeCustomerId,
-        stripeChargeType: connectedAccountId ? "direct" : "platform",
-        collectionMode,
-        invoiceTotalCents: String(invoice.totalCents),
-        invoiceAmountCents: String(amounts.invoiceAmountCents),
-        accountCreditAppliedCents: String(creditAllocation.accountCreditAppliedCents),
-        stripeChargePrincipalCents: String(creditAllocation.stripeChargePrincipalCents),
-        parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
-        parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
-        schoolProcessingFeeAmountCents: String(amounts.schoolProcessingFeeAmountCents),
-        beeSuitePaymentOperationsFeeAmountCents: String(amounts.beeSuitePaymentOperationsFeeAmountCents),
-        beeSuitePaymentOperationsFeeWaived: String(waiveBeeSuitePaymentOperationsFee),
-        requestedPaymentMethodCategory: autopayPaymentMethodCategory,
-        paymentMethodCategory: amounts.paymentMethodCategory,
-        checkoutTotalCents: String(amounts.checkoutTotalCents),
-        applicationFeeAmountCents: String(amounts.applicationFeeAmountCents),
-        cardProcessingRecoveryAcceptedAt: clean(billingAccountFields.cardProcessingRecoveryAcceptedAt) || "",
-        cardProcessingRecoveryAcceptedByUserId: clean(billingAccountFields.cardProcessingRecoveryAcceptedByUserId) || input.requestedByUserId || "",
-        environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
-      },
+      paymentMethodId: stripePaymentMethodId,
+      paymentMethodType: stripePaymentMethodType,
+      customerEmail: stripeCustomerEmail,
+      metadata: submissionMetadata,
       connectedAccountId,
       applicationFeeAmountCents: amounts.applicationFeeAmountCents,
-      onBehalfOfConnectedAccount: process.env.STRIPE_CHECKOUT_ON_BEHALF_OF === "true",
-      idempotencyKey: `${collectionMode}:${payment.id}`,
-      descriptionLabel: collectionLabel,
+      onBehalfOfConnectedAccount,
+      idempotencyKey: `${paymentCollectionMode}:${payment.id}`,
+      descriptionLabel: paymentCollectionLabel,
       tenantId,
     }));
     if (!submission.resolved) {
@@ -946,7 +1046,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         data: {
           customFields: jsonInput({
             ...jsonRecord(payment.customFields),
-            status: `${statusPrefix}_submission_unknown`,
+            status: `${paymentStatusPrefix}_submission_unknown`,
             submissionStateUnknownAt: new Date().toISOString(),
             submissionRetryUsesPaymentId: payment.id,
           }),
@@ -990,14 +1090,14 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         where: { id: payment.id, status: PaymentStatus.DRAFT },
         data: {
           status: accepted ? PaymentStatus.DRAFT : PaymentStatus.FAILED,
-          externalIdPlaceholder: intent.paymentIntent?.id || intent.error || `${statusPrefix}_payment_intent_failed`,
+          externalIdPlaceholder: intent.paymentIntent?.id || intent.error || `${paymentStatusPrefix}_payment_intent_failed`,
           customFields: jsonInput({
             ...jsonRecord(payment.customFields),
             stripePaymentIntentId: intent.paymentIntent?.id || null,
             stripePaymentIntentStatus: intentStatus,
-            stripeError: intent.ok ? null : intent.error || `${statusPrefix}_payment_intent_failed`,
+            stripeError: intent.ok ? null : intent.error || `${paymentStatusPrefix}_payment_intent_failed`,
             failedAt: accepted ? null : new Date().toISOString(),
-            status: accepted ? `${statusPrefix}_processing` : `${statusPrefix}_failed`,
+            status: accepted ? `${paymentStatusPrefix}_processing` : `${paymentStatusPrefix}_failed`,
           }),
         },
       });
@@ -1022,18 +1122,18 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     const processingAccepted = !terminalPaymentStatus && accepted && intentStatus === "processing";
 
     const auditAction = appliedAsAccountCredit
-      ? collectionMode === "stored_method"
+      ? paymentCollectionMode === "stored_method"
         ? "billing.stored_method.overpayment_recorded"
         : "billing.autopay.overpayment_recorded"
       : appliedImmediately
-      ? collectionMode === "stored_method"
+      ? paymentCollectionMode === "stored_method"
         ? "billing.stored_method.completed"
         : "billing.autopay.completed"
       : processingAccepted
-        ? collectionMode === "stored_method"
+        ? paymentCollectionMode === "stored_method"
           ? "billing.stored_method.payment_intent_created"
           : "billing.autopay.payment_intent_created"
-        : collectionMode === "stored_method"
+        : paymentCollectionMode === "stored_method"
           ? "billing.stored_method.failed"
           : "billing.autopay.failed";
 
@@ -1081,7 +1181,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           ? terminalPaymentReason
           : immediateApplicationReason
           ? `Payment succeeded with the processor but could not be applied automatically: ${immediateApplicationReason}.`
-          : intent.error || `${collectionLabel} could not be submitted.`;
+          : intent.error || `${paymentCollectionLabel} could not be submitted.`;
 
     if (appliedImmediately || processingAccepted) {
       availableCreditByAccountId.set(

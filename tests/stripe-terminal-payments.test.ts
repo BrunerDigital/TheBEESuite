@@ -168,12 +168,16 @@ test("Terminal API and workbench enforce school scope and describe the web USB b
   assert.match(route, /parentPresent !== true/);
   assert.match(route, /allocateAccountCreditToInvoice/);
   assert.match(route, /invoiceCreditAllocation\?\.stripeChargePrincipalCents/);
-  assert.match(route, /accountCreditAppliedCents: String\(invoiceCreditAllocation\?\.accountCreditAppliedCents \?\? 0\)/);
+  assert.match(route, /accountCreditAppliedCents: String\(storedCents\(paymentFields\.accountCreditAppliedCents/);
   assert.match(route, /accountCreditAppliedCents: invoiceCreditAllocation\?\.accountCreditAppliedCents \?\? 0/);
   assert.match(route, /activeStripeAccountCreditReservationCents\(payment\)/);
   assert.match(route, /amountCents = allocation\.stripeChargePrincipalCents/);
   assert.match(route, /paymentMethodCategory: "card_present"/);
   assert.match(route, /terminal_reader_submission_unknown/);
+  assert.match(route, /amountCents = retryableTerminalSubmission\?\.amountCents/);
+  assert.doesNotMatch(route, /payment\.amountCents === amountCents[\s\S]*isStripeSubmissionUnknownPayment\(payment\)/);
+  assert.match(route, /connectedAccountId = clean\(retryableTerminalFields\.stripeConnectedAccountId\)/);
+  assert.match(route, /invoiceNumber: stripeInvoiceNumber/);
   assert.match(route, /reconcileIdempotentStripeSubmission\(\(\) => processStripeTerminalPaymentIntent/);
   assert.match(component, /json\?\.paymentId && json\.status === "processing"/);
   assert.match(component, /do not start another payment/);

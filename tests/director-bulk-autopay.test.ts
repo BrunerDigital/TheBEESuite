@@ -35,7 +35,7 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(actions, /Process this batch first/);
   assert.match(processing, /hasMore/);
   assert.match(page, /activeConnectedAccountId: readStripeConnectedAccountId\(center\?\.customFields\)/);
-  assert.match(processing, /if \(paymentMethod\.paymentMethodReauthorizationRequired\)/);
+  assert.match(processing, /!recoverableSubmissionPayment && paymentMethod\.paymentMethodReauthorizationRequired/);
   assert.match(processing, /accountsWithActiveFamilyBalancePayments/);
   assert.match(processing, /activeDraftPayments/);
   assert.match(processing, /new Map\(\[\.\.\.payments, \.\.\.activeDraftPayments\]/);
@@ -60,12 +60,18 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(paymentClaims, /reconcileIdempotentStripeSubmission/);
   assert.match(paymentClaims, /TransactionIsolationLevel\.Serializable/);
   assert.match(processing, /_submission_unknown/);
+  assert.match(processing, /stripePaymentMethodId,/);
+  assert.match(processing, /stripeInvoiceNumber/);
+  assert.match(processing, /onBehalfOfConnectedAccount/);
+  assert.match(processing, /paymentMethodId: stripePaymentMethodId/);
   assert.match(familyPayment, /checkout_submission_unknown/);
   assert.match(familyPayment, /director_saved_method_submission_unknown/);
   assert.match(familyPayment, /amountCents = retryableFamilySubmission[\s\S]*retryableFamilySubmission\.amountCents/);
   assert.doesNotMatch(familyPayment, /item\.amountCents === amountCents[\s\S]*isStripeSubmissionUnknownPayment\(item\)/);
   assert.match(terminalPayment, /createStripePaymentClaim/);
-  assert.match(terminalPayment, /scope: invoice \? "invoice_collection" : "family_balance"/);
+  assert.match(terminalPayment, /scope: paymentIsInvoice \? "invoice_collection" : "family_balance"/);
+  assert.match(terminalPayment, /amountCents = retryableTerminalSubmission\?\.amountCents/);
+  assert.doesNotMatch(terminalPayment, /payment\.amountCents === amountCents[\s\S]*isStripeSubmissionUnknownPayment\(payment\)/);
   assert.match(terminalPayment, /terminal_submission_unknown/);
   assert.match(terminalPayment, /terminal_reader_submission_unknown/);
   assert.match(terminalPayment, /terminal-payment:reader:\$\{payment\.id\}/);

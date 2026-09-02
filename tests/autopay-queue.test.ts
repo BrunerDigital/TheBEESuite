@@ -150,6 +150,6 @@ test("scheduled autopay blocks later family invoices after finding a prior faile
   const processing = readFileSync("src/lib/autopay-processing.ts", "utf8");
   assert.match(
     processing,
-    /if \(!input\.retryFailed && attempts\.some\(isAutopayFailureForInvoice\)\) \{\s*blockedBillingAccountIds\.add\(invoice\.billingAccountId\);/,
+    /if \(!recoverableSubmissionPayment && !input\.retryFailed && attempts\.some\(isAutopayFailureForInvoice\)\) \{\s*blockedBillingAccountIds\.add\(invoice\.billingAccountId\);/,
   );
 });

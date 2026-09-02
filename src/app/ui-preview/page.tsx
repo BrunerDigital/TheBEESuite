@@ -4,8 +4,12 @@ import { Moon, Sun } from "lucide-react";
 import { DirectorPaymentTerminalWorkspace } from "@/components/director-payment-terminal-workspace";
 import { DirectorReviewInbox } from "@/components/director-review-inbox";
 import { DataReadinessCenter } from "@/components/data-readiness-center";
+import { BillingWorkbench } from "@/components/billing-workbench";
+import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { EndOfDayClosingBoard } from "@/components/end-of-day-closing-board";
 import { FamilyRelationshipMapPreview } from "@/components/family-relationship-map-preview";
+import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import type { EditableFamilyRecord } from "@/components/family-record-editor";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -13,7 +17,7 @@ import { cn } from "@/lib/utils";
 import type { DataReadinessWorkspaceData } from "@/lib/data-readiness";
 import { dataReadinessViewFilters } from "@/lib/data-readiness-context";
 
-type PreviewView = "family" | "terminal" | "closing" | "inbox" | "migration-director" | "migration-executive";
+type PreviewView = "family" | "terminal" | "closing" | "inbox" | "migration-director" | "migration-executive" | "declutter" | "billing-declutter" | "staff-declutter";
 
 const family: EditableFamilyRecord = {
   id: "preview-family",
@@ -121,7 +125,7 @@ const migrationPreviewData: DataReadinessWorkspaceData = {
 export default async function UiPreviewPage({ searchParams }: { searchParams: Promise<{ view?: string; theme?: string; chrome?: string }> }) {
   if (process.env.NODE_ENV !== "development") notFound();
   const params = await searchParams;
-  const view: PreviewView = ["terminal", "closing", "inbox", "migration-director", "migration-executive"].includes(params.view ?? "") ? params.view as PreviewView : "family";
+  const view: PreviewView = ["terminal", "closing", "inbox", "migration-director", "migration-executive", "declutter", "billing-declutter", "staff-declutter"].includes(params.view ?? "") ? params.view as PreviewView : "family";
   const dark = params.theme === "dark";
   const showChrome = params.chrome !== "0";
   const nextTheme = dark ? "light" : "dark";
@@ -133,7 +137,7 @@ export default async function UiPreviewPage({ searchParams }: { searchParams: Pr
           <div className="mx-auto flex max-w-[96rem] flex-wrap items-center justify-between gap-3">
             <div><Badge>Honeyglass UI Preview</Badge><span className="ml-3 text-sm text-muted-foreground">Synthetic data only</span></div>
             <nav className="flex flex-wrap gap-2" aria-label="Preview screens">
-              {(["family", "terminal", "closing", "inbox", "migration-director", "migration-executive"] as const).map((item) => <Link key={item} href={`/ui-preview?view=${item}&theme=${dark ? "dark" : "light"}`} className={buttonVariants({ variant: view === item ? "default" : "outline", size: "sm" })}>{item}</Link>)}
+              {(["family", "terminal", "closing", "inbox", "migration-director", "migration-executive", "declutter", "billing-declutter", "staff-declutter"] as const).map((item) => <Link key={item} href={`/ui-preview?view=${item}&theme=${dark ? "dark" : "light"}`} className={buttonVariants({ variant: view === item ? "default" : "outline", size: "sm" })}>{item}</Link>)}
               <Link href={`/ui-preview?view=${view}&theme=${nextTheme}`} className={buttonVariants({ variant: "outline", size: "sm" })}>{dark ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}{dark ? "Light" : "Dark"}</Link>
             </nav>
           </div>
@@ -146,6 +150,85 @@ export default async function UiPreviewPage({ searchParams }: { searchParams: Pr
         {view === "inbox" ? <DirectorReviewInbox items={inboxItems} /> : null}
         {view === "migration-director" ? <DataReadinessCenter data={migrationPreviewData} centers={[{ id: "baden", name: "Baden Strasse" }]} allowBulkImport={false} initialView={dataReadinessViewFilters({ tab: "procare" })} /> : null}
         {view === "migration-executive" ? <DataReadinessCenter data={migrationPreviewData} centers={[{ id: "baden", name: "Baden Strasse" }, { id: "east", name: "Jasper East" }]} allowBulkImport initialView={dataReadinessViewFilters({ tab: "queue" })} /> : null}
+        {view === "declutter" ? (
+          <div className="space-y-5">
+            <header className="rounded-2xl border bg-card p-5">
+              <Badge>Director workspace</Badge>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight">Staff operations</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">See current coverage first, then move directly to the form needed for a change.</p>
+            </header>
+            <WorkspaceSectionDirectory
+              id="declutter-preview-directory"
+              description="Viewing sections stay compact until they are needed. Editing work has an explicit destination instead of competing with current status."
+              reviewDestinations={[
+                { href: "#preview-coverage", label: "Classroom coverage", description: "Assignments, gaps, and active schedules" },
+                { href: "#preview-payroll", label: "Payroll summary", description: "Hours, overtime, and open shifts" },
+              ]}
+              actionDestinations={[
+                { href: "#preview-assignment", label: "Assign a teacher" },
+                { href: "#preview-profile", label: "Add or edit staff" },
+                { href: "#preview-schedule", label: "Update a schedule" },
+              ]}
+            />
+            <div className="grid gap-4 lg:grid-cols-2">
+              <CollapsibleCard id="preview-coverage" title="Classroom coverage" description="3 classrooms · 1 needs attention" collapsedSummary="3 classrooms · Butterflies needs a schedule" defaultCollapsed>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {["Busy Bees · Covered", "Butterflies · Needs schedule", "Fireflies · Covered"].map((item) => <div key={item} className="rounded-xl border bg-background/50 p-3 text-sm">{item}</div>)}
+                </div>
+              </CollapsibleCard>
+              <CollapsibleCard id="preview-payroll" title="Payroll summary" description="Current pay period" collapsedSummary="142.50 regular · 3.25 overtime · 1 open shift" defaultCollapsed>
+                <div className="grid grid-cols-3 gap-3 text-center"><div>142.50<br /><span className="text-xs text-muted-foreground">Regular</span></div><div>3.25<br /><span className="text-xs text-muted-foreground">Overtime</span></div><div>1<br /><span className="text-xs text-muted-foreground">Open shift</span></div></div>
+              </CollapsibleCard>
+            </div>
+            <section id="preview-assignment" className="scroll-mt-28 rounded-2xl border bg-card p-5">
+              <h2 className="text-lg font-semibold">Assign a teacher</h2>
+              <p className="mt-1 text-sm text-muted-foreground">The focused input task begins here after choosing the action above.</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-lg border bg-background p-3 text-sm">Teacher selection</div><div className="rounded-lg border bg-background p-3 text-sm">Classroom selection</div></div>
+            </section>
+          </div>
+        ) : null}
+        {view === "billing-declutter" ? (
+          <div className="space-y-5">
+            <header className="rounded-2xl border bg-card p-5">
+              <Badge>Director workspace</Badge>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight">Billing &amp; invoices</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Synthetic family data showing the actual decluttered billing workbench.</p>
+            </header>
+            <BillingWorkbench
+              families={[terminalFamily]}
+              centers={[terminalCenter]}
+              products={[{ id: "preview-registration", name: "Registration fee", type: "registration_fee", amountCents: 7500 }]}
+              tuitionPlans={[{ id: "preview-plan", centerId: terminalCenter.id, name: "Pre-K Weekly", ageGroup: "Pre-K", cadence: "weekly", amountCents: 24500 }]}
+              currentRole="CENTER_DIRECTOR"
+              initialCenterId={terminalCenter.id}
+              initialFamilyId={terminalFamily.id}
+            />
+          </div>
+        ) : null}
+        {view === "staff-declutter" ? (
+          <div className="space-y-5">
+            <header className="rounded-2xl border bg-card p-5">
+              <Badge>Director workspace</Badge>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight">Staff</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Synthetic staffing data showing the actual decluttered staff workspace.</p>
+            </header>
+            <StaffManagementPanel
+              centers={[{ id: "preview-center", name: "Sunshine Academy · Carmel", city: "Carmel", state: "IN", timezone: "America/Indiana/Indianapolis" }]}
+              classrooms={[
+                { id: "preview-classroom", centerId: "preview-center", name: "Butterflies", ageGroup: "Pre-K" },
+                { id: "preview-classroom-2", centerId: "preview-center", name: "Busy Bees", ageGroup: "Toddlers" },
+              ]}
+              staff={[
+                { id: "preview-teacher-1", centerId: "preview-center", classroomId: "preview-classroom", title: "Lead Teacher", phone: "317-555-0110", backgroundCheckStatus: "placeholder_clear", user: { name: "Jordan Lee", email: "jordan.lee@example.com", isActive: true }, classroom: { id: "preview-classroom", name: "Butterflies" } },
+                { id: "preview-teacher-2", centerId: "preview-center", classroomId: "preview-classroom-2", title: "Teacher", phone: "317-555-0111", backgroundCheckStatus: "placeholder_clear", user: { name: "Morgan Reed", email: "morgan.reed@example.com", isActive: true }, classroom: { id: "preview-classroom-2", name: "Busy Bees" } },
+              ]}
+              schedules={[{ id: "preview-schedule", startsAt: "2026-09-02T12:00:00.000Z", endsAt: "2026-09-02T20:00:00.000Z", status: "scheduled", staff: { id: "preview-teacher-1", user: { name: "Jordan Lee" } } }]}
+              timeClockSummaryGeneratedAt="2026-09-02T15:00:00.000Z"
+              canManageCompensation={false}
+              canFilterPayrollByCenter={false}
+            />
+          </div>
+        ) : null}
       </main>
     </div>
   );

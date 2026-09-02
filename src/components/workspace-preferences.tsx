@@ -199,6 +199,7 @@ export function CollapsiblePanel({
 
   return (
     <section
+      id={id}
       className={cn("min-w-0 overflow-hidden rounded-xl border bg-background/40", className)}
       data-collapsible-panel="true"
       data-collapsed={collapsed ? "true" : "false"}

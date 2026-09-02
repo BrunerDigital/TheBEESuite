@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Save, Search, Send } from "lucide-react";
@@ -31,6 +31,8 @@ import {
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { StripeTerminalPayment } from "@/components/stripe-terminal-payment";
 import { TUITION_CREDIT_CATEGORIES, type TuitionCreditCategory } from "@/lib/tuition-credits";
+import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
+import { CollapsiblePanel } from "@/components/workspace-preferences";
 
 export type BillingWorkbenchFamily = {
   id: string;
@@ -437,6 +439,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [planAmountDollars, setPlanAmountDollars] = useState(initialAssignedPlan ? String(initialAssignedPlan.amountCents / 100) : "");
   const [planFundingType, setPlanFundingType] = useState<TuitionFundingType>(initialAssignedPlan?.amountCents === 0 ? "voucher" : "family");
   const [billingAction, setBillingAction] = useState("recurring");
+
+  useEffect(() => {
+    const sectionId = decodeURIComponent(window.location.hash.slice(1));
+    if (!["billing-family-overview", "billing-payment-methods", "billing-actions"].includes(sectionId)) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById(sectionId)?.scrollIntoView({ block: "start" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [weeklyRecoveryPeriod, setWeeklyRecoveryPeriod] = useState(currentWeeklyPeriod());
@@ -1601,6 +1610,21 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </Alert>
         ) : null}
 
+        <WorkspaceSectionDirectory
+          id="billing-workspace-directory"
+          description="Keep the current family and balance visible, then move directly to payment setup or the billing task that needs a change. Less common corrections stay under More billing tasks."
+          reviewDestinations={[
+            { href: "#billing-family-overview", label: "Family billing overview", description: `${selectedFamily?.name ?? "Choose a family"} · ${money(familyBalanceCents)} balance` },
+            { href: "#billing-payment-methods", label: "Payment methods", description: selectedPaymentMethod?.hasSavedPaymentMethod ? selectedPaymentMethod.paymentMethodLabel ?? "Saved method on file" : "No saved method" },
+          ]}
+          actionDestinations={[
+            { href: "#billing-payment-methods", label: "Collect or request payment" },
+            { href: "#billing-actions", label: "Add or update billing" },
+            { href: "#agency-subsidy-billing", label: "Open agency claims" },
+          ]}
+        />
+
+        <div id="billing-family-overview" className="scroll-mt-28">
         <EntityHeader
           sticky
           eyebrow="Family billing"
@@ -1634,6 +1658,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             />
           </div>
         </EntityHeader>
+        </div>
 
         {selectedFamilyIsPast ? (
           <Alert className="border-sky-500/30 bg-sky-500/10">
@@ -1694,7 +1719,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </Alert>
         ) : null}
 
-        <div className="rounded-lg border bg-background/35 p-4">
+        <div id="billing-payment-methods" className="scroll-mt-28 rounded-lg border bg-background/35 p-4">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -2003,20 +2028,33 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </Button>
         </div>
 
-        <Tabs value={billingAction} onValueChange={setBillingAction}>
-          <TabsList className="flex h-auto flex-wrap justify-start">
-            <TabsTrigger value="recurring"><CalendarClock data-icon="inline-start" />Child tuition</TabsTrigger>
-            <TabsTrigger value="single"><ReceiptText data-icon="inline-start" />Family charge</TabsTrigger>
-            <TabsTrigger value="edit"><FilePenLine data-icon="inline-start" />Edit invoice</TabsTrigger>
-            <TabsTrigger value="batch"><Rows3 data-icon="inline-start" />Batch tuition</TabsTrigger>
-            <TabsTrigger value="weekly-recovery"><Search data-icon="inline-start" />Weekly recovery</TabsTrigger>
-            <TabsTrigger value="check"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
-            <TabsTrigger value="cash"><Banknote data-icon="inline-start" />Cash payment</TabsTrigger>
-            <TabsTrigger value="payroll"><Banknote data-icon="inline-start" />Payroll deduction</TabsTrigger>
-            <TabsTrigger value="refund"><RotateCcw data-icon="inline-start" />Refund</TabsTrigger>
-            <TabsTrigger value="agency"><BadgeDollarSign data-icon="inline-start" />Agency claims</TabsTrigger>
-            <TabsTrigger value="adjustment"><MinusCircle data-icon="inline-start" />Credit / adjustment</TabsTrigger>
+        <Tabs id="billing-actions" value={billingAction} onValueChange={setBillingAction} className="scroll-mt-28">
+          <div>
+            <div className="text-sm font-semibold">Common billing tasks</div>
+            <p className="mt-1 text-xs text-muted-foreground">Choose the routine change you need to make for this family.</p>
+          </div>
+          <TabsList className="flex flex-wrap justify-start gap-1 group-data-horizontal/tabs:h-auto" aria-label="Common billing tasks">
+            <TabsTrigger value="recurring" className="h-10 min-h-10"><CalendarClock data-icon="inline-start" />Child tuition</TabsTrigger>
+            <TabsTrigger value="single" className="h-10 min-h-10"><ReceiptText data-icon="inline-start" />Family charge</TabsTrigger>
+            <TabsTrigger value="check" className="h-10 min-h-10"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
+            <TabsTrigger value="cash" className="h-10 min-h-10"><Banknote data-icon="inline-start" />Cash payment</TabsTrigger>
           </TabsList>
+          <CollapsiblePanel
+            id="billing-more-actions"
+            title="More billing tasks"
+            summary="Invoice corrections, batch work, payroll deductions, refunds, agency claims, and adjustments"
+            defaultCollapsed
+          >
+            <TabsList className="flex flex-wrap justify-start gap-1 group-data-horizontal/tabs:h-auto" aria-label="More billing tasks">
+              <TabsTrigger value="edit" className="h-10 min-h-10"><FilePenLine data-icon="inline-start" />Edit invoice</TabsTrigger>
+              <TabsTrigger value="batch" className="h-10 min-h-10"><Rows3 data-icon="inline-start" />Batch tuition</TabsTrigger>
+              <TabsTrigger value="weekly-recovery" className="h-10 min-h-10"><Search data-icon="inline-start" />Weekly recovery</TabsTrigger>
+              <TabsTrigger value="payroll" className="h-10 min-h-10"><Banknote data-icon="inline-start" />Payroll deduction</TabsTrigger>
+              <TabsTrigger value="refund" className="h-10 min-h-10"><RotateCcw data-icon="inline-start" />Refund</TabsTrigger>
+              <TabsTrigger value="agency" className="h-10 min-h-10"><BadgeDollarSign data-icon="inline-start" />Agency claims</TabsTrigger>
+              <TabsTrigger value="adjustment" className="h-10 min-h-10"><MinusCircle data-icon="inline-start" />Credit / adjustment</TabsTrigger>
+            </TabsList>
+          </CollapsiblePanel>
 
           <TabsContent value="single" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <ChargeFields

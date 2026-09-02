@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, Pill, Save } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -70,12 +70,14 @@ export function MedicationLogPanel({ childrenOptions }: { childrenOptions: Medic
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle as="h2">Medication log</CardTitle>
-        <CardDescription>Record administration details for director review and export.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <CollapsibleCard
+      id="compliance-medication-log"
+      title="Medication log"
+      description="Record administration details for director review and export."
+      collapsedSummary={`${childrenOptions.length} ${childrenOptions.length === 1 ? "child" : "children"} available`}
+      contentClassName="space-y-4"
+      defaultCollapsed
+    >
         {error ? (
           <Alert variant="destructive">
             <AlertCircle aria-hidden="true" className="size-4" />
@@ -151,7 +153,6 @@ export function MedicationLogPanel({ childrenOptions }: { childrenOptions: Medic
         ) : (
           <p className="text-sm text-muted-foreground">No child records are available in this compliance scope.</p>
         )}
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

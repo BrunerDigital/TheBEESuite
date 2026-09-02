@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { CollapsiblePanel } from "@/components/workspace-preferences";
 import {
   ageGroupTotal,
   calculateScheduledDaysFte,
@@ -725,7 +726,13 @@ export function FteReportForm({
           </div>
         </div>
 
-        <div className="grid gap-3 rounded-xl border bg-background/35 p-4">
+        <CollapsiblePanel
+          id={`fte-${mode}-legacy-fields`}
+          title="Advanced financial and legacy fields"
+          summary="Receivables, billing mix, capacity, payroll, starts, withdrawals, and preregistration"
+          defaultCollapsed
+        >
+        <div className="grid gap-3">
           <div>
             <div className="text-sm font-semibold">Legacy FTE report fields</div>
             <p className="text-xs text-muted-foreground">
@@ -787,6 +794,7 @@ export function FteReportForm({
             </div>
           </div>
         </div>
+        </CollapsiblePanel>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {[
@@ -854,7 +862,13 @@ export function FteReportForm({
           </span>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border">
+        <CollapsiblePanel
+          id={`fte-${mode}-report-history`}
+          title="FTE report history"
+          summary={`${reports.length} ${reports.length === 1 ? "report" : "reports"} available · showing up to 12`}
+          defaultCollapsed
+        >
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -911,6 +925,7 @@ export function FteReportForm({
             </TableBody>
           </Table>
         </div>
+        </CollapsiblePanel>
       </CardContent>
     </Card>
   );

@@ -378,6 +378,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
           city: true,
           state: true,
           postalCode: true,
+          status: true,
           timezone: true,
           customFields: true,
           organization: {
@@ -408,10 +409,12 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
         [center.city, center.state].filter(Boolean).join(", "),
       ].filter(Boolean).join(" · ") || "Authorized school",
       companyName: center.organization.tenant.name,
+      status: center.status,
     })),
     requestedSelection: session.workspaceSelection,
   });
-  centerIds = effectiveCenterIdsForWorkspace(workspace, authorizedCenterIds);
+  const selectableCenterIds = workspace.options.map((center) => center.id);
+  centerIds = effectiveCenterIdsForWorkspace(workspace, selectableCenterIds);
   const effectiveCenters = authorizedCenters.filter((center) => centerIds.includes(center.id));
   const timeZonesByCenterId = Object.fromEntries(effectiveCenters.map((center) => [center.id, readCenterLocationTimeZone(center)]));
   const primaryCenter = authorizedCenters.find((center) => center.id === workspace.activeCenterId)
@@ -446,7 +449,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     organizationId: effectiveOrganizationId,
     mustResetPassword: user.mustResetPassword,
     centerIds,
-    authorizedCenterIds,
+    authorizedCenterIds: selectableCenterIds,
     primaryCenterId: centerIds[0] ?? null,
     assignedClassroomId: user.staffProfile?.classroomId ?? null,
     deviceSessionId: session.deviceSessionId ?? null,

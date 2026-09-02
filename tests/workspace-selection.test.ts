@@ -37,6 +37,26 @@ test("multi-location executives must choose a live authorized workspace", () => 
   assert.deepEqual(effectiveCenterIdsForWorkspace(revoked, centers.map((center) => center.id)), []);
 });
 
+test("closed and inactive locations are not selectable workspaces", () => {
+  const options = [
+    ...centers,
+    { id: "school_closed", name: "Former school", detail: "Closed", companyName: "Kid City USA", status: "closed" },
+    { id: "school_inactive", name: "Paused school", detail: "Inactive", companyName: "Kid City USA", status: "inactive" },
+  ];
+  const pending = resolveWorkspaceState({ role: UserRole.BRAND_ADMIN, authorizedCenters: options });
+  assert.deepEqual(pending.options.map((center) => center.id), ["school_a", "school_b"]);
+  assert.equal(pending.authorizedCenterCount, 2);
+
+  const stale = resolveWorkspaceState({
+    role: UserRole.BRAND_ADMIN,
+    authorizedCenters: options,
+    requestedSelection: "center:school_closed",
+  });
+  assert.equal(stale.mode, "pending");
+  assert.equal(stale.invalidSelection, true);
+  assert.deepEqual(effectiveCenterIdsForWorkspace(stale, stale.options.map((center) => center.id)), []);
+});
+
 test("specific and all-location workspaces narrow the effective server scope", () => {
   const all = resolveWorkspaceState({ role: UserRole.REGIONAL_MANAGER, authorizedCenters: centers, requestedSelection: "all" });
   assert.equal(all.mode, "all");
@@ -126,6 +146,7 @@ test("platform location selection carries the selected company context and large
 
   assert.match(auth, /selectedPlatformCenter\?\.organization\.tenantId \?\? user\.tenantId/);
   assert.match(auth, /user\.role === UserRole\.PLATFORM_OWNER && workspace\.activeCenterId/);
+  assert.match(auth, /const selectableCenterIds = workspace\.options\.map/);
   assert.match(auth, /effectiveOrganizationId = selectedPlatformCenter\?\.organization\.id \?\? user\.organizationId/);
   assert.match(auth, /effectiveBrand = selectedPlatformCenter\?\.organization\.brand \?\? user\.organization\?\.brand/);
   assert.match(selector, /workspace\.options\.length > 8/);

@@ -52,7 +52,7 @@ test("workspace selection guards the shared authenticated entry points before da
     assert.match(source, /workspaceSelectionRedirect/);
   }
   const api = readFileSync(new URL("../src/app/api/workspace/selection/route.ts", import.meta.url), "utf8");
-  assert.match(api, /authorizedCenterIds/);
+  assert.match(api, /user\.workspace\?\.options\.some/);
   assert.match(api, /createSessionToken/);
   assert.doesNotMatch(api, /prisma\./);
   const autopay = readFileSync(new URL("../src/app/api/billing/autopay/route.ts", import.meta.url), "utf8");

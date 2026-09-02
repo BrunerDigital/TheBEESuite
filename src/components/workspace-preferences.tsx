@@ -3,6 +3,7 @@
 import {
   type DragEvent,
   type ReactNode,
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -97,7 +98,14 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean) {
     };
   }, [key]);
 
-  function toggleCollapsed() {
+  const setPersistedCollapsed = useCallback((next: boolean) => {
+    setCollapsed(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(key, next ? "1" : "0");
+    }
+  }, [key]);
+
+  const toggleCollapsed = useCallback(() => {
     setCollapsed((current) => {
       const next = !current;
       if (typeof window !== "undefined") {
@@ -105,9 +113,35 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean) {
       }
       return next;
     });
-  }
+  }, [key]);
 
-  return { collapsed, toggleCollapsed };
+  const expand = useCallback(() => setPersistedCollapsed(false), [setPersistedCollapsed]);
+
+  return { collapsed, expand, toggleCollapsed };
+}
+
+function useExpandForHash(id: string, expand: () => void) {
+  useEffect(() => {
+    function expandAndFocusTarget() {
+      let target = "";
+      try {
+        target = decodeURIComponent(window.location.hash.slice(1));
+      } catch {
+        return;
+      }
+      if (target !== id) return;
+      expand();
+      window.requestAnimationFrame(() => {
+        const element = document.getElementById(id);
+        element?.scrollIntoView({ block: "start" });
+        element?.focus({ preventScroll: true });
+      });
+    }
+
+    expandAndFocusTarget();
+    window.addEventListener("hashchange", expandAndFocusTarget);
+    return () => window.removeEventListener("hashchange", expandAndFocusTarget);
+  }, [expand, id]);
 }
 
 export function CollapsibleCard({
@@ -126,10 +160,18 @@ export function CollapsibleCard({
   defaultCollapsed = false,
 }: CollapsibleCardProps) {
   const contentId = useId();
-  const { collapsed, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
+  const { collapsed, expand, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
+  useExpandForHash(id, expand);
 
   return (
-    <Card id={id} className={className} data-collapsible-card="true" data-collapsed={collapsed ? "true" : "false"} size={collapsed ? "sm" : "default"}>
+    <Card
+      id={id}
+      tabIndex={-1}
+      className={cn("scroll-mt-28 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", className)}
+      data-collapsible-card="true"
+      data-collapsed={collapsed ? "true" : "false"}
+      size={collapsed ? "sm" : "default"}
+    >
       <CardHeader className={cn(collapsed && "py-0", headerClassName)}>
         <div className={cn("flex gap-3", collapsed ? "items-center justify-between" : "flex-col lg:flex-row lg:items-start lg:justify-between")}>
           <div className="min-w-0">
@@ -195,12 +237,14 @@ export function CollapsiblePanel({
   defaultCollapsed = true,
 }: CollapsiblePanelProps) {
   const contentId = useId();
-  const { collapsed, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
+  const { collapsed, expand, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
+  useExpandForHash(id, expand);
 
   return (
     <section
       id={id}
-      className={cn("min-w-0 overflow-hidden rounded-xl border bg-background/40", className)}
+      tabIndex={-1}
+      className={cn("min-w-0 scroll-mt-28 overflow-hidden rounded-xl border bg-background/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", className)}
       data-collapsible-panel="true"
       data-collapsed={collapsed ? "true" : "false"}
     >

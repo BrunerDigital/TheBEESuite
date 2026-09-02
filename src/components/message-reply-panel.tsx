@@ -6,11 +6,11 @@ import { AlertCircle, CheckCircle2, MessageSquare, Paperclip, Send, X } from "lu
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import { replySubject } from "@/lib/message-reply-routing";
 
 export type MessageFamilyOption = {
@@ -112,6 +112,7 @@ export function MessageReplyPanel({
   replyDraft,
   variant = "full",
   composerId = "message-composer",
+  defaultCollapsed = false,
 }: {
   familyOptions: MessageFamilyOption[];
   templates: MessageTemplateOption[];
@@ -122,6 +123,7 @@ export function MessageReplyPanel({
   replyDraft?: MessageReplyDraft | null;
   variant?: "full" | "conversation";
   composerId?: string;
+  defaultCollapsed?: boolean;
 }) {
   const router = useRouter();
   const instanceId = useId();
@@ -471,12 +473,15 @@ export function MessageReplyPanel({
   }
 
   return (
-    <Card aria-busy={isPending || isSuggesting}>
-      <CardHeader id={composerId} className="scroll-mt-28">
-        <CardTitle as="h2">Message Composer</CardTitle>
-        <CardDescription>Family, classroom, broadcast, and director/teacher messages are stored in scoped threads.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <CollapsibleCard
+      id={composerId}
+      title="Write a message"
+      description="Family, classroom, broadcast, and director/teacher messages are stored in scoped threads."
+      collapsedSummary={replyDraft ? "Reply ready to complete" : "Open a focused composer"}
+      contentClassName="space-y-4"
+      defaultCollapsed={defaultCollapsed && !replyDraft}
+    >
+      <div aria-busy={isPending || isSuggesting} className="contents">
         {statusMessage ? (
           <Alert>
             <CheckCircle2 className="size-4" />
@@ -763,7 +768,7 @@ export function MessageReplyPanel({
         ) : (
           <p className="text-sm text-muted-foreground">No families are available for messaging yet.</p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }

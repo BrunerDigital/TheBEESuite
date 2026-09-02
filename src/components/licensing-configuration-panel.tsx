@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { AlertTriangle, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -139,12 +139,15 @@ export function LicensingConfigurationPanel({
   }
 
   return (
-    <Card aria-busy={isPending}>
-      <CardHeader>
-        <CardTitle as="h2">State licensing configuration</CardTitle>
-        <CardDescription>School-level licensing agency, license, capacity, ratio, inspection, drill, document, and medication rules.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <CollapsibleCard
+      id="compliance-licensing-configuration"
+      title="State licensing configuration"
+      description="School-level licensing agency, license, capacity, ratio, inspection, drill, document, and medication rules."
+      collapsedSummary={`${readyCount} configured · ${needsInputCount} need input · ${rows.length} visible schools`}
+      contentClassName="space-y-6"
+      defaultCollapsed
+    >
+      <div aria-busy={isPending} className="contents">
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-lg border bg-background/40 p-3">
             <div className="text-xs text-muted-foreground">Configured</div>
@@ -284,7 +287,7 @@ export function LicensingConfigurationPanel({
             </Button>
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }

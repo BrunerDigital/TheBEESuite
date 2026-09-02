@@ -6,10 +6,10 @@ import { Bell, RotateCcw, Save, SlidersHorizontal } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import {
   notificationPreferenceKey,
   resolveNotificationPreferenceChannels,
@@ -201,20 +201,16 @@ export function NotificationPreferencesPanel({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <CardTitle as="h2">Notification preferences</CardTitle>
-            <CardDescription>Email, text message, and app-alert defaults by role, with settings for individual users.</CardDescription>
-          </div>
-          <Badge variant="outline">
-            <Bell data-icon="inline-start" />
-            {canManageRoleDefaults ? "Role + user matrix" : "My settings"}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4" aria-busy={isPending}>
+    <CollapsibleCard
+      id="message-notification-preferences"
+      title="Notification preferences"
+      description="Email, text message, and app-alert defaults by role, with settings for individual users."
+      collapsedSummary={canManageRoleDefaults ? "Role and user settings" : "My settings"}
+      headerActions={<Badge variant="outline"><Bell data-icon="inline-start" />{canManageRoleDefaults ? "Role + user matrix" : "My settings"}</Badge>}
+      contentClassName="space-y-4"
+      defaultCollapsed
+    >
+      <div aria-busy={isPending} className="contents">
         {status ? (
           <Alert>
             <AlertTitle>Saved</AlertTitle>
@@ -328,7 +324,7 @@ export function NotificationPreferencesPanel({
             ))}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }

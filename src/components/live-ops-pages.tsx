@@ -156,6 +156,7 @@ import { RegistrationReviewActions } from "@/components/registration-review-acti
 import type { RegistrationReviewPreview } from "@/lib/registration-packet";
 import { ReputationWorkspace, type ReputationWorkspaceData } from "@/components/reputation-workspace";
 import { RequiredDocumentChecklistPanel } from "@/components/required-document-checklist-panel";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import { SchoolReceiptDetailsCard } from "@/components/school-receipt-details-card";
 import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { StaffOnboardingChecklistPanel } from "@/components/staff-onboarding-checklist-panel";
@@ -2490,6 +2491,13 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
         <StatCard label="Priority" value={data.stats.priority.toLocaleString()} />
         {!isParentMessagingView ? <StatCard label="Needs follow-up" value={data.stats.aiReview.toLocaleString()} detail="Flagged for attention" /> : null}
       </div>
+      <nav aria-label="Message tasks" className="flex flex-wrap gap-2 rounded-xl border bg-card p-3">
+        <a className={buttonVariants({ variant: "default" })} href={isParentMessagingView ? "#message-composer" : "#message-inbox"}>
+          {isParentMessagingView ? "Write to the school" : "Open family inbox"}
+        </a>
+        {!isParentMessagingView ? <a className={buttonVariants({ variant: "outline" })} href="#new-message-composer">Write a new message</a> : null}
+        <a className={buttonVariants({ variant: "ghost" })} href="#message-notification-preferences">Notification settings</a>
+      </nav>
       {isParentMessagingView ? (
         <>
           <MessageReplyPanel
@@ -2501,15 +2509,15 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
             segmentOptions={data.segmentOptions}
             currentRole={data.currentRole}
             replyDraft={data.replyDraft}
+            defaultCollapsed
           />
-          <Card className="glass-panel">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <CardTitle as="h2">Message History</CardTitle>
-                <InfoTip label="About message history">Conversation history appears here when portal messages are linked to your family account.</InfoTip>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <CollapsibleCard
+            id="message-history"
+            title={<span className="flex items-center gap-2">Message history<InfoTip label="About message history">Conversation history appears here when portal messages are linked to your family account.</InfoTip></span>}
+            collapsedSummary={`${data.threads.length} ${data.threads.length === 1 ? "conversation" : "conversations"} · ${data.stats.unread} unread`}
+            contentClassName="space-y-4"
+            defaultCollapsed={!data.stats.unread}
+          >
               {data.threads.map((thread) => (
                 <div key={thread.key} className="rounded-lg border bg-background/60 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2537,25 +2545,26 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
                 </div>
               ))}
               {!data.threads.length ? <p className="text-sm text-muted-foreground">No message history is visible yet.</p> : null}
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
         </>
       ) : (
         <>
-          <MessageConversationInbox
-            threads={data.threads}
-            initialThreadKey={data.initialThreadKey}
-            initialReplyToMessageId={data.replyDraft?.replyToMessageId}
-            initialSearchQuery={data.initialSearchQuery}
-            composer={{
-              familyOptions: data.familyOptions,
-              templates: data.templates,
-              mergeFields: data.mergeFields,
-              staffOptions: data.staffOptions,
-              segmentOptions: data.segmentOptions,
-              currentRole: data.currentRole,
-            }}
-          />
+          <section id="message-inbox" className="scroll-mt-28">
+            <MessageConversationInbox
+              threads={data.threads}
+              initialThreadKey={data.initialThreadKey}
+              initialReplyToMessageId={data.replyDraft?.replyToMessageId}
+              initialSearchQuery={data.initialSearchQuery}
+              composer={{
+                familyOptions: data.familyOptions,
+                templates: data.templates,
+                mergeFields: data.mergeFields,
+                staffOptions: data.staffOptions,
+                segmentOptions: data.segmentOptions,
+                currentRole: data.currentRole,
+              }}
+            />
+          </section>
           <MessageReplyPanel
             key="new-message"
             familyOptions={data.familyOptions}
@@ -2565,6 +2574,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
             segmentOptions={data.segmentOptions}
             currentRole={data.currentRole}
             composerId="new-message-composer"
+            defaultCollapsed
           />
         </>
       )}
@@ -3882,29 +3892,27 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
         <StatCard label="Medical notes" value={data.stats.medicalNotes} />
         <StatCard label="Teacher documents" value={data.stats.documents} />
       </div>
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle as="h2">Visibility Rules</CardTitle>
-          <CardDescription>
-            Teachers see classroom safety records only. Billing, payroll, staff files, raw legal/court records, and admin compliance packages stay hidden.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <CollapsibleCard
+        id="teacher-document-visibility-rules"
+        title="Visibility rules"
+        description="Teachers see classroom safety records only. Billing, payroll, staff files, raw legal/court records, and admin compliance packages stay hidden."
+        collapsedSummary="Classroom safety records only"
+        defaultCollapsed
+      >
+        <p className="text-sm text-muted-foreground">Restricted administrative and legal records remain outside this teacher-scoped workspace.</p>
+      </CollapsibleCard>
       <div className="grid gap-4 xl:grid-cols-2">
         {data.children.map((child) => (
-          <Card key={child.id} className="glass-panel">
-            <CardHeader>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <CardTitle as="div">{child.preferredName || child.fullName}</CardTitle>
-                  <CardDescription>
-                    {child.fullName} · {child.classroom?.name ?? "Unassigned classroom"} · {child.ageGroup}
-                  </CardDescription>
-                </div>
-                <Badge variant="outline">{formatRecordLabel(child.enrollmentStatus)}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="grid gap-4">
+          <CollapsibleCard
+            key={child.id}
+            id={`teacher-document-child-${child.id}`}
+            title={child.preferredName || child.fullName}
+            description={`${child.fullName} · ${child.classroom?.name ?? "Unassigned classroom"} · ${child.ageGroup}`}
+            collapsedSummary={`${child.allergies.length} allergies · ${child.medicalNotes.length} medical notes · ${child.documents.length} files`}
+            headerActions={<Badge variant="outline">{formatRecordLabel(child.enrollmentStatus)}</Badge>}
+            contentClassName="grid gap-4"
+            defaultCollapsed={!hasCustodyWarning(child.family)}
+          >
               {hasCustodyWarning(child.family) ? (
                 <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
                   <div className="font-medium text-destructive">
@@ -3965,8 +3973,7 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
         ))}
         {!data.children.length ? (
           <Card className="glass-panel xl:col-span-2">
@@ -3976,12 +3983,13 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
           </Card>
         ) : null}
       </div>
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle as="h2">Teacher-Visible Files</CardTitle>
-          <CardDescription>Read-only files relevant to classroom care, safety, permissions, and emergency response.</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        id="teacher-visible-files"
+        title="Teacher-visible files"
+        description="Read-only files relevant to classroom care, safety, permissions, and emergency response."
+        collapsedSummary={`${documentRows.length} ${documentRows.length === 1 ? "file" : "files"}`}
+        defaultCollapsed
+      >
           <Table>
             <TableHeader>
               <TableRow>
@@ -4021,8 +4029,7 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
               ) : null}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
     </div>
   );
 }
@@ -4046,14 +4053,18 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
         <StatCard label="Restricted" value={data.stats.restricted} />
         <StatCard label="Pending" value={data.stats.pending} />
       </div>
-      <Card className="glass-panel">
-        <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <CardTitle as="h2">Licensing / Records Package</CardTitle>
-            <CardDescription>
-              Download a manifest-backed package for visible schools with family, child, staff, document, incident, medication, drill, attendance, and form records.
-            </CardDescription>
-          </div>
+      <nav aria-label="Document tasks" className="flex flex-wrap gap-2 rounded-xl border bg-card p-3">
+        <a className={buttonVariants({ variant: "default" })} href="#required-document-action-rows">Review needed documents</a>
+        <a className={buttonVariants({ variant: "outline" })} href="#document-signature-request">Request a signature</a>
+        <a className={buttonVariants({ variant: "outline" })} href="#document-request-editor">Create or edit request</a>
+        <a className={buttonVariants({ variant: "ghost" })} href="#document-records">View all records</a>
+      </nav>
+      <CollapsibleCard
+        id="document-export-package"
+        title="Licensing / records package"
+        description="Download a manifest-backed package for visible schools with family, child, staff, document, incident, medication, drill, attendance, and form records."
+        collapsedSummary="Manifest-backed JSON and CSV export"
+        headerActions={(
           <a
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
             href="/api/documents/export-package"
@@ -4062,21 +4073,22 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
             <Download data-icon="inline-start" />
             Export package
           </a>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            The package includes CSV sections inside a single JSON download and records the export in the audit log. It does not include raw storage keys or certify legal/licensing compliance.
-          </p>
-        </CardContent>
-      </Card>
+        )}
+        defaultCollapsed
+      >
+        <p className="text-sm text-muted-foreground">
+          The package includes CSV sections inside a single JSON download and records the export in the audit log. It does not include raw storage keys or certify legal/licensing compliance.
+        </p>
+      </CollapsibleCard>
       <RequiredDocumentChecklistPanel items={data.requiredChecklist.items} summary={data.requiredChecklist.summary} />
       <SignatureRequestPanel families={data.signatureFamilies} />
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle as="h2">Document Records</CardTitle>
-          <CardDescription>Compliance-ready document tracking without legal compliance guarantees</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        id="document-records"
+        title="Document records"
+        description="Compliance-ready document tracking without legal compliance guarantees."
+        collapsedSummary={`${data.documents.length} ${data.documents.length === 1 ? "record" : "records"} · ${data.stats.pending} pending`}
+        defaultCollapsed={!data.stats.pending}
+      >
           <Table>
             <TableHeader>
               <TableRow>
@@ -4129,9 +4141,10 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
               ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-      <OperationsActionHub title="Create or Edit Document Request" defaultEntity="document" compact />
+      </CollapsibleCard>
+      <section id="document-request-editor" className="scroll-mt-28">
+        <OperationsActionHub title="Create or Edit Document Request" defaultEntity="document" compact />
+      </section>
     </div>
   );
 }
@@ -4208,15 +4221,19 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
         <StatCard label="Open compliance tasks" value={data.stats.openComplianceTasks} />
         <StatCard label="Reminders needing attention" value={data.stats.dueComplianceReminders} />
       </div>
-      <div className="flex justify-end">
+      <nav aria-label="Compliance tasks" className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+        <a className={buttonVariants({ variant: "default" })} href="#compliance-task-workspace">Review compliance tasks</a>
+        <a className={buttonVariants({ variant: "outline" })} href="#compliance-medication-log">Record medication</a>
+        <a className={buttonVariants({ variant: "outline" })} href="#compliance-emergency-drills">Log a drill</a>
+        <a className={buttonVariants({ variant: "ghost" })} href="#compliance-licensing-configuration">Edit licensing setup</a>
         <Link
           href="/api/compliance/export"
-          className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+          className={buttonVariants({ variant: "ghost" })}
         >
           <Download data-icon="inline-start" />
           Export Compliance CSV
         </Link>
-      </div>
+      </nav>
       <LicensingConfigurationPanel centers={data.centers} canManage={data.canManageLicensing} />
       <EmergencyDrillLogPanel centers={data.centers} drillLogs={data.emergencyDrillLogs} canManage={data.canManageLicensing} />
       <ComplianceTaskPanel
@@ -4226,12 +4243,13 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
         canManage={data.canManageLicensing}
       />
       <MedicationLogPanel childrenOptions={data.medicationChildren} />
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle as="h2">Recent Medication Logs</CardTitle>
-          <CardDescription>Medication administration records for the schools you can access</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        id="compliance-recent-medication-logs"
+        title="Recent medication logs"
+        description="Medication administration records for the schools you can access."
+        collapsedSummary={`${data.medicationLogs.length} recent ${data.medicationLogs.length === 1 ? "entry" : "entries"}`}
+        defaultCollapsed
+      >
           <Table>
             <TableHeader>
               <TableRow>
@@ -4264,15 +4282,15 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
               ) : null}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle as="h2">Certification Reminders</CardTitle>
-            <CardDescription>Expiring teacher documentation</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <CollapsibleCard
+          id="compliance-certification-reminders"
+          title="Certification reminders"
+          description="Expiring teacher documentation."
+          collapsedSummary={`${data.certifications.length} ${data.certifications.length === 1 ? "certification" : "certifications"}`}
+          defaultCollapsed={!data.stats.expiringCertifications}
+        >
             <Table>
               <TableHeader>
                 <TableRow>
@@ -4293,8 +4311,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle as="h2">Allergy List</CardTitle>

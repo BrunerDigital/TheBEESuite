@@ -906,29 +906,29 @@ export function TeacherMobileWorkspace({
         </Alert>
       ) : null}
 
-      <Card id="teacher-profile-setup" className="scroll-mt-28 shadow-none">
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <UserAvatar name={profileName || teacherName} src={teacherProfile?.profilePhotoUrl} size="lg" />
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle as="h2">My profile</CardTitle>
-                  <Badge variant={profileReady ? "default" : "outline"}>
-                    {profileReady ? "Ready" : "Needs setup"}
-                  </Badge>
-                </div>
-                <CardDescription className="mt-2">
-                  Review your contact information, classroom assignment, and staff kiosk code.
-                </CardDescription>
-              </div>
-            </div>
+      <CollapsibleCard
+        id="teacher-profile-setup"
+        title="My profile"
+        description="Review your contact information, classroom assignment, and staff kiosk code."
+        collapsedSummary={`${profileReady ? "Ready" : "Needs setup"} · ${teacherProfile?.centerName ?? "School not assigned"}`}
+        headerActions={(
+          <div className="flex flex-wrap gap-2">
+            <Badge variant={profileReady ? "default" : "outline"}>{profileReady ? "Ready" : "Needs setup"}</Badge>
             <Badge variant={hasStaffKioskCode ? "default" : "destructive"}>
               {hasStaffKioskCode ? "Staff code ready" : "Staff code missing"}
             </Badge>
           </div>
-        </CardHeader>
-        <CardContent>
+        )}
+        className="shadow-none"
+        defaultCollapsed={profileReady}
+      >
+          <div className="mb-4 flex items-center gap-3 rounded-xl border bg-background/40 p-3">
+            <UserAvatar name={profileName || teacherName} src={teacherProfile?.profilePhotoUrl} size="lg" />
+            <div className="min-w-0 text-sm">
+              <div className="truncate font-medium">{profileName || teacherName}</div>
+              <div className="truncate text-muted-foreground">{teacherProfile?.centerName ?? "School not assigned"}</div>
+            </div>
+          </div>
           <form className="grid gap-4" onSubmit={saveTeacherProfile}>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
@@ -1031,8 +1031,7 @@ export function TeacherMobileWorkspace({
               Save profile
             </Button>
           </form>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
 
       {selectedCustodyWarning ? (
         <Alert variant="destructive">
@@ -1061,15 +1060,16 @@ export function TeacherMobileWorkspace({
         </AlertDescription>
       </Alert>
 
-      <nav className="sticky top-[4.75rem] z-10 -mx-1 overflow-x-auto rounded-xl border bg-background p-2 lg:top-20">
+      <nav aria-label="Teacher task shortcuts" className="sticky top-[4.75rem] z-10 -mx-1 overflow-x-auto rounded-xl border bg-background p-2 shadow-sm lg:top-20">
+        <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Do now</div>
         <div className="flex min-w-max gap-2">
           {[
-            ["Profile", "#teacher-profile-setup"],
-            ["Roster", "#teacher-roster"],
-            ["Attendance", "#teacher-attendance"],
-            ["Daily report", "#teacher-daily-report"],
-            ["Photo", "#teacher-photo"],
-            ["Incident", "#teacher-incident"],
+            ["Check attendance", "#teacher-attendance"],
+            ["Write daily report", "#teacher-daily-report"],
+            ["Share photo", "#teacher-photo"],
+            ["Report incident", "#teacher-incident"],
+            ["View roster", "#teacher-roster"],
+            ["Edit profile", "#teacher-profile-setup"],
           ].map(([label, href]) => (
             <Button key={href} size="sm" variant="outline" className="min-h-10" nativeButton={false} render={<a href={href} />}>
               {label}
@@ -1142,6 +1142,7 @@ export function TeacherMobileWorkspace({
         collapsedSummary={`${roster.length} ${roster.length === 1 ? "child" : "children"} · ${byClassroom.length} ${byClassroom.length === 1 ? "classroom" : "classrooms"}`}
         className="scroll-mt-28 shadow-none"
         contentClassName="grid gap-3 md:grid-cols-2"
+        defaultCollapsed
       >
           {byClassroom.map((classroom) => {
             const ratioSnapshot = classroom.id ? ratioByClassroomId.get(classroom.id) : null;
@@ -1434,6 +1435,7 @@ export function TeacherMobileWorkspace({
           collapsedSummary={`${activeDailyReportChildren.length} selected · ${mealRows.length} meals · ${napRows.length} naps`}
           className="scroll-mt-28 shadow-none lg:col-span-2"
           contentClassName="space-y-5"
+          defaultCollapsed
         >
             <section id="teacher-quick-log" className="scroll-mt-28 rounded-xl border bg-background/40 p-3">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

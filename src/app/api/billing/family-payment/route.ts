@@ -51,7 +51,7 @@ import { stripeSchoolReadinessFlowFromFields } from "@/lib/stripe-school-readine
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { applySucceededStripeFamilyBalancePayment } from "@/lib/stripe-payment-application";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
-import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import { getParentPortalFamilyScope, getParentPortalPaymentFamilyScope } from "@/lib/parent-portal-family-scope";
 import {
   PARENT_PAYMENT_UNAVAILABLE_MESSAGE,
   paymentServiceError,
@@ -142,13 +142,15 @@ async function POSTHandler(request: NextRequest) {
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const billingAccountId = clean(body.billingAccountId);
   const familyId = clean(body.familyId);
+  const method = familyPaymentMethod(body.method);
   const parentFamilyScope = userIsParentGuardian && !userCanManageBilling
-    ? await getParentPortalFamilyScope(user.id, user.tenantId, familyId || null)
+    ? method === "saved_method"
+      ? await getParentPortalFamilyScope(user.id, user.tenantId, familyId || null)
+      : await getParentPortalPaymentFamilyScope(user.id, user.tenantId, familyId || null)
     : null;
   if (parentFamilyScope && !parentFamilyScope.ok) {
     return NextResponse.json({ ok: false, error: "Your family link needs review before payment can continue." }, { status: 409 });
   }
-  const method = familyPaymentMethod(body.method);
   const parentCheckout = userIsParentGuardian && !userCanManageBilling;
   const returnPath = safeReturnPath(body.returnPath, parentCheckout ? "/parent-portal" : "/billing-invoices");
   const description = parentCheckout ? "Family balance payment" : clean(body.description) || "Tuition payment";

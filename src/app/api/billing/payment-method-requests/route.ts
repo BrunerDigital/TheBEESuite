@@ -24,6 +24,7 @@ import {
 } from "@/lib/payment-method-request-forms";
 import { prisma } from "@/lib/prisma";
 import { buildManualEmailCopy, type ManualEmailCopy } from "@/lib/manual-email-copy";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -73,6 +74,7 @@ async function POSTHandler(request: NextRequest) {
       name: true,
       billingEmail: true,
       billingAccount: { select: { customFields: true } },
+      _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
       guardians: {
         select: { id: true, fullName: true, email: true, userId: true },
         orderBy: { fullName: "asc" },
@@ -109,6 +111,12 @@ async function POSTHandler(request: NextRequest) {
   }
   if (!canAccessAllCenters(user) && !canAccessCenter(user, center.id)) {
     return NextResponse.json({ ok: false, error: "You do not have access to this family's school." }, { status: 403 });
+  }
+  if (family._count.children === 0) {
+    return NextResponse.json(
+      { ok: false, error: "Payment method links are unavailable for a past family account. Use a one-time payment method instead." },
+      { status: 409 },
+    );
   }
 
   const options = paymentMethodRequestRecipientOptions({

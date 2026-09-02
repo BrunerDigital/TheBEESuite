@@ -123,7 +123,8 @@ test("parent portal presents messaging as one responsive school conversation", (
 });
 
 test("parent message direction comes from the family-scoped server query", () => {
-  assert.match(routePage, /prisma\.message\.findMany\(\{[\s\S]*?where: \{ familyId \}/);
+  assert.match(routePage, /prisma\.message\.findMany\(\{[\s\S]*?where: \{ familyId: parentPortalContentFamilyId \}/);
+  assert.match(routePage, /paymentContinuityAccess \? "__payment_continuity__" : familyId/);
   assert.match(routePage, /sender: \{ select: \{ name: true, role: true \} \}/);
   assert.match(routePage, /isFromFamily: message\.sender\?\.role === UserRole\.PARENT_GUARDIAN/);
   assert.match(routePage, /centerName=\{familyCenter \? formatCenterName\(familyCenter\)/);

@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { PaymentStatus, type Prisma } from "@prisma/client";
 import { activeClassroomWhere } from "@/lib/classroom-status";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 
@@ -26,6 +26,24 @@ export function visibleCurrentFamilyWhere(centerIds: readonly string[]): Prisma.
   return {
     ...visibleFamilyWhere(centerIds),
     children: { some: currentlyEnrolledChildWhere() },
+  };
+}
+
+export function currentOrOutstandingFamilyWhere(): Prisma.FamilyWhereInput {
+  return {
+    OR: [
+      { children: { some: currentlyEnrolledChildWhere() } },
+      {
+        billingAccount: {
+          is: {
+            OR: [
+              { balanceCents: { gt: 0 } },
+              { invoices: { some: { status: { in: [PaymentStatus.OPEN, PaymentStatus.FAILED] } } } },
+            ],
+          },
+        },
+      },
+    ],
   };
 }
 

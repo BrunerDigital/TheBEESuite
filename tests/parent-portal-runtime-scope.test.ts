@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { resolveParentPortalFamilyScope } from "../src/lib/parent-portal-family-scope";
+import { resolveParentPortalFamilyScope, resolveParentPortalPaymentFamilyScope } from "../src/lib/parent-portal-family-scope";
 
 test("parent portal runtime scope allows duplicate guardian rows for one family", () => {
   assert.deepEqual(resolveParentPortalFamilyScope([
@@ -59,6 +59,28 @@ test("parent portal runtime scope permits an explicitly selected current linked 
   });
 });
 
+test("general parent mutation scope rejects an explicitly selected billing-history family when a current family exists", () => {
+  assert.deepEqual(resolveParentPortalFamilyScope([
+    { id: "guardian_current", familyId: "family_current", currentChildCount: 1 },
+    { id: "guardian_history", familyId: "family_history", currentChildCount: 0 },
+  ], "family_history"), {
+    ok: false,
+    reason: "requested_family_not_linked",
+    familyIds: ["family_current"],
+  });
+});
+
+test("payment-only scope permits an explicitly selected eligible billing-history family", () => {
+  assert.deepEqual(resolveParentPortalPaymentFamilyScope([
+    { id: "guardian_current", familyId: "family_current", currentChildCount: 1 },
+    { id: "guardian_history", familyId: "family_history", currentChildCount: 0 },
+  ], "family_history"), {
+    ok: true,
+    familyId: "family_history",
+    guardianIds: ["guardian_history"],
+  });
+});
+
 test("parent portal runtime scope rejects an explicitly selected unlinked family", () => {
   assert.deepEqual(resolveParentPortalFamilyScope([
     { id: "guardian_1", familyId: "family_1", currentChildCount: 1 },
@@ -80,17 +102,24 @@ test("parent portal runtime scope never substitutes the only linked family for a
   });
 });
 
-test("every parent setup and billing mutation enforces unambiguous family scope", () => {
+test("parent setup and saved-method mutations retain current-family scope", () => {
   for (const path of [
     "src/app/api/parent/setup/route.ts",
     "src/app/api/parent/kiosk-credential/route.ts",
     "src/app/api/parent/products/purchase/route.ts",
-    "src/app/api/billing/checkout-session/route.ts",
-    "src/app/api/billing/family-payment/route.ts",
     "src/app/api/billing/payment-method-session/route.ts",
   ]) {
     assert.match(readFileSync(path, "utf8"), /getParentPortalFamilyScope\(user\.id, user\.tenantId,/, path);
   }
+  const familyPayment = readFileSync("src/app/api/billing/family-payment/route.ts", "utf8");
+  assert.match(familyPayment, /method === "saved_method"[\s\S]*getParentPortalFamilyScope\(user\.id, user\.tenantId,/);
+});
+
+test("one-time parent payment routes use the outstanding-payment scope", () => {
+  const checkout = readFileSync("src/app/api/billing/checkout-session/route.ts", "utf8");
+  const familyPayment = readFileSync("src/app/api/billing/family-payment/route.ts", "utf8");
+  assert.match(checkout, /getParentPortalPaymentFamilyScope\(user\.id, user\.tenantId,/);
+  assert.match(familyPayment, /method === "saved_method"[\s\S]*getParentPortalFamilyScope[\s\S]*getParentPortalPaymentFamilyScope\(user\.id, user\.tenantId,/);
 });
 
 test("runtime family lookup restricts guardian links to the signed-in tenant", () => {
@@ -119,7 +148,7 @@ test("tenant family scope accepts only unmixed current-child classroom fallbacks
 
 test("parent portal rejects a requested unlinked family before choosing a default", () => {
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
-  assert.match(page, /getParentPortalFamilyScope\(user\.id, user\.tenantId, requestedParentFamilyId\)/);
+  assert.match(page, /getParentPortalPaymentFamilyScope\(user\.id, user\.tenantId, requestedParentFamilyId\)/);
   assert.match(page, /requestedParentFamilyScope && !requestedParentFamilyScope\.ok/);
   assert.match(page, /getParentPortalTenantCenterIds\(user\.tenantId\)/);
   assert.match(page, /parentPortalTenantFamilyWhere\(parentPortalTenantCenterIds\)/);

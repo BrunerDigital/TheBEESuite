@@ -159,7 +159,12 @@ export function effectiveCenterIdsForWorkspace(
 }
 
 export function safeWorkspaceNextPath(value: unknown, fallback = "/dashboard") {
-  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return fallback;
+  if (
+    typeof value !== "string"
+    || !value.startsWith("/")
+    || value.startsWith("//")
+    || value.includes("\\")
+  ) return fallback;
   const pathname = value.split(/[?#]/, 1)[0];
   if (
     pathname === "/workspace"

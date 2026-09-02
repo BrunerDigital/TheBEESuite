@@ -417,7 +417,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
   const primaryCenter = authorizedCenters.find((center) => center.id === workspace.activeCenterId)
     ?? effectiveCenters.find((center) => center.id === centerIds[0])
     ?? null;
-  const selectedPlatformCenter = user.role === UserRole.PLATFORM_OWNER && workspace.mode === "center"
+  const selectedPlatformCenter = user.role === UserRole.PLATFORM_OWNER && workspace.activeCenterId
     ? primaryCenter
     : null;
   const effectiveTenant = selectedPlatformCenter?.organization.tenant ?? user.tenant;

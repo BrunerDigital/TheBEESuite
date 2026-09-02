@@ -97,6 +97,7 @@ test("workspace switching preserves safe destinations, query parameters, and has
   }), "/dashboard");
   assert.equal(safeWorkspaceNextPath("https://attacker.example"), "/dashboard");
   assert.equal(safeWorkspaceNextPath("//attacker.example"), "/dashboard");
+  assert.equal(safeWorkspaceNextPath("/\\attacker.example"), "/dashboard");
   assert.equal(safeWorkspaceNextPath("/workspace?next=%2Fdashboard"), "/dashboard");
 });
 
@@ -124,6 +125,7 @@ test("platform location selection carries the selected company context and large
   const selector = readFileSync("src/components/workspace-selector.tsx", "utf8");
 
   assert.match(auth, /selectedPlatformCenter\?\.organization\.tenantId \?\? user\.tenantId/);
+  assert.match(auth, /user\.role === UserRole\.PLATFORM_OWNER && workspace\.activeCenterId/);
   assert.match(auth, /effectiveOrganizationId = selectedPlatformCenter\?\.organization\.id \?\? user\.organizationId/);
   assert.match(auth, /effectiveBrand = selectedPlatformCenter\?\.organization\.brand \?\? user\.organization\?\.brand/);
   assert.match(selector, /workspace\.options\.length > 8/);

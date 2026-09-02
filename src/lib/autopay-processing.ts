@@ -381,7 +381,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       billingAccountId,
       connectedAccountId: readStripeConnectedAccountId(center?.customFields),
       tenantId: center?.organization.tenantId,
-      now: asOf,
+      now: new Date(),
       candidates,
       reconcileDrafts: !dryRun,
     })) {

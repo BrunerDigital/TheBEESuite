@@ -38,12 +38,17 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(processing, /accountsWithActiveFamilyBalancePayments/);
   assert.match(processing, /familyBalanceDraftPayments/);
   assert.match(processing, /await resolveStripeCheckoutDraftBlocker/);
+  assert.doesNotMatch(processing, /now: asOf/);
   assert.match(processing, /createStripePaymentClaim/);
   assert.match(processing, /scope: "invoice_collection"/);
   assert.match(familyPayment, /createStripePaymentClaim/);
   assert.match(familyPayment, /scope: "family_balance"/);
   assert.match(paymentClaims, /FROM "BillingAccount"[\s\S]*FOR UPDATE/);
   assert.match(paymentClaims, /TransactionIsolationLevel\.Serializable/);
+  assert.ok(
+    familyPayment.indexOf("const activeFamilyCheckout") < familyPayment.lastIndexOf('if (method === "saved_method")'),
+    "expired family Checkout drafts must be reconciled before saved-method claims",
+  );
   assert.match(processing, /A family balance payment is already pending or processing; autopay is paused for this account\./);
   assert.match(processing, /prior payout account/);
   assert.match(workbench, /sendPaymentMethodRequest\("payment_method_reauthorization"\)/);

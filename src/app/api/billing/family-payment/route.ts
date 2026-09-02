@@ -598,6 +598,45 @@ async function POSTHandler(request: NextRequest) {
     environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
   };
 
+  const activeFamilyCheckout = draftStripePayments.find((item) => {
+    const fields = jsonRecord(item.customFields);
+    return isActiveStripeCheckoutPayment(item) && fields.paymentScope === "family_balance";
+  });
+  if (activeFamilyCheckout) {
+    const blocker = await resolveStripeCheckoutDraftBlocker({
+      payment: activeFamilyCheckout,
+      connectedAccountId,
+      tenantId: user.tenantId,
+      scope: "family_balance",
+      requestedPaymentMethodCategory: checkoutCategory(method),
+      expectedAmountCents: amountCents,
+      expectedCheckoutTotalCents: amounts.checkoutTotalCents,
+      expectedFeeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
+    });
+    if (!blocker.blocked && blocker.url && method !== "saved_method") {
+      return NextResponse.json({
+        ok: true,
+        url: blocker.url,
+        status: "checkout_session_reused",
+        paymentId: activeFamilyCheckout.id,
+        stripeSessionId: blocker.pendingPayment?.stripeCheckoutSessionId,
+        feeDisclosure: PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
+        feeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
+      });
+    }
+    if (blocker.blocked) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: blocker.message || activeStripeCheckoutPaymentMessage(activeFamilyCheckout, "family_balance"),
+          paymentId: activeFamilyCheckout.id,
+          pendingPayment: blocker.pendingPayment || activeStripeCheckoutPaymentSummary(activeFamilyCheckout),
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   if (method === "saved_method") {
     if (!canChargeSavedPaymentMethod(savedPaymentMethod) || !savedPaymentMethod.stripeDefaultPaymentMethodId) {
       return NextResponse.json(
@@ -769,45 +808,6 @@ async function POSTHandler(request: NextRequest) {
       feeDisclosure: PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
       feeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
     });
-  }
-
-  const activeFamilyPayment = draftStripePayments.find((item) => {
-    const fields = jsonRecord(item.customFields);
-    return isActiveStripeCheckoutPayment(item) && fields.paymentScope === "family_balance";
-  });
-  if (activeFamilyPayment) {
-    const blocker = await resolveStripeCheckoutDraftBlocker({
-      payment: activeFamilyPayment,
-      connectedAccountId,
-      tenantId: user.tenantId,
-      scope: "family_balance",
-      requestedPaymentMethodCategory: checkoutCategory(method),
-      expectedAmountCents: amountCents,
-      expectedCheckoutTotalCents: amounts.checkoutTotalCents,
-      expectedFeeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
-    });
-    if (!blocker.blocked && blocker.url) {
-      return NextResponse.json({
-        ok: true,
-        url: blocker.url,
-        status: "checkout_session_reused",
-        paymentId: activeFamilyPayment.id,
-        stripeSessionId: blocker.pendingPayment?.stripeCheckoutSessionId,
-        feeDisclosure: PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
-        feeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
-      });
-    }
-    if (blocker.blocked) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: blocker.message || activeStripeCheckoutPaymentMessage(activeFamilyPayment, "family_balance"),
-          paymentId: activeFamilyPayment.id,
-          pendingPayment: blocker.pendingPayment || activeStripeCheckoutPaymentSummary(activeFamilyPayment),
-        },
-        { status: 409 },
-      );
-    }
   }
 
   const paymentClaim = await createStripePaymentClaim({

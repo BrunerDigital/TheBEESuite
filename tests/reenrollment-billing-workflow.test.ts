@@ -33,8 +33,10 @@ test("withdrawn to enrolled with a valid classroom becomes billing-visible after
   assert.match(enrollmentPanels, /reenrollments\?\.length === 1[\s\S]*familyId:[\s\S]*centerId:[\s\S]*childId:[\s\S]*Open billing/);
 });
 
-test("withdrawn families remain excluded while incomplete current records are non-chargeable", () => {
-  assert.match(billingPage, /workbenchFamilyWhere[\s\S]*children: \{ some: currentlyEnrolledChildWhere\(\) \}/);
+test("past families with outstanding billing remain payment-visible while current totals stay enrollment-scoped", () => {
+  assert.match(billingPage, /workbenchFamilyWhere[\s\S]*currentOrOutstandingFamilyWhere\(\)/);
+  assert.match(billingPage, /currentBillingAccountWhere = visibleCurrentBillingAccountWhere\(visibleCenterIds\)/);
+  assert.match(billingPage, /ledgerEntry\.findMany\([\s\S]*billingAccount: currentBillingAccountWhere/);
   assert.match(billingPage, /enrollmentStatus: \{ in: currentlyEnrolledStatusValues\(\) \}[\s\S]*classroomId: null/);
   assert.match(billingUi, /Needs enrollment setup/);
   assert.match(billingUi, /remain non-chargeable and excluded from active Billing and Accounts Receivable totals/);

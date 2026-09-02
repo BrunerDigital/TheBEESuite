@@ -10,16 +10,15 @@ export function resolveParentPortalFamilyScope(
   guardians: Array<{ id: string; familyId: string; currentChildCount?: number }>,
   requestedFamilyId?: string | null,
 ): ParentPortalFamilyScope {
+  const eligibleFamilyIds = Array.from(new Set(guardians.map((guardian) => guardian.familyId)));
   const currentFamilyIds = Array.from(new Set(
     guardians
       .filter((guardian) => (guardian.currentChildCount ?? 0) > 0)
       .map((guardian) => guardian.familyId),
   ));
-  const familyIds = currentFamilyIds.length > 0
-    ? currentFamilyIds
-    : Array.from(new Set(guardians.map((guardian) => guardian.familyId)));
+  const familyIds = currentFamilyIds.length > 0 ? currentFamilyIds : eligibleFamilyIds;
   const selectedFamilyId = requestedFamilyId
-    ? familyIds.includes(requestedFamilyId) ? requestedFamilyId : null
+    ? eligibleFamilyIds.includes(requestedFamilyId) ? requestedFamilyId : null
     : familyIds.length === 1 ? familyIds[0] : null;
   if (!selectedFamilyId) {
     return {

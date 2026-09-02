@@ -59,6 +59,17 @@ test("parent portal runtime scope permits an explicitly selected current linked 
   });
 });
 
+test("parent portal runtime scope permits an explicitly selected linked billing-history family", () => {
+  assert.deepEqual(resolveParentPortalFamilyScope([
+    { id: "guardian_current", familyId: "family_current", currentChildCount: 1 },
+    { id: "guardian_history", familyId: "family_history", currentChildCount: 0 },
+  ], "family_history"), {
+    ok: true,
+    familyId: "family_history",
+    guardianIds: ["guardian_history"],
+  });
+});
+
 test("parent portal runtime scope rejects an explicitly selected unlinked family", () => {
   assert.deepEqual(resolveParentPortalFamilyScope([
     { id: "guardian_1", familyId: "family_1", currentChildCount: 1 },

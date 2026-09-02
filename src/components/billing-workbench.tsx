@@ -36,6 +36,7 @@ export type BillingWorkbenchFamily = {
   id: string;
   centerId: string | null;
   name: string;
+  accountCategory?: "current" | "past";
   billingEmail: string | null;
   updatedAt?: Date | string | null;
   guardians: Array<{
@@ -457,6 +458,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     ? familyId
     : filteredFamilies[0]?.id ?? "";
   const selectedFamily = filteredFamilies.find((family) => family.id === effectiveFamilyId) ?? null;
+  const selectedFamilyIsPast = selectedFamily?.accountCategory === "past";
   const selectedCenter = centers.find((center) => center.id === centerId) ?? centers[0] ?? null;
   const selectedCenterClassrooms = selectedCenter?.classrooms ?? [];
   const selectedCheckoutReadiness = selectedCenter?.checkoutReadiness ?? null;
@@ -583,7 +585,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const selectedFamilyProfileHref = familyProfileHref(selectedFamily);
   const selectedChildSummary = selectedChildren.length
     ? `${selectedChildren.length} child${selectedChildren.length === 1 ? "" : "ren"}`
-    : "No children";
+    : selectedFamilyIsPast ? "Past family" : "No children";
 
   function billingContextDescription(childName?: string) {
     return [
@@ -623,6 +625,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   function openPaymentReview(method: DirectorPaymentMethod) {
     if (!selectedFamily || !selectedBillingAccount) {
       return setErrorMessage("Choose a family with a billing account before processing a payment.");
+    }
+    if (method === "autopay" && selectedFamilyIsPast) {
+      return setErrorMessage("Autopay is unavailable for a past family account. Use a one-time payment method instead.");
     }
     if (method === "autopay" && !effectivePaymentTarget.startsWith("invoice:")) {
       return setErrorMessage("Choose an open invoice before running autopay.");
@@ -671,6 +676,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   function processParentPayment(method: DirectorPaymentMethod) {
     if (!selectedFamily || !selectedBillingAccount) {
       return setErrorMessage("Choose a family with a billing account before processing a payment.");
+    }
+    if (method === "autopay" && selectedFamilyIsPast) {
+      return setErrorMessage("Autopay is unavailable for a past family account. Use a one-time payment method instead.");
     }
     if (method === "autopay" && !effectivePaymentTarget.startsWith("invoice:")) {
       return setErrorMessage("Choose an open invoice before running autopay.");
@@ -1540,7 +1548,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <div className="grid gap-3 sm:grid-cols-3">
               <ContextBadge label="Online payments" value={selectedCheckoutReadiness?.label ?? "Unknown"} variant={selectedCheckoutReadiness?.canAcceptParentPayments ? "default" : "destructive"} />
               <ContextBadge label="Saved method" value={selectedPaymentMethod?.paymentMethodLabel ?? "None"} />
-              <ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />
+              {selectedFamilyIsPast
+                ? <ContextBadge label="Account" value="Past family" variant="outline" />
+                : <ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />}
             </div>
           </div>
         ) : null}
@@ -1596,7 +1606,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           title={selectedFamily?.name ?? "Choose a family"}
           subtitle={billingContextDescription()}
           initials={initialsFromName(selectedFamily?.name)}
-          status={<ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />}
+          status={selectedFamilyIsPast
+            ? <ContextBadge label="Account" value="Past family" variant="outline" />
+            : <ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />}
           actions={
             selectedFamily ? (
               <Link href={selectedFamilyProfileHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
@@ -1622,6 +1634,16 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </div>
         </EntityHeader>
 
+        {selectedFamilyIsPast ? (
+          <Alert className="border-sky-500/30 bg-sky-500/10">
+            <ReceiptText className="size-4" />
+            <AlertTitle>Past family payment access</AlertTitle>
+            <AlertDescription>
+              This family remains available so an existing balance or invoice can be paid. Recurring tuition, new invoices, saved-method changes, and autopay remain unavailable until enrollment is current.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <div className="space-y-1">
             <Label htmlFor="billing-workbench-school">School</Label>
@@ -1641,7 +1663,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <SelectContent>
                 {filteredFamilies.map((family) => (
                   <SelectItem key={family.id} value={family.id}>
-                    {family.name}{family.billingEmail ? ` · ${family.billingEmail}` : ""}
+                    {family.name}{family.accountCategory === "past" ? " · Past family" : ""}{family.billingEmail ? ` · ${family.billingEmail}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1681,8 +1703,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </InfoTip>
               </div>
             </div>
-            <Badge variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} className="capitalize">
-              {selectedPaymentMethod?.paymentMethodReauthorizationRequired ? "Reauthorization required" : selectedAutopayStatus}
+            <Badge variant={!selectedFamilyIsPast && selectedAutopayStatus === "enabled" ? "default" : "outline"} className="capitalize">
+              {selectedFamilyIsPast ? "Past family" : selectedPaymentMethod?.paymentMethodReauthorizationRequired ? "Reauthorization required" : selectedAutopayStatus}
             </Badge>
           </div>
           <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
@@ -1702,15 +1724,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily} onClick={() => manageFamilyPaymentMethod("setup", "link_bank")}>
+              <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily || selectedFamilyIsPast} onClick={() => manageFamilyPaymentMethod("setup", "link_bank")}>
                 <Building2 data-icon="inline-start" />
                 Connect bank account
               </Button>
-              <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily} onClick={() => manageFamilyPaymentMethod("setup", "card")} variant="outline">
+              <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily || selectedFamilyIsPast} onClick={() => manageFamilyPaymentMethod("setup", "card")} variant="outline">
                 <CreditCard data-icon="inline-start" />
                 {selectedPaymentMethod?.hasSavedPaymentMethod ? "Replace saved card" : "Save card"}
               </Button>
-              <Button className="w-full sm:w-auto" disabled={isPending || !selectedPaymentMethod?.hasStripeCustomer} onClick={() => manageFamilyPaymentMethod("portal")} variant="outline">
+              <Button className="w-full sm:w-auto" disabled={isPending || selectedFamilyIsPast || !selectedPaymentMethod?.hasStripeCustomer} onClick={() => manageFamilyPaymentMethod("portal")} variant="outline">
                 Manage payment method
               </Button>
             </div>
@@ -1764,7 +1786,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {effectivePaymentTarget.startsWith("invoice:") ? (
+              {effectivePaymentTarget.startsWith("invoice:") && !selectedFamilyIsPast ? (
                 <Button
                   disabled={isPending || selectedAutopayStatus !== "enabled" || !selectedBillingAccount || directorPaymentAmountCents <= 0}
                   onClick={() => openPaymentReview("autopay")}
@@ -2029,7 +2051,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <DateFields idPrefix="billing-single" dueDate={dueDate} setDueDate={setDueDate} billingPeriod={billingPeriod} setBillingPeriod={setBillingPeriod} />
             </div>
             <DescriptionField id="billing-single-description" value={description} setValue={setDescription} />
-            <Button disabled={isPending || !selectedFamily} onClick={submitSingle}>
+            <Button disabled={isPending || !selectedFamily || selectedFamilyIsPast} onClick={submitSingle}>
               <ReceiptText data-icon="inline-start" />
               Create Invoice
             </Button>

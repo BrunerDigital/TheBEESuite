@@ -334,6 +334,7 @@ type Props = {
   activeView?: ParentPortalView;
   familySection?: string;
   family: PortalFamily | null;
+  paymentContinuityAccess?: boolean;
   billingAccount?: {
     id: string;
     balanceCents: number;
@@ -758,6 +759,7 @@ function ParentPortalWorkspaceView({
   activeView = "home",
   familySection,
   family,
+  paymentContinuityAccess = false,
   billingAccount,
   checkoutReadiness = fallbackCheckoutReadiness,
   paymentTransitionActive = false,
@@ -1035,6 +1037,7 @@ function ParentPortalWorkspaceView({
       return true;
     });
   }, [autopayEnableRequirements]);
+  const autopayUnavailable = paymentContinuityAccess;
   const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
   const checkoutBlockedMessage =
     "Online payments are temporarily unavailable. Please contact your school if you need help.";
@@ -1647,6 +1650,10 @@ function ParentPortalWorkspaceView({
 
   function toggleAutopay(enabled: boolean) {
     if (!family) return;
+    if (autopayUnavailable) {
+      setAutopayError("Autopay is unavailable for a past family account. You can still make a one-time payment.");
+      return;
+    }
     if (enabled === (autopayStatus === "enabled")) return;
     managePaymentMethod(enabled ? "enable_autopay" : "disable_autopay");
   }
@@ -1891,6 +1898,16 @@ function ParentPortalWorkspaceView({
           <AlertDescription>
             You can explore every parent view here. No family information is
             changed.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {paymentContinuityAccess ? (
+        <Alert className="border-sky-500/30 bg-sky-500/10">
+          <ReceiptText className="size-4" />
+          <AlertTitle>Your billing access remains available</AlertTitle>
+          <AlertDescription>
+            You can review and pay an existing balance or invoice. Classroom tools return when enrollment is current, and a one-time payment does not reactivate enrollment or autopay.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -2616,7 +2633,9 @@ function ParentPortalWorkspaceView({
                     </InfoTip>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {paymentMethodReauthorizationRequired
+                    {autopayUnavailable
+                      ? "Autopay is unavailable for a past family account. One-time payments remain available."
+                      : paymentMethodReauthorizationRequired
                       ? "The prior saved method is protected but cannot be charged on the school's current payment account."
                       : autopayStatus === "enabled"
                       ? "Account credit is applied first, then the saved method pays eligible invoices."
@@ -2637,22 +2656,25 @@ function ParentPortalWorkspaceView({
                       isPending ||
                       paymentCheckoutMethod !== null ||
                       !family ||
+                      autopayUnavailable ||
                       autopayStatus === "pending" ||
                       (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")
                     }
                     aria-label="Enable or disable autopay"
                   />
-                  <span className="text-xs font-medium text-muted-foreground">{autopayStatus === "enabled" ? "On" : "Off"}</span>
+                  <span className="text-xs font-medium text-muted-foreground">{autopayUnavailable ? "Unavailable" : autopayStatus === "enabled" ? "On" : "Off"}</span>
                 </div>
               </div>
               <Button
                 className="mt-3 w-full sm:w-auto"
                 type="button"
                 variant={autopayStatus === "enabled" ? "outline" : "default"}
-                disabled={isPending || paymentCheckoutMethod !== null || !family || autopayStatus === "pending" || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
+                disabled={isPending || paymentCheckoutMethod !== null || !family || autopayUnavailable || autopayStatus === "pending" || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
                 onClick={() => toggleAutopay(autopayStatus !== "enabled")}
               >
-                {isPending
+                {autopayUnavailable
+                  ? "Autopay unavailable"
+                  : isPending
                   ? "Updating…"
                   : autopayStatus === "enabled"
                     ? "Disable autopay"
@@ -2863,7 +2885,9 @@ function ParentPortalWorkspaceView({
                   <div className="min-w-0">
                     <div className="font-medium">Autopay</div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {paymentMethodReauthorizationRequired
+                      {autopayUnavailable
+                        ? "Autopay is unavailable for a past family account. One-time payments remain available."
+                        : paymentMethodReauthorizationRequired
                         ? paymentMethodReauthorizationPreservesAutopay
                           ? "Autopay is paused only until Stripe confirms the replacement method, then your existing consent resumes."
                           : "Autopay is paused until the method is replaced; review and enable it afterward if desired."
@@ -2877,10 +2901,12 @@ function ParentPortalWorkspaceView({
                   <Button
                     type="button"
                     variant={autopayStatus === "enabled" ? "outline" : "default"}
-                    disabled={isPending || paymentCheckoutMethod !== null || autopayStatus === "pending" || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
+                    disabled={isPending || paymentCheckoutMethod !== null || autopayUnavailable || autopayStatus === "pending" || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
                     onClick={() => toggleAutopay(autopayStatus !== "enabled")}
                   >
-                    {isPending
+                    {autopayUnavailable
+                      ? "Autopay unavailable"
+                      : isPending
                       ? "Updating…"
                       : autopayStatus === "enabled"
                         ? "Disable autopay"

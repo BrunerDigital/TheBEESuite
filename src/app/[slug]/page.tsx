@@ -125,6 +125,7 @@ import { buildLedgerReconciliationReport } from "@/lib/billing-reconciliation";
 import { dashboardOptionsFromCustomFields, mergeAgeGroupOptions } from "@/lib/dashboard-options";
 import { activeClassroomWhere } from "@/lib/classroom-status";
 import {
+  currentOrOutstandingFamilyWhere,
   visibleAttendanceWhere,
   visibleBillingAccountWhere,
   visibleCenterIdFilter,
@@ -2097,7 +2098,8 @@ async function renderLivePage(
       />;
     }
 
-    const parentPortalView = normalizeParentPortalView(firstSearchParam(searchParams.view));
+    const requestedParentPortalView = firstSearchParam(searchParams.view);
+    const parentPortalView = normalizeParentPortalView(requestedParentPortalView);
     const parentFamilySection = firstSearchParam(searchParams.section) || "children";
     const requestedParentFamilyId = firstSearchParam(searchParams.familyId) || null;
     const requestedLedgerPage = boundedPage(searchParams.ledgerPage);
@@ -2113,9 +2115,11 @@ async function renderLivePage(
     const linkedParentFamilies = user.role === UserRole.PARENT_GUARDIAN
       ? await prisma.family.findMany({
           where: {
-            ...parentPortalFamilyScopeWhere({ userId: user.id }),
-            ...parentPortalTenantFamilyWhere(parentPortalTenantCenterIds),
-            children: { some: currentlyEnrolledChildWhere() },
+            AND: [
+              parentPortalFamilyScopeWhere({ userId: user.id }),
+              parentPortalTenantFamilyWhere(parentPortalTenantCenterIds),
+              currentOrOutstandingFamilyWhere(),
+            ],
           },
           orderBy: [{ name: "asc" }, { createdAt: "asc" }],
           select: {
@@ -2137,8 +2141,14 @@ async function renderLivePage(
     }
     const family = await prisma.family.findFirst({
       where: user.role === "PARENT_GUARDIAN"
-        ? { ...parentPortalFamilyScopeWhere({ userId: user.id, requestedFamilyId: selectedParentFamilyId }), children: { some: currentlyEnrolledChildWhere() } }
-        : { ...visibleFamilyWhere(visibleCenterIds), children: { some: currentlyEnrolledChildWhere() } },
+        ? {
+            AND: [
+              parentPortalFamilyScopeWhere({ userId: user.id, requestedFamilyId: selectedParentFamilyId }),
+              parentPortalTenantFamilyWhere(parentPortalTenantCenterIds),
+              currentOrOutstandingFamilyWhere(),
+            ],
+          }
+        : { AND: [visibleFamilyWhere(visibleCenterIds), currentOrOutstandingFamilyWhere()] },
       orderBy: { createdAt: "desc" },
       include: {
         guardians: {
@@ -2192,6 +2202,10 @@ async function renderLivePage(
 
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
+    const paymentContinuityAccess = Boolean(family && family.children.length === 0);
+    const resolvedParentPortalView = paymentContinuityAccess && !requestedParentPortalView
+      ? "payments"
+      : parentPortalView;
     const parentClassroomIds = Array.from(new Set(
       family?.children.map((child) => child.classroomId).filter((id): id is string => Boolean(id)) ?? [],
     ));
@@ -2834,9 +2848,10 @@ async function renderLivePage(
     return (
       <ParentPortalWorkspace
         key={parentReplyToMessageId || "parent-portal"}
-        activeView={parentPortalView}
+        activeView={resolvedParentPortalView}
         familySection={parentFamilySection}
         family={parentPortalFamily}
+        paymentContinuityAccess={paymentContinuityAccess}
         billingAccount={billingAccount ? {
           id: billingAccount.id,
           balanceCents: parentBalanceReviewRequired && !parentBalanceVisibilityConfirmed ? 0 : parentBalanceCents,
@@ -3727,8 +3742,10 @@ async function renderLivePage(
     const invoiceStatus = normalizeDirectorInvoiceStatus(firstSearchParam(searchParams.invoiceStatus));
     const invoicePaymentStatus = paymentStatusForDirectorInvoiceStatus(invoiceStatus);
     const workbenchFamilyWhere: Prisma.FamilyWhereInput = {
-      centerId: scopedCenterIds,
-      children: { some: currentlyEnrolledChildWhere() },
+      AND: [
+        { centerId: scopedCenterIds },
+        currentOrOutstandingFamilyWhere(),
+      ],
     };
     const [
       invoices,
@@ -4106,6 +4123,7 @@ async function renderLivePage(
             currentRole: user.role,
             families: billingFamilies.map((family) => ({
               ...family,
+              accountCategory: family.children.length ? "current" as const : "past" as const,
               billingAccount: family.billingAccount
                 ? {
                     id: family.billingAccount.id,

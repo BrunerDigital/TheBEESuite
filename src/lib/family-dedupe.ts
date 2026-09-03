@@ -235,17 +235,19 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
       rawParts[0]?.split(/\s+/).filter(Boolean).at(-1),
       personNameSuffixes,
     );
+    const compoundSurnameWordCount = firstPartWords - (surnameTrailingSuffix ? 1 : 0);
     const groupedTrailingCredentials = rawTrailingWords.length > 1
       && rawTrailingWords.every((word) => Boolean(canonicalPersonNameToken(word, personNameCredentials)));
     const trailingCredential = groupedTrailingCredentials || (Boolean(rawTrailingToken)
       && (!personNameCredentialLikeSurnames.has(rawTrailingToken) || uppercaseTrailingCredential));
     const commaCompoundSurname = rawParts.length === 2
-      && firstPartWords >= 2
+      && compoundSurnameWordCount >= 2
       && !trailingSuffix
-      && !surnameTrailingSuffix
       && !trailingCredential;
     if (commaCompoundSurname) {
-      const surname = normalizeText(rawParts[0]).replace(/\s+/g, "");
+      const rawSurnameWords = rawParts[0].split(/\s+/).filter(Boolean);
+      if (surnameTrailingSuffix) rawSurnameWords.pop();
+      const surname = normalizeText(rawSurnameWords.join(" ")).replace(/\s+/g, "");
       const givenNameWords = credentialsRemoved(
         rawParts[1].split(/\s+/).filter(Boolean),
         stripCredentials,
@@ -254,7 +256,8 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
       if (attachedSuffix) givenNameWords.pop();
       const givenNames = normalizePersonNameText(givenNameWords.join(" "));
       variants.clear();
-      normalizeTextVariants(`${givenNames} ${surname} ${attachedSuffix}`).forEach((variant) => variants.add(variant));
+      normalizeTextVariants(`${givenNames} ${surname} ${surnameTrailingSuffix || attachedSuffix}`)
+        .forEach((variant) => variants.add(variant));
     }
     if (rawParts.length === 2 && trailingSuffix === "v") {
       variants.add(normalizePersonNameText(`${trailingSuffix} ${rawParts[0]}`));

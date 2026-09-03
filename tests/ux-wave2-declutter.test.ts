@@ -12,7 +12,8 @@ test("documents separate action shortcuts from expandable records", async () => 
   assert.match(source, /href="#required-document-action-rows"/);
   assert.match(source, /href="#document-signature-request"/);
   assert.match(source, /id="document-records"[\s\S]*?defaultCollapsed=\{!data\.stats\.pending\}/);
-  assert.match(source, /id="document-request-editor"/);
+  assert.match(source, /id="document-request-editor"[\s\S]*?defaultCollapsed/);
+  assert.match(source, /OperationsActionHub[\s\S]*?defaultEntity="document"[\s\S]*?embedded/);
   assert.match(checklist, /id="required-document-action-rows"[\s\S]*?defaultCollapsed/);
   assert.doesNotMatch(checklist, /id="required-document-action-rows"[\s\S]*?defaultCollapsed=\{!visibleRequestableItems\.length\}/);
 });

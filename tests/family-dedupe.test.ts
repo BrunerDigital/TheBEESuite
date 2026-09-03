@@ -1868,6 +1868,92 @@ test("guardian duplicate scoring rejects surname-only matches after stripping ho
   assert.equal(score, null);
 });
 
+test("guardian duplicate scoring rejects honorific-only compound surnames", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Mr. De La Cruz",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Mrs. De La Cruz",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("child duplicate scoring preserves explicit compound surnames during initial matching", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Garcia Marquez, Avery",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Avery G Marquez",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("guardian duplicate scoring preserves explicit compound surnames during initial matching", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Garcia Marquez, Avery",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Avery G Marquez",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("family duplicate scoring preserves explicit child compound surnames", () => {
+  const score = scoreFamilyDuplicate(
+    {
+      id: "family_1",
+      centerId: "center_1",
+      name: "One Family",
+      children: [{ fullName: "Garcia Marquez, Avery", dateOfBirth: "2022-10-10" }],
+    },
+    {
+      id: "family_2",
+      centerId: "center_1",
+      name: "Two Family",
+      children: [{ fullName: "Avery G Marquez", dateOfBirth: "2022-10-10" }],
+    },
+  );
+
+  assert.equal(score, null);
+});
+
 test("child duplicate scoring does not collapse an unpunctuated first and middle name", () => {
   const score = scoreChildDuplicate(
     {

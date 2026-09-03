@@ -398,6 +398,69 @@ function personNamesMatch(left: string, right: string) {
   return matched && omittedParts.every((part) => part.length === 1);
 }
 
+function hasLeadingHonorific(value: unknown) {
+  if (typeof value !== "string") return false;
+  return personNameHonorifics.has(normalizeText(value).split(" ").filter(Boolean)[0] ?? "");
+}
+
+function hasGivenNameAfterHonorific(value: unknown) {
+  if (typeof value !== "string") return false;
+  const words = normalizeText(value).split(" ").filter(Boolean);
+  if (!personNameHonorifics.has(words[0] ?? "")) return true;
+  words.shift();
+  return words.length >= 2 && !personNameSurnameParticles.has(words[0] ?? "");
+}
+
+function explicitCommaCompoundSurname(value: unknown, stripCredentials: boolean) {
+  if (typeof value !== "string") return [];
+  const rawParts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  const finalSuffix = canonicalPersonNameToken(rawParts.at(-1), personNameSuffixes);
+  if (finalSuffix) rawParts.pop();
+  const nameParts = stripCredentials ? stripTrailingPersonCredentials(rawParts) : rawParts;
+  if (nameParts.length < 2) return [];
+  const surnameWords = normalizeText(nameParts[0]).split(" ").filter(Boolean);
+  if (canonicalPersonNameToken(surnameWords.at(-1), personNameSuffixes)) surnameWords.pop();
+  return surnameWords.length >= 2 ? surnameWords : [];
+}
+
+function explicitCompoundSurnameMatches(surnameWords: string[], value: unknown, stripCredentials: boolean) {
+  const normalized = normalizePersonName(value, { stripCredentials });
+  if (!normalized) return false;
+  const parts = normalized.split(" ").filter(Boolean);
+  if (personNameSuffixes.has(parts.at(-1) ?? "")) parts.pop();
+  const joinedSurname = surnameWords.join("");
+  return parts.at(-1) === joinedSurname
+    || (parts.length > surnameWords.length
+      && parts.slice(-surnameWords.length).every((part, index) => part === surnameWords[index]));
+}
+
+function personNameValuesMatch(
+  left: unknown,
+  right: unknown,
+  options: { stripCredentials?: boolean } = {},
+) {
+  const stripCredentials = options.stripCredentials ?? true;
+  const leftHasHonorific = hasLeadingHonorific(left);
+  const rightHasHonorific = hasLeadingHonorific(right);
+  if ((leftHasHonorific && rightHasHonorific)
+    || !hasGivenNameAfterHonorific(left)
+    || !hasGivenNameAfterHonorific(right)) return false;
+
+  const leftNames = normalizePersonNameVariants(left, { stripCredentials });
+  const rightNames = normalizePersonNameVariants(right, { stripCredentials });
+  if (!leftNames.some((leftName) => rightNames.some((rightName) => personNamesMatch(leftName, rightName)))) {
+    return false;
+  }
+
+  const leftCompoundSurname = explicitCommaCompoundSurname(left, stripCredentials);
+  if (leftCompoundSurname.length && !explicitCompoundSurnameMatches(leftCompoundSurname, right, stripCredentials)) {
+    return false;
+  }
+  const rightCompoundSurname = explicitCommaCompoundSurname(right, stripCredentials);
+  return !rightCompoundSurname.length
+    || explicitCompoundSurnameMatches(rightCompoundSurname, left, stripCredentials);
+}
+
 function normalizeEmail(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
@@ -410,13 +473,6 @@ function normalizedDate(value: unknown) {
   if (!value) return "";
   const date = new Date(value as string | Date);
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
-}
-
-function childKeys(child: FamilyDedupeChild) {
-  const dateOfBirth = normalizedDate(child.dateOfBirth);
-  return dateOfBirth
-    ? normalizePersonNameVariants(child.fullName, { stripCredentials: false }).map((name) => `${name}|${dateOfBirth}`)
-    : [];
 }
 
 function hasIntersection(left: string[], right: string[]) {
@@ -456,9 +512,14 @@ export function scoreFamilyDuplicate(left: FamilyDedupeRecord, right: FamilyDedu
     reasons.push("matching guardian phone");
   }
 
-  const leftChildren = (left.children ?? []).flatMap(childKeys);
-  const rightChildren = (right.children ?? []).flatMap(childKeys);
-  if (hasIntersection(leftChildren, rightChildren)) {
+  const matchingChild = (left.children ?? []).some((leftChild) => {
+    const leftDateOfBirth = normalizedDate(leftChild.dateOfBirth);
+    return leftDateOfBirth && (right.children ?? []).some((rightChild) => (
+      leftDateOfBirth === normalizedDate(rightChild.dateOfBirth)
+        && personNameValuesMatch(leftChild.fullName, rightChild.fullName, { stripCredentials: false })
+    ));
+  });
+  if (matchingChild) {
     score += 35;
     reasons.push("matching child name and date of birth");
   }
@@ -503,9 +564,7 @@ export function scoreChildDuplicate(left: ChildDedupeRecord, right: ChildDedupeR
 
   const reasons: string[] = [];
   let score = 0;
-  const leftNames = normalizePersonNameVariants(left.fullName, { stripCredentials: false });
-  const rightNames = normalizePersonNameVariants(right.fullName, { stripCredentials: false });
-  const sameName = leftNames.some((leftName) => rightNames.some((rightName) => personNamesMatch(leftName, rightName)));
+  const sameName = personNameValuesMatch(left.fullName, right.fullName, { stripCredentials: false });
   const leftPreferredName = normalizeText(left.preferredName);
   const rightPreferredName = normalizeText(right.preferredName);
   const leftDateOfBirth = normalizedDate(left.dateOfBirth);
@@ -587,9 +646,7 @@ export function scoreGuardianDuplicate(left: GuardianDedupeRecord, right: Guardi
     reasons.push("same guardian phone");
   }
 
-  const leftNames = normalizePersonNameVariants(left.fullName);
-  const rightNames = normalizePersonNameVariants(right.fullName);
-  const sameName = leftNames.some((leftName) => rightNames.some((rightName) => personNamesMatch(leftName, rightName)));
+  const sameName = personNameValuesMatch(left.fullName, right.fullName);
   const sameEmail = Boolean(leftEmail && leftEmail === rightEmail);
   if (!sameEmail && !sameName) return null;
   if (sameName) {

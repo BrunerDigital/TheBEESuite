@@ -1938,6 +1938,53 @@ test("guardian duplicate scoring rejects conflicting titles on unmarked compound
   assert.equal(score, null);
 });
 
+test("guardian duplicate scoring rejects conflicting titles in last-first names", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith, Mr. John",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Smith, Mrs. John",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("guardian duplicate scoring recognizes lowercase comma-separated short credentials", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Alex Smith, pa",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
 test("guardian duplicate scoring collapses compound surnames after separate credentials", () => {
   const score = scoreGuardianDuplicate(
     {

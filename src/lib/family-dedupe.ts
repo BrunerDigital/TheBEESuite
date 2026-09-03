@@ -128,15 +128,11 @@ function stripTrailingPersonCredentials(parts: string[]) {
     if (!canonicalPersonNameToken(rawCredential, personNameCredentials)) break;
     const firstPartWords = remaining[0]?.split(/\s+/).filter(Boolean).length ?? 0;
     const credentialToken = canonicalPersonNameToken(rawCredential, personNameCredentials);
-    const credentialLetters = rawCredential.replace(/[^A-Za-z]/g, "");
-    const explicitUppercaseCredential = credentialLetters.length >= 2
-      && credentialLetters === credentialLetters.toUpperCase();
     const groupedCommaCredentials = remaining.length > 1
       && trailingWords.length > 1
       && trailingWords.every((word) => Boolean(canonicalPersonNameToken(word, personNameCredentials)));
     const separateCommaPart = groupedCommaCredentials || (trailingWords.length === 1
-      && (remaining.length > 2 || firstPartWords >= 2)
-      && (!personNameCredentialLikeSurnames.has(credentialToken) || explicitUppercaseCredential));
+      && (remaining.length > 2 || firstPartWords >= 2));
     const visiblyAttachedCredential = rawCredential.includes(".")
       || (trailingWords.length >= 3
         && !personNameCredentialLikeSurnames.has(credentialToken));
@@ -401,8 +397,12 @@ function hasGivenNameAfterHonorific(value: unknown) {
 
 function leadingHonorific(value: unknown) {
   if (typeof value !== "string") return "";
-  const firstWord = normalizeText(value).split(" ").filter(Boolean)[0] ?? "";
-  return personNameHonorifics.has(firstWord) ? firstWord : "";
+  const nameParts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  for (const namePart of nameParts.slice(0, 2)) {
+    const firstWord = normalizeText(namePart).split(" ").filter(Boolean)[0] ?? "";
+    if (personNameHonorifics.has(firstWord)) return firstWord;
+  }
+  return "";
 }
 
 function explicitCommaCompoundSurname(value: unknown, stripCredentials: boolean) {

@@ -67,7 +67,7 @@ function normalizeText(value: unknown) {
         .replace(/[ıİ]/g, "i")
         .replace(/['’]/g, "")
         .toLowerCase()
-        .replace(/[^a-z0-9]+/g, " ")
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
         .trim()
     : "";
 }
@@ -90,9 +90,8 @@ function stripTrailingPersonCredentials(parts: string[]) {
     const rawCredential = trailingWords.at(-1) ?? "";
     if (!canonicalPersonNameToken(rawCredential, personNameCredentials)) break;
     const separateCommaPart = remaining.length > 1 && trailingWords.length === 1;
-    const uppercaseLetters = rawCredential.match(/[A-Z]/g)?.length ?? 0;
     const visiblyAttachedCredential = rawCredential.includes(".")
-      || (trailingWords.length >= 3 && uppercaseLetters >= 2);
+      || trailingWords.length >= 3;
     if (!separateCommaPart && !visiblyAttachedCredential) break;
     trailingWords.pop();
     if (trailingWords.length) remaining[remaining.length - 1] = trailingWords.join(" ");

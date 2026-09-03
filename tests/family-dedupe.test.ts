@@ -233,6 +233,28 @@ test("child duplicate scoring canonicalizes omitted apostrophes", () => {
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
 
+test("child duplicate scoring preserves exact non-Latin names", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "李美玲",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "李美玲",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
 test("guardian duplicate scoring matches email and phone across same-school families", () => {
   const score = scoreGuardianDuplicate(
     {
@@ -348,6 +370,30 @@ test("guardian duplicate scoring folds name diacritics", () => {
   assert.ok(score?.reasons.includes("same guardian name"));
 });
 
+test("guardian duplicate scoring preserves exact non-Latin names", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "王小明",
+      phone: "7205550109",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "王小明",
+      phone: "7205550109",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
 test("guardian duplicate scoring transliterates stroked Latin letters", () => {
   const score = scoreGuardianDuplicate(
     {
@@ -412,6 +458,30 @@ test("guardian duplicate scoring canonicalizes dotted credentials without commas
       centerId: "center_1",
       fullName: "Alex Smith MD",
       phone: "7205550103",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
+test("guardian duplicate scoring canonicalizes lowercase credentials without commas", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Alex Smith rn",
+      phone: "7205550110",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith, RN",
+      phone: "7205550110",
       relation: "Parent",
     },
   );

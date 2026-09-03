@@ -14,6 +14,7 @@ test("parents control autopay consent and directors can only run enabled autopay
   const autopayProcessor = readFileSync("src/lib/autopay-processing.ts", "utf8");
   const stripeWebhook = readFileSync("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   const parentPortal = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
+  const parentPortalPage = readFileSync("src/app/[slug]/page.tsx", "utf8");
 
   assert.match(workbench, /Parents enable or disable autopay from their Parent Portal/);
   assert.doesNotMatch(workbench, /manageFamilyPaymentMethod\("enable_autopay"\)/);
@@ -86,4 +87,6 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(invoiceAction, /accountCategory === "past"[\s\S]*method\.paymentMethodLabel[\s\S]*reason \?/);
   assert.match(parentPortal, /You do not need to turn autopay on again/);
   assert.match(publicPaymentMethodForm, /You do not need to turn autopay on again/);
+  assert.match(parentPortalPage, /canPreservePendingAutopayConsentForPaymentMethodMigration/);
+  assert.match(readFileSync("src/app/payment-method-form/[token]/page.tsx", "utf8"), /canPreservePendingAutopayConsentForPaymentMethodMigration/);
 });

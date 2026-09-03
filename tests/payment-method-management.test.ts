@@ -4,6 +4,7 @@ import {
   canChargeSavedPaymentMethod,
   canCreatePaymentMethodManagementSession,
   canFinalizePendingAutopayConsentMigration,
+  canPreservePendingAutopayConsentForPaymentMethodMigration,
   canPreserveAutopayConsentForPaymentMethodMigration,
   canRunAutopay,
   failedPendingPaymentMethodAutopayOutcome,
@@ -174,6 +175,7 @@ test("pending bank verification finalizes an existing autopay authorization with
     autopayEnabled: false,
     autopayEnabledByUserId: "user_123",
     autopayStatus: "pending",
+    stripeBankVerificationPending: true,
     stripeDefaultPaymentMethodId: "pm_old",
     stripeDefaultPaymentMethodConnectedAccountId: "acct_previous",
     stripePendingAutopayOutcome: pendingOutcome,
@@ -200,6 +202,14 @@ test("pending bank verification finalizes an existing autopay authorization with
     activeConnectedAccountId: "acct_current",
     centerCustomFields,
     replacementPaymentMethodId: "pm_new",
+  }), true);
+  assert.equal(canPreservePendingAutopayConsentForPaymentMethodMigration({
+    currentFields,
+    linkedGuardianUserIds: ["user_123"],
+    currentCenterId: "center_123",
+    currentTenantId: "tenant_123",
+    activeConnectedAccountId: "acct_current",
+    centerCustomFields,
   }), true);
   assert.deepEqual(failedPendingPaymentMethodAutopayOutcome({
     currentFields,
@@ -259,6 +269,10 @@ test("pending consent migration fails closed when guardian, school, tenant, acco
   assert.equal(canFinalizePendingAutopayConsentMigration({ ...baseline, activeConnectedAccountId: "acct_other" }), false);
   assert.equal(canFinalizePendingAutopayConsentMigration({ ...baseline, centerCustomFields: {} }), false);
   assert.equal(canFinalizePendingAutopayConsentMigration({ ...baseline, replacementPaymentMethodId: "pm_other" }), false);
+  assert.equal(canPreservePendingAutopayConsentForPaymentMethodMigration({
+    ...baseline,
+    currentFields: { ...currentFields, stripeBankVerificationPending: false },
+  }), false);
   assert.equal(canFinalizePendingAutopayConsentMigration({
     ...baseline,
     currentFields: { ...currentFields, stripeDefaultPaymentMethodId: "pm_other" },

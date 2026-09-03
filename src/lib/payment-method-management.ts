@@ -253,6 +253,23 @@ export function canFinalizePendingAutopayConsentMigration(input: {
   );
 }
 
+export function canPreservePendingAutopayConsentForPaymentMethodMigration(input: {
+  currentFields: unknown;
+  linkedGuardianUserIds: Array<string | null | undefined>;
+  currentCenterId?: string | null;
+  currentTenantId?: string | null;
+  activeConnectedAccountId?: string | null;
+  centerCustomFields?: unknown;
+}) {
+  const current = fields(input.currentFields);
+  if (current.stripeBankVerificationPending !== true) return false;
+  return canFinalizePendingAutopayConsentMigration({
+    ...input,
+    pendingOutcome: current.stripePendingAutopayOutcome,
+    replacementPaymentMethodId: clean(current.stripePendingPaymentMethodId),
+  });
+}
+
 export function failedPendingPaymentMethodAutopayOutcome(input: {
   currentFields: unknown;
   pendingOutcome: unknown;

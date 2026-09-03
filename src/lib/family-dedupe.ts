@@ -268,7 +268,16 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
       const dottedVInitial = canonicalPersonNameToken(rawFinalGivenNameWord, personNameSuffixes) === "v"
         && /\.\s*$/.test(rawFinalGivenNameWord);
       if (rawGivenNameWords.length >= 2 && dottedVInitial) {
-        variants.add(normalizePersonNameText(`${rawGivenNameWords.join(" ")} ${rawParts[0]}`));
+        const dottedSurnameWords = rawParts[0].split(/\s+/).filter(Boolean);
+        const dottedSurnameSuffix = canonicalPersonNameToken(dottedSurnameWords.at(-1), personNameSuffixes);
+        if (dottedSurnameSuffix) dottedSurnameWords.pop();
+        const dottedSurname = normalizeText(dottedSurnameWords.join(" "));
+        const canonicalDottedSurname = compoundSurnameWordCount >= 2
+          ? dottedSurname.replace(/\s+/g, "")
+          : dottedSurname;
+        variants.add(normalizePersonNameText(
+          `${rawGivenNameWords.join(" ")} ${canonicalDottedSurname} ${dottedSurnameSuffix}`,
+        ));
       }
     }
     if (rawParts.length === 1) {

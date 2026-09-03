@@ -74,6 +74,9 @@ function normalizeText(value: unknown) {
 
 const personNameSuffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
 const personNameHonorifics = new Set(["dr", "fr", "miss", "mr", "mrs", "ms", "mx", "prof", "rev"]);
+const personNameSurnameParticles = new Set([
+  "al", "bin", "da", "de", "del", "della", "der", "di", "dos", "du", "la", "le", "los", "saint", "st", "van", "von",
+]);
 const personNameCredentials = new Set([
   "aprn", "ba", "bs", "bsn", "cpa", "dc", "dds", "dmd", "do", "dpt", "edd", "esq", "jd", "lpn", "lvn",
   "ma", "mba", "md", "ms", "msn", "np", "od", "pa", "pharmd", "phd", "rn",
@@ -184,6 +187,14 @@ function personNamesMatch(left: string, right: string) {
 
   const leftMiddle = leftParts.slice(1, -1);
   const rightMiddle = rightParts.slice(1, -1);
+  const trailingSurnameParticles = (parts: string[]) => {
+    let index = parts.length;
+    while (index > 0 && personNameSurnameParticles.has(parts[index - 1])) index -= 1;
+    return parts.slice(index);
+  };
+  const leftSurnameParticles = trailingSurnameParticles(leftMiddle);
+  const rightSurnameParticles = trailingSurnameParticles(rightMiddle);
+  if (leftSurnameParticles.join(" ") !== rightSurnameParticles.join(" ")) return false;
   if (Math.abs(leftMiddle.length - rightMiddle.length) > 2) return false;
   if (leftMiddle.length === rightMiddle.length) {
     return leftMiddle.every((part, index) => namePartsMatch(part, rightMiddle[index]));

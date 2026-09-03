@@ -92,6 +92,16 @@ export type CenterTimeZoneSource = {
 
 const FALLBACK_TIME_ZONE = "America/New_York";
 
+export function formatServiceDateLabel(date = new Date(), timeZone = FALLBACK_TIME_ZONE) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
 const stateTimeZones: Record<string, string> = {
   AK: "America/Anchorage",
   AL: "America/Chicago",

@@ -9,7 +9,7 @@ import {
   buildAccountsReceivableSummary,
   canViewAccountBalances,
 } from "@/lib/accounts-receivable";
-import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
+import { centerServiceDayWindow, formatServiceDateLabel, latestLogMap } from "@/lib/attendance-state";
 import { canAccessAllCenters, canManageCrmLeads, canManageOperations, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
 import { stageLabels } from "@/lib/crm";
 import { buildDashboardAttendanceSnapshot } from "@/lib/dashboard-attendance-snapshot";
@@ -1061,7 +1061,7 @@ export default async function DashboardPage() {
     analytics: dashboardAnalytics,
     attendanceSnapshot,
     notifications: dashboardNotifications,
-    asOfLabel: today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
+    asOfLabel: formatServiceDateLabel(today, user.timeZone),
     showDemoFallbackData,
     visibleLenses: visibleDashboardLenses,
     dashboardWidgets: dashboardWidgetConfig.widgets,

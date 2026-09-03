@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { centerServiceDayWindow, isLatePickup, readCenterLocationTimeZone, readCenterTimeZone, readLatePickupCutoff } from "@/lib/attendance-state";
+import { centerServiceDayWindow, formatServiceDateLabel, isLatePickup, readCenterLocationTimeZone, readCenterTimeZone, readLatePickupCutoff } from "@/lib/attendance-state";
 
 test("late pickup cutoff defaults and reads center customization", () => {
   assert.equal(readLatePickupCutoff(null), "18:00");
@@ -52,4 +52,11 @@ test("center service day uses location fallback for kiosk day boundaries", () =>
   assert.equal(day.timeZone, "America/Indiana/Indianapolis");
   assert.equal(day.start.toISOString(), "2026-06-22T04:00:00.000Z");
   assert.equal(day.end.toISOString(), "2026-06-23T04:00:00.000Z");
+});
+
+test("dashboard date label uses the active workspace timezone near UTC midnight", () => {
+  const instant = new Date("2026-09-03T02:30:00.000Z");
+
+  assert.equal(formatServiceDateLabel(instant, "America/New_York"), "Wednesday, September 2, 2026");
+  assert.equal(formatServiceDateLabel(instant, "UTC"), "Thursday, September 3, 2026");
 });

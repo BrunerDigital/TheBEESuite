@@ -2851,12 +2851,24 @@ function ParentPortalWorkspaceView({
               <Alert variant="destructive">
                 <AlertCircle className="size-4" />
                 <AlertTitle>Payment method update required</AlertTitle>
-                <AlertDescription>
-                  Your school now uses a new payment account. Replace your saved card or connect a bank account in Payment settings before saved-method payments can resume. One-time checkout remains available. {paymentMethodReauthorizationPreservesAutopay
-                    ? "Your existing autopay consent will resume automatically after Stripe confirms the replacement."
-                    : autopayStatus === "enabled"
-                      ? "Review and re-enable autopay after replacement."
-                      : "Autopay remains off until you choose to enable it."}
+                <AlertDescription className="space-y-3">
+                  <p>
+                    Your school now uses a new payment account. Replace your saved card or connect a bank account before saved-method payments can resume. A one-time payment does not replace the saved autopay method, so using only the checkout buttons below would require another update next time. {paymentMethodReauthorizationPreservesAutopay
+                      ? "Your existing autopay consent will resume automatically after Stripe confirms the replacement."
+                      : autopayStatus === "enabled"
+                        ? "Review and re-enable autopay after replacement."
+                        : "Autopay remains off until you choose to enable it."}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
+                      <CreditCard data-icon="inline-start" />
+                      Replace saved card
+                    </Button>
+                    <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                      <Building2 data-icon="inline-start" />
+                      Connect bank account
+                    </Button>
+                  </div>
                 </AlertDescription>
               </Alert>
             ) : paymentTransitionActive ? (
@@ -3429,6 +3441,11 @@ function ParentPortalWorkspaceView({
                         : "Bank account"}
                     </Button>
                   </div>
+                  {paymentMethodReauthorizationRequired ? (
+                    <p className="mt-2 text-xs font-medium text-destructive">
+                      These are one-time payment options. They will not replace the saved autopay method; use the replacement buttons above first.
+                    </p>
+                  ) : null}
                 </div>
                 {paymentCheckoutMethod ? (
                   <Alert className="mt-3" role="status" aria-live="polite">

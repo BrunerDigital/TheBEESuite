@@ -1321,6 +1321,33 @@ async function lockCurrentPaymentMethodAutopayScope(
   };
 }
 
+async function lockPaymentMethodBillingAccount(
+  tx: Prisma.TransactionClient,
+  billingAccountId: string,
+) {
+  const lockedRows = await tx.$queryRaw<Array<{ id: string }>>`
+    select "id"
+    from "BillingAccount"
+    where "id" = ${billingAccountId}
+    for update
+  `;
+  return lockedRows.length === 1;
+}
+
+async function hasReservedTerminalSetupIntentEvent(
+  tx: Prisma.TransactionClient,
+  setupIntentId: string,
+) {
+  const terminalReceipt = await tx.stripeWebhookEvent.findFirst({
+    where: {
+      objectId: setupIntentId,
+      type: { in: ["setup_intent.succeeded", "setup_intent.setup_failed", "setup_intent.canceled"] },
+    },
+    select: { id: true },
+  });
+  return Boolean(terminalReceipt);
+}
+
 async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted, matchedTenantId?: string | null) {
   const billingAccountId = session.metadata?.billingAccountId;
   if (!billingAccountId) {
@@ -1330,22 +1357,22 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
   const setupIntentId = clean(session.setup_intent);
   const tenantId = matchedTenantId || session.metadata?.tenantId || null;
   const connectedAccountId = clean(session.metadata?.stripeConnectedAccountId) || clean(event.account) || null;
-  const setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId, { tenantId, connectedAccountId }) : null;
+  let setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId, { tenantId, connectedAccountId }) : null;
   if (setupIntent && !setupIntent.ok) {
     return NextResponse.json(
       { ok: false, configured: setupIntent.configured, error: setupIntent.error || "Payment setup session could not be retrieved." },
       { status: setupIntent.configured ? 502 : 503 },
     );
   }
-  const setupPaymentMethodId = setupIntent?.setupIntent?.paymentMethodId || null;
+  let setupPaymentMethodId = setupIntent?.setupIntent?.paymentMethodId || null;
   const paymentMethodLookup = setupPaymentMethodId
     ? await retrieveStripePaymentMethod(setupPaymentMethodId, { tenantId, connectedAccountId })
     : null;
-  const paymentMethodDetails = paymentMethodLookup?.ok ? paymentMethodLookup.paymentMethod : null;
+  let paymentMethodDetails = paymentMethodLookup?.ok ? paymentMethodLookup.paymentMethod : null;
 
-  try {
-    const outcome = await prisma.$transaction(async (tx) => {
+  const applySetupCompletion = () => prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
+      if (!await lockPaymentMethodBillingAccount(tx, billingAccountId)) return "missing" as const;
       const billingAccount = await tx.billingAccount.findUnique({
         where: { id: billingAccountId },
         select: {
@@ -1360,6 +1387,16 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
         },
       });
       if (!billingAccount) return "missing" as const;
+
+      const retrievedSetupStatus = setupIntent?.setupIntent?.status || "";
+      const retrievedSetupPending = !["succeeded", "canceled", "setup_failed"].includes(retrievedSetupStatus);
+      if (
+        setupIntentId
+        && retrievedSetupPending
+        && await hasReservedTerminalSetupIntentEvent(tx, setupIntentId)
+      ) {
+        return "refresh_terminal" as const;
+      }
 
       const currentFields = jsonObject(billingAccount.customFields);
       const latestSetupSessionId = clean(currentFields.stripeSetupCheckoutSessionId);
@@ -1545,7 +1582,32 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
         }
       }
       return appliedAutopayPatch?.preservedExistingConsent ? "preserved" as const : "applied" as const;
-    });
+  });
+
+  try {
+    let outcome = await applySetupCompletion();
+    if (outcome === "refresh_terminal" && setupIntentId) {
+      const refreshedSetupIntent = await retrieveStripeSetupIntent(setupIntentId, { tenantId, connectedAccountId });
+      if (!refreshedSetupIntent.ok || !refreshedSetupIntent.setupIntent) {
+        throw new Error("Stripe SetupIntent terminal state could not be reconciled during checkout completion.");
+      }
+      if (!["succeeded", "canceled", "setup_failed"].includes(refreshedSetupIntent.setupIntent.status || "")) {
+        throw new Error("Stripe SetupIntent terminal receipt did not match the current provider state.");
+      }
+      setupIntent = refreshedSetupIntent;
+      setupPaymentMethodId = refreshedSetupIntent.setupIntent.paymentMethodId || null;
+      if (setupPaymentMethodId) {
+        const refreshedPaymentMethod = await retrieveStripePaymentMethod(setupPaymentMethodId, { tenantId, connectedAccountId });
+        if (!refreshedPaymentMethod.ok || !refreshedPaymentMethod.paymentMethod) {
+          throw new Error("Stripe SetupIntent payment method could not be reconciled during checkout completion.");
+        }
+        paymentMethodDetails = refreshedPaymentMethod.paymentMethod;
+      }
+      outcome = await applySetupCompletion();
+      if (outcome === "refresh_terminal") {
+        throw new Error("Stripe SetupIntent terminal reconciliation did not advance checkout completion.");
+      }
+    }
     if (outcome === "stale") return NextResponse.json({ ok: true, staleSetupSessionIgnored: true });
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) {
@@ -1581,6 +1643,7 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
+      if (!await lockPaymentMethodBillingAccount(tx, billingAccountId)) return;
       const billingAccount = await tx.billingAccount.findUnique({
         where: { id: billingAccountId },
         select: {
@@ -1693,6 +1756,7 @@ async function handlePaymentMethodSetupIntentFailed(event: StripeWebhookEvent, s
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
+      if (!await lockPaymentMethodBillingAccount(tx, billingAccountId)) return;
       const billingAccount = await tx.billingAccount.findUnique({
         where: { id: billingAccountId },
         select: {

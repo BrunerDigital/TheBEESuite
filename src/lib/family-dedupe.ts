@@ -131,8 +131,7 @@ function canonicalPersonNameToken(value: unknown, supported: Set<string>) {
 
 function canonicalPersonNameSuffixToken(value: unknown) {
   if (typeof value !== "string" || value.trim().split(/\s+/).length !== 1) return "";
-  const compact = value.trim();
-  if (/^(?:\p{L}\.)+\p{L}\.?$/u.test(compact)) return "";
+  if (!/^[\p{L}\p{N}]+\.?$/u.test(value.trim())) return "";
   return canonicalPersonNameToken(value, personNameSuffixes);
 }
 
@@ -263,7 +262,10 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
       normalizeTextVariants(normalizePersonName(spacedApostropheName, { stripCredentials }))
         .forEach((variant) => variants.add(variant));
     }
-    const joinedHyphenName = value.replace(/([\p{L}\p{N}])[-\u2010-\u2015](?=[\p{L}\p{N}])/gu, "$1");
+    const hasHyphenatedInitialPair = /(?:^|[\s,])\p{L}\.?[-\u2010-\u2015]\p{L}\.?(?=\s|,|$)/u.test(value);
+    const joinedHyphenName = hasHyphenatedInitialPair
+      ? value
+      : value.replace(/([\p{L}\p{N}])[-\u2010-\u2015](?=[\p{L}\p{N}])/gu, "$1");
     if (joinedHyphenName !== value) {
       normalizeTextVariants(normalizePersonName(joinedHyphenName, { stripCredentials }))
         .forEach((variant) => variants.add(variant));

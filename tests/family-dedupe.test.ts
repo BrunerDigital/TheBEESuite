@@ -1624,6 +1624,46 @@ test("guardian duplicate scoring does not collapse compact dotted initials into 
   assert.equal(score, null);
 });
 
+test("hyphenated initials are never parsed as a generational suffix", () => {
+  for (const initials of ["J-R", "J.-R."]) {
+    const matchingScore = scoreChildDuplicate(
+      {
+        id: `child_last_first_${initials}`,
+        familyId: `family_last_first_${initials}`,
+        centerId: "center_1",
+        fullName: `Smith, ${initials}`,
+        dateOfBirth: "2022-10-10",
+      },
+      {
+        id: `child_direct_${initials}`,
+        familyId: `family_direct_${initials}`,
+        centerId: "center_1",
+        fullName: `${initials} Smith`,
+        dateOfBirth: "2022-10-10",
+      },
+    );
+    const suffixScore = scoreChildDuplicate(
+      {
+        id: `child_initials_${initials}`,
+        familyId: `family_initials_${initials}`,
+        centerId: "center_1",
+        fullName: `Smith, ${initials}`,
+        dateOfBirth: "2022-10-10",
+      },
+      {
+        id: `child_suffix_${initials}`,
+        familyId: `family_suffix_${initials}`,
+        centerId: "center_1",
+        fullName: "Smith Jr.",
+        dateOfBirth: "2022-10-10",
+      },
+    );
+
+    assert.equal(matchingScore?.confidence, "high", `${initials} should remain initials`);
+    assert.equal(suffixScore, null, `${initials} should not become Jr.`);
+  }
+});
+
 test("last-first single-letter Roman suffixes retain a middle-initial interpretation", () => {
   for (const suffix of ["I", "V", "X"]) {
     const score = scoreChildDuplicate(

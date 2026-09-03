@@ -264,6 +264,18 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
       normalizeTextVariants(`${givenNameWords.join(" ")} ${surname} ${trailingSuffix}`)
         .forEach((variant) => variants.add(variant));
     }
+    const infixSuffix = rawParts.length >= 3
+      ? canonicalPersonNameToken(rawParts[1], personNameSuffixes)
+      : "";
+    if (infixSuffix && firstPartWords >= 2) {
+      const surname = normalizeText(rawParts[0]).replace(/\s+/g, "");
+      const givenNameWords = credentialsRemoved(
+        rawParts.slice(2).join(" ").split(/\s+/).filter(Boolean),
+        stripCredentials,
+      );
+      normalizeTextVariants(`${givenNameWords.join(" ")} ${surname} ${infixSuffix}`)
+        .forEach((variant) => variants.add(variant));
+    }
     if (rawParts.length === 2 && trailingSuffix === "v") {
       variants.add(normalizePersonNameText(`${trailingSuffix} ${rawParts[0]}`));
     }

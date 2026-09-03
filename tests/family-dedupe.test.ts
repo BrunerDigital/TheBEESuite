@@ -255,6 +255,28 @@ test("child duplicate scoring preserves exact non-Latin names", () => {
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
 
+test("child duplicate scoring matches an abbreviated given name", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "A. Johnson",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Johnson",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
 test("guardian duplicate scoring matches email and phone across same-school families", () => {
   const score = scoreGuardianDuplicate(
     {
@@ -410,6 +432,30 @@ test("guardian duplicate scoring transliterates stroked Latin letters", () => {
       centerId: "center_1",
       fullName: "Soren Jorgensen",
       phone: "7205550106",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
+test("guardian duplicate scoring folds uppercase sharp S", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "ALEX GROẞ",
+      phone: "7205550111",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Gross",
+      phone: "7205550111",
       relation: "Parent",
     },
   );

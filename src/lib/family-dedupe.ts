@@ -63,7 +63,7 @@ function normalizeText(value: unknown) {
         .replace(/[þÞ]/g, "th")
         .replace(/[æÆ]/g, "ae")
         .replace(/[œŒ]/g, "oe")
-        .replace(/ß/g, "ss")
+        .replace(/[ßẞ]/g, "ss")
         .replace(/[ıİ]/g, "i")
         .replace(/['’]/g, "")
         .toLowerCase()
@@ -136,16 +136,16 @@ function personNamesMatch(left: string, right: string) {
   const rightSuffix = personNameSuffixes.has(rightParts.at(-1) ?? "") ? rightParts.pop() : "";
   if (leftSuffix !== rightSuffix) return false;
   if (leftParts.length < 2 || rightParts.length < 2) return false;
-  if (leftParts[0] !== rightParts[0] || leftParts.at(-1) !== rightParts.at(-1)) return false;
+  const namePartsMatch = (leftPart: string, rightPart: string) => leftPart === rightPart
+    || (leftPart.length === 1 && rightPart.startsWith(leftPart))
+    || (rightPart.length === 1 && leftPart.startsWith(rightPart));
+  if (!namePartsMatch(leftParts[0], rightParts[0]) || leftParts.at(-1) !== rightParts.at(-1)) return false;
 
   const leftMiddle = leftParts.slice(1, -1);
   const rightMiddle = rightParts.slice(1, -1);
   if (Math.abs(leftMiddle.length - rightMiddle.length) > 2) return false;
-  const middlePartsMatch = (leftPart: string, rightPart: string) => leftPart === rightPart
-    || (leftPart.length === 1 && rightPart.startsWith(leftPart))
-    || (rightPart.length === 1 && leftPart.startsWith(rightPart));
   if (leftMiddle.length === rightMiddle.length) {
-    return leftMiddle.every((part, index) => middlePartsMatch(part, rightMiddle[index]));
+    return leftMiddle.every((part, index) => namePartsMatch(part, rightMiddle[index]));
   }
 
   const [shorterMiddle, longerMiddle] = leftMiddle.length < rightMiddle.length
@@ -154,7 +154,7 @@ function personNamesMatch(left: string, right: string) {
   if (!shorterMiddle.length) return true;
   let longerIndex = 0;
   return shorterMiddle.every((part) => {
-    while (longerIndex < longerMiddle.length && !middlePartsMatch(part, longerMiddle[longerIndex])) longerIndex += 1;
+    while (longerIndex < longerMiddle.length && !namePartsMatch(part, longerMiddle[longerIndex])) longerIndex += 1;
     if (longerIndex >= longerMiddle.length) return false;
     longerIndex += 1;
     return true;

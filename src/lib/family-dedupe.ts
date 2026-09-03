@@ -398,11 +398,6 @@ function personNamesMatch(left: string, right: string) {
   return matched && omittedParts.every((part) => part.length === 1);
 }
 
-function hasLeadingHonorific(value: unknown) {
-  if (typeof value !== "string") return false;
-  return personNameHonorifics.has(normalizeText(value).split(" ").filter(Boolean)[0] ?? "");
-}
-
 function hasGivenNameAfterHonorific(value: unknown) {
   if (typeof value !== "string") return false;
   const words = normalizeText(value).split(" ").filter(Boolean);
@@ -440,10 +435,7 @@ function personNameValuesMatch(
   options: { stripCredentials?: boolean } = {},
 ) {
   const stripCredentials = options.stripCredentials ?? true;
-  const leftHasHonorific = hasLeadingHonorific(left);
-  const rightHasHonorific = hasLeadingHonorific(right);
-  if ((leftHasHonorific && rightHasHonorific)
-    || !hasGivenNameAfterHonorific(left)
+  if (!hasGivenNameAfterHonorific(left)
     || !hasGivenNameAfterHonorific(right)) return false;
 
   const leftNames = normalizePersonNameVariants(left, { stripCredentials });

@@ -738,6 +738,30 @@ test("guardian duplicate scoring ignores common professional credentials", () =>
   assert.ok(score?.reasons.includes("same guardian name"));
 });
 
+test("guardian duplicate scoring strips grouped comma-separated credentials", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Alex Smith, RN BSN",
+      phone: "7205550115",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith",
+      phone: "7205550115",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
 test("guardian duplicate scoring preserves credential-like surnames", () => {
   const score = scoreGuardianDuplicate(
     {

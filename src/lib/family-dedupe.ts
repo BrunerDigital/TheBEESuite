@@ -104,9 +104,12 @@ function stripTrailingPersonCredentials(parts: string[]) {
     const credentialLetters = rawCredential.replace(/[^A-Za-z]/g, "");
     const explicitUppercaseCredential = credentialLetters.length >= 2
       && credentialLetters === credentialLetters.toUpperCase();
-    const separateCommaPart = trailingWords.length === 1
+    const groupedCommaCredentials = remaining.length > 1
+      && trailingWords.length > 1
+      && trailingWords.every((word) => Boolean(canonicalPersonNameToken(word, personNameCredentials)));
+    const separateCommaPart = groupedCommaCredentials || (trailingWords.length === 1
       && (remaining.length > 2 || firstPartWords >= 2)
-      && (!personNameCredentialLikeSurnames.has(credentialToken) || explicitUppercaseCredential);
+      && (!personNameCredentialLikeSurnames.has(credentialToken) || explicitUppercaseCredential));
     const visiblyAttachedCredential = rawCredential.includes(".")
       || (trailingWords.length >= 3
         && (!personNameCredentialLikeSurnames.has(credentialToken) || explicitUppercaseCredential));

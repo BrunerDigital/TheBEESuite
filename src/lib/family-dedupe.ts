@@ -121,7 +121,9 @@ function normalizePersonName(value: unknown) {
 
   const firstPartWords = nameParts[0]?.split(/\s+/).filter(Boolean).length ?? 0;
   const trailingSuffix = canonicalPersonNameToken(nameParts.at(-1), personNameSuffixes);
-  const separateSuffix = nameParts.length === 2 && firstPartWords < 2 ? "" : trailingSuffix;
+  const separateSuffix = nameParts.length === 2 && (firstPartWords < 2 || trailingSuffix === "v")
+    ? ""
+    : trailingSuffix;
   if (nameParts.length === 2 && separateSuffix) return normalizeText(`${nameParts[0]} ${separateSuffix}`);
 
   const givenNameWords = (separateSuffix ? nameParts.slice(1, -1) : nameParts.slice(1))

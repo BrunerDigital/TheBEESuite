@@ -417,6 +417,23 @@ function explicitCommaCompoundSurname(value: unknown, stripCredentials: boolean)
   return surnameWords.length >= 2 ? surnameWords : [];
 }
 
+function explicitCompoundSurname(value: unknown, stripCredentials: boolean) {
+  const commaSurname = explicitCommaCompoundSurname(value, stripCredentials);
+  if (commaSurname.length || typeof value !== "string") return commaSurname;
+
+  const rawParts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  const finalSuffix = canonicalPersonNameToken(rawParts.at(-1), personNameSuffixes);
+  if (finalSuffix) rawParts.pop();
+  const nameParts = stripCredentials ? stripTrailingPersonCredentials(rawParts) : rawParts;
+  if (nameParts.length !== 1) return [];
+  const words = nameParts[0].split(/\s+/).filter(Boolean);
+  if (canonicalPersonNameToken(words.at(-1), personNameSuffixes)) words.pop();
+  const rawSurname = words.at(-1) ?? "";
+  if (!/[\p{L}\p{N}][-\u2010-\u2015][\p{L}\p{N}]/u.test(rawSurname)) return [];
+  const surnameWords = normalizeText(rawSurname).split(" ").filter(Boolean);
+  return surnameWords.length >= 2 ? surnameWords : [];
+}
+
 function explicitCompoundSurnameMatches(surnameWords: string[], value: unknown, stripCredentials: boolean) {
   const normalized = normalizePersonName(value, { stripCredentials });
   if (!normalized) return false;
@@ -446,11 +463,11 @@ function personNameValuesMatch(
     return false;
   }
 
-  const leftCompoundSurname = explicitCommaCompoundSurname(left, stripCredentials);
+  const leftCompoundSurname = explicitCompoundSurname(left, stripCredentials);
   if (leftCompoundSurname.length && !explicitCompoundSurnameMatches(leftCompoundSurname, right, stripCredentials)) {
     return false;
   }
-  const rightCompoundSurname = explicitCommaCompoundSurname(right, stripCredentials);
+  const rightCompoundSurname = explicitCompoundSurname(right, stripCredentials);
   return !rightCompoundSurname.length
     || explicitCompoundSurnameMatches(rightCompoundSurname, left, stripCredentials);
 }

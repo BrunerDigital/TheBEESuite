@@ -1385,7 +1385,7 @@ test("guardian duplicate scoring matches a middle initial to its full name", () 
       id: "guardian_1",
       familyId: "family_1",
       centerId: "center_1",
-      fullName: "Jordan M Rivera",
+      fullName: "Jordan M. Rivera",
       phone: "7205550105",
       relation: "Parent",
     },
@@ -1416,7 +1416,7 @@ test("child duplicate scoring treats a particle-like middle name as a middle nam
       id: "child_2",
       familyId: "family_2",
       centerId: "center_1",
-      fullName: "Jordan V Smith",
+      fullName: "Jordan V. Smith",
       dateOfBirth: "2022-10-10",
     },
   );
@@ -1439,7 +1439,7 @@ test("guardian duplicate scoring treats a particle-like middle name as a middle 
       id: "guardian_2",
       familyId: "family_2",
       centerId: "center_1",
-      fullName: "Jordan V Smith",
+      fullName: "Jordan V. Smith",
       phone: "7205550122",
       relation: "Parent",
     },
@@ -1495,13 +1495,13 @@ test("guardian duplicate scoring preserves suffixes attached to last-first surna
   assert.ok(score?.reasons.includes("same guardian name"));
 });
 
-test("child duplicate scoring preserves dotted V middle initials in last-first names", () => {
+test("child duplicate scoring preserves undotted V middle initials in last-first names", () => {
   const score = scoreChildDuplicate(
     {
       id: "child_1",
       familyId: "family_1",
       centerId: "center_1",
-      fullName: "Smith, Mary V.",
+      fullName: "Smith, Mary V",
       dateOfBirth: "2022-10-10",
     },
     {
@@ -1517,13 +1517,13 @@ test("child duplicate scoring preserves dotted V middle initials in last-first n
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
 
-test("guardian duplicate scoring preserves dotted V middle initials in last-first names", () => {
+test("guardian duplicate scoring preserves undotted V middle initials in last-first names", () => {
   const score = scoreGuardianDuplicate(
     {
       id: "guardian_1",
       familyId: "family_1",
       centerId: "center_1",
-      fullName: "Smith, Mary V.",
+      fullName: "Smith, Mary V",
       phone: "7205550123",
       relation: "Parent",
     },
@@ -2174,6 +2174,69 @@ test("child duplicate scoring preserves explicit compound surnames during initia
       centerId: "center_1",
       fullName: "Avery G Marquez",
       dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("child duplicate scoring preserves unpunctuated compound surnames during initial matching", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Avery Garcia Marquez",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Avery G Marquez",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("guardian duplicate scoring preserves unpunctuated compound surnames during initial matching", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Avery Garcia Marquez",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Avery G Marquez",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("family duplicate scoring preserves unpunctuated child compound surnames during initial matching", () => {
+  const score = scoreFamilyDuplicate(
+    {
+      id: "family_1",
+      centerId: "center_1",
+      name: "One Family",
+      children: [{ fullName: "Avery Garcia Marquez", dateOfBirth: "2022-10-10" }],
+    },
+    {
+      id: "family_2",
+      centerId: "center_1",
+      name: "Two Family",
+      children: [{ fullName: "Avery G Marquez", dateOfBirth: "2022-10-10" }],
     },
   );
 

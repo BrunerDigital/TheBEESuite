@@ -316,9 +316,8 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
     if (rawParts.length === 2) {
       const rawGivenNameWords = rawParts[1].split(/\s+/).filter(Boolean);
       const rawFinalGivenNameWord = rawGivenNameWords.at(-1) ?? "";
-      const dottedVInitial = canonicalPersonNameToken(rawFinalGivenNameWord, personNameSuffixes) === "v"
-        && /\.\s*$/.test(rawFinalGivenNameWord);
-      if (rawGivenNameWords.length >= 2 && dottedVInitial) {
+      const possibleVInitial = canonicalPersonNameToken(rawFinalGivenNameWord, personNameSuffixes) === "v";
+      if (rawGivenNameWords.length >= 2 && possibleVInitial) {
         rawGivenNameWords.pop();
         const dottedGivenNameWords = credentialsRemoved(rawGivenNameWords, stripCredentials);
         dottedGivenNameWords.push(rawFinalGivenNameWord);
@@ -339,7 +338,7 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
   return [...variants].filter(Boolean);
 }
 
-function personNamesMatch(left: string, right: string) {
+function personNamesMatch(left: string, right: string, allowMiddleInitialExpansion = false) {
   if (left === right) return Boolean(left);
   const leftParts = left.split(" ").filter(Boolean);
   const rightParts = right.split(" ").filter(Boolean);
@@ -351,11 +350,14 @@ function personNamesMatch(left: string, right: string) {
     || (leftPart.length === 1 && rightPart.startsWith(leftPart))
     || (rightPart.length === 1 && leftPart.startsWith(rightPart));
   if (!namePartsMatch(leftParts[0], rightParts[0]) || leftParts.at(-1) !== rightParts.at(-1)) return false;
+  const middlePartsMatch = allowMiddleInitialExpansion
+    ? namePartsMatch
+    : (leftPart: string, rightPart: string) => leftPart === rightPart;
 
   const leftMiddle = leftParts.slice(1, -1);
   const rightMiddle = rightParts.slice(1, -1);
   if (leftMiddle.length === rightMiddle.length) {
-    return leftMiddle.every((part, index) => namePartsMatch(part, rightMiddle[index]));
+    return leftMiddle.every((part, index) => middlePartsMatch(part, rightMiddle[index]));
   }
 
   const trailingSurnameParticles = (parts: string[]) => {
@@ -375,7 +377,7 @@ function personNamesMatch(left: string, right: string) {
   let longerIndex = 0;
   const omittedParts: string[] = [];
   const matched = shorterMiddle.every((part) => {
-    while (longerIndex < longerMiddle.length && !namePartsMatch(part, longerMiddle[longerIndex])) {
+    while (longerIndex < longerMiddle.length && !middlePartsMatch(part, longerMiddle[longerIndex])) {
       omittedParts.push(longerMiddle[longerIndex]);
       longerIndex += 1;
     }
@@ -404,6 +406,10 @@ function leadingHonorific(value: unknown) {
     if (personNameHonorifics.has(firstWord)) return firstWord;
   }
   return "";
+}
+
+function hasExplicitMiddleInitial(value: unknown) {
+  return typeof value === "string" && /(?:^|[\s,])\p{L}\.(?=\s|,|$)/u.test(value);
 }
 
 function explicitCommaCompoundSurname(value: unknown, stripCredentials: boolean) {
@@ -460,7 +466,10 @@ function personNameValuesMatch(
 
   const leftNames = normalizePersonNameVariants(left, { stripCredentials });
   const rightNames = normalizePersonNameVariants(right, { stripCredentials });
-  if (!leftNames.some((leftName) => rightNames.some((rightName) => personNamesMatch(leftName, rightName)))) {
+  const allowMiddleInitialExpansion = hasExplicitMiddleInitial(left) || hasExplicitMiddleInitial(right);
+  if (!leftNames.some((leftName) => rightNames.some((rightName) => (
+    personNamesMatch(leftName, rightName, allowMiddleInitialExpansion)
+  )))) {
     return false;
   }
 

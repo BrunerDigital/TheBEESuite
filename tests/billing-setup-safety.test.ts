@@ -39,10 +39,11 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
   assert.match(webhook, /const setupCanceled = event.type === "setup_intent.canceled"/);
   assert.match(webhook, /replacement_bank_verification_canceled/);
   assert.match(webhook, /from "BillingAccount"[\s\S]*for update/);
-  assert.match(webhook, /reservedTerminalSetupIntentEventType/);
+  assert.match(webhook, /hasReservedTerminalSetupIntentEvent/);
   assert.match(webhook, /const refreshedSetupIntent = await retrieveStripeSetupIntent/);
   assert.match(webhook, /Stripe SetupIntent terminal state could not be reconciled during checkout completion/);
-  assert.match(webhook, /reconciledTerminalEventType === "setup_intent.setup_failed"[\s\S]*"requires_payment_method"/);
+  assert.match(webhook, /reconciledTerminalEventType = stripeSetupIntentTerminalEventTypeForStatus/);
+  assert.doesNotMatch(webhook, /async function hasReservedTerminalSetupIntentEvent[\s\S]{0,500}orderBy:/);
   assert.ok(
     (webhook.match(/lockPaymentMethodBillingAccount\(tx, billingAccountId\)/g) ?? []).length >= 3,
   );

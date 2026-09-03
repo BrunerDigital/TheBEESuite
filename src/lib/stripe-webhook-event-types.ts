@@ -70,6 +70,13 @@ export function isStripeWebhookPayoutEvent(type: string) {
   return PAYOUT_EVENTS.has(type);
 }
 
+export function stripeSetupIntentTerminalEventTypeForStatus(status?: string | null) {
+  if (status === "succeeded") return "setup_intent.succeeded" as const;
+  if (status === "canceled") return "setup_intent.canceled" as const;
+  if (status === "requires_payment_method") return "setup_intent.setup_failed" as const;
+  return null;
+}
+
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

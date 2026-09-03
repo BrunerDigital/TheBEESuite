@@ -36,6 +36,7 @@ import {
   isStripeWebhookPaymentEvent,
   isStripeWebhookPayoutEvent,
   isStripeWebhookSoftwareBillingEvent,
+  stripeSetupIntentTerminalEventTypeForStatus,
   stripeWebhookObjectForRouting,
 } from "@/lib/stripe-webhook-event-types";
 import {
@@ -1334,7 +1335,7 @@ async function lockPaymentMethodBillingAccount(
   return lockedRows.length === 1;
 }
 
-async function reservedTerminalSetupIntentEventType(
+async function hasReservedTerminalSetupIntentEvent(
   tx: Prisma.TransactionClient,
   setupIntentId: string,
 ) {
@@ -1343,10 +1344,9 @@ async function reservedTerminalSetupIntentEventType(
       objectId: setupIntentId,
       type: { in: ["setup_intent.succeeded", "setup_intent.setup_failed", "setup_intent.canceled"] },
     },
-    orderBy: { createdAt: "desc" },
-    select: { type: true },
+    select: { id: true },
   });
-  return terminalReceipt?.type ?? null;
+  return Boolean(terminalReceipt);
 }
 
 async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted, matchedTenantId?: string | null) {
@@ -1394,8 +1394,9 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       const retrievedSetupPending = !["succeeded", "canceled"].includes(retrievedSetupStatus)
         && reconciledTerminalEventType !== "setup_intent.setup_failed";
       if (setupIntentId && retrievedSetupPending && !reconciledTerminalEventType) {
-        reconciledTerminalEventType = await reservedTerminalSetupIntentEventType(tx, setupIntentId);
-        if (reconciledTerminalEventType) return "refresh_terminal" as const;
+        if (await hasReservedTerminalSetupIntentEvent(tx, setupIntentId)) {
+          return "refresh_terminal" as const;
+        }
       }
 
       const currentFields = jsonObject(billingAccount.customFields);
@@ -1596,15 +1597,11 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       if (!refreshedSetupIntent.ok || !refreshedSetupIntent.setupIntent) {
         throw new Error("Stripe SetupIntent terminal state could not be reconciled during checkout completion.");
       }
-      const expectedTerminalStatus = reconciledTerminalEventType === "setup_intent.succeeded"
-        ? "succeeded"
-        : reconciledTerminalEventType === "setup_intent.canceled"
-          ? "canceled"
-          : reconciledTerminalEventType === "setup_intent.setup_failed"
-            ? "requires_payment_method"
-            : null;
-      if (!expectedTerminalStatus || refreshedSetupIntent.setupIntent.status !== expectedTerminalStatus) {
-        throw new Error("Stripe SetupIntent terminal receipt did not match the current provider state.");
+      reconciledTerminalEventType = stripeSetupIntentTerminalEventTypeForStatus(
+        refreshedSetupIntent.setupIntent.status,
+      );
+      if (!reconciledTerminalEventType) {
+        throw new Error("Stripe SetupIntent receipt did not resolve to a current terminal provider state.");
       }
       setupIntent = refreshedSetupIntent;
       setupPaymentMethodId = refreshedSetupIntent.setupIntent.paymentMethodId || null;

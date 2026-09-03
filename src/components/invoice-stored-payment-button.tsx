@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, CreditCard } from "lucide-react";
+import { AlertCircle, CheckCircle2, CreditCard, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,10 +25,11 @@ export type InvoiceStoredPaymentActionData = {
   } | null;
   billingAccount: {
     balanceCents: number;
-    family: { name: string; accountCategory: "current" | "past" };
+    family: { id: string; centerId: string | null; name: string; accountCategory: "current" | "past" };
     paymentMethodManagement: {
       autopayStatus: "enabled" | "disabled" | "pending";
       paymentMethodReauthorizationRequired: boolean;
+      paymentMethodReauthorizationRecipientEmails: string[];
       hasStripeCustomer: boolean;
       hasSavedPaymentMethod: boolean;
       paymentMethodLabel: string | null;
@@ -53,6 +54,13 @@ type CheckoutSummary = {
   ok?: boolean;
   error?: string;
   url?: string;
+};
+
+type PaymentMethodRequestSummary = {
+  ok?: boolean;
+  error?: string;
+  emailsSent?: number;
+  notificationsCreated?: number;
 };
 
 type ResponsibilitySummary = {
@@ -97,6 +105,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
     invoiceStatus: invoice.status,
     invoiceTotalCents: invoice.totalCents,
   });
+  const replacementRecipientEmails = method.paymentMethodReauthorizationRecipientEmails;
 
   function dollarsToCents(value: string) {
     const normalized = value.trim().replace(/[$,]/g, "");
@@ -193,10 +202,42 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
     });
   }
 
+  function sendReplacementMethodLink() {
+    if (!method.paymentMethodReauthorizationRequired) return;
+    if (!replacementRecipientEmails.length) {
+      return setError("The linked guardian who enabled autopay does not have a saved email. Open the family record to correct it before sending a replacement link.");
+    }
+    const confirmed = window.confirm(
+      `Send a secure, no-charge replacement payment-method link to ${replacementRecipientEmails.join(", ")}? This will not process either invoice.`,
+    );
+    if (!confirmed) return;
+
+    startTransition(async () => {
+      setMessage("");
+      setError("");
+      const response = await fetch("/api/billing/payment-method-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          familyId: invoice.billingAccount.family.id,
+          emails: replacementRecipientEmails,
+          intent: "payment_method_reauthorization",
+        }),
+      });
+      const json = await response.json().catch(() => null) as PaymentMethodRequestSummary | null;
+      if (!response.ok || !json?.ok) {
+        setError(json?.error || "The replacement payment-method link could not be sent.");
+        return;
+      }
+      setMessage(`Replacement link sent to ${replacementRecipientEmails.join(", ")}. No payment was processed.`);
+      router.refresh();
+    });
+  }
+
   function openInstantBankCheckout() {
     if (paymentActionReason) return setError(paymentActionReason);
     const confirmed = window.confirm(
-      `Open a secure Link payment form for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
+      `Open a secure Link payment form for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?${method.paymentMethodReauthorizationRequired ? " This is a one-time payment and will not replace the saved autopay method." : ""}`,
     );
     if (!confirmed) return;
 
@@ -224,7 +265,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   function openCardCheckout() {
     if (paymentActionReason) return setError(paymentActionReason);
     const confirmed = window.confirm(
-      `Open the Digital Terminal on this device for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?`,
+      `Open the Digital Terminal on this device for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}?${method.paymentMethodReauthorizationRequired ? " This is a one-time payment and will not replace the saved autopay method." : ""}`,
     );
     if (!confirmed) return;
 
@@ -252,6 +293,16 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
   return (
     <div className="flex min-w-40 flex-col items-start gap-1">
       <div className="flex flex-wrap gap-1">
+        {method.paymentMethodReauthorizationRequired ? (
+          <Button
+            size="sm"
+            disabled={isPending || invoice.billingAccount.family.accountCategory === "past"}
+            onClick={sendReplacementMethodLink}
+          >
+            <Send data-icon="inline-start" />
+            Send replacement link
+          </Button>
+        ) : null}
         <Button
           size="sm"
           disabled={isPending || Boolean(reason)}
@@ -268,7 +319,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
           variant="outline"
         >
           <CreditCard data-icon="inline-start" />
-          Pay with Link
+          {method.paymentMethodReauthorizationRequired ? "One-time Pay with Link" : "Pay with Link"}
         </Button>
         <Button
           size="sm"
@@ -277,7 +328,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
           variant="outline"
         >
           <CreditCard data-icon="inline-start" />
-          Digital Terminal
+          {method.paymentMethodReauthorizationRequired ? "One-time Digital Terminal" : "Digital Terminal"}
         </Button>
         {invoice.responsibilityReviewRequired ? (
           <Button
@@ -303,7 +354,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
                 : ""
             }
           >
-            {reason}
+            {reason}{method.paymentMethodReauthorizationRequired ? " One-time checkout will not update the saved autopay method." : ""}
           </span>
         ) : null}
       </div>

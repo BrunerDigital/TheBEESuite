@@ -15,6 +15,8 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
   assert.match(paymentMethodRoute, /action === "enable_autopay"/);
   assert.match(paymentMethodRoute, /action === "disable_autopay"/);
   assert.match(paymentMethodRoute, /parentInitiatedPaymentMethodReauthorization/);
+  assert.match(paymentMethodRoute, /parentFacing &&[\s\S]*billingAccount\.family\.children\.length === 0 &&[\s\S]*action === "setup"/);
+  assert.match(paymentMethodRoute, /Saved payment methods and autopay are unavailable for a past family account/);
   assert.match(paymentMethodManagement, /const explicitEnable = setupMode === "enable"/);
   assert.match(paymentMethodManagement, /const explicitDisable = setupMode === "disabled"/);
   assert.match(webhook, /const autopayPatch = paymentMethodSetupAutopayOutcome/);

@@ -3825,6 +3825,9 @@ async function renderLivePage(
                   billingEmail: true,
                   centerId: true,
                   customFields: true,
+                  guardians: {
+                    select: { email: true, userId: true },
+                  },
                   children: { select: { id: true, customFields: true } },
                   _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
                 },
@@ -4277,11 +4280,22 @@ async function renderLivePage(
             billingAccount: {
               id: invoice.billingAccount.id,
               balanceCents: invoice.billingAccount.balanceCents,
-              paymentMethodManagement: billingPaymentMethodSummary({
-                autopayPlaceholder: invoice.billingAccount.autopayPlaceholder,
-                customFields: invoice.billingAccount.customFields,
-                centerId: invoice.billingAccount.family.centerId,
-              }),
+              paymentMethodManagement: {
+                ...billingPaymentMethodSummary({
+                  autopayPlaceholder: invoice.billingAccount.autopayPlaceholder,
+                  customFields: invoice.billingAccount.customFields,
+                  centerId: invoice.billingAccount.family.centerId,
+                }),
+                paymentMethodReauthorizationRecipientEmails: Array.from(new Set(
+                  invoice.billingAccount.family.guardians.flatMap((guardian) => (
+                    guardian.userId
+                    && guardian.userId === recordFromJson(invoice.billingAccount.customFields).autopayEnabledByUserId
+                    && guardian.email
+                      ? [guardian.email.trim().toLowerCase()]
+                      : []
+                  )),
+                )),
+              },
               family: {
                 id: invoice.billingAccount.family.id,
                 name: invoice.billingAccount.family.name,

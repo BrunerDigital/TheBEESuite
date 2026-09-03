@@ -12,6 +12,8 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   const terminalPayment = readFileSync("src/app/api/billing/terminal-payment/route.ts", "utf8");
   const paymentClaims = readFileSync("src/lib/stripe-payment-claims.ts", "utf8");
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
+  const invoiceActions = readFileSync("src/components/invoice-stored-payment-button.tsx", "utf8");
+  const parentPortal = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
   const paymentRequests = readFileSync("src/app/api/billing/payment-method-requests/route.ts", "utf8");
 
   assert.match(route, /Review eligible family balances before processing autopay/);
@@ -87,6 +89,13 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(workbench, /sendPaymentMethodRequest\("payment_method_reauthorization"\)/);
   assert.match(workbench, /Send replacement method link/);
   assert.match(workbench, /selectedPaymentMethod\?\.paymentMethodReauthorizationRecipientEmails/);
+  assert.match(invoiceActions, /sendReplacementMethodLink/);
+  assert.match(invoiceActions, /intent: "payment_method_reauthorization"/);
+  assert.match(invoiceActions, /One-time checkout will not update the saved autopay method/);
+  assert.match(parentPortal, /Replace saved card/);
+  assert.match(parentPortal, /A one-time payment does not replace the saved autopay method/);
+  assert.match(parentPortal, /const canReplaceSavedPaymentMethod = !paymentContinuityAccess && !autopayUnavailable/);
+  assert.match(parentPortal, /saved payment methods and autopay remain unavailable; use a one-time payment option below/);
   assert.match(paymentRequests, /optionByEmail\.get\(email\)\?\.userIds\.includes\(enabledByUserId\)/);
   assert.match(paymentRequests, /linked guardian who enabled autopay/);
 });

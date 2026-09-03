@@ -238,8 +238,14 @@ async function POSTHandler(request: NextRequest) {
   // Disabling collection must remain available even when a school's billing
   // approval is paused. It never creates a Stripe object or moves money.
   if (action === "disable_autopay") {
-    await prisma.billingAccount.update({
-      where: { id: billingAccount.id },
+    const disabledAccount = await prisma.billingAccount.updateMany({
+      where: {
+        id: billingAccount.id,
+        autopayPlaceholder: billingAccount.autopayPlaceholder,
+        customFields: billingAccount.customFields === null
+          ? { equals: Prisma.DbNull }
+          : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+      },
       data: {
         autopayPlaceholder: false,
         customFields: {
@@ -253,6 +259,12 @@ async function POSTHandler(request: NextRequest) {
         },
       },
     });
+    if (disabledAccount.count !== 1) {
+      return NextResponse.json(
+        { ok: false, error: "Autopay status changed while your request was being saved. Refresh and try again." },
+        { status: 409 },
+      );
+    }
     await writeAuditLog(user, {
       centerId,
       action: "billing.autopay.disabled",
@@ -376,8 +388,14 @@ async function POSTHandler(request: NextRequest) {
       );
     }
     const enabledAt = new Date().toISOString();
-    await prisma.billingAccount.update({
-      where: { id: billingAccount.id },
+    const enabledAccount = await prisma.billingAccount.updateMany({
+      where: {
+        id: billingAccount.id,
+        autopayPlaceholder: billingAccount.autopayPlaceholder,
+        customFields: billingAccount.customFields === null
+          ? { equals: Prisma.DbNull }
+          : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+      },
       data: {
         autopayPlaceholder: true,
         customFields: {
@@ -392,6 +410,12 @@ async function POSTHandler(request: NextRequest) {
         },
       },
     });
+    if (enabledAccount.count !== 1) {
+      return NextResponse.json(
+        { ok: false, error: "Autopay status changed while your authorization was being saved. Refresh and try again." },
+        { status: 409 },
+      );
+    }
     await writeAuditLog(user, {
       centerId,
       action: "billing.autopay.enabled",
@@ -442,8 +466,14 @@ async function POSTHandler(request: NextRequest) {
       );
     }
 
-    await prisma.billingAccount.update({
-      where: { id: billingAccount.id },
+    await prisma.billingAccount.updateMany({
+      where: {
+        id: billingAccount.id,
+        autopayPlaceholder: billingAccount.autopayPlaceholder,
+        customFields: billingAccount.customFields === null
+          ? { equals: Prisma.DbNull }
+          : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+      },
       data: {
         customFields: {
           ...currentFields,

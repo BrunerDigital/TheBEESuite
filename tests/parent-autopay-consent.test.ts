@@ -9,6 +9,7 @@ test("parents control autopay consent and directors can only run enabled autopay
   const invoicePaymentActions = readFileSync("src/lib/invoice-payment-actions.ts", "utf8");
   const paymentMethodRoute = readFileSync("src/app/api/billing/payment-method-session/route.ts", "utf8");
   const publicPaymentMethodForm = readFileSync("src/components/payment-method-request-form.tsx", "utf8");
+  const publicPaymentMethodPage = readFileSync("src/app/payment-method-form/[token]/page.tsx", "utf8");
   const publicPaymentMethodRoute = readFileSync("src/app/api/billing/payment-method-request/session/route.ts", "utf8");
   const autopayRoute = readFileSync("src/app/api/billing/autopay/route.ts", "utf8");
   const autopayProcessor = readFileSync("src/lib/autopay-processing.ts", "utf8");
@@ -88,5 +89,9 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(parentPortal, /You do not need to turn autopay on again/);
   assert.match(publicPaymentMethodForm, /You do not need to turn autopay on again/);
   assert.match(parentPortalPage, /canPreservePendingAutopayConsentForPaymentMethodMigration/);
-  assert.match(readFileSync("src/app/payment-method-form/[token]/page.tsx", "utf8"), /canPreservePendingAutopayConsentForPaymentMethodMigration/);
+  assert.match(parentPortalPage, /linkedGuardianUserIds: family\?\.guardians\.map/);
+  assert.match(publicPaymentMethodPage, /canPreservePendingAutopayConsentForPaymentMethodMigration/);
+  assert.match(publicPaymentMethodPage, /paymentMethodManagementSummary\(\{[\s\S]*activeConnectedAccountId,[\s\S]*centerCustomFields: center\.customFields/);
+  assert.match(publicPaymentMethodForm, /disabled=\{isPending \|\| autopayStatus === "pending"\}/);
+  assert.match(parentPortal, /disabled=\{isPending \|\| autopayStatus === "pending" \|\| paymentCheckoutMethod !== null \|\| !family\}/);
 });

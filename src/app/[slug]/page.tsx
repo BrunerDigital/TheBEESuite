@@ -2844,7 +2844,7 @@ async function renderLivePage(
         })
         || canPreservePendingAutopayConsentForPaymentMethodMigration({
           currentFields: parentBillingAccountFields,
-          linkedGuardianUserIds: [user.id],
+          linkedGuardianUserIds: family?.guardians.map((guardian) => guardian.userId) ?? [],
           currentCenterId: familyCenter?.id,
           currentTenantId: user.tenantId,
           activeConnectedAccountId: readStripeConnectedAccountId(parentCenterFields),

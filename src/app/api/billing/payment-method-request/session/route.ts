@@ -170,6 +170,15 @@ async function POSTHandler(request: NextRequest) {
     select: { id: true, autopayPlaceholder: true, customFields: true },
   });
   const currentFields = jsonObject(billingAccount.customFields);
+  if (currentFields.stripeBankVerificationPending === true) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Bank verification is already pending. Wait for Stripe to finish before starting another payment method update.",
+      },
+      { status: 409 },
+    );
+  }
   const connectedAccountId = readStripeConnectedAccountId(center.customFields);
   let paymentMethodReauthorizationRequired = false;
   if (payload.intent === "payment_method_reauthorization") {

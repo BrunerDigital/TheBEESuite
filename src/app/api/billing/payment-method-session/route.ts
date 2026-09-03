@@ -223,6 +223,16 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
+  if (action === "setup" && currentFields.stripeBankVerificationPending === true) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Bank verification is already pending. Wait for Stripe to finish before starting another payment method update.",
+      },
+      { status: 409 },
+    );
+  }
+
   // Disabling collection must remain available even when a school's billing
   // approval is paused. It never creates a Stripe object or moves money.
   if (action === "disable_autopay") {

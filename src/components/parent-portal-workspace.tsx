@@ -2864,11 +2864,11 @@ function ParentPortalWorkspaceView({
                             : "Autopay remains off until you choose to enable it."}
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
+                        <Button disabled={isPending || autopayStatus === "pending" || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
                           <CreditCard data-icon="inline-start" />
                           Replace saved card
                         </Button>
-                        <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                        <Button disabled={isPending || autopayStatus === "pending" || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
                           <Building2 data-icon="inline-start" />
                           Connect bank account
                         </Button>

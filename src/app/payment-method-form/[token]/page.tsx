@@ -136,14 +136,16 @@ export default async function PaymentMethodFormPage({
     organizationName: center.organization.name,
     email: payload.email,
   });
-  const paymentMethod = paymentMethodManagementSummary({
-    autopayPlaceholder: family.billingAccount?.autopayPlaceholder,
-    customFields: family.billingAccount?.customFields,
-  });
   const billingAccountFields = family.billingAccount?.customFields && typeof family.billingAccount.customFields === "object" && !Array.isArray(family.billingAccount.customFields)
     ? family.billingAccount.customFields as Record<string, unknown>
     : {};
   const activeConnectedAccountId = readStripeConnectedAccountId(center.customFields);
+  const paymentMethod = paymentMethodManagementSummary({
+    autopayPlaceholder: family.billingAccount?.autopayPlaceholder,
+    customFields: billingAccountFields,
+    activeConnectedAccountId,
+    centerCustomFields: center.customFields,
+  });
   const reauthorizationRequired = stripeConnectSavedMethodNeedsReauthorization({
     activeAccountId: activeConnectedAccountId,
     savedMethodAccountId: typeof billingAccountFields.stripeDefaultPaymentMethodConnectedAccountId === "string"

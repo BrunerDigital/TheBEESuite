@@ -253,7 +253,7 @@ export function PaymentMethodRequestForm({
         <div className="grid gap-2 sm:grid-cols-2">
           <Button
             className={focus === "instant-bank" ? "order-1 h-11 bg-sky-500 text-white hover:bg-sky-400" : "order-2 h-11 border-white/15 bg-white/5 text-white hover:bg-white/10"}
-            disabled={isPending}
+            disabled={isPending || autopayStatus === "pending"}
             onClick={() => startSetup("link_bank")}
             variant={focus === "instant-bank" ? "default" : "outline"}
           >
@@ -262,7 +262,7 @@ export function PaymentMethodRequestForm({
           </Button>
           <Button
             className={focus === "instant-bank" ? "order-2 h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" : "order-1 h-11"}
-            disabled={isPending}
+            disabled={isPending || autopayStatus === "pending"}
             onClick={() => startSetup("card")}
             variant={focus === "instant-bank" ? "outline" : "default"}
           >

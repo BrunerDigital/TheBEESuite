@@ -210,13 +210,29 @@ test("executive payroll loads the complete authorized teacher roster", async () 
 
 test("executives can filter, open, and print school-specific payroll reports", async () => {
   const source = await readFile("src/components/dashboard.tsx", "utf8");
-  assert.match(source, /payrollSchoolFilter/);
-  assert.match(source, /summary\.centerId === payrollSchoolFilter/);
+  assert.match(source, /const \[schoolFilter, setSchoolFilter\]/);
+  assert.match(source, /summary\.centerId === schoolFilter/);
   assert.match(source, /Open report/);
   assert.match(source, /Print report/);
   assert.match(source, /Employee payroll summary/);
   assert.match(source, /older total-only submission/);
   assert.match(source, /send this payroll summary again/);
+});
+
+test("individual-location executive workspaces load and show center-scoped payroll reports", async () => {
+  const page = await readFile("src/app/dashboard/page.tsx", "utf8");
+  const dashboard = await readFile("src/components/dashboard.tsx", "utf8");
+  const payrollQuery = page.slice(
+    page.indexOf("canSeePayrollSummaries ? prisma.auditLog.findMany"),
+    page.indexOf("canSeeExecutiveMetrics ? prisma.document.findMany"),
+  );
+
+  assert.match(page, /user\.workspace\?\.mode === "center"[\s\S]*executiveRoles\.has\(user\.role\)/);
+  assert.match(payrollQuery, /tenantId: user\.tenantId/);
+  assert.match(payrollQuery, /centerId: scopedCenterFilter/);
+  assert.match(page, /payrollSummaries: canSeeLocationExecutivePayroll \? payrollSummaries : undefined/);
+  assert.match(dashboard, /isDirectorDashboard && live\?\.payrollSummaries/);
+  assert.match(dashboard, /cardId="dashboard-director-payroll-summary-submissions"/);
 });
 
 test("print reports remove hidden dashboard layout instead of leaving blank pages", async () => {

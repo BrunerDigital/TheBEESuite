@@ -28,7 +28,7 @@ import { prisma } from "@/lib/prisma";
 import { buildRegistrationShareUrl } from "@/lib/registration-sharing";
 import { registrationReviewFromData } from "@/lib/registration-packet";
 import { loginHrefForNextPath } from "@/lib/login-routing";
-import { dashboardLensesForRole } from "@/lib/rbac";
+import { dashboardLensesForRole, executiveRoles } from "@/lib/rbac";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { directorLaunchChecklistTasksForPayoutSetup, readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
@@ -112,6 +112,10 @@ export default async function DashboardPage() {
   });
   const visibleDashboardLenses = dashboardLensesForRole(user);
   const canSeeExecutiveMetrics = visibleDashboardLenses.some((lens) => ["platform", "brand", "regional"].includes(lens));
+  const canSeeLocationExecutivePayroll = visibleDashboardLenses.some((lens) => lens === "director")
+    && user.workspace?.mode === "center"
+    && executiveRoles.has(user.role);
+  const canSeePayrollSummaries = canSeeExecutiveMetrics || canSeeLocationExecutivePayroll;
   const directorChecklistCompletedIds = readCompletedSetupChecklistIds(dashboardPreferenceUser?.customFields, "director_launch");
   const teacherChecklistCompletedIds = readCompletedSetupChecklistIds(dashboardPreferenceUser?.customFields, "teacher_profile");
   const brandName = tenantBrand?.brands[0]?.name || tenantBrand?.name || "The BEE Suite";
@@ -654,7 +658,7 @@ export default async function DashboardPage() {
         submittedBy: { select: { name: true, email: true } },
       },
     }) : Promise.resolve([]),
-    canSeeExecutiveMetrics ? prisma.auditLog.findMany({
+    canSeePayrollSummaries ? prisma.auditLog.findMany({
       where: {
         tenantId: user.tenantId,
         centerId: scopedCenterFilter,
@@ -1067,6 +1071,7 @@ export default async function DashboardPage() {
     dashboardWidgetRoleLabel: dashboardWidgetConfig.roleLabel,
     dataReadiness,
     reviewInbox,
+    payrollSummaries: canSeeLocationExecutivePayroll ? payrollSummaries : undefined,
     setupChecklists: [
       ...(user.role === UserRole.TEACHER ? [{
         key: "teacher_profile" as const,

@@ -163,6 +163,28 @@ async function preflightExistingAuthIdentity(account: SyntheticRoleQaAccount) {
   return { exists: true, safe: true };
 }
 
+async function deactivateExistingDatabaseAccount(account: SyntheticRoleQaAccount, tenantId: string) {
+  const user = await prisma.user.findUnique({
+    where: { email: account.email },
+    select: { id: true, tenantId: true, role: true, customFields: true },
+  });
+  if (!user) return;
+  if (user.tenantId !== tenantId || user.role !== account.role || !hasSyntheticRoleQaMarker(user.customFields)) {
+    fail(`Existing ${account.key} account changed after preflight; refusing session invalidation.`);
+  }
+  const revokedAt = new Date();
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: { isActive: false, sessionVersion: { increment: 1 } },
+    }),
+    prisma.deviceSession.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt, revokedById: user.id },
+    }),
+  ]);
+}
+
 async function ensureGrant(input: {
   userId: string;
   tenantId: string;
@@ -365,6 +387,7 @@ async function main() {
 
   if (apply) {
     for (const account of SYNTHETIC_ROLE_QA_ACCOUNTS) {
+      await deactivateExistingDatabaseAccount(account, scope.tenant.id);
       await upsertSupabaseAuthUserWithPassword({
         email: account.email,
         name: account.name,

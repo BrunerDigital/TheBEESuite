@@ -43,7 +43,10 @@ test("credential and write preflights reject unmarked identities and non-heartbe
   assert.match(accounts, /staffProfile\.sourceSystem === SYNTHETIC_ROLE_QA_SOURCE/);
   assert.match(accounts, /hasSyntheticRoleQaMarker\(user\.staffProfile\.customFields\)/);
   assert.match(accounts, /staffProfile\.classroomId === \(account\.key === "teacher" \? input\.classroomId : null\)/);
+  assert.match(accounts, /data: \{ isActive: false, sessionVersion: \{ increment: 1 \} \}/);
+  assert.match(accounts, /prisma\.deviceSession\.updateMany\([\s\S]*where: \{ userId: user\.id, revokedAt: null \}/);
   const applyLoop = accounts.slice(accounts.lastIndexOf("  if (apply) {"), accounts.indexOf("  const results = []"));
+  assert.ok(applyLoop.indexOf("deactivateExistingDatabaseAccount") < applyLoop.indexOf("upsertSupabaseAuthUserWithPassword"));
   assert.ok(applyLoop.indexOf("upsertSupabaseAuthUserWithPassword") < applyLoop.indexOf("ensureDatabaseAccount"));
   assert.ok(applyLoop.indexOf("verifySupabasePassword") < applyLoop.indexOf("ensureDatabaseAccount"));
   assert.match(workflows, /request\.postDataJSON\(\)/);

@@ -349,6 +349,16 @@ export async function supabaseAuthUserExistsByEmail(email: string) {
   return Boolean(user);
 }
 
+export async function getSupabaseAuthUserMetadataByEmail(email: string) {
+  const { user } = await findSupabaseAuthUserByEmail(email.toLowerCase());
+  if (!user) return null;
+  return {
+    email: user.email?.toLowerCase() ?? "",
+    userMetadata: user.user_metadata ?? {},
+    appMetadata: user.app_metadata ?? {},
+  };
+}
+
 export async function upsertSupabaseAuthUserWithPassword({
   email,
   name,

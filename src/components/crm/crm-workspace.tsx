@@ -1322,7 +1322,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                 </div>
                 <Label
                   htmlFor={emailAttachmentsId}
-                  className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
+                  className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
                 >
                   <Paperclip className="size-4" />
                   Add files

@@ -77,6 +77,9 @@ const personNameCredentials = new Set([
   "aprn", "ba", "bs", "bsn", "cpa", "dc", "dds", "dmd", "do", "dpt", "edd", "esq", "jd", "lpn", "lvn",
   "ma", "mba", "md", "ms", "msn", "np", "od", "pa", "pharmd", "phd", "rn",
 ]);
+// These short credential tokens are also established surnames. Treat them as
+// credentials only when a comma or punctuation makes that intent explicit.
+const personNameCredentialLikeSurnames = new Set(["ba", "do", "ma", "pa"]);
 
 function canonicalPersonNameToken(value: unknown, supported: Set<string>) {
   const normalized = normalizeText(value).replace(/\s+/g, "");
@@ -91,7 +94,8 @@ function stripTrailingPersonCredentials(parts: string[]) {
     if (!canonicalPersonNameToken(rawCredential, personNameCredentials)) break;
     const separateCommaPart = remaining.length > 1 && trailingWords.length === 1;
     const visiblyAttachedCredential = rawCredential.includes(".")
-      || trailingWords.length >= 3;
+      || (trailingWords.length >= 3
+        && !personNameCredentialLikeSurnames.has(canonicalPersonNameToken(rawCredential, personNameCredentials)));
     if (!separateCommaPart && !visiblyAttachedCredential) break;
     trailingWords.pop();
     if (trailingWords.length) remaining[remaining.length - 1] = trailingWords.join(" ");

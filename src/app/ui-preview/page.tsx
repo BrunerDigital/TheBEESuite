@@ -165,9 +165,9 @@ export default async function UiPreviewPage({ searchParams }: { searchParams: Pr
                 { href: "#preview-payroll", label: "Payroll summary", description: "Hours, overtime, and open shifts" },
               ]}
               actionDestinations={[
-                { href: "#preview-assignment", label: "Assign a teacher" },
-                { href: "#preview-profile", label: "Add or edit staff" },
-                { href: "#preview-schedule", label: "Update a schedule" },
+                { href: "/ui-preview?view=staff-declutter#staff-assignment", label: "Assign a teacher" },
+                { href: "/ui-preview?view=staff-declutter#staff-profile", label: "Add or edit staff" },
+                { href: "/ui-preview?view=staff-declutter#staff-schedule", label: "Update a schedule" },
               ]}
             />
             <div className="grid gap-4 lg:grid-cols-2">

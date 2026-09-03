@@ -157,6 +157,7 @@ import type { RegistrationReviewPreview } from "@/lib/registration-packet";
 import { ReputationWorkspace, type ReputationWorkspaceData } from "@/components/reputation-workspace";
 import { RequiredDocumentChecklistPanel } from "@/components/required-document-checklist-panel";
 import { CollapsibleCard } from "@/components/workspace-preferences";
+import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
 import { SchoolReceiptDetailsCard } from "@/components/school-receipt-details-card";
 import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { StaffOnboardingChecklistPanel } from "@/components/staff-onboarding-checklist-panel";
@@ -2491,13 +2492,29 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
         <StatCard label="Priority" value={data.stats.priority.toLocaleString()} />
         {!isParentMessagingView ? <StatCard label="Needs follow-up" value={data.stats.aiReview.toLocaleString()} detail="Flagged for attention" /> : null}
       </div>
-      <nav aria-label="Message tasks" className="flex flex-wrap gap-2 rounded-xl border bg-card p-3">
-        <a className={buttonVariants({ variant: "default" })} href={isParentMessagingView ? "#message-composer" : "#message-inbox"}>
-          {isParentMessagingView ? "Write to the school" : "Open family inbox"}
-        </a>
-        {!isParentMessagingView ? <a className={buttonVariants({ variant: "outline" })} href="#new-message-composer">Write a new message</a> : null}
-        <a className={buttonVariants({ variant: "ghost" })} href="#message-notification-preferences">Notification settings</a>
-      </nav>
+      <section aria-label="Message tasks">
+        <WorkspaceSectionDirectory
+          id="message-page-directory"
+          title="Message Workspace"
+          description={isParentMessagingView
+            ? "Review the private family conversation, write to the school, or adjust notification settings."
+            : "Review the family inbox first, or open a focused composer and notification settings only when needed."}
+          reviewDestinations={[
+            {
+              href: isParentMessagingView ? "#message-history" : "#message-inbox",
+              label: isParentMessagingView ? "Conversation History" : "Family Inbox",
+              description: `${data.stats.unread} unread · ${data.threads.length} conversation${data.threads.length === 1 ? "" : "s"}`,
+            },
+          ]}
+          actionDestinations={[
+            {
+              href: isParentMessagingView ? "#message-composer" : "#new-message-composer",
+              label: isParentMessagingView ? "Write to the School" : "Write a New Message",
+            },
+            { href: "#message-notification-preferences", label: "Notification Settings" },
+          ]}
+        />
+      </section>
       {isParentMessagingView ? (
         <>
           <MessageReplyPanel
@@ -3524,20 +3541,46 @@ export function StaffPage({ data }: { data: StaffPageData }) {
           Teacher profiles, classroom assignments, certifications, and background-check readiness for ratio-aware operations.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-5">
-        <StatCard label="Teachers" value={data.stats.total} />
-        <StatCard label="Active users" value={data.stats.activeUsers} />
-        <StatCard label="Expiring certs" value={data.stats.expiringCerts} />
-        <StatCard label="Background pending" value={data.stats.backgroundPending} />
-        <StatCard label="Onboarding actions" value={data.stats.onboardingActionNeeded} />
-      </div>
+      <CollapsibleCard
+        id="staff-summary"
+        title="Staff Summary"
+        collapsedSummary={`${data.stats.total} teachers · ${data.stats.expiringCerts} expiring certifications · ${data.stats.onboardingActionNeeded} onboarding actions`}
+        defaultCollapsed={!data.stats.expiringCerts && !data.stats.backgroundPending && !data.stats.onboardingActionNeeded}
+      >
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <StatCard label="Teachers" value={data.stats.total} />
+          <StatCard label="Active users" value={data.stats.activeUsers} />
+          <StatCard label="Expiring certs" value={data.stats.expiringCerts} />
+          <StatCard label="Background pending" value={data.stats.backgroundPending} />
+          <StatCard label="Onboarding actions" value={data.stats.onboardingActionNeeded} />
+        </div>
+      </CollapsibleCard>
+      <WorkspaceSectionDirectory
+        id="staff-page-directory"
+        title="Staff Workspace"
+        description="Review staffing summaries when needed, or jump directly to the focused tool for an assignment, time card, profile, certification, or schedule change."
+        reviewDestinations={[
+          { href: "#staff-onboarding-checklist", label: "Onboarding Readiness", description: `${data.stats.onboardingActionNeeded} action${data.stats.onboardingActionNeeded === 1 ? "" : "s"} need review` },
+          { href: "#staff-directory", label: "Teacher Directory", description: `${data.staff.length} current teacher${data.staff.length === 1 ? "" : "s"}` },
+          { href: "#staff-upcoming-schedule", label: "Upcoming Schedule", description: `${data.schedules.length} coverage row${data.schedules.length === 1 ? "" : "s"}` },
+        ]}
+        actionDestinations={[
+          { href: "#staff-assignment", label: "Assign Classroom Coverage" },
+          { href: "#staff-time-clock", label: "Edit a Time Card" },
+          { href: "#staff-profile", label: "Add or Edit Staff" },
+          { href: "#staff-certification", label: "Update Certification" },
+          { href: "#staff-schedule", label: "Update Schedule" },
+        ]}
+      />
       <StaffOnboardingChecklistPanel items={data.staffChecklist.items} summary={data.staffChecklist.summary} />
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle as="h2">Teacher Directory</CardTitle>
-          <CardDescription>Role, classroom, and certification snapshot</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        id="staff-directory"
+        title="Teacher Directory"
+        description="Role, classroom, time-clock, compensation, and certification snapshot."
+        collapsedSummary={`${data.staff.length} current teachers · ${data.stats.expiringCerts} expiring certifications · ${data.stats.backgroundPending} background reviews`}
+        className="glass-panel"
+        defaultCollapsed={!data.stats.expiringCerts && !data.stats.backgroundPending}
+      >
           <Table>
             <TableHeader>
               <TableRow>
@@ -3593,8 +3636,7 @@ export function StaffPage({ data }: { data: StaffPageData }) {
               })}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
         <StaffManagementPanel
           centers={data.centers}
           classrooms={data.classrooms}
@@ -3605,12 +3647,14 @@ export function StaffPage({ data }: { data: StaffPageData }) {
           canManageCompensation={data.canManageCompensation}
           canFilterPayrollByCenter={data.canFilterPayrollByCenter}
         />
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle as="h2">Upcoming Staff Schedule</CardTitle>
-          <CardDescription>Published teacher coverage for the schools you can access</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        id="staff-upcoming-schedule"
+        title="Upcoming Staff Schedule"
+        description="Published teacher coverage for the schools you can access."
+        collapsedSummary={`${data.schedules.length} upcoming coverage row${data.schedules.length === 1 ? "" : "s"}`}
+        className="glass-panel"
+        defaultCollapsed
+      >
           <Table>
             <TableHeader>
               <TableRow>
@@ -3638,8 +3682,7 @@ export function StaffPage({ data }: { data: StaffPageData }) {
               ) : null}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
     </div>
   );
 }
@@ -4861,19 +4904,41 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
           Guardian, child, document, pickup, emergency contact, billing email, and restricted custody-note visibility.
         </p>
       </section>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Current families" value={data.stats.total} />
-        <StatCard label="Currently enrolled" value={data.stats.children} />
-        <StatCard label="Guardians" value={data.stats.guardians} />
-        <StatCard label="Pending" value={data.stats.enrollmentLifecycle.pending} />
-        <StatCard label="Waitlisted" value={data.stats.enrollmentLifecycle.waitlisted} />
-        <StatCard label="Tours scheduled" value={data.stats.enrollmentLifecycle.tourScheduled} />
-        <StatCard label="Summer break" value={data.stats.enrollmentLifecycle.summerBreak} />
-        <StatCard label="Closed enrollment" value={data.stats.enrollmentLifecycle.closed} detail={`${data.stats.closedFamilies.toLocaleString()} families with no current enrollment`} />
-        <StatCard label="Needs review" value={data.stats.enrollmentLifecycle.needsReview} detail="Unassigned or unrecognized status" />
-        <StatCard label="Restricted custody notes" value={data.stats.withCustodyNotes} />
-      </div>
-      <FamilyStudentIntakeForm centers={data.intakeCenters} />
+      <CollapsibleCard
+        id="family-summary"
+        title="Family & Enrollment Summary"
+        collapsedSummary={`${data.stats.total} current families · ${data.stats.children} enrolled children · ${data.stats.withCustodyNotes} restricted custody notes`}
+        defaultCollapsed
+      >
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <StatCard label="Current families" value={data.stats.total} />
+          <StatCard label="Currently enrolled" value={data.stats.children} />
+          <StatCard label="Guardians" value={data.stats.guardians} />
+          <StatCard label="Pending" value={data.stats.enrollmentLifecycle.pending} />
+          <StatCard label="Waitlisted" value={data.stats.enrollmentLifecycle.waitlisted} />
+          <StatCard label="Tours scheduled" value={data.stats.enrollmentLifecycle.tourScheduled} />
+          <StatCard label="Summer break" value={data.stats.enrollmentLifecycle.summerBreak} />
+          <StatCard label="Closed enrollment" value={data.stats.enrollmentLifecycle.closed} detail={`${data.stats.closedFamilies.toLocaleString()} families with no current enrollment`} />
+          <StatCard label="Needs review" value={data.stats.enrollmentLifecycle.needsReview} detail="Unassigned or unrecognized status" />
+          <StatCard label="Restricted custody notes" value={data.stats.withCustodyNotes} />
+        </div>
+      </CollapsibleCard>
+      <WorkspaceSectionDirectory
+        id="family-page-directory"
+        title="Family Workspace"
+        description="Review current family information first, or open the exact intake or editing workflow you need."
+        reviewDestinations={[
+          { href: "#family-directory", label: "Family Directory", description: `${data.stats.total} current families` },
+          { href: "#guardian-directory", label: "Parent & Guardian Directory", description: `${data.stats.guardians} contacts` },
+          { href: "#parent-family-link-review", label: "Family-Link Review", description: `${data.ambiguousFamilyLinks.length} login${data.ambiguousFamilyLinks.length === 1 ? "" : "s"} need review` },
+          { href: "#guardian-change-requests", label: "Change Requests", description: `${data.guardianChangeRequests.length} recent request${data.guardianChangeRequests.length === 1 ? "" : "s"}` },
+        ]}
+        actionDestinations={[
+          { href: "#family-intake", label: "Add Family, Parent + Child" },
+          { href: "#family-editor", label: "Edit an Existing Family" },
+        ]}
+      />
+      <FamilyStudentIntakeForm centers={data.intakeCenters} defaultCollapsed />
       <FamilyProfilesEnrollmentPanel
         currentFamilies={data.families}
         allFamilies={data.allFamilies}
@@ -4883,14 +4948,14 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
         allFamilyCount={data.stats.allFamilyTotal}
         ageGroups={data.ageGroups}
       />
-      <Card className="glass-panel border-amber-500/35">
-        <CardHeader>
-          <CardTitle as="h2">Parent Family-Link Review</CardTitle>
-          <CardDescription>
-            Parent logins linked to more than one family are held for director review. Do not merge or unlink records until identity and guardianship are confirmed; families outside your school remain hidden.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        id="parent-family-link-review"
+        title="Parent Family-Link Review"
+        description="Parent logins linked to more than one family are held for director review. Do not merge or unlink records until identity and guardianship are confirmed; families outside your school remain hidden."
+        collapsedSummary={`${data.ambiguousFamilyLinks.length} ambiguous login${data.ambiguousFamilyLinks.length === 1 ? "" : "s"}`}
+        className="glass-panel border-amber-500/35"
+        defaultCollapsed={!data.ambiguousFamilyLinks.length}
+      >
           <div className="overflow-x-auto">
             <Table>
               <TableHeader><TableRow><TableHead>Parent login</TableHead><TableHead>Visible family records</TableHead><TableHead>Scope</TableHead><TableHead>Review</TableHead></TableRow></TableHeader>
@@ -4907,16 +4972,15 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
-      <Card id="guardian-change-requests" className="glass-panel scroll-mt-36">
-        <CardHeader>
-          <CardTitle as="h2">Guardian Self-Service Change Requests</CardTitle>
-          <CardDescription>
-            Parent portal requests stay restricted until a director approves or rejects them. Approval automatically applies the requested emergency-contact or authorized-pickup change to the family record.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      </CollapsibleCard>
+      <CollapsibleCard
+        id="guardian-change-requests"
+        title="Guardian Self-Service Change Requests"
+        description="Parent portal requests stay restricted until a director approves or rejects them. Approval automatically applies the requested emergency-contact or authorized-pickup change to the family record."
+        collapsedSummary={`${data.guardianChangeRequests.filter((request) => request.status === "pending").length} pending · ${data.guardianChangeRequests.length} recent requests`}
+        className="glass-panel"
+        defaultCollapsed={!data.guardianChangeRequests.some((request) => request.status === "pending")}
+      >
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -4959,8 +5023,7 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
       <ProcareImportPanel centers={data.importCenters} allowBulkImport={data.bulkImportEnabled} />
     </div>
   );
@@ -4992,18 +5055,38 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
           Child enrollment, classroom, allergy, medical note, document, incident, permission, and daily activity profile.
         </p>
       </section>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <StatCard label="Currently enrolled" value={data.stats.total} />
-        <StatCard label="Pending" value={data.stats.enrollmentLifecycle.pending} />
-        <StatCard label="Waitlisted" value={data.stats.enrollmentLifecycle.waitlisted} />
-        <StatCard label="Tours scheduled" value={data.stats.enrollmentLifecycle.tourScheduled} />
-        <StatCard label="Summer break" value={data.stats.enrollmentLifecycle.summerBreak} />
-        <StatCard label="Closed enrollment" value={data.stats.enrollmentLifecycle.closed} />
-        <StatCard label="Needs review" value={data.stats.enrollmentLifecycle.needsReview} detail="Unassigned or unrecognized status" />
-        <StatCard label="Allergy records" value={data.stats.allergies} />
-        <StatCard label="Medical notes" value={data.stats.restrictedMedicalNotes} />
-      </div>
-      <FamilyStudentIntakeForm centers={data.intakeCenters} compact />
+      <CollapsibleCard
+        id="child-summary"
+        title="Child & Enrollment Summary"
+        collapsedSummary={`${data.stats.total} enrolled children · ${data.stats.allergies} allergy records · ${data.stats.restrictedMedicalNotes} medical notes`}
+        defaultCollapsed
+      >
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
+          <StatCard label="Currently enrolled" value={data.stats.total} />
+          <StatCard label="Pending" value={data.stats.enrollmentLifecycle.pending} />
+          <StatCard label="Waitlisted" value={data.stats.enrollmentLifecycle.waitlisted} />
+          <StatCard label="Tours scheduled" value={data.stats.enrollmentLifecycle.tourScheduled} />
+          <StatCard label="Summer break" value={data.stats.enrollmentLifecycle.summerBreak} />
+          <StatCard label="Closed enrollment" value={data.stats.enrollmentLifecycle.closed} />
+          <StatCard label="Needs review" value={data.stats.enrollmentLifecycle.needsReview} detail="Unassigned or unrecognized status" />
+          <StatCard label="Allergy records" value={data.stats.allergies} />
+          <StatCard label="Medical notes" value={data.stats.restrictedMedicalNotes} />
+        </div>
+      </CollapsibleCard>
+      <WorkspaceSectionDirectory
+        id="child-page-directory"
+        title="Child Records Workspace"
+        description="Review child safety and enrollment information first, or open a focused form to add or update a record."
+        reviewDestinations={[
+          { href: "#child-directory", label: "Child Directory", description: `${data.stats.total} currently enrolled children` },
+          { href: "#past-enrollment-records", label: "Past Enrollment Records", description: `${data.stats.enrollmentLifecycle.closed} closed enrollments` },
+        ]}
+        actionDestinations={[
+          { href: "#family-intake", label: "Add Family, Parent + Child" },
+          { href: "#child-profile-editor", label: "Create or Edit Child Profile" },
+        ]}
+      />
+      <FamilyStudentIntakeForm centers={data.intakeCenters} compact defaultCollapsed />
       <ChildProfilesEnrollmentPanel
         currentChildren={data.children}
         allChildren={data.allChildren}
@@ -5012,7 +5095,9 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
         currentChildCount={data.stats.total}
         allChildCount={data.stats.allTotal}
       />
-      <OperationsActionHub title="Create or Edit Child Profile" defaultEntity="child" compact />
+      <div id="child-profile-editor" className="scroll-mt-28">
+        <OperationsActionHub title="Create or Edit Child Profile" defaultEntity="child" compact />
+      </div>
     </div>
   );
 }
@@ -5670,16 +5755,24 @@ export function AnalyticsPage({ data }: { data: AnalyticsPageData }) {
           Current enrollment, tours, billing, messages, incidents, and pipeline health across your available schools.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
-        <StatCard label="Enrolled" value={data.stats.enrolled.toLocaleString()} />
-        <StatCard label="Waitlisted" value={data.stats.waitlisted.toLocaleString()} />
-        <StatCard label="Tours" value={data.stats.tours.toLocaleString()} />
-        <StatCard label="Current-family open invoices" value={data.stats.openInvoices.toLocaleString()} />
-        <StatCard label="Current-family outstanding" value={money(data.stats.outstandingCents)} />
-        <StatCard label="Incidents pending" value={data.stats.incidentsPending.toLocaleString()} />
-        <StatCard label="Unread messages" value={data.stats.unreadMessages.toLocaleString()} />
-      </div>
+      <CollapsibleCard
+        id="analytics-operational-overview"
+        title="Operational Overview"
+        description="Enrollment, tours, billing, incidents, and family-message totals across the active workspace."
+        collapsedSummary={`${data.stats.enrolled.toLocaleString()} enrolled · ${data.stats.incidentsPending.toLocaleString()} incidents pending · ${data.stats.unreadMessages.toLocaleString()} unread messages`}
+        defaultCollapsed={!data.stats.incidentsPending && !data.stats.unreadMessages}
+      >
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
+          <StatCard label="Enrolled" value={data.stats.enrolled.toLocaleString()} />
+          <StatCard label="Waitlisted" value={data.stats.waitlisted.toLocaleString()} />
+          <StatCard label="Tours" value={data.stats.tours.toLocaleString()} />
+          <StatCard label="Current-family open invoices" value={data.stats.openInvoices.toLocaleString()} />
+          <StatCard label="Current-family outstanding" value={money(data.stats.outstandingCents)} />
+          <StatCard label="Incidents pending" value={data.stats.incidentsPending.toLocaleString()} />
+          <StatCard label="Unread messages" value={data.stats.unreadMessages.toLocaleString()} />
+        </div>
+      </CollapsibleCard>
       {data.fte ? (
         <div className="grid gap-4 md:grid-cols-3">
           <StatCard label="FTE total" value={data.fte.totalFte.toLocaleString()} detail={formatRecordLabel(data.fte.status)} />

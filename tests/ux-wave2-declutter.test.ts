@@ -45,7 +45,7 @@ test("communications exposes inbox and compose actions while collapsing secondar
   const preferences = await readSource("src/components/notification-preferences-panel.tsx");
 
   assert.match(page, /aria-label="Message tasks"/);
-  assert.match(page, /href="#new-message-composer"/);
+  assert.match(page, /id="message-page-directory"[\s\S]*?href: isParentMessagingView \? "#message-composer" : "#new-message-composer"/);
   assert.match(page, /id="message-history"[\s\S]*?defaultCollapsed=\{!data\.stats\.unread\}/);
   assert.match(composer, /id=\{composerId\}[\s\S]*?defaultCollapsed=\{defaultCollapsed && !replyDraft\}/);
   assert.match(preferences, /id="message-notification-preferences"[\s\S]*?defaultCollapsed/);

@@ -7,12 +7,11 @@ import { AlertCircle, Archive, CalendarClock, CheckCircle2, Clock, Copy, FileSpr
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserAvatar } from "@/components/user-avatar";
 import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
-import { CollapsiblePanel } from "@/components/workspace-preferences";
+import { CollapsibleCard, CollapsiblePanel } from "@/components/workspace-preferences";
 import {
   centsToDollarInput,
   estimatedHourlyGrossPayCents,
@@ -1082,15 +1081,15 @@ export function StaffManagementPanel({
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle as="h2">
-            <UserRoundCog data-icon="inline-start" />
-            Classroom Assignment Tool
-          </CardTitle>
-          <CardDescription>Assign active teachers to classrooms and update the contact details needed for classroom coverage.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <CollapsibleCard
+        id="staff-management-workspace"
+        title={<span className="inline-flex items-center gap-2"><UserRoundCog className="size-4" aria-hidden="true" />Staff Editing Workspace</span>}
+        description="Assign teachers, review time cards, and update staff profiles from focused sections."
+        collapsedSummary={`${activeStaff.length} active teachers · assignment, time-card, and profile tools`}
+        className="glass-panel"
+        contentClassName="space-y-4"
+        defaultCollapsed
+      >
           {statusMessage ? (
             <Alert>
               <CheckCircle2 className="size-4" />
@@ -2143,15 +2142,16 @@ export function StaffManagementPanel({
               </div>
             )}
           </section>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
 
-      <Card id="staff-certification" className="glass-panel scroll-mt-28">
-        <CardHeader>
-          <CardTitle as="h2">Certification</CardTitle>
-          <CardDescription>Add CPR, first aid, background, training, or licensing documentation reminders.</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        id="staff-certification"
+        title="Certification"
+        description="Add CPR, first aid, background, training, or licensing documentation reminders."
+        collapsedSummary={`${activeStaff.length} active teachers · open to update a credential`}
+        className="glass-panel"
+        defaultCollapsed
+      >
           <form className="space-y-4" onSubmit={saveCertification}>
             <div className="space-y-1">
               <Label htmlFor="certification-teacher">Teacher</Label>
@@ -2192,18 +2192,16 @@ export function StaffManagementPanel({
               Save certification
             </Button>
           </form>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
 
-      <Card id="staff-schedule" className="glass-panel scroll-mt-28 lg:col-span-2">
-        <CardHeader>
-          <CardTitle as="h2">
-            <CalendarClock data-icon="inline-start" />
-            Staff Schedule
-          </CardTitle>
-          <CardDescription>Create, edit, or remove upcoming teacher coverage for this school.</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        id="staff-schedule"
+        title={<span className="inline-flex items-center gap-2"><CalendarClock className="size-4" aria-hidden="true" />Staff Schedule</span>}
+        description="Create, edit, or remove upcoming teacher coverage for this school."
+        collapsedSummary={`${schedules.length} upcoming schedule row${schedules.length === 1 ? "" : "s"}`}
+        className="glass-panel lg:col-span-2"
+        defaultCollapsed
+      >
           <form className="grid gap-3 md:grid-cols-2 lg:grid-cols-5" onSubmit={saveSchedule}>
             <div className="space-y-1">
               <Label htmlFor="staff-schedule-row">Schedule row</Label>
@@ -2271,8 +2269,7 @@ export function StaffManagementPanel({
               ) : null}
             </div>
           </form>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
     </div>
   );
 }

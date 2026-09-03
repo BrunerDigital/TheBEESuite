@@ -203,7 +203,7 @@ function PastEnrollmentRecordsTable({ rows, centers }: { rows: PastEnrollmentRow
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 lg:grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto]">
-          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search child, family, classroom..." aria-label="Search past student records" />
+          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search child, family, or classroom…" aria-label="Search past student records" />
           <Select value={statusFilter} onValueChange={(value) => value && setStatusFilter(value)}>
             <SelectTrigger aria-label="Filter past students by status"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -484,7 +484,7 @@ export function FamilyProfilesEnrollmentPanel({
         </Card>
       ) : null}
 
-      <Card>
+      <Card id="family-directory" className="scroll-mt-28">
         <CardHeader>
           <CardTitle as="h2">Family Directory</CardTitle>
           <CardDescription>Currently enrolled family profile snapshot</CardDescription>
@@ -786,7 +786,7 @@ export function ChildProfilesEnrollmentPanel({
         </Card>
       ) : null}
 
-      {!showOtherStatuses ? <Card>
+      {!showOtherStatuses ? <Card id="child-directory" className="scroll-mt-28">
         <CardHeader>
           <CardTitle as="h2">Children</CardTitle>
           <CardDescription>

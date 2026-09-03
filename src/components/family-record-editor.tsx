@@ -11,11 +11,12 @@ import { confirmRelationshipRecordSwitch, FamilyRelationshipMap } from "@/compon
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import { CUSTODY_WARNING_DETAIL, CUSTODY_WARNING_LABEL, custodyWarningPreview, hasCustodyWarning } from "@/lib/custody-visibility";
 import {
   findChildDuplicateCandidates,
@@ -1145,20 +1146,16 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
   }
 
   return (
-    <Card id="family-editor" className="glass-panel scroll-mt-28">
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <CardTitle as="h2">
-              <UserPen data-icon="inline-start" />
-              Family Record Editor
-            </CardTitle>
-            <CardDescription>Edit director-level family, guardian, and child profile details for the selected account.</CardDescription>
-          </div>
-          <Badge variant="outline">Office workflow</Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-5">
+    <CollapsibleCard
+      id="family-editor"
+      title={<span className="inline-flex items-center gap-2"><UserPen className="size-4" aria-hidden="true" />Family Record Editor</span>}
+      description="Edit director-level family, guardian, and child profile details for the selected account."
+      collapsedSummary={`${selectedFamily?.name ?? "Choose a family"} · ${editingTargetLabel}`}
+      className="glass-panel"
+      contentClassName="space-y-5"
+      headerActions={<Badge variant="outline">Office workflow</Badge>}
+      defaultCollapsed={!initialFamilyId && !initialChildId && !searchQuery}
+    >
         {statusMessage ? (
           <Alert>
             <CheckCircle2 className="size-4" />
@@ -2283,7 +2280,6 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             </div>
           </div>
         </section>
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

@@ -262,10 +262,14 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
       normalizeTextVariants(normalizePersonName(spacedApostropheName, { stripCredentials }))
         .forEach((variant) => variants.add(variant));
     }
-    const hasHyphenatedInitialPair = /(?:^|[\s,])\p{L}\.?[-\u2010-\u2015]\p{L}\.?(?=\s|,|$)/u.test(value);
-    const joinedHyphenName = hasHyphenatedInitialPair
-      ? value
-      : value.replace(/([\p{L}\p{N}])[-\u2010-\u2015](?=[\p{L}\p{N}])/gu, "$1");
+    const initialHyphenSentinel = "\uE000";
+    const joinedHyphenName = value
+      .replace(
+        /((?:^|[\s,])\p{L}\.?)[-\u2010-\u2015](\p{L}\.?(?=\s|,|$))/gu,
+        `$1${initialHyphenSentinel}$2`,
+      )
+      .replace(/([\p{L}\p{N}])[-\u2010-\u2015](?=[\p{L}\p{N}])/gu, "$1")
+      .replaceAll(initialHyphenSentinel, "-");
     if (joinedHyphenName !== value) {
       normalizeTextVariants(normalizePersonName(joinedHyphenName, { stripCredentials }))
         .forEach((variant) => variants.add(variant));

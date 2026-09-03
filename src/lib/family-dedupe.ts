@@ -122,7 +122,7 @@ function stripTrailingPersonCredentials(parts: string[]) {
       && (!personNameCredentialLikeSurnames.has(credentialToken) || explicitUppercaseCredential));
     const visiblyAttachedCredential = rawCredential.includes(".")
       || (trailingWords.length >= 3
-        && (!personNameCredentialLikeSurnames.has(credentialToken) || explicitUppercaseCredential));
+        && !personNameCredentialLikeSurnames.has(credentialToken));
     if (!separateCommaPart && !visiblyAttachedCredential) break;
     trailingWords.pop();
     if (trailingWords.length) remaining[remaining.length - 1] = trailingWords.join(" ");

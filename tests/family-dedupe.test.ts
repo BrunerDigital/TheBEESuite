@@ -588,7 +588,7 @@ test("guardian duplicate scoring strips last-first credentials before suffixes",
   assert.ok(score?.reasons.includes("same guardian name"));
 });
 
-test("guardian duplicate scoring strips credentials after an infix suffix", () => {
+test("guardian duplicate scoring strips credentials after infix suffixes", () => {
   const score = scoreGuardianDuplicate(
     {
       id: "guardian_1",
@@ -924,6 +924,27 @@ test("guardian duplicate scoring preserves credential-like surnames", () => {
   assert.equal(score, null);
 });
 
+test("child duplicate scoring preserves all-caps credential-like surnames", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "AVERY JAMES MA",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "AVERY JAMES PA",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
 test("guardian duplicate scoring recognizes uppercase comma credentials", () => {
   const score = scoreGuardianDuplicate(
     {
@@ -938,7 +959,7 @@ test("guardian duplicate scoring recognizes uppercase comma credentials", () => 
       id: "guardian_2",
       familyId: "family_2",
       centerId: "center_1",
-      fullName: "Alex Smith MA",
+      fullName: "Alex Smith",
       phone: "7205550113",
       relation: "Parent",
     },

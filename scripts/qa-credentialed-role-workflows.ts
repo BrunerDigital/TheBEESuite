@@ -324,6 +324,7 @@ async function main() {
 
         const secondary = workflows[account.key][1];
         const secondaryStatus = await visit(page, secondary.href);
+        const secondaryActual = safePath(page.url());
         const secondaryMetrics = await pageMetrics(page);
         const secondaryScreenshot = resolve(outputDirectory, account.key, viewport.id, `${secondary.id}.png`);
         await mkdir(dirname(secondaryScreenshot), { recursive: true });
@@ -344,6 +345,7 @@ async function main() {
           && matchesWorkflow(clickedPath, primary.href)
           && Boolean(back && matchesWorkflow(back, account.landingPath))
           && Boolean(forward && matchesWorkflow(forward, primary.href))
+          && matchesWorkflow(secondaryActual, secondary.href)
           && secondaryMetrics.meaningfulText > 0
           && secondaryMetrics.horizontalOverflowPx === 0;
 
@@ -356,7 +358,7 @@ async function main() {
           keyboard,
           disclosure,
           primaryWorkflow: { ...primary, ...click, clickedPath, back, forward, screenshot: primaryScreenshot },
-          secondaryWorkflow: { ...secondary, status: secondaryStatus, metrics: secondaryMetrics, screenshot: secondaryScreenshot },
+          secondaryWorkflow: { ...secondary, status: secondaryStatus, actual: secondaryActual, metrics: secondaryMetrics, screenshot: secondaryScreenshot },
           screenshot,
           passed,
         });

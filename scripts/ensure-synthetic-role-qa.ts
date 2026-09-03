@@ -84,6 +84,7 @@ async function preflightExistingAccount(account: SyntheticRoleQaAccount, input: 
   organizationId: string;
   centerId: string;
   familyId: string;
+  classroomId: string;
 }) {
   if (!isSyntheticRoleQaEmail(account.email)) fail(`Rejected non-synthetic QA email for ${account.key}.`);
   const user = await prisma.user.findUnique({
@@ -97,7 +98,7 @@ async function preflightExistingAccount(account: SyntheticRoleQaAccount, input: 
         where: { isActive: true },
         select: { tenantId: true, role: true, scopeType: true, brandId: true, centerId: true, organizationId: true },
       },
-      staffProfile: { select: { centerId: true, classroomId: true, sourceSystem: true } },
+      staffProfile: { select: { centerId: true, classroomId: true, sourceSystem: true, externalId: true, customFields: true } },
       guardians: { select: { familyId: true, sourceSystem: true, customFields: true } },
     },
   });
@@ -133,6 +134,19 @@ async function preflightExistingAccount(account: SyntheticRoleQaAccount, input: 
     : user.guardians.length === 0;
   if (!guardianLinksSafe) {
     fail(`Existing ${account.key} account has an unexpected guardian linkage.`);
+  }
+  const expectedStaffProfile = account.key === "director" || account.key === "teacher";
+  const staffProfileSafe = expectedStaffProfile
+    ? !user.staffProfile || (
+      user.staffProfile.centerId === input.centerId
+      && user.staffProfile.classroomId === (account.key === "teacher" ? input.classroomId : null)
+      && user.staffProfile.sourceSystem === SYNTHETIC_ROLE_QA_SOURCE
+      && user.staffProfile.externalId === `synthetic-role-qa-${account.key}`
+      && hasSyntheticRoleQaMarker(user.staffProfile.customFields)
+    )
+    : !user.staffProfile;
+  if (!staffProfileSafe) {
+    fail(`Existing ${account.key} account has an unexpected staff assignment or source marker.`);
   }
   return { exists: true, safe: true };
 }
@@ -343,6 +357,7 @@ async function main() {
       organizationId: scope.organization.id,
       centerId: scope.center.id,
       familyId: scope.family.id,
+      classroomId: scope.classroom.id,
     });
     const authentication = await preflightExistingAuthIdentity(account);
     preflight.push({ role: account.key, accountRef: syntheticRoleQaAccountRef(account.email), database, authentication });
@@ -350,7 +365,6 @@ async function main() {
 
   if (apply) {
     for (const account of SYNTHETIC_ROLE_QA_ACCOUNTS) {
-      await ensureDatabaseAccount(account, scope);
       await upsertSupabaseAuthUserWithPassword({
         email: account.email,
         name: account.name,
@@ -358,6 +372,10 @@ async function main() {
         role: account.role,
         source: SYNTHETIC_ROLE_QA_SOURCE,
       });
+      if (!await verifySupabasePassword(account.email, password)) {
+        fail(`Rotated ${account.key} Auth credentials could not be verified before database activation.`);
+      }
+      await ensureDatabaseAccount(account, scope);
     }
   }
 

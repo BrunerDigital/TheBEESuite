@@ -40,9 +40,17 @@ test("credential and write preflights reject unmarked identities and non-heartbe
   assert.match(auth, /getSupabaseAuthUserMetadataByEmail/);
   assert.match(accounts, /userMetadata\.source === SYNTHETIC_ROLE_QA_SOURCE/);
   assert.match(accounts, /appMetadata\.bee_suite_role === account\.role/);
+  assert.match(accounts, /staffProfile\.sourceSystem === SYNTHETIC_ROLE_QA_SOURCE/);
+  assert.match(accounts, /hasSyntheticRoleQaMarker\(user\.staffProfile\.customFields\)/);
+  assert.match(accounts, /staffProfile\.classroomId === \(account\.key === "teacher" \? input\.classroomId : null\)/);
+  const applyLoop = accounts.slice(accounts.lastIndexOf("  if (apply) {"), accounts.indexOf("  const results = []"));
+  assert.ok(applyLoop.indexOf("upsertSupabaseAuthUserWithPassword") < applyLoop.indexOf("ensureDatabaseAccount"));
+  assert.ok(applyLoop.indexOf("verifySupabasePassword") < applyLoop.indexOf("ensureDatabaseAccount"));
   assert.match(workflows, /request\.postDataJSON\(\)/);
   assert.match(workflows, /payload\?\.action === "heartbeat"/);
   assert.doesNotMatch(workflows, /pathname === "\/api\/device-sessions"\) return null/);
+  assert.match(workflows, /const secondaryActual = safePath\(page\.url\(\)\)/);
+  assert.match(workflows, /matchesWorkflow\(secondaryActual, secondary\.href\)/);
 });
 
 test("report exports stay discoverable without crowding the mobile collapsed header", async () => {

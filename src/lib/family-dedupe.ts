@@ -192,9 +192,12 @@ function normalizePersonNameVariants(value: unknown) {
       && !trailingCredential;
     if (commaCompoundSurname) {
       const surname = normalizeText(rawParts[0]).replace(/\s+/g, "");
-      const givenNames = normalizePersonNameText(rawParts[1]);
+      const givenNameWords = rawParts[1].split(/\s+/).filter(Boolean);
+      const attachedSuffix = canonicalPersonNameToken(givenNameWords.at(-1), personNameSuffixes);
+      if (attachedSuffix) givenNameWords.pop();
+      const givenNames = normalizePersonNameText(givenNameWords.join(" "));
       variants.clear();
-      normalizeTextVariants(`${givenNames} ${surname}`).forEach((variant) => variants.add(variant));
+      normalizeTextVariants(`${givenNames} ${surname} ${attachedSuffix}`).forEach((variant) => variants.add(variant));
     }
     if (rawParts.length === 2 && firstPartWords >= 2 && trailingSuffix === "v") {
       variants.add(normalizePersonNameText(`${rawParts[0]} ${trailingSuffix}`));
@@ -207,6 +210,14 @@ function normalizePersonNameVariants(value: unknown) {
         const surname = directParts.slice(-surnameLength).join("");
         variants.add([...givenNames, surname, suffix].filter(Boolean).join(" "));
       }
+    }
+  }
+
+  for (const variant of [...variants]) {
+    const parts = variant.split(" ").filter(Boolean);
+    const suffix = personNameSuffixes.has(parts.at(-1) ?? "") ? parts.pop() : "";
+    if (parts.length >= 3) {
+      variants.add([`${parts[0]}${parts[1]}`, ...parts.slice(2), suffix].filter(Boolean).join(" "));
     }
   }
 

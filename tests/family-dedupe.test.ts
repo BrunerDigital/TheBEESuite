@@ -933,6 +933,50 @@ test("child duplicate scoring preserves unmarked compound surname boundaries", (
   assert.equal(shortenedScore, null);
 });
 
+test("child duplicate scoring retains suffixes with compound surnames", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Garcia Marquez, Avery Jr.",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Avery Garcia Marquez Jr.",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
+test("child duplicate scoring canonicalizes omitted given-name hyphens", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Anne-Marie Smith",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "AnneMarie Smith",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
 test("child duplicate scoring does not omit direct compound surname components", () => {
   const score = scoreChildDuplicate(
     {

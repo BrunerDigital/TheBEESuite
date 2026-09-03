@@ -2617,7 +2617,7 @@ function ParentPortalWorkspaceView({
                 <AlertTitle>Replace your saved payment method</AlertTitle>
                 <AlertDescription>
                   Your school now uses a new payment account. Replace the saved card or connect a bank account below. No payment is charged while you update it. {paymentMethodReauthorizationPreservesAutopay
-                    ? "Your existing autopay consent will resume on the replacement method after Stripe confirms it."
+                    ? "Your existing autopay consent will resume on the replacement method after Stripe confirms it. You do not need to turn autopay on again."
                     : autopayStatus === "enabled"
                       ? "After replacement, review and re-enable autopay."
                       : "Autopay will remain off unless you enable it after replacement."}
@@ -2857,7 +2857,7 @@ function ParentPortalWorkspaceView({
                     <>
                       <p>
                         Your school now uses a new payment account. Replace your saved card or connect a bank account before saved-method payments can resume. A one-time payment does not replace the saved autopay method, so using only the checkout buttons below would require another update next time. {paymentMethodReauthorizationPreservesAutopay
-                          ? "Your existing autopay consent will resume automatically after Stripe confirms the replacement."
+                          ? "Your existing autopay consent will resume automatically after Stripe confirms the replacement. You do not need to turn autopay on again."
                           : autopayStatus === "enabled"
                             ? "Review and re-enable autopay after replacement."
                             : "Autopay remains off until you choose to enable it."}
@@ -2910,7 +2910,7 @@ function ParentPortalWorkspaceView({
                         ? "Autopay is unavailable for a past family account. One-time payments remain available."
                         : paymentMethodReauthorizationRequired
                         ? paymentMethodReauthorizationPreservesAutopay
-                          ? "Autopay is paused only until Stripe confirms the replacement method, then your existing consent resumes."
+                          ? "Autopay is paused only until Stripe confirms the replacement method, then your existing consent resumes. You do not need to turn it on again."
                           : "Autopay is paused until the method is replaced; review and enable it afterward if desired."
                         : autopayStatus === "enabled"
                         ? "Enabled for eligible invoices using the saved family payment method."

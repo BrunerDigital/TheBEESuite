@@ -139,7 +139,7 @@ export function PaymentMethodRequestForm({
             <AlertTitle>No payment will be charged</AlertTitle>
             <AlertDescription className="text-sky-100">
               Your school updated its secure Stripe account. Save a replacement method below. No payment is charged during setup. {reauthorizationPreservesAutopay
-                ? "Your existing autopay consent will resume on the replacement method after Stripe confirms it."
+                ? "Your existing autopay consent will resume on the replacement method after Stripe confirms it. You do not need to turn autopay on again."
                 : autopayStatus === "enabled"
                   ? "After the replacement is confirmed, sign in to review and re-enable autopay."
                   : "Autopay will remain off unless you enable it later in the Parent Portal."}
@@ -199,7 +199,9 @@ export function PaymentMethodRequestForm({
             <AlertCircle className="size-4" />
             <AlertTitle>Bank verification is pending</AlertTitle>
             <AlertDescription className="text-amber-100">
-              Connect your bank account to complete verification. Saving a bank account does not turn on autopay; you can choose autopay separately in the Parent Portal or with your school. Open invoices do not block verification.
+              {reauthorization && reauthorizationPreservesAutopay
+                ? "Stripe is still verifying the replacement bank account. Your existing autopay authorization remains in place and will resume automatically after verification. You do not need to turn autopay on again."
+                : "Connect your bank account to complete verification. Saving a bank account does not turn on autopay; you can choose autopay separately in the Parent Portal or with your school. Open invoices do not block verification."}
             </AlertDescription>
           </Alert>
         ) : null}

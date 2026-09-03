@@ -67,6 +67,11 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(stripeWebhook, /billingAccountUpdate\.count !== 1/);
   assert.match(stripeWebhook, /billing\.autopay\.consent_migrated_to_current_stripe_account/);
   assert.match(stripeWebhook, /await tx\.auditLog\.create/);
+  assert.match(stripeWebhook, /lockCurrentPaymentMethodAutopayScope/);
+  assert.match(stripeWebhook, /canFinalizePendingAutopayConsentMigration/);
+  assert.match(stripeWebhook, /failedPendingPaymentMethodAutopayOutcome/);
+  assert.match(stripeWebhook, /stripePendingAutopayPreviousPaymentMethodId/);
+  assert.match(stripeWebhook, /stripePendingAutopayConsentUserId/);
   assert.match(stripeWebhook, /autopayDisabledReason: "saved_payment_method_replaced"/);
   assert.match(autopayProcessor, /must re-enable autopay in the Parent Portal/);
   assert.match(parentPortal, /activeView === "payments"[\s\S]*Enable autopay/);
@@ -79,4 +84,6 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(paymentMethodRoute, /wrong_payout_account/);
   assert.ok((parentPortal.match(/onClick=\{\(\) => toggleAutopay\(autopayStatus !== "enabled"\)\}/g) ?? []).length >= 2);
   assert.match(invoiceAction, /accountCategory === "past"[\s\S]*method\.paymentMethodLabel[\s\S]*reason \?/);
+  assert.match(parentPortal, /You do not need to turn autopay on again/);
+  assert.match(publicPaymentMethodForm, /You do not need to turn autopay on again/);
 });

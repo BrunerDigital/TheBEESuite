@@ -201,17 +201,15 @@ function normalizePersonName(value: unknown, options: { stripCredentials?: boole
     : trailingSuffix;
   if (nameParts.length === 2 && separateSuffix) return normalizePersonNameText(`${nameParts[0]} ${separateSuffix}`);
 
-  const givenNameWords = credentialsRemoved(
-    (separateSuffix ? nameParts.slice(1, -1) : nameParts.slice(1))
-      .join(" ")
-      .split(/\s+/)
-      .filter(Boolean),
-    stripCredentials,
-  );
-  const attachedSuffix = separateSuffix || givenNameWords.length < 2
+  const rawGivenNameWords = (separateSuffix ? nameParts.slice(1, -1) : nameParts.slice(1))
+    .join(" ")
+    .split(/\s+/)
+    .filter(Boolean);
+  const attachedSuffix = separateSuffix || rawGivenNameWords.length < 2
     ? ""
-    : canonicalPersonNameToken(givenNameWords.at(-1), personNameSuffixes);
-  if (attachedSuffix) givenNameWords.pop();
+    : canonicalPersonNameToken(rawGivenNameWords.at(-1), personNameSuffixes);
+  if (attachedSuffix) rawGivenNameWords.pop();
+  const givenNameWords = credentialsRemoved(rawGivenNameWords, stripCredentials);
   const suffix = separateSuffix || attachedSuffix;
   return normalizePersonNameText(`${givenNameWords.join(" ")} ${nameParts[0]} ${suffix}`);
 }
@@ -248,15 +246,22 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
       const rawSurnameWords = rawParts[0].split(/\s+/).filter(Boolean);
       if (surnameTrailingSuffix) rawSurnameWords.pop();
       const surname = normalizeText(rawSurnameWords.join(" ")).replace(/\s+/g, "");
-      const givenNameWords = credentialsRemoved(
-        rawParts[1].split(/\s+/).filter(Boolean),
-        stripCredentials,
-      );
-      const attachedSuffix = canonicalPersonNameToken(givenNameWords.at(-1), personNameSuffixes);
-      if (attachedSuffix) givenNameWords.pop();
+      const rawGivenNameWords = rawParts[1].split(/\s+/).filter(Boolean);
+      const attachedSuffix = canonicalPersonNameToken(rawGivenNameWords.at(-1), personNameSuffixes);
+      if (attachedSuffix) rawGivenNameWords.pop();
+      const givenNameWords = credentialsRemoved(rawGivenNameWords, stripCredentials);
       const givenNames = normalizePersonNameText(givenNameWords.join(" "));
       variants.clear();
       normalizeTextVariants(`${givenNames} ${surname} ${surnameTrailingSuffix || attachedSuffix}`)
+        .forEach((variant) => variants.add(variant));
+    }
+    if (rawParts.length >= 3 && trailingSuffix && firstPartWords >= 2) {
+      const surname = normalizeText(rawParts[0]).replace(/\s+/g, "");
+      const givenNameWords = credentialsRemoved(
+        rawParts.slice(1, -1).join(" ").split(/\s+/).filter(Boolean),
+        stripCredentials,
+      );
+      normalizeTextVariants(`${givenNameWords.join(" ")} ${surname} ${trailingSuffix}`)
         .forEach((variant) => variants.add(variant));
     }
     if (rawParts.length === 2 && trailingSuffix === "v") {
@@ -268,6 +273,9 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
       const dottedVInitial = canonicalPersonNameToken(rawFinalGivenNameWord, personNameSuffixes) === "v"
         && /\.\s*$/.test(rawFinalGivenNameWord);
       if (rawGivenNameWords.length >= 2 && dottedVInitial) {
+        rawGivenNameWords.pop();
+        const dottedGivenNameWords = credentialsRemoved(rawGivenNameWords, stripCredentials);
+        dottedGivenNameWords.push(rawFinalGivenNameWord);
         const dottedSurnameWords = rawParts[0].split(/\s+/).filter(Boolean);
         const dottedSurnameSuffix = canonicalPersonNameToken(dottedSurnameWords.at(-1), personNameSuffixes);
         if (dottedSurnameSuffix) dottedSurnameWords.pop();
@@ -276,7 +284,7 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
           ? dottedSurname.replace(/\s+/g, "")
           : dottedSurname;
         variants.add(normalizePersonNameText(
-          `${rawGivenNameWords.join(" ")} ${canonicalDottedSurname} ${dottedSurnameSuffix}`,
+          `${dottedGivenNameWords.join(" ")} ${canonicalDottedSurname} ${dottedSurnameSuffix}`,
         ));
       }
     }

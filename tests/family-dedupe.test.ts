@@ -1523,3 +1523,97 @@ test("child duplicate scoring preserves uppercase credential-like given names wi
   assert.equal(score?.confidence, "high");
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
+
+test("child duplicate scoring collapses compound surnames before a final comma suffix", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "De La Cruz, Juan, Jr.",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Juan DeLaCruz Jr.",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
+test("guardian duplicate scoring collapses hyphenated surnames before a final comma suffix", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith-Jones, Avery, Jr.",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Avery SmithJones Jr.",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
+test("guardian duplicate scoring strips credentials before attached given-name suffixes", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith, Alex RN Jr.",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith Jr.",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
+test("guardian duplicate scoring strips credentials before compound surname attached suffixes", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "De La Cruz, Alex RN Jr.",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex DeLaCruz Jr.",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});

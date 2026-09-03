@@ -540,6 +540,30 @@ test("guardian duplicate scoring recognizes ProCare last-first formatting", () =
   assert.ok(score?.reasons.includes("same guardian phone"));
 });
 
+test("guardian duplicate scoring strips credentials attached to last-first given names", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith, Alex RN",
+      phone: "7205550118",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith",
+      phone: "7205550118",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
 test("guardian duplicate scoring ignores imported honorifics", () => {
   const score = scoreGuardianDuplicate(
     {

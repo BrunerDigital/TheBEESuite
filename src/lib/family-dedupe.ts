@@ -175,6 +175,16 @@ function normalizePersonName(value: unknown) {
     .join(" ")
     .split(/\s+/)
     .filter(Boolean);
+  while (givenNameWords.length >= 2) {
+    const rawCredential = givenNameWords.at(-1) ?? "";
+    const credentialToken = canonicalPersonNameToken(rawCredential, personNameCredentials);
+    const credentialLetters = rawCredential.replace(/[^A-Za-z]/g, "");
+    const explicitCredential = rawCredential.includes(".")
+      || (credentialLetters.length >= 2 && credentialLetters === credentialLetters.toUpperCase());
+    if (!credentialToken
+      || (personNameCredentialLikeSurnames.has(credentialToken) && !explicitCredential)) break;
+    givenNameWords.pop();
+  }
   const attachedSuffix = separateSuffix || givenNameWords.length < 2
     ? ""
     : canonicalPersonNameToken(givenNameWords.at(-1), personNameSuffixes);

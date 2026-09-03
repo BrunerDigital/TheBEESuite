@@ -588,6 +588,30 @@ test("guardian duplicate scoring strips last-first credentials before suffixes",
   assert.ok(score?.reasons.includes("same guardian name"));
 });
 
+test("guardian duplicate scoring strips credentials after an infix suffix", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith, Jr., Alex RN",
+      phone: "7205550121",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith Jr.",
+      phone: "7205550121",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
 test("guardian duplicate scoring strips credentials from compound-surname variants", () => {
   const score = scoreGuardianDuplicate(
     {

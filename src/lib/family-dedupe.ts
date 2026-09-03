@@ -182,7 +182,10 @@ function normalizePersonName(value: unknown) {
     ? canonicalPersonNameToken(nameParts[1], personNameSuffixes)
     : "";
   if (surnameFollowingSuffix) {
-    return normalizePersonNameText(`${nameParts.slice(2).join(" ")} ${nameParts[0]} ${surnameFollowingSuffix}`);
+    const givenNameWords = stripAttachedPersonCredentials(
+      nameParts.slice(2).join(" ").split(/\s+/).filter(Boolean),
+    );
+    return normalizePersonNameText(`${givenNameWords.join(" ")} ${nameParts[0]} ${surnameFollowingSuffix}`);
   }
   const trailingSuffix = canonicalPersonNameToken(nameParts.at(-1), personNameSuffixes);
   const dottedVInitial = trailingSuffix === "v" && /\.\s*$/.test(nameParts.at(-1) ?? "");

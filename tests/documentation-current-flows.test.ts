@@ -91,13 +91,13 @@ test("agency payment SOP has a stable public route and evidence-first reconcilia
   assert.match(workspace, /Open SOP/);
   assert.match(guide, /Agency Payment And Reconciliation SOP/);
   assert.match(guide, /Do not use a Stripe payout or a bank deposit by itself as remittance proof/);
-  assert.match(guide, /Review complete - save/);
-  assert.match(guide, /parent-visible family responsibility stays unchanged/);
+  assert.match(guide, /different billing administrator or accounting reviewer/);
+  assert.match(guide, /unchanged parent-visible responsibility/);
   assert.match(guide, /dedicated agency ledger/);
   assert.match(sop, /claim-by-claim allocation/);
-  assert.match(sop, /Do not post a second manual family payment/);
-  assert.match(sop, /Export the agency ledger CSV/);
-  assert.match(sop, /Reverse an incorrect remittance/);
+  assert.match(sop, /Do not add a duplicate remittance or family payment/);
+  assert.match(sop, /Export claims, deposits, ledger activity, and reconciliation/);
+  assert.match(sop, /Reverse the whole deposit batch/);
 });
 
 test("director clean-start guide has a stable public route with steps, FAQs, and stop conditions", () => {
@@ -228,7 +228,7 @@ test("role SOPs cover the current August UI and workflow baseline", () => {
   assert.match(billing, /Void invoice/i);
   assert.match(billing, /school absorbs Stripe processing costs/i);
   assert.match(billing, /agency-payment-reconciliation/);
-  assert.match(billing, /Do not use the family cash\/check payment action for agency money/);
+  assert.match(billing, /never guess an allocation or use the family cash\/check action/);
   assert.match(parent, /current password is preserved/i);
   assert.match(teacher, /https:\/\/thebeesuite\.io\/teachers/);
   assert.match(executive, /school filter/);

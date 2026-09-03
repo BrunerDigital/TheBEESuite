@@ -40,32 +40,41 @@ const steps = [
     stop: "Do not use a Stripe payout or a bank deposit by itself as remittance proof, and never guess how to split a deposit.",
   },
   {
-    title: "Record the remittance once",
+    title: "Prepare one deposit batch",
     actions: [
-      "Select Record remittance on the matched claim.",
-      "Enter the exact external reference, remittance amount, agency paid date, and matching payment method.",
-      "Review the values together, choose Review complete - save once, and wait for Agency billing record saved and the refreshed queue.",
+      "Enter the unique payment reference, exact deposit total, agency paid date, method, evidence name, secure evidence reference, and follow-up due date.",
+      "Allocate the deposit across every claim shown on the remittance advice; leave any unsupported remainder as unapplied cash.",
+      "Save once. The batch stays pending and does not change claims or the ledger until a different reviewer approves it.",
     ],
-    stop: "Do not use a family cash/check payment action for agency money. Never enter passwords, bank account numbers, routing numbers, or provider credentials in notes.",
+    stop: "Do not use a family cash/check action, guess an allocation, or enter passwords, bank account numbers, routing numbers, or provider credentials in notes.",
   },
   {
-    title: "Reconcile immediately",
+    title: "Obtain independent review",
     actions: [
-      "Verify the claim paid amount increased exactly once and the status is partially paid or paid as expected.",
-      "Verify the remittance history shows the exact date, amount, and external reference once.",
-      "Confirm the dedicated agency ledger contains one payment entry, the school-and-agency balance decreased exactly once, and parent-visible family responsibility stays unchanged.",
-      "For a multi-claim deposit, total the recorded claim allocations and compare them with the deposit.",
+      "A different billing administrator or accounting reviewer compares the batch, evidence, claims, and allocations.",
+      "Approval posts every claim allocation and any unapplied cash together; the preparer cannot approve their own batch.",
+      "Later use of unapplied cash also requires a different reviewer and posts in the current open accounting period.",
     ],
-    stop: "If the remittance saved but the dedicated agency ledger is missing or does not reconcile, stop and escalate. Do not post a second remittance or manual family payment.",
+    stop: "Reject the batch if evidence conflicts or if allocated plus unapplied cash cannot equal the deposit exactly.",
+  },
+  {
+    title: "Reconcile claims, cash, and ledger",
+    actions: [
+      "Verify claim paid amounts changed exactly once and deposit total equals allocated plus unapplied cash.",
+      "Confirm approved claims minus active remittances minus unapplied cash plus adjustments equals the agency-ledger balance with zero variance.",
+      "Review aging, overdue follow-ups, pending reviews, legacy family-ledger history, and unchanged parent-visible responsibility.",
+      "Export claims, deposits, ledger activity, and reconciliation for accounting; configured GL and cost-center codes are included.",
+    ],
+    stop: "If any variance remains, stop and escalate. Never post a duplicate remittance or family payment to force a match.",
   },
   {
     title: "Correct through reversal, never deletion",
     actions: [
-      "Find the exact remittance, select Reverse, and enter a specific correction reason.",
-      "Verify the original is marked reversed, the claim recalculates, and the dedicated agency ledger restores the receivable with a compensating entry.",
-      "Enter the corrected remittance as a new record from the correct evidence.",
+      "Reverse the whole deposit batch when its payment reference, total, or evidence is wrong.",
+      "Use reviewed adjustment requests for write-offs, recoupments, overpayments, and correction increases or decreases.",
+      "Close accounting periods only after reviews and exceptions are cleared; reopening requires a retained reason.",
     ],
-    stop: "Never delete, overwrite, or silently backdate a remittance. Preserve the original, reversal, correction reason, and replacement in the audit history.",
+    stop: "Never delete, overwrite, or silently backdate activity. Preserve the original, compensating entry, reason, reviewer, and replacement.",
   },
 ];
 
@@ -76,15 +85,17 @@ const preflight = [
   "Submitted claim confirmation and agency decision/reference",
   "Approved amount, paid amount, paid date, method, and external reference",
   "Claim-by-claim allocation for a multi-claim deposit",
+  "A different authorized reviewer and an accountable follow-up due date",
 ];
 
 const faqs = [
   ["Does Mark submitted send the claim to the agency?", "No. Submit through the agency's approved external channel first. Mark submitted records the confirmation reference afterward."],
   ["Can I use the school's Stripe payout as the agency payment?", "No. Stripe payout routing is separate and does not prove the agency, authorization, service period, claim, amount, or agency approval."],
-  ["Can I post this as a family cash or check payment?", "No. Use Record remittance on the approved agency claim so agency and family responsibility remain separate."],
-  ["What if one deposit covers several claims?", "Use the agency remittance detail to enter the exact amount on each claim, then verify the total equals the deposit. Stop if the allocation is missing."],
+  ["Can I post this as a family cash or check payment?", "No. Prepare an agency deposit batch so agency cash and family responsibility remain separate."],
+  ["What if one deposit covers several claims?", "Prepare one batch and add the agency's exact claim allocations. Unsupported cash remains unapplied with an owner and due date."],
   ["What if the family ledger does not change?", "That is expected for new agency activity. Approvals and remittances post to the separate agency ledger; family-ledger compatibility entries are limited to clearing pre-existing agency receivables."],
-  ["What if I entered the wrong amount or reference?", "Reverse the exact remittance with a correction reason, verify the recalculated claim and compensating ledger entry, then enter the corrected remittance."],
+  ["What if I entered the wrong amount or reference?", "Reverse the whole batch with a specific reason, verify every compensating entry, then prepare a corrected batch for independent review."],
+  ["Can I change a closed month?", "Not directly. Accounting must reopen it with a retained reason, or post the correction in the current open period while preserving the original event date."],
 ];
 
 export default function AgencyPaymentReconciliationPage() {
@@ -100,7 +111,7 @@ export default function AgencyPaymentReconciliationPage() {
           <div className="py-12 sm:py-16">
             <Badge className="bg-amber-300 text-slate-950"><Landmark data-icon="inline-start" />Directors and billing administrators</Badge>
             <h1 className="mt-5 max-w-4xl text-4xl font-semibold leading-tight sm:text-5xl">Agency Payment And Reconciliation SOP</h1>
-            <p className="mt-5 max-w-3xl text-base leading-7 text-slate-300">Use this guide together to match an approved agency claim, record the remittance once, and prove it reconciled in the dedicated agency ledger without changing what the family owes.</p>
+            <p className="mt-5 max-w-3xl text-base leading-7 text-slate-300">Use this guide to stage one agency deposit, obtain independent review, and prove the claims, cash allocation, and dedicated agency ledger agree without changing what the family owes.</p>
             <div className="mt-7 flex flex-wrap gap-3"><Button nativeButton={false} render={<Link href="/billing-invoices#agency-subsidy-billing" />}>Open agency workspace<ArrowRight data-icon="inline-end" /></Button><Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="#preflight" />}>Review preflight</Button></div>
             <div className="mt-7 rounded-lg border border-red-300/20 bg-red-400/10 p-4 text-sm leading-6 text-red-100">A bank deposit or Stripe payout is not enough. Do not record anything until the exact school, agency, authorization, service period, approved claim, amount, paid date, and external reference match.</div>
           </div>
@@ -117,7 +128,7 @@ export default function AgencyPaymentReconciliationPage() {
             <h2 className="text-2xl font-semibold">Before you begin</h2>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <div className="rounded-lg border border-white/10 bg-white/[0.055] p-5"><h3 className="flex items-center gap-2 font-semibold text-amber-200"><ClipboardCheck className="size-5" />Have these ready</h3><ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-300">{preflight.map(item => <li key={item}>{item}</li>)}</ul></div>
-              <div className="rounded-lg border border-red-300/20 bg-red-400/10 p-5"><h3 className="flex items-center gap-2 font-semibold text-red-200"><ShieldAlert className="size-5" />Immediate stop conditions</h3><ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-300"><li>The program says Setup required</li><li>The claim is not approved or partially paid</li><li>The payment exceeds the remaining approved amount</li><li>The agency has not supplied an exact multi-claim allocation</li><li>Any school, child, authorization, period, amount, date, or reference conflicts</li></ul></div>
+              <div className="rounded-lg border border-red-300/20 bg-red-400/10 p-5"><h3 className="flex items-center gap-2 font-semibold text-red-200"><ShieldAlert className="size-5" />Immediate stop conditions</h3><ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-300"><li>The program says Setup required</li><li>The claim is not approved or partially paid</li><li>The payment exceeds the remaining approved amount</li><li>The agency has not supplied an exact multi-claim allocation</li><li>The payment reference is already recorded</li><li>The accounting period is closed</li><li>Any school, child, authorization, period, amount, date, or reference conflicts</li></ul></div>
             </div>
           </section>
 
@@ -129,7 +140,7 @@ export default function AgencyPaymentReconciliationPage() {
 
           <section id="faqs" className="scroll-mt-6 py-10"><h2 className="text-2xl font-semibold">Frequently asked questions</h2><div className="mt-6 grid gap-3">{faqs.map(([question, answer]) => <details key={question} className="group rounded-lg border border-white/10 bg-white/[0.055] p-5"><summary className="cursor-pointer list-none font-semibold text-white marker:hidden">{question}</summary><p className="mt-3 text-sm leading-6 text-slate-300">{answer}</p></details>)}</div></section>
 
-          <section className="my-10 rounded-lg border border-emerald-300/25 bg-emerald-400/10 p-6"><h2 className="flex items-center gap-2 text-xl font-semibold text-emerald-100"><CheckCircle2 className="size-5" />Reconciliation is complete only when</h2><p className="mt-3 text-sm leading-6 text-slate-200">The claim, remittance history, dedicated agency-ledger balance, parent-visible family responsibility, and deposit allocation all agree. Export the ledger for complete accounting history, keep unresolved exceptions open, and never force a match with a second family payment.</p></section>
+          <section className="my-10 rounded-lg border border-emerald-300/25 bg-emerald-400/10 p-6"><h2 className="flex items-center gap-2 text-xl font-semibold text-emerald-100"><CheckCircle2 className="size-5" />Reconciliation is complete only when</h2><p className="mt-3 text-sm leading-6 text-slate-200">The independently reviewed deposit equals claim allocations plus unapplied cash, the calculated and ledger balances have zero variance, exceptions have owners, family responsibility is unchanged, and the accounting period can be closed without deleting history.</p></section>
         </div>
       </section>
 

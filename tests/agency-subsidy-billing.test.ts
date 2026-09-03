@@ -198,7 +198,7 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   assert.match(workspace, /setClaimPage\(1\)/);
   assert.match(workspace, /setClaimError\(""\); setClaimMessage\(""\); setData\(null\)/);
   assert.match(workspace, /reloadClaimPage: 1/);
-  assert.match(workspace, /const reloadPage = callbacks\.reloadClaimPage \?\? claimPage;[\s\S]*await load\(reloadPage, reloadPage === 1 \? "" : claimCursorByPage\[reloadPage\] \?\? ""\)/);
+  assert.match(workspace, /const reloadPage = callbacks\.reloadClaimPage \?\? claimPage;[\s\S]*setLedgerPage\(1\); setLedgerCursorByPage\(\{\}\);[\s\S]*await load\(reloadPage, reloadPage === 1 \? "" : claimCursorByPage\[reloadPage\] \?\? "", ""\)/);
   assert.match(workspace, /exportClaims=true/);
   assert.match(workspace, /response\.blob\(\)/);
   assert.match(workspace, /const blob = await response\.blob\(\);\s+if \(centerIdRef\.current !== exportCenterId\) return;/);
@@ -213,15 +213,20 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   assert.match(route, /if \(exportingClaims\) return exportClaimsCsv\(centerIds\)/);
 });
 
-test("agency remittances re-read the claim inside a serializable transaction", () => {
+test("agency remittances are staged, independently reviewed, and posted serializably", () => {
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
-  assert.match(route, /const current = await tx\.subsidyClaim\.findUnique/);
+  const reconciliation = readFileSync("src/components/agency-reconciliation-controls.tsx", "utf8");
+  assert.match(route, /action === "prepareRemittanceBatch" \|\| action === "recordRemittance"/);
+  assert.match(route, /agencyPostingClaim\(tx, allocation\.claimId\)/);
+  assert.match(route, /action === "approveRemittanceBatch"/);
+  assert.match(route, /canReviewAgencyPosting\(\{ role: auth\.user\.role, reviewerId: auth\.user\.id, requestedById: batch\.enteredById \}\)/);
   assert.match(route, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
   assert.match(route, /REMITTANCE_METHODS/);
   assert.match(route, /entryAuthorizationNumber && entryAgencyName[\s\S]*entryAuthorizationNumber === authorizationNumber && entryAgencyName === agencyName/);
-  assert.match(route, /That remittance reference is already recorded or the claim changed/);
-  assert.match(workspace, /Record remittance/);
+  assert.match(route, /already have a remittance batch with this payment reference/);
+  assert.match(workspace, /Prepare remittance/);
+  assert.match(reconciliation, /Approve and post/);
   assert.match(workspace, /Approvals and remittances post to the separate agency ledger/);
 });
 
@@ -255,6 +260,38 @@ test("agency receivables use a dedicated immutable ledger with a legacy-only fam
   assert.match(workspace, /exportLedger=true/);
   assert.match(workspace, /Family balances and parent payments do not post here/);
   assert.match(workspace, /Compatibility settlement is limited to clearing those pre-existing agency receivables/);
+});
+
+test("agency reconciliation controls cover deposit batches, exceptions, period close, and complete exports", () => {
+  const schema = readFileSync("prisma/schema.prisma", "utf8");
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  const controls = readFileSync("src/components/agency-reconciliation-controls.tsx", "utf8");
+  const prismaMigration = readFileSync("prisma/migrations/20260903210000_agency_reconciliation_controls/migration.sql", "utf8");
+  const supabaseMigration = readFileSync("supabase/migrations/20260903210000_agency_reconciliation_controls.sql", "utf8");
+
+  assert.equal(prismaMigration, supabaseMigration);
+  assert.match(schema, /model AgencyRemittanceBatch \{[\s\S]*@@unique\(\[centerId, agencyProgramId, referenceKey\]\)/);
+  assert.match(schema, /model AgencyRemittanceAllocation \{[\s\S]*remittanceId\s+String\?\s+@unique/);
+  assert.match(schema, /model AgencyLedgerAdjustment \{[\s\S]*status\s+String\s+@default\("pending_review"\)/);
+  assert.match(schema, /model AgencyProgram \{[\s\S]*receivableGlCode\s+String\?[\s\S]*cashGlCode\s+String\?[\s\S]*adjustmentGlCode\s+String\?[\s\S]*costCenterCode\s+String\?/);
+  assert.match(schema, /model AgencyRemittanceBatch \{[\s\S]*followUpOwnerId\s+String\?[\s\S]*followUpDueAt\s+DateTime\?/);
+  assert.match(schema, /model AgencyAccountingPeriod \{[\s\S]*@@unique\(\[centerId, startDate, endDate\]\)/);
+  assert.match(prismaMigration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(prismaMigration, /Historical record retained; no new approval was inferred/);
+  assert.match(route, /type: "unapplied_cash"/);
+  assert.match(route, /type: "unapplied_cash_allocation"/);
+  assert.match(route, /action === "requestLedgerAdjustment"/);
+  assert.match(route, /action === "closeAccountingPeriod"/);
+  assert.match(route, /assertAgencyPeriodOpen/);
+  assert.match(route, /exportAgencyReconciliationCsv/);
+  assert.match(route, /exportAgencyDepositsCsv/);
+  assert.match(route, /overdueFollowUpCount/);
+  assert.match(route, /legacyFamilyAgencyBalanceCents/);
+  assert.match(controls, /Prepare deposit batch/);
+  assert.match(controls, /Adjustment request/);
+  assert.match(controls, /Accounting periods/);
+  assert.match(controls, /Secure document\/advice reference/);
+  assert.match(controls, /Follow-up due/);
 });
 
 test("agency requirements fail closed when current required items are missing", () => {

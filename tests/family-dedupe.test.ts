@@ -494,6 +494,27 @@ test("child duplicate scoring preserves exact non-Latin names", () => {
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
 
+test("child duplicate scoring preserves non-Latin combining marks", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "दीपक शर्मा",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "दुपक शर्मा",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
 test("child duplicate scoring matches an abbreviated given name", () => {
   const score = scoreChildDuplicate(
     {
@@ -773,6 +794,29 @@ test("guardian duplicate scoring preserves exact non-Latin names", () => {
 
   assert.equal(score?.confidence, "high");
   assert.ok(score?.reasons.includes("same guardian name"));
+});
+
+test("guardian duplicate scoring preserves non-Latin combining marks", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "दीपक शर्मा",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "दुपक शर्मा",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
 });
 
 test("guardian duplicate scoring transliterates stroked Latin letters", () => {
@@ -2029,6 +2073,46 @@ test("child duplicate scoring matches complete names that both include honorific
 
   assert.equal(score?.confidence, "high");
   assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
+test("complete titled names preserve particle-like given names", () => {
+  const guardianScore = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Dr. Al Green",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Dr Al Green",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+  const childScore = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Dr. Al Green",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Dr Al Green",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(guardianScore?.confidence, "high");
+  assert.equal(childScore?.confidence, "high");
 });
 
 test("child duplicate scoring preserves explicit compound surnames during initial matching", () => {

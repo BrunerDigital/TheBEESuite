@@ -67,7 +67,7 @@ function normalizeText(value: unknown) {
         .replace(/[ıİ]/g, "i")
         .replace(/['’ʼ]/g, "")
         .toLowerCase()
-        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .replace(/[^\p{L}\p{N}\p{M}]+/gu, " ")
         .trim()
     : "";
 }
@@ -392,7 +392,8 @@ function hasGivenNameAfterHonorific(value: unknown) {
   const words = normalizeText(value).split(" ").filter(Boolean);
   if (!personNameHonorifics.has(words[0] ?? "")) return true;
   words.shift();
-  return words.length >= 2 && !personNameSurnameParticles.has(words[0] ?? "");
+  return words.length >= 2
+    && (!personNameSurnameParticles.has(words[0] ?? "") || words.length === 2);
 }
 
 function leadingHonorific(value: unknown) {

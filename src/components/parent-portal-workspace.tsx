@@ -1038,6 +1038,7 @@ function ParentPortalWorkspaceView({
     });
   }, [autopayEnableRequirements]);
   const autopayUnavailable = paymentContinuityAccess;
+  const canReplaceSavedPaymentMethod = !paymentContinuityAccess && !autopayUnavailable;
   const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
   const checkoutBlockedMessage =
     "Online payments are temporarily unavailable. Please contact your school if you need help.";
@@ -2852,23 +2853,31 @@ function ParentPortalWorkspaceView({
                 <AlertCircle className="size-4" />
                 <AlertTitle>Payment method update required</AlertTitle>
                 <AlertDescription className="space-y-3">
-                  <p>
-                    Your school now uses a new payment account. Replace your saved card or connect a bank account before saved-method payments can resume. A one-time payment does not replace the saved autopay method, so using only the checkout buttons below would require another update next time. {paymentMethodReauthorizationPreservesAutopay
-                      ? "Your existing autopay consent will resume automatically after Stripe confirms the replacement."
-                      : autopayStatus === "enabled"
-                        ? "Review and re-enable autopay after replacement."
-                        : "Autopay remains off until you choose to enable it."}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
-                      <CreditCard data-icon="inline-start" />
-                      Replace saved card
-                    </Button>
-                    <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
-                      <Building2 data-icon="inline-start" />
-                      Connect bank account
-                    </Button>
-                  </div>
+                  {canReplaceSavedPaymentMethod ? (
+                    <>
+                      <p>
+                        Your school now uses a new payment account. Replace your saved card or connect a bank account before saved-method payments can resume. A one-time payment does not replace the saved autopay method, so using only the checkout buttons below would require another update next time. {paymentMethodReauthorizationPreservesAutopay
+                          ? "Your existing autopay consent will resume automatically after Stripe confirms the replacement."
+                          : autopayStatus === "enabled"
+                            ? "Review and re-enable autopay after replacement."
+                            : "Autopay remains off until you choose to enable it."}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
+                          <CreditCard data-icon="inline-start" />
+                          Replace saved card
+                        </Button>
+                        <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                          <Building2 data-icon="inline-start" />
+                          Connect bank account
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p>
+                      Your previous saved payment method cannot be reused. Because this is a past family account, saved payment methods and autopay remain unavailable; use a one-time payment option below for any remaining balance.
+                    </p>
+                  )}
                 </AlertDescription>
               </Alert>
             ) : paymentTransitionActive ? (
@@ -3443,7 +3452,9 @@ function ParentPortalWorkspaceView({
                   </div>
                   {paymentMethodReauthorizationRequired ? (
                     <p className="mt-2 text-xs font-medium text-destructive">
-                      These are one-time payment options. They will not replace the saved autopay method; use the replacement buttons above first.
+                      {canReplaceSavedPaymentMethod
+                        ? "These are one-time payment options. They will not replace the saved autopay method; use the replacement buttons above first."
+                        : "These are one-time payment options. They do not save a reusable payment method or enable autopay."}
                     </p>
                   ) : null}
                 </div>

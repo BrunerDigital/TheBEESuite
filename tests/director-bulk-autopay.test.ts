@@ -94,6 +94,8 @@ test("director bulk autopay requires an exact reviewed balance snapshot", () => 
   assert.match(invoiceActions, /One-time checkout will not update the saved autopay method/);
   assert.match(parentPortal, /Replace saved card/);
   assert.match(parentPortal, /A one-time payment does not replace the saved autopay method/);
+  assert.match(parentPortal, /const canReplaceSavedPaymentMethod = !paymentContinuityAccess && !autopayUnavailable/);
+  assert.match(parentPortal, /saved payment methods and autopay remain unavailable; use a one-time payment option below/);
   assert.match(paymentRequests, /optionByEmail\.get\(email\)\?\.userIds\.includes\(enabledByUserId\)/);
   assert.match(paymentRequests, /linked guardian who enabled autopay/);
 });

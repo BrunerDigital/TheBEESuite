@@ -209,6 +209,20 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   }
 
+  if (
+    parentFacing &&
+    billingAccount.family.children.length === 0 &&
+    (action === "setup" || action === "enable_autopay")
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Saved payment methods and autopay are unavailable for a past family account. One-time payments remain available.",
+      },
+      { status: 403 },
+    );
+  }
+
   // Disabling collection must remain available even when a school's billing
   // approval is paused. It never creates a Stripe object or moves money.
   if (action === "disable_autopay") {

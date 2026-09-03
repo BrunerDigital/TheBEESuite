@@ -299,8 +299,8 @@ function PayrollSummariesCard({
       <CollapsibleCard
         id={cardId}
         className="bg-card"
-        title="Payroll summaries"
-        description="Payroll summaries sent by directors for executive review, including totals for each employee."
+        title="Location payroll reports"
+        description="Payroll reports sent by locations for executive review, including totals for each employee."
         collapsedSummary={`${summaries.length} submissions`}
         defaultCollapsed={defaultCollapsed}
       >
@@ -794,17 +794,6 @@ function ExecutiveLensDashboard({
             <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">No school FTE submissions are visible yet.</p>
           )}
         </CollapsibleCard>
-      ),
-    },
-    {
-      id: "payroll-summary-submissions",
-      title: "Payroll summaries",
-      className: "xl:col-span-2 2xl:col-span-3",
-      children: (
-        <PayrollSummariesCard
-          summaries={metrics.payrollSummaries}
-          cardId={`dashboard-${lens}-payroll-summary-submissions`}
-        />
       ),
     },
     {
@@ -1695,6 +1684,14 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         <PayrollSummariesCard
           summaries={live.payrollSummaries}
           cardId="dashboard-director-payroll-summary-submissions"
+          defaultCollapsed={false}
+        />
+      ) : null}
+
+      {isExecutiveDashboard && live?.executiveMetrics ? (
+        <PayrollSummariesCard
+          summaries={live.executiveMetrics.payrollSummaries}
+          cardId="dashboard-executive-location-payroll-reports"
           defaultCollapsed={false}
         />
       ) : null}

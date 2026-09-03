@@ -495,7 +495,7 @@ export function AnalyticsReportBuilder({
         className="glass-panel"
         contentClassName="space-y-4"
         headerActions={(
-          <div className="flex flex-wrap gap-2">
+          <div className="hidden flex-wrap gap-2 sm:flex">
               <Button type="button" variant="outline" onClick={() => download("csv")}>
                 <Download data-icon="inline-start" />
                 Export CSV
@@ -512,6 +512,20 @@ export function AnalyticsReportBuilder({
         )}
         defaultCollapsed
       >
+          <div className="grid gap-2 sm:hidden" aria-label="Report exports">
+            <Button type="button" variant="outline" className="w-full justify-start" onClick={() => download("csv")}>
+              <Download data-icon="inline-start" />
+              Export CSV
+            </Button>
+            <Button type="button" variant="outline" className="w-full justify-start" onClick={() => download("pdf")}>
+              <FileText data-icon="inline-start" />
+              Export PDF
+            </Button>
+            <Button type="button" variant="outline" className="w-full justify-start" onClick={printReport}>
+              <Printer data-icon="inline-start" />
+              Print report
+            </Button>
+          </div>
           <form action="/analytics" method="get" className="grid gap-3 md:grid-cols-2 xl:grid-cols-[12rem_minmax(14rem,1fr)_11rem_14rem_auto]">
             <input type="hidden" name="report" value={report} />
             <input type="hidden" name="range" value={range} />

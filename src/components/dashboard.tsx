@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   ArrowUpRight,
@@ -57,6 +57,11 @@ import { accessibleModuleRouteSlug } from "@/lib/rbac";
 import { dataReadinessCenterEnabled } from "@/lib/honeyglass";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
+const documentNavigationPrimaryActions = new Set([
+  "/billing-invoices",
+  "/classroom-dashboard",
+  "/multi-location-dashboard",
+]);
 const kpiWidgetIds: readonly DashboardWidgetId[] = [
   "attendanceSnapshot",
   "classroomCapacity",
@@ -101,6 +106,13 @@ type PayrollSummary = {
 
 function notificationText(item: DashboardNotification) {
   return typeof item === "string" ? item : item.text;
+}
+
+function DashboardPrimaryActionLink({ children, className, href }: { children: ReactNode; className: string; href: string }) {
+  if (documentNavigationPrimaryActions.has(href)) {
+    return <a className={className} href={href}>{children}</a>;
+  }
+  return <Link className={className} href={href}>{children}</Link>;
 }
 
 function withQueryParam(href: string, key: string, value: string | number | null | undefined) {
@@ -1616,7 +1628,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               </CardHeader>
               <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2" aria-labelledby="dashboard-primary-actions">
                 {primaryActionItems.map((item, index) => (
-                  <Link
+                  <DashboardPrimaryActionLink
                     key={item.slug}
                     href={item.href}
                     className={cn(
@@ -1629,7 +1641,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                       <span className="mt-0.5 block line-clamp-1 text-xs text-muted-foreground">{item.description}</span>
                     </span>
                     <ArrowUpRight className="size-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" />
-                  </Link>
+                  </DashboardPrimaryActionLink>
                 ))}
               </CardContent>
             </Card>

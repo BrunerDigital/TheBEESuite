@@ -84,6 +84,7 @@ type CollapsibleCardProps = {
 function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpanded = false) {
   const key = storageKey("collapsed", id);
   const [collapsed, setCollapsed] = useState(forceExpanded ? false : defaultCollapsed);
+  const [loadedPreferenceKey, setLoadedPreferenceKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -91,7 +92,10 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpan
     if (forceExpanded) {
       window.localStorage.removeItem(key);
       window.queueMicrotask(() => {
-        if (!cancelled) setCollapsed(false);
+        if (!cancelled) {
+          setCollapsed(false);
+          setLoadedPreferenceKey(key);
+        }
       });
       return () => {
         cancelled = true;
@@ -102,21 +106,11 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpan
       const stored = window.localStorage.getItem(key);
       if (stored === "1") setCollapsed(true);
       if (stored === "0") setCollapsed(false);
+      setLoadedPreferenceKey(key);
     });
     return () => {
       cancelled = true;
     };
-  }, [forceExpanded, key]);
-
-  const setPersistedCollapsed = useCallback((next: boolean) => {
-    if (forceExpanded) {
-      setCollapsed(false);
-      return;
-    }
-    setCollapsed(next);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(key, next ? "1" : "0");
-    }
   }, [forceExpanded, key]);
 
   const toggleCollapsed = useCallback(() => {
@@ -130,13 +124,21 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpan
     });
   }, [forceExpanded, key]);
 
-  const expand = useCallback(() => setPersistedCollapsed(false), [setPersistedCollapsed]);
+  const expandForNavigation = useCallback(() => {
+    setCollapsed(false);
+  }, []);
 
-  return { collapsed: forceExpanded ? false : collapsed, expand, toggleCollapsed };
+  return {
+    collapsed: forceExpanded ? false : collapsed,
+    expandForNavigation,
+    preferenceLoaded: loadedPreferenceKey === key,
+    toggleCollapsed,
+  };
 }
 
-function useExpandForHash(id: string, expand: () => void) {
+function useExpandForHash(id: string, expand: () => void, preferenceLoaded: boolean) {
   useEffect(() => {
+    if (!preferenceLoaded) return;
     function expandAndFocusTarget(targetHash: string) {
       let target = "";
       try {
@@ -176,7 +178,7 @@ function useExpandForHash(id: string, expand: () => void) {
       window.removeEventListener("hashchange", expandFromLocationHash);
       document.removeEventListener("click", expandFromAnchorClick);
     };
-  }, [expand, id]);
+  }, [expand, id, preferenceLoaded]);
 }
 
 export function CollapsibleCard({
@@ -196,8 +198,8 @@ export function CollapsibleCard({
   forceExpanded = false,
 }: CollapsibleCardProps) {
   const contentId = useId();
-  const { collapsed, expand, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed, forceExpanded);
-  useExpandForHash(id, expand);
+  const { collapsed, expandForNavigation, preferenceLoaded, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed, forceExpanded);
+  useExpandForHash(id, expandForNavigation, preferenceLoaded);
 
   return (
     <Card
@@ -273,8 +275,8 @@ export function CollapsiblePanel({
   defaultCollapsed = true,
 }: CollapsiblePanelProps) {
   const contentId = useId();
-  const { collapsed, expand, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
-  useExpandForHash(id, expand);
+  const { collapsed, expandForNavigation, preferenceLoaded, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
+  useExpandForHash(id, expandForNavigation, preferenceLoaded);
 
   return (
     <section

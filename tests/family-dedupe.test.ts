@@ -1497,10 +1497,16 @@ test("guardian duplicate scoring preserves suffixes attached to last-first surna
 
 test("guardian duplicate scoring canonicalizes numeric ordinal suffixes", () => {
   const suffixes = [
+    ["1st", "I"],
     ["2nd", "II"],
     ["3rd", "III"],
     ["4th", "IV"],
     ["5th", "V"],
+    ["6th", "VI"],
+    ["7th", "VII"],
+    ["8th", "VIII"],
+    ["9th", "IX"],
+    ["10th", "X"],
   ];
 
   for (const [ordinal, roman] of suffixes) {
@@ -1571,6 +1577,74 @@ test("guardian duplicate scoring does not collapse last-first initials into a su
   );
 
   assert.equal(score, null);
+});
+
+test("child duplicate scoring preserves compact dotted last-first given-name initials", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith, J.R.",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "J.R. Smith",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
+test("guardian duplicate scoring does not collapse compact dotted initials into a suffix", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith, J.R.",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Smith Jr",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("last-first single-letter Roman suffixes retain a middle-initial interpretation", () => {
+  for (const suffix of ["I", "V", "X"]) {
+    const score = scoreChildDuplicate(
+      {
+        id: `child_last_first_${suffix}`,
+        familyId: `family_last_first_${suffix}`,
+        centerId: "center_1",
+        fullName: `Smith, Mary ${suffix}`,
+        dateOfBirth: "2022-10-10",
+      },
+      {
+        id: `child_direct_${suffix}`,
+        familyId: `family_direct_${suffix}`,
+        centerId: "center_1",
+        fullName: `Mary ${suffix} Smith`,
+        dateOfBirth: "2022-10-10",
+      },
+    );
+
+    assert.equal(score?.confidence, "high", `${suffix} should remain a possible middle initial`);
+  }
 });
 
 test("child duplicate scoring preserves undotted V middle initials in last-first names", () => {

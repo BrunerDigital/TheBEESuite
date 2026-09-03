@@ -16,6 +16,7 @@ type Props = {
   recipientEmail: string;
   savedPaymentMethodLabel?: string | null;
   autopayStatus: "enabled" | "disabled" | "pending";
+  bankVerificationPending: boolean;
   paymentMethodStatus?: string | null;
   paymentStatus?: string | null;
   focus?: "instant-bank" | null;
@@ -37,6 +38,7 @@ export function PaymentMethodRequestForm({
   recipientEmail,
   savedPaymentMethodLabel,
   autopayStatus,
+  bankVerificationPending,
   paymentMethodStatus,
   paymentStatus,
   focus,
@@ -47,7 +49,7 @@ export function PaymentMethodRequestForm({
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const nextOpenInvoice = openInvoices[0] ?? null;
-  const showPendingBankVerification = autopayStatus === "pending" && paymentMethodStatus !== "success";
+  const showPendingBankVerification = bankVerificationPending && paymentMethodStatus !== "success";
   const autopayLabel = reauthorization && reauthorizationPreservesAutopay
     ? "Autopay consent preserved"
     : autopayStatus === "enabled"
@@ -139,7 +141,7 @@ export function PaymentMethodRequestForm({
             <AlertTitle>No payment will be charged</AlertTitle>
             <AlertDescription className="text-sky-100">
               Your school updated its secure Stripe account. Save a replacement method below. No payment is charged during setup. {reauthorizationPreservesAutopay
-                ? "Your existing autopay consent will resume on the replacement method after Stripe confirms it."
+                ? "Your existing autopay consent will resume on the replacement method after Stripe confirms it. You do not need to turn autopay on again."
                 : autopayStatus === "enabled"
                   ? "After the replacement is confirmed, sign in to review and re-enable autopay."
                   : "Autopay will remain off unless you enable it later in the Parent Portal."}
@@ -199,7 +201,9 @@ export function PaymentMethodRequestForm({
             <AlertCircle className="size-4" />
             <AlertTitle>Bank verification is pending</AlertTitle>
             <AlertDescription className="text-amber-100">
-              Connect your bank account to complete verification. Saving a bank account does not turn on autopay; you can choose autopay separately in the Parent Portal or with your school. Open invoices do not block verification.
+              {reauthorization && reauthorizationPreservesAutopay
+                ? "Stripe is still verifying the replacement bank account. Your existing autopay authorization remains in place and will resume automatically after verification. You do not need to turn autopay on again."
+                : "Connect your bank account to complete verification. Saving a bank account does not turn on autopay; you can choose autopay separately in the Parent Portal or with your school. Open invoices do not block verification."}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -251,7 +255,7 @@ export function PaymentMethodRequestForm({
         <div className="grid gap-2 sm:grid-cols-2">
           <Button
             className={focus === "instant-bank" ? "order-1 h-11 bg-sky-500 text-white hover:bg-sky-400" : "order-2 h-11 border-white/15 bg-white/5 text-white hover:bg-white/10"}
-            disabled={isPending}
+            disabled={isPending || bankVerificationPending}
             onClick={() => startSetup("link_bank")}
             variant={focus === "instant-bank" ? "default" : "outline"}
           >
@@ -260,7 +264,7 @@ export function PaymentMethodRequestForm({
           </Button>
           <Button
             className={focus === "instant-bank" ? "order-2 h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" : "order-1 h-11"}
-            disabled={isPending}
+            disabled={isPending || bankVerificationPending}
             onClick={() => startSetup("card")}
             variant={focus === "instant-bank" ? "outline" : "default"}
           >

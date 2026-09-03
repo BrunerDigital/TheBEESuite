@@ -32,6 +32,8 @@
     "qa:ui-preview": "tsx scripts/qa-device-preview.ts",
     "qa:responsive": "tsx scripts/qa-responsive.ts",
     "qa:parent-login": "tsx scripts/qa-synthetic-parent-login.ts",
+    "qa:role-accounts": "tsx -r tsconfig-paths/register scripts/ensure-synthetic-role-qa.ts",
+    "qa:role-workflows": "tsx -r tsconfig-paths/register scripts/qa-credentialed-role-workflows.ts",
     "procare:import-reviewed": "tsx scripts/import-reviewed-procare-package.ts",
     "procare:prepare-multi": "tsx scripts/prepare-procare-multi-report-import.ts",
     "procare:prepare-rendered": "tsx scripts/prepare-rendered-procare-import.ts",

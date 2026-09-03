@@ -212,11 +212,24 @@ test("executives can filter, open, and print school-specific payroll reports", a
   const source = await readFile("src/components/dashboard.tsx", "utf8");
   assert.match(source, /const \[schoolFilter, setSchoolFilter\]/);
   assert.match(source, /summary\.centerId === schoolFilter/);
+  assert.match(source, /title="Location payroll reports"/);
   assert.match(source, /Open report/);
   assert.match(source, /Print report/);
   assert.match(source, /Employee payroll summary/);
   assert.match(source, /older total-only submission/);
   assert.match(source, /send this payroll summary again/);
+});
+
+test("all-location executive dashboards show payroll reports prominently and expanded", async () => {
+  const source = await readFile("src/components/dashboard.tsx", "utf8");
+  const payrollCard = source.slice(
+    source.indexOf("isExecutiveDashboard && live?.executiveMetrics"),
+    source.indexOf('<details className="group rounded-2xl'),
+  );
+
+  assert.match(payrollCard, /summaries=\{live\.executiveMetrics\.payrollSummaries\}/);
+  assert.match(payrollCard, /cardId="dashboard-executive-location-payroll-reports"/);
+  assert.match(payrollCard, /defaultCollapsed=\{false\}/);
 });
 
 test("individual-location executive workspaces load and show center-scoped payroll reports", async () => {

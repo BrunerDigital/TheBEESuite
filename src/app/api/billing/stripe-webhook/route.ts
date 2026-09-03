@@ -19,6 +19,8 @@ import { getSchoolSoftwareBillingStartAt, getSchoolSoftwareFeePolicyForCenter } 
 import { beginCommunicationSmsDeliveryAttempt, finalizeCommunicationSmsDeliveryAttempt, nextIntegrationRetryAt } from "@/lib/integration-deliveries";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import {
+  canFinalizePendingAutopayConsentMigration,
+  failedPendingPaymentMethodAutopayOutcome,
   paymentMethodSetupAutopayOutcome,
   paymentMethodSetupExpirationPatch,
 } from "@/lib/payment-method-management";
@@ -34,6 +36,7 @@ import {
   isStripeWebhookPaymentEvent,
   isStripeWebhookPayoutEvent,
   isStripeWebhookSoftwareBillingEvent,
+  stripeSetupIntentTerminalEventTypeForStatus,
   stripeWebhookObjectForRouting,
 } from "@/lib/stripe-webhook-event-types";
 import {
@@ -1261,6 +1264,91 @@ async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeC
   return NextResponse.json({ ok: true });
 }
 
+async function lockCurrentPaymentMethodAutopayScope(
+  tx: Prisma.TransactionClient,
+  familyId: string,
+) {
+  const lockedFamilyRows = await tx.$queryRaw<Array<{ id: string; centerId: string | null }>>`
+    select "id", "centerId"
+    from "Family"
+    where "id" = ${familyId}
+    for update
+  `;
+  const lockedFamily = lockedFamilyRows[0];
+  if (!lockedFamily) throw new Error("Billing family changed while bank verification was completing.");
+
+  await tx.$queryRaw<Array<{ id: string }>>`
+    select "id"
+    from "Child"
+    where "familyId" = ${lockedFamily.id}
+    for update
+  `;
+  const currentChildren = await tx.child.findMany({
+    where: { familyId: lockedFamily.id, ...currentlyEnrolledChildWhere() },
+    select: { classroom: { select: { centerId: true } } },
+  });
+  const currentChildCenters = Array.from(new Set(
+    currentChildren
+      .map((child) => child.classroom?.centerId)
+      .filter((centerId): centerId is string => Boolean(centerId)),
+  ));
+  const resolvedCenterId = lockedFamily.centerId || (currentChildCenters.length === 1 ? currentChildCenters[0] : null);
+
+  if (resolvedCenterId) {
+    await tx.$queryRaw<Array<{ id: string }>>`
+      select "id"
+      from "Center"
+      where "id" = ${resolvedCenterId}
+      for update
+    `;
+  }
+  const center = resolvedCenterId
+    ? await tx.center.findUnique({
+        where: { id: resolvedCenterId },
+        select: { id: true, customFields: true, organization: { select: { tenantId: true } } },
+      })
+    : null;
+  const guardianLinks = await tx.$queryRaw<Array<{ userId: string | null }>>`
+    select "userId"
+    from "Guardian"
+    where "familyId" = ${lockedFamily.id}
+      and "userId" is not null
+    for update
+  `;
+
+  return {
+    center,
+    linkedGuardianUserIds: guardianLinks.map((guardian) => guardian.userId),
+  };
+}
+
+async function lockPaymentMethodBillingAccount(
+  tx: Prisma.TransactionClient,
+  billingAccountId: string,
+) {
+  const lockedRows = await tx.$queryRaw<Array<{ id: string }>>`
+    select "id"
+    from "BillingAccount"
+    where "id" = ${billingAccountId}
+    for update
+  `;
+  return lockedRows.length === 1;
+}
+
+async function hasReservedTerminalSetupIntentEvent(
+  tx: Prisma.TransactionClient,
+  setupIntentId: string,
+) {
+  const terminalReceipt = await tx.stripeWebhookEvent.findFirst({
+    where: {
+      objectId: setupIntentId,
+      type: { in: ["setup_intent.succeeded", "setup_intent.setup_failed", "setup_intent.canceled"] },
+    },
+    select: { id: true },
+  });
+  return Boolean(terminalReceipt);
+}
+
 async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted, matchedTenantId?: string | null) {
   const billingAccountId = session.metadata?.billingAccountId;
   if (!billingAccountId) {
@@ -1270,22 +1358,23 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
   const setupIntentId = clean(session.setup_intent);
   const tenantId = matchedTenantId || session.metadata?.tenantId || null;
   const connectedAccountId = clean(session.metadata?.stripeConnectedAccountId) || clean(event.account) || null;
-  const setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId, { tenantId, connectedAccountId }) : null;
+  let setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId, { tenantId, connectedAccountId }) : null;
   if (setupIntent && !setupIntent.ok) {
     return NextResponse.json(
       { ok: false, configured: setupIntent.configured, error: setupIntent.error || "Payment setup session could not be retrieved." },
       { status: setupIntent.configured ? 502 : 503 },
     );
   }
-  const setupPaymentMethodId = setupIntent?.setupIntent?.paymentMethodId || null;
+  let setupPaymentMethodId = setupIntent?.setupIntent?.paymentMethodId || null;
   const paymentMethodLookup = setupPaymentMethodId
     ? await retrieveStripePaymentMethod(setupPaymentMethodId, { tenantId, connectedAccountId })
     : null;
-  const paymentMethodDetails = paymentMethodLookup?.ok ? paymentMethodLookup.paymentMethod : null;
+  let paymentMethodDetails = paymentMethodLookup?.ok ? paymentMethodLookup.paymentMethod : null;
+  let reconciledTerminalEventType: string | null = null;
 
-  try {
-    const outcome = await prisma.$transaction(async (tx) => {
+  const applySetupCompletion = () => prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
+      if (!await lockPaymentMethodBillingAccount(tx, billingAccountId)) return "missing" as const;
       const billingAccount = await tx.billingAccount.findUnique({
         where: { id: billingAccountId },
         select: {
@@ -1300,6 +1389,15 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
         },
       });
       if (!billingAccount) return "missing" as const;
+
+      const retrievedSetupStatus = setupIntent?.setupIntent?.status || "";
+      const retrievedSetupPending = !["succeeded", "canceled"].includes(retrievedSetupStatus)
+        && reconciledTerminalEventType !== "setup_intent.setup_failed";
+      if (setupIntentId && retrievedSetupPending && !reconciledTerminalEventType) {
+        if (await hasReservedTerminalSetupIntentEvent(tx, setupIntentId)) {
+          return "refresh_terminal" as const;
+        }
+      }
 
       const currentFields = jsonObject(billingAccount.customFields);
       const latestSetupSessionId = clean(currentFields.stripeSetupCheckoutSessionId);
@@ -1383,7 +1481,8 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
         setupMode,
       });
       const setupSucceeded = setupIntent?.setupIntent?.status === "succeeded";
-      const setupPending = !setupSucceeded && !["canceled", "setup_failed"].includes(setupIntent?.setupIntent?.status || "");
+      const setupFailed = reconciledTerminalEventType === "setup_intent.setup_failed";
+      const setupPending = !setupSucceeded && !setupFailed && setupIntent?.setupIntent?.status !== "canceled";
       const appliedAutopayPatch = setupSucceeded ? autopayPatch : null;
       const auditTenantId = familyCenter?.organization.tenantId || clean(tenantId);
       if (autopayPatch?.preservedExistingConsent && !auditTenantId) {
@@ -1398,7 +1497,11 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
             : { equals: billingAccount.customFields as Prisma.InputJsonValue },
         },
         data: {
-          ...(autopayPatch ? { autopayPlaceholder: autopayPatch.autopayPlaceholder } : {}),
+          ...(setupPending
+            ? { autopayPlaceholder: false }
+            : appliedAutopayPatch
+              ? { autopayPlaceholder: appliedAutopayPatch.autopayPlaceholder }
+              : {}),
           customFields: {
             ...currentFields,
             ...(customerId ? stripeCustomerCustomFieldPatch(currentFields, customerId, connectedAccountId) : {}),
@@ -1422,11 +1525,19 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
               autopayStatus: "pending",
               autopayPaymentMethodId: null,
               stripePendingAutopayOutcome: autopayPatch,
+              stripePendingAutopayConsentUserId: autopayPatch?.preservedExistingConsent
+                ? clean(currentFields.autopayEnabledByUserId)
+                : null,
+              stripePendingAutopayPreviousPaymentMethodId: autopayPatch?.preservedExistingConsent
+                ? previousPaymentMethodId
+                : null,
               stripePendingAutopayAuditTenantId: auditTenantId,
               stripePendingAutopayAuditCenterId: familyCenter?.id ?? null,
               stripeBankVerificationPending: true,
             } : {
               stripePendingAutopayOutcome: null,
+              stripePendingAutopayConsentUserId: null,
+              stripePendingAutopayPreviousPaymentMethodId: null,
               stripePendingAutopayAuditTenantId: null,
               stripePendingAutopayAuditCenterId: null,
               stripeBankVerificationPending: false,
@@ -1477,7 +1588,35 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
         }
       }
       return appliedAutopayPatch?.preservedExistingConsent ? "preserved" as const : "applied" as const;
-    });
+  });
+
+  try {
+    let outcome = await applySetupCompletion();
+    if (outcome === "refresh_terminal" && setupIntentId) {
+      const refreshedSetupIntent = await retrieveStripeSetupIntent(setupIntentId, { tenantId, connectedAccountId });
+      if (!refreshedSetupIntent.ok || !refreshedSetupIntent.setupIntent) {
+        throw new Error("Stripe SetupIntent terminal state could not be reconciled during checkout completion.");
+      }
+      reconciledTerminalEventType = stripeSetupIntentTerminalEventTypeForStatus(
+        refreshedSetupIntent.setupIntent.status,
+      );
+      if (!reconciledTerminalEventType) {
+        throw new Error("Stripe SetupIntent receipt did not resolve to a current terminal provider state.");
+      }
+      setupIntent = refreshedSetupIntent;
+      setupPaymentMethodId = refreshedSetupIntent.setupIntent.paymentMethodId || null;
+      if (setupPaymentMethodId) {
+        const refreshedPaymentMethod = await retrieveStripePaymentMethod(setupPaymentMethodId, { tenantId, connectedAccountId });
+        if (!refreshedPaymentMethod.ok || !refreshedPaymentMethod.paymentMethod) {
+          throw new Error("Stripe SetupIntent payment method could not be reconciled during checkout completion.");
+        }
+        paymentMethodDetails = refreshedPaymentMethod.paymentMethod;
+      }
+      outcome = await applySetupCompletion();
+      if (outcome === "refresh_terminal") {
+        throw new Error("Stripe SetupIntent terminal reconciliation did not advance checkout completion.");
+      }
+    }
     if (outcome === "stale") return NextResponse.json({ ok: true, staleSetupSessionIgnored: true });
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) {
@@ -1513,9 +1652,14 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
+      if (!await lockPaymentMethodBillingAccount(tx, billingAccountId)) return;
       const billingAccount = await tx.billingAccount.findUnique({
         where: { id: billingAccountId },
-        select: { autopayPlaceholder: true, customFields: true },
+        select: {
+          autopayPlaceholder: true,
+          customFields: true,
+          family: { select: { id: true } },
+        },
       });
       if (!billingAccount) return;
       const currentFields = jsonObject(billingAccount.customFields);
@@ -1523,7 +1667,22 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
       if (currentFields.stripeBankVerificationPending !== true) return;
       const pendingOutcome = jsonObject(currentFields.stripePendingAutopayOutcome);
       const hasPendingOutcome = Object.keys(pendingOutcome).length > 0;
-      const preservedExistingConsent = pendingOutcome.preservedExistingConsent === true;
+      const pendingConsentMigration = pendingOutcome.preservedExistingConsent === true;
+      const currentScope = pendingConsentMigration
+        ? await lockCurrentPaymentMethodAutopayScope(tx, billingAccount.family.id)
+        : null;
+      const preservedExistingConsent = pendingConsentMigration && canFinalizePendingAutopayConsentMigration({
+        currentFields,
+        pendingOutcome,
+        linkedGuardianUserIds: currentScope?.linkedGuardianUserIds ?? [],
+        currentCenterId: currentScope?.center?.id,
+        currentTenantId: currentScope?.center?.organization.tenantId,
+        activeConnectedAccountId: readStripeConnectedAccountId(currentScope?.center?.customFields),
+        centerCustomFields: currentScope?.center?.customFields,
+        replacementPaymentMethodId: paymentMethodId,
+      });
+      const finalizedAutopayEnabled = hasPendingOutcome
+        && (pendingConsentMigration ? preservedExistingConsent : pendingOutcome.autopayEnabled === true);
       const update = await tx.billingAccount.updateMany({
         where: {
           id: billingAccountId,
@@ -1533,19 +1692,23 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
             : { equals: billingAccount.customFields as Prisma.InputJsonValue },
         },
         data: {
-          ...(hasPendingOutcome ? { autopayPlaceholder: pendingOutcome.autopayPlaceholder === true } : {}),
+          ...(hasPendingOutcome ? { autopayPlaceholder: finalizedAutopayEnabled } : {}),
           customFields: {
             ...currentFields,
             ...(hasPendingOutcome ? {
-              autopayEnabled: pendingOutcome.autopayEnabled === true,
-              autopayStatus: clean(pendingOutcome.autopayStatus) || "disabled",
-              autopayPaymentMethodId: clean(pendingOutcome.autopayPaymentMethodId) || null,
+              autopayEnabled: finalizedAutopayEnabled,
+              autopayStatus: finalizedAutopayEnabled ? "enabled" : "disabled",
+              autopayPaymentMethodId: finalizedAutopayEnabled ? paymentMethodId : null,
             } : {}),
             ...(preservedExistingConsent ? {
               autopayConsentMigratedAt: new Date().toISOString(),
               autopayConsentMigrationReason: "stripe_connected_account_payment_method_reauthorized",
               autopayDisabledAt: null,
               autopayDisabledReason: null,
+            } : {}),
+            ...(pendingConsentMigration && !preservedExistingConsent ? {
+              autopayDisabledAt: new Date().toISOString(),
+              autopayDisabledReason: "payment_method_reauthorization_scope_changed",
             } : {}),
             stripeSetupIntentStatus: "succeeded",
             stripeDefaultPaymentMethodId: clean(currentFields.stripePendingPaymentMethodId) || paymentMethodId,
@@ -1564,6 +1727,8 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
             stripePaymentMethodSavedAt: new Date().toISOString(),
             paymentMethodManagementStatus: "payment_method_saved",
             stripePendingAutopayOutcome: null,
+            stripePendingAutopayConsentUserId: null,
+            stripePendingAutopayPreviousPaymentMethodId: null,
             stripePendingAutopayAuditTenantId: null,
             stripePendingAutopayAuditCenterId: null,
             stripeBankVerificationPending: false,
@@ -1595,36 +1760,72 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
 async function handlePaymentMethodSetupIntentFailed(event: StripeWebhookEvent, setupIntent: StripeSetupIntentObject) {
   const billingAccountId = clean(setupIntent.metadata?.billingAccountId);
   if (!billingAccountId) return NextResponse.json({ ok: true, ignored: true, reason: "billing_account_metadata_missing" });
+  const setupCanceled = event.type === "setup_intent.canceled";
+  const terminalSetupStatus = setupCanceled ? "canceled" : "setup_failed";
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
-      const billingAccount = await tx.billingAccount.findUnique({ where: { id: billingAccountId }, select: { customFields: true } });
+      if (!await lockPaymentMethodBillingAccount(tx, billingAccountId)) return;
+      const billingAccount = await tx.billingAccount.findUnique({
+        where: { id: billingAccountId },
+        select: {
+          autopayPlaceholder: true,
+          customFields: true,
+          family: { select: { id: true } },
+        },
+      });
       if (!billingAccount) return;
       const currentFields = jsonObject(billingAccount.customFields);
       if (clean(currentFields.stripeSetupIntentId) !== setupIntent.id || currentFields.stripeBankVerificationPending !== true) return;
+      const pendingOutcome = jsonObject(currentFields.stripePendingAutopayOutcome);
+      const pendingConsentMigration = pendingOutcome.preservedExistingConsent === true;
+      const currentScope = pendingConsentMigration
+        ? await lockCurrentPaymentMethodAutopayScope(tx, billingAccount.family.id)
+        : null;
+      const failedAutopayOutcome = failedPendingPaymentMethodAutopayOutcome({
+        currentFields,
+        pendingOutcome,
+        linkedGuardianUserIds: currentScope?.linkedGuardianUserIds ?? [],
+        currentCenterId: currentScope?.center?.id,
+        currentTenantId: currentScope?.center?.organization.tenantId,
+        activeConnectedAccountId: readStripeConnectedAccountId(currentScope?.center?.customFields),
+        centerCustomFields: currentScope?.center?.customFields,
+        replacementPaymentMethodId: clean(currentFields.stripePendingPaymentMethodId),
+      });
       const update = await tx.billingAccount.updateMany({
         where: {
           id: billingAccountId,
+          autopayPlaceholder: billingAccount.autopayPlaceholder,
           customFields: billingAccount.customFields === null
             ? { equals: Prisma.DbNull }
             : { equals: billingAccount.customFields as Prisma.InputJsonValue },
         },
         data: {
-          autopayPlaceholder: false,
+          autopayPlaceholder: failedAutopayOutcome.autopayPlaceholder,
           customFields: {
             ...currentFields,
-            autopayEnabled: false,
-            autopayStatus: "disabled",
-            autopayPaymentMethodId: null,
+            autopayEnabled: failedAutopayOutcome.autopayEnabled,
+            autopayStatus: failedAutopayOutcome.autopayStatus,
+            autopayPaymentMethodId: failedAutopayOutcome.autopayPaymentMethodId,
+            ...(failedAutopayOutcome.retainedExistingConsent ? {
+              autopayConsentRetainedAt: new Date().toISOString(),
+              autopayConsentRetentionReason: setupCanceled
+                ? "replacement_bank_verification_canceled"
+                : "replacement_bank_verification_failed",
+              autopayDisabledAt: null,
+              autopayDisabledReason: null,
+            } : {}),
             stripePendingPaymentMethodId: null,
             stripePendingPaymentMethodConnectedAccountId: null,
             stripePendingPaymentMethodType: null,
             stripePendingPaymentMethodLast4: null,
             stripePendingPaymentMethodBrand: null,
             stripePendingPaymentMethodBankName: null,
-            stripeSetupIntentStatus: "setup_failed",
-            paymentMethodManagementStatus: "bank_verification_failed",
+            stripeSetupIntentStatus: terminalSetupStatus,
+            paymentMethodManagementStatus: setupCanceled ? "bank_verification_canceled" : "bank_verification_failed",
             stripePendingAutopayOutcome: null,
+            stripePendingAutopayConsentUserId: null,
+            stripePendingAutopayPreviousPaymentMethodId: null,
             stripePendingAutopayAuditTenantId: null,
             stripePendingAutopayAuditCenterId: null,
             stripeBankVerificationPending: false,
@@ -2819,7 +3020,7 @@ async function dispatchAuthenticatedEvent(
     return handlePaymentMethodSetupIntentSucceeded(event, event.data.object as StripeSetupIntentObject);
   }
 
-  if (event.type === "setup_intent.setup_failed") {
+  if (event.type === "setup_intent.setup_failed" || event.type === "setup_intent.canceled") {
     return handlePaymentMethodSetupIntentFailed(event, event.data.object as StripeSetupIntentObject);
   }
 

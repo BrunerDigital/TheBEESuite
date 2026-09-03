@@ -8,7 +8,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { InfoTip } from "@/components/ui/info-tip";
+import { readStripeConnectedAccountId } from "@/lib/integrations";
 import {
+  canPreservePendingAutopayConsentForPaymentMethodMigration,
   canPreserveAutopayConsentForPaymentMethodMigration,
   paymentMethodManagementSummary,
 } from "@/lib/payment-method-management";
@@ -18,6 +20,7 @@ import {
 } from "@/lib/payment-method-request-forms";
 import { prisma } from "@/lib/prisma";
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
+import { stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-connect-migration";
 
 export const metadata: Metadata = {
   title: "Payment Setup | The BEE Suite",
@@ -100,6 +103,7 @@ export default async function PaymentMethodFormPage({
         id: true,
         name: true,
         crmLocationId: true,
+        customFields: true,
         organization: {
           select: {
             name: true,
@@ -132,16 +136,40 @@ export default async function PaymentMethodFormPage({
     organizationName: center.organization.name,
     email: payload.email,
   });
+  const billingAccountFields = family.billingAccount?.customFields && typeof family.billingAccount.customFields === "object" && !Array.isArray(family.billingAccount.customFields)
+    ? family.billingAccount.customFields as Record<string, unknown>
+    : {};
+  const activeConnectedAccountId = readStripeConnectedAccountId(center.customFields);
   const paymentMethod = paymentMethodManagementSummary({
     autopayPlaceholder: family.billingAccount?.autopayPlaceholder,
-    customFields: family.billingAccount?.customFields,
+    customFields: billingAccountFields,
+    activeConnectedAccountId,
+    centerCustomFields: center.customFields,
+  });
+  const reauthorizationRequired = stripeConnectSavedMethodNeedsReauthorization({
+    activeAccountId: activeConnectedAccountId,
+    savedMethodAccountId: typeof billingAccountFields.stripeDefaultPaymentMethodConnectedAccountId === "string"
+      ? billingAccountFields.stripeDefaultPaymentMethodConnectedAccountId
+      : null,
+    centerCustomFields: center.customFields,
   });
   const reauthorizationPreservesAutopay = payload.intent === "payment_method_reauthorization"
-    && canPreserveAutopayConsentForPaymentMethodMigration({
-      autopayPlaceholder: family.billingAccount?.autopayPlaceholder,
-      customFields: family.billingAccount?.customFields,
-      linkedGuardianUserIds: recipient.userIds,
-    });
+    && reauthorizationRequired
+    && (
+      canPreserveAutopayConsentForPaymentMethodMigration({
+        autopayPlaceholder: family.billingAccount?.autopayPlaceholder,
+        customFields: billingAccountFields,
+        linkedGuardianUserIds: recipient.userIds,
+      })
+      || canPreservePendingAutopayConsentForPaymentMethodMigration({
+        currentFields: billingAccountFields,
+        linkedGuardianUserIds: recipient.userIds,
+        currentCenterId: center.id,
+        currentTenantId: center.organization.tenant.id,
+        activeConnectedAccountId,
+        centerCustomFields: center.customFields,
+      })
+    );
   const centerLabel = center.crmLocationId ?? center.name;
   const childNames = family.children.map((child) => child.fullName).join(", ");
   const paymentMethodStatus = firstQueryValue(search.paymentMethod) ?? null;
@@ -186,6 +214,7 @@ export default async function PaymentMethodFormPage({
           recipientEmail={payload.email}
           savedPaymentMethodLabel={paymentMethod.paymentMethodLabel}
           autopayStatus={paymentMethod.autopayStatus}
+          bankVerificationPending={paymentMethod.bankVerificationPending}
           paymentMethodStatus={paymentMethodStatus}
           paymentStatus={paymentStatus}
           focus={focus}

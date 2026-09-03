@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { stripeWebhookSecretFingerprint, verifyStripeSignature } from "../src/lib/integrations";
 import { stripePaymentIntentFailureDisposition } from "../src/lib/billing-guardrails";
 import { succeededFamilyBalancePaymentClaim } from "../src/lib/stripe-payment-application";
-import { STRIPE_WEBHOOK_SUPPORTED_EVENT_TYPES, stripeWebhookObjectForRouting } from "../src/lib/stripe-webhook-event-types";
+import { STRIPE_WEBHOOK_SUPPORTED_EVENT_TYPES, stripeSetupIntentTerminalEventTypeForStatus, stripeWebhookObjectForRouting } from "../src/lib/stripe-webhook-event-types";
 import {
   isStripeWebhookReceiptUniqueConflict,
   reserveStripeWebhookDelivery,
@@ -191,6 +191,7 @@ test("supported reconciliation matrix includes payment, invoice, subscription, d
     "payout.created",
     "setup_intent.succeeded",
     "setup_intent.setup_failed",
+    "setup_intent.canceled",
     "v2.core.account.created",
     "v2.core.account.updated",
     "v2.core.account[configuration.merchant].updated",
@@ -199,6 +200,13 @@ test("supported reconciliation matrix includes payment, invoice, subscription, d
     "v2.core.account[identity].updated",
     "v2.core.account[requirements].updated",
   ].sort());
+});
+
+test("SetupIntent reconciliation follows the current provider state instead of local receipt order", () => {
+  assert.equal(stripeSetupIntentTerminalEventTypeForStatus("succeeded"), "setup_intent.succeeded");
+  assert.equal(stripeSetupIntentTerminalEventTypeForStatus("canceled"), "setup_intent.canceled");
+  assert.equal(stripeSetupIntentTerminalEventTypeForStatus("requires_payment_method"), "setup_intent.setup_failed");
+  assert.equal(stripeSetupIntentTerminalEventTypeForStatus("processing"), null);
 });
 
 test("unpaid Checkout snapshots cannot reopen settled or returned payments", async () => {

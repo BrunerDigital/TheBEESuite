@@ -167,6 +167,7 @@ import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { activeNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import {
+  canPreservePendingAutopayConsentForPaymentMethodMigration,
   canPreserveAutopayConsentForPaymentMethodMigration,
   paymentMethodManagementSummary,
 } from "@/lib/payment-method-management";
@@ -2835,11 +2836,21 @@ async function renderLivePage(
       centerCustomFields: parentCenterFields,
     });
     const paymentMethodReauthorizationPreservesAutopay = paymentMethodReauthorizationRequired
-      && canPreserveAutopayConsentForPaymentMethodMigration({
-        autopayPlaceholder: billingAccount?.autopayPlaceholder,
-        customFields: parentBillingAccountFields,
-        linkedGuardianUserIds: [user.id],
-      });
+      && (
+        canPreserveAutopayConsentForPaymentMethodMigration({
+          autopayPlaceholder: billingAccount?.autopayPlaceholder,
+          customFields: parentBillingAccountFields,
+          linkedGuardianUserIds: [user.id],
+        })
+        || canPreservePendingAutopayConsentForPaymentMethodMigration({
+          currentFields: parentBillingAccountFields,
+          linkedGuardianUserIds: family?.guardians.map((guardian) => guardian.userId) ?? [],
+          currentCenterId: familyCenter?.id,
+          currentTenantId: user.tenantId,
+          activeConnectedAccountId: readStripeConnectedAccountId(parentCenterFields),
+          centerCustomFields: parentCenterFields,
+        })
+      );
     const paymentTransitionActive = Boolean(
       parentStripeMigration.targetAccountId &&
       parentCenterFields.stripeConnectMigrationPayoutReleaseStatus !== "released",
@@ -3825,6 +3836,9 @@ async function renderLivePage(
                   billingEmail: true,
                   centerId: true,
                   customFields: true,
+                  guardians: {
+                    select: { email: true, userId: true },
+                  },
                   children: { select: { id: true, customFields: true } },
                   _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
                 },
@@ -4277,11 +4291,22 @@ async function renderLivePage(
             billingAccount: {
               id: invoice.billingAccount.id,
               balanceCents: invoice.billingAccount.balanceCents,
-              paymentMethodManagement: billingPaymentMethodSummary({
-                autopayPlaceholder: invoice.billingAccount.autopayPlaceholder,
-                customFields: invoice.billingAccount.customFields,
-                centerId: invoice.billingAccount.family.centerId,
-              }),
+              paymentMethodManagement: {
+                ...billingPaymentMethodSummary({
+                  autopayPlaceholder: invoice.billingAccount.autopayPlaceholder,
+                  customFields: invoice.billingAccount.customFields,
+                  centerId: invoice.billingAccount.family.centerId,
+                }),
+                paymentMethodReauthorizationRecipientEmails: Array.from(new Set(
+                  invoice.billingAccount.family.guardians.flatMap((guardian) => (
+                    guardian.userId
+                    && guardian.userId === recordFromJson(invoice.billingAccount.customFields).autopayEnabledByUserId
+                    && guardian.email
+                      ? [guardian.email.trim().toLowerCase()]
+                      : []
+                  )),
+                )),
+              },
               family: {
                 id: invoice.billingAccount.family.id,
                 name: invoice.billingAccount.family.name,

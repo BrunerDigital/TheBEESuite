@@ -165,7 +165,7 @@ test("dashboard lenses show one role-relevant hierarchy in the active workspace"
   assert.deepEqual(dashboardLensesForRole({ role: UserRole.BILLING_ADMIN, accessScope: "center", workspace: { mode: "fixed" } }), ["billing"]);
 });
 
-test("platform location selection carries the selected company context and large portfolios remain searchable", () => {
+test("platform location selection carries the selected company context and uses one accessible dropdown", () => {
   const auth = readFileSync("src/lib/auth.ts", "utf8");
   const selector = readFileSync("src/components/workspace-selector.tsx", "utf8");
 
@@ -174,8 +174,13 @@ test("platform location selection carries the selected company context and large
   assert.match(auth, /const selectableCenterIds = workspace\.options\.map/);
   assert.match(auth, /effectiveOrganizationId = selectedPlatformCenter\?\.organization\.id \?\? user\.organizationId/);
   assert.match(auth, /effectiveBrand = selectedPlatformCenter\?\.organization\.brand \?\? user\.organization\?\.brand/);
-  assert.match(selector, /workspace\.options\.length > 8/);
-  assert.match(selector, /Search by school, city, or company/);
+  assert.match(selector, /<Label htmlFor="workspace-selection">Workspace<\/Label>/);
+  assert.match(selector, /<SelectItem value="all">All locations — Company-wide<\/SelectItem>/);
+  assert.match(selector, /workspace\.options\.map\(\(center\) => \(/);
+  assert.match(selector, /<SelectValue placeholder="Choose a location" \/>/);
+  assert.match(selector, /Start typing while the menu is open to jump to a location\./);
+  assert.doesNotMatch(selector, /WorkspaceChoice/);
+  assert.doesNotMatch(selector, /workspace-search/);
 });
 
 test("workspace switching retains browser fragments and dashboard actions honor feature availability", () => {

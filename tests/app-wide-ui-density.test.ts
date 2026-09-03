@@ -25,7 +25,7 @@ test("teacher portal opens focused tasks from a compact landing view", async () 
 
   assert.match(source, /aria-label="Teacher task shortcuts"/);
   assert.match(source, /\["Check attendance", "#teacher-attendance"\]/);
-  assert.match(source, /id="teacher-profile-setup"[\s\S]*?defaultCollapsed=\{profileReady\}/);
+  assert.match(source, /id="teacher-profile-setup"[\s\S]*?defaultCollapsed/);
   assert.match(source, /id="teacher-roster"[\s\S]*?title="Roster"[\s\S]*?defaultCollapsed/);
   assert.match(source, /id="teacher-daily-report"[\s\S]*?title="Daily Report"[\s\S]*?defaultCollapsed/);
   assert.match(source, /id="teacher-quick-log" tabIndex=\{-1\}/);

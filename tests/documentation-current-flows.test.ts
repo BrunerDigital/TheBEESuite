@@ -84,8 +84,11 @@ test("agency payment SOP has a stable public route and evidence-first reconcilia
   const resources = readFileSync("src/app/resources/page.tsx", "utf8");
   const guide = readFileSync("src/app/resources/agency-payment-reconciliation/page.tsx", "utf8");
   const sop = readFileSync("docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md", "utf8");
+  const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
 
   assert.match(resources, /href="\/resources\/agency-payment-reconciliation"/);
+  assert.match(workspace, /href="\/resources\/agency-payment-reconciliation"/);
+  assert.match(workspace, /Open SOP/);
   assert.match(guide, /Agency Payment And Reconciliation SOP/);
   assert.match(guide, /Do not use a Stripe payout or a bank deposit by itself as remittance proof/);
   assert.match(guide, /Review complete - save/);

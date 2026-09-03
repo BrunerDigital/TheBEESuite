@@ -45,6 +45,10 @@ test("credential and write preflights reject unmarked identities and non-heartbe
   assert.match(accounts, /staffProfile\.classroomId === \(account\.key === "teacher" \? input\.classroomId : null\)/);
   assert.match(accounts, /data: \{ isActive: false, sessionVersion: \{ increment: 1 \} \}/);
   assert.match(accounts, /prisma\.deviceSession\.updateMany\([\s\S]*where: \{ userId: user\.id, revokedAt: null \}/);
+  assert.match(accounts, /prisma\.\$transaction\(async \(db\) =>/);
+  const databaseSetup = accounts.slice(accounts.indexOf("async function ensureDatabaseAccount"), accounts.indexOf("async function verifyDatabaseAccount"));
+  assert.ok(databaseSetup.indexOf("isActive: false") < databaseSetup.indexOf("await ensureGrant"));
+  assert.ok(databaseSetup.indexOf("await ensureGrant") < databaseSetup.lastIndexOf("data: { isActive: true, mustResetPassword: false }"));
   const applyLoop = accounts.slice(accounts.lastIndexOf("  if (apply) {"), accounts.indexOf("  const results = []"));
   assert.ok(applyLoop.indexOf("deactivateExistingDatabaseAccount") < applyLoop.indexOf("upsertSupabaseAuthUserWithPassword"));
   assert.ok(applyLoop.indexOf("upsertSupabaseAuthUserWithPassword") < applyLoop.indexOf("ensureDatabaseAccount"));
@@ -55,6 +59,19 @@ test("credential and write preflights reject unmarked identities and non-heartbe
   assert.match(workflows, /const secondaryActual = safePath\(page\.url\(\)\)/);
   assert.match(workflows, /matchesWorkflow\(secondaryActual, secondary\.expectedHref \?\? secondary\.href\)/);
   assert.match(workflows, /href: "\/messages", expectedHref: "\/family-detail\?view=messages"/);
+  assert.match(workflows, /url\.hostname === "www\.thebeesuite\.io"\) url\.hostname = "thebeesuite\.io"/);
+  assert.match(workflows, /const primaryMetrics = await pageMetrics\(page\)/);
+  assert.match(workflows, /metricsPass\(primaryMetrics, viewport\)/);
+  assert.match(workflows, /metricsPass\(secondaryMetrics, viewport\)/);
+  assert.match(workflows, /viewport\.id !== "mobile" \|\| metrics\.undersizedInteractiveCount === 0/);
+  assert.match(workflows, /page\.locator\("main a\[href\]"\)/);
+
+  const dashboard = await readSource("src/components/dashboard.tsx");
+  assert.match(dashboard, /documentNavigationPrimaryActions = new Set\(\[/);
+  assert.match(dashboard, /"\/billing-invoices"/);
+  assert.match(dashboard, /"\/classroom-dashboard"/);
+  assert.match(dashboard, /"\/multi-location-dashboard"/);
+  assert.match(dashboard, /return <a className=\{className\} href=\{href\}>\{children\}<\/a>/);
 });
 
 test("report exports stay discoverable without crowding the mobile collapsed header", async () => {
@@ -80,11 +97,13 @@ test("dynamic family media bypasses the optimizer that rejects arbitrary signed 
 test("shared controls provide explicit focus and phone-sized targets", async () => {
   const button = await readSource("src/components/ui/button.tsx");
   const css = await readSource("src/app/globals.css");
+  const crm = await readSource("src/components/crm/crm-workspace.tsx");
 
   assert.match(button, /focus-visible:outline-2/);
   assert.match(button, /focus-visible:outline-offset-2/);
   assert.match(css, /\.bee-app-frame :is\(a\[href\], button, summary, \[role="button"\], \[data-slot="button"\]\):focus-visible/);
   assert.match(css, /outline: 2px solid var\(--primary\) !important/);
-  assert.match(css, /@media \(max-width: 639px\)[\s\S]*\.bee-app-frame \[data-slot="button"\][\s\S]*min-height: 2\.75rem/);
-  assert.match(css, /:has\(> svg:only-child\)[\s\S]*min-width: 2\.75rem/);
+  assert.match(css, /@media \(max-width: 639px\)[\s\S]*input:not\(\[type="hidden"\]\)[\s\S]*\.bee-app-frame a\[href\][\s\S]*min-height: 2\.75rem/);
+  assert.match(css, /\.bee-app-frame a\[href\][\s\S]*min-width: 2\.75rem/);
+  assert.match(crm, /min-h-11 cursor-pointer[\s\S]*Add files/);
 });

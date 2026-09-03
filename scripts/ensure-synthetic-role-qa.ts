@@ -185,7 +185,7 @@ async function deactivateExistingDatabaseAccount(account: SyntheticRoleQaAccount
   ]);
 }
 
-async function ensureGrant(input: {
+async function ensureGrant(db: Prisma.TransactionClient, input: {
   userId: string;
   tenantId: string;
   role: UserRole;
@@ -204,7 +204,7 @@ async function ensureGrant(input: {
     ownerGroupId: null,
     centerId: input.centerId ?? null,
   };
-  const existing = await prisma.userAccessGrant.findFirst({ where, select: { id: true } });
+  const existing = await db.userAccessGrant.findFirst({ where, select: { id: true } });
   const data = {
     ...where,
     isActive: true,
@@ -212,105 +212,112 @@ async function ensureGrant(input: {
     endsAt: null,
     permissions: syntheticRoleQaMarker() as Prisma.InputJsonValue,
   };
-  if (existing) return prisma.userAccessGrant.update({ where: { id: existing.id }, data });
-  return prisma.userAccessGrant.create({ data });
+  if (existing) return db.userAccessGrant.update({ where: { id: existing.id }, data });
+  return db.userAccessGrant.create({ data });
 }
 
 async function ensureDatabaseAccount(account: SyntheticRoleQaAccount, scope: Awaited<ReturnType<typeof loadDemoScope>>) {
-  const existing = await prisma.user.findUnique({ where: { email: account.email }, select: { customFields: true } });
-  const user = await prisma.user.upsert({
-    where: { email: account.email },
-    update: {
-      tenantId: scope.tenant.id,
-      organizationId: scope.organization.id,
-      name: account.name,
-      role: account.role,
-      isActive: true,
-      mustResetPassword: false,
-      customFields: syntheticRoleQaMarker(jsonObject(existing?.customFields)) as Prisma.InputJsonValue,
-    },
-    create: {
-      tenantId: scope.tenant.id,
-      organizationId: scope.organization.id,
-      email: account.email,
-      name: account.name,
-      role: account.role,
-      isActive: true,
-      mustResetPassword: false,
-      customFields: syntheticRoleQaMarker() as Prisma.InputJsonValue,
-    },
-    select: { id: true },
-  });
-
-  if (account.scope === "brand") {
-    await ensureGrant({
-      userId: user.id,
-      tenantId: scope.tenant.id,
-      role: account.role,
-      scopeType: "BRAND",
-      brandId: scope.brand.id,
-    });
-  }
-
-  if (account.scope === "center") {
-    await ensureGrant({
-      userId: user.id,
-      tenantId: scope.tenant.id,
-      role: account.role,
-      scopeType: "CENTER",
-      organizationId: scope.organization.id,
-      centerId: scope.center.id,
-    });
-  }
-
-  if (account.key === "director" || account.key === "teacher") {
-    await prisma.staffProfile.upsert({
-      where: { userId: user.id },
+  await prisma.$transaction(async (db) => {
+    const existing = await db.user.findUnique({ where: { email: account.email }, select: { customFields: true } });
+    const user = await db.user.upsert({
+      where: { email: account.email },
       update: {
-        centerId: scope.center.id,
-        classroomId: account.key === "teacher" ? scope.classroom.id : null,
-        title: account.key === "teacher" ? "Synthetic QA Teacher" : "Synthetic QA Director",
-        phone: null,
-        backgroundCheckStatus: "synthetic_qa",
-        sourceSystem: SYNTHETIC_ROLE_QA_SOURCE,
-        externalId: `synthetic-role-qa-${account.key}`,
-        customFields: syntheticRoleQaMarker() as Prisma.InputJsonValue,
+        tenantId: scope.tenant.id,
+        organizationId: scope.organization.id,
+        name: account.name,
+        role: account.role,
+        isActive: false,
+        mustResetPassword: true,
+        customFields: syntheticRoleQaMarker(jsonObject(existing?.customFields)) as Prisma.InputJsonValue,
       },
       create: {
-        userId: user.id,
-        centerId: scope.center.id,
-        classroomId: account.key === "teacher" ? scope.classroom.id : null,
-        title: account.key === "teacher" ? "Synthetic QA Teacher" : "Synthetic QA Director",
-        phone: null,
-        backgroundCheckStatus: "synthetic_qa",
-        sourceSystem: SYNTHETIC_ROLE_QA_SOURCE,
-        externalId: `synthetic-role-qa-${account.key}`,
+        tenantId: scope.tenant.id,
+        organizationId: scope.organization.id,
+        email: account.email,
+        name: account.name,
+        role: account.role,
+        isActive: false,
+        mustResetPassword: true,
         customFields: syntheticRoleQaMarker() as Prisma.InputJsonValue,
       },
+      select: { id: true },
     });
-  }
 
-  if (account.scope === "family") {
-    const existingGuardian = await prisma.guardian.findFirst({
-      where: { userId: user.id, sourceSystem: SYNTHETIC_ROLE_QA_SOURCE },
-      select: { id: true, customFields: true },
+    if (account.scope === "brand") {
+      await ensureGrant(db, {
+        userId: user.id,
+        tenantId: scope.tenant.id,
+        role: account.role,
+        scopeType: "BRAND",
+        brandId: scope.brand.id,
+      });
+    }
+
+    if (account.scope === "center") {
+      await ensureGrant(db, {
+        userId: user.id,
+        tenantId: scope.tenant.id,
+        role: account.role,
+        scopeType: "CENTER",
+        organizationId: scope.organization.id,
+        centerId: scope.center.id,
+      });
+    }
+
+    if (account.key === "director" || account.key === "teacher") {
+      await db.staffProfile.upsert({
+        where: { userId: user.id },
+        update: {
+          centerId: scope.center.id,
+          classroomId: account.key === "teacher" ? scope.classroom.id : null,
+          title: account.key === "teacher" ? "Synthetic QA Teacher" : "Synthetic QA Director",
+          phone: null,
+          backgroundCheckStatus: "synthetic_qa",
+          sourceSystem: SYNTHETIC_ROLE_QA_SOURCE,
+          externalId: `synthetic-role-qa-${account.key}`,
+          customFields: syntheticRoleQaMarker() as Prisma.InputJsonValue,
+        },
+        create: {
+          userId: user.id,
+          centerId: scope.center.id,
+          classroomId: account.key === "teacher" ? scope.classroom.id : null,
+          title: account.key === "teacher" ? "Synthetic QA Teacher" : "Synthetic QA Director",
+          phone: null,
+          backgroundCheckStatus: "synthetic_qa",
+          sourceSystem: SYNTHETIC_ROLE_QA_SOURCE,
+          externalId: `synthetic-role-qa-${account.key}`,
+          customFields: syntheticRoleQaMarker() as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    if (account.scope === "family") {
+      const existingGuardian = await db.guardian.findFirst({
+        where: { userId: user.id, sourceSystem: SYNTHETIC_ROLE_QA_SOURCE },
+        select: { id: true, customFields: true },
+      });
+      const data = {
+        familyId: scope.family.id,
+        userId: user.id,
+        fullName: account.name,
+        email: account.email,
+        phone: null,
+        relation: "Synthetic QA guardian",
+        preferredCommunication: "none",
+        isBillingContact: false,
+        sourceSystem: SYNTHETIC_ROLE_QA_SOURCE,
+        externalId: "synthetic-role-qa-parent",
+        customFields: syntheticRoleQaMarker(jsonObject(existingGuardian?.customFields)) as Prisma.InputJsonValue,
+      };
+      if (existingGuardian) await db.guardian.update({ where: { id: existingGuardian.id }, data });
+      else await db.guardian.create({ data });
+    }
+
+    await db.user.update({
+      where: { id: user.id },
+      data: { isActive: true, mustResetPassword: false },
     });
-    const data = {
-      familyId: scope.family.id,
-      userId: user.id,
-      fullName: account.name,
-      email: account.email,
-      phone: null,
-      relation: "Synthetic QA guardian",
-      preferredCommunication: "none",
-      isBillingContact: false,
-      sourceSystem: SYNTHETIC_ROLE_QA_SOURCE,
-      externalId: "synthetic-role-qa-parent",
-      customFields: syntheticRoleQaMarker(jsonObject(existingGuardian?.customFields)) as Prisma.InputJsonValue,
-    };
-    if (existingGuardian) await prisma.guardian.update({ where: { id: existingGuardian.id }, data });
-    else await prisma.guardian.create({ data });
-  }
+  });
 }
 
 async function verifyDatabaseAccount(account: SyntheticRoleQaAccount, scope: Awaited<ReturnType<typeof loadDemoScope>>) {

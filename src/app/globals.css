@@ -1634,13 +1634,37 @@
   }
 
   @media (max-width: 639px) {
-    .bee-app-frame [data-slot="button"],
-    .bee-app-frame summary {
+    .bee-app-frame :is(
+      [data-slot="button"],
+      button,
+      input:not([type="hidden"]),
+      select,
+      textarea,
+      summary,
+      [role="button"],
+      [role="switch"],
+      [role="checkbox"],
+      [role="combobox"]
+    ),
+    .bee-app-frame a[href] {
       min-height: 2.75rem;
     }
 
-    .bee-app-frame [data-slot="button"]:has(> svg:only-child) {
+    .bee-app-frame :is(
+      [data-slot="button"],
+      button,
+      summary,
+      [role="button"],
+      [role="switch"],
+      [role="checkbox"]
+    ),
+    .bee-app-frame a[href] {
       min-width: 2.75rem;
+    }
+
+    .bee-app-frame a[href]:not([class*="block"]):not([class*="flex"]):not([class*="grid"]) {
+      display: inline-flex;
+      align-items: center;
     }
 
     .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .dashboard-workspace {

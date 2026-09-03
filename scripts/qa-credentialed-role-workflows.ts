@@ -49,6 +49,7 @@ function cleanBaseUrl(value: string) {
   if (productionHost && process.env.ALLOW_SYNTHETIC_ROLE_QA_PRODUCTION_LOGIN !== "true") {
     throw new Error("Set ALLOW_SYNTHETIC_ROLE_QA_PRODUCTION_LOGIN=true for the canonical production host.");
   }
+  if (url.hostname === "www.thebeesuite.io") url.hostname = "thebeesuite.io";
   return url.toString().replace(/\/$/, "");
 }
 
@@ -117,6 +118,7 @@ type PageMetricsResult = {
   clippedInteractiveElements: Array<{ name: string; tag: string }>;
   unnamedInteractiveElements: Array<{ tag: string; type: string | null }>;
   undersizedInteractiveCount: number;
+  undersizedInteractiveElements: Array<{ name: string; tag: string; width: number; height: number }>;
   disclosureCount: number;
   links: Array<{ name: string; href: string }>;
 };
@@ -172,8 +174,8 @@ async function pageMetrics(page: Page) {
       const box = element.getBoundingClientRect();
       const label = element.closest("label")
         ?? (element.id ? document.querySelector("label[for=\\\"" + CSS.escape(element.id) + "\\\"]") : null);
-      const target = label?.getBoundingClientRect() ?? box;
-      return target.width < 44 || target.height < 44;
+      const targets = label ? [box, label.getBoundingClientRect()] : [box];
+      return !targets.some((target) => target.width >= 44 && target.height >= 44);
     });
     const headings = Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6"))
       .filter(isVisible)
@@ -193,6 +195,18 @@ async function pageMetrics(page: Page) {
       clippedInteractiveElements: clipped.map((element) => ({ name: nameFor(element).slice(0, 80), tag: element.tagName.toLowerCase() })).slice(0, 20),
       unnamedInteractiveElements: unnamed.map((element) => ({ tag: element.tagName.toLowerCase(), type: element.getAttribute("type") })).slice(0, 20),
       undersizedInteractiveCount: undersized.length,
+      undersizedInteractiveElements: undersized.map((element) => {
+        const label = element.closest("label")
+          ?? (element.id ? document.querySelector("label[for=\\\"" + CSS.escape(element.id) + "\\\"]") : null);
+        const boxes = [element.getBoundingClientRect(), ...(label ? [label.getBoundingClientRect()] : [])];
+        const target = boxes.sort((left, right) => (right.width * right.height) - (left.width * left.height))[0];
+        return {
+          name: nameFor(element).slice(0, 80),
+          tag: element.tagName.toLowerCase(),
+          width: Math.round(target.width),
+          height: Math.round(target.height),
+        };
+      }).slice(0, 30),
       disclosureCount: document.querySelectorAll("main details, main summary, main [aria-expanded]").length,
       links: Array.from(document.querySelectorAll("main a[href]"))
         .filter(isVisible)
@@ -232,29 +246,41 @@ async function disclosureProbe(page: Page) {
 async function visit(page: Page, href: string) {
   const response = await page.goto(`${baseUrl}${href}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
   await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => undefined);
-  await page.locator("h1").first().waitFor({ state: "visible", timeout: 15_000 }).catch(() => undefined);
+  await page.locator("h1").first().waitFor({ state: "visible", timeout: 45_000 }).catch(() => undefined);
   if (response) return response.status();
   return matchesWorkflow(page.url(), href) ? 200 : 0;
 }
 
 async function clickWorkflowLink(page: Page, href: string) {
   const target = new URL(href, baseUrl);
-  const links = page.locator("a[href]");
-  for (let index = 0; index < await links.count(); index += 1) {
-    const candidate = links.nth(index);
-    if (!await candidate.isVisible().catch(() => false)) continue;
-    const value = await candidate.getAttribute("href");
-    if (!value) continue;
-    const resolved = new URL(value, page.url());
-    if (resolved.pathname !== target.pathname) continue;
-    if (target.search && resolved.search !== target.search) continue;
-    if (target.hash && resolved.hash !== target.hash) continue;
-    await candidate.click();
-    await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => undefined);
-    await page.waitForTimeout(500);
-    return { clicked: true, actual: safePath(page.url()) };
+  for (const links of [page.locator("main a[href]"), page.locator("a[href]")]) {
+    for (let index = 0; index < await links.count(); index += 1) {
+      const candidate = links.nth(index);
+      if (!await candidate.isVisible().catch(() => false)) continue;
+      const value = await candidate.getAttribute("href");
+      if (!value) continue;
+      const resolved = new URL(value, page.url());
+      if (resolved.pathname !== target.pathname) continue;
+      if (target.search && resolved.search !== target.search) continue;
+      if (target.hash && resolved.hash !== target.hash) continue;
+      await candidate.click();
+      await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => undefined);
+      await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => undefined);
+      await page.locator("h1").first().waitFor({ state: "visible", timeout: 45_000 }).catch(() => undefined);
+      await page.waitForTimeout(300);
+      return { clicked: true, actual: safePath(page.url()) };
+    }
   }
   return { clicked: false, actual: safePath(page.url()) };
+}
+
+function metricsPass(metrics: PageMetricsResult, viewport: Viewport) {
+  return metrics.meaningfulText > 0
+    && metrics.h1Count === 1
+    && metrics.horizontalOverflowPx === 0
+    && metrics.clippedInteractiveElements.length === 0
+    && metrics.unnamedInteractiveElements.length === 0
+    && (viewport.id !== "mobile" || metrics.undersizedInteractiveCount === 0);
 }
 
 async function main() {
@@ -308,13 +334,16 @@ async function main() {
         const primary = workflows[account.key][0];
         const click = await clickWorkflowLink(page, primary.href);
         const clickedPath = safePath(page.url());
+        const primaryMetrics = await pageMetrics(page);
         if (click.clicked) {
           await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => null);
+          await page.locator("h1").first().waitFor({ state: "visible", timeout: 45_000 }).catch(() => undefined);
           await page.waitForTimeout(300);
         }
         const back = click.clicked ? safePath(page.url()) : null;
         if (click.clicked) {
           await page.goForward({ waitUntil: "domcontentloaded" }).catch(() => null);
+          await page.locator("h1").first().waitFor({ state: "visible", timeout: 45_000 }).catch(() => undefined);
           await page.waitForTimeout(300);
         }
         const forward = click.clicked ? safePath(page.url()) : null;
@@ -333,21 +362,17 @@ async function main() {
         const passed = status > 0 && status < 500
           && secondaryStatus > 0 && secondaryStatus < 500
           && !safePath(page.url()).startsWith(account.loginPath)
-          && metrics.meaningfulText > 0
-          && metrics.h1Count === 1
-          && metrics.horizontalOverflowPx === 0
-          && metrics.clippedInteractiveElements.length === 0
-          && metrics.unnamedInteractiveElements.length === 0
+          && metricsPass(metrics, viewport)
           && keyboard.focused
           && keyboard.visibleIndicator
           && (!disclosure.available || disclosure.toggled)
           && click.clicked
           && matchesWorkflow(clickedPath, primary.href)
+          && metricsPass(primaryMetrics, viewport)
           && Boolean(back && matchesWorkflow(back, account.landingPath))
           && Boolean(forward && matchesWorkflow(forward, primary.href))
           && matchesWorkflow(secondaryActual, secondary.expectedHref ?? secondary.href)
-          && secondaryMetrics.meaningfulText > 0
-          && secondaryMetrics.horizontalOverflowPx === 0;
+          && metricsPass(secondaryMetrics, viewport);
 
         results.push({
           role: account.key,
@@ -357,7 +382,7 @@ async function main() {
           metrics,
           keyboard,
           disclosure,
-          primaryWorkflow: { ...primary, ...click, clickedPath, back, forward, screenshot: primaryScreenshot },
+          primaryWorkflow: { ...primary, ...click, clickedPath, back, forward, metrics: primaryMetrics, screenshot: primaryScreenshot },
           secondaryWorkflow: { ...secondary, status: secondaryStatus, actual: secondaryActual, metrics: secondaryMetrics, screenshot: secondaryScreenshot },
           screenshot,
           passed,

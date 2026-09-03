@@ -125,7 +125,7 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
   }
 
   return (
-    <Card className={embedded ? "border-0 bg-transparent shadow-none" : undefined}>
+    <Card className={embedded ? "gap-0 border-0 bg-transparent py-0 ring-0 shadow-none" : undefined}>
       {embedded ? null : (
         <CardHeader>
           <CardTitle as="h2">{title}</CardTitle>

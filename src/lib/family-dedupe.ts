@@ -65,7 +65,7 @@ function normalizeText(value: unknown) {
         .replace(/[œŒ]/g, "oe")
         .replace(/[ßẞ]/g, "ss")
         .replace(/[ıİ]/g, "i")
-        .replace(/['’]/g, "")
+        .replace(/['’ʼ]/g, "")
         .toLowerCase()
         .replace(/[^\p{L}\p{N}]+/gu, " ")
         .trim()
@@ -77,7 +77,7 @@ function normalizeTextVariants(value: unknown) {
   if (!normalized) return [];
   const variants = new Set([normalized]);
   if (typeof value === "string") {
-    const spacedApostrophe = normalizeText(value.replace(/\b([odl])['’](?=\p{L})/giu, "$1 "));
+    const spacedApostrophe = normalizeText(value.replace(/\b([odl])['’ʼ](?=\p{L})/giu, "$1 "));
     if (spacedApostrophe) variants.add(spacedApostrophe);
   }
   return [...variants];
@@ -238,7 +238,7 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
   const variants = new Set(normalizeTextVariants(normalized));
 
   if (typeof value === "string") {
-    const spacedApostropheName = value.replace(/\b([odl])['’](?=\p{L})/giu, "$1 ");
+    const spacedApostropheName = value.replace(/\b([odl])['’ʼ](?=\p{L})/giu, "$1 ");
     if (spacedApostropheName !== value) {
       normalizeTextVariants(normalizePersonName(spacedApostropheName, { stripCredentials }))
         .forEach((variant) => variants.add(variant));

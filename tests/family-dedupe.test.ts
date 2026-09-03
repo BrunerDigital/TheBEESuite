@@ -98,6 +98,27 @@ test("family duplicate scoring preserves French spaced apostrophe variants", () 
   assert.ok(score?.reasons.includes("same address"));
 });
 
+test("family duplicate scoring canonicalizes modifier-letter apostrophes", () => {
+  const score = scoreFamilyDuplicate(
+    {
+      id: "family_1",
+      centerId: "center_1",
+      name: "OʼConnor Family",
+      address: "123 Main Street",
+    },
+    {
+      id: "family_2",
+      centerId: "center_1",
+      name: "O'Connor Family",
+      address: "123 Main Street",
+    },
+  );
+
+  assert.equal(score?.score, 35);
+  assert.ok(score?.reasons.includes("same family name"));
+  assert.ok(score?.reasons.includes("same address"));
+});
+
 test("child duplicate scoring matches same-school child profiles by name and date of birth", () => {
   const score = scoreChildDuplicate(
     {
@@ -1054,6 +1075,28 @@ test("child duplicate scoring preserves credential-like surnames after middle na
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
 
+test("child duplicate scoring canonicalizes modifier-letter apostrophes", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Sean OʼConnor",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Sean O'Connor",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
 test("child duplicate scoring preserves compound surname particles", () => {
   const score = scoreChildDuplicate(
     {
@@ -1952,6 +1995,30 @@ test("guardian duplicate scoring canonicalizes omitted hyphens in direct surname
       familyId: "family_2",
       centerId: "center_1",
       fullName: "Avery SmithJones",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
+test("guardian duplicate scoring canonicalizes modifier-letter apostrophes", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Avery OʼConnor",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Avery O'Connor",
       phone: "7205550123",
       relation: "Parent",
     },

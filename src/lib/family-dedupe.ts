@@ -93,11 +93,13 @@ function stripTrailingPersonCredentials(parts: string[]) {
     const rawCredential = trailingWords.at(-1) ?? "";
     if (!canonicalPersonNameToken(rawCredential, personNameCredentials)) break;
     const firstPartWords = remaining[0]?.split(/\s+/).filter(Boolean).length ?? 0;
+    const credentialToken = canonicalPersonNameToken(rawCredential, personNameCredentials);
     const separateCommaPart = trailingWords.length === 1
-      && (remaining.length > 2 || firstPartWords >= 2);
+      && (remaining.length > 2 || firstPartWords >= 2)
+      && !personNameCredentialLikeSurnames.has(credentialToken);
     const visiblyAttachedCredential = rawCredential.includes(".")
       || (trailingWords.length >= 3
-        && !personNameCredentialLikeSurnames.has(canonicalPersonNameToken(rawCredential, personNameCredentials)));
+        && !personNameCredentialLikeSurnames.has(credentialToken));
     if (!separateCommaPart && !visiblyAttachedCredential) break;
     trailingWords.pop();
     if (trailingWords.length) remaining[remaining.length - 1] = trailingWords.join(" ");

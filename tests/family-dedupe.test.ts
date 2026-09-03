@@ -1495,6 +1495,39 @@ test("guardian duplicate scoring preserves suffixes attached to last-first surna
   assert.ok(score?.reasons.includes("same guardian name"));
 });
 
+test("guardian duplicate scoring canonicalizes numeric ordinal suffixes", () => {
+  const suffixes = [
+    ["2nd", "II"],
+    ["3rd", "III"],
+    ["4th", "IV"],
+    ["5th", "V"],
+  ];
+
+  for (const [ordinal, roman] of suffixes) {
+    const score = scoreGuardianDuplicate(
+      {
+        id: `guardian_${ordinal}`,
+        familyId: `family_${ordinal}`,
+        centerId: "center_1",
+        fullName: `Smith, John ${ordinal}`,
+        phone: "7205550123",
+        relation: "Parent",
+      },
+      {
+        id: `guardian_${roman}`,
+        familyId: `family_${roman}`,
+        centerId: "center_1",
+        fullName: `John Smith ${roman}`,
+        phone: "7205550123",
+        relation: "Parent",
+      },
+    );
+
+    assert.equal(score?.confidence, "high", `${ordinal} should match ${roman}`);
+    assert.ok(score?.reasons.includes("same guardian name"));
+  }
+});
+
 test("child duplicate scoring preserves undotted V middle initials in last-first names", () => {
   const score = scoreChildDuplicate(
     {
@@ -2194,6 +2227,27 @@ test("child duplicate scoring preserves unpunctuated compound surnames during in
       familyId: "family_2",
       centerId: "center_1",
       fullName: "Avery G Marquez",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("child duplicate scoring scopes dotted-initial evidence to the exact middle token", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "John A. Garcia Marquez",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "John A. G Marquez",
       dateOfBirth: "2022-10-10",
     },
   );

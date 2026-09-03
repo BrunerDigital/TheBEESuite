@@ -231,6 +231,10 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
     const rawTrailingLetters = (rawParts.at(-1) ?? "").replace(/[^A-Za-z]/g, "");
     const uppercaseTrailingCredential = rawTrailingLetters.length >= 2
       && rawTrailingLetters === rawTrailingLetters.toUpperCase();
+    const surnameTrailingSuffix = canonicalPersonNameToken(
+      rawParts[0]?.split(/\s+/).filter(Boolean).at(-1),
+      personNameSuffixes,
+    );
     const groupedTrailingCredentials = rawTrailingWords.length > 1
       && rawTrailingWords.every((word) => Boolean(canonicalPersonNameToken(word, personNameCredentials)));
     const trailingCredential = groupedTrailingCredentials || (Boolean(rawTrailingToken)
@@ -238,6 +242,7 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
     const commaCompoundSurname = rawParts.length === 2
       && firstPartWords >= 2
       && !trailingSuffix
+      && !surnameTrailingSuffix
       && !trailingCredential;
     if (commaCompoundSurname) {
       const surname = normalizeText(rawParts[0]).replace(/\s+/g, "");

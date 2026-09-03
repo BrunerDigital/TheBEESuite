@@ -189,6 +189,50 @@ test("child duplicate scoring allows optional ProCare middle names", () => {
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
 
+test("child duplicate scoring extracts a suffix attached to a ProCare given name", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith, Avery Jr.",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Avery Smith Jr.",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
+test("child duplicate scoring canonicalizes omitted apostrophes", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Sean O'Connor",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Sean OConnor",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
 test("guardian duplicate scoring matches email and phone across same-school families", () => {
   const score = scoreGuardianDuplicate(
     {
@@ -368,6 +412,30 @@ test("guardian duplicate scoring allows optional ProCare middle names", () => {
       centerId: "center_1",
       fullName: "Jordan Rivera",
       phone: "7205550104",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
+test("guardian duplicate scoring matches a middle initial to its full name", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Jordan M Rivera",
+      phone: "7205550105",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Jordan Michael Rivera",
+      phone: "7205550105",
       relation: "Parent",
     },
   );

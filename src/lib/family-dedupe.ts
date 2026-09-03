@@ -54,7 +54,7 @@ export type MemberDuplicateCandidate = {
 
 function normalizeText(value: unknown) {
   return typeof value === "string"
-    ? value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+    ? value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/['’]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
     : "";
 }
 
@@ -76,12 +76,17 @@ function normalizePersonName(value: unknown) {
       : normalizeText(value);
   }
 
-  const trailingPart = canonicalPersonNameSuffix(nameParts.at(-1));
-  const hasSuffix = Boolean(trailingPart);
-  if (nameParts.length === 2 && hasSuffix) return normalizeText(`${nameParts[0]} ${trailingPart}`);
+  const separateSuffix = canonicalPersonNameSuffix(nameParts.at(-1));
+  if (nameParts.length === 2 && separateSuffix) return normalizeText(`${nameParts[0]} ${separateSuffix}`);
 
-  const givenNames = hasSuffix ? nameParts.slice(1, -1) : nameParts.slice(1);
-  return normalizeText(`${givenNames.join(" ")} ${nameParts[0]} ${hasSuffix ? trailingPart : ""}`);
+  const givenNameWords = (separateSuffix ? nameParts.slice(1, -1) : nameParts.slice(1))
+    .join(" ")
+    .split(/\s+/)
+    .filter(Boolean);
+  const attachedSuffix = separateSuffix ? "" : canonicalPersonNameSuffix(givenNameWords.at(-1));
+  if (attachedSuffix) givenNameWords.pop();
+  const suffix = separateSuffix || attachedSuffix;
+  return normalizeText(`${givenNameWords.join(" ")} ${nameParts[0]} ${suffix}`);
 }
 
 function personNamesMatch(left: string, right: string) {
@@ -91,14 +96,30 @@ function personNamesMatch(left: string, right: string) {
   const leftSuffix = personNameSuffixes.has(leftParts.at(-1) ?? "") ? leftParts.pop() : "";
   const rightSuffix = personNameSuffixes.has(rightParts.at(-1) ?? "") ? rightParts.pop() : "";
   if (leftSuffix !== rightSuffix) return false;
-  const [shorter, longer] = leftParts.length < rightParts.length
-    ? [leftParts, rightParts]
-    : [rightParts, leftParts];
-  return shorter.length >= 2
-    && longer.length > shorter.length
-    && longer.length - shorter.length <= 2
-    && shorter[0] === longer[0]
-    && shorter.at(-1) === longer.at(-1);
+  if (leftParts.length < 2 || rightParts.length < 2) return false;
+  if (leftParts[0] !== rightParts[0] || leftParts.at(-1) !== rightParts.at(-1)) return false;
+
+  const leftMiddle = leftParts.slice(1, -1);
+  const rightMiddle = rightParts.slice(1, -1);
+  if (Math.abs(leftMiddle.length - rightMiddle.length) > 2) return false;
+  const middlePartsMatch = (leftPart: string, rightPart: string) => leftPart === rightPart
+    || (leftPart.length === 1 && rightPart.startsWith(leftPart))
+    || (rightPart.length === 1 && leftPart.startsWith(rightPart));
+  if (leftMiddle.length === rightMiddle.length) {
+    return leftMiddle.every((part, index) => middlePartsMatch(part, rightMiddle[index]));
+  }
+
+  const [shorterMiddle, longerMiddle] = leftMiddle.length < rightMiddle.length
+    ? [leftMiddle, rightMiddle]
+    : [rightMiddle, leftMiddle];
+  if (!shorterMiddle.length) return true;
+  let longerIndex = 0;
+  return shorterMiddle.every((part) => {
+    while (longerIndex < longerMiddle.length && !middlePartsMatch(part, longerMiddle[longerIndex])) longerIndex += 1;
+    if (longerIndex >= longerMiddle.length) return false;
+    longerIndex += 1;
+    return true;
+  });
 }
 
 function normalizeEmail(value: unknown) {

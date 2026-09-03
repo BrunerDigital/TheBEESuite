@@ -933,6 +933,27 @@ test("child duplicate scoring preserves unmarked compound surname boundaries", (
   assert.equal(shortenedScore, null);
 });
 
+test("child duplicate scoring does not omit direct compound surname components", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Avery Garcia Marquez",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Avery Marquez",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
 test("guardian duplicate scoring allows optional ProCare middle names", () => {
   const score = scoreGuardianDuplicate(
     {

@@ -244,14 +244,20 @@ function personNamesMatch(left: string, right: string) {
   const [shorterMiddle, longerMiddle] = leftMiddle.length < rightMiddle.length
     ? [leftMiddle, rightMiddle]
     : [rightMiddle, leftMiddle];
-  if (!shorterMiddle.length) return true;
+  if (!shorterMiddle.length) return longerMiddle.every((part) => part.length === 1);
   let longerIndex = 0;
-  return shorterMiddle.every((part) => {
-    while (longerIndex < longerMiddle.length && !namePartsMatch(part, longerMiddle[longerIndex])) longerIndex += 1;
+  const omittedParts: string[] = [];
+  const matched = shorterMiddle.every((part) => {
+    while (longerIndex < longerMiddle.length && !namePartsMatch(part, longerMiddle[longerIndex])) {
+      omittedParts.push(longerMiddle[longerIndex]);
+      longerIndex += 1;
+    }
     if (longerIndex >= longerMiddle.length) return false;
     longerIndex += 1;
     return true;
   });
+  omittedParts.push(...longerMiddle.slice(longerIndex));
+  return matched && omittedParts.every((part) => part.length === 1);
 }
 
 function normalizeEmail(value: unknown) {

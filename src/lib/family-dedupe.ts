@@ -243,7 +243,7 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
     const commaCompoundSurname = rawParts.length === 2
       && compoundSurnameWordCount >= 2
       && !trailingSuffix
-      && !trailingCredential;
+      && (!stripCredentials || !trailingCredential);
     if (commaCompoundSurname) {
       const rawSurnameWords = rawParts[0].split(/\s+/).filter(Boolean);
       if (surnameTrailingSuffix) rawSurnameWords.pop();

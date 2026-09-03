@@ -1501,3 +1501,25 @@ test("guardian duplicate scoring preserves dotted V middles with suffixed compou
   assert.equal(score?.confidence, "high");
   assert.ok(score?.reasons.includes("same guardian name"));
 });
+
+test("child duplicate scoring preserves uppercase credential-like given names with compound surnames", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "DE LA CRUZ, MA",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "MA DELACRUZ",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});

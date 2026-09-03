@@ -1688,6 +1688,8 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
 async function handlePaymentMethodSetupIntentFailed(event: StripeWebhookEvent, setupIntent: StripeSetupIntentObject) {
   const billingAccountId = clean(setupIntent.metadata?.billingAccountId);
   if (!billingAccountId) return NextResponse.json({ ok: true, ignored: true, reason: "billing_account_metadata_missing" });
+  const setupCanceled = event.type === "setup_intent.canceled";
+  const terminalSetupStatus = setupCanceled ? "canceled" : "setup_failed";
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
@@ -1734,7 +1736,9 @@ async function handlePaymentMethodSetupIntentFailed(event: StripeWebhookEvent, s
             autopayPaymentMethodId: failedAutopayOutcome.autopayPaymentMethodId,
             ...(failedAutopayOutcome.retainedExistingConsent ? {
               autopayConsentRetainedAt: new Date().toISOString(),
-              autopayConsentRetentionReason: "replacement_bank_verification_failed",
+              autopayConsentRetentionReason: setupCanceled
+                ? "replacement_bank_verification_canceled"
+                : "replacement_bank_verification_failed",
               autopayDisabledAt: null,
               autopayDisabledReason: null,
             } : {}),
@@ -1744,8 +1748,8 @@ async function handlePaymentMethodSetupIntentFailed(event: StripeWebhookEvent, s
             stripePendingPaymentMethodLast4: null,
             stripePendingPaymentMethodBrand: null,
             stripePendingPaymentMethodBankName: null,
-            stripeSetupIntentStatus: "setup_failed",
-            paymentMethodManagementStatus: "bank_verification_failed",
+            stripeSetupIntentStatus: terminalSetupStatus,
+            paymentMethodManagementStatus: setupCanceled ? "bank_verification_canceled" : "bank_verification_failed",
             stripePendingAutopayOutcome: null,
             stripePendingAutopayConsentUserId: null,
             stripePendingAutopayPreviousPaymentMethodId: null,
@@ -2943,7 +2947,7 @@ async function dispatchAuthenticatedEvent(
     return handlePaymentMethodSetupIntentSucceeded(event, event.data.object as StripeSetupIntentObject);
   }
 
-  if (event.type === "setup_intent.setup_failed") {
+  if (event.type === "setup_intent.setup_failed" || event.type === "setup_intent.canceled") {
     return handlePaymentMethodSetupIntentFailed(event, event.data.object as StripeSetupIntentObject);
   }
 

@@ -2697,13 +2697,13 @@ function ParentPortalWorkspaceView({
                 </Alert>
               ) : null}
               <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
+                <Button disabled={isPending || autopayStatus === "pending" || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
                   <CreditCard data-icon="inline-start" />
                   {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace card" : "Save card"}
                 </Button>
-                <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                <Button disabled={isPending || autopayStatus === "pending" || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
                   <Building2 data-icon="inline-start" />
-                  {paymentMethodManagement?.autopayStatus === "pending" ? "Verify bank account" : "Connect bank account"}
+                  {autopayStatus === "pending" ? "Bank verification pending" : "Connect bank account"}
                 </Button>
                 <Button disabled={isPending || paymentCheckoutMethod !== null || !paymentMethodManagement?.hasStripeCustomer} onClick={() => managePaymentMethod("portal")} variant="outline">
                   Manage methods

@@ -28,6 +28,9 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
   assert.match(webhook, /autopayStatus: "pending"/);
   assert.match(webhook, /stripeBankVerificationPending !== true/);
   assert.match(webhook, /event.type === "setup_intent.setup_failed"/);
+  assert.match(webhook, /event.type === "setup_intent.setup_failed" \|\| event.type === "setup_intent.canceled"/);
+  assert.match(webhook, /const setupCanceled = event.type === "setup_intent.canceled"/);
+  assert.match(webhook, /replacement_bank_verification_canceled/);
   assert.match(webhook, /const setupPending = !setupSucceeded/);
   assert.match(webhook, /Billing account changed while failed bank verification was being recorded/);
   assert.match(webhook, /stripePendingPaymentMethodId/);

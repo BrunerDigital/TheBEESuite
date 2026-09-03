@@ -12,6 +12,8 @@ test("parent payment surfaces present debit and credit cards before bank options
     portal.indexOf('managePaymentMethod("setup", "card")')
       < portal.indexOf('managePaymentMethod("setup", "link_bank")'),
   );
+  assert.match(portal, /disabled=\{isPending \|\| autopayStatus === "pending" \|\| paymentCheckoutMethod !== null \|\| !family\}/);
+  assert.match(portal, /autopayStatus === "pending" \? "Bank verification pending" : "Connect bank account"/);
   assert.ok(
     portal.indexOf('payBalance("card")')
       < portal.indexOf('payBalance("link_bank")'),

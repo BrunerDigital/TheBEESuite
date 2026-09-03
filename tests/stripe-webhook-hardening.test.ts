@@ -191,6 +191,7 @@ test("supported reconciliation matrix includes payment, invoice, subscription, d
     "payout.created",
     "setup_intent.succeeded",
     "setup_intent.setup_failed",
+    "setup_intent.canceled",
     "v2.core.account.created",
     "v2.core.account.updated",
     "v2.core.account[configuration.merchant].updated",

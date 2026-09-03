@@ -50,7 +50,8 @@ test("credential and write preflights reject unmarked identities and non-heartbe
   assert.match(workflows, /payload\?\.action === "heartbeat"/);
   assert.doesNotMatch(workflows, /pathname === "\/api\/device-sessions"\) return null/);
   assert.match(workflows, /const secondaryActual = safePath\(page\.url\(\)\)/);
-  assert.match(workflows, /matchesWorkflow\(secondaryActual, secondary\.href\)/);
+  assert.match(workflows, /matchesWorkflow\(secondaryActual, secondary\.expectedHref \?\? secondary\.href\)/);
+  assert.match(workflows, /href: "\/messages", expectedHref: "\/family-detail\?view=messages"/);
 });
 
 test("report exports stay discoverable without crowding the mobile collapsed header", async () => {

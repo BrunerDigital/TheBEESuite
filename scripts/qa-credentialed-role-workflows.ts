@@ -5,7 +5,7 @@ import { chromium, type Page, type Request } from "playwright";
 import { SYNTHETIC_ROLE_QA_ACCOUNTS } from "@/lib/synthetic-role-qa";
 
 type Viewport = { id: "desktop" | "mobile"; width: number; height: number };
-type Workflow = { id: string; href: string };
+type Workflow = { id: string; href: string; expectedHref?: string };
 
 const viewports: readonly Viewport[] = [
   { id: "desktop", width: 1440, height: 1000 },
@@ -23,7 +23,7 @@ const workflows: Record<(typeof SYNTHETIC_ROLE_QA_ACCOUNTS)[number]["key"], read
   ],
   billing: [
     { id: "invoices", href: "/billing-invoices" },
-    { id: "communications", href: "/messages" },
+    { id: "communications", href: "/messages", expectedHref: "/family-detail?view=messages" },
   ],
   teacher: [
     { id: "roster", href: "/teacher-portal#teacher-roster" },
@@ -345,7 +345,7 @@ async function main() {
           && matchesWorkflow(clickedPath, primary.href)
           && Boolean(back && matchesWorkflow(back, account.landingPath))
           && Boolean(forward && matchesWorkflow(forward, primary.href))
-          && matchesWorkflow(secondaryActual, secondary.href)
+          && matchesWorkflow(secondaryActual, secondary.expectedHref ?? secondary.href)
           && secondaryMetrics.meaningfulText > 0
           && secondaryMetrics.horizontalOverflowPx === 0;
 

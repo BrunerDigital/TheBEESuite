@@ -1334,7 +1334,7 @@ async function lockPaymentMethodBillingAccount(
   return lockedRows.length === 1;
 }
 
-async function hasReservedTerminalSetupIntentEvent(
+async function reservedTerminalSetupIntentEventType(
   tx: Prisma.TransactionClient,
   setupIntentId: string,
 ) {
@@ -1343,9 +1343,10 @@ async function hasReservedTerminalSetupIntentEvent(
       objectId: setupIntentId,
       type: { in: ["setup_intent.succeeded", "setup_intent.setup_failed", "setup_intent.canceled"] },
     },
-    select: { id: true },
+    orderBy: { createdAt: "desc" },
+    select: { type: true },
   });
-  return Boolean(terminalReceipt);
+  return terminalReceipt?.type ?? null;
 }
 
 async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted, matchedTenantId?: string | null) {
@@ -1369,6 +1370,7 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
     ? await retrieveStripePaymentMethod(setupPaymentMethodId, { tenantId, connectedAccountId })
     : null;
   let paymentMethodDetails = paymentMethodLookup?.ok ? paymentMethodLookup.paymentMethod : null;
+  let reconciledTerminalEventType: string | null = null;
 
   const applySetupCompletion = () => prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
@@ -1389,13 +1391,11 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       if (!billingAccount) return "missing" as const;
 
       const retrievedSetupStatus = setupIntent?.setupIntent?.status || "";
-      const retrievedSetupPending = !["succeeded", "canceled", "setup_failed"].includes(retrievedSetupStatus);
-      if (
-        setupIntentId
-        && retrievedSetupPending
-        && await hasReservedTerminalSetupIntentEvent(tx, setupIntentId)
-      ) {
-        return "refresh_terminal" as const;
+      const retrievedSetupPending = !["succeeded", "canceled"].includes(retrievedSetupStatus)
+        && reconciledTerminalEventType !== "setup_intent.setup_failed";
+      if (setupIntentId && retrievedSetupPending && !reconciledTerminalEventType) {
+        reconciledTerminalEventType = await reservedTerminalSetupIntentEventType(tx, setupIntentId);
+        if (reconciledTerminalEventType) return "refresh_terminal" as const;
       }
 
       const currentFields = jsonObject(billingAccount.customFields);
@@ -1480,7 +1480,8 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
         setupMode,
       });
       const setupSucceeded = setupIntent?.setupIntent?.status === "succeeded";
-      const setupPending = !setupSucceeded && !["canceled", "setup_failed"].includes(setupIntent?.setupIntent?.status || "");
+      const setupFailed = reconciledTerminalEventType === "setup_intent.setup_failed";
+      const setupPending = !setupSucceeded && !setupFailed && setupIntent?.setupIntent?.status !== "canceled";
       const appliedAutopayPatch = setupSucceeded ? autopayPatch : null;
       const auditTenantId = familyCenter?.organization.tenantId || clean(tenantId);
       if (autopayPatch?.preservedExistingConsent && !auditTenantId) {
@@ -1591,7 +1592,14 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       if (!refreshedSetupIntent.ok || !refreshedSetupIntent.setupIntent) {
         throw new Error("Stripe SetupIntent terminal state could not be reconciled during checkout completion.");
       }
-      if (!["succeeded", "canceled", "setup_failed"].includes(refreshedSetupIntent.setupIntent.status || "")) {
+      const expectedTerminalStatus = reconciledTerminalEventType === "setup_intent.succeeded"
+        ? "succeeded"
+        : reconciledTerminalEventType === "setup_intent.canceled"
+          ? "canceled"
+          : reconciledTerminalEventType === "setup_intent.setup_failed"
+            ? "requires_payment_method"
+            : null;
+      if (!expectedTerminalStatus || refreshedSetupIntent.setupIntent.status !== expectedTerminalStatus) {
         throw new Error("Stripe SetupIntent terminal receipt did not match the current provider state.");
       }
       setupIntent = refreshedSetupIntent;

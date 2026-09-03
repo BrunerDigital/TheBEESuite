@@ -21,6 +21,12 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
   assert.match(publicPaymentMethodRoute, /currentFields\.stripeBankVerificationPending === true/);
   assert.match(paymentMethodRoute, /Bank verification is already pending/);
   assert.match(paymentMethodRoute, /paymentMethod\.bankVerificationPending/);
+  assert.match(paymentMethodRoute, /const setupAccountUpdate = await prisma\.billingAccount\.updateMany/);
+  assert.match(publicPaymentMethodRoute, /const setupAccountUpdate = await prisma\.billingAccount\.updateMany/);
+  assert.match(paymentMethodRoute, /customFields: billingAccount\.customFields === null[\s\S]*Prisma\.DbNull/);
+  assert.match(publicPaymentMethodRoute, /customFields: billingAccount\.customFields === null[\s\S]*Prisma\.DbNull/);
+  assert.match(paymentMethodRoute, /setupAccountUpdate\.count !== 1[\s\S]*expireStripeCheckoutSession/);
+  assert.match(publicPaymentMethodRoute, /setupAccountUpdate\.count !== 1[\s\S]*expireStripeCheckoutSession/);
   assert.match(publicPaymentMethodRoute, /Bank verification is already pending/);
   assert.match(paymentMethodManagement, /const explicitEnable = setupMode === "enable"/);
   assert.match(paymentMethodManagement, /const explicitDisable = setupMode === "disabled"/);
@@ -33,9 +39,10 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
   assert.match(webhook, /const setupCanceled = event.type === "setup_intent.canceled"/);
   assert.match(webhook, /replacement_bank_verification_canceled/);
   assert.match(webhook, /from "BillingAccount"[\s\S]*for update/);
-  assert.match(webhook, /hasReservedTerminalSetupIntentEvent/);
+  assert.match(webhook, /reservedTerminalSetupIntentEventType/);
   assert.match(webhook, /const refreshedSetupIntent = await retrieveStripeSetupIntent/);
   assert.match(webhook, /Stripe SetupIntent terminal state could not be reconciled during checkout completion/);
+  assert.match(webhook, /reconciledTerminalEventType === "setup_intent.setup_failed"[\s\S]*"requires_payment_method"/);
   assert.ok(
     (webhook.match(/lockPaymentMethodBillingAccount\(tx, billingAccountId\)/g) ?? []).length >= 3,
   );

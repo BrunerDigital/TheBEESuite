@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { canAccessAllCenters, canManageBilling, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import {
   createStripeBillingPortalSession,
   createStripeCustomer,
   createStripeSetupCheckoutSession,
+  expireStripeCheckoutSession,
   getStripeProcessingRecoveryAmount,
   readStripeConnectedAccountId,
   type StripePaymentMethodCategory,
@@ -529,8 +531,14 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const paymentMethodManagementUpdatedAt = new Date().toISOString();
-  await prisma.billingAccount.update({
-    where: { id: billingAccount.id },
+  const setupAccountUpdate = await prisma.billingAccount.updateMany({
+    where: {
+      id: billingAccount.id,
+      autopayPlaceholder: billingAccount.autopayPlaceholder,
+      customFields: billingAccount.customFields === null
+        ? { equals: Prisma.DbNull }
+        : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+    },
     data: {
       customFields: {
         ...currentFields,
@@ -552,6 +560,19 @@ async function POSTHandler(request: NextRequest) {
       },
     },
   });
+  if (setupAccountUpdate.count !== 1) {
+    if (setup.id) {
+      await expireStripeCheckoutSession({
+        sessionId: setup.id,
+        connectedAccountId,
+        tenantId,
+      });
+    }
+    return NextResponse.json(
+      { ok: false, error: "Payment method status changed while the secure setup form was opening. Refresh and try again." },
+      { status: 409 },
+    );
+  }
   await writeAuditLog(user, {
     centerId,
     action: "billing.payment_method.setup_created",

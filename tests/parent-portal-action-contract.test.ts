@@ -141,7 +141,7 @@ test("parent account checkout keeps the workspace interactive and reports mobile
   );
   assert.match(
     workspace,
-    /disabled=\{isPending \|\| autopayStatus === "pending" \|\| paymentCheckoutMethod !== null \|\| !family\}/,
+    /disabled=\{isPending \|\| bankVerificationPending \|\| paymentCheckoutMethod !== null \|\| !family\}/,
   );
   assert.match(
     workspace,

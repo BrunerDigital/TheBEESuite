@@ -342,6 +342,7 @@ type Props = {
     paymentMethodManagement?: {
       autopayEnabled: boolean;
       autopayStatus: "enabled" | "disabled" | "pending";
+      bankVerificationPending: boolean;
       hasStripeCustomer: boolean;
       hasSavedPaymentMethod: boolean;
       stripeCustomerId: string | null;
@@ -1028,6 +1029,7 @@ function ParentPortalWorkspaceView({
     autopayStatusOverride ??
     paymentMethodManagement?.autopayStatus ??
     (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
+  const bankVerificationPending = paymentMethodManagement?.bankVerificationPending === true;
   const autopayRequirements = useMemo(() => {
     const seen = new Set<string>();
     return autopayEnableRequirements.filter((requirement) => {
@@ -2697,13 +2699,13 @@ function ParentPortalWorkspaceView({
                 </Alert>
               ) : null}
               <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                <Button disabled={isPending || autopayStatus === "pending" || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
+                <Button disabled={isPending || bankVerificationPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
                   <CreditCard data-icon="inline-start" />
                   {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace card" : "Save card"}
                 </Button>
-                <Button disabled={isPending || autopayStatus === "pending" || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                <Button disabled={isPending || bankVerificationPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
                   <Building2 data-icon="inline-start" />
-                  {autopayStatus === "pending" ? "Bank verification pending" : "Connect bank account"}
+                  {bankVerificationPending ? "Bank verification pending" : "Connect bank account"}
                 </Button>
                 <Button disabled={isPending || paymentCheckoutMethod !== null || !paymentMethodManagement?.hasStripeCustomer} onClick={() => managePaymentMethod("portal")} variant="outline">
                   Manage methods
@@ -2864,11 +2866,11 @@ function ParentPortalWorkspaceView({
                             : "Autopay remains off until you choose to enable it."}
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        <Button disabled={isPending || autopayStatus === "pending" || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
+                        <Button disabled={isPending || bankVerificationPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
                           <CreditCard data-icon="inline-start" />
                           Replace saved card
                         </Button>
-                        <Button disabled={isPending || autopayStatus === "pending" || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                        <Button disabled={isPending || bankVerificationPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
                           <Building2 data-icon="inline-start" />
                           Connect bank account
                         </Button>

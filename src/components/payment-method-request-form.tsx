@@ -16,6 +16,7 @@ type Props = {
   recipientEmail: string;
   savedPaymentMethodLabel?: string | null;
   autopayStatus: "enabled" | "disabled" | "pending";
+  bankVerificationPending: boolean;
   paymentMethodStatus?: string | null;
   paymentStatus?: string | null;
   focus?: "instant-bank" | null;
@@ -37,6 +38,7 @@ export function PaymentMethodRequestForm({
   recipientEmail,
   savedPaymentMethodLabel,
   autopayStatus,
+  bankVerificationPending,
   paymentMethodStatus,
   paymentStatus,
   focus,
@@ -47,7 +49,7 @@ export function PaymentMethodRequestForm({
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const nextOpenInvoice = openInvoices[0] ?? null;
-  const showPendingBankVerification = autopayStatus === "pending" && paymentMethodStatus !== "success";
+  const showPendingBankVerification = bankVerificationPending && paymentMethodStatus !== "success";
   const autopayLabel = reauthorization && reauthorizationPreservesAutopay
     ? "Autopay consent preserved"
     : autopayStatus === "enabled"
@@ -253,7 +255,7 @@ export function PaymentMethodRequestForm({
         <div className="grid gap-2 sm:grid-cols-2">
           <Button
             className={focus === "instant-bank" ? "order-1 h-11 bg-sky-500 text-white hover:bg-sky-400" : "order-2 h-11 border-white/15 bg-white/5 text-white hover:bg-white/10"}
-            disabled={isPending || autopayStatus === "pending"}
+            disabled={isPending || bankVerificationPending}
             onClick={() => startSetup("link_bank")}
             variant={focus === "instant-bank" ? "default" : "outline"}
           >
@@ -262,7 +264,7 @@ export function PaymentMethodRequestForm({
           </Button>
           <Button
             className={focus === "instant-bank" ? "order-2 h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" : "order-1 h-11"}
-            disabled={isPending || autopayStatus === "pending"}
+            disabled={isPending || bankVerificationPending}
             onClick={() => startSetup("card")}
             variant={focus === "instant-bank" ? "outline" : "default"}
           >

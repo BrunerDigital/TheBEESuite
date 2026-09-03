@@ -3,6 +3,7 @@ import { stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-conne
 export type PaymentMethodManagementSummary = {
   autopayEnabled: boolean;
   autopayStatus: "enabled" | "disabled" | "pending";
+  bankVerificationPending: boolean;
   paymentMethodReauthorizationRequired: boolean;
   hasStripeCustomer: boolean;
   hasSavedPaymentMethod: boolean;
@@ -65,10 +66,12 @@ export function paymentMethodManagementSummary(input: {
     && !paymentMethodReauthorizationRequired;
   const setupExplicitlyExpired = clean(custom.paymentMethodManagementStatus) === "setup_session_expired";
   const pending = status === "pending" && !setupExplicitlyExpired;
+  const bankVerificationPending = custom.stripeBankVerificationPending === true;
 
   return {
     autopayEnabled: enabled,
     autopayStatus: enabled ? "enabled" : pending ? "pending" : "disabled",
+    bankVerificationPending,
     paymentMethodReauthorizationRequired,
     hasStripeCustomer: Boolean(stripeCustomerId),
     hasSavedPaymentMethod: Boolean(stripeDefaultPaymentMethodId),

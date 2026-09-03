@@ -214,6 +214,7 @@ export default async function PaymentMethodFormPage({
           recipientEmail={payload.email}
           savedPaymentMethodLabel={paymentMethod.paymentMethodLabel}
           autopayStatus={paymentMethod.autopayStatus}
+          bankVerificationPending={paymentMethod.bankVerificationPending}
           paymentMethodStatus={paymentMethodStatus}
           paymentStatus={paymentStatus}
           focus={focus}

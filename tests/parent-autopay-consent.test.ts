@@ -92,6 +92,6 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(parentPortalPage, /linkedGuardianUserIds: family\?\.guardians\.map/);
   assert.match(publicPaymentMethodPage, /canPreservePendingAutopayConsentForPaymentMethodMigration/);
   assert.match(publicPaymentMethodPage, /paymentMethodManagementSummary\(\{[\s\S]*activeConnectedAccountId,[\s\S]*centerCustomFields: center\.customFields/);
-  assert.match(publicPaymentMethodForm, /disabled=\{isPending \|\| autopayStatus === "pending"\}/);
-  assert.match(parentPortal, /disabled=\{isPending \|\| autopayStatus === "pending" \|\| paymentCheckoutMethod !== null \|\| !family\}/);
+  assert.match(publicPaymentMethodForm, /disabled=\{isPending \|\| bankVerificationPending\}/);
+  assert.match(parentPortal, /disabled=\{isPending \|\| bankVerificationPending \|\| paymentCheckoutMethod !== null \|\| !family\}/);
 });

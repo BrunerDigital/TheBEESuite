@@ -366,11 +366,31 @@ test("payment method summary preserves completed bank verification pending past 
       stripeSetupCheckoutSessionExpiresAt: Math.floor(Date.now() / 1000) - 60,
       paymentMethodManagementStatus: "payment_method_saved",
       autopayStatus: "pending",
+      stripeBankVerificationPending: true,
     },
   });
 
   assert.equal(summary.hasSavedPaymentMethod, true);
   assert.equal(summary.autopayStatus, "pending");
+  assert.equal(summary.bankVerificationPending, true);
+});
+
+test("bank verification remains independently visible after autopay is disabled", () => {
+  const summary = paymentMethodManagementSummary({
+    autopayPlaceholder: false,
+    customFields: {
+      stripeCustomerId: "cus_123",
+      stripeDefaultPaymentMethodId: "pm_old",
+      autopayEnabled: false,
+      autopayStatus: "disabled",
+      stripeBankVerificationPending: true,
+      stripePendingPaymentMethodId: "pm_bank_pending",
+    },
+  });
+
+  assert.equal(summary.autopayEnabled, false);
+  assert.equal(summary.autopayStatus, "disabled");
+  assert.equal(summary.bankVerificationPending, true);
 });
 
 test("setup expiration preserves an already saved bank payment method", () => {

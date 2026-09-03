@@ -200,7 +200,7 @@ export function RequiredDocumentChecklistPanel({
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
           <div className="rounded-lg border bg-background/40 p-3">
             <div className="text-xs text-muted-foreground">Required</div>
             <div className="text-2xl font-semibold">{summary.total}</div>
@@ -250,11 +250,11 @@ export function RequiredDocumentChecklistPanel({
         </div>
 
         <div className="flex flex-col gap-3 rounded-lg border bg-background/40 p-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground" htmlFor="checklist-scope-filter">Scope</Label>
               <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as ScopeFilter)}>
-                <SelectTrigger id="checklist-scope-filter" className="w-full sm:w-[180px]">
+                <SelectTrigger id="checklist-scope-filter" className="w-full lg:w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -268,7 +268,7 @@ export function RequiredDocumentChecklistPanel({
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground" htmlFor="checklist-status-filter">Status</Label>
               <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-                <SelectTrigger id="checklist-status-filter" className="w-full sm:w-[190px]">
+                <SelectTrigger id="checklist-status-filter" className="w-full lg:w-[190px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

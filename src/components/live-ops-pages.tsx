@@ -4048,7 +4048,7 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
           Family and child documents with secure uploads, review status, expiration reminders, and restricted visibility markers.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Documents" value={data.stats.total} />
         <StatCard label="Expiring soon" value={data.stats.expiring} />
         <StatCard label="Restricted" value={data.stats.restricted} />
@@ -4215,7 +4215,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
           Track licensing checklists, staff certifications, incident reviews, immunizations, allergies, and supporting records. Confirm current requirements with the appropriate licensing authority.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Incidents pending" value={data.stats.pendingIncidents} />
         <StatCard label="Certs expiring" value={data.stats.expiringCertifications} />
         <StatCard label="Docs expiring" value={data.stats.expiringDocuments} />
@@ -4223,7 +4223,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
         <StatCard label="Medical notes" value={data.stats.restrictedMedicalNotes} />
         <StatCard label="Medication logs" value={data.stats.medicationLogs} />
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <StatCard label="Drills logged" value={data.stats.emergencyDrills} />
         <StatCard label="Open compliance tasks" value={data.stats.openComplianceTasks} />
         <StatCard label="Reminders needing attention" value={data.stats.dueComplianceReminders} />

@@ -60,9 +60,16 @@ function normalizeText(value: unknown) {
 
 function normalizePersonName(value: unknown) {
   if (typeof value !== "string") return "";
-  const [lastName, ...givenNames] = value.split(",");
-  if (!givenNames.length) return normalizeText(value);
-  return normalizeText(`${givenNames.join(" ")} ${lastName}`);
+  const nameParts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  if (nameParts.length < 2) return normalizeText(value);
+
+  const suffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v", "esq", "phd", "md", "dds", "dmd", "do"]);
+  const trailingPart = normalizeText(nameParts.at(-1));
+  const hasSuffix = suffixes.has(trailingPart);
+  if (nameParts.length === 2 && hasSuffix) return normalizeText(value);
+
+  const givenNames = hasSuffix ? nameParts.slice(1, -1) : nameParts.slice(1);
+  return normalizeText(`${givenNames.join(" ")} ${nameParts[0]} ${hasSuffix ? nameParts.at(-1) : ""}`);
 }
 
 function normalizeEmail(value: unknown) {

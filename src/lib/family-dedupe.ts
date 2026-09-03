@@ -232,9 +232,13 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
   const normalized = normalizePersonName(value, { stripCredentials });
   if (!normalized) return [];
   const variants = new Set(normalizeTextVariants(normalized));
-  let joinPunctuatedGivenName = false;
 
   if (typeof value === "string") {
+    const joinedHyphenName = value.replace(/([\p{L}\p{N}])[-\u2010-\u2015](?=[\p{L}\p{N}])/gu, "$1");
+    if (joinedHyphenName !== value) {
+      normalizeTextVariants(normalizePersonName(joinedHyphenName, { stripCredentials }))
+        .forEach((variant) => variants.add(variant));
+    }
     const rawParts = value.split(",").map((part) => part.trim()).filter(Boolean);
     const firstPartWords = normalizeText(rawParts[0]).split(/\s+/).filter(Boolean).length;
     const trailingSuffix = canonicalPersonNameToken(rawParts.at(-1), personNameSuffixes);
@@ -330,24 +334,6 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
         variants.add(normalizePersonNameText(
           `${dottedGivenNameWords.join(" ")} ${canonicalDottedSurname} ${dottedSurnameSuffix}`,
         ));
-      }
-    }
-    const rawGivenNamePart = rawParts.length === 1
-      ? rawParts[0]
-      : infixSuffix
-        ? rawParts.slice(2).join(" ")
-        : rawParts[1] ?? "";
-    const rawGivenNameWords = rawGivenNamePart.split(/\s+/).filter(Boolean);
-    if (personNameHonorifics.has(normalizeText(rawGivenNameWords[0]))) rawGivenNameWords.shift();
-    joinPunctuatedGivenName = /^[\p{L}\p{N}]+[-\u2010-\u2015][\p{L}\p{N}]+$/u.test(rawGivenNameWords[0] ?? "");
-  }
-
-  if (joinPunctuatedGivenName) {
-    for (const variant of [...variants]) {
-      const parts = variant.split(" ").filter(Boolean);
-      const suffix = personNameSuffixes.has(parts.at(-1) ?? "") ? parts.pop() : "";
-      if (parts.length >= 3) {
-        variants.add([`${parts[0]}${parts[1]}`, ...parts.slice(2), suffix].filter(Boolean).join(" "));
       }
     }
   }

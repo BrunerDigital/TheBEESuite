@@ -121,6 +121,28 @@ test("child duplicate scoring ignores siblings and placeholder records that only
   assert.equal(score, null);
 });
 
+test("child duplicate scoring recognizes ProCare last-first formatting", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Avery Smith",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Smith, Avery",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
 test("guardian duplicate scoring matches email and phone across same-school families", () => {
   const score = scoreGuardianDuplicate(
     {

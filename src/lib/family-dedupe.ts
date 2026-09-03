@@ -169,8 +169,8 @@ export function scoreChildDuplicate(left: ChildDedupeRecord, right: ChildDedupeR
 
   const reasons: string[] = [];
   let score = 0;
-  const leftName = normalizeText(left.fullName);
-  const rightName = normalizeText(right.fullName);
+  const leftName = normalizePersonName(left.fullName);
+  const rightName = normalizePersonName(right.fullName);
   const sameName = Boolean(leftName && leftName === rightName);
   const leftPreferredName = normalizeText(left.preferredName);
   const rightPreferredName = normalizeText(right.preferredName);

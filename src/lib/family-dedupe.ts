@@ -56,7 +56,7 @@ function normalizeText(value: unknown) {
   return typeof value === "string"
     ? value
         .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/(\p{Script=Latin})\p{M}+/gu, "$1")
         .replace(/[øØ]/g, "o")
         .replace(/[łŁ]/g, "l")
         .replace(/[đĐðÐ]/g, "d")

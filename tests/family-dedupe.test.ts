@@ -515,6 +515,27 @@ test("child duplicate scoring preserves non-Latin combining marks", () => {
   assert.equal(score, null);
 });
 
+test("child duplicate scoring preserves combining marks on Cyrillic letters", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Йона Петров",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Иона Петров",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
 test("child duplicate scoring matches an abbreviated given name", () => {
   const score = scoreChildDuplicate(
     {
@@ -811,6 +832,29 @@ test("guardian duplicate scoring preserves non-Latin combining marks", () => {
       familyId: "family_2",
       centerId: "center_1",
       fullName: "दुपक शर्मा",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("guardian duplicate scoring preserves combining marks on Cyrillic letters", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Йона Петров",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Иона Петров",
       phone: "7205550123",
       relation: "Parent",
     },

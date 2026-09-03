@@ -1496,7 +1496,11 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
             : { equals: billingAccount.customFields as Prisma.InputJsonValue },
         },
         data: {
-          ...(autopayPatch ? { autopayPlaceholder: autopayPatch.autopayPlaceholder } : {}),
+          ...(setupPending
+            ? { autopayPlaceholder: false }
+            : appliedAutopayPatch
+              ? { autopayPlaceholder: appliedAutopayPatch.autopayPlaceholder }
+              : {}),
           customFields: {
             ...currentFields,
             ...(customerId ? stripeCustomerCustomFieldPatch(currentFields, customerId, connectedAccountId) : {}),

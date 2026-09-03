@@ -47,6 +47,7 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
     (webhook.match(/lockPaymentMethodBillingAccount\(tx, billingAccountId\)/g) ?? []).length >= 3,
   );
   assert.match(webhook, /const setupPending = !setupSucceeded/);
+  assert.match(webhook, /setupPending[\s\S]*\? \{ autopayPlaceholder: false \}/);
   assert.match(webhook, /Billing account changed while failed bank verification was being recorded/);
   assert.match(webhook, /stripePendingPaymentMethodId/);
   assert.match(webhook, /Verified payment method details could not be retrieved/);

@@ -253,27 +253,20 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
     const trailingSuffix = canonicalPersonNameToken(rawParts.at(-1), personNameSuffixes);
     const rawTrailingWords = (rawParts.at(-1) ?? "").split(/\s+/).filter(Boolean);
     const rawTrailingToken = canonicalPersonNameToken(rawParts.at(-1), personNameCredentials);
-    const rawTrailingLetters = (rawParts.at(-1) ?? "").replace(/[^A-Za-z]/g, "");
-    const uppercaseTrailingCredential = rawTrailingLetters.length >= 2
-      && rawTrailingLetters === rawTrailingLetters.toUpperCase();
     const surnameTrailingSuffix = canonicalPersonNameToken(
       rawParts[0]?.split(/\s+/).filter(Boolean).at(-1),
       personNameSuffixes,
     );
     const compoundSurnameWordCount = firstPartWords - (surnameTrailingSuffix ? 1 : 0);
-    const groupedTrailingCredentials = rawTrailingWords.length > 1
-      && rawTrailingWords.every((word) => Boolean(canonicalPersonNameToken(word, personNameCredentials)));
-    const trailingCredential = groupedTrailingCredentials || (Boolean(rawTrailingToken)
-      && (!personNameCredentialLikeSurnames.has(rawTrailingToken) || uppercaseTrailingCredential));
-    const commaCompoundSurname = rawParts.length === 2
+    const compoundNameParts = stripCredentials ? stripTrailingPersonCredentials(rawParts) : rawParts;
+    const commaCompoundSurname = compoundNameParts.length === 2
       && compoundSurnameWordCount >= 2
-      && !trailingSuffix
-      && (!stripCredentials || !trailingCredential);
+      && !canonicalPersonNameToken(compoundNameParts.at(-1), personNameSuffixes);
     if (commaCompoundSurname) {
-      const rawSurnameWords = rawParts[0].split(/\s+/).filter(Boolean);
+      const rawSurnameWords = compoundNameParts[0].split(/\s+/).filter(Boolean);
       if (surnameTrailingSuffix) rawSurnameWords.pop();
       const surname = normalizeText(rawSurnameWords.join(" ")).replace(/\s+/g, "");
-      const rawGivenNameWords = rawParts[1].split(/\s+/).filter(Boolean);
+      const rawGivenNameWords = compoundNameParts[1].split(/\s+/).filter(Boolean);
       const attachedSuffix = canonicalPersonNameToken(rawGivenNameWords.at(-1), personNameSuffixes);
       if (attachedSuffix) rawGivenNameWords.pop();
       const givenNameWords = credentialsRemoved(rawGivenNameWords, stripCredentials);
@@ -406,6 +399,12 @@ function hasGivenNameAfterHonorific(value: unknown) {
   return words.length >= 2 && !personNameSurnameParticles.has(words[0] ?? "");
 }
 
+function leadingHonorific(value: unknown) {
+  if (typeof value !== "string") return "";
+  const firstWord = normalizeText(value).split(" ").filter(Boolean)[0] ?? "";
+  return personNameHonorifics.has(firstWord) ? firstWord : "";
+}
+
 function explicitCommaCompoundSurname(value: unknown, stripCredentials: boolean) {
   if (typeof value !== "string") return [];
   const rawParts = value.split(",").map((part) => part.trim()).filter(Boolean);
@@ -435,6 +434,9 @@ function personNameValuesMatch(
   options: { stripCredentials?: boolean } = {},
 ) {
   const stripCredentials = options.stripCredentials ?? true;
+  const leftHonorific = leadingHonorific(left);
+  const rightHonorific = leadingHonorific(right);
+  if (leftHonorific && rightHonorific && leftHonorific !== rightHonorific) return false;
   if (!hasGivenNameAfterHonorific(left)
     || !hasGivenNameAfterHonorific(right)) return false;
 

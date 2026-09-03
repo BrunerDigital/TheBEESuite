@@ -1915,6 +1915,53 @@ test("guardian duplicate scoring matches complete names that both include honori
   assert.ok(score?.reasons.includes("same guardian name"));
 });
 
+test("guardian duplicate scoring rejects conflicting titles on unmarked compound surnames", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Mr. Garcia Marquez",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Mrs. Garcia Marquez",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("guardian duplicate scoring collapses compound surnames after separate credentials", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Garcia Marquez, Alex, RN",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex GarciaMarquez",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
 test("child duplicate scoring matches complete names that both include honorifics", () => {
   const score = scoreChildDuplicate(
     {

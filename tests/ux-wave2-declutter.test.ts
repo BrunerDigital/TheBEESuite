@@ -15,7 +15,10 @@ test("documents separate action shortcuts from expandable records", async () => 
   assert.match(source, /id="document-records"[\s\S]*?defaultCollapsed=\{!data\.stats\.pending\}/);
   assert.match(source, /id="document-request-editor"[\s\S]*?defaultCollapsed/);
   assert.match(source, /OperationsActionHub[\s\S]*?defaultEntity="document"[\s\S]*?embedded/);
+  assert.match(source, /grid grid-cols-2 gap-3 md:grid-cols-4/);
   assert.match(actionHub, /embedded \? "gap-0 border-0 bg-transparent py-0 ring-0 shadow-none"/);
+  assert.match(checklist, /grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6/);
+  assert.match(checklist, /grid grid-cols-2 gap-2/);
   assert.match(checklist, /id="required-document-action-rows"[\s\S]*?defaultCollapsed/);
   assert.doesNotMatch(checklist, /id="required-document-action-rows"[\s\S]*?defaultCollapsed=\{!visibleRequestableItems\.length\}/);
 });
@@ -33,6 +36,7 @@ test("compliance keeps safety summaries visible and opens focused entry tools by
   assert.match(drills, /id="compliance-emergency-drills"[\s\S]*?defaultCollapsed/);
   assert.match(medication, /id="compliance-medication-log"[\s\S]*?defaultCollapsed/);
   assert.match(tasks, /id="compliance-task-workspace"[\s\S]*?defaultCollapsed/);
+  assert.match(page, /grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6/);
 });
 
 test("communications exposes inbox and compose actions while collapsing secondary settings", async () => {

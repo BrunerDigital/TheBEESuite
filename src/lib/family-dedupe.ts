@@ -177,8 +177,36 @@ function normalizePersonNameVariants(value: unknown) {
     const rawParts = value.split(",").map((part) => part.trim()).filter(Boolean);
     const firstPartWords = rawParts[0]?.split(/\s+/).filter(Boolean).length ?? 0;
     const trailingSuffix = canonicalPersonNameToken(rawParts.at(-1), personNameSuffixes);
+    const rawTrailingWords = (rawParts.at(-1) ?? "").split(/\s+/).filter(Boolean);
+    const rawTrailingToken = canonicalPersonNameToken(rawParts.at(-1), personNameCredentials);
+    const rawTrailingLetters = (rawParts.at(-1) ?? "").replace(/[^A-Za-z]/g, "");
+    const uppercaseTrailingCredential = rawTrailingLetters.length >= 2
+      && rawTrailingLetters === rawTrailingLetters.toUpperCase();
+    const groupedTrailingCredentials = rawTrailingWords.length > 1
+      && rawTrailingWords.every((word) => Boolean(canonicalPersonNameToken(word, personNameCredentials)));
+    const trailingCredential = groupedTrailingCredentials || (Boolean(rawTrailingToken)
+      && (!personNameCredentialLikeSurnames.has(rawTrailingToken) || uppercaseTrailingCredential));
+    const commaCompoundSurname = rawParts.length === 2
+      && firstPartWords >= 2
+      && !trailingSuffix
+      && !trailingCredential;
+    if (commaCompoundSurname) {
+      const surname = normalizeText(rawParts[0]).replace(/\s+/g, "");
+      const givenNames = normalizePersonNameText(rawParts[1]);
+      variants.clear();
+      normalizeTextVariants(`${givenNames} ${surname}`).forEach((variant) => variants.add(variant));
+    }
     if (rawParts.length === 2 && firstPartWords >= 2 && trailingSuffix === "v") {
       variants.add(normalizePersonNameText(`${rawParts[0]} ${trailingSuffix}`));
+    }
+    if (rawParts.length === 1) {
+      const directParts = normalized.split(" ").filter(Boolean);
+      const suffix = personNameSuffixes.has(directParts.at(-1) ?? "") ? directParts.pop() : "";
+      for (let surnameLength = 2; surnameLength < directParts.length; surnameLength += 1) {
+        const givenNames = directParts.slice(0, -surnameLength);
+        const surname = directParts.slice(-surnameLength).join("");
+        variants.add([...givenNames, surname, suffix].filter(Boolean).join(" "));
+      }
     }
   }
 

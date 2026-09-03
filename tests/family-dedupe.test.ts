@@ -895,6 +895,44 @@ test("child duplicate scoring preserves compound surname particles", () => {
   assert.equal(score, null);
 });
 
+test("child duplicate scoring preserves unmarked compound surname boundaries", () => {
+  const matchingScore = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Garcia Marquez, Avery",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Avery Garcia Marquez",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+  const shortenedScore = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Garcia Marquez, Avery",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_3",
+      familyId: "family_3",
+      centerId: "center_1",
+      fullName: "Avery Marquez",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(matchingScore?.confidence, "high");
+  assert.equal(shortenedScore, null);
+});
+
 test("guardian duplicate scoring allows optional ProCare middle names", () => {
   const score = scoreGuardianDuplicate(
     {

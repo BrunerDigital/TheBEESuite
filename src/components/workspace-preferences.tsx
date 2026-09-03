@@ -108,17 +108,6 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpan
     };
   }, [forceExpanded, key]);
 
-  const setPersistedCollapsed = useCallback((next: boolean) => {
-    if (forceExpanded) {
-      setCollapsed(false);
-      return;
-    }
-    setCollapsed(next);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(key, next ? "1" : "0");
-    }
-  }, [forceExpanded, key]);
-
   const toggleCollapsed = useCallback(() => {
     if (forceExpanded) return;
     setCollapsed((current) => {
@@ -130,9 +119,11 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpan
     });
   }, [forceExpanded, key]);
 
-  const expand = useCallback(() => setPersistedCollapsed(false), [setPersistedCollapsed]);
+  const expandForNavigation = useCallback(() => {
+    setCollapsed(false);
+  }, []);
 
-  return { collapsed: forceExpanded ? false : collapsed, expand, toggleCollapsed };
+  return { collapsed: forceExpanded ? false : collapsed, expandForNavigation, toggleCollapsed };
 }
 
 function useExpandForHash(id: string, expand: () => void) {
@@ -196,8 +187,8 @@ export function CollapsibleCard({
   forceExpanded = false,
 }: CollapsibleCardProps) {
   const contentId = useId();
-  const { collapsed, expand, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed, forceExpanded);
-  useExpandForHash(id, expand);
+  const { collapsed, expandForNavigation, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed, forceExpanded);
+  useExpandForHash(id, expandForNavigation);
 
   return (
     <Card
@@ -273,8 +264,8 @@ export function CollapsiblePanel({
   defaultCollapsed = true,
 }: CollapsiblePanelProps) {
   const contentId = useId();
-  const { collapsed, expand, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
-  useExpandForHash(id, expand);
+  const { collapsed, expandForNavigation, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
+  useExpandForHash(id, expandForNavigation);
 
   return (
     <section

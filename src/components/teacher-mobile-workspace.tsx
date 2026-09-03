@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, MapPin, Moon, Palette, Plus, QrCode, Save, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
+import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, MapPin, Moon, Palette, Plus, Save, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -878,6 +877,7 @@ export function TeacherMobileWorkspace({
         initialCompletedIds={teacherChecklistCompletedIds}
         graphicHref="/brand/the-bee-suite/explainers/current/teacher-daily-flow.png"
         compact
+        defaultCollapsed
       />
 
       <section className="rounded-xl border bg-card p-5">
@@ -885,9 +885,9 @@ export function TeacherMobileWorkspace({
           <ClipboardCheck data-icon="inline-start" />
           Classroom tools
         </Badge>
-        <h1 className="text-2xl font-semibold tracking-tight">Hi {teacherName}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Today in your classroom</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Record attendance, daily care, photos, and incidents for your classroom.
+          Hi {teacherName}. Record attendance, daily care, photos, and incidents from one focused action at a time.
         </p>
       </section>
 
@@ -920,7 +920,7 @@ export function TeacherMobileWorkspace({
           </div>
         )}
         className="shadow-none"
-        defaultCollapsed={profileReady}
+        defaultCollapsed
       >
           <div className="mb-4 flex items-center gap-3 rounded-xl border bg-background/40 p-3">
             <UserAvatar name={profileName || teacherName} src={teacherProfile?.profilePhotoUrl} size="lg" />
@@ -1060,9 +1060,9 @@ export function TeacherMobileWorkspace({
         </AlertDescription>
       </Alert>
 
-      <nav aria-label="Teacher task shortcuts" className="sticky top-[4.75rem] z-10 -mx-1 overflow-x-auto rounded-xl border bg-background p-2 shadow-sm lg:top-20">
+      <nav aria-label="Teacher task shortcuts" className="sticky top-[4.75rem] z-10 -mx-1 rounded-xl border bg-background p-2 shadow-sm lg:top-20">
         <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Do now</div>
-        <div className="flex min-w-max gap-2">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-6">
           {[
             ["Check attendance", "#teacher-attendance"],
             ["Write daily report", "#teacher-daily-report"],
@@ -1071,7 +1071,7 @@ export function TeacherMobileWorkspace({
             ["View roster", "#teacher-roster"],
             ["Edit profile", "#teacher-profile-setup"],
           ].map(([label, href]) => (
-            <Button key={href} size="sm" variant="outline" className="min-h-10" nativeButton={false} render={<a href={href} />}>
+            <Button key={href} size="sm" variant="outline" className="min-h-11 w-full justify-start whitespace-normal text-left" nativeButton={false} render={<a href={href} />}>
               {label}
             </Button>
           ))}
@@ -1079,22 +1079,21 @@ export function TeacherMobileWorkspace({
       </nav>
 
       {kioskAccess ? (
-        <Card className="shadow-none">
-          <CardHeader>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <CardTitle as="h2" className="flex items-center gap-2">
-                  <QrCode className="text-primary" />
-                  Lobby Kiosk
-                </CardTitle>
-                <CardDescription>{kioskAccess.centerName}</CardDescription>
-              </div>
-              <Badge variant={kioskAccess.hasStaffKioskCode ? "default" : "destructive"}>
-                {kioskAccess.hasStaffKioskCode ? "Staff code ready" : "Staff code missing"}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+        <CollapsibleCard
+          id="teacher-staff-clock"
+          title="Staff clock"
+          description={kioskAccess.centerName}
+          collapsedSummary={`${kioskAccess.clockStatus === "clocked_in" ? "Clocked in" : "Clocked out"} · ${kioskAccess.hasStaffKioskCode ? "Staff code ready" : "Staff code missing"}`}
+          headerActions={(
+            <Button type="button" size="sm" variant="outline" onClick={() => window.location.assign(kioskAccess.kioskPath)}>
+              <ExternalLink data-icon="inline-start" />
+              Open clock
+            </Button>
+          )}
+          className="shadow-none"
+          contentClassName="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center"
+          defaultCollapsed
+        >
             <div className="space-y-2">
               <div className="flex flex-wrap gap-2 text-sm">
                 <Badge variant={kioskAccess.clockStatus === "clocked_in" ? "default" : "outline"}>
@@ -1131,8 +1130,7 @@ export function TeacherMobileWorkspace({
               <ExternalLink data-icon="inline-start" />
               Open Staff Clock
             </Button>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       ) : null}
 
       <CollapsibleCard

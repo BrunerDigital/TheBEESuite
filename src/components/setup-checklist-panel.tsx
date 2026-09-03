@@ -20,6 +20,7 @@ type Props = {
   guideHref?: string;
   graphicHref?: string;
   compact?: boolean;
+  defaultCollapsed?: boolean;
 };
 
 export function SetupChecklistPanel({
@@ -32,6 +33,7 @@ export function SetupChecklistPanel({
   guideHref,
   graphicHref,
   compact = false,
+  defaultCollapsed = false,
 }: Props) {
   const [completedIds, setCompletedIds] = useState(() => new Set(initialCompletedIds));
   const [message, setMessage] = useState("");
@@ -95,6 +97,8 @@ export function SetupChecklistPanel({
       )}
       title={title}
       description={description}
+      collapsedSummary={`${completedCount}/${tasks.length} complete`}
+      defaultCollapsed={defaultCollapsed}
       headerActions={(
         <>
           {guideHref ? (

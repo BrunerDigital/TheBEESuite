@@ -2033,6 +2033,7 @@ function ParentPortalWorkspaceView({
                       sizes="240px"
                       priority
                       className="object-cover transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:transform-none"
+                      unoptimized
                     />
                   ) : (
                     <span className="grid h-full place-items-center text-primary/60">

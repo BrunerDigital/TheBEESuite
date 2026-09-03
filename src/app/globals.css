@@ -249,6 +249,12 @@
     background: color-mix(in oklch, var(--glass-field) 88%, var(--module-accent) 12%);
   }
 
+  .bee-app-frame :is(a[href], button, summary, [role="button"], [data-slot="button"]):focus-visible {
+    border-radius: 0.5rem;
+    outline: 2px solid var(--primary) !important;
+    outline-offset: 2px;
+  }
+
   .bee-app-frame nav[aria-label="Role quick navigation"] {
     inset-inline: 0.75rem;
     bottom: 0.75rem;
@@ -1628,6 +1634,15 @@
   }
 
   @media (max-width: 639px) {
+    .bee-app-frame [data-slot="button"],
+    .bee-app-frame summary {
+      min-height: 2.75rem;
+    }
+
+    .bee-app-frame [data-slot="button"]:has(> svg:only-child) {
+      min-width: 2.75rem;
+    }
+
     .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .dashboard-workspace {
       padding-inline: 0.75rem;
       padding-top: 0.875rem;

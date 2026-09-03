@@ -564,6 +564,54 @@ test("guardian duplicate scoring strips credentials attached to last-first given
   assert.ok(score?.reasons.includes("same guardian name"));
 });
 
+test("guardian duplicate scoring strips last-first credentials before suffixes", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith, Alex RN, Jr.",
+      phone: "7205550119",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith Jr.",
+      phone: "7205550119",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
+test("guardian duplicate scoring strips credentials from compound-surname variants", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Garcia Marquez, Alex RN",
+      phone: "7205550120",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Garcia Marquez",
+      phone: "7205550120",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
 test("guardian duplicate scoring ignores imported honorifics", () => {
   const score = scoreGuardianDuplicate(
     {

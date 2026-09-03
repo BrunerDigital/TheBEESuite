@@ -1801,3 +1801,116 @@ test("guardian duplicate scoring does not collapse an arbitrary direct middle na
 
   assert.equal(score, null);
 });
+
+test("guardian duplicate scoring rejects surname-only matches after stripping honorifics", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Mr. Smith",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Mrs. Smith",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("child duplicate scoring does not collapse an unpunctuated first and middle name", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "John Adam Smith",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "JohnAdam Smith",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("guardian duplicate scoring does not collapse an unpunctuated first and middle name", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "John Adam Smith",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "JohnAdam Smith",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("child duplicate scoring canonicalizes a full-word suffix attached to a last-first surname", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith Junior, John",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "John Smith Jr.",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
+test("guardian duplicate scoring canonicalizes a full-word suffix attached to a last-first surname", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith Senior, John",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "John Smith Sr.",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});

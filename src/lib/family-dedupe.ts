@@ -110,7 +110,9 @@ function canonicalPersonNameToken(value: unknown, supported: Set<string>) {
 
 function normalizePersonNameText(value: unknown) {
   const words = normalizeText(value).split(" ").filter(Boolean);
-  if (personNameHonorifics.has(words[0] ?? "")) words.shift();
+  const hadHonorific = personNameHonorifics.has(words[0] ?? "");
+  if (hadHonorific) words.shift();
+  if (hadHonorific && words.length < 2) return "";
   return words.join(" ");
 }
 
@@ -230,6 +232,7 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
   const normalized = normalizePersonName(value, { stripCredentials });
   if (!normalized) return [];
   const variants = new Set(normalizeTextVariants(normalized));
+  let joinPunctuatedGivenName = false;
 
   if (typeof value === "string") {
     const rawParts = value.split(",").map((part) => part.trim()).filter(Boolean);
@@ -263,6 +266,17 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
       const givenNameWords = credentialsRemoved(rawGivenNameWords, stripCredentials);
       const givenNames = normalizePersonNameText(givenNameWords.join(" "));
       normalizeTextVariants(`${givenNames} ${surname} ${surnameTrailingSuffix || attachedSuffix}`)
+        .forEach((variant) => variants.add(variant));
+    }
+    if (rawParts.length === 2 && surnameTrailingSuffix && compoundSurnameWordCount === 1) {
+      const rawSurnameWords = rawParts[0].split(/\s+/).filter(Boolean);
+      rawSurnameWords.pop();
+      const surname = normalizeText(rawSurnameWords.join(" "));
+      const rawGivenNameWords = rawParts[1].split(/\s+/).filter(Boolean);
+      const attachedSuffix = canonicalPersonNameToken(rawGivenNameWords.at(-1), personNameSuffixes);
+      if (attachedSuffix) rawGivenNameWords.pop();
+      const givenNameWords = credentialsRemoved(rawGivenNameWords, stripCredentials);
+      normalizeTextVariants(`${givenNameWords.join(" ")} ${surname} ${surnameTrailingSuffix}`)
         .forEach((variant) => variants.add(variant));
     }
     const ambiguousCredentialLikeGivenName = rawParts.length === 2
@@ -318,13 +332,23 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
         ));
       }
     }
+    const rawGivenNamePart = rawParts.length === 1
+      ? rawParts[0]
+      : infixSuffix
+        ? rawParts.slice(2).join(" ")
+        : rawParts[1] ?? "";
+    const rawGivenNameWords = rawGivenNamePart.split(/\s+/).filter(Boolean);
+    if (personNameHonorifics.has(normalizeText(rawGivenNameWords[0]))) rawGivenNameWords.shift();
+    joinPunctuatedGivenName = /^[\p{L}\p{N}]+[-\u2010-\u2015][\p{L}\p{N}]+$/u.test(rawGivenNameWords[0] ?? "");
   }
 
-  for (const variant of [...variants]) {
-    const parts = variant.split(" ").filter(Boolean);
-    const suffix = personNameSuffixes.has(parts.at(-1) ?? "") ? parts.pop() : "";
-    if (parts.length >= 3) {
-      variants.add([`${parts[0]}${parts[1]}`, ...parts.slice(2), suffix].filter(Boolean).join(" "));
+  if (joinPunctuatedGivenName) {
+    for (const variant of [...variants]) {
+      const parts = variant.split(" ").filter(Boolean);
+      const suffix = personNameSuffixes.has(parts.at(-1) ?? "") ? parts.pop() : "";
+      if (parts.length >= 3) {
+        variants.add([`${parts[0]}${parts[1]}`, ...parts.slice(2), suffix].filter(Boolean).join(" "));
+      }
     }
   }
 

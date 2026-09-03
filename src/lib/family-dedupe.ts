@@ -87,7 +87,13 @@ function stripTrailingPersonCredentials(parts: string[]) {
   const remaining = [...parts];
   while (remaining.length) {
     const trailingWords = remaining.at(-1)?.split(/\s+/).filter(Boolean) ?? [];
-    if (!canonicalPersonNameToken(trailingWords.at(-1), personNameCredentials)) break;
+    const rawCredential = trailingWords.at(-1) ?? "";
+    if (!canonicalPersonNameToken(rawCredential, personNameCredentials)) break;
+    const separateCommaPart = remaining.length > 1 && trailingWords.length === 1;
+    const uppercaseLetters = rawCredential.match(/[A-Z]/g)?.length ?? 0;
+    const visiblyAttachedCredential = rawCredential.includes(".")
+      || (trailingWords.length >= 3 && uppercaseLetters >= 2);
+    if (!separateCommaPart && !visiblyAttachedCredential) break;
     trailingWords.pop();
     if (trailingWords.length) remaining[remaining.length - 1] = trailingWords.join(" ");
     else remaining.pop();

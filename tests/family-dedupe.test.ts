@@ -444,6 +444,29 @@ test("guardian duplicate scoring ignores common professional credentials", () =>
   assert.ok(score?.reasons.includes("same guardian name"));
 });
 
+test("guardian duplicate scoring preserves credential-like surnames", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Alex Ma",
+      phone: "7205550108",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Pa",
+      phone: "7205550108",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
 test("guardian duplicate scoring allows optional ProCare middle names", () => {
   const score = scoreGuardianDuplicate(
     {

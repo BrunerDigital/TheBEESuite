@@ -143,6 +143,12 @@ function normalizePersonName(value: unknown) {
   }
 
   const firstPartWords = nameParts[0]?.split(/\s+/).filter(Boolean).length ?? 0;
+  const surnameFollowingSuffix = nameParts.length > 2
+    ? canonicalPersonNameToken(nameParts[1], personNameSuffixes)
+    : "";
+  if (surnameFollowingSuffix) {
+    return normalizePersonNameText(`${nameParts.slice(2).join(" ")} ${nameParts[0]} ${surnameFollowingSuffix}`);
+  }
   const trailingSuffix = canonicalPersonNameToken(nameParts.at(-1), personNameSuffixes);
   const dottedVInitial = trailingSuffix === "v" && /\.\s*$/.test(nameParts.at(-1) ?? "");
   const separateSuffix = nameParts.length === 2 && (firstPartWords < 2 || dottedVInitial)

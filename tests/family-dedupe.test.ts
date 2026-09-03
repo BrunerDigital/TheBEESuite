@@ -364,6 +364,28 @@ test("child duplicate scoring extracts a suffix attached to a ProCare given name
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
 
+test("child duplicate scoring recognizes suffixes between surname and given name", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith, Jr., John",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "John Smith Jr.",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
 test("child duplicate scoring canonicalizes omitted apostrophes", () => {
   const score = scoreChildDuplicate(
     {

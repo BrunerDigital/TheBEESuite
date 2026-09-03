@@ -4143,9 +4143,15 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
             </TableBody>
           </Table>
       </CollapsibleCard>
-      <section id="document-request-editor" className="scroll-mt-28">
-        <OperationsActionHub title="Create or Edit Document Request" defaultEntity="document" compact />
-      </section>
+      <CollapsibleCard
+        id="document-request-editor"
+        title="Create or edit document request"
+        description="Open a focused form to create a request or update an existing record."
+        collapsedSummary="Request form · existing records remain unchanged until you save"
+        defaultCollapsed
+      >
+        <OperationsActionHub title="Create or Edit Document Request" defaultEntity="document" compact embedded />
+      </CollapsibleCard>
     </div>
   );
 }

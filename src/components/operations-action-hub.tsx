@@ -39,12 +39,13 @@ type Props = {
   title?: string;
   defaultEntity?: string;
   compact?: boolean;
+  embedded?: boolean;
   centers?: Array<{ id: string; name: string }>;
 };
 
 const centerScopedEntities = new Set(["family", "classroom", "staff", "announcement"]);
 
-export function OperationsActionHub({ title = "Create / Edit Record", defaultEntity = "announcement", compact = false, centers = [] }: Props) {
+export function OperationsActionHub({ title = "Create / Edit Record", defaultEntity = "announcement", compact = false, embedded = false, centers = [] }: Props) {
   const formId = useId();
   const [entity, setEntity] = useState(defaultEntity);
   const [id, setId] = useState("");
@@ -124,14 +125,16 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle as="h2">{title}</CardTitle>
-        <CardDescription>
-          Enter an existing record reference to update it, or leave the reference blank to create a new record.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <Card className={embedded ? "gap-0 border-0 bg-transparent py-0 ring-0 shadow-none" : undefined}>
+      {embedded ? null : (
+        <CardHeader>
+          <CardTitle as="h2">{title}</CardTitle>
+          <CardDescription>
+            Enter an existing record reference to update it, or leave the reference blank to create a new record.
+          </CardDescription>
+        </CardHeader>
+      )}
+      <CardContent className={embedded ? "space-y-4 p-0" : "space-y-4"}>
         {statusMessage ? (
           <Alert>
             <CheckCircle2 className="size-4" />

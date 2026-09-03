@@ -108,6 +108,24 @@ export function serviceDayWindowInTimeZone(date = new Date(), timeZone = FALLBAC
   return { timeZone, start, end };
 }
 
+export function monthKeyInTimeZone(date: Date, timeZone = FALLBACK_TIME_ZONE) {
+  const parts = datePartsInTimeZone(date, timeZone);
+  return `${parts.year}-${parts.month - 1}`;
+}
+
+export function monthBucketInTimeZone(date: Date, timeZone = FALLBACK_TIME_ZONE, monthOffset = 0) {
+  const parts = datePartsInTimeZone(date, timeZone);
+  const normalizedMonth = new Date(Date.UTC(parts.year, parts.month - 1 + monthOffset, 1));
+  const year = normalizedMonth.getUTCFullYear();
+  const month = normalizedMonth.getUTCMonth() + 1;
+  const start = zonedDateTimeToUtc({ year, month, day: 1, hour: 0, minute: 0, second: 0 }, timeZone);
+  return {
+    key: `${year}-${month - 1}`,
+    label: new Intl.DateTimeFormat("en-US", { timeZone, month: "short" }).format(start),
+    start,
+  };
+}
+
 const stateTimeZones: Record<string, string> = {
   AK: "America/Anchorage",
   AL: "America/Chicago",

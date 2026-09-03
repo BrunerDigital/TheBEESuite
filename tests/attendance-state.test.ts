@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { centerServiceDayWindow, formatServiceDateLabel, isLatePickup, readCenterLocationTimeZone, readCenterTimeZone, readLatePickupCutoff, serviceDayWindowInTimeZone } from "@/lib/attendance-state";
+import { centerServiceDayWindow, formatServiceDateLabel, isLatePickup, monthBucketInTimeZone, monthKeyInTimeZone, readCenterLocationTimeZone, readCenterTimeZone, readLatePickupCutoff, serviceDayWindowInTimeZone } from "@/lib/attendance-state";
 
 test("late pickup cutoff defaults and reads center customization", () => {
   assert.equal(readLatePickupCutoff(null), "18:00");
@@ -69,4 +69,21 @@ test("service day window preserves local midnights across daylight saving change
 
   assert.equal(serviceDay.start.toISOString(), "2026-03-08T05:00:00.000Z");
   assert.equal(serviceDay.end.toISOString(), "2026-03-09T04:00:00.000Z");
+});
+
+test("trend month boundaries and keys use the workspace timezone", () => {
+  const instant = new Date("2026-09-01T02:30:00.000Z");
+  const currentBucket = monthBucketInTimeZone(instant, "America/New_York");
+  const firstTrendBucket = monthBucketInTimeZone(instant, "America/New_York", -5);
+
+  assert.equal(monthKeyInTimeZone(instant, "America/New_York"), "2026-7");
+  assert.equal(monthKeyInTimeZone(instant, "UTC"), "2026-8");
+  assert.deepEqual(
+    { key: currentBucket.key, label: currentBucket.label, start: currentBucket.start.toISOString() },
+    { key: "2026-7", label: "Aug", start: "2026-08-01T04:00:00.000Z" },
+  );
+  assert.deepEqual(
+    { key: firstTrendBucket.key, label: firstTrendBucket.label, start: firstTrendBucket.start.toISOString() },
+    { key: "2026-2", label: "Mar", start: "2026-03-01T05:00:00.000Z" },
+  );
 });

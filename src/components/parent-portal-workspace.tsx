@@ -2643,10 +2643,10 @@ function ParentPortalWorkspaceView({
                       ? "The prior saved method is protected but cannot be charged on the school's current payment account."
                       : autopayStatus === "enabled"
                       ? "Account credit is applied first, then the saved method pays eligible invoices."
-                      : paymentMethodManagement?.hasSavedPaymentMethod
-                        ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` · updated ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}`
-                        : paymentMethodManagement?.autopayStatus === "pending"
-                          ? "Bank verification is pending."
+                      : bankVerificationPending
+                        ? "Bank verification is pending."
+                        : paymentMethodManagement?.hasSavedPaymentMethod
+                          ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` · updated ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}`
                           : "No saved payment method yet."}
                   </p>
                 </div>
@@ -2661,7 +2661,7 @@ function ParentPortalWorkspaceView({
                       paymentCheckoutMethod !== null ||
                       !family ||
                       autopayUnavailable ||
-                      autopayStatus === "pending" ||
+                      bankVerificationPending ||
                       (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")
                     }
                     aria-label="Enable or disable autopay"
@@ -2673,7 +2673,7 @@ function ParentPortalWorkspaceView({
                 className="mt-3 w-full sm:w-auto"
                 type="button"
                 variant={autopayStatus === "enabled" ? "outline" : "default"}
-                disabled={isPending || paymentCheckoutMethod !== null || !family || autopayUnavailable || autopayStatus === "pending" || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
+                disabled={isPending || paymentCheckoutMethod !== null || !family || autopayUnavailable || bankVerificationPending || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
                 onClick={() => toggleAutopay(autopayStatus !== "enabled")}
               >
                 {autopayUnavailable
@@ -2925,7 +2925,7 @@ function ParentPortalWorkspaceView({
                   <Button
                     type="button"
                     variant={autopayStatus === "enabled" ? "outline" : "default"}
-                    disabled={isPending || paymentCheckoutMethod !== null || autopayUnavailable || autopayStatus === "pending" || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
+                    disabled={isPending || paymentCheckoutMethod !== null || autopayUnavailable || bankVerificationPending || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
                     onClick={() => toggleAutopay(autopayStatus !== "enabled")}
                   >
                     {autopayUnavailable

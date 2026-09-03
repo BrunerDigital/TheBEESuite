@@ -20,6 +20,7 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
   assert.match(paymentMethodRoute, /action === "setup" && currentFields\.stripeBankVerificationPending === true/);
   assert.match(publicPaymentMethodRoute, /currentFields\.stripeBankVerificationPending === true/);
   assert.match(paymentMethodRoute, /Bank verification is already pending/);
+  assert.match(paymentMethodRoute, /paymentMethod\.bankVerificationPending/);
   assert.match(publicPaymentMethodRoute, /Bank verification is already pending/);
   assert.match(paymentMethodManagement, /const explicitEnable = setupMode === "enable"/);
   assert.match(paymentMethodManagement, /const explicitDisable = setupMode === "disabled"/);

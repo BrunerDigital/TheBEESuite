@@ -347,7 +347,7 @@ async function POSTHandler(request: NextRequest) {
     if (!paymentMethod.hasSavedPaymentMethod) {
       requirements.push(autopayRequirement("missing_saved_payment_method", "Save a payment method on file before enabling autopay."));
     }
-    if (paymentMethod.autopayStatus === "pending") {
+    if (paymentMethod.bankVerificationPending) {
       requirements.push(autopayRequirement("bank_verification_pending", "Bank verification is still pending for this payment method. Complete verification before enabling autopay."));
     }
     if (requirements.length) {

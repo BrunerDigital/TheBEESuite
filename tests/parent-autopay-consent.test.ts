@@ -81,6 +81,7 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(parentPortal, /action === "enable_autopay" \|\| action === "disable_autopay"/);
   assert.doesNotMatch(parentPortal, /if \(enabled && !autopayCanEnable\)/);
   assert.match(paymentMethodRoute, /action === "enable_autopay"[\s\S]*paymentMethodManagementSummary/);
+  assert.match(paymentMethodRoute, /if \(paymentMethod\.bankVerificationPending\)/);
   assert.match(paymentMethodRoute, /missing_stripe_customer/);
   assert.match(paymentMethodRoute, /missing_saved_payment_method/);
   assert.match(paymentMethodRoute, /wrong_payout_account/);
@@ -94,4 +95,5 @@ test("parents control autopay consent and directors can only run enabled autopay
   assert.match(publicPaymentMethodPage, /paymentMethodManagementSummary\(\{[\s\S]*activeConnectedAccountId,[\s\S]*centerCustomFields: center\.customFields/);
   assert.match(publicPaymentMethodForm, /disabled=\{isPending \|\| bankVerificationPending\}/);
   assert.match(parentPortal, /disabled=\{isPending \|\| bankVerificationPending \|\| paymentCheckoutMethod !== null \|\| !family\}/);
+  assert.ok((parentPortal.match(/autopayUnavailable \|\| bankVerificationPending/g) ?? []).length >= 2);
 });

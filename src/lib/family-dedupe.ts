@@ -58,6 +58,13 @@ function normalizeText(value: unknown) {
     : "";
 }
 
+function normalizePersonName(value: unknown) {
+  if (typeof value !== "string") return "";
+  const [lastName, ...givenNames] = value.split(",");
+  if (!givenNames.length) return normalizeText(value);
+  return normalizeText(`${givenNames.join(" ")} ${lastName}`);
+}
+
 function normalizeEmail(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
@@ -164,16 +171,17 @@ export function scoreChildDuplicate(left: ChildDedupeRecord, right: ChildDedupeR
   let score = 0;
   const leftName = normalizeText(left.fullName);
   const rightName = normalizeText(right.fullName);
+  const sameName = Boolean(leftName && leftName === rightName);
   const leftPreferredName = normalizeText(left.preferredName);
   const rightPreferredName = normalizeText(right.preferredName);
   const leftDateOfBirth = normalizedDate(left.dateOfBirth);
   const rightDateOfBirth = normalizedDate(right.dateOfBirth);
 
-  if (leftName && leftName === rightName && leftDateOfBirth && leftDateOfBirth === rightDateOfBirth) {
+  if (sameName && leftDateOfBirth && leftDateOfBirth === rightDateOfBirth) {
     score += 70;
     reasons.push("same child name and date of birth");
   } else {
-    if (leftName && leftName === rightName) {
+    if (sameName) {
       score += 35;
       reasons.push("same child name");
     }
@@ -182,6 +190,11 @@ export function scoreChildDuplicate(left: ChildDedupeRecord, right: ChildDedupeR
       reasons.push("same date of birth");
     }
   }
+
+  // Shared birth dates, classrooms, and preferred names are common for siblings
+  // and placeholder ProCare records. A matching child name is the minimum safe
+  // identity signal before showing a merge candidate.
+  if (!sameName) return null;
 
   if (leftPreferredName && leftPreferredName === rightPreferredName) {
     score += 10;
@@ -240,9 +253,12 @@ export function scoreGuardianDuplicate(left: GuardianDedupeRecord, right: Guardi
     reasons.push("same guardian phone");
   }
 
-  const leftName = normalizeText(left.fullName);
-  const rightName = normalizeText(right.fullName);
-  if (leftName && leftName === rightName) {
+  const leftName = normalizePersonName(left.fullName);
+  const rightName = normalizePersonName(right.fullName);
+  const sameName = Boolean(leftName && leftName === rightName);
+  const sameEmail = Boolean(leftEmail && leftEmail === rightEmail);
+  if (!sameEmail && !sameName) return null;
+  if (sameName) {
     score += 30;
     reasons.push("same guardian name");
   }

@@ -96,6 +96,31 @@ test("child duplicate candidates stay inside the same school and sort by score",
   assert.deepEqual(candidates.map((candidate) => candidate.candidateId), ["child_2", "child_4"]);
 });
 
+test("child duplicate scoring ignores siblings and placeholder records that only share dates or programs", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Finn Mahoney",
+      preferredName: "Finn",
+      dateOfBirth: "2022-10-10",
+      ageGroup: "Fireflies",
+    },
+    {
+      id: "child_2",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Mason Mahoney",
+      preferredName: "Mason",
+      dateOfBirth: "2022-10-10",
+      ageGroup: "Fireflies",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
 test("guardian duplicate scoring matches email and phone across same-school families", () => {
   const score = scoreGuardianDuplicate(
     {
@@ -135,4 +160,54 @@ test("guardian duplicate candidates stay inside the same school and sort by scor
   );
 
   assert.deepEqual(candidates.map((candidate) => candidate.candidateId), ["guardian_2"]);
+});
+
+test("guardian duplicate scoring recognizes ProCare last-first formatting", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Samantha Robbins",
+      phone: "7209998260",
+      relation: "Mom",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Robbins, Samantha",
+      phone: "Cell 720 9998260",
+      relation: "Mom",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+  assert.ok(score?.reasons.includes("same guardian phone"));
+});
+
+test("guardian duplicate scoring ignores distinct co-parents who share a household phone", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Brian Thompson",
+      email: "brian@example.com",
+      phone: "5053281322",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Alexa Thompson",
+      email: "alexa@example.com",
+      phone: "5053281322",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
 });

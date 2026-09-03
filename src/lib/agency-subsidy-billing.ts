@@ -107,3 +107,17 @@ export function nextRemittanceStatus(input: { claimedCents: number; approvedCent
   if (input.paidCents <= 0) return input.approvedCents === null || input.approvedCents === undefined ? "submitted" : "approved";
   return input.paidCents >= payable ? "paid" : "partially_paid";
 }
+
+export const AGENCY_LEDGER_SOURCE_SYSTEM = "subsidy_agency";
+
+export function agencyClaimApprovalLedgerExternalId(claimId: string) {
+  return `claim-approved:${claimId.trim()}`;
+}
+
+export function agencyRemittanceLedgerExternalId(remittanceId: string) {
+  return `remittance:${remittanceId.trim()}`;
+}
+
+export function agencyRemittanceReversalLedgerExternalId(remittanceId: string) {
+  return `remittance-reversal:${remittanceId.trim()}`;
+}

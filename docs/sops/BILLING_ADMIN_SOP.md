@@ -254,7 +254,7 @@ Use `docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md` or the public guide at `https://
 2. Confirm the school-specific agency program shows `Ready`.
 3. Match the approved claim to the agency, child, authorization, service period, amount, paid date, and remittance reference.
 4. Use `Record remittance` on the approved claim. Do not use the family cash/check payment action for agency money.
-5. Refresh and verify the claim paid amount/status, remittance history, matching agency ledger application, and unchanged parent-visible family responsibility.
+5. Refresh and verify the claim paid amount/status, remittance history, dedicated school-and-agency ledger entry and balance, and unchanged parent-visible family responsibility.
 6. Reverse an incorrect remittance with a correction reason, then enter the corrected record. Never delete or overwrite payment evidence.
 
 Stop when a bank deposit or Stripe payout cannot be tied to an exact approved claim and agency remittance notice. Do not write off or shift a balance to the family without separate director or accounting approval.

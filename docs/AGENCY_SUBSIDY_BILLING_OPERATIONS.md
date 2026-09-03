@@ -1,12 +1,12 @@
 # Agency Payment And Reconciliation SOP - The BEE Suite
 
-Last updated: September 2, 2026
+Last updated: September 3, 2026
 
 Audience: school directors, assistant directors, billing administrators, accounting users, and launch support.
 
 ## Purpose
 
-Use this SOP to prepare an agency claim, record an approved ACH, check, or agency-portal remittance, and prove that the payment reconciled to the correct agency receivable. The workflow keeps agency responsibility separate from the family's responsibility and never charges the family.
+Use this SOP to prepare an agency claim, record an approved ACH, check, or agency-portal remittance, and prove that the payment reconciled in the dedicated agency ledger. The workflow keeps agency responsibility separate from the family's ledger and never charges the family.
 
 Public step-by-step guide: `https://thebeesuite.io/resources/agency-payment-reconciliation`
 
@@ -70,7 +70,7 @@ When one deposit covers several claims, use the agency remittance detail to allo
 7. Review the claim, amount, date, method, and reference with the second person when two-person review is available.
 8. Select `Review complete - save` once. Wait for `Agency billing record saved` and the refreshed claim queue before doing anything else.
 
-Recording a remittance does not charge the family. When a matching agency receivable exists, The BEE Suite posts the agency payment against that receivable while preserving the parent-visible family responsibility.
+Recording a remittance does not charge the family. Agency approval creates the receivable charge in the dedicated agency ledger; the matched remittance creates a payment entry against that same school-and-agency account. Existing family-ledger agency rows remain immutable history, and compatibility settlement is limited to clearing those pre-existing agency receivables.
 
 ## Step 5 - Reconcile Immediately
 
@@ -79,21 +79,23 @@ Refresh the agency workspace and verify all of the following:
 1. The claim's paid amount increased by exactly the remittance amount.
 2. The claim status is `partially paid` when money remains or `paid` when the approved amount is fully covered.
 3. The remittance history shows the exact paid date, amount, and external reference once.
-4. The agency outstanding total decreased by the amount applied.
-5. When the family ledger had a matching agency receivable, it contains the corresponding `agency_payment` entry and the agency receivable decreased by the applied amount.
+4. The agency ledger contains one `remittance received` entry with the exact claim, amount, date, method, and reference.
+5. The school-and-agency ledger balance decreased by the remittance amount and reconciles to approved claims less active remittances and reversals.
 6. The parent's visible family responsibility did not increase or decrease because of the agency remittance.
-7. For a multi-claim deposit, the sum recorded across claims equals the deposit exactly.
-8. Export the agency-claims CSV or retain the school-approved reconciliation evidence required by accounting.
+7. Any legacy family-ledger compatibility entry is clearly identified and does not exceed the pre-existing matching agency receivable.
+8. For a multi-claim deposit, the sum recorded across claims equals the deposit exactly.
+9. Export the agency ledger CSV for complete accounting history; export the agency-claims CSV when claim-level status detail is also required.
 
-If the claim saved but no matching agency receivable was available to apply in the family ledger, keep the remittance as claim evidence and escalate the unmatched receivable to accounting. Do not post a second manual family payment to force the balance to match.
+If the claim or remittance saved but the dedicated agency ledger is missing the matching entry or does not reconcile, stop and escalate to accounting. Do not post a second manual family payment or a duplicate remittance to force the balance to match.
 
 ## Reverse an incorrect remittance
 
 1. Find the exact remittance in the claim history.
 2. Select `Reverse` and enter a specific correction reason.
 3. Confirm the original remittance is shown as reversed and the claim paid amount/status recalculates.
-4. Confirm any linked agency-receivable ledger amount was restored through a compensating reversal entry.
-5. Enter the corrected remittance as a new record using the correct source evidence.
+4. Confirm the dedicated agency ledger contains a compensating reversal entry and the school-and-agency balance was restored.
+5. If the original payment cleared a pre-existing legacy family-ledger agency receivable, confirm its compatibility reversal was also preserved.
+6. Enter the corrected remittance as a new record using the correct source evidence.
 
 Never delete, overwrite, backdate without evidence, or reuse the family cash/check payment workflow to correct an agency remittance. The original record, reversal, correction reason, and replacement must remain in the audit history.
 
@@ -132,7 +134,7 @@ Retain these details in the school's approved internal reconciliation record:
 - Claim number or numbers and covered service period.
 - Deposit or remittance total and external reference.
 - Exact amount allocated to each claim.
-- Claim status, agency outstanding total, and ledger result after posting.
+- Claim status, dedicated agency-ledger balance, and ledger result after posting.
 - Parent-visible responsibility before and after posting.
 - Person who entered the remittance and date reviewed.
 - Second reviewer and date reviewed.

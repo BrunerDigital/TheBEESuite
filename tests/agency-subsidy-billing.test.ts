@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   activeRemittanceTotalCents,
+  agencyClaimApprovalLedgerExternalId,
+  agencyRemittanceLedgerExternalId,
+  agencyRemittanceReversalLedgerExternalId,
   AGENCY_SUBMISSION_METHODS,
   agencyProgramSetupBlockers,
   agencyProgramStatus,
@@ -29,6 +32,7 @@ test("agency remittance corrections replay safely in both migration ledgers", ()
   const migrationNames = [
     "20260824150000_agency_remittance_corrections",
     "20260824173000_active_agency_remittance_reference",
+    "20260903190000_agency_receivable_ledger",
   ];
 
   for (const migrationName of migrationNames) {
@@ -45,6 +49,9 @@ test("claim math and identifiers are deterministic", () => {
   assert.equal(normalizeStateCode("Indiana"), "");
   assert.equal(claimAmountCents({ serviceUnits: 4.5, rateCents: 12000 }), 54000);
   assert.equal(subsidyClaimNumber({ stateCode: "IN", centerId: "center_123456", now: new Date("2026-08-14T12:00:00Z"), suffix: "abc-123" }), "SUB-IN-123456-20260814-ABC123");
+  assert.equal(agencyClaimApprovalLedgerExternalId(" claim-1 "), "claim-approved:claim-1");
+  assert.equal(agencyRemittanceLedgerExternalId(" remittance-1 "), "remittance:remittance-1");
+  assert.equal(agencyRemittanceReversalLedgerExternalId(" remittance-1 "), "remittance-reversal:remittance-1");
 });
 
 test("submission is fail closed on program setup and documentation", () => {
@@ -215,7 +222,39 @@ test("agency remittances re-read the claim inside a serializable transaction", (
   assert.match(route, /entryAuthorizationNumber && entryAgencyName[\s\S]*entryAuthorizationNumber === authorizationNumber && entryAgencyName === agencyName/);
   assert.match(route, /That remittance reference is already recorded or the claim changed/);
   assert.match(workspace, /Record remittance/);
-  assert.match(workspace, /reconciles matching agency receivables while leaving the parent-visible family responsibility unchanged/);
+  assert.match(workspace, /Approvals and remittances post to the separate agency ledger/);
+});
+
+test("agency receivables use a dedicated immutable ledger with a legacy-only family mirror", () => {
+  const schema = readFileSync("prisma/schema.prisma", "utf8");
+  const migration = readFileSync("prisma/migrations/20260903190000_agency_receivable_ledger/migration.sql", "utf8");
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
+
+  assert.match(schema, /model AgencyLedgerAccount \{[\s\S]*@@unique\(\[centerId, agencyProgramId\]\)/);
+  assert.match(schema, /model AgencyLedgerEntry \{[\s\S]*amountCents\s+Int[\s\S]*balanceAfterCents\s+Int[\s\S]*@@unique\(\[sourceSystem, externalId\]\)/);
+  assert.match(migration, /Approved claims become agency receivable charges\. Family billing is not changed\./);
+  assert.match(migration, /'claim_approved'/);
+  assert.match(migration, /'remittance_received'/);
+  assert.match(migration, /'remittance_reversal'/);
+  assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
+  assert.doesNotMatch(migration, /(?:UPDATE|DELETE FROM|INSERT INTO) "BillingAccount"|(?:UPDATE|DELETE FROM|INSERT INTO) "LedgerEntry"/);
+
+  assert.match(route, /ensureAgencyClaimReceivable/);
+  assert.match(route, /type: "claim_approved"/);
+  assert.match(route, /type: "remittance_received"/);
+  assert.match(route, /type: "remittance_reversal"/);
+  assert.match(route, /agencyLedgerAccount\.findMany/);
+  assert.match(route, /agencyLedgerEntry\.findMany/);
+  assert.match(route, /if \(exportingLedger\) return exportAgencyLedgerCsv\(centerIds\)/);
+  assert.match(route, /legacyCompatibilityMirror: true/);
+  assert.match(route, /legacyFamilyLedgerAppliedCents = Math\.min/);
+
+  assert.match(workspace, /title="Agency ledger"/);
+  assert.match(workspace, /Ledger receivable/);
+  assert.match(workspace, /exportLedger=true/);
+  assert.match(workspace, /Family balances and parent payments do not post here/);
+  assert.match(workspace, /Compatibility settlement is limited to clearing those pre-existing agency receivables/);
 });
 
 test("agency requirements fail closed when current required items are missing", () => {

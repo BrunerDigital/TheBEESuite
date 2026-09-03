@@ -175,6 +175,7 @@ model Center {
   tuitionPlans             TuitionPlan[]
   refundRequests           RefundRequest[]
   agencyPrograms           AgencyProgram[]
+  agencyLedgerAccounts     AgencyLedgerAccount[]
   subsidyAuthorizations    SubsidyAuthorization[]
   subsidyClaims            SubsidyClaim[]
 
@@ -1248,6 +1249,7 @@ model AgencyProgram {
   center         Center                 @relation(fields: [centerId], references: [id])
   authorizations SubsidyAuthorization[]
   claims         SubsidyClaim[]
+  ledgerAccounts AgencyLedgerAccount[]
 
   @@unique([centerId, name, programName])
   @@index([centerId, status])
@@ -1312,6 +1314,7 @@ model SubsidyClaim {
   lines         SubsidyClaimLine[]
   documents     SubsidyClaimDocument[]
   remittances   SubsidyRemittance[]
+  ledgerEntries AgencyLedgerEntry[]
 
   @@index([centerId, status, dueDate])
   @@index([agencyProgramId, servicePeriodStart, servicePeriodEnd])
@@ -1356,7 +1359,7 @@ model SubsidyClaimDocument {
 }
 
 model SubsidyRemittance {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   claimId           String
   amountCents       Int
   paidAt            DateTime
@@ -1367,13 +1370,56 @@ model SubsidyRemittance {
   reversedAt        DateTime?
   reversedById      String?
   reversalReason    String?
-  createdAt         DateTime @default(now())
+  createdAt         DateTime  @default(now())
 
-  claim SubsidyClaim @relation(fields: [claimId], references: [id])
+  claim         SubsidyClaim        @relation(fields: [claimId], references: [id])
+  ledgerEntries AgencyLedgerEntry[]
 
   @@index([claimId, externalReference])
   @@index([claimId, paidAt])
   @@index([claimId, reversedAt])
+}
+
+model AgencyLedgerAccount {
+  id              String   @id @default(cuid())
+  centerId        String
+  agencyProgramId String
+  balanceCents    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  center        Center              @relation(fields: [centerId], references: [id])
+  agencyProgram AgencyProgram       @relation(fields: [agencyProgramId], references: [id])
+  entries       AgencyLedgerEntry[]
+
+  @@unique([centerId, agencyProgramId])
+  @@index([centerId, balanceCents])
+}
+
+model AgencyLedgerEntry {
+  id                    String   @id @default(cuid())
+  agencyLedgerAccountId String
+  claimId               String?
+  remittanceId          String?
+  type                  String
+  description           String
+  amountCents           Int
+  balanceAfterCents     Int
+  effectiveAt           DateTime
+  externalReference     String?
+  sourceSystem          String?
+  externalId            String?
+  metadata              Json?
+  createdAt             DateTime @default(now())
+
+  agencyLedgerAccount AgencyLedgerAccount @relation(fields: [agencyLedgerAccountId], references: [id])
+  claim               SubsidyClaim?       @relation(fields: [claimId], references: [id])
+  remittance          SubsidyRemittance?  @relation(fields: [remittanceId], references: [id])
+
+  @@unique([sourceSystem, externalId])
+  @@index([agencyLedgerAccountId, effectiveAt, createdAt])
+  @@index([claimId])
+  @@index([remittanceId])
 }
 
 model Invoice {

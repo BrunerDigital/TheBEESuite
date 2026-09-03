@@ -354,7 +354,7 @@ const guides: ResourceGuide[] = [
     id: "agency-payment-reconciliation",
     audience: "Directors and billing administrators",
     title: "Agency Payment & Reconciliation",
-    summary: "Match an approved agency claim, record an ACH, check, or portal remittance, and prove the agency receivable reconciled without changing family responsibility.",
+    summary: "Match an approved agency claim, record an ACH, check, or portal remittance, and reconcile it in a separate agency ledger without changing family responsibility.",
     graphicSrc: "/brand/the-bee-suite/sop-graphics/current/director-desktop-operations-guide.png",
     graphicAlt: "Director desktop guide for exact school, billing, and reconciliation work",
     icon: Landmark,
@@ -363,7 +363,7 @@ const guides: ResourceGuide[] = [
       "Continue only when the school-specific agency program shows Ready and the provider/vendor, submission, and payment setup are documented.",
       "Match the agency, child, authorization, service period, approved claim, amount, paid date, method, and unique remittance reference to the agency evidence.",
       "Use Record remittance on an approved or partially paid claim. Never use a family cash/check payment or a Stripe payout as substitute evidence.",
-      "Refresh and verify the claim paid amount and status, remittance history, agency ledger application when a matching receivable exists, and unchanged parent-visible family responsibility.",
+      "Refresh and verify the claim paid amount and status, remittance history, dedicated agency-ledger payment and balance, and unchanged parent-visible family responsibility.",
       "Reverse an incorrect remittance with a correction reason, then enter the corrected record. Keep the original evidence and stop when any allocation is unclear.",
     ],
     visual: [

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Agency Payment And Reconciliation SOP | The BEE Suite",
-  description: "Evidence-first steps for recording and reconciling an approved agency remittance without changing family responsibility.",
+  description: "Evidence-first steps for reconciling approved agency remittances in a dedicated ledger without changing family responsibility.",
   alternates: { canonical: "/resources/agency-payment-reconciliation" },
 };
 
@@ -53,16 +53,16 @@ const steps = [
     actions: [
       "Verify the claim paid amount increased exactly once and the status is partially paid or paid as expected.",
       "Verify the remittance history shows the exact date, amount, and external reference once.",
-      "Confirm the agency outstanding total decreased, any matching agency receivable received its agency_payment ledger entry, and parent-visible family responsibility stays unchanged.",
+      "Confirm the dedicated agency ledger contains one payment entry, the school-and-agency balance decreased exactly once, and parent-visible family responsibility stays unchanged.",
       "For a multi-claim deposit, total the recorded claim allocations and compare them with the deposit.",
     ],
-    stop: "If no matching agency receivable was available, keep the claim remittance evidence and escalate the unmatched ledger item. Do not post a second manual family payment.",
+    stop: "If the remittance saved but the dedicated agency ledger is missing or does not reconcile, stop and escalate. Do not post a second remittance or manual family payment.",
   },
   {
     title: "Correct through reversal, never deletion",
     actions: [
       "Find the exact remittance, select Reverse, and enter a specific correction reason.",
-      "Verify the original is marked reversed, the claim recalculates, and any linked agency receivable is restored with a compensating entry.",
+      "Verify the original is marked reversed, the claim recalculates, and the dedicated agency ledger restores the receivable with a compensating entry.",
       "Enter the corrected remittance as a new record from the correct evidence.",
     ],
     stop: "Never delete, overwrite, or silently backdate a remittance. Preserve the original, reversal, correction reason, and replacement in the audit history.",
@@ -83,7 +83,7 @@ const faqs = [
   ["Can I use the school's Stripe payout as the agency payment?", "No. Stripe payout routing is separate and does not prove the agency, authorization, service period, claim, amount, or agency approval."],
   ["Can I post this as a family cash or check payment?", "No. Use Record remittance on the approved agency claim so agency and family responsibility remain separate."],
   ["What if one deposit covers several claims?", "Use the agency remittance detail to enter the exact amount on each claim, then verify the total equals the deposit. Stop if the allocation is missing."],
-  ["What if the claim saves but no family-ledger receivable changes?", "The remittance remains valid claim evidence, but accounting must reconcile the missing agency receivable. Do not create a second manual family payment."],
+  ["What if the family ledger does not change?", "That is expected for new agency activity. Approvals and remittances post to the separate agency ledger; family-ledger compatibility entries are limited to clearing pre-existing agency receivables."],
   ["What if I entered the wrong amount or reference?", "Reverse the exact remittance with a correction reason, verify the recalculated claim and compensating ledger entry, then enter the corrected remittance."],
 ];
 
@@ -100,7 +100,7 @@ export default function AgencyPaymentReconciliationPage() {
           <div className="py-12 sm:py-16">
             <Badge className="bg-amber-300 text-slate-950"><Landmark data-icon="inline-start" />Directors and billing administrators</Badge>
             <h1 className="mt-5 max-w-4xl text-4xl font-semibold leading-tight sm:text-5xl">Agency Payment And Reconciliation SOP</h1>
-            <p className="mt-5 max-w-3xl text-base leading-7 text-slate-300">Use this guide together to match an approved agency claim, record the remittance once, and prove the agency receivable reconciled without changing what the family owes.</p>
+            <p className="mt-5 max-w-3xl text-base leading-7 text-slate-300">Use this guide together to match an approved agency claim, record the remittance once, and prove it reconciled in the dedicated agency ledger without changing what the family owes.</p>
             <div className="mt-7 flex flex-wrap gap-3"><Button nativeButton={false} render={<Link href="/billing-invoices#agency-subsidy-billing" />}>Open agency workspace<ArrowRight data-icon="inline-end" /></Button><Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="#preflight" />}>Review preflight</Button></div>
             <div className="mt-7 rounded-lg border border-red-300/20 bg-red-400/10 p-4 text-sm leading-6 text-red-100">A bank deposit or Stripe payout is not enough. Do not record anything until the exact school, agency, authorization, service period, approved claim, amount, paid date, and external reference match.</div>
           </div>
@@ -129,7 +129,7 @@ export default function AgencyPaymentReconciliationPage() {
 
           <section id="faqs" className="scroll-mt-6 py-10"><h2 className="text-2xl font-semibold">Frequently asked questions</h2><div className="mt-6 grid gap-3">{faqs.map(([question, answer]) => <details key={question} className="group rounded-lg border border-white/10 bg-white/[0.055] p-5"><summary className="cursor-pointer list-none font-semibold text-white marker:hidden">{question}</summary><p className="mt-3 text-sm leading-6 text-slate-300">{answer}</p></details>)}</div></section>
 
-          <section className="my-10 rounded-lg border border-emerald-300/25 bg-emerald-400/10 p-6"><h2 className="flex items-center gap-2 text-xl font-semibold text-emerald-100"><CheckCircle2 className="size-5" />Reconciliation is complete only when</h2><p className="mt-3 text-sm leading-6 text-slate-200">The claim, remittance history, agency outstanding amount, matching agency ledger entry when applicable, parent-visible family responsibility, and deposit allocation all agree. Keep unresolved exceptions open for accounting; never force a match with a second family payment.</p></section>
+          <section className="my-10 rounded-lg border border-emerald-300/25 bg-emerald-400/10 p-6"><h2 className="flex items-center gap-2 text-xl font-semibold text-emerald-100"><CheckCircle2 className="size-5" />Reconciliation is complete only when</h2><p className="mt-3 text-sm leading-6 text-slate-200">The claim, remittance history, dedicated agency-ledger balance, parent-visible family responsibility, and deposit allocation all agree. Export the ledger for complete accounting history, keep unresolved exceptions open, and never force a match with a second family payment.</p></section>
         </div>
       </section>
 

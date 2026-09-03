@@ -5,6 +5,10 @@ import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
 import {
   activeRemittanceTotalCents,
+  agencyClaimApprovalLedgerExternalId,
+  agencyRemittanceLedgerExternalId,
+  agencyRemittanceReversalLedgerExternalId,
+  AGENCY_LEDGER_SOURCE_SYSTEM,
   AGENCY_SUBMISSION_METHODS,
   agencyProgramSetupBlockers,
   agencyProgramStatus,
@@ -27,6 +31,7 @@ const REMITTANCE_METHODS = new Set(["ach", "check", "agency_portal", "other"]);
 const SUBMISSION_METHODS = new Set<string>(AGENCY_SUBMISSION_METHODS);
 const UNIT_PRECISION = 1_000_000;
 const CLAIM_PAGE_SIZE = 100;
+const AGENCY_LEDGER_ENTRY_LIMIT = 250;
 
 class AgencyWorkflowError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -107,6 +112,75 @@ function csvRow(values: unknown[]) {
   return `${values.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")}\r\n`;
 }
 
+type AgencyLedgerClaimInput = {
+  id: string;
+  centerId: string;
+  agencyProgramId: string;
+  number: string;
+  approvedCents: number | null;
+  approvedAt: Date | null;
+  externalReference: string | null;
+  agencyProgram: { name: string };
+};
+
+async function appendAgencyLedgerEntry(tx: Prisma.TransactionClient, input: {
+  centerId: string;
+  agencyProgramId: string;
+  claimId?: string | null;
+  remittanceId?: string | null;
+  type: string;
+  description: string;
+  amountCents: number;
+  effectiveAt: Date;
+  externalReference?: string | null;
+  externalId: string;
+  metadata?: Prisma.InputJsonValue;
+}) {
+  const account = await tx.agencyLedgerAccount.upsert({
+    where: { centerId_agencyProgramId: { centerId: input.centerId, agencyProgramId: input.agencyProgramId } },
+    create: { centerId: input.centerId, agencyProgramId: input.agencyProgramId, balanceCents: input.amountCents },
+    update: { balanceCents: { increment: input.amountCents } },
+  });
+  const entry = await tx.agencyLedgerEntry.create({ data: {
+    agencyLedgerAccountId: account.id,
+    claimId: input.claimId || null,
+    remittanceId: input.remittanceId || null,
+    type: input.type,
+    description: input.description,
+    amountCents: input.amountCents,
+    balanceAfterCents: account.balanceCents,
+    effectiveAt: input.effectiveAt,
+    externalReference: input.externalReference || null,
+    sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
+    externalId: input.externalId,
+    metadata: input.metadata,
+  } });
+  return { account, entry };
+}
+
+async function ensureAgencyClaimReceivable(tx: Prisma.TransactionClient, claim: AgencyLedgerClaimInput) {
+  const externalId = agencyClaimApprovalLedgerExternalId(claim.id);
+  const existing = await tx.agencyLedgerEntry.findUnique({
+    where: { sourceSystem_externalId: { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM, externalId } },
+  });
+  if (existing) return { entry: existing, created: false };
+  const approvedCents = claim.approvedCents ?? 0;
+  if (approvedCents <= 0) throw new AgencyWorkflowError("Record a positive agency approval before creating its receivable.", 409);
+  const result = await appendAgencyLedgerEntry(tx, {
+    centerId: claim.centerId,
+    agencyProgramId: claim.agencyProgramId,
+    claimId: claim.id,
+    type: "claim_approved",
+    description: `${claim.agencyProgram.name} approved ${claim.number}`,
+    amountCents: approvedCents,
+    effectiveAt: claim.approvedAt ?? new Date(),
+    externalReference: claim.externalReference,
+    externalId,
+    metadata: { claimNumber: claim.number },
+  });
+  return { entry: result.entry, created: true };
+}
+
 function exportClaimsCsv(centerIds: string[]) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -171,6 +245,57 @@ function exportClaimsCsv(centerIds: string[]) {
   });
 }
 
+function exportAgencyLedgerCsv(centerIds: string[]) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        controller.enqueue(encoder.encode(csvRow(["Date", "Agency", "Program", "Type", "Claim", "Family", "Child", "Reference", "Charge", "Payment / credit", "Net", "Balance"])));
+        let cursorId: string | undefined;
+        while (true) {
+          const entries = await prisma.agencyLedgerEntry.findMany({
+            where: { agencyLedgerAccount: { centerId: { in: centerIds } } },
+            orderBy: { id: "asc" },
+            take: 250,
+            ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+            include: {
+              agencyLedgerAccount: { include: { agencyProgram: { select: { name: true, programName: true } } } },
+              claim: { include: { authorization: { include: { family: { select: { name: true } }, child: { select: { fullName: true } } } } } },
+            },
+          });
+          if (!entries.length) break;
+          controller.enqueue(encoder.encode(entries.map((entry) => csvRow([
+            dateInput(entry.effectiveAt),
+            entry.agencyLedgerAccount.agencyProgram.name,
+            entry.agencyLedgerAccount.agencyProgram.programName ?? "",
+            entry.type,
+            entry.claim?.number ?? "",
+            entry.claim?.authorization?.family.name ?? "",
+            entry.claim?.authorization?.child.fullName ?? "",
+            entry.externalReference ?? "",
+            entry.amountCents > 0 ? (entry.amountCents / 100).toFixed(2) : "",
+            entry.amountCents < 0 ? (Math.abs(entry.amountCents) / 100).toFixed(2) : "",
+            (entry.amountCents / 100).toFixed(2),
+            (entry.balanceAfterCents / 100).toFixed(2),
+          ])).join("")));
+          cursorId = entries.at(-1)?.id;
+          if (entries.length < 250) break;
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": "attachment; filename=agency-ledger.csv",
+      "Cache-Control": "private, no-store",
+    },
+  });
+}
+
 async function currentBillingUser(): Promise<
   | { ok: true; user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> }
   | { ok: false; response: NextResponse }
@@ -190,6 +315,7 @@ async function getHandler(request: NextRequest) {
   if (!auth.ok) return auth.response;
   const requestedCenterId = clean(request.nextUrl.searchParams.get("centerId"));
   const exportingClaims = request.nextUrl.searchParams.get("exportClaims") === "true";
+  const exportingLedger = request.nextUrl.searchParams.get("exportLedger") === "true";
   const requestedClaimPage = Number.parseInt(clean(request.nextUrl.searchParams.get("claimPage")) || "1", 10);
   const claimPage = Math.min(Math.max(Number.isFinite(requestedClaimPage) ? requestedClaimPage : 1, 1), 10_000);
   const claimCursor = clean(request.nextUrl.searchParams.get("claimCursor"));
@@ -198,9 +324,10 @@ async function getHandler(request: NextRequest) {
     : auth.user.centerIds;
   if (!centerIds.length) return NextResponse.json({ ok: false, error: "No accessible school selected." }, { status: 403 });
   if (exportingClaims) return exportClaimsCsv(centerIds);
+  if (exportingLedger) return exportAgencyLedgerCsv(centerIds);
   if (claimPage > 1 && !claimCursor) return NextResponse.json({ ok: false, error: "Refresh the claim queue before opening that page." }, { status: 400 });
 
-  const [programs, authorizations, claims, summaryRows, families] = await Promise.all([
+  const [programs, authorizations, claims, summaryRows, families, ledgerAccounts, ledgerEntryRows] = await Promise.all([
     prisma.agencyProgram.findMany({
       where: { centerId: { in: centerIds } },
       orderBy: [{ stateCode: "asc" }, { name: "asc" }],
@@ -289,6 +416,21 @@ async function getHandler(request: NextRequest) {
         children: { where: { OR: [{ enrollmentStatus: { in: CURRENT_ENROLLMENT_STATUSES }, classroomId: { not: null } }, { subsidyAuthorizations: { some: {} } }] }, select: { id: true, fullName: true, enrollmentStatus: true, classroomId: true }, orderBy: { fullName: "asc" } },
       },
     }),
+    prisma.agencyLedgerAccount.findMany({
+      where: { centerId: { in: centerIds } },
+      orderBy: [{ balanceCents: "desc" }, { agencyProgram: { name: "asc" } }],
+      include: { agencyProgram: { select: { name: true, programName: true } } },
+    }),
+    prisma.agencyLedgerEntry.findMany({
+      where: { agencyLedgerAccount: { centerId: { in: centerIds } } },
+      orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+      take: AGENCY_LEDGER_ENTRY_LIMIT + 1,
+      include: {
+        agencyLedgerAccount: { include: { agencyProgram: { select: { name: true, programName: true } } } },
+        claim: { include: { authorization: { include: { family: { select: { name: true } }, child: { select: { fullName: true } } } } } },
+        remittance: { select: { paymentMethod: true, reversedAt: true } },
+      },
+    }),
   ]);
 
   const hasNextClaimPage = claims.length > CLAIM_PAGE_SIZE;
@@ -308,6 +450,7 @@ async function getHandler(request: NextRequest) {
     outstandingCents: Number(summaryRow?.outstandingCents ?? 0),
     needsSubmission: Number(summaryRow?.needsSubmission ?? 0),
     missingDocumentClaims: Number(summaryRow?.missingDocumentClaims ?? 0),
+    agencyLedgerBalanceCents: ledgerAccounts.reduce((total, account) => total + account.balanceCents, 0),
   };
   const programReadiness = programs.map((program) => {
     const setupBlockers = agencyProgramSetupBlockers(program);
@@ -332,6 +475,12 @@ async function getHandler(request: NextRequest) {
     claimPagination: { page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage, nextCursor: hasNextClaimPage ? visibleClaims.at(-1)?.id ?? null : null },
     families,
     summary: { ...summary, ...readiness },
+    ledger: {
+      accounts: ledgerAccounts,
+      entries: ledgerEntryRows.slice(0, AGENCY_LEDGER_ENTRY_LIMIT),
+      entryLimit: AGENCY_LEDGER_ENTRY_LIMIT,
+      truncated: ledgerEntryRows.length > AGENCY_LEDGER_ENTRY_LIMIT,
+    },
   });
 }
 
@@ -659,9 +808,9 @@ async function postHandler(request: NextRequest) {
     if (!externalReference) return NextResponse.json({ ok: false, error: "Enter the agency decision or claim reference." }, { status: 400 });
     const denialReason = clean(body.denialReason);
     if (decision === "denied" && !denialReason) return NextResponse.json({ ok: false, error: "Enter the agency denial reason or code." }, { status: 400 });
-    let updated;
+    let result;
     try {
-      updated = await prisma.$transaction(async (tx) => {
+      result = await prisma.$transaction(async (tx) => {
         const transition = await tx.subsidyClaim.updateMany({ where: { id: claim.id, status: "submitted" }, data: { updatedAt: new Date() } });
         if (transition.count !== 1) throw new AgencyWorkflowError("The claim changed before the agency decision was recorded. Refresh before trying again.", 409);
         const current = await tx.subsidyClaim.findUniqueOrThrow({ where: { id: claim.id }, include: { agencyProgram: true, authorization: true, documents: true } });
@@ -669,14 +818,18 @@ async function postHandler(request: NextRequest) {
           const blockers = claimSubmissionBlockers({ ...current.agencyProgram, documents: current.documents, requirements: claimRequirements(current) });
           if (blockers.length) throw new AgencyWorkflowError("Complete every required claim document before recording agency approval.", 409);
         }
-        return tx.subsidyClaim.update({ where: { id: current.id }, data: { status: decision, approvedCents, approvedAt: decision === "approved" ? new Date() : null, denialReason: decision === "denied" ? denialReason : null, externalReference } });
-      });
+        const approvedAt = decision === "approved" ? new Date() : null;
+        const updated = await tx.subsidyClaim.update({ where: { id: current.id }, data: { status: decision, approvedCents, approvedAt, denialReason: decision === "denied" ? denialReason : null, externalReference } });
+        const ledger = decision === "approved" ? await ensureAgencyClaimReceivable(tx, { ...updated, agencyProgram: current.agencyProgram }) : null;
+        return { updated, ledgerEntryId: ledger?.entry.id ?? null };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The claim or agency ledger changed before the decision was recorded. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: claim.centerId, action: `billing.subsidy_claim.${decision}`, resource: "SubsidyClaim", resourceId: claim.id, metadata: { approvedCents, externalReference: updated.externalReference } });
-    return NextResponse.json({ ok: true, claim: updated });
+    await writeAuditLog(auth.user, { centerId: claim.centerId, action: `billing.subsidy_claim.${decision}`, resource: "SubsidyClaim", resourceId: claim.id, metadata: { approvedCents, externalReference: result.updated.externalReference, agencyLedgerEntryId: result.ledgerEntryId } });
+    return NextResponse.json({ ok: true, claim: result.updated, agencyLedgerEntryId: result.ledgerEntryId });
   }
 
   if (action === "voidClaim") {
@@ -708,9 +861,23 @@ async function postHandler(request: NextRequest) {
         const payable = current.approvedCents ?? current.claimedCents;
         const paidBeforeCents = activeRemittanceTotalCents(current.remittances);
         if (paidBeforeCents + amountCents > payable) throw new AgencyWorkflowError("The remittance amount cannot exceed the remaining approved claim.");
+        await ensureAgencyClaimReceivable(tx, current);
         const remittance = await tx.subsidyRemittance.create({ data: { claimId: current.id, amountCents, paidAt, paymentMethod, externalReference: reference, notes: clean(body.notes) || null, enteredById: auth.user.id } });
-        let ledgerAppliedCents = 0;
-        let ledgerEntryId: string | null = null;
+        const agencyLedger = await appendAgencyLedgerEntry(tx, {
+          centerId: current.centerId,
+          agencyProgramId: current.agencyProgramId,
+          claimId: current.id,
+          remittanceId: remittance.id,
+          type: "remittance_received",
+          description: `${current.agencyProgram.name} remittance for ${current.number}`,
+          amountCents: -amountCents,
+          effectiveAt: paidAt,
+          externalReference: reference,
+          externalId: agencyRemittanceLedgerExternalId(remittance.id),
+          metadata: { claimNumber: current.number, paymentMethod },
+        });
+        let legacyFamilyLedgerAppliedCents = 0;
+        let legacyFamilyLedgerEntryId: string | null = null;
         const billingAccount = current.authorization?.family.billingAccount;
         if (billingAccount) {
           const authorizationNumber = current.authorization?.authorizationNumber ?? "";
@@ -730,33 +897,42 @@ async function postHandler(request: NextRequest) {
                 : entryAgencyName === agencyName;
             return matches ? total + entry.amountCents : total;
           }, 0);
-          ledgerAppliedCents = Math.min(amountCents, Math.max(0, matchingOutstandingCents));
-          if (ledgerAppliedCents > 0) {
-            const updatedAccount = await tx.billingAccount.update({ where: { id: billingAccount.id }, data: { balanceCents: { decrement: ledgerAppliedCents } } });
+          legacyFamilyLedgerAppliedCents = Math.min(amountCents, Math.max(0, matchingOutstandingCents));
+          if (legacyFamilyLedgerAppliedCents > 0) {
+            const updatedAccount = await tx.billingAccount.update({ where: { id: billingAccount.id }, data: { balanceCents: { decrement: legacyFamilyLedgerAppliedCents } } });
             const ledgerEntry = await tx.ledgerEntry.create({ data: {
               billingAccountId: billingAccount.id,
               type: "agency_payment",
-              description: `${current.agencyProgram.name} remittance for ${current.number}`,
-              amountCents: -ledgerAppliedCents,
+              description: `Legacy family-ledger settlement for ${current.agencyProgram.name} remittance ${current.number}`,
+              amountCents: -legacyFamilyLedgerAppliedCents,
               balanceAfterCents: updatedAccount.balanceCents,
               effectiveAt: paidAt,
               sourceSystem: "subsidy_agency",
               externalId: `agency-remittance:${remittance.id}`,
-              metadata: { claimId: current.id, claimNumber: current.number, remittanceId: remittance.id, agencyName: current.agencyProgram.name, authorizationNumber, externalReference: reference },
+              metadata: { claimId: current.id, claimNumber: current.number, remittanceId: remittance.id, agencyName: current.agencyProgram.name, authorizationNumber, externalReference: reference, legacyCompatibilityMirror: true },
             } });
-            ledgerEntryId = ledgerEntry.id;
+            legacyFamilyLedgerEntryId = ledgerEntry.id;
           }
         }
         const paidCents = paidBeforeCents + amountCents;
         const updated = await tx.subsidyClaim.update({ where: { id: current.id }, data: { paidCents, status: nextRemittanceStatus({ claimedCents: current.claimedCents, approvedCents: current.approvedCents, paidCents }) } });
-        return { remittance, claim: updated, ledgerAppliedCents, ledgerEntryId };
+        return {
+          remittance,
+          claim: updated,
+          agencyLedgerEntryId: agencyLedger.entry.id,
+          agencyLedgerBalanceCents: agencyLedger.account.balanceCents,
+          legacyFamilyLedgerAppliedCents,
+          legacyFamilyLedgerEntryId,
+          ledgerAppliedCents: legacyFamilyLedgerAppliedCents,
+          ledgerEntryId: legacyFamilyLedgerEntryId,
+        };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "That remittance reference is already recorded or the claim changed. Refresh before trying again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_remittance.recorded", resource: "SubsidyRemittance", resourceId: result.remittance.id, metadata: { claimId: claim.id, amountCents, externalReference: reference, ledgerAppliedCents: result.ledgerAppliedCents, ledgerEntryId: result.ledgerEntryId } });
+    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_remittance.recorded", resource: "SubsidyRemittance", resourceId: result.remittance.id, metadata: { claimId: claim.id, amountCents, externalReference: reference, agencyLedgerEntryId: result.agencyLedgerEntryId, agencyLedgerBalanceCents: result.agencyLedgerBalanceCents, legacyFamilyLedgerAppliedCents: result.legacyFamilyLedgerAppliedCents, legacyFamilyLedgerEntryId: result.legacyFamilyLedgerEntryId } });
     return NextResponse.json({ ok: true, ...result });
   }
 
@@ -767,38 +943,78 @@ async function postHandler(request: NextRequest) {
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {
-        const remittance = await tx.subsidyRemittance.findFirst({ where: { id: remittanceId, claimId: claim.id }, include: { claim: true } });
+        const remittance = await tx.subsidyRemittance.findFirst({ where: { id: remittanceId, claimId: claim.id }, include: { claim: { include: { agencyProgram: true } } } });
         if (!remittance) throw new AgencyWorkflowError("Remittance not found.", 404);
         if (remittance.reversedAt) throw new AgencyWorkflowError("This remittance was already reversed.", 409);
-        const transition = await tx.subsidyRemittance.updateMany({ where: { id: remittance.id, reversedAt: null }, data: { reversedAt: new Date(), reversedById: auth.user.id, reversalReason: reason } });
+        const reversedAt = new Date();
+        const transition = await tx.subsidyRemittance.updateMany({ where: { id: remittance.id, reversedAt: null }, data: { reversedAt, reversedById: auth.user.id, reversalReason: reason } });
         if (transition.count !== 1) throw new AgencyWorkflowError("The remittance changed before it could be reversed. Refresh and try again.", 409);
-        const paymentEntry = await tx.ledgerEntry.findUnique({ where: { sourceSystem_externalId: { sourceSystem: "subsidy_agency", externalId: `agency-remittance:${remittance.id}` } } });
-        let reversalLedgerEntryId: string | null = null;
-        if (paymentEntry && paymentEntry.amountCents < 0) {
-          const updatedAccount = await tx.billingAccount.update({ where: { id: paymentEntry.billingAccountId }, data: { balanceCents: { increment: Math.abs(paymentEntry.amountCents) } } });
+        await ensureAgencyClaimReceivable(tx, remittance.claim);
+        const agencyPaymentExternalId = agencyRemittanceLedgerExternalId(remittance.id);
+        let agencyPaymentEntry = await tx.agencyLedgerEntry.findUnique({ where: { sourceSystem_externalId: { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM, externalId: agencyPaymentExternalId } } });
+        if (!agencyPaymentEntry) {
+          const agencyPayment = await appendAgencyLedgerEntry(tx, {
+            centerId: remittance.claim.centerId,
+            agencyProgramId: remittance.claim.agencyProgramId,
+            claimId: remittance.claimId,
+            remittanceId: remittance.id,
+            type: "remittance_received",
+            description: `${remittance.claim.agencyProgram.name} remittance for ${remittance.claim.number}`,
+            amountCents: -remittance.amountCents,
+            effectiveAt: remittance.paidAt,
+            externalReference: remittance.externalReference,
+            externalId: agencyPaymentExternalId,
+            metadata: { claimNumber: remittance.claim.number, paymentMethod: remittance.paymentMethod, restoredBeforeReversal: true },
+          });
+          agencyPaymentEntry = agencyPayment.entry;
+        }
+        const agencyReversal = await appendAgencyLedgerEntry(tx, {
+          centerId: remittance.claim.centerId,
+          agencyProgramId: remittance.claim.agencyProgramId,
+          claimId: remittance.claimId,
+          remittanceId: remittance.id,
+          type: "remittance_reversal",
+          description: `Reversed agency remittance for ${remittance.claim.number}`,
+          amountCents: remittance.amountCents,
+          effectiveAt: reversedAt,
+          externalReference: remittance.externalReference,
+          externalId: agencyRemittanceReversalLedgerExternalId(remittance.id),
+          metadata: { claimNumber: remittance.claim.number, originalAgencyLedgerEntryId: agencyPaymentEntry.id, reason },
+        });
+        const legacyPaymentEntry = await tx.ledgerEntry.findUnique({ where: { sourceSystem_externalId: { sourceSystem: "subsidy_agency", externalId: `agency-remittance:${remittance.id}` } } });
+        let legacyFamilyReversalLedgerEntryId: string | null = null;
+        if (legacyPaymentEntry && legacyPaymentEntry.amountCents < 0) {
+          const updatedAccount = await tx.billingAccount.update({ where: { id: legacyPaymentEntry.billingAccountId }, data: { balanceCents: { increment: Math.abs(legacyPaymentEntry.amountCents) } } });
           const reversalEntry = await tx.ledgerEntry.create({ data: {
-            billingAccountId: paymentEntry.billingAccountId,
+            billingAccountId: legacyPaymentEntry.billingAccountId,
             type: "agency_payment_reversal",
-            description: `Reversed agency remittance for ${remittance.claim.number}`,
-            amountCents: Math.abs(paymentEntry.amountCents),
+            description: `Reversed legacy family-ledger agency settlement for ${remittance.claim.number}`,
+            amountCents: Math.abs(legacyPaymentEntry.amountCents),
             balanceAfterCents: updatedAccount.balanceCents,
             sourceSystem: "subsidy_agency",
             externalId: `agency-remittance-reversal:${remittance.id}`,
-            metadata: { ...recordValue(paymentEntry.metadata), remittanceId: remittance.id, claimId: claim.id, originalLedgerEntryId: paymentEntry.id, reason },
+            metadata: { ...recordValue(legacyPaymentEntry.metadata), remittanceId: remittance.id, claimId: claim.id, originalLedgerEntryId: legacyPaymentEntry.id, reason, legacyCompatibilityMirror: true },
           } });
-          reversalLedgerEntryId = reversalEntry.id;
+          legacyFamilyReversalLedgerEntryId = reversalEntry.id;
         }
         const activeRemittances = await tx.subsidyRemittance.findMany({ where: { claimId: claim.id, reversedAt: null }, select: { amountCents: true, reversedAt: true } });
         const paidCents = activeRemittanceTotalCents(activeRemittances);
         const updated = await tx.subsidyClaim.update({ where: { id: claim.id }, data: { paidCents, status: nextRemittanceStatus({ claimedCents: remittance.claim.claimedCents, approvedCents: remittance.claim.approvedCents, paidCents }) } });
-        return { remittanceId: remittance.id, claim: updated, reversalLedgerEntryId };
+        return {
+          remittanceId: remittance.id,
+          claim: updated,
+          agencyLedgerEntryId: agencyReversal.entry.id,
+          agencyLedgerBalanceCents: agencyReversal.account.balanceCents,
+          legacyFamilyReversalLedgerEntryId,
+          reversalLedgerEntryId: legacyFamilyReversalLedgerEntryId,
+        };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The remittance changed while it was being reversed. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_remittance.reversed", resource: "SubsidyRemittance", resourceId: result.remittanceId, metadata: { claimId: claim.id, reason, reversalLedgerEntryId: result.reversalLedgerEntryId } });
+    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_remittance.reversed", resource: "SubsidyRemittance", resourceId: result.remittanceId, metadata: { claimId: claim.id, reason, agencyLedgerEntryId: result.agencyLedgerEntryId, agencyLedgerBalanceCents: result.agencyLedgerBalanceCents, legacyFamilyReversalLedgerEntryId: result.legacyFamilyReversalLedgerEntryId } });
     return NextResponse.json({ ok: true, ...result });
   }
 

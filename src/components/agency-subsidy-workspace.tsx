@@ -23,7 +23,9 @@ type ClaimRemittance = { id: string; amountCents: number; paidAt: string; paymen
 type Claim = { id: string; number: string; status: string; claimedCents: number; approvedCents: number | null; paidCents: number; servicePeriodStart: string; servicePeriodEnd: string; agencyProgram: { name: string }; authorization: { child: { fullName: string }; family: { name: string } } | null; documents: ClaimDocument[]; remittances: ClaimRemittance[]; requirementBlockers?: string[] };
 type ClaimAction = { kind: "document" | "submit" | "approve" | "deny" | "void" | "remit" | "reverse"; claim: Claim; document?: ClaimDocument; remittance?: ClaimRemittance };
 type Family = { id: string; centerId: string | null; name: string; guardians: Array<{ fullName: string }>; children: Array<{ id: string; fullName: string; enrollmentStatus: string; classroomId: string | null }> };
-type Workspace = { programs: Program[]; authorizations: Authorization[]; claims: Claim[]; claimPagination: { page: number; pageSize: number; hasNext: boolean; nextCursor: string | null }; families: Family[]; summary: { claimedCents: number; approvedCents: number; paidCents: number; outstandingCents: number; needsSubmission: number; missingDocumentClaims: number; readyPrograms: number; setupRequiredPrograms: number; expiredAuthorizations: number; expiringAuthorizations: number } };
+type AgencyLedgerAccount = { id: string; balanceCents: number; agencyProgram: { name: string; programName: string | null } };
+type AgencyLedgerEntry = { id: string; agencyLedgerAccountId: string; type: string; description: string; amountCents: number; balanceAfterCents: number; effectiveAt: string; externalReference: string | null; agencyLedgerAccount: AgencyLedgerAccount; claim: { number: string; authorization: { family: { name: string }; child: { fullName: string } } | null } | null };
+type Workspace = { programs: Program[]; authorizations: Authorization[]; claims: Claim[]; claimPagination: { page: number; pageSize: number; hasNext: boolean; nextCursor: string | null }; families: Family[]; summary: { claimedCents: number; approvedCents: number; paidCents: number; outstandingCents: number; agencyLedgerBalanceCents: number; needsSubmission: number; missingDocumentClaims: number; readyPrograms: number; setupRequiredPrograms: number; expiredAuthorizations: number; expiringAuthorizations: number }; ledger: { accounts: AgencyLedgerAccount[]; entries: AgencyLedgerEntry[]; entryLimit: number; truncated: boolean } };
 
 function money(cents: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100); }
 function dateOnly(value: string) { return value ? new Date(value).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"; }
@@ -51,6 +53,8 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const [claimPage, setClaimPage] = useState(1);
   const [claimCursorByPage, setClaimCursorByPage] = useState<Record<number, string>>({});
   const [exportingClaims, setExportingClaims] = useState(false);
+  const [exportingLedger, setExportingLedger] = useState(false);
+  const [ledgerAccountId, setLedgerAccountId] = useState("all");
   const [claimAction, setClaimAction] = useState<ClaimAction | null>(null);
   const centerIdRef = useRef(centerId);
   const claimCursor = claimPage === 1 ? "" : claimCursorByPage[claimPage] ?? "";
@@ -108,6 +112,9 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const claims = data?.claims ?? [];
   const claimPagination = data?.claimPagination;
   const summary = data?.summary;
+  const ledgerAccounts = data?.ledger.accounts ?? [];
+  const ledgerEntries = data?.ledger.entries ?? [];
+  const visibleLedgerEntries = ledgerAccountId === "all" ? ledgerEntries : ledgerEntries.filter((entry) => entry.agencyLedgerAccountId === ledgerAccountId);
   const setupProgram = programs.find((program) => program.id === setupProgramId);
   const setupBlockers = setupProgram ? agencyProgramSetupBlockers(setupProgram) : [];
   const selectedChild = selectedFamily?.children.find((child) => child.id === childId) ?? null;
@@ -199,6 +206,30 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
     setExportingClaims(false);
   }
 
+  async function exportAgencyLedger() {
+    const exportCenterId = centerId;
+    setExportingLedger(true); setError("");
+    try {
+      const response = await fetch(`/api/billing/agency-claims?centerId=${encodeURIComponent(exportCenterId)}&exportLedger=true`, { cache: "no-store" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error || "Agency ledger could not be exported.");
+      }
+      if (centerIdRef.current !== exportCenterId) return;
+      const blob = await response.blob();
+      if (centerIdRef.current !== exportCenterId) return;
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href; anchor.download = `agency-ledger-${exportCenterId}-${today()}.csv`; anchor.click();
+      URL.revokeObjectURL(href);
+    } catch (exportError) {
+      if (centerIdRef.current === exportCenterId) setError(exportError instanceof Error ? exportError.message : "Agency ledger could not be exported.");
+      setExportingLedger(false);
+      return;
+    }
+    setExportingLedger(false);
+  }
+
   return (
     <section id="agency-subsidy-billing" className="space-y-4 scroll-mt-24">
       <Card className="glass-panel border-sky-500/30">
@@ -209,15 +240,15 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
               <CardTitle as="h2">Subsidy claims and agency invoices</CardTitle>
               <CardDescription className="mt-2 max-w-3xl">Keep government or third-party claims separate from family balances. Configure each payer, verify authorizations and supporting documents, submit through the approved agency channel, and reconcile ACH, check, or portal remittances.</CardDescription>
             </div>
-            <div className="flex flex-wrap gap-2"><Button variant="outline" nativeButton={false} render={<Link href="/resources/agency-payment-reconciliation" />}><BookOpenText data-icon="inline-start" /> Open SOP</Button><Button variant="outline" onClick={() => window.print()}><Printer data-icon="inline-start" /> Print</Button><Button variant="outline" onClick={() => void exportClaims()} disabled={!data || exportingClaims}><Download data-icon="inline-start" /> {exportingClaims ? "Exporting…" : "Export CSV"}</Button><Button variant="outline" onClick={() => void load()} disabled={pending}><RefreshCw data-icon="inline-start" /> Refresh</Button></div>
+            <div className="flex flex-wrap gap-2"><Button variant="outline" nativeButton={false} render={<Link href="/resources/agency-payment-reconciliation" />}><BookOpenText data-icon="inline-start" /> Open SOP</Button><Button variant="outline" onClick={() => window.print()}><Printer data-icon="inline-start" /> Print</Button><Button variant="outline" onClick={() => void exportClaims()} disabled={!data || exportingClaims}><Download data-icon="inline-start" /> {exportingClaims ? "Exporting…" : "Export claims"}</Button><Button variant="outline" onClick={() => void exportAgencyLedger()} disabled={!data || exportingLedger}><Download data-icon="inline-start" /> {exportingLedger ? "Exporting…" : "Export ledger"}</Button><Button variant="outline" onClick={() => void load()} disabled={pending}><RefreshCw data-icon="inline-start" /> Refresh</Button></div>
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="max-w-md space-y-2"><Label htmlFor="agency-subsidy-school">School</Label><Select value={centerId} onValueChange={(value) => { if (!value) return; centerIdRef.current = value; setCenterId(value); setPending(false); setExportingClaims(false); setSetupProgramId("new"); setProgramId(""); setFamilyId(""); setChildId(""); setAuthorizationId(""); setEditingAuthorizationId(""); setClaimPage(1); setClaimCursorByPage({}); setClaimError(""); setClaimMessage(""); setData(null); setError(""); }}><SelectTrigger id="agency-subsidy-school"><SelectValue /></SelectTrigger><SelectContent>{centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>)}</SelectContent></Select></div>
+          <div className="max-w-md space-y-2"><Label htmlFor="agency-subsidy-school">School</Label><Select value={centerId} onValueChange={(value) => { if (!value) return; centerIdRef.current = value; setCenterId(value); setPending(false); setExportingClaims(false); setExportingLedger(false); setLedgerAccountId("all"); setSetupProgramId("new"); setProgramId(""); setFamilyId(""); setChildId(""); setAuthorizationId(""); setEditingAuthorizationId(""); setClaimPage(1); setClaimCursorByPage({}); setClaimError(""); setClaimMessage(""); setData(null); setError(""); }}><SelectTrigger id="agency-subsidy-school"><SelectValue /></SelectTrigger><SelectContent>{centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>)}</SelectContent></Select></div>
           {error ? <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
           {message ? <p role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200">{message}</p> : null}
           {summary ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {[["Programs ready", `${summary.readyPrograms}/${summary.readyPrograms + summary.setupRequiredPrograms}`], ["Expired authorizations", summary.expiredAuthorizations], ["Expiring in 30 days", summary.expiringAuthorizations], ["Claimed", money(summary.claimedCents)], ["Approved", money(summary.approvedCents)], ["Paid", money(summary.paidCents)], ["Outstanding", money(summary.outstandingCents)], ["Needs submission", summary.needsSubmission], ["Missing documents", summary.missingDocumentClaims]].map(([label, value]) => <div key={label} className="rounded-lg border bg-background/50 p-3"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 text-lg font-semibold">{value}</div></div>)}
+            {[["Programs ready", `${summary.readyPrograms}/${summary.readyPrograms + summary.setupRequiredPrograms}`], ["Expired authorizations", summary.expiredAuthorizations], ["Expiring in 30 days", summary.expiringAuthorizations], ["Claimed", money(summary.claimedCents)], ["Approved", money(summary.approvedCents)], ["Paid", money(summary.paidCents)], ["Claim outstanding", money(summary.outstandingCents)], ["Ledger receivable", money(summary.agencyLedgerBalanceCents)], ["Needs submission", summary.needsSubmission], ["Missing documents", summary.missingDocumentClaims]].map(([label, value]) => <div key={label} className="rounded-lg border bg-background/50 p-3"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 text-lg font-semibold">{value}</div></div>)}
           </div> : null}
         </CardContent>
       </Card>
@@ -226,6 +257,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
         id="agency-workspace-directory"
         description="Review claim status without opening setup forms, or jump directly to the exact agency record you need to add or update."
         reviewDestinations={[
+          { href: "#agency-ledger", label: "Agency ledger", description: `${ledgerEntries.length} recent entr${ledgerEntries.length === 1 ? "y" : "ies"} across ${ledgerAccounts.length} agency account${ledgerAccounts.length === 1 ? "" : "s"}` },
           { href: "#agency-claim-queue", label: "Claim queue", description: `${claims.length} claim${claims.length === 1 ? "" : "s"} in this school` },
           { href: "#agency-subsidy-billing", label: "Agency summary", description: "Readiness, authorizations, and receivables" },
         ]}
@@ -235,6 +267,24 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
           { href: "#agency-claim-builder", label: "Create a claim" },
         ]}
       />
+
+      <CollapsibleCard
+        id="agency-ledger"
+        title="Agency ledger"
+        description="A separate, school-scoped receivable ledger for approved subsidy claims, agency payments, and correcting reversals. Family balances and parent payments do not post here."
+        collapsedSummary={`${ledgerAccounts.length} agency account${ledgerAccounts.length === 1 ? "" : "s"} · ${money(summary?.agencyLedgerBalanceCents ?? 0)} receivable`}
+      >
+        {ledgerAccounts.length ? <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {ledgerAccounts.map((account) => <div key={account.id} className="rounded-lg border bg-background/50 p-3"><div className="text-sm font-medium">{account.agencyProgram.name}</div>{account.agencyProgram.programName ? <div className="text-xs text-muted-foreground">{account.agencyProgram.programName}</div> : null}<div className="mt-2 text-lg font-semibold">{money(account.balanceCents)}</div><div className="text-xs text-muted-foreground">Outstanding agency receivable</div></div>)}
+        </div> : null}
+        <div className="mb-4 max-w-md space-y-2"><Label htmlFor="agency-ledger-account">Agency account</Label><Select value={ledgerAccountId} onValueChange={(value) => setLedgerAccountId(value ?? "all")}><SelectTrigger id="agency-ledger-account"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All agency accounts</SelectItem>{ledgerAccounts.map((account) => <SelectItem key={account.id} value={account.id}>{account.agencyProgram.name}{account.agencyProgram.programName ? ` · ${account.agencyProgram.programName}` : ""}</SelectItem>)}</SelectContent></Select></div>
+        <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Agency</TableHead><TableHead>Claim / family</TableHead><TableHead>Activity</TableHead><TableHead>Charge</TableHead><TableHead>Payment / credit</TableHead><TableHead>Balance</TableHead><TableHead>Reference</TableHead></TableRow></TableHeader><TableBody>
+          {visibleLedgerEntries.map((entry) => <TableRow key={entry.id}><TableCell>{dateOnly(entry.effectiveAt)}</TableCell><TableCell className="font-medium">{entry.agencyLedgerAccount.agencyProgram.name}<div className="text-xs font-normal text-muted-foreground">{entry.agencyLedgerAccount.agencyProgram.programName}</div></TableCell><TableCell>{entry.claim?.number ?? "—"}<div className="text-xs text-muted-foreground">{entry.claim?.authorization ? `${entry.claim.authorization.family.name} · ${entry.claim.authorization.child.fullName}` : "No family-linked claim"}</div></TableCell><TableCell><Badge variant="outline">{entry.type.replaceAll("_", " ")}</Badge><div className="mt-1 max-w-72 text-xs text-muted-foreground">{entry.description}</div></TableCell><TableCell>{entry.amountCents > 0 ? money(entry.amountCents) : "—"}</TableCell><TableCell>{entry.amountCents < 0 ? money(Math.abs(entry.amountCents)) : "—"}</TableCell><TableCell className="font-medium">{money(entry.balanceAfterCents)}</TableCell><TableCell className="max-w-52 break-words text-xs">{entry.externalReference ?? "—"}</TableCell></TableRow>)}
+          {!visibleLedgerEntries.length ? <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">No agency ledger entries match this account yet. An approved claim creates the receivable; a recorded remittance creates the payment.</TableCell></TableRow> : null}
+        </TableBody></Table></div>
+        {data?.ledger.truncated ? <p className="mt-3 text-xs text-muted-foreground">Showing the latest {data.ledger.entryLimit} entries. Export the ledger for complete school history.</p> : null}
+        <p className="mt-3 text-xs text-muted-foreground">Existing family-ledger agency rows remain immutable history. Compatibility settlement is limited to clearing those pre-existing agency receivables; all new claim accounting is recorded in this ledger.</p>
+      </CollapsibleCard>
 
       <div className="grid gap-4 xl:grid-cols-3">
         <Card id="agency-program-setup" className="scroll-mt-28"><CardHeader><CardTitle as="h3">1. Complete agency setup</CardTitle><CardDescription>Finish a preloaded program or add another school-specific payer. Never reuse another location&apos;s provider identity.</CardDescription></CardHeader><CardContent><div className="mb-3 space-y-2"><Label htmlFor="agency-setup-program">Program to configure</Label><Select value={setupProgramId} onValueChange={(value) => value && setSetupProgramId(value)}><SelectTrigger id="agency-setup-program"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="new">Add another program</SelectItem>{programs.map((program) => <SelectItem key={program.id} value={program.id}>{program.name}{program.programName ? ` · ${program.programName}` : ""}</SelectItem>)}</SelectContent></Select></div>{setupProgram ? <div className="mb-3 rounded-lg border bg-background/50 p-3 text-sm"><div className="flex items-center gap-2"><Badge variant={setupBlockers.length ? "outline" : "default"}>{setupBlockers.length ? "Setup required" : "Ready"}</Badge><span>{setupBlockers.length ? `${setupBlockers.length} item${setupBlockers.length === 1 ? "" : "s"} remaining` : "Provider and payment setup documented"}</span></div>{setupBlockers.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{setupBlockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : null}</div> : null}<form key={`${centerId}:${setupProgramId}`} className="space-y-3" onSubmit={submitProgramSetup}>
@@ -286,7 +336,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
         </form></CardContent></Card>
       </div>
 
-      <CollapsibleCard id="agency-claim-queue" title="Agency claim queue" description="Document readiness, manual portal submission, decisions, and remittances are tracked independently from parent billing. A recorded remittance reconciles matching agency receivables while leaving the parent-visible family responsibility unchanged." collapsedSummary={`${claims.length} claim${claims.length === 1 ? "" : "s"} · ${summary?.needsSubmission ?? 0} need submission · ${summary?.missingDocumentClaims ?? 0} missing documents`} defaultCollapsed>
+      <CollapsibleCard id="agency-claim-queue" title="Agency claim queue" description="Document readiness, manual portal submission, decisions, and remittances are tracked independently from parent billing. Approvals and remittances post to the separate agency ledger; the parent-visible family responsibility remains unchanged." collapsedSummary={`${claims.length} claim${claims.length === 1 ? "" : "s"} · ${summary?.needsSubmission ?? 0} need submission · ${summary?.missingDocumentClaims ?? 0} missing documents`} defaultCollapsed>
         <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Claim</TableHead><TableHead>Agency / child</TableHead><TableHead>Period</TableHead><TableHead>Status</TableHead><TableHead>Amount</TableHead><TableHead>Documents</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader><TableBody>
         {claims.map((claim) => { const incomplete = claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)); const documentsEditable = ["draft", "ready", "submitted"].includes(claim.status); return <TableRow key={claim.id}><TableCell className="font-medium">{claim.number}</TableCell><TableCell>{claim.agencyProgram.name}<div className="text-xs text-muted-foreground">{claim.authorization?.child.fullName ?? "No child"}</div></TableCell><TableCell>{dateOnly(claim.servicePeriodStart)} – {dateOnly(claim.servicePeriodEnd)}</TableCell><TableCell><Badge variant="outline">{claim.status.replaceAll("_", " ")}</Badge></TableCell><TableCell>{money(claim.claimedCents)}<div className="text-xs text-muted-foreground">Paid {money(claim.paidCents)}</div>{claim.remittances?.length ? <div className="mt-2 space-y-1">{claim.remittances.map((remittance) => <div key={remittance.id} className="text-xs text-muted-foreground"><span className={remittance.reversedAt ? "line-through" : ""}>{dateOnly(remittance.paidAt)} · {money(remittance.amountCents)} · {remittance.externalReference}</span>{remittance.reversedAt ? <span> · reversed</span> : <button type="button" className="ml-2 underline" onClick={() => setClaimAction({ kind: "reverse", claim, remittance })}>Reverse</button>}</div>)}</div> : null}</TableCell><TableCell>{claim.requirementBlockers?.length ? <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 p-2 text-xs"><div>Requirements changed.</div><Button className="mt-2" size="sm" variant="outline" onClick={() => void post("syncRequirements", { claimId: claim.id })}>Sync required items</Button></div> : null}{incomplete.length ? <div className="space-y-1">{claim.documents.map((document) => <button key={document.id} type="button" disabled={!documentsEditable} className="block text-left text-xs underline-offset-2 enabled:hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground" onClick={() => toggleClaimDocument(claim, document)}>{document.status === "verified" ? "✓" : "○"} {document.name}</button>)}</div> : <span className="inline-flex items-center gap-1 text-sm text-emerald-700"><FileCheck2 className="size-4" /> Complete</span>}</TableCell><TableCell><div className="flex flex-wrap gap-2">
           {["draft", "ready"].includes(claim.status) ? <><Button size="sm" variant="outline" onClick={() => setClaimAction({ kind: "submit", claim })}>Mark submitted</Button><Button size="sm" variant="outline" onClick={() => setClaimAction({ kind: "void", claim })}>Void draft</Button></> : null}

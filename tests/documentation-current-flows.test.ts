@@ -24,7 +24,7 @@ const currentGuides = [
 test("current guides carry an approved revision and exclude superseded workflow copy", () => {
   for (const path of currentGuides) {
     const content = readFileSync(path, "utf8");
-    assert.match(content, /(?:August (?:11|24)|September 2), 2026/, path);
+    assert.match(content, /(?:August (?:11|24)|September (?:2|3)), 2026/, path);
     assert.doesNotMatch(content, /creates? (?:a |the )?Friday invoice/i, path);
     assert.doesNotMatch(content, /bank payment is the preferred payment method/i, path);
     assert.doesNotMatch(content, /create your password.*setup link/i, path);
@@ -93,8 +93,10 @@ test("agency payment SOP has a stable public route and evidence-first reconcilia
   assert.match(guide, /Do not use a Stripe payout or a bank deposit by itself as remittance proof/);
   assert.match(guide, /Review complete - save/);
   assert.match(guide, /parent-visible family responsibility stays unchanged/);
+  assert.match(guide, /dedicated agency ledger/);
   assert.match(sop, /claim-by-claim allocation/);
   assert.match(sop, /Do not post a second manual family payment/);
+  assert.match(sop, /Export the agency ledger CSV/);
   assert.match(sop, /Reverse an incorrect remittance/);
 });
 

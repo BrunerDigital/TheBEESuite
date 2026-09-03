@@ -74,9 +74,13 @@ function normalizeText(value: unknown) {
 
 function normalizeTextVariants(value: unknown) {
   const normalized = normalizeText(value);
-  return normalized
-    ? [...new Set([normalized, normalized.replace(/\b([odl])\s+(?=\p{L})/gu, "$1")])]
-    : [];
+  if (!normalized) return [];
+  const variants = new Set([normalized]);
+  if (typeof value === "string") {
+    const spacedApostrophe = normalizeText(value.replace(/\b([odl])['’](?=\p{L})/giu, "$1 "));
+    if (spacedApostrophe) variants.add(spacedApostrophe);
+  }
+  return [...variants];
 }
 
 const personNameSuffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
@@ -234,6 +238,11 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
   const variants = new Set(normalizeTextVariants(normalized));
 
   if (typeof value === "string") {
+    const spacedApostropheName = value.replace(/\b([odl])['’](?=\p{L})/giu, "$1 ");
+    if (spacedApostropheName !== value) {
+      normalizeTextVariants(normalizePersonName(spacedApostropheName, { stripCredentials }))
+        .forEach((variant) => variants.add(variant));
+    }
     const joinedHyphenName = value.replace(/([\p{L}\p{N}])[-\u2010-\u2015](?=[\p{L}\p{N}])/gu, "$1");
     if (joinedHyphenName !== value) {
       normalizeTextVariants(normalizePersonName(joinedHyphenName, { stripCredentials }))

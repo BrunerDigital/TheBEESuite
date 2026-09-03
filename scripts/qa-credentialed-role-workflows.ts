@@ -77,7 +77,14 @@ function requestProblem(request: Request) {
   if (["GET", "HEAD", "OPTIONS"].includes(method)) return null;
   if (url.origin !== base.origin) return null;
   if (method === "POST" && url.origin === base.origin && url.pathname === "/api/auth/login") return null;
-  if (method === "POST" && url.origin === base.origin && url.pathname === "/api/device-sessions") return null;
+  if (method === "POST" && url.origin === base.origin && url.pathname === "/api/device-sessions") {
+    try {
+      const payload = request.postDataJSON() as { action?: unknown } | null;
+      if (payload?.action === "heartbeat") return null;
+    } catch {
+      // Malformed or opaque device-session writes remain unexpected.
+    }
+  }
   return `${method} ${url.pathname}`;
 }
 

@@ -22,12 +22,27 @@ test("anchored disclosure navigation expands the task without making it the next
 
   assert.match(preferences, /const expandForNavigation = useCallback/);
   assert.match(preferences, /setCollapsed\(false\)/);
-  assert.match(preferences, /useExpandForHash\(id, expandForNavigation\)/);
+  assert.match(preferences, /setLoadedPreferenceKey\(key\)/);
+  assert.match(preferences, /if \(!preferenceLoaded\) return/);
+  assert.match(preferences, /useExpandForHash\(id, expandForNavigation, preferenceLoaded\)/);
   const transientExpansion = preferences.slice(
     preferences.indexOf("const expandForNavigation"),
-    preferences.indexOf("return { collapsed:", preferences.indexOf("const expandForNavigation")),
+    preferences.indexOf("function useExpandForHash", preferences.indexOf("const expandForNavigation")),
   );
   assert.doesNotMatch(transientExpansion, /localStorage\.setItem/);
+});
+
+test("credential and write preflights reject unmarked identities and non-heartbeat session mutations", async () => {
+  const accounts = await readSource("scripts/ensure-synthetic-role-qa.ts");
+  const auth = await readSource("src/lib/supabase-auth.ts");
+  const workflows = await readSource("scripts/qa-credentialed-role-workflows.ts");
+
+  assert.match(auth, /getSupabaseAuthUserMetadataByEmail/);
+  assert.match(accounts, /userMetadata\.source === SYNTHETIC_ROLE_QA_SOURCE/);
+  assert.match(accounts, /appMetadata\.bee_suite_role === account\.role/);
+  assert.match(workflows, /request\.postDataJSON\(\)/);
+  assert.match(workflows, /payload\?\.action === "heartbeat"/);
+  assert.doesNotMatch(workflows, /pathname === "\/api\/device-sessions"\) return null/);
 });
 
 test("report exports stay discoverable without crowding the mobile collapsed header", async () => {

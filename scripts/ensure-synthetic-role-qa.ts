@@ -12,7 +12,11 @@ import {
   syntheticRoleQaMarker,
   type SyntheticRoleQaAccount,
 } from "@/lib/synthetic-role-qa";
-import { upsertSupabaseAuthUserWithPassword, verifySupabasePassword } from "@/lib/supabase-auth";
+import {
+  getSupabaseAuthUserMetadataByEmail,
+  upsertSupabaseAuthUserWithPassword,
+  verifySupabasePassword,
+} from "@/lib/supabase-auth";
 
 const apply = process.argv.includes("--apply");
 const verifyAuth = process.argv.includes("--verify-auth") || apply;
@@ -129,6 +133,18 @@ async function preflightExistingAccount(account: SyntheticRoleQaAccount, input: 
     : user.guardians.length === 0;
   if (!guardianLinksSafe) {
     fail(`Existing ${account.key} account has an unexpected guardian linkage.`);
+  }
+  return { exists: true, safe: true };
+}
+
+async function preflightExistingAuthIdentity(account: SyntheticRoleQaAccount) {
+  const authUser = await getSupabaseAuthUserMetadataByEmail(account.email);
+  if (!authUser) return { exists: false, safe: true };
+  const safe = authUser.email === account.email
+    && authUser.userMetadata.source === SYNTHETIC_ROLE_QA_SOURCE
+    && authUser.appMetadata.bee_suite_role === account.role;
+  if (!safe) {
+    fail(`Existing ${account.key} Auth identity failed the synthetic source or role safety gate.`);
   }
   return { exists: true, safe: true };
 }
@@ -321,14 +337,15 @@ async function main() {
   const scope = await loadDemoScope();
   const preflight = [];
   for (const account of SYNTHETIC_ROLE_QA_ACCOUNTS) {
-    const result = await preflightExistingAccount(account, {
+    const database = await preflightExistingAccount(account, {
       tenantId: scope.tenant.id,
       brandId: scope.brand.id,
       organizationId: scope.organization.id,
       centerId: scope.center.id,
       familyId: scope.family.id,
     });
-    preflight.push({ role: account.key, accountRef: syntheticRoleQaAccountRef(account.email), ...result });
+    const authentication = await preflightExistingAuthIdentity(account);
+    preflight.push({ role: account.key, accountRef: syntheticRoleQaAccountRef(account.email), database, authentication });
   }
 
   if (apply) {

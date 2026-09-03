@@ -84,6 +84,7 @@ type CollapsibleCardProps = {
 function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpanded = false) {
   const key = storageKey("collapsed", id);
   const [collapsed, setCollapsed] = useState(forceExpanded ? false : defaultCollapsed);
+  const [loadedPreferenceKey, setLoadedPreferenceKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -91,7 +92,10 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpan
     if (forceExpanded) {
       window.localStorage.removeItem(key);
       window.queueMicrotask(() => {
-        if (!cancelled) setCollapsed(false);
+        if (!cancelled) {
+          setCollapsed(false);
+          setLoadedPreferenceKey(key);
+        }
       });
       return () => {
         cancelled = true;
@@ -102,6 +106,7 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpan
       const stored = window.localStorage.getItem(key);
       if (stored === "1") setCollapsed(true);
       if (stored === "0") setCollapsed(false);
+      setLoadedPreferenceKey(key);
     });
     return () => {
       cancelled = true;
@@ -123,11 +128,17 @@ function usePersistedCollapsed(id: string, defaultCollapsed: boolean, forceExpan
     setCollapsed(false);
   }, []);
 
-  return { collapsed: forceExpanded ? false : collapsed, expandForNavigation, toggleCollapsed };
+  return {
+    collapsed: forceExpanded ? false : collapsed,
+    expandForNavigation,
+    preferenceLoaded: loadedPreferenceKey === key,
+    toggleCollapsed,
+  };
 }
 
-function useExpandForHash(id: string, expand: () => void) {
+function useExpandForHash(id: string, expand: () => void, preferenceLoaded: boolean) {
   useEffect(() => {
+    if (!preferenceLoaded) return;
     function expandAndFocusTarget(targetHash: string) {
       let target = "";
       try {
@@ -167,7 +178,7 @@ function useExpandForHash(id: string, expand: () => void) {
       window.removeEventListener("hashchange", expandFromLocationHash);
       document.removeEventListener("click", expandFromAnchorClick);
     };
-  }, [expand, id]);
+  }, [expand, id, preferenceLoaded]);
 }
 
 export function CollapsibleCard({
@@ -187,8 +198,8 @@ export function CollapsibleCard({
   forceExpanded = false,
 }: CollapsibleCardProps) {
   const contentId = useId();
-  const { collapsed, expandForNavigation, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed, forceExpanded);
-  useExpandForHash(id, expandForNavigation);
+  const { collapsed, expandForNavigation, preferenceLoaded, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed, forceExpanded);
+  useExpandForHash(id, expandForNavigation, preferenceLoaded);
 
   return (
     <Card
@@ -264,8 +275,8 @@ export function CollapsiblePanel({
   defaultCollapsed = true,
 }: CollapsiblePanelProps) {
   const contentId = useId();
-  const { collapsed, expandForNavigation, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
-  useExpandForHash(id, expandForNavigation);
+  const { collapsed, expandForNavigation, preferenceLoaded, toggleCollapsed } = usePersistedCollapsed(id, defaultCollapsed);
+  useExpandForHash(id, expandForNavigation, preferenceLoaded);
 
   return (
     <section

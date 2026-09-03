@@ -401,8 +401,8 @@ export function RequiredDocumentChecklistPanel({
         <CollapsiblePanel
           id="required-document-action-rows"
           title="Requirement rows"
-          summary={`${visibleItems.length} matching ${visibleItems.length === 1 ? "requirement" : "requirements"} · ${visibleRequestableItems.length} need action`}
-          defaultCollapsed={!visibleRequestableItems.length}
+          summary={`${visibleItems.length} matching ${visibleItems.length === 1 ? "requirement" : "requirements"} · ${visibleRequestableItems.length} need action · expand to review or request information`}
+          defaultCollapsed
         >
           <div className="overflow-x-auto">
             <Table>

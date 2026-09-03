@@ -6,12 +6,15 @@ const readSource = (path: string) => readFile(new URL(`../${path}`, import.meta.
 
 test("documents separate action shortcuts from expandable records", async () => {
   const source = await readSource("src/components/live-ops-pages.tsx");
+  const checklist = await readSource("src/components/required-document-checklist-panel.tsx");
 
   assert.match(source, /aria-label="Document tasks"/);
   assert.match(source, /href="#required-document-action-rows"/);
   assert.match(source, /href="#document-signature-request"/);
   assert.match(source, /id="document-records"[\s\S]*?defaultCollapsed=\{!data\.stats\.pending\}/);
   assert.match(source, /id="document-request-editor"/);
+  assert.match(checklist, /id="required-document-action-rows"[\s\S]*?defaultCollapsed/);
+  assert.doesNotMatch(checklist, /id="required-document-action-rows"[\s\S]*?defaultCollapsed=\{!visibleRequestableItems\.length\}/);
 });
 
 test("compliance keeps safety summaries visible and opens focused entry tools by anchor", async () => {

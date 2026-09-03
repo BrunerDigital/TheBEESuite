@@ -1711,3 +1711,49 @@ test("guardian duplicate scoring retains the credential interpretation of ambigu
   assert.equal(score?.confidence, "high");
   assert.ok(score?.reasons.includes("same guardian name"));
 });
+
+test("child duplicate scoring canonicalizes a spelled-out Junior suffix", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith, John Junior",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "John Smith Jr.",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
+test("guardian duplicate scoring canonicalizes a spelled-out Senior suffix", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith, John Senior",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "John Smith Sr.",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});

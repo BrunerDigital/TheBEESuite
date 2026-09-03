@@ -80,6 +80,14 @@ function normalizeTextVariants(value: unknown) {
 }
 
 const personNameSuffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
+const personNameSuffixAliases = new Map([
+  ["junior", "jr"],
+  ["senior", "sr"],
+  ["second", "ii"],
+  ["third", "iii"],
+  ["fourth", "iv"],
+  ["fifth", "v"],
+]);
 const personNameHonorifics = new Set(["dr", "fr", "miss", "mr", "mrs", "ms", "mx", "prof", "rev"]);
 const personNameSurnameParticles = new Set([
   "al", "bin", "da", "de", "del", "della", "der", "di", "dos", "du", "la", "le", "los", "saint", "st", "van", "von",
@@ -93,7 +101,10 @@ const personNameCredentials = new Set([
 const personNameCredentialLikeSurnames = new Set(["ba", "do", "ma", "pa"]);
 
 function canonicalPersonNameToken(value: unknown, supported: Set<string>) {
-  const normalized = normalizeText(value).replace(/\s+/g, "");
+  const compact = normalizeText(value).replace(/\s+/g, "");
+  const normalized = supported === personNameSuffixes
+    ? personNameSuffixAliases.get(compact) ?? compact
+    : compact;
   return supported.has(normalized) ? normalized : "";
 }
 

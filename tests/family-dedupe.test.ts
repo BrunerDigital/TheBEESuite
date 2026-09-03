@@ -255,3 +255,51 @@ test("guardian duplicate scoring ignores distinct co-parents who share a househo
 
   assert.equal(score, null);
 });
+
+test("guardian duplicate scoring folds name diacritics", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "José García",
+      phone: "7205550101",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Jose Garcia",
+      phone: "7205550101",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
+test("guardian duplicate scoring canonicalizes dotted credentials", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Alex Smith, M.D.",
+      phone: "7205550102",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith MD",
+      phone: "7205550102",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});

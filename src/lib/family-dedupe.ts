@@ -54,7 +54,7 @@ export type MemberDuplicateCandidate = {
 
 function normalizeText(value: unknown) {
   return typeof value === "string"
-    ? value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+    ? value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
     : "";
 }
 
@@ -64,12 +64,12 @@ function normalizePersonName(value: unknown) {
   if (nameParts.length < 2) return normalizeText(value);
 
   const suffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v", "esq", "phd", "md", "dds", "dmd", "do"]);
-  const trailingPart = normalizeText(nameParts.at(-1));
+  const trailingPart = normalizeText(nameParts.at(-1)).replace(/\s+/g, "");
   const hasSuffix = suffixes.has(trailingPart);
-  if (nameParts.length === 2 && hasSuffix) return normalizeText(value);
+  if (nameParts.length === 2 && hasSuffix) return normalizeText(`${nameParts[0]} ${trailingPart}`);
 
   const givenNames = hasSuffix ? nameParts.slice(1, -1) : nameParts.slice(1);
-  return normalizeText(`${givenNames.join(" ")} ${nameParts[0]} ${hasSuffix ? nameParts.at(-1) : ""}`);
+  return normalizeText(`${givenNames.join(" ")} ${nameParts[0]} ${hasSuffix ? trailingPart : ""}`);
 }
 
 function normalizeEmail(value: unknown) {

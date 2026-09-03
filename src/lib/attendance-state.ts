@@ -92,6 +92,40 @@ export type CenterTimeZoneSource = {
 
 const FALLBACK_TIME_ZONE = "America/New_York";
 
+export function formatServiceDateLabel(date = new Date(), timeZone = FALLBACK_TIME_ZONE) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+export function serviceDayWindowInTimeZone(date = new Date(), timeZone = FALLBACK_TIME_ZONE) {
+  const start = startOfServiceDay(date, timeZone);
+  const end = startOfServiceDay(new Date(start.getTime() + 36 * 60 * 60 * 1000), timeZone);
+  return { timeZone, start, end };
+}
+
+export function monthKeyInTimeZone(date: Date, timeZone = FALLBACK_TIME_ZONE) {
+  const parts = datePartsInTimeZone(date, timeZone);
+  return `${parts.year}-${parts.month - 1}`;
+}
+
+export function monthBucketInTimeZone(date: Date, timeZone = FALLBACK_TIME_ZONE, monthOffset = 0) {
+  const parts = datePartsInTimeZone(date, timeZone);
+  const normalizedMonth = new Date(Date.UTC(parts.year, parts.month - 1 + monthOffset, 1));
+  const year = normalizedMonth.getUTCFullYear();
+  const month = normalizedMonth.getUTCMonth() + 1;
+  const start = zonedDateTimeToUtc({ year, month, day: 1, hour: 0, minute: 0, second: 0 }, timeZone);
+  return {
+    key: `${year}-${month - 1}`,
+    label: new Intl.DateTimeFormat("en-US", { timeZone, month: "short" }).format(start),
+    start,
+  };
+}
+
 const stateTimeZones: Record<string, string> = {
   AK: "America/Anchorage",
   AL: "America/Chicago",
@@ -242,12 +276,7 @@ export function readCenterLocationTimeZone(input: unknown) {
 
 export function centerServiceDayWindow(date = new Date(), center: unknown) {
   const timeZone = readCenterTimeZone(center);
-  const start = startOfServiceDay(date, timeZone);
-  return {
-    timeZone,
-    start,
-    end: new Date(start.getTime() + 24 * 60 * 60 * 1000),
-  };
+  return serviceDayWindowInTimeZone(date, timeZone);
 }
 
 export function readLatePickupCutoff(customFields: unknown) {

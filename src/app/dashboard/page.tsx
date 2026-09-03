@@ -9,7 +9,7 @@ import {
   buildAccountsReceivableSummary,
   canViewAccountBalances,
 } from "@/lib/accounts-receivable";
-import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
+import { centerServiceDayWindow, formatServiceDateLabel, latestLogMap, monthBucketInTimeZone, monthKeyInTimeZone, serviceDayWindowInTimeZone } from "@/lib/attendance-state";
 import { canAccessAllCenters, canManageCrmLeads, canManageOperations, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
 import { stageLabels } from "@/lib/crm";
 import { buildDashboardAttendanceSnapshot } from "@/lib/dashboard-attendance-snapshot";
@@ -133,13 +133,12 @@ export default async function DashboardPage() {
     children: { some: currentEnrollmentWhere },
   };
   const today = new Date();
-  const startOfDay = new Date(today);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(today);
-  endOfDay.setHours(23, 59, 59, 999);
+  const dashboardServiceDay = serviceDayWindowInTimeZone(today, user.timeZone);
+  const startOfDay = dashboardServiceDay.start;
+  const endOfDay = dashboardServiceDay.end;
   const thirtyDays = new Date(today);
   thirtyDays.setDate(today.getDate() + 30);
-  const trendStart = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+  const trendStart = monthBucketInTimeZone(today, dashboardServiceDay.timeZone, -5).start;
   const attendanceClassroomWhere = user.role === UserRole.TEACHER
     ? teacherDashboardProfile?.classroomId
       ? { id: teacherDashboardProfile.classroomId, centerId: scopedCenterFilter }
@@ -198,7 +197,7 @@ export default async function DashboardPage() {
         centerId: scopedCenterFilter,
         startsAt: {
           gte: startOfDay,
-          lte: endOfDay,
+          lt: endOfDay,
         },
       },
     }),
@@ -334,7 +333,7 @@ export default async function DashboardPage() {
         centerId: scopedCenterFilter,
         startsAt: {
           gte: trendStart,
-          lte: endOfDay,
+          lt: endOfDay,
         },
       },
       select: {
@@ -523,12 +522,12 @@ export default async function DashboardPage() {
   const occupancy = capacity ? Math.round((activeChildren / capacity) * 1000) / 10 : 0;
   const revenueDollars = Math.round((revenue._sum.balanceCents ?? 0) / 100);
   const totalOpenSeats = Math.max(capacity - activeChildren, 0);
-  const monthKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}`;
+  const monthKey = (date: Date) => monthKeyInTimeZone(date, dashboardServiceDay.timeZone);
   const trendBuckets = Array.from({ length: 6 }, (_, index) => {
-    const date = new Date(today.getFullYear(), today.getMonth() - (5 - index), 1);
+    const bucket = monthBucketInTimeZone(today, dashboardServiceDay.timeZone, -(5 - index));
     return {
-      key: monthKey(date),
-      month: date.toLocaleDateString("en-US", { month: "short" }),
+      key: bucket.key,
+      month: bucket.label,
       leads: 0,
       tours: 0,
       enrolled: 0,
@@ -616,7 +615,7 @@ export default async function DashboardPage() {
     }) : Promise.resolve([]),
     canSeeExecutiveMetrics ? prisma.tour.groupBy({
       by: ["centerId"],
-      where: { centerId: scopedCenterFilter, startsAt: { gte: startOfDay, lte: endOfDay } },
+      where: { centerId: scopedCenterFilter, startsAt: { gte: startOfDay, lt: endOfDay } },
       _count: { _all: true },
     }) : Promise.resolve([]),
     canSeeExecutiveMetrics ? prisma.invoice.findMany({
@@ -1061,7 +1060,7 @@ export default async function DashboardPage() {
     analytics: dashboardAnalytics,
     attendanceSnapshot,
     notifications: dashboardNotifications,
-    asOfLabel: today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
+    asOfLabel: formatServiceDateLabel(today, dashboardServiceDay.timeZone),
     showDemoFallbackData,
     visibleLenses: visibleDashboardLenses,
     dashboardWidgets: dashboardWidgetConfig.widgets,

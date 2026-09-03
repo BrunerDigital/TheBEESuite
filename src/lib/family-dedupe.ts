@@ -255,6 +255,14 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
       normalizeTextVariants(`${givenNames} ${surname} ${surnameTrailingSuffix || attachedSuffix}`)
         .forEach((variant) => variants.add(variant));
     }
+    const ambiguousCredentialLikeGivenName = rawParts.length === 2
+      && compoundSurnameWordCount >= 2
+      && rawTrailingWords.length === 1
+      && personNameCredentialLikeSurnames.has(rawTrailingToken);
+    if (ambiguousCredentialLikeGivenName) {
+      const surname = normalizeText(rawParts[0]).replace(/\s+/g, "");
+      normalizeTextVariants(`${rawParts[1]} ${surname}`).forEach((variant) => variants.add(variant));
+    }
     if (rawParts.length >= 3 && trailingSuffix && firstPartWords >= 2) {
       const surname = normalizeText(rawParts[0]).replace(/\s+/g, "");
       const givenNameWords = credentialsRemoved(

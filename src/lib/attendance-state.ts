@@ -102,6 +102,12 @@ export function formatServiceDateLabel(date = new Date(), timeZone = FALLBACK_TI
   }).format(date);
 }
 
+export function serviceDayWindowInTimeZone(date = new Date(), timeZone = FALLBACK_TIME_ZONE) {
+  const start = startOfServiceDay(date, timeZone);
+  const end = startOfServiceDay(new Date(start.getTime() + 36 * 60 * 60 * 1000), timeZone);
+  return { timeZone, start, end };
+}
+
 const stateTimeZones: Record<string, string> = {
   AK: "America/Anchorage",
   AL: "America/Chicago",
@@ -252,12 +258,7 @@ export function readCenterLocationTimeZone(input: unknown) {
 
 export function centerServiceDayWindow(date = new Date(), center: unknown) {
   const timeZone = readCenterTimeZone(center);
-  const start = startOfServiceDay(date, timeZone);
-  return {
-    timeZone,
-    start,
-    end: new Date(start.getTime() + 24 * 60 * 60 * 1000),
-  };
+  return serviceDayWindowInTimeZone(date, timeZone);
 }
 
 export function readLatePickupCutoff(customFields: unknown) {

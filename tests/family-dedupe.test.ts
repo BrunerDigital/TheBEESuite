@@ -1012,6 +1012,27 @@ test("child duplicate scoring preserves credential-like surnames after middle na
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
 
+test("child duplicate scoring preserves all-caps credential-like surnames", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "AVERY JAMES MA",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "AVERY JAMES PA",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
 test("child duplicate scoring preserves compound surname particles", () => {
   const score = scoreChildDuplicate(
     {

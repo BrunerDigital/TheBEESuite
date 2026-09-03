@@ -92,7 +92,9 @@ function stripTrailingPersonCredentials(parts: string[]) {
     const trailingWords = remaining.at(-1)?.split(/\s+/).filter(Boolean) ?? [];
     const rawCredential = trailingWords.at(-1) ?? "";
     if (!canonicalPersonNameToken(rawCredential, personNameCredentials)) break;
-    const separateCommaPart = remaining.length > 1 && trailingWords.length === 1;
+    const firstPartWords = remaining[0]?.split(/\s+/).filter(Boolean).length ?? 0;
+    const separateCommaPart = trailingWords.length === 1
+      && (remaining.length > 2 || firstPartWords >= 2);
     const visiblyAttachedCredential = rawCredential.includes(".")
       || (trailingWords.length >= 3
         && !personNameCredentialLikeSurnames.has(canonicalPersonNameToken(rawCredential, personNameCredentials)));
@@ -115,14 +117,18 @@ function normalizePersonName(value: unknown) {
       : normalizeText(words.join(" "));
   }
 
-  const separateSuffix = canonicalPersonNameToken(nameParts.at(-1), personNameSuffixes);
+  const firstPartWords = nameParts[0]?.split(/\s+/).filter(Boolean).length ?? 0;
+  const trailingSuffix = canonicalPersonNameToken(nameParts.at(-1), personNameSuffixes);
+  const separateSuffix = nameParts.length === 2 && firstPartWords < 2 ? "" : trailingSuffix;
   if (nameParts.length === 2 && separateSuffix) return normalizeText(`${nameParts[0]} ${separateSuffix}`);
 
   const givenNameWords = (separateSuffix ? nameParts.slice(1, -1) : nameParts.slice(1))
     .join(" ")
     .split(/\s+/)
     .filter(Boolean);
-  const attachedSuffix = separateSuffix ? "" : canonicalPersonNameToken(givenNameWords.at(-1), personNameSuffixes);
+  const attachedSuffix = separateSuffix || givenNameWords.length < 2
+    ? ""
+    : canonicalPersonNameToken(givenNameWords.at(-1), personNameSuffixes);
   if (attachedSuffix) givenNameWords.pop();
   const suffix = separateSuffix || attachedSuffix;
   return normalizeText(`${givenNameWords.join(" ")} ${nameParts[0]} ${suffix}`);

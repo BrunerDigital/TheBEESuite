@@ -144,12 +144,12 @@ function DeviceForRole({ device, src, alt }: { device: DeviceKind; src: string; 
 export function LandingHeroShowcase() {
   return (
     <div className="relative mx-auto h-[25rem] w-full max-w-[50rem] sm:h-[34rem] lg:h-[38rem] xl:h-[42rem]">
-      <div className="absolute right-0 top-0 h-[42%] w-[34%] overflow-hidden rounded-[1.4rem] border border-white/10 opacity-95 shadow-[0_24px_64px_rgba(0,0,0,0.3)] sm:rounded-[1.8rem] xl:-right-8">
+      <div className="absolute left-[4%] right-[4%] top-0 h-[clamp(11rem,52vw,12.75rem)] w-auto overflow-hidden rounded-[1.4rem] border border-white/10 opacity-95 shadow-[0_24px_64px_rgba(0,0,0,0.3)] sm:left-auto sm:right-0 sm:h-[42%] sm:w-[34%] sm:rounded-[1.8rem] xl:-right-8">
         <Image
           src="/brand/the-bee-suite/usage/bee-suite-lobby-check-in.png"
           alt="A parent and school director using The BEE Suite at a childcare front desk"
           fill
-          sizes="(max-width: 768px) 34vw, 20vw"
+          sizes="(max-width: 639px) 92vw, (max-width: 768px) 34vw, 20vw"
           className="object-cover object-[52%_40%]"
         />
       </div>

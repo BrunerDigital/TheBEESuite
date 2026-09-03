@@ -45,6 +45,13 @@ test("landing page presents real product screens in device mockups", () => {
   assert.ok(showcaseSource.includes('loading={preload ? "eager" : undefined}'), "hero LCP image should load eagerly");
   assert.ok(showcaseSource.includes('fetchPriority={preload ? "high" : undefined}'), "hero LCP image should receive high fetch priority");
   assert.ok(showcaseSource.includes("sizes="), "device images should provide responsive sizes");
+  assert.ok(
+    showcaseSource.includes("left-[4%] right-[4%]") &&
+      showcaseSource.includes("h-[clamp(11rem,52vw,12.75rem)]") &&
+      showcaseSource.includes("sm:left-auto sm:right-0 sm:h-[42%] sm:w-[34%]"),
+    "school-use image should keep a landscape mobile frame and restore the desktop composition",
+  );
+  assert.ok(showcaseSource.includes("(max-width: 639px) 92vw"), "school-use image should request an appropriately sized mobile asset");
 });
 
 test("landing page uses the existing in-school imagery as editorial product proof", () => {

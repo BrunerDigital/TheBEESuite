@@ -90,7 +90,7 @@ function canonicalPersonNameToken(value: unknown, supported: Set<string>) {
 function normalizePersonNameText(value: unknown) {
   const words = normalizeText(value).split(" ").filter(Boolean);
   if (personNameHonorifics.has(words[0] ?? "")) words.shift();
-  return words.join(" ");
+  return words.join(" ").replace(/\b([od])\s+(?=\p{L})/gu, "$1");
 }
 
 function stripTrailingPersonCredentials(parts: string[]) {
@@ -101,12 +101,15 @@ function stripTrailingPersonCredentials(parts: string[]) {
     if (!canonicalPersonNameToken(rawCredential, personNameCredentials)) break;
     const firstPartWords = remaining[0]?.split(/\s+/).filter(Boolean).length ?? 0;
     const credentialToken = canonicalPersonNameToken(rawCredential, personNameCredentials);
+    const credentialLetters = rawCredential.replace(/[^A-Za-z]/g, "");
+    const explicitUppercaseCredential = credentialLetters.length >= 2
+      && credentialLetters === credentialLetters.toUpperCase();
     const separateCommaPart = trailingWords.length === 1
       && (remaining.length > 2 || firstPartWords >= 2)
-      && !personNameCredentialLikeSurnames.has(credentialToken);
+      && (!personNameCredentialLikeSurnames.has(credentialToken) || explicitUppercaseCredential);
     const visiblyAttachedCredential = rawCredential.includes(".")
       || (trailingWords.length >= 3
-        && !personNameCredentialLikeSurnames.has(credentialToken));
+        && (!personNameCredentialLikeSurnames.has(credentialToken) || explicitUppercaseCredential));
     if (!separateCommaPart && !visiblyAttachedCredential) break;
     trailingWords.pop();
     if (trailingWords.length) remaining[remaining.length - 1] = trailingWords.join(" ");
@@ -194,7 +197,7 @@ function normalizedDate(value: unknown) {
 }
 
 function childKey(child: FamilyDedupeChild) {
-  const name = normalizeText(child.fullName);
+  const name = normalizePersonName(child.fullName);
   const dateOfBirth = normalizedDate(child.dateOfBirth);
   return name && dateOfBirth ? `${name}|${dateOfBirth}` : "";
 }

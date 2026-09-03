@@ -343,6 +343,28 @@ test("child duplicate scoring canonicalizes omitted apostrophes", () => {
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
 
+test("child duplicate scoring canonicalizes spaced apostrophe variants", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Sean O Connor",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Sean O'Connor",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
 test("child duplicate scoring preserves exact non-Latin names", () => {
   const score = scoreChildDuplicate(
     {
@@ -715,6 +737,30 @@ test("guardian duplicate scoring preserves credential-like surnames", () => {
   );
 
   assert.equal(score, null);
+});
+
+test("guardian duplicate scoring recognizes uppercase comma credentials", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Alex Smith, MA",
+      phone: "7205550113",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith MA",
+      phone: "7205550113",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
 });
 
 test("child duplicate scoring preserves credential-like surnames after middle names", () => {

@@ -7,6 +7,7 @@ export type WorkspaceCenterOption = {
   name: string;
   detail: string;
   companyName?: string;
+  status?: string;
 };
 
 export type WorkspaceState = {
@@ -46,6 +47,11 @@ export function isWorkspaceExecutiveRole(role: UserRole | string) {
   return workspaceExecutiveRoles.has(role as UserRole);
 }
 
+export function isSelectableWorkspaceCenterStatus(status: string | null | undefined) {
+  const normalized = status?.trim().toLocaleLowerCase();
+  return !normalized || !["closed", "archived", "inactive"].includes(normalized);
+}
+
 export function centerWorkspaceSelection(centerId: string): WorkspaceSelectionValue {
   return `center:${centerId}`;
 }
@@ -67,7 +73,7 @@ export function resolveWorkspaceState({
   authorizedCenters: WorkspaceCenterOption[];
   requestedSelection?: string | null;
 }): WorkspaceState {
-  const options = [...authorizedCenters];
+  const options = authorizedCenters.filter((center) => isSelectableWorkspaceCenterStatus(center.status));
   const companyLabel = workspaceCompanyLabel(options);
   const multiLocationExecutive = isWorkspaceExecutiveRole(role) && options.length > 1;
   const requestedCenterId = centerIdFromWorkspaceSelection(requestedSelection);

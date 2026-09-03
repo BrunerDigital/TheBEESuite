@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -155,12 +155,14 @@ export function ComplianceTaskPanel({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle as="h2">Compliance tasks and reminders</CardTitle>
-        <CardDescription>Assign licensing, drill, document, medication, and incident follow-up tasks with due dates and reminders.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-5">
+    <CollapsibleCard
+      id="compliance-task-workspace"
+      title="Compliance tasks and reminders"
+      description="Assign licensing, drill, document, medication, and incident follow-up tasks with due dates and reminders."
+      collapsedSummary={`${rows.length} ${rows.length === 1 ? "task" : "tasks"} in this workspace`}
+      contentClassName="space-y-5"
+      defaultCollapsed
+    >
         {error ? (
           <Alert variant="destructive">
             <AlertCircle aria-hidden="true" className="size-4" />
@@ -316,7 +318,6 @@ export function ComplianceTaskPanel({
             ) : null}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

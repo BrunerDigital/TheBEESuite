@@ -12,13 +12,23 @@ test("shared collapsible sections expose accessible persisted controls and conci
   assert.match(source, /aria-controls=\{contentId\}/);
   assert.match(source, /collapsedSummary \|\| description/);
   assert.match(source, /data-collapsible-panel="true"/);
+  assert.match(source, /window\.addEventListener\("hashchange", expandFromLocationHash\)/);
+  assert.match(source, /document\.addEventListener\("click", expandFromAnchorClick\)/);
+  assert.match(source, /new URL\(href, window\.location\.href\)/);
+  assert.match(source, /destination\.pathname !== window\.location\.pathname/);
+  assert.match(source, /container\.contains\(destination\)/);
+  assert.match(source, /element\?\.focus\(\{ preventScroll: true \}\)/);
 });
 
-test("teacher portal keeps primary work open and compresses secondary workflows", async () => {
+test("teacher portal opens focused tasks from a compact landing view", async () => {
   const source = await readSource("src/components/teacher-mobile-workspace.tsx");
 
-  assert.match(source, /id="teacher-roster"[\s\S]*?title="Roster"/);
-  assert.match(source, /id="teacher-daily-report"[\s\S]*?title="Daily Report"/);
+  assert.match(source, /aria-label="Teacher task shortcuts"/);
+  assert.match(source, /\["Check attendance", "#teacher-attendance"\]/);
+  assert.match(source, /id="teacher-profile-setup"[\s\S]*?defaultCollapsed=\{profileReady\}/);
+  assert.match(source, /id="teacher-roster"[\s\S]*?title="Roster"[\s\S]*?defaultCollapsed/);
+  assert.match(source, /id="teacher-daily-report"[\s\S]*?title="Daily Report"[\s\S]*?defaultCollapsed/);
+  assert.match(source, /id="teacher-quick-log" tabIndex=\{-1\}/);
   assert.match(source, /id="teacher-attendance"[\s\S]*?defaultCollapsed/);
   assert.match(source, /id="teacher-location"[\s\S]*?defaultCollapsed/);
   assert.match(source, /id="teacher-photo"[\s\S]*?defaultCollapsed/);

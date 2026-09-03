@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -106,12 +106,14 @@ export function EmergencyDrillLogPanel({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle as="h2">Emergency drill logs</CardTitle>
-        <CardDescription>Record school-level fire, lockdown, weather, evacuation, and shelter drill documentation.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-5">
+    <CollapsibleCard
+      id="compliance-emergency-drills"
+      title="Emergency drill logs"
+      description="Record school-level fire, lockdown, weather, evacuation, and shelter drill documentation."
+      collapsedSummary={`${rows.length} recent drill ${rows.length === 1 ? "record" : "records"}`}
+      contentClassName="space-y-5"
+      defaultCollapsed
+    >
         {error ? (
           <Alert variant="destructive">
             <AlertCircle aria-hidden="true" className="size-4" />
@@ -219,7 +221,6 @@ export function EmergencyDrillLogPanel({
             ) : null}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { UserRole } from "@prisma/client";
-import { canAccessAllCenters, canAccessCenter, createSessionToken, verifySessionToken } from "@/lib/auth";
+import { canAccessAllCenters, canAccessCenter, canAdministerAllCenters, canAdministerCenter, createSessionToken, verifySessionToken } from "@/lib/auth";
 import { dashboardLensesForRole } from "@/lib/rbac";
 import {
   effectiveCenterIdsForWorkspace,
@@ -35,6 +35,51 @@ test("multi-location executives must choose a live authorized workspace", () => 
   assert.equal(revoked.mode, "pending");
   assert.equal(revoked.invalidSelection, true);
   assert.deepEqual(effectiveCenterIdsForWorkspace(revoked, centers.map((center) => center.id)), []);
+});
+
+test("closed and inactive locations are not selectable workspaces", () => {
+  const options = [
+    ...centers,
+    { id: "school_closed", name: "Former school", detail: "Closed", companyName: "Kid City USA", status: "closed" },
+    { id: "school_inactive", name: "Paused school", detail: "Inactive", companyName: "Kid City USA", status: "inactive" },
+  ];
+  const pending = resolveWorkspaceState({ role: UserRole.BRAND_ADMIN, authorizedCenters: options });
+  assert.deepEqual(pending.options.map((center) => center.id), ["school_a", "school_b"]);
+  assert.equal(pending.authorizedCenterCount, 2);
+
+  const stale = resolveWorkspaceState({
+    role: UserRole.BRAND_ADMIN,
+    authorizedCenters: options,
+    requestedSelection: "center:school_closed",
+  });
+  assert.equal(stale.mode, "pending");
+  assert.equal(stale.invalidSelection, true);
+  assert.deepEqual(effectiveCenterIdsForWorkspace(stale, stale.options.map((center) => center.id)), []);
+
+  const allLocationsAdmin = {
+    centerIds: ["school_a", "school_b"],
+    authorizedCenterIds: ["school_a", "school_b", "school_closed"],
+    workspace: { mode: "all" } as const,
+  };
+  const singleLocationAdmin = { ...allLocationsAdmin, centerIds: ["school_a"], workspace: { mode: "fixed" } as const };
+  const selectedLocationAdmin = { ...allLocationsAdmin, centerIds: ["school_a"], workspace: { mode: "center" } as const };
+  assert.equal(canAdministerCenter(allLocationsAdmin, "school_closed"), true);
+  assert.equal(canAdministerCenter(singleLocationAdmin, "school_closed"), true);
+  assert.equal(canAdministerCenter(selectedLocationAdmin, "school_closed"), false);
+  assert.equal(canAdministerAllCenters({
+    role: UserRole.BRAND_ADMIN,
+    accessScope: "tenant",
+    centerIds: ["school_a"],
+    authorizedCenterIds: ["school_a", "school_closed"],
+    workspace: { mode: "fixed" },
+  }), true);
+  assert.equal(canAdministerAllCenters({
+    role: UserRole.BRAND_ADMIN,
+    accessScope: "tenant",
+    centerIds: ["school_a"],
+    authorizedCenterIds: ["school_a", "school_closed"],
+    workspace: { mode: "center" },
+  }), false);
 });
 
 test("specific and all-location workspaces narrow the effective server scope", () => {
@@ -126,6 +171,7 @@ test("platform location selection carries the selected company context and large
 
   assert.match(auth, /selectedPlatformCenter\?\.organization\.tenantId \?\? user\.tenantId/);
   assert.match(auth, /user\.role === UserRole\.PLATFORM_OWNER && workspace\.activeCenterId/);
+  assert.match(auth, /const selectableCenterIds = workspace\.options\.map/);
   assert.match(auth, /effectiveOrganizationId = selectedPlatformCenter\?\.organization\.id \?\? user\.organizationId/);
   assert.match(auth, /effectiveBrand = selectedPlatformCenter\?\.organization\.brand \?\? user\.organization\?\.brand/);
   assert.match(selector, /workspace\.options\.length > 8/);

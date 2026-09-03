@@ -378,6 +378,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
           city: true,
           state: true,
           postalCode: true,
+          status: true,
           timezone: true,
           customFields: true,
           organization: {
@@ -408,10 +409,12 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
         [center.city, center.state].filter(Boolean).join(", "),
       ].filter(Boolean).join(" · ") || "Authorized school",
       companyName: center.organization.tenant.name,
+      status: center.status,
     })),
     requestedSelection: session.workspaceSelection,
   });
-  centerIds = effectiveCenterIdsForWorkspace(workspace, authorizedCenterIds);
+  const selectableCenterIds = workspace.options.map((center) => center.id);
+  centerIds = effectiveCenterIdsForWorkspace(workspace, selectableCenterIds);
   const effectiveCenters = authorizedCenters.filter((center) => centerIds.includes(center.id));
   const timeZonesByCenterId = Object.fromEntries(effectiveCenters.map((center) => [center.id, readCenterLocationTimeZone(center)]));
   const primaryCenter = authorizedCenters.find((center) => center.id === workspace.activeCenterId)
@@ -542,6 +545,18 @@ export function canAccessAllCenters(user: Pick<CurrentUser, "role"> & Partial<Pi
   return tenantWideAccessRoles.has(user.role);
 }
 
+export function canAdministerAllCenters(
+  user: Pick<CurrentUser, "role" | "centerIds"> & Partial<Pick<CurrentUser, "accessScope" | "authorizedCenterIds">> & {
+    workspace?: { mode?: WorkspaceState["mode"] };
+  },
+) {
+  const hasTenantAuthority = (user.accessScope === "platform" || user.accessScope === "tenant")
+    && canUseTenantWideAccessRole(user.role);
+  if (!hasTenantAuthority) return false;
+  if (!user.workspace) return true;
+  return user.workspace.mode === "all" || user.workspace.mode === "fixed";
+}
+
 export function messageCenterIdsForUser(
   user: Pick<CurrentUser, "role" | "centerIds" | "primaryCenterId">,
 ) {
@@ -590,6 +605,18 @@ export function canAccessCenter(user: Pick<CurrentUser, "role" | "accessScope" |
     (user.accessScope === "tenant" && canUseTenantWideAccessRole(user.role)) ||
     user.centerIds.includes(centerId)
   );
+}
+
+export function canAdministerCenter(
+  user: Pick<CurrentUser, "centerIds"> & Partial<Pick<CurrentUser, "authorizedCenterIds">> & {
+    workspace?: { mode?: WorkspaceState["mode"] };
+  },
+  centerId: string,
+) {
+  if (user.workspace?.mode === "center") {
+    return user.centerIds.includes(centerId);
+  }
+  return (user.authorizedCenterIds ?? user.centerIds).includes(centerId);
 }
 
 export function canManageCrmLeads(user: Pick<CurrentUser, "role">) {

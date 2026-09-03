@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CollapsiblePanel } from "@/components/workspace-preferences";
 import {
   groupRequiredChecklistBySubject,
   requiresChecklistAction,
@@ -177,7 +178,7 @@ export function RequiredDocumentChecklistPanel({
   }
 
   return (
-    <Card aria-busy={isPending}>
+    <Card id="required-document-checklist" className="scroll-mt-28" aria-busy={isPending}>
       <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle as="h2">
@@ -316,11 +317,12 @@ export function RequiredDocumentChecklistPanel({
           </Alert>
         ) : null}
 
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold">Checklist by subject</h3>
-            <span className="text-xs text-muted-foreground">Completion is calculated from all requirements in the selected scope.</span>
-          </div>
+        <CollapsiblePanel
+          id="required-document-subject-summary"
+          title="Checklist by subject"
+          summary={`${visibleSubjectGroups.length} matching ${visibleSubjectGroups.length === 1 ? "subject" : "subjects"} · completion is calculated from all requirements`}
+          defaultCollapsed
+        >
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -394,13 +396,14 @@ export function RequiredDocumentChecklistPanel({
               Showing {visibleSubjectGroups.length} of {subjectGroups.length} matching subjects. Narrow the filters to review the rest.
             </p>
           ) : null}
-        </div>
+        </CollapsiblePanel>
 
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold">Requirement rows</h3>
-            <span className="text-xs text-muted-foreground">Family and child row actions create the request and email the parent form.</span>
-          </div>
+        <CollapsiblePanel
+          id="required-document-action-rows"
+          title="Requirement rows"
+          summary={`${visibleItems.length} matching ${visibleItems.length === 1 ? "requirement" : "requirements"} · ${visibleRequestableItems.length} need action`}
+          defaultCollapsed={!visibleRequestableItems.length}
+        >
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -458,7 +461,7 @@ export function RequiredDocumentChecklistPanel({
               Showing {visibleItems.length} of {detailItems.length} matching checklist rows. Resolve visible action items first, then narrow the filters.
             </p>
           ) : null}
-        </div>
+        </CollapsiblePanel>
       </CardContent>
     </Card>
   );

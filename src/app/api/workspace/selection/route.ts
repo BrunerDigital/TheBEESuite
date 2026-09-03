@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   const selectedCenterId = centerIdFromWorkspaceSelection(body.selection);
   const selectionAllowed = body.selection === "all"
     ? Boolean(user.workspace?.canSelectAll)
-    : Boolean(selectedCenterId && (user.authorizedCenterIds ?? user.centerIds).includes(selectedCenterId));
+    : Boolean(selectedCenterId && user.workspace?.options.some((center) => center.id === selectedCenterId));
   if (!selectionAllowed) {
     return NextResponse.json({ ok: false, error: "That workspace is no longer authorized for this account." }, { status: 403 });
   }

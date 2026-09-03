@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { PenLine, Send } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -76,15 +76,15 @@ export function SignatureRequestPanel({ families }: { families: SignatureRequest
   }
 
   return (
-    <Card className="glass-panel">
-      <CardHeader>
-        <CardTitle as="h2" className="flex items-center gap-2">
-          <PenLine className="text-primary" />
-          Request Parent Signature
-        </CardTitle>
-        <CardDescription>Create a parent portal signature request and notify the family.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4" aria-busy={isPending}>
+    <CollapsibleCard
+      id="document-signature-request"
+      title={<span className="flex items-center gap-2"><PenLine className="text-primary" />Request parent signature</span>}
+      description="Create a parent portal signature request and notify the family."
+      collapsedSummary={`${families.length} ${families.length === 1 ? "family" : "families"} available`}
+      contentClassName="space-y-4"
+      defaultCollapsed
+    >
+      <div aria-busy={isPending} className="contents">
         {message ? (
           <Alert>
             <AlertTitle>Sent</AlertTitle>
@@ -138,7 +138,7 @@ export function SignatureRequestPanel({ families }: { families: SignatureRequest
           <Send data-icon="inline-start" />
           {isPending ? "Sending request..." : "Send Signature Request"}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }

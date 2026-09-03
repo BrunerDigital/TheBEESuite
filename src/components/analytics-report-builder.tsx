@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import type { AnalyticsReportData } from "@/lib/reporting-analytics";
 import { REPORT_DEFINITIONS, type ReportKind } from "@/lib/reporting-analytics-shared";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
@@ -621,14 +622,14 @@ export function AnalyticsReportBuilder({
           <TabsTrigger value="staff_hours"><Clock data-icon="inline-start" />Staff hours</TabsTrigger>
         </TabsList>
         <TabsContent value="enrollment_status" className="space-y-4">
-          <Card className="glass-panel">
-            <CardHeader>
-              <CardTitle as="h2">Enrollment Status Summary</CardTitle>
-              <CardDescription>
-                Current enrolled roster as of {formatDate(enrollmentAsOf, timeZone)}, grouped by classroom or age group for viewing, export, and print.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
+          <CollapsibleCard
+            id="analytics-enrollment-details"
+            title="Enrollment status details"
+            description={`Current enrolled roster as of ${formatDate(enrollmentAsOf, timeZone)}, grouped by classroom or age group for viewing, export, and print.`}
+            collapsedSummary={`${filteredEnrollmentStatus.length} enrolled children · ${groupedEnrollmentStatus.length} groups`}
+            contentClassName="space-y-5"
+            defaultCollapsed
+          >
               {groupedEnrollmentStatus.map((group) => (
                 <section key={group.key} className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
@@ -665,17 +666,11 @@ export function AnalyticsReportBuilder({
               {!groupedEnrollmentStatus.length ? (
                 <p className="text-sm text-muted-foreground">No currently enrolled children match the report filters.</p>
               ) : null}
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
         </TabsContent>
         <TabsContent value="lead_funnel" className="space-y-4">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <Card className="glass-panel">
-              <CardHeader>
-              <CardTitle as="h2">Lead Source Conversion</CardTitle>
-                <CardDescription>Lead source, tour, application, and enrollment outcomes.</CardDescription>
-              </CardHeader>
-              <CardContent>
+            <CollapsibleCard id="analytics-lead-source-details" title="Lead source conversion" description="Lead source, tour, application, and enrollment outcomes." collapsedSummary={`${filteredLeadSources.length} source rows`} defaultCollapsed>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -719,14 +714,8 @@ export function AnalyticsReportBuilder({
                     ) : null}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-            <Card className="glass-panel">
-              <CardHeader>
-              <CardTitle as="h2">Funnel Stages</CardTitle>
-                <CardDescription>Current distribution inside the selected reporting range.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            </CollapsibleCard>
+            <CollapsibleCard id="analytics-funnel-stage-details" title="Funnel stages" description="Current distribution inside the selected reporting range." collapsedSummary={`${data.funnelStages.length} stages`} contentClassName="space-y-3" defaultCollapsed>
                 {data.funnelStages.map((stage) => (
                   <div key={stage.stage} className="rounded-xl border bg-background/40 p-3">
                     <div className="flex items-center justify-between gap-3">
@@ -746,17 +735,11 @@ export function AnalyticsReportBuilder({
                     <div className="mt-1 text-xs text-muted-foreground">{stage.share}% of visible leads</div>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
+            </CollapsibleCard>
           </div>
         </TabsContent>
         <TabsContent value="attendance">
-          <Card className="glass-panel">
-            <CardHeader>
-              <CardTitle as="h2">Attendance And Absence Trends</CardTitle>
-              <CardDescription>Present, absent, check-in, and check-out trends by center and period.</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <CollapsibleCard id="analytics-attendance-details" title="Attendance and absence trends" description="Present, absent, check-in, and check-out trends by center and period." collapsedSummary={`${filteredAttendance.length} period rows`} defaultCollapsed>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -786,16 +769,10 @@ export function AnalyticsReportBuilder({
                   ) : null}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
         </TabsContent>
         <TabsContent value="billing">
-          <Card className="glass-panel">
-            <CardHeader>
-              <CardTitle as="h2">Billing, Revenue, And AR</CardTitle>
-              <CardDescription>Invoice and payment history for the period; open and overdue AR include currently enrolled families only.</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <CollapsibleCard id="analytics-billing-details" title="Billing, revenue, and AR" description="Invoice and payment history for the period; open and overdue AR include currently enrolled families only." collapsedSummary={`${filteredBilling.length} period rows`} defaultCollapsed>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -825,16 +802,10 @@ export function AnalyticsReportBuilder({
                   ) : null}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
         </TabsContent>
         <TabsContent value="weekly_billing">
-          <Card className="glass-panel">
-            <CardHeader>
-              <CardTitle as="h2">Weekly Billing</CardTitle>
-              <CardDescription>Invoices billed for the period; open and overdue AR include currently enrolled families only.</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <CollapsibleCard id="analytics-weekly-billing-details" title="Weekly billing" description="Invoices billed for the period; open and overdue AR include currently enrolled families only." collapsedSummary={`${filteredBilling.length} weekly rows`} defaultCollapsed>
               <Table>
                 <TableHeader><TableRow><TableHead>Week</TableHead><TableHead>Center</TableHead><TableHead>Invoices</TableHead><TableHead>Billed</TableHead><TableHead>Current-family open AR</TableHead><TableHead>Current-family overdue</TableHead></TableRow></TableHeader>
                 <TableBody>
@@ -846,16 +817,10 @@ export function AnalyticsReportBuilder({
                   {!filteredBilling.length ? <TableRow><TableCell colSpan={6} className="text-muted-foreground">No weekly billing rows match the report filters.</TableCell></TableRow> : null}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
         </TabsContent>
         <TabsContent value="weekly_payments">
-          <Card className="glass-panel">
-            <CardHeader>
-              <CardTitle as="h2">Weekly Payments</CardTitle>
-              <CardDescription>Successful payment count and collected amount by center for each Monday-Sunday week.</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <CollapsibleCard id="analytics-weekly-payment-details" title="Weekly payments" description="Successful payment count and collected amount by center for each Monday-Sunday week." collapsedSummary={`${filteredBilling.length} weekly rows`} defaultCollapsed>
               <Table>
                 <TableHeader><TableRow><TableHead>Week</TableHead><TableHead>Center</TableHead><TableHead>Payments</TableHead><TableHead>Paid</TableHead></TableRow></TableHeader>
                 <TableBody>
@@ -867,16 +832,10 @@ export function AnalyticsReportBuilder({
                   {!filteredBilling.length ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No weekly payment rows match the report filters.</TableCell></TableRow> : null}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
         </TabsContent>
         <TabsContent value="messages">
-          <Card className="glass-panel">
-            <CardHeader>
-              <CardTitle as="h2">Parent Response Time And Message Analytics</CardTitle>
-              <CardDescription>Parent-origin messages, staff replies, unread counts, and response speed.</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <CollapsibleCard id="analytics-message-details" title="Parent response time and message analytics" description="Parent-origin messages, staff replies, unread counts, and response speed." collapsedSummary={`${filteredMessages.length} location rows`} defaultCollapsed>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -904,16 +863,10 @@ export function AnalyticsReportBuilder({
                   ) : null}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
         </TabsContent>
         <TabsContent value="staff_hours">
-          <Card className="glass-panel">
-            <CardHeader>
-              <CardTitle as="h2">Staff Hours And Time Clock</CardTitle>
-              <CardDescription>Teacher clock status, closed shifts, open shift time, and range totals for the selected centers.</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <CollapsibleCard id="analytics-staff-hour-details" title="Staff hours and time clock" description="Teacher clock status, closed shifts, open shift time, and range totals for the selected centers." collapsedSummary={`${filteredStaffHours.length} staff rows`} defaultCollapsed>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -952,8 +905,7 @@ export function AnalyticsReportBuilder({
                   ) : null}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
         </TabsContent>
       </Tabs>
     </div>

@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { CollapsiblePanel } from "@/components/workspace-preferences";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import type { FteReportRow } from "@/components/fte-report-form";
 import { aggregateFteWeeks, fteDateKey, latestFteReportsByCenter, latestFteReportsByCenterWeek } from "@/lib/fte-report-rollups";
@@ -612,6 +613,12 @@ export function FteReportExplorer({ centers, reports }: Props) {
           </div>
         ) : null}
 
+        <CollapsiblePanel
+          id="fte-trend-and-breakdowns"
+          title="Trend and breakdowns"
+          summary={`${trendWeeks.length} weeks · ${groupedByState.length} regions · ${groupedByOwner.length} owner groups`}
+          defaultCollapsed
+        >
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-xl border p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -646,17 +653,14 @@ export function FteReportExplorer({ centers, reports }: Props) {
             <SummaryTable title="By owner group" rows={groupedByOwner} />
           </div>
         </div>
+        </CollapsiblePanel>
 
-        <div className="rounded-xl border">
-          <div className="flex flex-col gap-2 border-b p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-semibold">School navigator</div>
-              <div className="text-xs text-muted-foreground">
-                {selectedWeekKey ? `Selected week ${selectedWeekKey}` : "No matching weekly reports yet"}
-              </div>
-            </div>
-            <Badge variant="outline">{schoolRows.length.toLocaleString()} schools</Badge>
-          </div>
+        <CollapsiblePanel
+          id="fte-school-navigator"
+          title="School navigator"
+          summary={`${schoolRows.length.toLocaleString()} schools · ${selectedWeekKey ? `selected week ${selectedWeekKey}` : "no matching weekly reports yet"}`}
+          defaultCollapsed
+        >
           <div className="max-h-80 overflow-auto">
             <Table>
               <TableHeader>
@@ -703,9 +707,15 @@ export function FteReportExplorer({ centers, reports }: Props) {
               </TableBody>
             </Table>
           </div>
-        </div>
+        </CollapsiblePanel>
 
-        <div className="overflow-x-auto rounded-xl border">
+        <CollapsiblePanel
+          id="fte-filtered-report-history"
+          title="Filtered report history"
+          summary={`${filteredReports.length.toLocaleString()} matching ${filteredReports.length === 1 ? "report" : "reports"} · showing up to 30`}
+          defaultCollapsed
+        >
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -855,6 +865,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
             </TableBody>
           </Table>
         </div>
+        </CollapsiblePanel>
       </CardContent>
     </Card>
   );

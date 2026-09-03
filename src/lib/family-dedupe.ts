@@ -84,7 +84,7 @@ function normalizePersonName(value: unknown) {
   return normalizeText(`${givenNames.join(" ")} ${nameParts[0]} ${hasSuffix ? trailingPart : ""}`);
 }
 
-function childNamesMatch(left: string, right: string) {
+function personNamesMatch(left: string, right: string) {
   if (left === right) return Boolean(left);
   const leftParts = left.split(" ").filter(Boolean);
   const rightParts = right.split(" ").filter(Boolean);
@@ -207,7 +207,7 @@ export function scoreChildDuplicate(left: ChildDedupeRecord, right: ChildDedupeR
   let score = 0;
   const leftName = normalizePersonName(left.fullName);
   const rightName = normalizePersonName(right.fullName);
-  const sameName = childNamesMatch(leftName, rightName);
+  const sameName = personNamesMatch(leftName, rightName);
   const leftPreferredName = normalizeText(left.preferredName);
   const rightPreferredName = normalizeText(right.preferredName);
   const leftDateOfBirth = normalizedDate(left.dateOfBirth);
@@ -291,7 +291,7 @@ export function scoreGuardianDuplicate(left: GuardianDedupeRecord, right: Guardi
 
   const leftName = normalizePersonName(left.fullName);
   const rightName = normalizePersonName(right.fullName);
-  const sameName = Boolean(leftName && leftName === rightName);
+  const sameName = personNamesMatch(leftName, rightName);
   const sameEmail = Boolean(leftEmail && leftEmail === rightEmail);
   if (!sameEmail && !sameName) return null;
   if (sameName) {

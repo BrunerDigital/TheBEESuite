@@ -351,3 +351,27 @@ test("guardian duplicate scoring canonicalizes dotted credentials without commas
   assert.equal(score?.confidence, "high");
   assert.ok(score?.reasons.includes("same guardian name"));
 });
+
+test("guardian duplicate scoring allows optional ProCare middle names", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Jordan M Rivera",
+      phone: "7205550104",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Jordan Rivera",
+      phone: "7205550104",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});

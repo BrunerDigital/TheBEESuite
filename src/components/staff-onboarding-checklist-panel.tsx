@@ -104,7 +104,7 @@ export function StaffOnboardingChecklistPanel({ items, summary }: Props) {
   }
 
   return (
-    <Card className="glass-panel">
+    <Card id="staff-onboarding-checklist" className="glass-panel scroll-mt-28">
       <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle as="h2">

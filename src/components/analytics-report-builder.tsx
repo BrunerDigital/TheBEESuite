@@ -5,7 +5,6 @@ import { CalendarDays, ClipboardList, Clock, Download, FileText, MessageSquare, 
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -207,6 +206,15 @@ export function AnalyticsReportBuilder({
 
   function download(format: "csv" | "pdf") {
     window.location.href = exportParams({ ...exportState, format });
+  }
+
+  function selectReport(value: string | null) {
+    if (!value) return;
+    const nextReport = value as ReportKind;
+    setReport(nextReport);
+    const params = new URLSearchParams(window.location.search);
+    params.set("report", nextReport);
+    window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
   }
 
   return (
@@ -479,16 +487,15 @@ export function AnalyticsReportBuilder({
           </>
         ) : null}
       </PrintableReport>
-      <Card className="glass-panel">
-        <CardHeader>
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-          <CardTitle as="h2">Report Builder</CardTitle>
-              <CardDescription>
-                Filter by center and date range, then export the selected operational report.
-              </CardDescription>
-            </div>
-            <div className="flex flex-wrap gap-2">
+      <CollapsibleCard
+        id="analytics-report-controls"
+        title="Report Options"
+        description="Change the report, visible rows, workspace, or date range. The current report stays in view below."
+        collapsedSummary={`${reportLabel(report)} · ${selectedCenterLabel} · ${rangeLabel}`}
+        className="glass-panel"
+        contentClassName="space-y-4"
+        headerActions={(
+          <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={() => download("csv")}>
                 <Download data-icon="inline-start" />
                 Export CSV
@@ -501,17 +508,17 @@ export function AnalyticsReportBuilder({
                 <Printer data-icon="inline-start" />
                 Print report
               </Button>
-            </div>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <form action="/analytics" method="get" className="grid gap-3 md:grid-cols-2 xl:grid-cols-[12rem_1fr_11rem_11rem_14rem_auto]">
+        )}
+        defaultCollapsed
+      >
+          <form action="/analytics" method="get" className="grid gap-3 md:grid-cols-2 xl:grid-cols-[12rem_minmax(14rem,1fr)_11rem_14rem_auto]">
             <input type="hidden" name="report" value={report} />
             <input type="hidden" name="range" value={range} />
             <input type="hidden" name="centerId" value={centerId} />
             <div className="space-y-1">
               <Label htmlFor={controlIds.report}>Report</Label>
-              <Select value={report} onValueChange={(value) => value && setReport(value as ReportKind)}>
+              <Select value={report} onValueChange={selectReport}>
                 <SelectTrigger id={controlIds.report} className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {reportOptions.map((option) => (
@@ -524,7 +531,7 @@ export function AnalyticsReportBuilder({
               <Label htmlFor={controlIds.search}>Search visible rows</Label>
               <div className="relative">
                 <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input id={controlIds.search} className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Child, classroom, center, teacher..." />
+                <Input id={controlIds.search} className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Child, classroom, center, or teacher…" />
               </div>
             </div>
             <div className="space-y-1">
@@ -540,20 +547,18 @@ export function AnalyticsReportBuilder({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor={controlIds.start}>Start</Label>
-              <Input id={controlIds.start} name="start" type="date" value={start} onChange={(event) => {
-                setStart(event.target.value);
-                setRange("all");
-              }} />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={controlIds.end}>End</Label>
-              <Input id={controlIds.end} name="end" type="date" value={end} onChange={(event) => {
-                setEnd(event.target.value);
-                setRange("all");
-              }} />
-            </div>
+            {range === "all" ? (
+              <>
+                <div className="space-y-1">
+                  <Label htmlFor={controlIds.start}>Start</Label>
+                  <Input id={controlIds.start} name="start" type="date" value={start} onChange={(event) => setStart(event.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={controlIds.end}>End</Label>
+                  <Input id={controlIds.end} name="end" type="date" value={end} onChange={(event) => setEnd(event.target.value)} />
+                </div>
+              </>
+            ) : null}
             <div className="space-y-1">
               <Label htmlFor={controlIds.center}>Center</Label>
               <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
@@ -569,15 +574,27 @@ export function AnalyticsReportBuilder({
             <div className="flex items-end">
               <Button type="submit" className="w-full">
                 <CalendarDays data-icon="inline-start" />
-                Apply
+                Apply Options
               </Button>
             </div>
           </form>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+      </CollapsibleCard>
+
+          <section aria-labelledby="analytics-current-summary-title" className="space-y-2">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 id="analytics-current-summary-title" className="text-lg font-semibold tracking-tight">Current Report Summary</h2>
+                <p className="text-sm text-muted-foreground">{reportLabel(report)} · {selectedCenterLabel} · {rangeLabel}</p>
+              </div>
+              <a href="#analytics-report-controls" className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                Change report options
+              </a>
+            </div>
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-6">
             <div className="rounded-xl border bg-background/40 p-3">
               <div className="text-xs text-muted-foreground">Loaded range</div>
               <div className="mt-1 text-sm font-medium">{formatDate(data.range.startDate, timeZone)} to {formatDate(data.range.endDate, timeZone)}</div>
-              <div className="mt-1 text-xs text-muted-foreground">Generated {formatDate(data.generatedAt)}</div>
+              <div className="mt-1 text-xs text-muted-foreground">Generated {formatDate(data.generatedAt, timeZone)}</div>
             </div>
             <div className="rounded-xl border bg-background/40 p-3">
               <div className="text-xs text-muted-foreground">Current enrollment</div>
@@ -600,26 +617,31 @@ export function AnalyticsReportBuilder({
               <div className="mt-1 text-sm font-medium">{hours(data.totals.staffHoursMinutes)} decimal hours</div>
             </div>
           </div>
-          <div className="rounded-xl border bg-background/40 p-3 text-sm">
-            <div className="font-medium">Definition and freshness</div>
-            <p className="mt-1 text-muted-foreground">{reportDefinition.definition}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+          </section>
+
+          <CollapsibleCard
+            id="analytics-report-definition"
+            title="Definition & Freshness"
+            collapsedSummary={`Source: ${reportDefinition.source} · queried ${formatPrintDateTime(new Date(data.generatedAt), timeZone)}`}
+            contentClassName="space-y-1 text-sm"
+            defaultCollapsed
+          >
+            <p className="text-muted-foreground">{reportDefinition.definition}</p>
+            <p className="text-xs text-muted-foreground">
               Source: {reportDefinition.source}. Data queried as of {formatPrintDateTime(new Date(data.generatedAt), timeZone)}.
             </p>
-          </div>
-        </CardContent>
-      </Card>
+          </CollapsibleCard>
 
-      <Tabs value={report} onValueChange={(value) => value && setReport(value as ReportKind)} className="gap-4">
-        <TabsList className="flex h-auto flex-wrap justify-start">
-          <TabsTrigger value="enrollment_status"><ClipboardList data-icon="inline-start" />Enrollment status</TabsTrigger>
-          <TabsTrigger value="lead_funnel"><TrendingUp data-icon="inline-start" />Lead funnel</TabsTrigger>
-          <TabsTrigger value="attendance"><UsersRound data-icon="inline-start" />Attendance</TabsTrigger>
-          <TabsTrigger value="billing"><ReceiptText data-icon="inline-start" />Billing/AR</TabsTrigger>
-          <TabsTrigger value="weekly_billing"><ReceiptText data-icon="inline-start" />Weekly billing</TabsTrigger>
-          <TabsTrigger value="weekly_payments"><ReceiptText data-icon="inline-start" />Weekly payments</TabsTrigger>
-          <TabsTrigger value="messages"><MessageSquare data-icon="inline-start" />Messages</TabsTrigger>
-          <TabsTrigger value="staff_hours"><Clock data-icon="inline-start" />Staff hours</TabsTrigger>
+      <Tabs value={report} onValueChange={selectReport} className="gap-4">
+        <TabsList aria-label="Available reports" className="flex h-auto w-full flex-nowrap justify-start overflow-x-auto overscroll-x-contain">
+          <TabsTrigger className="shrink-0" value="enrollment_status"><ClipboardList data-icon="inline-start" />Enrollment status</TabsTrigger>
+          <TabsTrigger className="shrink-0" value="lead_funnel"><TrendingUp data-icon="inline-start" />Lead funnel</TabsTrigger>
+          <TabsTrigger className="shrink-0" value="attendance"><UsersRound data-icon="inline-start" />Attendance</TabsTrigger>
+          <TabsTrigger className="shrink-0" value="billing"><ReceiptText data-icon="inline-start" />Billing/AR</TabsTrigger>
+          <TabsTrigger className="shrink-0" value="weekly_billing"><ReceiptText data-icon="inline-start" />Weekly billing</TabsTrigger>
+          <TabsTrigger className="shrink-0" value="weekly_payments"><ReceiptText data-icon="inline-start" />Weekly payments</TabsTrigger>
+          <TabsTrigger className="shrink-0" value="messages"><MessageSquare data-icon="inline-start" />Messages</TabsTrigger>
+          <TabsTrigger className="shrink-0" value="staff_hours"><Clock data-icon="inline-start" />Staff hours</TabsTrigger>
         </TabsList>
         <TabsContent value="enrollment_status" className="space-y-4">
           <CollapsibleCard

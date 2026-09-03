@@ -6,11 +6,11 @@ import { AlertCircle, CheckCircle2, UserPlus } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import { enrollmentClassroomValidationError } from "@/lib/enrollment-status";
 
 type CenterOption = {
@@ -22,6 +22,7 @@ type CenterOption = {
 type Props = {
   centers: CenterOption[];
   compact?: boolean;
+  defaultCollapsed?: boolean;
 };
 
 const ageGroups = ["Infant", "Toddler", "Twos", "Preschool", "Pre-K", "School Age"];
@@ -44,7 +45,7 @@ type IntakeResponse = {
   mode?: string;
 };
 
-export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
+export function FamilyStudentIntakeForm({ centers, compact = false, defaultCollapsed = false }: Props) {
   const router = useRouter();
   const controlIdPrefix = useId();
   const controlId = (name: string) => `${controlIdPrefix}-${name}`;
@@ -173,19 +174,16 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
   }
 
   return (
-    <Card className="glass-panel">
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-        <CardTitle as="h2">Add Family, Parent + Child</CardTitle>
-            <CardDescription>
-              Enter the primary parent once here. This creates the family profile, parent/guardian record, child profile, billing account, and kiosk PIN in one save.
-            </CardDescription>
-          </div>
-          <Badge variant="outline">Director workflow</Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-5">
+    <CollapsibleCard
+      id="family-intake"
+      title="Add Family, Parent + Child"
+      description="Enter the primary parent once here. This creates the family profile, parent/guardian record, child profile, billing account, and kiosk PIN in one save."
+      collapsedSummary="Focused intake form · no records are created until Save Family + Child"
+      className="glass-panel"
+      contentClassName="space-y-5"
+      headerActions={<Badge variant="outline">Director workflow</Badge>}
+      defaultCollapsed={defaultCollapsed}
+    >
         {statusMessage ? (
           <Alert>
             <CheckCircle2 className="size-4" />
@@ -265,7 +263,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
             </div>
             <div className="space-y-1">
               <Label htmlFor={controlId("guardian-relation")}>Relation</Label>
-              <Input id={controlId("guardian-relation")} value={guardianRelation} onChange={(event) => setGuardianRelation(event.target.value)} placeholder="Mother, father, guardian..." {...accessibilityFor("guardianRelation")} />
+              <Input id={controlId("guardian-relation")} value={guardianRelation} onChange={(event) => setGuardianRelation(event.target.value)} placeholder="Mother, father, guardian…" {...accessibilityFor("guardianRelation")} />
               {errorFor("guardianRelation")}
             </div>
             <div className="space-y-1">
@@ -410,7 +408,6 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
           <UserPlus data-icon="inline-start" />
           Save Family, Parent + Child
         </Button>
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

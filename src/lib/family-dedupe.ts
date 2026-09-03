@@ -291,6 +291,10 @@ function personNamesMatch(left: string, right: string) {
 
   const leftMiddle = leftParts.slice(1, -1);
   const rightMiddle = rightParts.slice(1, -1);
+  if (leftMiddle.length === rightMiddle.length) {
+    return leftMiddle.every((part, index) => namePartsMatch(part, rightMiddle[index]));
+  }
+
   const trailingSurnameParticles = (parts: string[]) => {
     let index = parts.length;
     while (index > 0 && personNameSurnameParticles.has(parts[index - 1])) index -= 1;
@@ -300,9 +304,6 @@ function personNamesMatch(left: string, right: string) {
   const rightSurnameParticles = trailingSurnameParticles(rightMiddle);
   if (leftSurnameParticles.join(" ") !== rightSurnameParticles.join(" ")) return false;
   if (Math.abs(leftMiddle.length - rightMiddle.length) > 2) return false;
-  if (leftMiddle.length === rightMiddle.length) {
-    return leftMiddle.every((part, index) => namePartsMatch(part, rightMiddle[index]));
-  }
 
   const [shorterMiddle, longerMiddle] = leftMiddle.length < rightMiddle.length
     ? [leftMiddle, rightMiddle]

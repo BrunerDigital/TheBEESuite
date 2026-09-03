@@ -165,6 +165,30 @@ test("child duplicate scoring preserves conventional suffix position", () => {
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
 
+test("child duplicate scoring allows optional ProCare middle names", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Avery J Rivera",
+      preferredName: "Avery",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Avery Rivera",
+      preferredName: "Avery",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
 test("guardian duplicate scoring matches email and phone across same-school families", () => {
   const score = scoreGuardianDuplicate(
     {
@@ -296,6 +320,30 @@ test("guardian duplicate scoring canonicalizes dotted credentials", () => {
       centerId: "center_1",
       fullName: "Alex Smith MD",
       phone: "7205550102",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
+test("guardian duplicate scoring canonicalizes dotted credentials without commas", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Alex Smith M.D.",
+      phone: "7205550103",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith MD",
+      phone: "7205550103",
       relation: "Parent",
     },
   );

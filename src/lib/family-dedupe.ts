@@ -58,18 +58,47 @@ function normalizeText(value: unknown) {
     : "";
 }
 
+const personNameSuffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v", "esq", "phd", "md", "dds", "dmd", "do"]);
+
+function canonicalPersonNameSuffix(value: unknown) {
+  const normalized = normalizeText(value).replace(/\s+/g, "");
+  return personNameSuffixes.has(normalized) ? normalized : "";
+}
+
 function normalizePersonName(value: unknown) {
   if (typeof value !== "string") return "";
   const nameParts = value.split(",").map((part) => part.trim()).filter(Boolean);
-  if (nameParts.length < 2) return normalizeText(value);
+  if (nameParts.length < 2) {
+    const words = value.trim().split(/\s+/).filter(Boolean);
+    const suffix = canonicalPersonNameSuffix(words.at(-1));
+    return suffix
+      ? normalizeText(`${words.slice(0, -1).join(" ")} ${suffix}`)
+      : normalizeText(value);
+  }
 
-  const suffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v", "esq", "phd", "md", "dds", "dmd", "do"]);
-  const trailingPart = normalizeText(nameParts.at(-1)).replace(/\s+/g, "");
-  const hasSuffix = suffixes.has(trailingPart);
+  const trailingPart = canonicalPersonNameSuffix(nameParts.at(-1));
+  const hasSuffix = Boolean(trailingPart);
   if (nameParts.length === 2 && hasSuffix) return normalizeText(`${nameParts[0]} ${trailingPart}`);
 
   const givenNames = hasSuffix ? nameParts.slice(1, -1) : nameParts.slice(1);
   return normalizeText(`${givenNames.join(" ")} ${nameParts[0]} ${hasSuffix ? trailingPart : ""}`);
+}
+
+function childNamesMatch(left: string, right: string) {
+  if (left === right) return Boolean(left);
+  const leftParts = left.split(" ").filter(Boolean);
+  const rightParts = right.split(" ").filter(Boolean);
+  const leftSuffix = personNameSuffixes.has(leftParts.at(-1) ?? "") ? leftParts.pop() : "";
+  const rightSuffix = personNameSuffixes.has(rightParts.at(-1) ?? "") ? rightParts.pop() : "";
+  if (leftSuffix !== rightSuffix) return false;
+  const [shorter, longer] = leftParts.length < rightParts.length
+    ? [leftParts, rightParts]
+    : [rightParts, leftParts];
+  return shorter.length >= 2
+    && longer.length > shorter.length
+    && longer.length - shorter.length <= 2
+    && shorter[0] === longer[0]
+    && shorter.at(-1) === longer.at(-1);
 }
 
 function normalizeEmail(value: unknown) {
@@ -178,7 +207,7 @@ export function scoreChildDuplicate(left: ChildDedupeRecord, right: ChildDedupeR
   let score = 0;
   const leftName = normalizePersonName(left.fullName);
   const rightName = normalizePersonName(right.fullName);
-  const sameName = Boolean(leftName && leftName === rightName);
+  const sameName = childNamesMatch(leftName, rightName);
   const leftPreferredName = normalizeText(left.preferredName);
   const rightPreferredName = normalizeText(right.preferredName);
   const leftDateOfBirth = normalizedDate(left.dateOfBirth);

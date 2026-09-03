@@ -17,6 +17,17 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
   assert.match(paymentMethodRoute, /parentInitiatedPaymentMethodReauthorization/);
   assert.match(paymentMethodRoute, /parentFacing &&[\s\S]*billingAccount\.family\.children\.length === 0 &&[\s\S]*action === "setup"/);
   assert.match(paymentMethodRoute, /Saved payment methods and autopay are unavailable for a past family account/);
+  assert.match(paymentMethodRoute, /action === "setup" && currentFields\.stripeBankVerificationPending === true/);
+  assert.match(publicPaymentMethodRoute, /currentFields\.stripeBankVerificationPending === true/);
+  assert.match(paymentMethodRoute, /Bank verification is already pending/);
+  assert.match(paymentMethodRoute, /paymentMethod\.bankVerificationPending/);
+  assert.match(paymentMethodRoute, /const setupAccountUpdate = await prisma\.billingAccount\.updateMany/);
+  assert.match(publicPaymentMethodRoute, /const setupAccountUpdate = await prisma\.billingAccount\.updateMany/);
+  assert.match(paymentMethodRoute, /customFields: billingAccount\.customFields === null[\s\S]*Prisma\.DbNull/);
+  assert.match(publicPaymentMethodRoute, /customFields: billingAccount\.customFields === null[\s\S]*Prisma\.DbNull/);
+  assert.match(paymentMethodRoute, /setupAccountUpdate\.count !== 1[\s\S]*expireStripeCheckoutSession/);
+  assert.match(publicPaymentMethodRoute, /setupAccountUpdate\.count !== 1[\s\S]*expireStripeCheckoutSession/);
+  assert.match(publicPaymentMethodRoute, /Bank verification is already pending/);
   assert.match(paymentMethodManagement, /const explicitEnable = setupMode === "enable"/);
   assert.match(paymentMethodManagement, /const explicitDisable = setupMode === "disabled"/);
   assert.match(webhook, /const autopayPatch = paymentMethodSetupAutopayOutcome/);
@@ -24,7 +35,20 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
   assert.match(webhook, /autopayStatus: "pending"/);
   assert.match(webhook, /stripeBankVerificationPending !== true/);
   assert.match(webhook, /event.type === "setup_intent.setup_failed"/);
+  assert.match(webhook, /event.type === "setup_intent.setup_failed" \|\| event.type === "setup_intent.canceled"/);
+  assert.match(webhook, /const setupCanceled = event.type === "setup_intent.canceled"/);
+  assert.match(webhook, /replacement_bank_verification_canceled/);
+  assert.match(webhook, /from "BillingAccount"[\s\S]*for update/);
+  assert.match(webhook, /hasReservedTerminalSetupIntentEvent/);
+  assert.match(webhook, /const refreshedSetupIntent = await retrieveStripeSetupIntent/);
+  assert.match(webhook, /Stripe SetupIntent terminal state could not be reconciled during checkout completion/);
+  assert.match(webhook, /reconciledTerminalEventType = stripeSetupIntentTerminalEventTypeForStatus/);
+  assert.doesNotMatch(webhook, /async function hasReservedTerminalSetupIntentEvent[\s\S]{0,500}orderBy:/);
+  assert.ok(
+    (webhook.match(/lockPaymentMethodBillingAccount\(tx, billingAccountId\)/g) ?? []).length >= 3,
+  );
   assert.match(webhook, /const setupPending = !setupSucceeded/);
+  assert.match(webhook, /setupPending[\s\S]*\? \{ autopayPlaceholder: false \}/);
   assert.match(webhook, /Billing account changed while failed bank verification was being recorded/);
   assert.match(webhook, /stripePendingPaymentMethodId/);
   assert.match(webhook, /Verified payment method details could not be retrieved/);

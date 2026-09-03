@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { canAccessAllCenters, canManageBilling, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import {
   createStripeBillingPortalSession,
   createStripeCustomer,
   createStripeSetupCheckoutSession,
+  expireStripeCheckoutSession,
   getStripeProcessingRecoveryAmount,
   readStripeConnectedAccountId,
   type StripePaymentMethodCategory,
@@ -223,11 +225,27 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
+  if (action === "setup" && currentFields.stripeBankVerificationPending === true) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Bank verification is already pending. Wait for Stripe to finish before starting another payment method update.",
+      },
+      { status: 409 },
+    );
+  }
+
   // Disabling collection must remain available even when a school's billing
   // approval is paused. It never creates a Stripe object or moves money.
   if (action === "disable_autopay") {
-    await prisma.billingAccount.update({
-      where: { id: billingAccount.id },
+    const disabledAccount = await prisma.billingAccount.updateMany({
+      where: {
+        id: billingAccount.id,
+        autopayPlaceholder: billingAccount.autopayPlaceholder,
+        customFields: billingAccount.customFields === null
+          ? { equals: Prisma.DbNull }
+          : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+      },
       data: {
         autopayPlaceholder: false,
         customFields: {
@@ -241,6 +259,12 @@ async function POSTHandler(request: NextRequest) {
         },
       },
     });
+    if (disabledAccount.count !== 1) {
+      return NextResponse.json(
+        { ok: false, error: "Autopay status changed while your request was being saved. Refresh and try again." },
+        { status: 409 },
+      );
+    }
     await writeAuditLog(user, {
       centerId,
       action: "billing.autopay.disabled",
@@ -337,7 +361,7 @@ async function POSTHandler(request: NextRequest) {
     if (!paymentMethod.hasSavedPaymentMethod) {
       requirements.push(autopayRequirement("missing_saved_payment_method", "Save a payment method on file before enabling autopay."));
     }
-    if (paymentMethod.autopayStatus === "pending") {
+    if (paymentMethod.bankVerificationPending) {
       requirements.push(autopayRequirement("bank_verification_pending", "Bank verification is still pending for this payment method. Complete verification before enabling autopay."));
     }
     if (requirements.length) {
@@ -364,8 +388,14 @@ async function POSTHandler(request: NextRequest) {
       );
     }
     const enabledAt = new Date().toISOString();
-    await prisma.billingAccount.update({
-      where: { id: billingAccount.id },
+    const enabledAccount = await prisma.billingAccount.updateMany({
+      where: {
+        id: billingAccount.id,
+        autopayPlaceholder: billingAccount.autopayPlaceholder,
+        customFields: billingAccount.customFields === null
+          ? { equals: Prisma.DbNull }
+          : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+      },
       data: {
         autopayPlaceholder: true,
         customFields: {
@@ -380,6 +410,12 @@ async function POSTHandler(request: NextRequest) {
         },
       },
     });
+    if (enabledAccount.count !== 1) {
+      return NextResponse.json(
+        { ok: false, error: "Autopay status changed while your authorization was being saved. Refresh and try again." },
+        { status: 409 },
+      );
+    }
     await writeAuditLog(user, {
       centerId,
       action: "billing.autopay.enabled",
@@ -430,8 +466,14 @@ async function POSTHandler(request: NextRequest) {
       );
     }
 
-    await prisma.billingAccount.update({
-      where: { id: billingAccount.id },
+    await prisma.billingAccount.updateMany({
+      where: {
+        id: billingAccount.id,
+        autopayPlaceholder: billingAccount.autopayPlaceholder,
+        customFields: billingAccount.customFields === null
+          ? { equals: Prisma.DbNull }
+          : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+      },
       data: {
         customFields: {
           ...currentFields,
@@ -519,8 +561,14 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const paymentMethodManagementUpdatedAt = new Date().toISOString();
-  await prisma.billingAccount.update({
-    where: { id: billingAccount.id },
+  const setupAccountUpdate = await prisma.billingAccount.updateMany({
+    where: {
+      id: billingAccount.id,
+      autopayPlaceholder: billingAccount.autopayPlaceholder,
+      customFields: billingAccount.customFields === null
+        ? { equals: Prisma.DbNull }
+        : { equals: billingAccount.customFields as Prisma.InputJsonValue },
+    },
     data: {
       customFields: {
         ...currentFields,
@@ -542,6 +590,19 @@ async function POSTHandler(request: NextRequest) {
       },
     },
   });
+  if (setupAccountUpdate.count !== 1) {
+    if (setup.id) {
+      await expireStripeCheckoutSession({
+        sessionId: setup.id,
+        connectedAccountId,
+        tenantId,
+      });
+    }
+    return NextResponse.json(
+      { ok: false, error: "Payment method status changed while the secure setup form was opening. Refresh and try again." },
+      { status: 409 },
+    );
+  }
   await writeAuditLog(user, {
     centerId,
     action: "billing.payment_method.setup_created",

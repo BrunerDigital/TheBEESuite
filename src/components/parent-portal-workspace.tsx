@@ -342,6 +342,7 @@ type Props = {
     paymentMethodManagement?: {
       autopayEnabled: boolean;
       autopayStatus: "enabled" | "disabled" | "pending";
+      bankVerificationPending: boolean;
       hasStripeCustomer: boolean;
       hasSavedPaymentMethod: boolean;
       stripeCustomerId: string | null;
@@ -1028,6 +1029,7 @@ function ParentPortalWorkspaceView({
     autopayStatusOverride ??
     paymentMethodManagement?.autopayStatus ??
     (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
+  const bankVerificationPending = paymentMethodManagement?.bankVerificationPending === true;
   const autopayRequirements = useMemo(() => {
     const seen = new Set<string>();
     return autopayEnableRequirements.filter((requirement) => {
@@ -2618,7 +2620,7 @@ function ParentPortalWorkspaceView({
                 <AlertTitle>Replace your saved payment method</AlertTitle>
                 <AlertDescription>
                   Your school now uses a new payment account. Replace the saved card or connect a bank account below. No payment is charged while you update it. {paymentMethodReauthorizationPreservesAutopay
-                    ? "Your existing autopay consent will resume on the replacement method after Stripe confirms it."
+                    ? "Your existing autopay consent will resume on the replacement method after Stripe confirms it. You do not need to turn autopay on again."
                     : autopayStatus === "enabled"
                       ? "After replacement, review and re-enable autopay."
                       : "Autopay will remain off unless you enable it after replacement."}
@@ -2641,10 +2643,10 @@ function ParentPortalWorkspaceView({
                       ? "The prior saved method is protected but cannot be charged on the school's current payment account."
                       : autopayStatus === "enabled"
                       ? "Account credit is applied first, then the saved method pays eligible invoices."
-                      : paymentMethodManagement?.hasSavedPaymentMethod
-                        ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` · updated ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}`
-                        : paymentMethodManagement?.autopayStatus === "pending"
-                          ? "Bank verification is pending."
+                      : bankVerificationPending
+                        ? "Bank verification is pending."
+                        : paymentMethodManagement?.hasSavedPaymentMethod
+                          ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` · updated ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}`
                           : "No saved payment method yet."}
                   </p>
                 </div>
@@ -2659,7 +2661,7 @@ function ParentPortalWorkspaceView({
                       paymentCheckoutMethod !== null ||
                       !family ||
                       autopayUnavailable ||
-                      autopayStatus === "pending" ||
+                      bankVerificationPending ||
                       (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")
                     }
                     aria-label="Enable or disable autopay"
@@ -2671,7 +2673,7 @@ function ParentPortalWorkspaceView({
                 className="mt-3 w-full sm:w-auto"
                 type="button"
                 variant={autopayStatus === "enabled" ? "outline" : "default"}
-                disabled={isPending || paymentCheckoutMethod !== null || !family || autopayUnavailable || autopayStatus === "pending" || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
+                disabled={isPending || paymentCheckoutMethod !== null || !family || autopayUnavailable || bankVerificationPending || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
                 onClick={() => toggleAutopay(autopayStatus !== "enabled")}
               >
                 {autopayUnavailable
@@ -2697,13 +2699,13 @@ function ParentPortalWorkspaceView({
                 </Alert>
               ) : null}
               <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
+                <Button disabled={isPending || bankVerificationPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
                   <CreditCard data-icon="inline-start" />
                   {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace card" : "Save card"}
                 </Button>
-                <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                <Button disabled={isPending || bankVerificationPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
                   <Building2 data-icon="inline-start" />
-                  {paymentMethodManagement?.autopayStatus === "pending" ? "Verify bank account" : "Connect bank account"}
+                  {bankVerificationPending ? "Bank verification pending" : "Connect bank account"}
                 </Button>
                 <Button disabled={isPending || paymentCheckoutMethod !== null || !paymentMethodManagement?.hasStripeCustomer} onClick={() => managePaymentMethod("portal")} variant="outline">
                   Manage methods
@@ -2858,17 +2860,17 @@ function ParentPortalWorkspaceView({
                     <>
                       <p>
                         Your school now uses a new payment account. Replace your saved card or connect a bank account before saved-method payments can resume. A one-time payment does not replace the saved autopay method, so using only the checkout buttons below would require another update next time. {paymentMethodReauthorizationPreservesAutopay
-                          ? "Your existing autopay consent will resume automatically after Stripe confirms the replacement."
+                          ? "Your existing autopay consent will resume automatically after Stripe confirms the replacement. You do not need to turn autopay on again."
                           : autopayStatus === "enabled"
                             ? "Review and re-enable autopay after replacement."
                             : "Autopay remains off until you choose to enable it."}
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
+                        <Button disabled={isPending || bankVerificationPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "card")}>
                           <CreditCard data-icon="inline-start" />
                           Replace saved card
                         </Button>
-                        <Button disabled={isPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                        <Button disabled={isPending || bankVerificationPending || paymentCheckoutMethod !== null || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
                           <Building2 data-icon="inline-start" />
                           Connect bank account
                         </Button>
@@ -2911,7 +2913,7 @@ function ParentPortalWorkspaceView({
                         ? "Autopay is unavailable for a past family account. One-time payments remain available."
                         : paymentMethodReauthorizationRequired
                         ? paymentMethodReauthorizationPreservesAutopay
-                          ? "Autopay is paused only until Stripe confirms the replacement method, then your existing consent resumes."
+                          ? "Autopay is paused only until Stripe confirms the replacement method, then your existing consent resumes. You do not need to turn it on again."
                           : "Autopay is paused until the method is replaced; review and enable it afterward if desired."
                         : autopayStatus === "enabled"
                         ? "Enabled for eligible invoices using the saved family payment method."
@@ -2923,7 +2925,7 @@ function ParentPortalWorkspaceView({
                   <Button
                     type="button"
                     variant={autopayStatus === "enabled" ? "outline" : "default"}
-                    disabled={isPending || paymentCheckoutMethod !== null || autopayUnavailable || autopayStatus === "pending" || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
+                    disabled={isPending || paymentCheckoutMethod !== null || autopayUnavailable || bankVerificationPending || (paymentMethodReauthorizationRequired && autopayStatus !== "enabled")}
                     onClick={() => toggleAutopay(autopayStatus !== "enabled")}
                   >
                     {autopayUnavailable

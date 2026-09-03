@@ -3,6 +3,7 @@ import { stripeConnectSavedMethodNeedsReauthorization } from "@/lib/stripe-conne
 export type PaymentMethodManagementSummary = {
   autopayEnabled: boolean;
   autopayStatus: "enabled" | "disabled" | "pending";
+  bankVerificationPending: boolean;
   paymentMethodReauthorizationRequired: boolean;
   hasStripeCustomer: boolean;
   hasSavedPaymentMethod: boolean;
@@ -65,10 +66,12 @@ export function paymentMethodManagementSummary(input: {
     && !paymentMethodReauthorizationRequired;
   const setupExplicitlyExpired = clean(custom.paymentMethodManagementStatus) === "setup_session_expired";
   const pending = status === "pending" && !setupExplicitlyExpired;
+  const bankVerificationPending = custom.stripeBankVerificationPending === true;
 
   return {
     autopayEnabled: enabled,
     autopayStatus: enabled ? "enabled" : pending ? "pending" : "disabled",
+    bankVerificationPending,
     paymentMethodReauthorizationRequired,
     hasStripeCustomer: Boolean(stripeCustomerId),
     hasSavedPaymentMethod: Boolean(stripeDefaultPaymentMethodId),
@@ -202,6 +205,95 @@ export function paymentMethodSetupAutopayOutcome(input: {
     };
   }
   return null;
+}
+
+export function canFinalizePendingAutopayConsentMigration(input: {
+  currentFields: unknown;
+  pendingOutcome: unknown;
+  linkedGuardianUserIds: Array<string | null | undefined>;
+  currentCenterId?: string | null;
+  currentTenantId?: string | null;
+  activeConnectedAccountId?: string | null;
+  centerCustomFields?: unknown;
+  replacementPaymentMethodId?: string | null;
+}) {
+  const current = fields(input.currentFields);
+  const pending = fields(input.pendingOutcome);
+  const consentUserId = clean(current.stripePendingAutopayConsentUserId);
+  const previousPaymentMethodId = clean(current.stripePendingAutopayPreviousPaymentMethodId);
+  const replacementPaymentMethodId = clean(current.stripePendingPaymentMethodId);
+  const confirmedReplacementPaymentMethodId = clean(input.replacementPaymentMethodId);
+  const currentCenterId = clean(input.currentCenterId);
+  const pendingCenterId = clean(current.stripePendingAutopayAuditCenterId);
+  const currentTenantId = clean(input.currentTenantId);
+  const pendingTenantId = clean(current.stripePendingAutopayAuditTenantId);
+  const activeConnectedAccountId = clean(input.activeConnectedAccountId);
+  const pendingConnectedAccountId = clean(current.stripePendingPaymentMethodConnectedAccountId);
+  const savedPaymentMethodConnectedAccountId = clean(current.stripeDefaultPaymentMethodConnectedAccountId);
+
+  return Boolean(
+    pending.preservedExistingConsent === true
+      && pending.autopayEnabled === true
+      && consentUserId
+      && consentUserId === clean(current.autopayEnabledByUserId)
+      && input.linkedGuardianUserIds.some((userId) => clean(userId) === consentUserId)
+      && previousPaymentMethodId
+      && previousPaymentMethodId === clean(current.stripeDefaultPaymentMethodId)
+      && replacementPaymentMethodId
+      && replacementPaymentMethodId === clean(pending.autopayPaymentMethodId)
+      && replacementPaymentMethodId === confirmedReplacementPaymentMethodId
+      && currentCenterId
+      && currentCenterId === pendingCenterId
+      && currentTenantId
+      && currentTenantId === pendingTenantId
+      && activeConnectedAccountId
+      && activeConnectedAccountId === pendingConnectedAccountId
+      && stripeConnectSavedMethodNeedsReauthorization({
+        activeAccountId: activeConnectedAccountId,
+        savedMethodAccountId: savedPaymentMethodConnectedAccountId,
+        centerCustomFields: input.centerCustomFields,
+      }),
+  );
+}
+
+export function canPreservePendingAutopayConsentForPaymentMethodMigration(input: {
+  currentFields: unknown;
+  linkedGuardianUserIds: Array<string | null | undefined>;
+  currentCenterId?: string | null;
+  currentTenantId?: string | null;
+  activeConnectedAccountId?: string | null;
+  centerCustomFields?: unknown;
+}) {
+  const current = fields(input.currentFields);
+  if (current.stripeBankVerificationPending !== true) return false;
+  return canFinalizePendingAutopayConsentMigration({
+    ...input,
+    pendingOutcome: current.stripePendingAutopayOutcome,
+    replacementPaymentMethodId: clean(current.stripePendingPaymentMethodId),
+  });
+}
+
+export function failedPendingPaymentMethodAutopayOutcome(input: {
+  currentFields: unknown;
+  pendingOutcome: unknown;
+  linkedGuardianUserIds: Array<string | null | undefined>;
+  currentCenterId?: string | null;
+  currentTenantId?: string | null;
+  activeConnectedAccountId?: string | null;
+  centerCustomFields?: unknown;
+  replacementPaymentMethodId?: string | null;
+}) {
+  const current = fields(input.currentFields);
+  const retainedExistingConsent = canFinalizePendingAutopayConsentMigration(input);
+  return {
+    autopayEnabled: retainedExistingConsent,
+    autopayStatus: retainedExistingConsent ? "enabled" as const : "disabled" as const,
+    autopayPlaceholder: retainedExistingConsent,
+    autopayPaymentMethodId: retainedExistingConsent
+      ? clean(current.stripePendingAutopayPreviousPaymentMethodId)
+      : null,
+    retainedExistingConsent,
+  };
 }
 
 export function canCreatePaymentMethodManagementSession(input: {

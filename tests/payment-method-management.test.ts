@@ -3,8 +3,11 @@ import { test } from "node:test";
 import {
   canChargeSavedPaymentMethod,
   canCreatePaymentMethodManagementSession,
+  canFinalizePendingAutopayConsentMigration,
+  canPreservePendingAutopayConsentForPaymentMethodMigration,
   canPreserveAutopayConsentForPaymentMethodMigration,
   canRunAutopay,
+  failedPendingPaymentMethodAutopayOutcome,
   paymentMethodAutopayCategory,
   paymentMethodManagementSummary,
   paymentMethodSetupAutopayOutcome,
@@ -159,6 +162,133 @@ test("migration does not preserve consent from an unlinked user", () => {
   assert.equal(outcome?.preservedExistingConsent, false);
 });
 
+test("pending bank verification finalizes an existing autopay authorization without another opt-in", () => {
+  const pendingOutcome = {
+    autopayEnabled: true,
+    autopayStatus: "enabled",
+    autopayPlaceholder: true,
+    autopayPaymentMethodId: "pm_new",
+    preservedExistingConsent: true,
+    replacementDisabledAutopay: false,
+  };
+  const currentFields = {
+    autopayEnabled: false,
+    autopayEnabledByUserId: "user_123",
+    autopayStatus: "pending",
+    stripeBankVerificationPending: true,
+    stripeDefaultPaymentMethodId: "pm_old",
+    stripeDefaultPaymentMethodConnectedAccountId: "acct_previous",
+    stripePendingAutopayOutcome: pendingOutcome,
+    stripePendingAutopayConsentUserId: "user_123",
+    stripePendingAutopayPreviousPaymentMethodId: "pm_old",
+    stripePendingAutopayAuditCenterId: "center_123",
+    stripePendingAutopayAuditTenantId: "tenant_123",
+    stripePendingPaymentMethodId: "pm_new",
+    stripePendingPaymentMethodConnectedAccountId: "acct_current",
+  };
+  const centerCustomFields = {
+    stripeConnectMigrationSourceAccountId: "acct_previous",
+    stripeConnectMigrationTargetAccountId: "acct_current",
+    stripeConnectMigrationCutoverAt: "2026-08-12T16:49:50.985Z",
+    stripeConnectMigrationSourceAccountRetainedForReconciliation: true,
+  };
+
+  assert.equal(canFinalizePendingAutopayConsentMigration({
+    currentFields,
+    pendingOutcome,
+    linkedGuardianUserIds: ["user_123"],
+    currentCenterId: "center_123",
+    currentTenantId: "tenant_123",
+    activeConnectedAccountId: "acct_current",
+    centerCustomFields,
+    replacementPaymentMethodId: "pm_new",
+  }), true);
+  assert.equal(canPreservePendingAutopayConsentForPaymentMethodMigration({
+    currentFields,
+    linkedGuardianUserIds: ["user_123"],
+    currentCenterId: "center_123",
+    currentTenantId: "tenant_123",
+    activeConnectedAccountId: "acct_current",
+    centerCustomFields,
+  }), true);
+  assert.deepEqual(failedPendingPaymentMethodAutopayOutcome({
+    currentFields,
+    pendingOutcome,
+    linkedGuardianUserIds: ["user_123"],
+    currentCenterId: "center_123",
+    currentTenantId: "tenant_123",
+    activeConnectedAccountId: "acct_current",
+    centerCustomFields,
+    replacementPaymentMethodId: "pm_new",
+  }), {
+    autopayEnabled: true,
+    autopayStatus: "enabled",
+    autopayPlaceholder: true,
+    autopayPaymentMethodId: "pm_old",
+    retainedExistingConsent: true,
+  });
+});
+
+test("pending consent migration fails closed when guardian, school, tenant, account, or method evidence changes", () => {
+  const pendingOutcome = {
+    autopayEnabled: true,
+    autopayPaymentMethodId: "pm_new",
+    preservedExistingConsent: true,
+  };
+  const currentFields = {
+    autopayEnabledByUserId: "user_123",
+    stripeDefaultPaymentMethodId: "pm_old",
+    stripeDefaultPaymentMethodConnectedAccountId: "acct_previous",
+    stripePendingAutopayConsentUserId: "user_123",
+    stripePendingAutopayPreviousPaymentMethodId: "pm_old",
+    stripePendingAutopayAuditCenterId: "center_123",
+    stripePendingAutopayAuditTenantId: "tenant_123",
+    stripePendingPaymentMethodId: "pm_new",
+    stripePendingPaymentMethodConnectedAccountId: "acct_current",
+  };
+  const centerCustomFields = {
+    stripeConnectMigrationSourceAccountId: "acct_previous",
+    stripeConnectMigrationTargetAccountId: "acct_current",
+    stripeConnectMigrationCutoverAt: "2026-08-12T16:49:50.985Z",
+    stripeConnectMigrationSourceAccountRetainedForReconciliation: true,
+  };
+  const baseline = {
+    currentFields,
+    pendingOutcome,
+    linkedGuardianUserIds: ["user_123"],
+    currentCenterId: "center_123",
+    currentTenantId: "tenant_123",
+    activeConnectedAccountId: "acct_current",
+    centerCustomFields,
+    replacementPaymentMethodId: "pm_new",
+  };
+
+  assert.equal(canFinalizePendingAutopayConsentMigration({ ...baseline, linkedGuardianUserIds: ["user_other"] }), false);
+  assert.equal(canFinalizePendingAutopayConsentMigration({ ...baseline, currentCenterId: "center_other" }), false);
+  assert.equal(canFinalizePendingAutopayConsentMigration({ ...baseline, currentTenantId: "tenant_other" }), false);
+  assert.equal(canFinalizePendingAutopayConsentMigration({ ...baseline, activeConnectedAccountId: "acct_other" }), false);
+  assert.equal(canFinalizePendingAutopayConsentMigration({ ...baseline, centerCustomFields: {} }), false);
+  assert.equal(canFinalizePendingAutopayConsentMigration({ ...baseline, replacementPaymentMethodId: "pm_other" }), false);
+  assert.equal(canPreservePendingAutopayConsentForPaymentMethodMigration({
+    ...baseline,
+    currentFields: { ...currentFields, stripeBankVerificationPending: false },
+  }), false);
+  assert.equal(canFinalizePendingAutopayConsentMigration({
+    ...baseline,
+    currentFields: { ...currentFields, stripeDefaultPaymentMethodId: "pm_other" },
+  }), false);
+  assert.deepEqual(failedPendingPaymentMethodAutopayOutcome({
+    ...baseline,
+    linkedGuardianUserIds: ["user_other"],
+  }), {
+    autopayEnabled: false,
+    autopayStatus: "disabled",
+    autopayPlaceholder: false,
+    autopayPaymentMethodId: null,
+    retainedExistingConsent: false,
+  });
+});
+
 test("payment method summary labels saved cards without storing full numbers", () => {
   const summary = paymentMethodManagementSummary({
     customFields: {
@@ -236,11 +366,31 @@ test("payment method summary preserves completed bank verification pending past 
       stripeSetupCheckoutSessionExpiresAt: Math.floor(Date.now() / 1000) - 60,
       paymentMethodManagementStatus: "payment_method_saved",
       autopayStatus: "pending",
+      stripeBankVerificationPending: true,
     },
   });
 
   assert.equal(summary.hasSavedPaymentMethod, true);
   assert.equal(summary.autopayStatus, "pending");
+  assert.equal(summary.bankVerificationPending, true);
+});
+
+test("bank verification remains independently visible after autopay is disabled", () => {
+  const summary = paymentMethodManagementSummary({
+    autopayPlaceholder: false,
+    customFields: {
+      stripeCustomerId: "cus_123",
+      stripeDefaultPaymentMethodId: "pm_old",
+      autopayEnabled: false,
+      autopayStatus: "disabled",
+      stripeBankVerificationPending: true,
+      stripePendingPaymentMethodId: "pm_bank_pending",
+    },
+  });
+
+  assert.equal(summary.autopayEnabled, false);
+  assert.equal(summary.autopayStatus, "disabled");
+  assert.equal(summary.bankVerificationPending, true);
 });
 
 test("setup expiration preserves an already saved bank payment method", () => {

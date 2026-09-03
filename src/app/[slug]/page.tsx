@@ -167,6 +167,7 @@ import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { activeNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import {
+  canPreservePendingAutopayConsentForPaymentMethodMigration,
   canPreserveAutopayConsentForPaymentMethodMigration,
   paymentMethodManagementSummary,
 } from "@/lib/payment-method-management";
@@ -2835,11 +2836,21 @@ async function renderLivePage(
       centerCustomFields: parentCenterFields,
     });
     const paymentMethodReauthorizationPreservesAutopay = paymentMethodReauthorizationRequired
-      && canPreserveAutopayConsentForPaymentMethodMigration({
-        autopayPlaceholder: billingAccount?.autopayPlaceholder,
-        customFields: parentBillingAccountFields,
-        linkedGuardianUserIds: [user.id],
-      });
+      && (
+        canPreserveAutopayConsentForPaymentMethodMigration({
+          autopayPlaceholder: billingAccount?.autopayPlaceholder,
+          customFields: parentBillingAccountFields,
+          linkedGuardianUserIds: [user.id],
+        })
+        || canPreservePendingAutopayConsentForPaymentMethodMigration({
+          currentFields: parentBillingAccountFields,
+          linkedGuardianUserIds: family?.guardians.map((guardian) => guardian.userId) ?? [],
+          currentCenterId: familyCenter?.id,
+          currentTenantId: user.tenantId,
+          activeConnectedAccountId: readStripeConnectedAccountId(parentCenterFields),
+          centerCustomFields: parentCenterFields,
+        })
+      );
     const paymentTransitionActive = Boolean(
       parentStripeMigration.targetAccountId &&
       parentCenterFields.stripeConnectMigrationPayoutReleaseStatus !== "released",

@@ -73,6 +73,7 @@ function normalizeText(value: unknown) {
 }
 
 const personNameSuffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
+const personNameHonorifics = new Set(["dr", "fr", "miss", "mr", "mrs", "ms", "mx", "prof", "rev"]);
 const personNameCredentials = new Set([
   "aprn", "ba", "bs", "bsn", "cpa", "dc", "dds", "dmd", "do", "dpt", "edd", "esq", "jd", "lpn", "lvn",
   "ma", "mba", "md", "ms", "msn", "np", "od", "pa", "pharmd", "phd", "rn",
@@ -84,6 +85,12 @@ const personNameCredentialLikeSurnames = new Set(["ba", "do", "ma", "pa"]);
 function canonicalPersonNameToken(value: unknown, supported: Set<string>) {
   const normalized = normalizeText(value).replace(/\s+/g, "");
   return supported.has(normalized) ? normalized : "";
+}
+
+function normalizePersonNameText(value: unknown) {
+  const words = normalizeText(value).split(" ").filter(Boolean);
+  if (personNameHonorifics.has(words[0] ?? "")) words.shift();
+  return words.join(" ");
 }
 
 function stripTrailingPersonCredentials(parts: string[]) {
@@ -115,16 +122,17 @@ function normalizePersonName(value: unknown) {
     const words = (nameParts[0] ?? "").split(/\s+/).filter(Boolean);
     const suffix = canonicalPersonNameToken(words.at(-1), personNameSuffixes);
     return suffix
-      ? normalizeText(`${words.slice(0, -1).join(" ")} ${suffix}`)
-      : normalizeText(words.join(" "));
+      ? normalizePersonNameText(`${words.slice(0, -1).join(" ")} ${suffix}`)
+      : normalizePersonNameText(words.join(" "));
   }
 
   const firstPartWords = nameParts[0]?.split(/\s+/).filter(Boolean).length ?? 0;
   const trailingSuffix = canonicalPersonNameToken(nameParts.at(-1), personNameSuffixes);
-  const separateSuffix = nameParts.length === 2 && (firstPartWords < 2 || trailingSuffix === "v")
+  const dottedVInitial = trailingSuffix === "v" && /\.\s*$/.test(nameParts.at(-1) ?? "");
+  const separateSuffix = nameParts.length === 2 && (firstPartWords < 2 || dottedVInitial)
     ? ""
     : trailingSuffix;
-  if (nameParts.length === 2 && separateSuffix) return normalizeText(`${nameParts[0]} ${separateSuffix}`);
+  if (nameParts.length === 2 && separateSuffix) return normalizePersonNameText(`${nameParts[0]} ${separateSuffix}`);
 
   const givenNameWords = (separateSuffix ? nameParts.slice(1, -1) : nameParts.slice(1))
     .join(" ")
@@ -135,7 +143,7 @@ function normalizePersonName(value: unknown) {
     : canonicalPersonNameToken(givenNameWords.at(-1), personNameSuffixes);
   if (attachedSuffix) givenNameWords.pop();
   const suffix = separateSuffix || attachedSuffix;
-  return normalizeText(`${givenNameWords.join(" ")} ${nameParts[0]} ${suffix}`);
+  return normalizePersonNameText(`${givenNameWords.join(" ")} ${nameParts[0]} ${suffix}`);
 }
 
 function personNamesMatch(left: string, right: string) {

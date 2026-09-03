@@ -253,6 +253,28 @@ test("child duplicate scoring preserves conventional suffix position", () => {
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
 
+test("child duplicate scoring preserves V as a conventional generational suffix", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "John Smith, V",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "John Smith V",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
 test("child duplicate scoring allows optional ProCare middle names", () => {
   const score = scoreChildDuplicate(
     {
@@ -429,6 +451,30 @@ test("guardian duplicate scoring recognizes ProCare last-first formatting", () =
   assert.equal(score?.confidence, "high");
   assert.ok(score?.reasons.includes("same guardian name"));
   assert.ok(score?.reasons.includes("same guardian phone"));
+});
+
+test("guardian duplicate scoring ignores imported honorifics", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Dr. Alex Smith",
+      phone: "7205550112",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith",
+      phone: "7205550112",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
 });
 
 test("guardian duplicate scoring ignores distinct co-parents who share a household phone", () => {

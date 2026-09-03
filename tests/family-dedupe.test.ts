@@ -2697,6 +2697,46 @@ test("guardian duplicate scoring canonicalizes omitted hyphens in direct surname
   assert.ok(score?.reasons.includes("same guardian name"));
 });
 
+test("hyphenated initials do not prevent independent surname-hyphen normalization", () => {
+  for (const initials of ["J-R", "J.-R."]) {
+    const childScore = scoreChildDuplicate(
+      {
+        id: `child_hyphenated_${initials}`,
+        familyId: `family_hyphenated_${initials}`,
+        centerId: "center_1",
+        fullName: `${initials} Smith-Jones`,
+        dateOfBirth: "2022-10-10",
+      },
+      {
+        id: `child_joined_${initials}`,
+        familyId: `family_joined_${initials}`,
+        centerId: "center_1",
+        fullName: `${initials} SmithJones`,
+        dateOfBirth: "2022-10-10",
+      },
+    );
+    const guardianScore = scoreGuardianDuplicate(
+      {
+        id: `guardian_hyphenated_${initials}`,
+        familyId: `family_hyphenated_${initials}`,
+        centerId: "center_1",
+        fullName: `${initials} Smith-Jones`,
+        phone: "7205550123",
+      },
+      {
+        id: `guardian_joined_${initials}`,
+        familyId: `family_joined_${initials}`,
+        centerId: "center_1",
+        fullName: `${initials} SmithJones`,
+        phone: "7205550123",
+      },
+    );
+
+    assert.equal(childScore?.confidence, "high");
+    assert.equal(guardianScore?.confidence, "high");
+  }
+});
+
 test("guardian duplicate scoring canonicalizes modifier-letter apostrophes", () => {
   const score = scoreGuardianDuplicate(
     {

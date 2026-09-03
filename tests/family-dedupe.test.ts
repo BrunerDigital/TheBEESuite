@@ -1757,3 +1757,47 @@ test("guardian duplicate scoring canonicalizes a spelled-out Senior suffix", () 
   assert.equal(score?.confidence, "high");
   assert.ok(score?.reasons.includes("same guardian name"));
 });
+
+test("child duplicate scoring does not collapse an arbitrary direct middle name into the surname", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "John Adam Smith",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "John Adamsmith",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score, null);
+});
+
+test("guardian duplicate scoring does not collapse an arbitrary direct middle name into the surname", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "John Adam Smith",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "John Adamsmith",
+      phone: "7205550123",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score, null);
+});

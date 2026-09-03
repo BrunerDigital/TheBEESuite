@@ -262,7 +262,6 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
       if (attachedSuffix) rawGivenNameWords.pop();
       const givenNameWords = credentialsRemoved(rawGivenNameWords, stripCredentials);
       const givenNames = normalizePersonNameText(givenNameWords.join(" "));
-      variants.clear();
       normalizeTextVariants(`${givenNames} ${surname} ${surnameTrailingSuffix || attachedSuffix}`)
         .forEach((variant) => variants.add(variant));
     }
@@ -317,15 +316,6 @@ function normalizePersonNameVariants(value: unknown, options: { stripCredentials
         variants.add(normalizePersonNameText(
           `${dottedGivenNameWords.join(" ")} ${canonicalDottedSurname} ${dottedSurnameSuffix}`,
         ));
-      }
-    }
-    if (rawParts.length === 1) {
-      const directParts = normalized.split(" ").filter(Boolean);
-      const suffix = personNameSuffixes.has(directParts.at(-1) ?? "") ? directParts.pop() : "";
-      for (let surnameLength = 2; surnameLength < directParts.length; surnameLength += 1) {
-        const givenNames = directParts.slice(0, -surnameLength);
-        const surname = directParts.slice(-surnameLength).join("");
-        variants.add([...givenNames, surname, suffix].filter(Boolean).join(" "));
       }
     }
   }

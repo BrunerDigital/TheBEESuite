@@ -77,6 +77,27 @@ test("family duplicate scoring preserves spaced apostrophe variants", () => {
   assert.ok(score?.reasons.includes("same address"));
 });
 
+test("family duplicate scoring preserves French spaced apostrophe variants", () => {
+  const score = scoreFamilyDuplicate(
+    {
+      id: "family_1",
+      centerId: "center_1",
+      name: "L Heureux Family",
+      address: "123 Main Street",
+    },
+    {
+      id: "family_2",
+      centerId: "center_1",
+      name: "L'Heureux Family",
+      address: "123 Main Street",
+    },
+  );
+
+  assert.equal(score?.score, 35);
+  assert.ok(score?.reasons.includes("same family name"));
+  assert.ok(score?.reasons.includes("same address"));
+});
+
 test("child duplicate scoring matches same-school child profiles by name and date of birth", () => {
   const score = scoreChildDuplicate(
     {

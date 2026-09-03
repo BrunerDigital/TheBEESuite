@@ -75,7 +75,7 @@ function normalizeText(value: unknown) {
 function normalizeTextVariants(value: unknown) {
   const normalized = normalizeText(value);
   return normalized
-    ? [...new Set([normalized, normalized.replace(/\b([od])\s+(?=\p{L})/gu, "$1")])]
+    ? [...new Set([normalized, normalized.replace(/\b([odl])\s+(?=\p{L})/gu, "$1")])]
     : [];
 }
 

@@ -54,36 +54,66 @@ export type MemberDuplicateCandidate = {
 
 function normalizeText(value: unknown) {
   return typeof value === "string"
-    ? value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/['’]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+    ? value
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[øØ]/g, "o")
+        .replace(/[łŁ]/g, "l")
+        .replace(/[đĐðÐ]/g, "d")
+        .replace(/[þÞ]/g, "th")
+        .replace(/[æÆ]/g, "ae")
+        .replace(/[œŒ]/g, "oe")
+        .replace(/ß/g, "ss")
+        .replace(/[ıİ]/g, "i")
+        .replace(/['’]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim()
     : "";
 }
 
-const personNameSuffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v", "esq", "phd", "md", "dds", "dmd", "do"]);
+const personNameSuffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
+const personNameCredentials = new Set([
+  "aprn", "ba", "bs", "bsn", "cpa", "dc", "dds", "dmd", "do", "dpt", "edd", "esq", "jd", "lpn", "lvn",
+  "ma", "mba", "md", "ms", "msn", "np", "od", "pa", "pharmd", "phd", "rn",
+]);
 
-function canonicalPersonNameSuffix(value: unknown) {
+function canonicalPersonNameToken(value: unknown, supported: Set<string>) {
   const normalized = normalizeText(value).replace(/\s+/g, "");
-  return personNameSuffixes.has(normalized) ? normalized : "";
+  return supported.has(normalized) ? normalized : "";
+}
+
+function stripTrailingPersonCredentials(parts: string[]) {
+  const remaining = [...parts];
+  while (remaining.length) {
+    const trailingWords = remaining.at(-1)?.split(/\s+/).filter(Boolean) ?? [];
+    if (!canonicalPersonNameToken(trailingWords.at(-1), personNameCredentials)) break;
+    trailingWords.pop();
+    if (trailingWords.length) remaining[remaining.length - 1] = trailingWords.join(" ");
+    else remaining.pop();
+  }
+  return remaining;
 }
 
 function normalizePersonName(value: unknown) {
   if (typeof value !== "string") return "";
-  const nameParts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  const nameParts = stripTrailingPersonCredentials(value.split(",").map((part) => part.trim()).filter(Boolean));
   if (nameParts.length < 2) {
-    const words = value.trim().split(/\s+/).filter(Boolean);
-    const suffix = canonicalPersonNameSuffix(words.at(-1));
+    const words = (nameParts[0] ?? "").split(/\s+/).filter(Boolean);
+    const suffix = canonicalPersonNameToken(words.at(-1), personNameSuffixes);
     return suffix
       ? normalizeText(`${words.slice(0, -1).join(" ")} ${suffix}`)
-      : normalizeText(value);
+      : normalizeText(words.join(" "));
   }
 
-  const separateSuffix = canonicalPersonNameSuffix(nameParts.at(-1));
+  const separateSuffix = canonicalPersonNameToken(nameParts.at(-1), personNameSuffixes);
   if (nameParts.length === 2 && separateSuffix) return normalizeText(`${nameParts[0]} ${separateSuffix}`);
 
   const givenNameWords = (separateSuffix ? nameParts.slice(1, -1) : nameParts.slice(1))
     .join(" ")
     .split(/\s+/)
     .filter(Boolean);
-  const attachedSuffix = separateSuffix ? "" : canonicalPersonNameSuffix(givenNameWords.at(-1));
+  const attachedSuffix = separateSuffix ? "" : canonicalPersonNameToken(givenNameWords.at(-1), personNameSuffixes);
   if (attachedSuffix) givenNameWords.pop();
   const suffix = separateSuffix || attachedSuffix;
   return normalizeText(`${givenNameWords.join(" ")} ${nameParts[0]} ${suffix}`);

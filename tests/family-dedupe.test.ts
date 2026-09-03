@@ -348,6 +348,30 @@ test("guardian duplicate scoring folds name diacritics", () => {
   assert.ok(score?.reasons.includes("same guardian name"));
 });
 
+test("guardian duplicate scoring transliterates stroked Latin letters", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Søren Jørgensen",
+      phone: "7205550106",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Soren Jorgensen",
+      phone: "7205550106",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
 test("guardian duplicate scoring canonicalizes dotted credentials", () => {
   const score = scoreGuardianDuplicate(
     {
@@ -388,6 +412,30 @@ test("guardian duplicate scoring canonicalizes dotted credentials without commas
       centerId: "center_1",
       fullName: "Alex Smith MD",
       phone: "7205550103",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
+test("guardian duplicate scoring ignores common professional credentials", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Alex Smith, RN, BSN",
+      phone: "7205550107",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith RN",
+      phone: "7205550107",
       relation: "Parent",
     },
   );

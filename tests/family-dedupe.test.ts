@@ -275,6 +275,28 @@ test("child duplicate scoring preserves V as a conventional generational suffix"
   assert.ok(score?.reasons.includes("same child name and date of birth"));
 });
 
+test("child duplicate scoring preserves dotted V as a conventional generational suffix", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "John Smith, V.",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "John Smith V",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
 test("child duplicate scoring allows optional ProCare middle names", () => {
   const score = scoreChildDuplicate(
     {
@@ -801,6 +823,30 @@ test("guardian duplicate scoring allows optional ProCare middle names", () => {
       centerId: "center_1",
       fullName: "Jordan Rivera",
       phone: "7205550104",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same guardian name"));
+});
+
+test("guardian duplicate scoring preserves standalone O and D middle initials", () => {
+  const score = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Jordan O Smith",
+      phone: "7205550114",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Jordan Smith",
+      phone: "7205550114",
       relation: "Parent",
     },
   );

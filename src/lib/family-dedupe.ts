@@ -90,7 +90,7 @@ function canonicalPersonNameToken(value: unknown, supported: Set<string>) {
 function normalizePersonNameText(value: unknown) {
   const words = normalizeText(value).split(" ").filter(Boolean);
   if (personNameHonorifics.has(words[0] ?? "")) words.shift();
-  return words.join(" ").replace(/\b([od])\s+(?=\p{L})/gu, "$1");
+  return words.join(" ");
 }
 
 function stripTrailingPersonCredentials(parts: string[]) {
@@ -149,6 +149,23 @@ function normalizePersonName(value: unknown) {
   return normalizePersonNameText(`${givenNameWords.join(" ")} ${nameParts[0]} ${suffix}`);
 }
 
+function normalizePersonNameVariants(value: unknown) {
+  const normalized = normalizePersonName(value);
+  if (!normalized) return [];
+  const variants = new Set([normalized, normalized.replace(/\b([od])\s+(?=\p{L})/gu, "$1")]);
+
+  if (typeof value === "string") {
+    const rawParts = value.split(",").map((part) => part.trim()).filter(Boolean);
+    const firstPartWords = rawParts[0]?.split(/\s+/).filter(Boolean).length ?? 0;
+    const trailingSuffix = canonicalPersonNameToken(rawParts.at(-1), personNameSuffixes);
+    if (rawParts.length === 2 && firstPartWords >= 2 && trailingSuffix === "v") {
+      variants.add(normalizePersonNameText(`${rawParts[0]} ${trailingSuffix}`));
+    }
+  }
+
+  return [...variants].filter(Boolean);
+}
+
 function personNamesMatch(left: string, right: string) {
   if (left === right) return Boolean(left);
   const leftParts = left.split(" ").filter(Boolean);
@@ -196,10 +213,11 @@ function normalizedDate(value: unknown) {
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
 
-function childKey(child: FamilyDedupeChild) {
-  const name = normalizePersonName(child.fullName);
+function childKeys(child: FamilyDedupeChild) {
   const dateOfBirth = normalizedDate(child.dateOfBirth);
-  return name && dateOfBirth ? `${name}|${dateOfBirth}` : "";
+  return dateOfBirth
+    ? normalizePersonNameVariants(child.fullName).map((name) => `${name}|${dateOfBirth}`)
+    : [];
 }
 
 function hasIntersection(left: string[], right: string[]) {
@@ -239,8 +257,8 @@ export function scoreFamilyDuplicate(left: FamilyDedupeRecord, right: FamilyDedu
     reasons.push("matching guardian phone");
   }
 
-  const leftChildren = (left.children ?? []).map(childKey);
-  const rightChildren = (right.children ?? []).map(childKey);
+  const leftChildren = (left.children ?? []).flatMap(childKeys);
+  const rightChildren = (right.children ?? []).flatMap(childKeys);
   if (hasIntersection(leftChildren, rightChildren)) {
     score += 35;
     reasons.push("matching child name and date of birth");
@@ -286,9 +304,9 @@ export function scoreChildDuplicate(left: ChildDedupeRecord, right: ChildDedupeR
 
   const reasons: string[] = [];
   let score = 0;
-  const leftName = normalizePersonName(left.fullName);
-  const rightName = normalizePersonName(right.fullName);
-  const sameName = personNamesMatch(leftName, rightName);
+  const leftNames = normalizePersonNameVariants(left.fullName);
+  const rightNames = normalizePersonNameVariants(right.fullName);
+  const sameName = leftNames.some((leftName) => rightNames.some((rightName) => personNamesMatch(leftName, rightName)));
   const leftPreferredName = normalizeText(left.preferredName);
   const rightPreferredName = normalizeText(right.preferredName);
   const leftDateOfBirth = normalizedDate(left.dateOfBirth);
@@ -370,9 +388,9 @@ export function scoreGuardianDuplicate(left: GuardianDedupeRecord, right: Guardi
     reasons.push("same guardian phone");
   }
 
-  const leftName = normalizePersonName(left.fullName);
-  const rightName = normalizePersonName(right.fullName);
-  const sameName = personNamesMatch(leftName, rightName);
+  const leftNames = normalizePersonNameVariants(left.fullName);
+  const rightNames = normalizePersonNameVariants(right.fullName);
+  const sameName = leftNames.some((leftName) => rightNames.some((rightName) => personNamesMatch(leftName, rightName)));
   const sameEmail = Boolean(leftEmail && leftEmail === rightEmail);
   if (!sameEmail && !sameName) return null;
   if (sameName) {

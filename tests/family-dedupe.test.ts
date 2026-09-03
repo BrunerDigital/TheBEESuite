@@ -56,6 +56,27 @@ test("family duplicate candidates are sorted by score", () => {
   assert.deepEqual(candidates.map((candidate) => candidate.candidateId), ["family_2", "family_3"]);
 });
 
+test("family duplicate scoring preserves spaced apostrophe variants", () => {
+  const score = scoreFamilyDuplicate(
+    {
+      id: "family_1",
+      centerId: "center_1",
+      name: "O Connor Family",
+      address: "123 Main Street",
+    },
+    {
+      id: "family_2",
+      centerId: "center_1",
+      name: "O'Connor Family",
+      address: "123 Main Street",
+    },
+  );
+
+  assert.equal(score?.score, 35);
+  assert.ok(score?.reasons.includes("same family name"));
+  assert.ok(score?.reasons.includes("same address"));
+});
+
 test("child duplicate scoring matches same-school child profiles by name and date of birth", () => {
   const score = scoreChildDuplicate(
     {

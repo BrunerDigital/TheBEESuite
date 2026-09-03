@@ -72,6 +72,13 @@ function normalizeText(value: unknown) {
     : "";
 }
 
+function normalizeTextVariants(value: unknown) {
+  const normalized = normalizeText(value);
+  return normalized
+    ? [...new Set([normalized, normalized.replace(/\b([od])\s+(?=\p{L})/gu, "$1")])]
+    : [];
+}
+
 const personNameSuffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
 const personNameHonorifics = new Set(["dr", "fr", "miss", "mr", "mrs", "ms", "mx", "prof", "rev"]);
 const personNameSurnameParticles = new Set([
@@ -158,7 +165,7 @@ function normalizePersonName(value: unknown) {
 function normalizePersonNameVariants(value: unknown) {
   const normalized = normalizePersonName(value);
   if (!normalized) return [];
-  const variants = new Set([normalized, normalized.replace(/\b([od])\s+(?=\p{L})/gu, "$1")]);
+  const variants = new Set(normalizeTextVariants(normalized));
 
   if (typeof value === "string") {
     const rawParts = value.split(",").map((part) => part.trim()).filter(Boolean);
@@ -278,16 +285,16 @@ export function scoreFamilyDuplicate(left: FamilyDedupeRecord, right: FamilyDedu
     reasons.push("matching child name and date of birth");
   }
 
-  const leftName = normalizeText(left.name);
-  const rightName = normalizeText(right.name);
-  if (leftName && leftName === rightName) {
+  const leftNames = normalizeTextVariants(left.name);
+  const rightNames = normalizeTextVariants(right.name);
+  if (hasIntersection(leftNames, rightNames)) {
     score += 20;
     reasons.push("same family name");
   }
 
-  const leftAddress = normalizeText(left.address);
-  const rightAddress = normalizeText(right.address);
-  if (leftAddress && leftAddress === rightAddress) {
+  const leftAddresses = normalizeTextVariants(left.address);
+  const rightAddresses = normalizeTextVariants(right.address);
+  if (hasIntersection(leftAddresses, rightAddresses)) {
     score += 15;
     reasons.push("same address");
   }

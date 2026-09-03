@@ -852,6 +852,48 @@ test("guardian duplicate scoring recognizes uppercase comma credentials", () => 
   assert.ok(score?.reasons.includes("same guardian name"));
 });
 
+test("guardian duplicate scoring strips credentials before generational suffixes", () => {
+  const directScore = scoreGuardianDuplicate(
+    {
+      id: "guardian_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Alex Smith MD Jr.",
+      phone: "7205550116",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Alex Smith Jr.",
+      phone: "7205550116",
+      relation: "Parent",
+    },
+  );
+  const commaScore = scoreGuardianDuplicate(
+    {
+      id: "guardian_3",
+      familyId: "family_3",
+      centerId: "center_1",
+      fullName: "Alex Smith, MD, Jr.",
+      phone: "7205550117",
+      relation: "Parent",
+    },
+    {
+      id: "guardian_4",
+      familyId: "family_4",
+      centerId: "center_1",
+      fullName: "Alex Smith Jr.",
+      phone: "7205550117",
+      relation: "Parent",
+    },
+  );
+
+  assert.equal(directScore?.confidence, "high");
+  assert.equal(commaScore?.confidence, "high");
+});
+
 test("child duplicate scoring preserves credential-like surnames after middle names", () => {
   const score = scoreChildDuplicate(
     {
@@ -969,6 +1011,28 @@ test("child duplicate scoring canonicalizes omitted given-name hyphens", () => {
       familyId: "family_2",
       centerId: "center_1",
       fullName: "AnneMarie Smith",
+      dateOfBirth: "2022-10-10",
+    },
+  );
+
+  assert.equal(score?.confidence, "high");
+  assert.ok(score?.reasons.includes("same child name and date of birth"));
+});
+
+test("child duplicate scoring canonicalizes omitted surname hyphens in last-first names", () => {
+  const score = scoreChildDuplicate(
+    {
+      id: "child_1",
+      familyId: "family_1",
+      centerId: "center_1",
+      fullName: "Smith-Jones, Avery",
+      dateOfBirth: "2022-10-10",
+    },
+    {
+      id: "child_2",
+      familyId: "family_2",
+      centerId: "center_1",
+      fullName: "Avery SmithJones",
       dateOfBirth: "2022-10-10",
     },
   );

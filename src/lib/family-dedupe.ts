@@ -133,13 +133,28 @@ function stripTrailingPersonCredentials(parts: string[]) {
 
 function normalizePersonName(value: unknown) {
   if (typeof value !== "string") return "";
-  const nameParts = stripTrailingPersonCredentials(value.split(",").map((part) => part.trim()).filter(Boolean));
+  const rawNameParts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  const finalCommaSuffix = rawNameParts.length > 1
+    ? canonicalPersonNameToken(rawNameParts.at(-1), personNameSuffixes)
+    : "";
+  if (finalCommaSuffix) rawNameParts.pop();
+  const nameParts = stripTrailingPersonCredentials(rawNameParts);
+  if (finalCommaSuffix) {
+    return nameParts.length === 1
+      ? normalizePersonNameText(`${nameParts[0]} ${finalCommaSuffix}`)
+      : normalizePersonNameText(`${nameParts.slice(1).join(" ")} ${nameParts[0]} ${finalCommaSuffix}`);
+  }
   if (nameParts.length < 2) {
     const words = (nameParts[0] ?? "").split(/\s+/).filter(Boolean);
     const suffix = canonicalPersonNameToken(words.at(-1), personNameSuffixes);
+    if (suffix) words.pop();
+    const credentialFreeWords = stripTrailingPersonCredentials([words.join(" ")])
+      .join(" ")
+      .split(/\s+/)
+      .filter(Boolean);
     return suffix
-      ? normalizePersonNameText(`${words.slice(0, -1).join(" ")} ${suffix}`)
-      : normalizePersonNameText(words.join(" "));
+      ? normalizePersonNameText(`${credentialFreeWords.join(" ")} ${suffix}`)
+      : normalizePersonNameText(credentialFreeWords.join(" "));
   }
 
   const firstPartWords = nameParts[0]?.split(/\s+/).filter(Boolean).length ?? 0;
@@ -175,7 +190,7 @@ function normalizePersonNameVariants(value: unknown) {
 
   if (typeof value === "string") {
     const rawParts = value.split(",").map((part) => part.trim()).filter(Boolean);
-    const firstPartWords = rawParts[0]?.split(/\s+/).filter(Boolean).length ?? 0;
+    const firstPartWords = normalizeText(rawParts[0]).split(/\s+/).filter(Boolean).length;
     const trailingSuffix = canonicalPersonNameToken(rawParts.at(-1), personNameSuffixes);
     const rawTrailingWords = (rawParts.at(-1) ?? "").split(/\s+/).filter(Boolean);
     const rawTrailingToken = canonicalPersonNameToken(rawParts.at(-1), personNameCredentials);
@@ -199,8 +214,8 @@ function normalizePersonNameVariants(value: unknown) {
       variants.clear();
       normalizeTextVariants(`${givenNames} ${surname} ${attachedSuffix}`).forEach((variant) => variants.add(variant));
     }
-    if (rawParts.length === 2 && firstPartWords >= 2 && trailingSuffix === "v") {
-      variants.add(normalizePersonNameText(`${rawParts[0]} ${trailingSuffix}`));
+    if (rawParts.length === 2 && trailingSuffix === "v") {
+      variants.add(normalizePersonNameText(`${trailingSuffix} ${rawParts[0]}`));
     }
     if (rawParts.length === 1) {
       const directParts = normalized.split(" ").filter(Boolean);

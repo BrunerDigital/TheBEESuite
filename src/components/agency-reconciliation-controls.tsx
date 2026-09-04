@@ -59,8 +59,10 @@ export function AgencyReconciliationControls({ programs, claims, accounts, batch
   const [batchKey, setBatchKey] = useState(idempotencyKey);
   const [allocationDrafts, setAllocationDrafts] = useState<AllocationDraft[]>([{ key: idempotencyKey(), claimId: "", amountDollars: "" }]);
   const [allocationClaimByBatch, setAllocationClaimByBatch] = useState<Record<string, string>>({});
+  const [allocationKeyByBatch, setAllocationKeyByBatch] = useState<Record<string, string>>({});
   const [adjustmentAccountId, setAdjustmentAccountId] = useState(accounts[0]?.id ?? "");
   const [adjustmentType, setAdjustmentType] = useState("write_off");
+  const [adjustmentKey, setAdjustmentKey] = useState(idempotencyKey);
   const availableClaims = useMemo(() => claims.filter((claim) => ["approved", "partially_paid"].includes(claim.status)), [claims]);
   const selectedBatchProgram = programs.find((program) => program.id === batchProgramId);
   const batchClaims = availableClaims.filter((claim) => claim.agencyProgram.id === selectedBatchProgram?.id);
@@ -94,16 +96,24 @@ export function AgencyReconciliationControls({ programs, claims, accounts, batch
   async function requestAdditionalAllocation(event: FormEvent<HTMLFormElement>, batch: Batch) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const ok = await post("requestBatchAllocation", { batchId: batch.id, claimId: allocationClaimByBatch[batch.id], amountDollars: form.get("amountDollars"), notes: form.get("notes") });
-    if (ok) setAllocationClaimByBatch((current) => ({ ...current, [batch.id]: "" }));
+    const requestKey = allocationKeyByBatch[batch.id] ?? idempotencyKey();
+    if (!allocationKeyByBatch[batch.id]) setAllocationKeyByBatch((current) => ({ ...current, [batch.id]: requestKey }));
+    const ok = await post("requestBatchAllocation", { batchId: batch.id, claimId: allocationClaimByBatch[batch.id], amountDollars: form.get("amountDollars"), notes: form.get("notes"), idempotencyKey: requestKey });
+    if (ok) {
+      setAllocationClaimByBatch((current) => ({ ...current, [batch.id]: "" }));
+      setAllocationKeyByBatch((current) => ({ ...current, [batch.id]: idempotencyKey() }));
+    }
   }
 
   async function requestAdjustment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const ok = await post("requestLedgerAdjustment", { ledgerAccountId: adjustmentAccountId, adjustmentType, amountDollars: form.get("amountDollars"), effectiveAt: form.get("effectiveAt"), reason: form.get("reason"), evidenceName: form.get("evidenceName"), evidenceReference: form.get("evidenceReference"), followUpDueAt: form.get("followUpDueAt") });
-    if (ok) formElement.reset();
+    const ok = await post("requestLedgerAdjustment", { ledgerAccountId: adjustmentAccountId, adjustmentType, amountDollars: form.get("amountDollars"), effectiveAt: form.get("effectiveAt"), reason: form.get("reason"), evidenceName: form.get("evidenceName"), evidenceReference: form.get("evidenceReference"), followUpDueAt: form.get("followUpDueAt"), idempotencyKey: adjustmentKey });
+    if (ok) {
+      formElement.reset();
+      setAdjustmentKey(idempotencyKey());
+    }
   }
 
   return <div className="space-y-4">

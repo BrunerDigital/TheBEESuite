@@ -1359,6 +1359,7 @@ async function postHandler(request: NextRequest) {
             amountCents: allocation.amountCents,
             notes: allocation.notes,
             fingerprint: agencyAllocationFingerprint({ batchId: batch.id, claimId: allocation.claimId, amountCents: allocation.amountCents }),
+            idempotencyKey: `batch-allocation:${batch.id}:${allocation.claimId}`,
             requestedById: auth.user.id,
           })) });
         }
@@ -1436,10 +1437,18 @@ async function postHandler(request: NextRequest) {
     const batchId = clean(body.batchId);
     const claimId = clean(body.claimId);
     const amountCents = cents(body.amountDollars);
-    if (!batchId || !claimId || amountCents <= 0) return NextResponse.json({ ok: false, error: "Choose a batch, approved claim, and positive allocation amount." }, { status: 400 });
+    const idempotencyKey = clean(body.idempotencyKey);
+    if (!batchId || !claimId || amountCents <= 0 || !idempotencyKey) return NextResponse.json({ ok: false, error: "Choose a batch, approved claim, positive allocation amount, and retry-safe request key." }, { status: 400 });
+    const fingerprint = agencyAllocationFingerprint({ batchId, claimId, amountCents });
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {
+        const existingByIdempotency = await tx.agencyRemittanceAllocation.findUnique({ where: { idempotencyKey }, include: { batch: true } });
+        if (existingByIdempotency) {
+          if (!centerAllowed(auth.user, existingByIdempotency.batch.centerId)) throw new AgencyWorkflowError("Batch allocation not found.", 404);
+          if (existingByIdempotency.fingerprint !== fingerprint) throw new AgencyWorkflowError("This retry key was already used for a different batch allocation.", 409);
+          return { batch: existingByIdempotency.batch, allocation: existingByIdempotency, reused: true };
+        }
         const batch = await tx.agencyRemittanceBatch.findUnique({ where: { id: batchId } });
         if (!batch || !centerAllowed(auth.user, batch.centerId)) throw new AgencyWorkflowError("Remittance batch not found.", 404);
         if (batch.reversedAt || !new Set(["unmatched", "partially_allocated", "exception"]).has(batch.status)) throw new AgencyWorkflowError("Only an unreversed batch with unapplied cash can receive another allocation.", 409);
@@ -1453,18 +1462,19 @@ async function postHandler(request: NextRequest) {
           claimId,
           amountCents,
           notes: clean(body.notes) || null,
-          fingerprint: agencyAllocationFingerprint({ batchId: batch.id, claimId, amountCents }),
+          fingerprint,
+          idempotencyKey,
           requestedById: auth.user.id,
         } });
         const updated = await tx.agencyRemittanceBatch.update({ where: { id: batch.id }, data: { status: "pending_review" } });
-        return { batch: updated, allocation };
+        return { batch: updated, allocation, reused: false };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The batch or claim changed while the allocation was prepared. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: result.batch.centerId, action: "billing.agency_remittance_allocation.prepared", resource: "AgencyRemittanceAllocation", resourceId: result.allocation.id, metadata: { batchId, claimId, amountCents } });
+    await writeAuditLog(auth.user, { centerId: result.batch.centerId, action: "billing.agency_remittance_allocation.prepared", resource: "AgencyRemittanceAllocation", resourceId: result.allocation.id, metadata: { batchId, claimId, amountCents, reused: result.reused } });
     return NextResponse.json({ ok: true, ...result, requiresReview: true });
   }
 
@@ -1520,16 +1530,23 @@ async function postHandler(request: NextRequest) {
     const evidenceName = clean(body.evidenceName);
     const evidenceReference = clean(body.evidenceReference);
     const followUpDueAt = dateValue(body.followUpDueAt);
-    if (!ledgerAccountId || !AGENCY_ADJUSTMENT_TYPES.includes(type as (typeof AGENCY_ADJUSTMENT_TYPES)[number]) || !amountCents || !effectiveAt || !reason) return NextResponse.json({ ok: false, error: "Choose an agency account and adjustment type, then enter a positive amount, effective date, and specific reason." }, { status: 400 });
+    const idempotencyKey = clean(body.idempotencyKey);
+    const claimId = clean(body.claimId) || null;
+    const batchId = clean(body.batchId) || null;
+    if (!ledgerAccountId || !AGENCY_ADJUSTMENT_TYPES.includes(type as (typeof AGENCY_ADJUSTMENT_TYPES)[number]) || !amountCents || !effectiveAt || !reason || !idempotencyKey) return NextResponse.json({ ok: false, error: "Choose an agency account and adjustment type, then enter a positive amount, effective date, specific reason, and retry-safe request key." }, { status: 400 });
     if (!evidenceName || !evidenceReference || !followUpDueAt) return NextResponse.json({ ok: false, error: "Name the adjustment evidence, enter its secure internal reference, and assign a follow-up due date." }, { status: 400 });
-    let adjustment;
+    let prepared;
     try {
-      adjustment = await prisma.$transaction(async (tx) => {
+      prepared = await prisma.$transaction(async (tx) => {
         const account = await tx.agencyLedgerAccount.findUnique({ where: { id: ledgerAccountId } });
         if (!account || !centerAllowed(auth.user, account.centerId)) throw new AgencyWorkflowError("Agency ledger account not found.", 404);
+        const fingerprint = agencyAdjustmentFingerprint({ ledgerAccountId: account.id, claimId, batchId, type, amountCents, effectiveAt, reason });
+        const existingByIdempotency = await tx.agencyLedgerAdjustment.findUnique({ where: { idempotencyKey } });
+        if (existingByIdempotency) {
+          if (existingByIdempotency.fingerprint !== fingerprint) throw new AgencyWorkflowError("This retry key was already used for a different agency adjustment.", 409);
+          return { adjustment: existingByIdempotency, reused: true };
+        }
         await assertAgencyPeriodOpen(tx, account.centerId, effectiveAt);
-        const claimId = clean(body.claimId) || null;
-        const batchId = clean(body.batchId) || null;
         if (claimId) {
           const claim = await tx.subsidyClaim.findFirst({ where: { id: claimId, centerId: account.centerId, agencyProgramId: account.agencyProgramId } });
           if (!claim) throw new AgencyWorkflowError("The linked claim must belong to this school and agency account.", 409);
@@ -1538,7 +1555,7 @@ async function postHandler(request: NextRequest) {
           const batch = await tx.agencyRemittanceBatch.findFirst({ where: { id: batchId, centerId: account.centerId, agencyProgramId: account.agencyProgramId } });
           if (!batch) throw new AgencyWorkflowError("The linked remittance batch must belong to this school and agency account.", 409);
         }
-        return tx.agencyLedgerAdjustment.create({ data: {
+        const adjustment = await tx.agencyLedgerAdjustment.create({ data: {
           centerId: account.centerId,
           agencyProgramId: account.agencyProgramId,
           ledgerAccountId: account.id,
@@ -1550,19 +1567,21 @@ async function postHandler(request: NextRequest) {
           reason,
           evidenceName,
           evidenceReference,
-          fingerprint: agencyAdjustmentFingerprint({ ledgerAccountId: account.id, claimId, batchId, type, amountCents, effectiveAt, reason }),
+          fingerprint,
+          idempotencyKey,
           requestedById: auth.user.id,
           followUpOwnerId: auth.user.id,
           followUpDueAt,
         } });
+        return { adjustment, reused: false };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The agency account changed while the adjustment was prepared. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: adjustment.centerId, action: "billing.agency_ledger_adjustment.requested", resource: "AgencyLedgerAdjustment", resourceId: adjustment.id, metadata: { type, amountCents, claimId: adjustment.claimId, batchId: adjustment.batchId, evidenceRecorded: true } });
-    return NextResponse.json({ ok: true, adjustment, requiresReview: true });
+    await writeAuditLog(auth.user, { centerId: prepared.adjustment.centerId, action: "billing.agency_ledger_adjustment.requested", resource: "AgencyLedgerAdjustment", resourceId: prepared.adjustment.id, metadata: { type, amountCents, claimId: prepared.adjustment.claimId, batchId: prepared.adjustment.batchId, evidenceRecorded: true, reused: prepared.reused } });
+    return NextResponse.json({ ok: true, ...prepared, requiresReview: true });
   }
 
   if (action === "approveLedgerAdjustment" || action === "rejectLedgerAdjustment") {

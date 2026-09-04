@@ -1484,19 +1484,20 @@ model AgencyRemittanceBatch {
 }
 
 model AgencyRemittanceAllocation {
-  id            String    @id @default(cuid())
-  batchId       String
-  claimId       String
-  remittanceId  String?   @unique
-  amountCents   Int
-  status        String    @default("pending_review")
-  notes         String?
-  fingerprint   String
-  requestedById String
-  reviewedById  String?
-  reviewedAt    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  batchId        String
+  claimId        String
+  remittanceId   String?   @unique
+  amountCents    Int
+  status         String    @default("pending_review")
+  notes          String?
+  fingerprint    String
+  idempotencyKey String    @unique
+  requestedById  String
+  reviewedById   String?
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   batch      AgencyRemittanceBatch @relation(fields: [batchId], references: [id])
   claim      SubsidyClaim          @relation(fields: [claimId], references: [id])
@@ -1521,6 +1522,7 @@ model AgencyLedgerAdjustment {
   evidenceName      String?
   evidenceReference String?
   fingerprint       String
+  idempotencyKey    String    @unique
   requestedById     String
   reviewedById      String?
   reviewedAt        DateTime?

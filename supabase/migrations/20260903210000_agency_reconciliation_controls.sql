@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS "AgencyRemittanceAllocation" (
     "status" TEXT NOT NULL DEFAULT 'pending_review',
     "notes" TEXT,
     "fingerprint" TEXT NOT NULL,
+    "idempotencyKey" TEXT NOT NULL,
     "requestedById" TEXT NOT NULL,
     "reviewedById" TEXT,
     "reviewedAt" TIMESTAMP(3),
@@ -67,6 +68,7 @@ CREATE TABLE IF NOT EXISTS "AgencyLedgerAdjustment" (
     "evidenceName" TEXT,
     "evidenceReference" TEXT,
     "fingerprint" TEXT NOT NULL,
+    "idempotencyKey" TEXT NOT NULL,
     "requestedById" TEXT NOT NULL,
     "reviewedById" TEXT,
     "reviewedAt" TIMESTAMP(3),
@@ -109,12 +111,14 @@ CREATE INDEX IF NOT EXISTS "AgencyRemittanceBatch_centerId_status_paidAt_idx" ON
 CREATE INDEX IF NOT EXISTS "AgencyRemittanceBatch_agencyProgramId_paidAt_idx" ON "AgencyRemittanceBatch"("agencyProgramId", "paidAt");
 CREATE INDEX IF NOT EXISTS "AgencyRemittanceBatch_centerId_followUpDueAt_idx" ON "AgencyRemittanceBatch"("centerId", "followUpDueAt");
 CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceAllocation_remittanceId_key" ON "AgencyRemittanceAllocation"("remittanceId");
+CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceAllocation_idempotencyKey_key" ON "AgencyRemittanceAllocation"("idempotencyKey");
 CREATE INDEX IF NOT EXISTS "AgencyRemittanceAllocation_batchId_status_idx" ON "AgencyRemittanceAllocation"("batchId", "status");
 CREATE INDEX IF NOT EXISTS "AgencyRemittanceAllocation_claimId_status_idx" ON "AgencyRemittanceAllocation"("claimId", "status");
 CREATE INDEX IF NOT EXISTS "AgencyLedgerAdjustment_centerId_status_effectiveAt_idx" ON "AgencyLedgerAdjustment"("centerId", "status", "effectiveAt");
 CREATE INDEX IF NOT EXISTS "AgencyLedgerAdjustment_ledgerAccountId_status_idx" ON "AgencyLedgerAdjustment"("ledgerAccountId", "status");
 CREATE INDEX IF NOT EXISTS "AgencyLedgerAdjustment_claimId_idx" ON "AgencyLedgerAdjustment"("claimId");
 CREATE INDEX IF NOT EXISTS "AgencyLedgerAdjustment_batchId_idx" ON "AgencyLedgerAdjustment"("batchId");
+CREATE UNIQUE INDEX IF NOT EXISTS "AgencyLedgerAdjustment_idempotencyKey_key" ON "AgencyLedgerAdjustment"("idempotencyKey");
 CREATE INDEX IF NOT EXISTS "AgencyLedgerAdjustment_centerId_followUpDueAt_idx" ON "AgencyLedgerAdjustment"("centerId", "followUpDueAt");
 CREATE UNIQUE INDEX IF NOT EXISTS "AgencyAccountingPeriod_centerId_startDate_endDate_key" ON "AgencyAccountingPeriod"("centerId", "startDate", "endDate");
 CREATE INDEX IF NOT EXISTS "AgencyAccountingPeriod_centerId_status_startDate_endDate_idx" ON "AgencyAccountingPeriod"("centerId", "status", "startDate", "endDate");
@@ -214,7 +218,7 @@ FROM grouped
 ON CONFLICT DO NOTHING;
 
 INSERT INTO "AgencyRemittanceAllocation" (
-    "id", "batchId", "claimId", "remittanceId", "amountCents", "status", "notes", "fingerprint",
+    "id", "batchId", "claimId", "remittanceId", "amountCents", "status", "notes", "fingerprint", "idempotencyKey",
     "requestedById", "reviewedById", "reviewedAt", "createdAt", "updatedAt"
 )
 SELECT
@@ -226,6 +230,7 @@ SELECT
     CASE WHEN remittance."reversedAt" IS NULL THEN 'posted' ELSE 'reversed' END,
     'Historical claim allocation retained during agency reconciliation migration.',
     MD5(batch.id || ':' || remittance."claimId" || ':' || remittance."amountCents"::text),
+    'legacy-allocation:' || remittance.id,
     remittance."enteredById",
     COALESCE(remittance."reversedById", remittance."enteredById"),
     COALESCE(remittance."reversedAt", remittance."createdAt"),

@@ -22,17 +22,14 @@ import {
 import {
   AGENCY_ADJUSTMENT_TYPES,
   agencyAdjustmentFingerprint,
-  agencyAgingBucket,
   agencyAllocationFingerprint,
   agencyBatchFingerprint,
   agencyBatchStatus,
   agencyLedgerRunningBalances,
   agencyRemittanceReferenceKey,
-  agencyUnappliedCashBalance,
   agencyUtcCalendarRange,
   canCloseAgencyAccountingPeriod,
   canReviewAgencyPosting,
-  isAgencyClaimOverdue,
   normalizeAgencyPaymentReference,
   signedAgencyAdjustmentCents,
 } from "@/lib/agency-reconciliation";
@@ -70,6 +67,24 @@ type AgencySummaryRow = {
   missingDocumentClaims: bigint;
 };
 
+type AgencyReconciliationClaimAggregateRow = {
+  agencyProgramId: string;
+  approvedCents: bigint;
+  remittedCents: bigint;
+  currentCents: bigint;
+  days1To30Cents: bigint;
+  days31To60Cents: bigint;
+  days61To90Cents: bigint;
+  days91PlusCents: bigint;
+  overdueClaimCount: bigint;
+};
+
+type AgencyPeriodLedgerAggregateRow = {
+  agencyProgramId: string;
+  ledgerCents: bigint;
+  unappliedLedgerCents: bigint;
+};
+
 function prismaConflict(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code);
 }
@@ -87,6 +102,45 @@ function dateValue(value: unknown) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
   const date = new Date(`${text}T12:00:00.000Z`);
   return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== text ? null : date;
+}
+
+async function agencyReconciliationClaimAggregates(centerIds: string[], asOf = new Date()) {
+  const today = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate()));
+  const days30Ago = new Date(today);
+  const days60Ago = new Date(today);
+  const days90Ago = new Date(today);
+  days30Ago.setUTCDate(days30Ago.getUTCDate() - 30);
+  days60Ago.setUTCDate(days60Ago.getUTCDate() - 60);
+  days90Ago.setUTCDate(days90Ago.getUTCDate() - 90);
+  return prisma.$queryRaw<AgencyReconciliationClaimAggregateRow[]>`
+    WITH claim_balances AS (
+      SELECT claim."agencyProgramId",
+        claim."dueDate",
+        COALESCE(claim."approvedCents", claim."claimedCents")::bigint AS "approvedCents",
+        claim."paidCents"::bigint AS "paidCents",
+        COALESCE(SUM(remittance."amountCents") FILTER (WHERE remittance."reversedAt" IS NULL), 0)::bigint AS "remittedCents"
+      FROM "SubsidyClaim" claim
+      LEFT JOIN "SubsidyRemittance" remittance ON remittance."claimId" = claim.id
+      WHERE claim."centerId" IN (${Prisma.join(centerIds)})
+        AND claim."approvedCents" > 0
+        AND claim.status NOT IN ('void', 'denied')
+      GROUP BY claim.id, claim."agencyProgramId", claim."dueDate", claim."approvedCents", claim."claimedCents", claim."paidCents"
+    ), claim_outstanding AS (
+      SELECT *, GREATEST(0::bigint, "approvedCents" - "remittedCents") AS "outstandingCents"
+      FROM claim_balances
+    )
+    SELECT "agencyProgramId",
+      COALESCE(SUM("approvedCents"), 0)::bigint AS "approvedCents",
+      COALESCE(SUM("remittedCents"), 0)::bigint AS "remittedCents",
+      COALESCE(SUM("outstandingCents") FILTER (WHERE "dueDate" IS NULL OR "dueDate" >= ${today}), 0)::bigint AS "currentCents",
+      COALESCE(SUM("outstandingCents") FILTER (WHERE "dueDate" < ${today} AND "dueDate" >= ${days30Ago}), 0)::bigint AS "days1To30Cents",
+      COALESCE(SUM("outstandingCents") FILTER (WHERE "dueDate" < ${days30Ago} AND "dueDate" >= ${days60Ago}), 0)::bigint AS "days31To60Cents",
+      COALESCE(SUM("outstandingCents") FILTER (WHERE "dueDate" < ${days60Ago} AND "dueDate" >= ${days90Ago}), 0)::bigint AS "days61To90Cents",
+      COALESCE(SUM("outstandingCents") FILTER (WHERE "dueDate" < ${days90Ago}), 0)::bigint AS "days91PlusCents",
+      COUNT(*) FILTER (WHERE "approvedCents" > "paidCents" AND "dueDate" IS NOT NULL AND "dueDate" < ${today})::bigint AS "overdueClaimCount"
+    FROM claim_outstanding
+    GROUP BY "agencyProgramId"
+  `;
 }
 
 function cents(value: unknown) {
@@ -155,14 +209,20 @@ async function assertAgencyPeriodOpen(tx: Prisma.TransactionClient, centerId: st
 }
 
 async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, centerId: string, endExclusive: Date) {
-  const [accounts, claims, remittances, adjustments] = await Promise.all([
-    tx.agencyLedgerAccount.findMany({
-      where: { centerId },
-      select: {
-        agencyProgramId: true,
-        entries: { where: { effectiveAt: { lt: endExclusive } }, select: { type: true, amountCents: true } },
-      },
-    }),
+  const [ledgerAggregates, claims, remittances, adjustments] = await Promise.all([
+    tx.$queryRaw<AgencyPeriodLedgerAggregateRow[]>`
+      SELECT account."agencyProgramId",
+        COALESCE(SUM(entry."amountCents"), 0)::bigint AS "ledgerCents",
+        COALESCE(SUM(entry."amountCents") FILTER (
+          WHERE entry.type IN ('unapplied_cash', 'unapplied_cash_allocation', 'unapplied_cash_reversal')
+        ), 0)::bigint AS "unappliedLedgerCents"
+      FROM "AgencyLedgerAccount" account
+      LEFT JOIN "AgencyLedgerEntry" entry
+        ON entry."agencyLedgerAccountId" = account.id
+        AND entry."effectiveAt" < ${endExclusive}
+      WHERE account."centerId" = ${centerId}
+      GROUP BY account."agencyProgramId"
+    `,
     tx.subsidyClaim.findMany({
       where: {
         centerId,
@@ -262,10 +322,10 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
     totals.set(agencyProgramId, current);
     return current;
   };
-  for (const account of accounts) {
-    const current = row(account.agencyProgramId);
-    current.ledger += account.entries.reduce((total, entry) => total + entry.amountCents, 0);
-    current.expected -= agencyUnappliedCashBalance(account.entries);
+  for (const aggregate of ledgerAggregates) {
+    const current = row(aggregate.agencyProgramId);
+    current.ledger += Number(aggregate.ledgerCents);
+    current.expected += Number(aggregate.unappliedLedgerCents);
   }
   let missingLedgerEventCount = 0;
   for (const claim of claims) {
@@ -800,30 +860,39 @@ function exportAgencyLedgerCsv(centerIds: string[]) {
 }
 
 async function exportAgencyReconciliationCsv(centerIds: string[]) {
-  const [accounts, claims, batches, adjustments] = await Promise.all([
+  const [accounts, claimAggregates, batchAggregates, adjustmentAggregates, openBatchAggregates] = await Promise.all([
     prisma.agencyLedgerAccount.findMany({
       where: { centerId: { in: centerIds } },
       orderBy: [{ centerId: "asc" }, { agencyProgram: { name: "asc" } }],
       include: { center: { select: { name: true } }, agencyProgram: { select: { name: true, programName: true, receivableGlCode: true, cashGlCode: true, adjustmentGlCode: true, costCenterCode: true } } },
     }),
-    prisma.subsidyClaim.findMany({
-      where: { centerId: { in: centerIds }, approvedCents: { gt: 0 }, status: { notIn: ["void", "denied"] } },
-      select: { agencyProgramId: true, approvedCents: true, claimedCents: true, remittances: { where: { reversedAt: null }, select: { amountCents: true } } },
+    agencyReconciliationClaimAggregates(centerIds),
+    prisma.agencyRemittanceBatch.groupBy({
+      by: ["agencyProgramId"],
+      where: { centerId: { in: centerIds }, status: { in: ACTIVE_REMITTANCE_BATCH_STATUSES }, reviewedAt: { not: null }, reversedAt: null },
+      _sum: { unappliedCents: true },
     }),
-    prisma.agencyRemittanceBatch.findMany({
-      where: { centerId: { in: centerIds }, status: { in: ACTIVE_REMITTANCE_BATCH_STATUSES }, reversedAt: null },
-      select: { agencyProgramId: true, unappliedCents: true, status: true, reviewedAt: true, externalReference: true },
-    }),
-    prisma.agencyLedgerAdjustment.findMany({
+    prisma.agencyLedgerAdjustment.groupBy({
+      by: ["agencyProgramId"],
       where: { centerId: { in: centerIds }, status: "posted" },
-      select: { agencyProgramId: true, amountCents: true },
+      _sum: { amountCents: true },
+    }),
+    prisma.agencyRemittanceBatch.groupBy({
+      by: ["agencyProgramId"],
+      where: { centerId: { in: centerIds }, status: { in: [...OPEN_REMITTANCE_BATCH_STATUSES] }, reversedAt: null },
+      _count: { _all: true },
     }),
   ]);
+  const claimsByProgram = new Map(claimAggregates.map((row) => [row.agencyProgramId, row]));
+  const unappliedByProgram = new Map(batchAggregates.map((row) => [row.agencyProgramId, row._sum.unappliedCents ?? 0]));
+  const adjustmentsByProgram = new Map(adjustmentAggregates.map((row) => [row.agencyProgramId, row._sum.amountCents ?? 0]));
+  const openBatchesByProgram = new Map(openBatchAggregates.map((row) => [row.agencyProgramId, row._count._all]));
   const rows = accounts.map((account) => {
-    const approvedCents = claims.filter((claim) => claim.agencyProgramId === account.agencyProgramId).reduce((total, claim) => total + (claim.approvedCents ?? claim.claimedCents), 0);
-    const remittedCents = claims.filter((claim) => claim.agencyProgramId === account.agencyProgramId).reduce((total, claim) => total + claim.remittances.reduce((claimTotal, remittance) => claimTotal + remittance.amountCents, 0), 0);
-    const unappliedCents = batches.filter((batch) => batch.agencyProgramId === account.agencyProgramId && batch.reviewedAt).reduce((total, batch) => total + batch.unappliedCents, 0);
-    const adjustmentCents = adjustments.filter((adjustment) => adjustment.agencyProgramId === account.agencyProgramId).reduce((total, adjustment) => total + adjustment.amountCents, 0);
+    const claimTotals = claimsByProgram.get(account.agencyProgramId);
+    const approvedCents = Number(claimTotals?.approvedCents ?? 0);
+    const remittedCents = Number(claimTotals?.remittedCents ?? 0);
+    const unappliedCents = unappliedByProgram.get(account.agencyProgramId) ?? 0;
+    const adjustmentCents = adjustmentsByProgram.get(account.agencyProgramId) ?? 0;
     const expectedBalanceCents = approvedCents - remittedCents - unappliedCents + adjustmentCents;
     return csvRow([
       account.center.name,
@@ -840,7 +909,7 @@ async function exportAgencyReconciliationCsv(centerIds: string[]) {
       expectedBalanceCents / 100,
       account.balanceCents / 100,
       (account.balanceCents - expectedBalanceCents) / 100,
-      batches.filter((batch) => batch.agencyProgramId === account.agencyProgramId && OPEN_REMITTANCE_BATCH_STATUSES.has(batch.status)).length,
+      openBatchesByProgram.get(account.agencyProgramId) ?? 0,
     ]);
   });
   return new Response([
@@ -857,56 +926,67 @@ async function exportAgencyReconciliationCsv(centerIds: string[]) {
 
 function exportAgencyDepositsCsv(centerIds: string[]) {
   const encoder = new TextEncoder();
+  let cursorId: string | undefined;
+  let headerPending = true;
+  let finished = false;
+  let cancelled = false;
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
+    async pull(controller) {
+      if (finished || cancelled) return;
       try {
-        controller.enqueue(encoder.encode(csvRow(["School", "Agency", "Program", "Paid date", "Deposit reference", "Method", "Cash GL", "Cost center", "Deposit total", "Allocated", "Unapplied", "Batch status", "Evidence", "Evidence reference", "Follow-up owner", "Follow-up due", "Claim", "Claim allocation", "Allocation status"])));
-        let cursorId: string | undefined;
-        while (true) {
-          const batches = await prisma.agencyRemittanceBatch.findMany({
-            where: { centerId: { in: centerIds } },
-            orderBy: [{ paidAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-            take: 100,
-            ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
-            include: {
-              center: { select: { name: true } },
-              agencyProgram: { select: { name: true, programName: true, cashGlCode: true, costCenterCode: true } },
-              allocations: { orderBy: { createdAt: "asc" }, include: { claim: { select: { number: true } } } },
-            },
-          });
-          if (!batches.length) break;
-          const chunk = batches.flatMap((batch) => {
-            const allocations = batch.allocations.length ? batch.allocations : [null];
-            return allocations.map((allocation) => csvRow([
-              batch.center.name,
-              batch.agencyProgram.name,
-              batch.agencyProgram.programName ?? "",
-              dateInput(batch.paidAt),
-              batch.externalReference,
-              batch.paymentMethod,
-              batch.agencyProgram.cashGlCode ?? "",
-              batch.agencyProgram.costCenterCode ?? "",
-              batch.totalCents / 100,
-              batch.allocatedCents / 100,
-              batch.unappliedCents / 100,
-              batch.status,
-              batch.evidenceName ?? "",
-              batch.evidenceReference ?? "",
-              batch.followUpOwnerId ?? "",
-              batch.followUpDueAt ? dateInput(batch.followUpDueAt) : "",
-              allocation?.claim.number ?? "",
-              allocation ? allocation.amountCents / 100 : "",
-              allocation?.status ?? "",
-            ]));
-          }).join("");
-          controller.enqueue(encoder.encode(chunk));
-          cursorId = batches.at(-1)?.id;
-          if (batches.length < 100) break;
+        const batches = await prisma.agencyRemittanceBatch.findMany({
+          where: { centerId: { in: centerIds } },
+          orderBy: [{ paidAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+          take: 100,
+          ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+          include: {
+            center: { select: { name: true } },
+            agencyProgram: { select: { name: true, programName: true, cashGlCode: true, costCenterCode: true } },
+            allocations: { orderBy: { createdAt: "asc" }, include: { claim: { select: { number: true } } } },
+          },
+        });
+        if (cancelled) return;
+        const header = headerPending
+          ? csvRow(["School", "Agency", "Program", "Paid date", "Deposit reference", "Method", "Cash GL", "Cost center", "Deposit total", "Allocated", "Unapplied", "Batch status", "Evidence", "Evidence reference", "Follow-up owner", "Follow-up due", "Claim", "Claim allocation", "Allocation status"])
+          : "";
+        headerPending = false;
+        const rows = batches.flatMap((batch) => {
+          const allocations = batch.allocations.length ? batch.allocations : [null];
+          return allocations.map((allocation) => csvRow([
+            batch.center.name,
+            batch.agencyProgram.name,
+            batch.agencyProgram.programName ?? "",
+            dateInput(batch.paidAt),
+            batch.externalReference,
+            batch.paymentMethod,
+            batch.agencyProgram.cashGlCode ?? "",
+            batch.agencyProgram.costCenterCode ?? "",
+            batch.totalCents / 100,
+            batch.allocatedCents / 100,
+            batch.unappliedCents / 100,
+            batch.status,
+            batch.evidenceName ?? "",
+            batch.evidenceReference ?? "",
+            batch.followUpOwnerId ?? "",
+            batch.followUpDueAt ? dateInput(batch.followUpDueAt) : "",
+            allocation?.claim.number ?? "",
+            allocation ? allocation.amountCents / 100 : "",
+            allocation?.status ?? "",
+          ]));
+        }).join("");
+        if (header || rows) controller.enqueue(encoder.encode(header + rows));
+        cursorId = batches.at(-1)?.id;
+        if (batches.length < 100) {
+          finished = true;
+          controller.close();
         }
-        controller.close();
       } catch (error) {
-        controller.error(error);
+        finished = true;
+        if (!cancelled) controller.error(error);
       }
+    },
+    cancel() {
+      cancelled = true;
     },
   });
   return new Response(stream, {
@@ -980,7 +1060,7 @@ async function getHandler(request: NextRequest) {
     ] } : {}),
   };
 
-  const [programs, authorizations, claims, summaryRows, families, ledgerAccounts, ledgerEntryRows, recentBatches, unresolvedBatches, recentAdjustments, unresolvedAdjustments, accountingPeriods, reconciliationClaims, reconciliationBatches, reconciliationAdjustments, legacyFamilyAgencyEntries, pendingBatchReviews, pendingAdjustmentReviews, overdueBatchFollowUps, overdueAdjustmentFollowUps] = await Promise.all([
+  const [programs, authorizations, claims, summaryRows, families, ledgerAccounts, ledgerEntryRows, recentBatches, unresolvedBatches, recentAdjustments, unresolvedAdjustments, accountingPeriods, reconciliationClaimAggregates, allocationClaims, reconciliationBatches, reconciliationAdjustments, legacyFamilyAgencyAggregate, pendingBatchReviews, pendingAdjustmentReviews, overdueBatchFollowUps, overdueAdjustmentFollowUps] = await Promise.all([
     prisma.agencyProgram.findMany({
       where: { centerId: { in: centerIds } },
       orderBy: [{ stateCode: "asc" }, { name: "asc" }],
@@ -1119,8 +1199,10 @@ async function getHandler(request: NextRequest) {
       where: { centerId: { in: centerIds } },
       orderBy: [{ startDate: "desc" }, { id: "desc" }],
     }),
+    agencyReconciliationClaimAggregates(centerIds),
     prisma.subsidyClaim.findMany({
-      where: { centerId: { in: centerIds }, approvedCents: { gt: 0 }, status: { notIn: ["void", "denied"] } },
+      where: { centerId: { in: centerIds }, approvedCents: { gt: 0 }, status: { in: ["approved", "partially_paid"] } },
+      orderBy: [{ dueDate: "asc" }, { id: "asc" }],
       select: {
         id: true,
         agencyProgramId: true,
@@ -1132,20 +1214,22 @@ async function getHandler(request: NextRequest) {
         paidCents: true,
         agencyProgram: { select: { id: true, name: true } },
         authorization: { select: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
-        remittances: { where: { reversedAt: null }, select: { amountCents: true } },
       },
     }),
-    prisma.agencyRemittanceBatch.findMany({
+    prisma.agencyRemittanceBatch.groupBy({
+      by: ["agencyProgramId"],
       where: { centerId: { in: centerIds }, reviewedAt: { not: null }, reversedAt: null },
-      select: { agencyProgramId: true, unappliedCents: true },
+      _sum: { unappliedCents: true },
     }),
-    prisma.agencyLedgerAdjustment.findMany({
+    prisma.agencyLedgerAdjustment.groupBy({
+      by: ["agencyProgramId"],
       where: { centerId: { in: centerIds }, status: "posted" },
-      select: { agencyProgramId: true, amountCents: true },
+      _sum: { amountCents: true },
     }),
-    prisma.ledgerEntry.findMany({
+    prisma.ledgerEntry.aggregate({
       where: { sourceSystem: "subsidy_agency", billingAccount: { family: { centerId: { in: centerIds } } } },
-      select: { billingAccountId: true, amountCents: true, type: true },
+      _sum: { amountCents: true },
+      _count: { _all: true },
     }),
     prisma.agencyRemittanceBatch.count({ where: { centerId: { in: centerIds }, status: "pending_review" } }),
     prisma.agencyLedgerAdjustment.count({ where: { centerId: { in: centerIds }, status: "pending_review" } }),
@@ -1176,23 +1260,26 @@ async function getHandler(request: NextRequest) {
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const aging = { current: 0, days_1_30: 0, days_31_60: 0, days_61_90: 0, days_91_plus: 0 };
   const claimTotalsByProgram = new Map<string, { approvedCents: number; remittedCents: number }>();
-  for (const claim of reconciliationClaims) {
-    const approvedCents = claim.approvedCents ?? claim.claimedCents;
-    const remittedCents = claim.remittances.reduce((total, remittance) => total + remittance.amountCents, 0);
-    const outstandingCents = Math.max(0, approvedCents - remittedCents);
-    aging[agencyAgingBucket(claim.dueDate, now)] += outstandingCents;
-    const current = claimTotalsByProgram.get(claim.agencyProgramId) ?? { approvedCents: 0, remittedCents: 0 };
-    current.approvedCents += approvedCents;
-    current.remittedCents += remittedCents;
-    claimTotalsByProgram.set(claim.agencyProgramId, current);
+  let overdueClaimCount = 0;
+  for (const aggregate of reconciliationClaimAggregates) {
+    claimTotalsByProgram.set(aggregate.agencyProgramId, {
+      approvedCents: Number(aggregate.approvedCents),
+      remittedCents: Number(aggregate.remittedCents),
+    });
+    aging.current += Number(aggregate.currentCents);
+    aging.days_1_30 += Number(aggregate.days1To30Cents);
+    aging.days_31_60 += Number(aggregate.days31To60Cents);
+    aging.days_61_90 += Number(aggregate.days61To90Cents);
+    aging.days_91_plus += Number(aggregate.days91PlusCents);
+    overdueClaimCount += Number(aggregate.overdueClaimCount);
   }
   const unappliedByProgram = new Map<string, number>();
   for (const batch of reconciliationBatches) {
-    unappliedByProgram.set(batch.agencyProgramId, (unappliedByProgram.get(batch.agencyProgramId) ?? 0) + batch.unappliedCents);
+    unappliedByProgram.set(batch.agencyProgramId, batch._sum.unappliedCents ?? 0);
   }
   const adjustmentByProgram = new Map<string, number>();
   for (const adjustment of reconciliationAdjustments) {
-    adjustmentByProgram.set(adjustment.agencyProgramId, (adjustmentByProgram.get(adjustment.agencyProgramId) ?? 0) + adjustment.amountCents);
+    adjustmentByProgram.set(adjustment.agencyProgramId, adjustment._sum.amountCents ?? 0);
   }
   const reconciliation = ledgerAccounts.map((account) => {
     const claimTotals = claimTotalsByProgram.get(account.agencyProgramId) ?? { approvedCents: 0, remittedCents: 0 };
@@ -1212,7 +1299,7 @@ async function getHandler(request: NextRequest) {
       varianceCents: account.balanceCents - expectedBalanceCents,
     };
   });
-  const legacyFamilyAgencyBalanceCents = legacyFamilyAgencyEntries.reduce((total, entry) => total + entry.amountCents, 0);
+  const legacyFamilyAgencyBalanceCents = legacyFamilyAgencyAggregate._sum.amountCents ?? 0;
   const hasNextLedgerPage = ledgerEntryRows.length > AGENCY_LEDGER_ENTRY_LIMIT;
   const visibleLedgerEntries = ledgerEntryRows.slice(0, AGENCY_LEDGER_ENTRY_LIMIT);
   const summary = {
@@ -1224,13 +1311,13 @@ async function getHandler(request: NextRequest) {
     missingDocumentClaims: Number(summaryRow?.missingDocumentClaims ?? 0),
     agencyLedgerBalanceCents: ledgerAccounts.reduce((total, account) => total + account.balanceCents, 0),
     reconciliationVarianceCents: reconciliation.reduce((total, row) => total + row.varianceCents, 0),
-    unappliedCashCents: reconciliationBatches.reduce((total, batch) => total + batch.unappliedCents, 0),
+    unappliedCashCents: reconciliationBatches.reduce((total, batch) => total + (batch._sum.unappliedCents ?? 0), 0),
     pendingBatchReviews,
     pendingAdjustmentReviews,
-    overdueClaimCount: reconciliationClaims.filter((claim) => (claim.approvedCents ?? claim.claimedCents) > claim.paidCents && isAgencyClaimOverdue(claim.dueDate, now)).length,
+    overdueClaimCount,
     overdueFollowUpCount: overdueBatchFollowUps + overdueAdjustmentFollowUps,
     legacyFamilyAgencyBalanceCents,
-    legacyFamilyAgencyEntryCount: legacyFamilyAgencyEntries.length,
+    legacyFamilyAgencyEntryCount: legacyFamilyAgencyAggregate._count._all,
   };
   const programReadiness = programs.map((program) => {
     const setupBlockers = agencyProgramSetupBlockers(program);
@@ -1250,7 +1337,7 @@ async function getHandler(request: NextRequest) {
     programs: programReadiness,
     authorizations,
     claims: visibleClaims,
-    allocationClaims: reconciliationClaims.filter((claim) => ["approved", "partially_paid"].includes(claim.status)),
+    allocationClaims,
     claimPagination: { page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage, nextCursor: hasNextClaimPage ? visibleClaims.at(-1)?.id ?? null : null },
     families,
     summary: { ...summary, ...readiness },

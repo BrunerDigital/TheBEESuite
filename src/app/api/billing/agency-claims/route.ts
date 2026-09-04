@@ -51,6 +51,9 @@ const CLAIM_PAGE_SIZE = 100;
 const AGENCY_LEDGER_ENTRY_LIMIT = 250;
 const AGENCY_BATCH_LIMIT = 100;
 const AGENCY_ADJUSTMENT_LIMIT = 100;
+const ACTIVE_REMITTANCE_BATCH_STATUSES = ["pending_review", "unmatched", "partially_allocated", "exception", "reconciled"];
+const OPEN_REMITTANCE_BATCH_STATUSES = new Set(["pending_review", "unmatched", "partially_allocated", "exception"]);
+const REVERSIBLE_REMITTANCE_BATCH_STATUSES = new Set(ACTIVE_REMITTANCE_BATCH_STATUSES);
 
 class AgencyWorkflowError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -771,8 +774,8 @@ async function exportAgencyReconciliationCsv(centerIds: string[]) {
       select: { agencyProgramId: true, approvedCents: true, claimedCents: true, remittances: { where: { reversedAt: null }, select: { amountCents: true } } },
     }),
     prisma.agencyRemittanceBatch.findMany({
-      where: { centerId: { in: centerIds }, reviewedAt: { not: null }, reversedAt: null },
-      select: { agencyProgramId: true, unappliedCents: true, status: true, externalReference: true },
+      where: { centerId: { in: centerIds }, status: { in: ACTIVE_REMITTANCE_BATCH_STATUSES }, reversedAt: null },
+      select: { agencyProgramId: true, unappliedCents: true, status: true, reviewedAt: true, externalReference: true },
     }),
     prisma.agencyLedgerAdjustment.findMany({
       where: { centerId: { in: centerIds }, status: "posted" },
@@ -782,7 +785,7 @@ async function exportAgencyReconciliationCsv(centerIds: string[]) {
   const rows = accounts.map((account) => {
     const approvedCents = claims.filter((claim) => claim.agencyProgramId === account.agencyProgramId).reduce((total, claim) => total + (claim.approvedCents ?? claim.claimedCents), 0);
     const remittedCents = claims.filter((claim) => claim.agencyProgramId === account.agencyProgramId).reduce((total, claim) => total + claim.remittances.reduce((claimTotal, remittance) => claimTotal + remittance.amountCents, 0), 0);
-    const unappliedCents = batches.filter((batch) => batch.agencyProgramId === account.agencyProgramId).reduce((total, batch) => total + batch.unappliedCents, 0);
+    const unappliedCents = batches.filter((batch) => batch.agencyProgramId === account.agencyProgramId && batch.reviewedAt).reduce((total, batch) => total + batch.unappliedCents, 0);
     const adjustmentCents = adjustments.filter((adjustment) => adjustment.agencyProgramId === account.agencyProgramId).reduce((total, adjustment) => total + adjustment.amountCents, 0);
     const expectedBalanceCents = approvedCents - remittedCents - unappliedCents + adjustmentCents;
     return csvRow([
@@ -800,7 +803,7 @@ async function exportAgencyReconciliationCsv(centerIds: string[]) {
       (expectedBalanceCents / 100).toFixed(2),
       (account.balanceCents / 100).toFixed(2),
       ((account.balanceCents - expectedBalanceCents) / 100).toFixed(2),
-      batches.filter((batch) => batch.agencyProgramId === account.agencyProgramId && batch.status !== "reconciled").length,
+      batches.filter((batch) => batch.agencyProgramId === account.agencyProgramId && OPEN_REMITTANCE_BATCH_STATUSES.has(batch.status)).length,
     ]);
   });
   return new Response([
@@ -1945,7 +1948,8 @@ async function postHandler(request: NextRequest) {
         if (!batch || !centerAllowed(auth.user, batch.centerId)) throw new AgencyWorkflowError("Remittance batch not found.", 404);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: batch.enteredById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must reverse this batch.", 403);
         if (batch.reversedAt || batch.status === "reversed") throw new AgencyWorkflowError("This remittance batch was already reversed.", 409);
-        if (batch.status === "pending_review" && !batch.reviewedAt) throw new AgencyWorkflowError("Reject an unposted batch instead of creating financial reversal entries.", 409);
+        if (batch.status === "rejected") throw new AgencyWorkflowError("A rejected, unposted batch cannot be reversed.", 409);
+        if (!batch.reviewedAt || !REVERSIBLE_REMITTANCE_BATCH_STATUSES.has(batch.status)) throw new AgencyWorkflowError("Reject an unposted batch instead of creating financial reversal entries.", 409);
         const reversedAt = new Date();
         await assertAgencyPeriodOpen(tx, batch.centerId, reversedAt);
         const postedAllocations = batch.allocations.filter((allocation) => allocation.status === "posted" && allocation.remittanceId);

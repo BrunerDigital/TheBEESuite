@@ -354,6 +354,13 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /status: \{ in: \["pending_review", "posted"\] \}, reversedAt: null/);
   assert.match(route, /new Map\(\[\.\.\.unresolvedBatches, \.\.\.recentBatches\]/);
   assert.match(route, /new Map\(\[\.\.\.unresolvedAdjustments, \.\.\.recentAdjustments\]/);
+  assert.match(route, /status: \{ in: ACTIVE_REMITTANCE_BATCH_STATUSES \}, reversedAt: null/);
+  assert.match(route, /batch\.agencyProgramId === account\.agencyProgramId && batch\.reviewedAt/);
+  assert.match(route, /OPEN_REMITTANCE_BATCH_STATUSES\.has\(batch\.status\)/);
+  assert.match(route, /batch\.status === "rejected"[\s\S]*A rejected, unposted batch cannot be reversed/);
+  assert.match(route, /!batch\.reviewedAt \|\| !REVERSIBLE_REMITTANCE_BATCH_STATUSES\.has\(batch\.status\)/);
+  assert.match(controls, /ALLOCATABLE_BATCH_STATUSES\.has\(batch\.status\)/);
+  assert.match(controls, /REVERSIBLE_BATCH_STATUSES\.has\(batch\.status\)/);
   assert.match(retryKeys, /\(\) => globalThis\.sessionStorage, \(\) => globalThis\.localStorage/);
   assert.match(retryKeys, /if \(!persisted\) throw new Error\(AGENCY_RETRY_STORAGE_ERROR\)/);
   assert.match(retryKeys, /crypto\?\.getRandomValues/);

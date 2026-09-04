@@ -1865,7 +1865,9 @@ async function postHandler(request: NextRequest) {
     const name = clean(body.name);
     const reason = clean(body.reason);
     if (!startDate || !endDate || endDate < startDate || !name || !reason) return NextResponse.json({ ok: false, error: "Period name, valid start/end dates, and a close reason are required." }, { status: 400 });
-    const { startInclusive, endExclusive } = agencyUtcCalendarRange(startDate, endDate);
+    const currentAccountingDate = dateValue(dateInput(new Date())) ?? new Date();
+    if (endDate > currentAccountingDate) return NextResponse.json({ ok: false, error: "An accounting period cannot be closed beyond the current UTC accounting day." }, { status: 400 });
+    const { endExclusive } = agencyUtcCalendarRange(startDate, endDate);
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {

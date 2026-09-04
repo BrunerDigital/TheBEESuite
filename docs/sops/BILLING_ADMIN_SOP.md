@@ -257,7 +257,7 @@ Use `docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md` or the public guide at `https://
 5. A different billing administrator or accounting reviewer approves or rejects the batch. The preparer cannot post their own batch.
 6. Refresh and verify deposit total equals allocated plus unapplied cash, the calculated and agency-ledger balances have zero variance, and family responsibility is unchanged.
 7. Use reviewed adjustment or batch-reversal controls for corrections. Never delete or overwrite financial evidence.
-8. Export deposits, ledger activity, and reconciliation before closing the school accounting period. Clear every earlier pending batch, allocation, and adjustment through the period end. If a historical period must be reopened, reopen later closed periods first and retain the reason for each period.
+8. Export deposits, ledger activity, and reconciliation before closing the school accounting period. Do not close beyond the current UTC accounting day. Clear every earlier pending batch, allocation, and adjustment through the period end. If a historical period must be reopened, reopen later closed periods first and retain the reason for each period.
 
 Stop when a bank deposit or Stripe payout cannot be tied to exact agency evidence, a batch reference is duplicated, the effective date falls within or before the latest closed period, or reconciliation has a variance. Do not write off or shift a balance to the family without separate documented approval.
 

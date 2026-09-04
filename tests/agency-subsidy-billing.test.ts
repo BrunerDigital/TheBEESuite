@@ -319,6 +319,7 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /This retry key was already used for a different agency adjustment/);
   assert.match(route, /agencyAdjustmentFingerprint\(\{ ledgerAccountId: account\.id, claimId, batchId, type, amountCents, effectiveAt, reason, evidenceName, evidenceReference, followUpDueAt \}\)/);
   assert.match(route, /action === "closeAccountingPeriod"/);
+  assert.match(route, /const currentAccountingDate = dateValue\(dateInput\(new Date\(\)\)\) \?\? new Date\(\);\s+if \(endDate > currentAccountingDate\)[\s\S]*cannot be closed beyond the current UTC accounting day/);
   assert.match(route, /assertAgencyPeriodOpen/);
   assert.match(route, /status: "closed", endDate: \{ gte: accountingDate \}[\s\S]*or a later accounting period is closed/);
   assert.doesNotMatch(route, /status: "closed", startDate: \{ lte: accountingDate \}, endDate: \{ gte: accountingDate \}/);

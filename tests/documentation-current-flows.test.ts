@@ -72,7 +72,9 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
   assert.match(resources, /A blank field is not proof that none exists/);
   assert.match(resources, /keep agency responsibility separate from the parent's family balance/);
   assert.match(resources, /id: "agency-payment-reconciliation"/);
-  assert.match(resources, /Record remittance on an approved or partially paid claim/);
+  assert.match(resources, /Prepare deposit batch, or Prepare remittance from one approved or partially paid claim/);
+  assert.match(resources, /different billing administrator or accounting reviewer must compare and approve the pending batch/);
+  assert.match(resources, /Reverse an incorrect deposit batch with a correction reason/);
   assert.match(resources, /object-contain/);
   assert.match(resources, /Tap a screen to open the full view/);
   assert.doesNotMatch(resources, /Section link/);

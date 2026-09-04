@@ -300,6 +300,7 @@ function claimRequirements(claim: {
 
 function csvRow(values: unknown[]) {
   return `${values.map((value) => {
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
     const text = String(value ?? "");
     const formulaSafeText = typeof value === "string" && /^\s*[=+\-@]/.test(text) ? `'${text}` : text;
     return `"${formulaSafeText.replaceAll('"', '""')}"`;
@@ -709,9 +710,9 @@ function exportClaimsCsv(centerIds: string[]) {
               dateInput(claim.servicePeriodStart),
               dateInput(claim.servicePeriodEnd),
               claim.status,
-              (claim.claimedCents / 100).toFixed(2),
-              claim.approvedCents === null ? "" : (claim.approvedCents / 100).toFixed(2),
-              (claim.paidCents / 100).toFixed(2),
+              claim.claimedCents / 100,
+              claim.approvedCents === null ? "" : claim.approvedCents / 100,
+              claim.paidCents / 100,
               [...new Set(missingDocuments)].join("; "),
             ]);
           }).join("");
@@ -775,10 +776,10 @@ function exportAgencyLedgerCsv(centerIds: string[]) {
             entry.claim?.authorization?.family.name ?? "",
             entry.claim?.authorization?.child.fullName ?? "",
             entry.externalReference ?? "",
-            entry.amountCents > 0 ? (entry.amountCents / 100).toFixed(2) : "",
-            entry.amountCents < 0 ? (Math.abs(entry.amountCents) / 100).toFixed(2) : "",
-            (entry.amountCents / 100).toFixed(2),
-            (entry.balanceAfterCents / 100).toFixed(2),
+            entry.amountCents > 0 ? entry.amountCents / 100 : "",
+            entry.amountCents < 0 ? Math.abs(entry.amountCents) / 100 : "",
+            entry.amountCents / 100,
+            entry.balanceAfterCents / 100,
           ])).join("")));
           cursorId = entries.at(-1)?.id;
           if (entries.length < 250) break;
@@ -832,13 +833,13 @@ async function exportAgencyReconciliationCsv(centerIds: string[]) {
       account.agencyProgram.cashGlCode ?? "",
       account.agencyProgram.adjustmentGlCode ?? "",
       account.agencyProgram.costCenterCode ?? "",
-      (approvedCents / 100).toFixed(2),
-      (remittedCents / 100).toFixed(2),
-      (unappliedCents / 100).toFixed(2),
-      (adjustmentCents / 100).toFixed(2),
-      (expectedBalanceCents / 100).toFixed(2),
-      (account.balanceCents / 100).toFixed(2),
-      ((account.balanceCents - expectedBalanceCents) / 100).toFixed(2),
+      approvedCents / 100,
+      remittedCents / 100,
+      unappliedCents / 100,
+      adjustmentCents / 100,
+      expectedBalanceCents / 100,
+      account.balanceCents / 100,
+      (account.balanceCents - expectedBalanceCents) / 100,
       batches.filter((batch) => batch.agencyProgramId === account.agencyProgramId && OPEN_REMITTANCE_BATCH_STATUSES.has(batch.status)).length,
     ]);
   });
@@ -854,44 +855,61 @@ async function exportAgencyReconciliationCsv(centerIds: string[]) {
   });
 }
 
-async function exportAgencyDepositsCsv(centerIds: string[]) {
-  const batches = await prisma.agencyRemittanceBatch.findMany({
-    where: { centerId: { in: centerIds } },
-    orderBy: [{ paidAt: "asc" }, { id: "asc" }],
-    include: {
-      center: { select: { name: true } },
-      agencyProgram: { select: { name: true, programName: true, cashGlCode: true, costCenterCode: true } },
-      allocations: { orderBy: { createdAt: "asc" }, include: { claim: { select: { number: true } } } },
+function exportAgencyDepositsCsv(centerIds: string[]) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        controller.enqueue(encoder.encode(csvRow(["School", "Agency", "Program", "Paid date", "Deposit reference", "Method", "Cash GL", "Cost center", "Deposit total", "Allocated", "Unapplied", "Batch status", "Evidence", "Evidence reference", "Follow-up owner", "Follow-up due", "Claim", "Claim allocation", "Allocation status"])));
+        let cursorId: string | undefined;
+        while (true) {
+          const batches = await prisma.agencyRemittanceBatch.findMany({
+            where: { centerId: { in: centerIds } },
+            orderBy: [{ paidAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+            take: 100,
+            ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+            include: {
+              center: { select: { name: true } },
+              agencyProgram: { select: { name: true, programName: true, cashGlCode: true, costCenterCode: true } },
+              allocations: { orderBy: { createdAt: "asc" }, include: { claim: { select: { number: true } } } },
+            },
+          });
+          if (!batches.length) break;
+          const chunk = batches.flatMap((batch) => {
+            const allocations = batch.allocations.length ? batch.allocations : [null];
+            return allocations.map((allocation) => csvRow([
+              batch.center.name,
+              batch.agencyProgram.name,
+              batch.agencyProgram.programName ?? "",
+              dateInput(batch.paidAt),
+              batch.externalReference,
+              batch.paymentMethod,
+              batch.agencyProgram.cashGlCode ?? "",
+              batch.agencyProgram.costCenterCode ?? "",
+              batch.totalCents / 100,
+              batch.allocatedCents / 100,
+              batch.unappliedCents / 100,
+              batch.status,
+              batch.evidenceName ?? "",
+              batch.evidenceReference ?? "",
+              batch.followUpOwnerId ?? "",
+              batch.followUpDueAt ? dateInput(batch.followUpDueAt) : "",
+              allocation?.claim.number ?? "",
+              allocation ? allocation.amountCents / 100 : "",
+              allocation?.status ?? "",
+            ]));
+          }).join("");
+          controller.enqueue(encoder.encode(chunk));
+          cursorId = batches.at(-1)?.id;
+          if (batches.length < 100) break;
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
     },
   });
-  const rows = batches.flatMap((batch) => {
-    const allocations = batch.allocations.length ? batch.allocations : [null];
-    return allocations.map((allocation) => csvRow([
-      batch.center.name,
-      batch.agencyProgram.name,
-      batch.agencyProgram.programName ?? "",
-      dateInput(batch.paidAt),
-      batch.externalReference,
-      batch.paymentMethod,
-      batch.agencyProgram.cashGlCode ?? "",
-      batch.agencyProgram.costCenterCode ?? "",
-      (batch.totalCents / 100).toFixed(2),
-      (batch.allocatedCents / 100).toFixed(2),
-      (batch.unappliedCents / 100).toFixed(2),
-      batch.status,
-      batch.evidenceName ?? "",
-      batch.evidenceReference ?? "",
-      batch.followUpOwnerId ?? "",
-      batch.followUpDueAt ? dateInput(batch.followUpDueAt) : "",
-      allocation?.claim.number ?? "",
-      allocation ? (allocation.amountCents / 100).toFixed(2) : "",
-      allocation?.status ?? "",
-    ]));
-  });
-  return new Response([
-    csvRow(["School", "Agency", "Program", "Paid date", "Deposit reference", "Method", "Cash GL", "Cost center", "Deposit total", "Allocated", "Unapplied", "Batch status", "Evidence", "Evidence reference", "Follow-up owner", "Follow-up due", "Claim", "Claim allocation", "Allocation status"]),
-    ...rows,
-  ].join(""), {
+  return new Response(stream, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": "attachment; filename=agency-deposits.csv",

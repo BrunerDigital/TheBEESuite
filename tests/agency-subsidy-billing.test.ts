@@ -224,6 +224,7 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   assert.match(route, /take: 250/);
   assert.match(route, /cursor: \{ id: cursorId \}, skip: 1/);
   assert.match(route, /const formulaSafeText = typeof value === "string" && \/\^\\s\*\[=\+\\-@\]\//);
+  assert.match(route, /if \(typeof value === "number" && Number\.isFinite\(value\)\) return String\(value\)/);
   assert.match(route, /formulaSafeText\.replaceAll\('"', '""'\)/);
   assert.match(route, /if \(exportingClaims\) return exportClaimsCsv\(centerIds\)/);
 });
@@ -413,6 +414,9 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(controls, /rotateAgencyRetryKey\(storageKey\)/);
   assert.match(route, /exportAgencyReconciliationCsv/);
   assert.match(route, /exportAgencyDepositsCsv/);
+  assert.doesNotMatch(route, /\.toFixed\(2\)/);
+  assert.match(route, /function exportAgencyDepositsCsv[\s\S]*new ReadableStream<Uint8Array>[\s\S]*while \(true\)[\s\S]*agencyRemittanceBatch\.findMany\([\s\S]*orderBy: \[\{ paidAt: "asc" \}, \{ createdAt: "asc" \}, \{ id: "asc" \}\][\s\S]*take: 100,[\s\S]*cursor: \{ id: cursorId \}, skip: 1/);
+  assert.match(route, /batch\.totalCents \/ 100,[\s\S]*batch\.allocatedCents \/ 100,[\s\S]*batch\.unappliedCents \/ 100/);
   assert.match(route, /overdueFollowUpCount/);
   assert.match(route, /legacyFamilyAgencyBalanceCents/);
   assert.match(controls, /Prepare deposit batch/);

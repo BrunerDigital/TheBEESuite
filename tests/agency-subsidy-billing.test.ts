@@ -308,6 +308,7 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(prismaMigration, /ENABLE ROW LEVEL SECURITY/);
   assert.match(prismaMigration, /CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceBatch_active_referenceKey_key"[\s\S]*WHERE "status" NOT IN \('rejected', 'reversed'\) AND "reversedAt" IS NULL/);
   assert.match(prismaMigration, /CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceAllocation_idempotencyKey_key"/);
+  assert.match(prismaMigration, /CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceAllocation_active_batch_claim_key"[\s\S]*WHERE "status" IN \('pending_review', 'posted'\)/);
   assert.match(prismaMigration, /CREATE UNIQUE INDEX IF NOT EXISTS "AgencyLedgerAdjustment_idempotencyKey_key"/);
   assert.match(prismaMigration, /FROM grouped\s+ON CONFLICT DO NOTHING;/);
   assert.doesNotMatch(prismaMigration, /ON CONFLICT \("centerId", "agencyProgramId", "referenceKey"\)/);
@@ -363,9 +364,18 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /const effectiveAt = claim\.approvedAt \?\? claim\.updatedAt \?\? claim\.createdAt;\s+await assertAgencyPeriodOpen\(tx, claim\.centerId, effectiveAt\)/);
   assert.match(route, /agencyLedgerRunningBalances\(entries, finalBalanceCents - entryTotalCents\)/);
   assert.match(route, /"receivedBeforeEnd"[\s\S]*"reversalBeforeEnd"[\s\S]*"missingLedgerEventCount"/);
+  assert.match(route, /CASE WHEN "receivedBeforeEnd"[\s\S]*CASE WHEN "reversalBeforeEnd"/);
+  assert.match(route, /WITH scoped_adjustments AS[\s\S]*"adjustmentBeforeEnd"[\s\S]*"reversalBeforeEnd"[\s\S]*applicable_adjustments/);
   assert.match(route, /return netVarianceCount \+ missingLedgerEventCount/);
   assert.match(route, /if \(overlap\?\.status === "closed"\) \{[\s\S]*return \{ period: overlap, reused: true, \.\.\.recoveredCounts \}/);
-  assert.match(route, /if \(remittance\.reversedAt\) throw new AgencyWorkflowError[\s\S]*await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, input\.reversedAt\)/);
+  assert.match(route, /if \(remittance\.reversedAt\) throw new AgencyWorkflowError[\s\S]*const reversedAt = agencyReversalEffectiveAt\(agencyPaymentEntry\.effectiveAt, agencyReversalEffectiveAt\(remittance\.paidAt, input\.reversedAt\)\)[\s\S]*await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, reversedAt\)/);
+  assert.match(route, /isFutureAgencyAccountingDate\(paidAt\)[\s\S]*payment date cannot be after the current UTC accounting day/);
+  assert.match(route, /isFutureAgencyAccountingDate\(batch\.paidAt\)[\s\S]*future-dated remittance batch cannot be approved/);
+  assert.match(route, /isFutureAgencyAccountingDate\(effectiveAt\)[\s\S]*adjustment cannot be effective after the current UTC accounting day/);
+  assert.match(route, /isFutureAgencyAccountingDate\(adjustment\.effectiveAt\)[\s\S]*future-dated agency adjustment cannot be approved/);
+  assert.match(route, /const effectiveAt = agencyReversalEffectiveAt\(adjustment\.effectiveAt\)/);
+  assert.match(prismaMigration, /SubsidyRemittance_reversal_chronology_check[\s\S]*"reversedAt" >= "paidAt"/);
+  assert.match(prismaMigration, /AgencyLedgerAdjustment_reversal_chronology_check[\s\S]*"reversedAt" >= "effectiveAt"/);
   assert.match(route, /if \(!agencyPaymentEntry\) \{\s+await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, remittance\.paidAt\)/);
   assert.match(route, /COUNT\(\*\) FILTER \(WHERE "approvedCents" > "paidCents" AND "dueDate" IS NOT NULL AND "dueDate" < \$\{today\}\)::bigint AS "overdueClaimCount"/);
   assert.match(route, /orderBy: \[\s*\{ agencyLedgerAccountId: "asc" \},\s*\{ effectiveAt: "asc" \},\s*\{ createdAt: "asc" \},\s*\{ id: "asc" \}/);

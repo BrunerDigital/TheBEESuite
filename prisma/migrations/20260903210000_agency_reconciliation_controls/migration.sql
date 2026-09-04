@@ -113,6 +113,7 @@ CREATE INDEX IF NOT EXISTS "AgencyRemittanceBatch_agencyProgramId_paidAt_idx" ON
 CREATE INDEX IF NOT EXISTS "AgencyRemittanceBatch_centerId_followUpDueAt_idx" ON "AgencyRemittanceBatch"("centerId", "followUpDueAt");
 CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceAllocation_remittanceId_key" ON "AgencyRemittanceAllocation"("remittanceId");
 CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceAllocation_idempotencyKey_key" ON "AgencyRemittanceAllocation"("idempotencyKey");
+CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceAllocation_active_batch_claim_key" ON "AgencyRemittanceAllocation"("batchId", "claimId") WHERE "status" IN ('pending_review', 'posted');
 CREATE INDEX IF NOT EXISTS "AgencyRemittanceAllocation_batchId_status_idx" ON "AgencyRemittanceAllocation"("batchId", "status");
 CREATE INDEX IF NOT EXISTS "AgencyRemittanceAllocation_claimId_status_idx" ON "AgencyRemittanceAllocation"("claimId", "status");
 CREATE INDEX IF NOT EXISTS "AgencyLedgerAdjustment_centerId_status_effectiveAt_idx" ON "AgencyLedgerAdjustment"("centerId", "status", "effectiveAt");
@@ -128,6 +129,15 @@ CREATE INDEX IF NOT EXISTS "AgencyLedgerEntry_adjustmentId_idx" ON "AgencyLedger
 
 DO $migration$
 BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SubsidyRemittance_reversal_chronology_check') THEN
+        ALTER TABLE "SubsidyRemittance" ADD CONSTRAINT "SubsidyRemittance_reversal_chronology_check" CHECK ("reversedAt" IS NULL OR "reversedAt" >= "paidAt") NOT VALID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AgencyRemittanceBatch_reversal_chronology_check') THEN
+        ALTER TABLE "AgencyRemittanceBatch" ADD CONSTRAINT "AgencyRemittanceBatch_reversal_chronology_check" CHECK ("reversedAt" IS NULL OR "reversedAt" >= "paidAt") NOT VALID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AgencyLedgerAdjustment_reversal_chronology_check') THEN
+        ALTER TABLE "AgencyLedgerAdjustment" ADD CONSTRAINT "AgencyLedgerAdjustment_reversal_chronology_check" CHECK ("reversedAt" IS NULL OR "reversedAt" >= "effectiveAt") NOT VALID;
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AgencyRemittanceBatch_centerId_fkey') THEN
         ALTER TABLE "AgencyRemittanceBatch" ADD CONSTRAINT "AgencyRemittanceBatch_centerId_fkey" FOREIGN KEY ("centerId") REFERENCES "Center"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
     END IF;
@@ -169,6 +179,10 @@ BEGIN
     END IF;
 END
 $migration$;
+
+ALTER TABLE "SubsidyRemittance" VALIDATE CONSTRAINT "SubsidyRemittance_reversal_chronology_check";
+ALTER TABLE "AgencyRemittanceBatch" VALIDATE CONSTRAINT "AgencyRemittanceBatch_reversal_chronology_check";
+ALTER TABLE "AgencyLedgerAdjustment" VALIDATE CONSTRAINT "AgencyLedgerAdjustment_reversal_chronology_check";
 
 -- Preserve historical remittances while keeping reversed attempts separate from active corrections.
 WITH historical AS (

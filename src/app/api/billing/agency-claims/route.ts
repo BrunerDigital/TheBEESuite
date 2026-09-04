@@ -27,10 +27,12 @@ import {
   agencyBatchStatus,
   agencyLedgerRunningBalances,
   agencyRemittanceReferenceKey,
+  agencyReversalEffectiveAt,
   agencyUtcCalendarRange,
   canCloseAgencyAccountingPeriod,
   canReviewAgencyPosting,
   normalizeAgencyPaymentReference,
+  isFutureAgencyAccountingDate,
   signedAgencyAdjustmentCents,
 } from "@/lib/agency-reconciliation";
 import { currentlyEnrolledStatusValues, isCurrentlyEnrolledChildRecord } from "@/lib/enrollment-status";
@@ -44,6 +46,7 @@ const AUTHORIZATION_UNIT_TYPES = new Set(["weekly", "daily", "hourly", "monthly"
 const REMITTANCE_METHODS = new Set(["ach", "check", "agency_portal", "other"]);
 const SUBMISSION_METHODS = new Set<string>(AGENCY_SUBMISSION_METHODS);
 const UNIT_PRECISION = 1_000_000;
+const POSTGRES_INT_MAX_CENTS = 2_147_483_647;
 const CLAIM_PAGE_SIZE = 100;
 const AGENCY_LEDGER_ENTRY_LIMIT = 250;
 const AGENCY_BATCH_LIMIT = 100;
@@ -200,7 +203,7 @@ function agencyAllocationRows(value: unknown) {
     const row = recordValue(item);
     const claimId = clean(row.claimId);
     const amountCents = cents(row.amountDollars);
-    if (!claimId || !validCurrencyInput(row.amountDollars) || amountCents <= 0) {
+    if (!claimId || !validCurrencyInput(row.amountDollars) || amountCents <= 0 || amountCents > POSTGRES_INT_MAX_CENTS) {
       hasInvalidRows = true;
       continue;
     }
@@ -299,28 +302,62 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
           OR ("reversedAt" < ${endExclusive} AND NOT "reversalAny")
       )
       SELECT "agencyProgramId",
-        COALESCE(SUM(CASE
-          WHEN "reversedAt" IS NULL OR "reversedAt" >= ${endExclusive} THEN -"amountCents"
-          ELSE 0
-        END), 0)::bigint AS "expectedCents",
         COALESCE(SUM(
-          CASE WHEN NOT "receivedBeforeEnd" THEN 1 ELSE 0 END
-          + CASE WHEN "reversedAt" < ${endExclusive} AND NOT "reversalBeforeEnd" THEN 1 ELSE 0 END
+          CASE WHEN "receivedBeforeEnd" OR ("paidAt" < ${endExclusive} AND NOT "receivedAny") THEN -"amountCents" ELSE 0 END
+          + CASE WHEN "reversalBeforeEnd" OR ("reversedAt" < ${endExclusive} AND NOT "reversalAny") THEN "amountCents" ELSE 0 END
+        ), 0)::bigint AS "expectedCents",
+        COALESCE(SUM(
+          CASE WHEN "paidAt" < ${endExclusive} AND NOT "receivedAny" THEN 1 ELSE 0 END
+          + CASE WHEN "reversedAt" < ${endExclusive} AND NOT "reversalAny" THEN 1 ELSE 0 END
         ), 0)::bigint AS "missingLedgerEventCount"
       FROM applicable_remittances
       GROUP BY "agencyProgramId"
     `,
     tx.$queryRaw<AgencyPeriodExpectedAggregateRow[]>`
-      SELECT adjustment."agencyProgramId",
-        COALESCE(SUM(adjustment."amountCents"), 0)::bigint AS "expectedCents",
-        0::bigint AS "missingLedgerEventCount"
-      FROM "AgencyLedgerAdjustment" adjustment
-      WHERE adjustment."centerId" = ${centerId}
-        AND adjustment."reviewedAt" IS NOT NULL
-        AND adjustment."effectiveAt" < ${endExclusive}
-        AND adjustment.status <> 'rejected'
-        AND (adjustment."reversedAt" IS NULL OR adjustment."reversedAt" >= ${endExclusive})
-      GROUP BY adjustment."agencyProgramId"
+      WITH scoped_adjustments AS (
+        SELECT adjustment.id,
+          adjustment."agencyProgramId",
+          adjustment."amountCents",
+          adjustment."effectiveAt",
+          adjustment."reversedAt"
+        FROM "AgencyLedgerAdjustment" adjustment
+        WHERE adjustment."centerId" = ${centerId}
+          AND adjustment."reviewedAt" IS NOT NULL
+          AND adjustment.status <> 'rejected'
+      ), adjustment_events AS (
+        SELECT adjustment.id,
+          adjustment."agencyProgramId",
+          adjustment."amountCents",
+          adjustment."effectiveAt",
+          adjustment."reversedAt",
+          COALESCE(BOOL_OR(entry.type LIKE 'adjustment_%' AND entry.type <> 'adjustment_reversal' AND entry."effectiveAt" < ${endExclusive}), FALSE) AS "adjustmentBeforeEnd",
+          COALESCE(BOOL_OR(entry.type LIKE 'adjustment_%' AND entry.type <> 'adjustment_reversal'), FALSE) AS "adjustmentAny",
+          COALESCE(BOOL_OR(entry.type = 'adjustment_reversal' AND entry."effectiveAt" < ${endExclusive}), FALSE) AS "reversalBeforeEnd",
+          COALESCE(BOOL_OR(entry.type = 'adjustment_reversal'), FALSE) AS "reversalAny"
+        FROM scoped_adjustments adjustment
+        LEFT JOIN "AgencyLedgerEntry" entry
+          ON entry."adjustmentId" = adjustment.id
+          AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+        GROUP BY adjustment.id, adjustment."agencyProgramId", adjustment."amountCents", adjustment."effectiveAt", adjustment."reversedAt"
+      ), applicable_adjustments AS (
+        SELECT *
+        FROM adjustment_events
+        WHERE "adjustmentBeforeEnd"
+          OR ("effectiveAt" < ${endExclusive} AND NOT "adjustmentAny")
+          OR "reversalBeforeEnd"
+          OR ("reversedAt" < ${endExclusive} AND NOT "reversalAny")
+      )
+      SELECT "agencyProgramId",
+        COALESCE(SUM(
+          CASE WHEN "adjustmentBeforeEnd" OR ("effectiveAt" < ${endExclusive} AND NOT "adjustmentAny") THEN "amountCents" ELSE 0 END
+          + CASE WHEN "reversalBeforeEnd" OR ("reversedAt" < ${endExclusive} AND NOT "reversalAny") THEN -"amountCents" ELSE 0 END
+        ), 0)::bigint AS "expectedCents",
+        COALESCE(SUM(
+          CASE WHEN "effectiveAt" < ${endExclusive} AND NOT "adjustmentAny" THEN 1 ELSE 0 END
+          + CASE WHEN "reversedAt" < ${endExclusive} AND NOT "reversalAny" THEN 1 ELSE 0 END
+        ), 0)::bigint AS "missingLedgerEventCount"
+      FROM applicable_adjustments
+      GROUP BY "agencyProgramId"
     `,
   ]);
   const totals = new Map<string, { expected: number; ledger: number }>();
@@ -836,12 +873,6 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
   if (input.reviewerRole && !canReviewAgencyPosting({ role: input.reviewerRole, reviewerId: input.reviewerId, requestedById: remittance.enteredById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must reverse this remittance.", 403);
   if (input.requireUnbatched && remittance.allocation) throw new AgencyWorkflowError("This payment belongs to a controlled deposit batch. Reverse the batch from the reconciliation queue so every allocation remains balanced.", 409);
   if (remittance.reversedAt) throw new AgencyWorkflowError("This remittance was already reversed.", 409);
-  await assertAgencyPeriodOpen(tx, remittance.claim.centerId, input.reversedAt);
-  const transition = await tx.subsidyRemittance.updateMany({
-    where: { id: remittance.id, reversedAt: null },
-    data: { reversedAt: input.reversedAt, reversedById: input.reviewerId, reversalReason: input.reason },
-  });
-  if (transition.count !== 1) throw new AgencyWorkflowError("The remittance changed before it could be reversed.", 409);
   await ensureAgencyClaimReceivable(tx, remittance.claim, { recalculate: false });
   const agencyPaymentExternalId = agencyRemittanceLedgerExternalId(remittance.id);
   let agencyPaymentEntry = await tx.agencyLedgerEntry.findUnique({ where: { sourceSystem_externalId: { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM, externalId: agencyPaymentExternalId } } });
@@ -863,6 +894,14 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
     }, { recalculate: false });
     agencyPaymentEntry = restored.entry;
   }
+  const reversedAt = agencyReversalEffectiveAt(agencyPaymentEntry.effectiveAt, agencyReversalEffectiveAt(remittance.paidAt, input.reversedAt));
+  if (reversedAt < remittance.paidAt || reversedAt < agencyPaymentEntry.effectiveAt) throw new AgencyWorkflowError("A remittance reversal cannot be effective before the original receipt event.", 409);
+  await assertAgencyPeriodOpen(tx, remittance.claim.centerId, reversedAt);
+  const transition = await tx.subsidyRemittance.updateMany({
+    where: { id: remittance.id, reversedAt: null },
+    data: { reversedAt, reversedById: input.reviewerId, reversalReason: input.reason },
+  });
+  if (transition.count !== 1) throw new AgencyWorkflowError("The remittance changed before it could be reversed.", 409);
   const agencyReversal = await appendAgencyLedgerEntry(tx, {
     centerId: remittance.claim.centerId,
     agencyProgramId: remittance.claim.agencyProgramId,
@@ -872,7 +911,7 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
     type: "remittance_reversal",
     description: `Reversed agency remittance for ${remittance.claim.number}`,
     amountCents: remittance.amountCents,
-    effectiveAt: input.reversedAt,
+    effectiveAt: reversedAt,
     externalReference: remittance.externalReference,
     externalId: agencyRemittanceReversalLedgerExternalId(remittance.id),
     metadata: { claimNumber: remittance.claim.number, originalAgencyLedgerEntryId: agencyPaymentEntry.id, reason: input.reason },
@@ -887,7 +926,7 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
       description: `Reversed legacy family-ledger agency settlement for ${remittance.claim.number}`,
       amountCents: Math.abs(legacyPaymentEntry.amountCents),
       balanceAfterCents: 0,
-      effectiveAt: input.reversedAt,
+      effectiveAt: reversedAt,
       sourceSystem: "subsidy_agency",
       externalId: `agency-remittance-reversal:${remittance.id}`,
       metadata: { ...recordValue(legacyPaymentEntry.metadata), remittanceId: remittance.id, claimId: remittance.claimId, originalLedgerEntryId: legacyPaymentEntry.id, reason: input.reason, legacyCompatibilityMirror: true },
@@ -1781,7 +1820,8 @@ async function postHandler(request: NextRequest) {
         ? [{ claimId: clean(body.claimId), amountCents: cents(body.amountDollars), notes: clean(body.notes) || null }]
         : [];
     const allocatedCents = allocations.reduce((total, allocation) => total + allocation.amountCents, 0);
-    if (!reference || !paidAt || totalCents <= 0) return NextResponse.json({ ok: false, error: "A payment reference, paid date, and positive deposit total are required." }, { status: 400 });
+    if (!reference || !paidAt || totalCents <= 0 || totalCents > POSTGRES_INT_MAX_CENTS) return NextResponse.json({ ok: false, error: "A payment reference, paid date, and positive deposit total within the supported accounting range are required." }, { status: 400 });
+    if (isFutureAgencyAccountingDate(paidAt)) return NextResponse.json({ ok: false, error: "A remittance payment date cannot be after the current UTC accounting day." }, { status: 400 });
     if (!REMITTANCE_METHODS.has(paymentMethod)) return NextResponse.json({ ok: false, error: "Choose ACH, check, agency portal, or other as the remittance method." }, { status: 400 });
     if (allocatedCents > totalCents) return NextResponse.json({ ok: false, error: "Claim allocations cannot exceed the deposit total." }, { status: 400 });
     if (!evidenceName || !evidenceReference || !followUpDueAt) return NextResponse.json({ ok: false, error: "Name the remittance evidence, enter its secure internal reference, and assign a follow-up due date." }, { status: 400 });
@@ -1885,6 +1925,7 @@ async function postHandler(request: NextRequest) {
         if (!batch || !centerAllowed(auth.user, batch.centerId)) throw new AgencyWorkflowError("Remittance batch not found.", 404);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: batch.enteredById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must approve this batch.", 403);
         if (batch.status !== "pending_review" || batch.reviewedAt) throw new AgencyWorkflowError("This remittance batch is no longer awaiting initial review.", 409);
+        if (isFutureAgencyAccountingDate(batch.paidAt)) throw new AgencyWorkflowError("A future-dated remittance batch cannot be approved.", 409);
         const pendingAllocations = batch.allocations.filter((allocation) => allocation.status === "pending_review");
         const fingerprint = agencyBatchFingerprint({ centerId: batch.centerId, agencyProgramId: batch.agencyProgramId, externalReference: batch.externalReference, paidAt: batch.paidAt, paymentMethod: batch.paymentMethod, totalCents: batch.totalCents, notes: batch.notes, evidenceName: batch.evidenceName, evidenceReference: batch.evidenceReference, followUpDueAt: batch.followUpDueAt, allocations: pendingAllocations });
         if (fingerprint !== batch.reconciliationFingerprint) throw new AgencyWorkflowError("The batch no longer matches its reviewed fingerprint. Recreate the batch from current evidence.", 409);
@@ -1945,7 +1986,7 @@ async function postHandler(request: NextRequest) {
     const amountCents = cents(body.amountDollars);
     const notes = clean(body.notes) || null;
     const idempotencyKey = clean(body.idempotencyKey);
-    if (!batchId || !claimId || amountCents <= 0 || !idempotencyKey) return NextResponse.json({ ok: false, error: "Choose a batch, approved claim, positive allocation amount, and retry-safe request key." }, { status: 400 });
+    if (!batchId || !claimId || amountCents <= 0 || amountCents > POSTGRES_INT_MAX_CENTS || !idempotencyKey) return NextResponse.json({ ok: false, error: "Choose a batch, approved claim, supported positive allocation amount, and retry-safe request key." }, { status: 400 });
     const fingerprint = agencyAllocationFingerprint({ batchId, claimId, amountCents, notes });
     let result;
     try {
@@ -2084,7 +2125,8 @@ async function postHandler(request: NextRequest) {
     const idempotencyKey = clean(body.idempotencyKey);
     const claimId = clean(body.claimId) || null;
     const batchId = clean(body.batchId) || null;
-    if (!ledgerAccountId || !AGENCY_ADJUSTMENT_TYPES.includes(type as (typeof AGENCY_ADJUSTMENT_TYPES)[number]) || !amountCents || !effectiveAt || !reason || !idempotencyKey) return NextResponse.json({ ok: false, error: "Choose an agency account and adjustment type, then enter a positive amount, effective date, specific reason, and retry-safe request key." }, { status: 400 });
+    if (!ledgerAccountId || !AGENCY_ADJUSTMENT_TYPES.includes(type as (typeof AGENCY_ADJUSTMENT_TYPES)[number]) || !amountCents || Math.abs(amountCents) > POSTGRES_INT_MAX_CENTS || !effectiveAt || !reason || !idempotencyKey) return NextResponse.json({ ok: false, error: "Choose an agency account and adjustment type, then enter a supported positive amount, effective date, specific reason, and retry-safe request key." }, { status: 400 });
+    if (isFutureAgencyAccountingDate(effectiveAt)) return NextResponse.json({ ok: false, error: "An agency adjustment cannot be effective after the current UTC accounting day." }, { status: 400 });
     if (!evidenceName || !evidenceReference || !followUpDueAt) return NextResponse.json({ ok: false, error: "Name the adjustment evidence, enter its secure internal reference, and assign a follow-up due date." }, { status: 400 });
     let prepared;
     try {
@@ -2145,6 +2187,7 @@ async function postHandler(request: NextRequest) {
         if (!adjustment || !centerAllowed(auth.user, adjustment.centerId)) throw new AgencyWorkflowError("Agency adjustment not found.", 404);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: adjustment.requestedById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must review this adjustment.", 403);
         if (adjustment.status !== "pending_review") throw new AgencyWorkflowError("This adjustment is no longer awaiting review.", 409);
+        if (isFutureAgencyAccountingDate(adjustment.effectiveAt)) throw new AgencyWorkflowError("A future-dated agency adjustment cannot be approved.", 409);
         const fingerprint = agencyAdjustmentFingerprint({ ledgerAccountId: adjustment.ledgerAccountId, claimId: adjustment.claimId, batchId: adjustment.batchId, type: adjustment.type, amountCents: adjustment.amountCents, effectiveAt: adjustment.effectiveAt, reason: adjustment.reason, evidenceName: adjustment.evidenceName, evidenceReference: adjustment.evidenceReference, followUpDueAt: adjustment.followUpDueAt });
         if (fingerprint !== adjustment.fingerprint) throw new AgencyWorkflowError("The adjustment no longer matches its reviewed fingerprint. Recreate it from current evidence.", 409);
         if (action === "rejectLedgerAdjustment") {
@@ -2189,7 +2232,8 @@ async function postHandler(request: NextRequest) {
         if (!adjustment || !centerAllowed(auth.user, adjustment.centerId)) throw new AgencyWorkflowError("Agency adjustment not found.", 404);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: adjustment.requestedById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must reverse this adjustment.", 403);
         if (adjustment.status !== "posted" || adjustment.reversedAt) throw new AgencyWorkflowError("Only an unreversed posted adjustment can be reversed.", 409);
-        const effectiveAt = new Date();
+        const effectiveAt = agencyReversalEffectiveAt(adjustment.effectiveAt);
+        if (effectiveAt < adjustment.effectiveAt) throw new AgencyWorkflowError("An adjustment reversal cannot be effective before the original adjustment.", 409);
         await assertAgencyPeriodOpen(tx, adjustment.centerId, effectiveAt);
         const ledger = await appendAgencyLedgerEntry(tx, {
           centerId: adjustment.centerId,
@@ -2359,7 +2403,8 @@ async function postHandler(request: NextRequest) {
         if (batch.reversedAt || batch.status === "reversed") throw new AgencyWorkflowError("This remittance batch was already reversed.", 409);
         if (batch.status === "rejected") throw new AgencyWorkflowError("A rejected, unposted batch cannot be reversed.", 409);
         if (!batch.reviewedAt || !REVERSIBLE_REMITTANCE_BATCH_STATUSES.has(batch.status)) throw new AgencyWorkflowError("Reject an unposted batch instead of creating financial reversal entries.", 409);
-        const reversedAt = new Date();
+        const reversedAt = agencyReversalEffectiveAt(batch.paidAt);
+        if (reversedAt < batch.paidAt) throw new AgencyWorkflowError("A deposit reversal cannot be effective before the original receipt date.", 409);
         await assertAgencyPeriodOpen(tx, batch.centerId, reversedAt);
         const postedAllocations = batch.allocations.filter((allocation) => allocation.status === "posted" && allocation.remittanceId);
         const reversedRemittances = [];
@@ -2580,7 +2625,8 @@ async function postHandler(request: NextRequest) {
     const reference = clean(body.externalReference);
     const paidAt = dateValue(body.paidAt);
     const paymentMethod = clean(body.paymentMethod) || "ach";
-    if (!reference || !paidAt || amountCents <= 0) return NextResponse.json({ ok: false, error: "A unique reference, paid date, and positive remittance amount are required." }, { status: 400 });
+    if (!reference || !paidAt || amountCents <= 0 || amountCents > POSTGRES_INT_MAX_CENTS) return NextResponse.json({ ok: false, error: "A unique reference, paid date, and positive remittance amount within the supported accounting range are required." }, { status: 400 });
+    if (isFutureAgencyAccountingDate(paidAt)) return NextResponse.json({ ok: false, error: "A remittance payment date cannot be after the current UTC accounting day." }, { status: 400 });
     if (!REMITTANCE_METHODS.has(paymentMethod)) return NextResponse.json({ ok: false, error: "Choose ACH, check, agency portal, or other as the remittance method." }, { status: 400 });
     let result;
     try {

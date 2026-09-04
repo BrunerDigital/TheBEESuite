@@ -8,10 +8,13 @@ import {
   agencyBatchStatus,
   agencyLedgerRunningBalances,
   agencyRemittanceReferenceKey,
+  agencyReversalEffectiveAt,
+  agencyUtcAccountingDate,
   agencyUnappliedCashBalance,
   agencyUtcCalendarRange,
   canReviewAgencyPosting,
   isAgencyClaimOverdue,
+  isFutureAgencyAccountingDate,
   signedAgencyAdjustmentCents,
 } from "../src/lib/agency-reconciliation";
 import { newAgencyRetryKey, persistentAgencyRetryKey, rotateAgencyRetryKey } from "../src/lib/agency-retry-key";
@@ -184,6 +187,21 @@ test("agency accounting ranges include both requested UTC calendar dates", () =>
   const range = agencyUtcCalendarRange("2026-09-01T12:00:00.000Z", "2026-09-30T12:00:00.000Z");
   assert.equal(range.startInclusive.toISOString(), "2026-09-01T00:00:00.000Z");
   assert.equal(range.endExclusive.toISOString(), "2026-10-01T00:00:00.000Z");
+});
+
+test("agency server date rules reject future UTC accounting days", () => {
+  const now = new Date("2026-09-04T09:00:00.000Z");
+  assert.equal(agencyUtcAccountingDate(now).toISOString(), "2026-09-04T00:00:00.000Z");
+  assert.equal(isFutureAgencyAccountingDate("2026-09-04T12:00:00.000Z", now), false);
+  assert.equal(isFutureAgencyAccountingDate("2026-09-05T00:00:00.000Z", now), true);
+});
+
+test("remittance and adjustment reversals never precede their original effective event", () => {
+  const requestTime = new Date("2026-09-04T09:00:00.000Z");
+  const sameDayNoon = new Date("2026-09-04T12:00:00.000Z");
+  const priorDay = new Date("2026-09-03T12:00:00.000Z");
+  assert.equal(agencyReversalEffectiveAt(sameDayNoon, requestTime).toISOString(), sameDayNoon.toISOString());
+  assert.equal(agencyReversalEffectiveAt(priorDay, requestTime).toISOString(), requestTime.toISOString());
 });
 
 test("agency ledger running balances recalculate every later row after a backdated entry", () => {

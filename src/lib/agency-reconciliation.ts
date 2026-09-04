@@ -134,6 +134,20 @@ export function agencyUtcCalendarRange(startDate: Date | string, endDate: Date |
   return { startInclusive, endExclusive };
 }
 
+export function agencyUtcAccountingDate(value: Date | string) {
+  const date = new Date(value);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+export function isFutureAgencyAccountingDate(value: Date | string, now = new Date()) {
+  return agencyUtcAccountingDate(value) > agencyUtcAccountingDate(now);
+}
+
+export function agencyReversalEffectiveAt(originalEffectiveAt: Date | string, now = new Date()) {
+  const original = new Date(originalEffectiveAt);
+  return now < original ? original : now;
+}
+
 export function agencyLedgerRunningBalances<T extends { id: string; amountCents: number }>(entries: T[], openingBalanceCents = 0) {
   let balanceAfterCents = openingBalanceCents;
   return entries.map((entry) => {

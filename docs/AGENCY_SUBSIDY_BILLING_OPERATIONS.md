@@ -4,6 +4,8 @@ Last updated: September 3, 2026
 
 Audience: school directors, assistant directors, billing administrators, accounting users, and launch support.
 
+Pre-release status: this document describes the expanded agency-ledger workflow shipped with PR #310. Until both production database migrations and the exact reviewed application commit are released and validated, the public SOP and production application remain on the baseline direct `Record remittance` workflow. A successful Vercel preview build does not prove that the expanded runtime is compatible with an unmigrated production schema.
+
 ## Purpose
 
 Use this SOP to prepare agency claims, stage ACH/check/portal deposits, obtain independent review, and prove that claim allocations, deposits, and the dedicated agency ledger agree. Agency responsibility remains separate from the family ledger and never charges the family.
@@ -95,4 +97,12 @@ Stop for any school, agency, child, authorization, service-period, approval, amo
 
 ## Activation And Cutover Gates
 
-The shared software does not activate a school's business process. Before activation, each school needs current provider/payment evidence, authorized users, configured programs and accounting mappings, verified authorizations, an approved dual-review policy, a reviewed legacy-family-history report, and a successful first deposit reconciliation. Production migration, deployment, staff training, real payment posting, responsibility changes, and provider/bank changes are separate approvals.
+The shared software does not activate a school's business process. These are separate gates:
+
+1. **Software deployment** puts the exact reviewed application commit on the canonical production aliases.
+2. **Database migration** applies the two reviewed additive migrations after current backup/PITR and data-readiness verification.
+3. **Per-school operational activation** enables only an explicitly approved, fully configured school; `setup_required` programs remain blocked.
+4. **Staff training** confirms that preparers and independent reviewers can use the evidence, exception, reversal, close, and export controls.
+5. **First-deposit reconciliation approval** requires two authorized users to post and independently verify the pilot school's first real deposit before the workflow is declared live there.
+
+Before activation, each school also needs current provider/payment evidence, authorized users, configured programs and accounting mappings, verified authorizations, an approved dual-review policy, and a reviewed legacy-family-history report. Real payment posting, responsibility changes, and provider/bank changes remain separate approvals.

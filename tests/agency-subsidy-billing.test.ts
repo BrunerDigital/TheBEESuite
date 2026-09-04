@@ -422,8 +422,14 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /exportAgencyReconciliationCsv/);
   assert.match(route, /exportAgencyDepositsCsv/);
   assert.doesNotMatch(route, /\.toFixed\(2\)/);
+  assert.match(route, /function exportClaimsCsv[\s\S]*new ReadableStream<Uint8Array>[\s\S]*async pull\(controller\)[\s\S]*subsidyClaim\.findMany\([\s\S]*take: 250,[\s\S]*cursor: \{ id: cursorId \}, skip: 1/);
+  assert.match(route, /function exportClaimsCsv[\s\S]*cancel\(\) \{\s+cancelled = true/);
+  assert.doesNotMatch(route, /function exportClaimsCsv[\s\S]*async start\(controller\)/);
+  assert.match(route, /function exportAgencyLedgerCsv[\s\S]*new ReadableStream<Uint8Array>[\s\S]*async pull\(controller\)[\s\S]*agencyLedgerEntry\.findMany\([\s\S]*take: 250,[\s\S]*cursor: \{ id: cursorId \}, skip: 1/);
+  assert.match(route, /function exportAgencyLedgerCsv[\s\S]*cancel\(\) \{\s+cancelled = true/);
+  assert.doesNotMatch(route, /function exportAgencyLedgerCsv[\s\S]*async start\(controller\)/);
   assert.match(route, /function exportAgencyDepositsCsv[\s\S]*new ReadableStream<Uint8Array>[\s\S]*async pull\(controller\)[\s\S]*agencyRemittanceBatch\.findMany\([\s\S]*orderBy: \[\{ paidAt: "asc" \}, \{ createdAt: "asc" \}, \{ id: "asc" \}\][\s\S]*take: 100,[\s\S]*cursor: \{ id: cursorId \}, skip: 1/);
-  assert.match(route, /cancel\(\) \{\s+cancelled = true/);
+  assert.match(route, /function exportAgencyDepositsCsv[\s\S]*cancel\(\) \{\s+cancelled = true/);
   assert.doesNotMatch(route, /function exportAgencyDepositsCsv[\s\S]*async start\(controller\)/);
   assert.match(route, /batch\.totalCents \/ 100,[\s\S]*batch\.allocatedCents \/ 100,[\s\S]*batch\.unappliedCents \/ 100/);
   assert.match(route, /overdueFollowUpCount/);

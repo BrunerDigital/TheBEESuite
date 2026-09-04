@@ -718,57 +718,68 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
 
 function exportClaimsCsv(centerIds: string[]) {
   const encoder = new TextEncoder();
+  let cursorId: string | undefined;
+  let headerPending = true;
+  let finished = false;
+  let cancelled = false;
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
+    async pull(controller) {
+      if (finished || cancelled) return;
       try {
-        controller.enqueue(encoder.encode(csvRow(["Claim", "Agency", "Family", "Child", "Service start", "Service end", "Status", "Claimed", "Approved", "Paid", "Missing documents"])));
-        let cursorId: string | undefined;
-        while (true) {
-          const claims = await prisma.subsidyClaim.findMany({
-            where: { centerId: { in: centerIds } },
-            orderBy: { id: "asc" },
-            take: 250,
-            ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
-            include: {
-              agencyProgram: { select: { name: true, requirements: true } },
-              authorization: { include: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
-              documents: { orderBy: { name: "asc" } },
-            },
-          });
-          if (!claims.length) break;
-          const chunk = claims.map((claim) => {
-            const missingDocuments = claim.documents
-              .filter((document) => !["received", "verified", "not_applicable"].includes(document.status))
-              .map((document) => document.name);
-            if (["draft", "ready", "submitted"].includes(claim.status)) {
-              const documentKeys = new Set(claim.documents.map((document) => `${document.name.trim().toLowerCase()}|${document.type.trim().toLowerCase()}`));
-              for (const requirement of claimRequirements(claim)) {
-                const key = `${requirement.label.trim().toLowerCase()}|${requirement.type.trim().toLowerCase()}`;
-                if (!documentKeys.has(key)) missingDocuments.push(requirement.label);
-              }
+        const claims = await prisma.subsidyClaim.findMany({
+          where: { centerId: { in: centerIds } },
+          orderBy: { id: "asc" },
+          take: 250,
+          ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+          include: {
+            agencyProgram: { select: { name: true, requirements: true } },
+            authorization: { include: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
+            documents: { orderBy: { name: "asc" } },
+          },
+        });
+        if (cancelled) return;
+        const header = headerPending
+          ? csvRow(["Claim", "Agency", "Family", "Child", "Service start", "Service end", "Status", "Claimed", "Approved", "Paid", "Missing documents"])
+          : "";
+        headerPending = false;
+        const rows = claims.map((claim) => {
+          const missingDocuments = claim.documents
+            .filter((document) => !["received", "verified", "not_applicable"].includes(document.status))
+            .map((document) => document.name);
+          if (["draft", "ready", "submitted"].includes(claim.status)) {
+            const documentKeys = new Set(claim.documents.map((document) => `${document.name.trim().toLowerCase()}|${document.type.trim().toLowerCase()}`));
+            for (const requirement of claimRequirements(claim)) {
+              const key = `${requirement.label.trim().toLowerCase()}|${requirement.type.trim().toLowerCase()}`;
+              if (!documentKeys.has(key)) missingDocuments.push(requirement.label);
             }
-            return csvRow([
-              claim.number,
-              claim.agencyProgram.name,
-              claim.authorization?.family.name ?? "",
-              claim.authorization?.child.fullName ?? "",
-              dateInput(claim.servicePeriodStart),
-              dateInput(claim.servicePeriodEnd),
-              claim.status,
-              claim.claimedCents / 100,
-              claim.approvedCents === null ? "" : claim.approvedCents / 100,
-              claim.paidCents / 100,
-              [...new Set(missingDocuments)].join("; "),
-            ]);
-          }).join("");
-          controller.enqueue(encoder.encode(chunk));
-          cursorId = claims.at(-1)?.id;
-          if (claims.length < 250) break;
+          }
+          return csvRow([
+            claim.number,
+            claim.agencyProgram.name,
+            claim.authorization?.family.name ?? "",
+            claim.authorization?.child.fullName ?? "",
+            dateInput(claim.servicePeriodStart),
+            dateInput(claim.servicePeriodEnd),
+            claim.status,
+            claim.claimedCents / 100,
+            claim.approvedCents === null ? "" : claim.approvedCents / 100,
+            claim.paidCents / 100,
+            [...new Set(missingDocuments)].join("; "),
+          ]);
+        }).join("");
+        if (header || rows) controller.enqueue(encoder.encode(header + rows));
+        cursorId = claims.at(-1)?.id;
+        if (claims.length < 250) {
+          finished = true;
+          controller.close();
         }
-        controller.close();
       } catch (error) {
-        controller.error(error);
+        finished = true;
+        if (!cancelled) controller.error(error);
       }
+    },
+    cancel() {
+      cancelled = true;
     },
   });
   return new Response(stream, {
@@ -788,51 +799,63 @@ function agencyEntryGlCode(type: string, program: { receivableGlCode: string | n
 
 function exportAgencyLedgerCsv(centerIds: string[]) {
   const encoder = new TextEncoder();
+  let cursorId: string | undefined;
+  let headerPending = true;
+  let finished = false;
+  let cancelled = false;
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
+    async pull(controller) {
+      if (finished || cancelled) return;
       try {
-        controller.enqueue(encoder.encode(csvRow(["Date", "Agency", "Program", "Type", "GL code", "Cost center", "Claim", "Family", "Child", "Reference", "Charge", "Payment / credit", "Net", "Balance"])));
-        let cursorId: string | undefined;
-        while (true) {
-          const entries = await prisma.agencyLedgerEntry.findMany({
-            where: { agencyLedgerAccount: { centerId: { in: centerIds } } },
-            orderBy: [
-              { agencyLedgerAccountId: "asc" },
-              { effectiveAt: "asc" },
-              { createdAt: "asc" },
-              { id: "asc" },
-            ],
-            take: 250,
-            ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
-            include: {
-              agencyLedgerAccount: { include: { agencyProgram: { select: { name: true, programName: true, receivableGlCode: true, cashGlCode: true, adjustmentGlCode: true, costCenterCode: true } } } },
-              claim: { include: { authorization: { include: { family: { select: { name: true } }, child: { select: { fullName: true } } } } } },
-            },
-          });
-          if (!entries.length) break;
-          controller.enqueue(encoder.encode(entries.map((entry) => csvRow([
-            dateInput(entry.effectiveAt),
-            entry.agencyLedgerAccount.agencyProgram.name,
-            entry.agencyLedgerAccount.agencyProgram.programName ?? "",
-            entry.type,
-            agencyEntryGlCode(entry.type, entry.agencyLedgerAccount.agencyProgram),
-            entry.agencyLedgerAccount.agencyProgram.costCenterCode ?? "",
-            entry.claim?.number ?? "",
-            entry.claim?.authorization?.family.name ?? "",
-            entry.claim?.authorization?.child.fullName ?? "",
-            entry.externalReference ?? "",
-            entry.amountCents > 0 ? entry.amountCents / 100 : "",
-            entry.amountCents < 0 ? Math.abs(entry.amountCents) / 100 : "",
-            entry.amountCents / 100,
-            entry.balanceAfterCents / 100,
-          ])).join("")));
-          cursorId = entries.at(-1)?.id;
-          if (entries.length < 250) break;
+        const entries = await prisma.agencyLedgerEntry.findMany({
+          where: { agencyLedgerAccount: { centerId: { in: centerIds } } },
+          orderBy: [
+            { agencyLedgerAccountId: "asc" },
+            { effectiveAt: "asc" },
+            { createdAt: "asc" },
+            { id: "asc" },
+          ],
+          take: 250,
+          ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+          include: {
+            agencyLedgerAccount: { include: { agencyProgram: { select: { name: true, programName: true, receivableGlCode: true, cashGlCode: true, adjustmentGlCode: true, costCenterCode: true } } } },
+            claim: { include: { authorization: { include: { family: { select: { name: true } }, child: { select: { fullName: true } } } } } },
+          },
+        });
+        if (cancelled) return;
+        const header = headerPending
+          ? csvRow(["Date", "Agency", "Program", "Type", "GL code", "Cost center", "Claim", "Family", "Child", "Reference", "Charge", "Payment / credit", "Net", "Balance"])
+          : "";
+        headerPending = false;
+        const rows = entries.map((entry) => csvRow([
+          dateInput(entry.effectiveAt),
+          entry.agencyLedgerAccount.agencyProgram.name,
+          entry.agencyLedgerAccount.agencyProgram.programName ?? "",
+          entry.type,
+          agencyEntryGlCode(entry.type, entry.agencyLedgerAccount.agencyProgram),
+          entry.agencyLedgerAccount.agencyProgram.costCenterCode ?? "",
+          entry.claim?.number ?? "",
+          entry.claim?.authorization?.family.name ?? "",
+          entry.claim?.authorization?.child.fullName ?? "",
+          entry.externalReference ?? "",
+          entry.amountCents > 0 ? entry.amountCents / 100 : "",
+          entry.amountCents < 0 ? Math.abs(entry.amountCents) / 100 : "",
+          entry.amountCents / 100,
+          entry.balanceAfterCents / 100,
+        ])).join("");
+        if (header || rows) controller.enqueue(encoder.encode(header + rows));
+        cursorId = entries.at(-1)?.id;
+        if (entries.length < 250) {
+          finished = true;
+          controller.close();
         }
-        controller.close();
       } catch (error) {
-        controller.error(error);
+        finished = true;
+        if (!cancelled) controller.error(error);
       }
+    },
+    cancel() {
+      cancelled = true;
     },
   });
   return new Response(stream, {

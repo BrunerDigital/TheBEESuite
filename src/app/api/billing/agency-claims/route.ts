@@ -91,6 +91,11 @@ type AgencyPeriodExpectedAggregateRow = {
   missingLedgerEventCount: bigint;
 };
 
+type RecoveredAgencyClaimReceivableRow = {
+  agencyLedgerAccountId: string;
+  claimId: string;
+};
+
 function prismaConflict(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code);
 }
@@ -458,6 +463,91 @@ async function ensureAgencyClaimReceivable(tx: Prisma.TransactionClient, claim: 
     metadata: { claimNumber: claim.number },
   }, options);
   return { entry: result.entry, created: true };
+}
+
+async function recoverMissingAgencyClaimReceivables(
+  tx: Prisma.TransactionClient,
+  centerId: string,
+  endExclusive: Date,
+  recoveredById: string,
+) {
+  await tx.$executeRaw`
+    INSERT INTO "AgencyLedgerAccount" (id, "centerId", "agencyProgramId", "balanceCents", "createdAt", "updatedAt")
+    SELECT
+      'agency-ledger-account:' || program.id,
+      program."centerId",
+      program.id,
+      0,
+      program."createdAt",
+      CURRENT_TIMESTAMP
+    FROM "AgencyProgram" program
+    WHERE program."centerId" = ${centerId}
+      AND EXISTS (
+        SELECT 1
+        FROM "SubsidyClaim" claim
+        WHERE claim."centerId" = ${centerId}
+          AND claim."agencyProgramId" = program.id
+          AND claim."approvedCents" > 0
+          AND claim.status NOT IN ('void', 'denied')
+          AND COALESCE(claim."approvedAt", claim."updatedAt", claim."createdAt") < ${endExclusive}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "AgencyLedgerEntry" entry
+            WHERE entry."claimId" = claim.id
+              AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+              AND entry.type = 'claim_approved'
+          )
+      )
+    ON CONFLICT ("centerId", "agencyProgramId") DO NOTHING
+  `;
+  const recovered = await tx.$queryRaw<RecoveredAgencyClaimReceivableRow[]>`
+    INSERT INTO "AgencyLedgerEntry" (
+      id, "agencyLedgerAccountId", "claimId", type, description,
+      "amountCents", "balanceAfterCents", "effectiveAt", "externalReference",
+      "sourceSystem", "externalId", metadata, "createdAt"
+    )
+    SELECT
+      'agency-ledger-claim:' || claim.id,
+      account.id,
+      claim.id,
+      'claim_approved',
+      program.name || ' approved ' || claim.number,
+      claim."approvedCents",
+      0,
+      COALESCE(claim."approvedAt", claim."updatedAt", claim."createdAt"),
+      claim."externalReference",
+      ${AGENCY_LEDGER_SOURCE_SYSTEM},
+      'claim-approved:' || claim.id,
+      jsonb_build_object(
+        'claimNumber', claim.number,
+        'recoveredAtPeriodClose', true,
+        'recoveredById', ${recoveredById}
+      ),
+      COALESCE(claim."approvedAt", claim."createdAt")
+    FROM "SubsidyClaim" claim
+    JOIN "AgencyProgram" program
+      ON program.id = claim."agencyProgramId"
+      AND program."centerId" = claim."centerId"
+    JOIN "AgencyLedgerAccount" account
+      ON account."centerId" = claim."centerId"
+      AND account."agencyProgramId" = claim."agencyProgramId"
+    WHERE claim."centerId" = ${centerId}
+      AND claim."approvedCents" > 0
+      AND claim.status NOT IN ('void', 'denied')
+      AND COALESCE(claim."approvedAt", claim."updatedAt", claim."createdAt") < ${endExclusive}
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "AgencyLedgerEntry" entry
+        WHERE entry."claimId" = claim.id
+          AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+          AND entry.type = 'claim_approved'
+      )
+    ON CONFLICT ("sourceSystem", "externalId") DO NOTHING
+    RETURNING "agencyLedgerAccountId", "claimId"
+  `;
+  const accountIds = [...new Set(recovered.map((row) => row.agencyLedgerAccountId))];
+  for (const accountId of accountIds) await recalculateAgencyLedgerBalances(tx, accountId);
+  return recovered.length;
 }
 
 type AgencyPostingClaim = AgencyLedgerClaimInput & {
@@ -2035,7 +2125,8 @@ async function postHandler(request: NextRequest) {
       result = await prisma.$transaction(async (tx) => {
         const overlap = await tx.agencyAccountingPeriod.findFirst({ where: { centerId, OR: [{ startDate: { lte: endDate }, endDate: { gte: startDate } }] } });
         if (overlap && (overlap.startDate.getTime() !== startDate.getTime() || overlap.endDate.getTime() !== endDate.getTime())) throw new AgencyWorkflowError(`This range overlaps ${overlap.name}.`, 409);
-        if (overlap?.status === "closed") return { period: overlap, reused: true };
+        if (overlap?.status === "closed") return { period: overlap, reused: true, recoveredClaimReceivableCount: 0 };
+        const recoveredClaimReceivableCount = await recoverMissingAgencyClaimReceivables(tx, centerId, endExclusive, auth.user.id);
         const [unresolvedBatches, pendingAllocations, pendingAdjustments, reconciliationVariances] = await Promise.all([
           tx.agencyRemittanceBatch.count({
             where: {
@@ -2067,15 +2158,18 @@ async function postHandler(request: NextRequest) {
         const period = overlap
           ? await tx.agencyAccountingPeriod.update({ where: { id: overlap.id }, data: { name, status: "closed", closedAt: new Date(), closedById: auth.user.id, closeReason: reason } })
           : await tx.agencyAccountingPeriod.create({ data: { centerId, name, startDate, endDate, status: "closed", closedAt: new Date(), closedById: auth.user.id, closeReason: reason } });
-        return { period, reused: false };
+        return { period, reused: false, recoveredClaimReceivableCount };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The accounting period changed while it was being closed. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId, action: result.reused ? "billing.agency_accounting_period.close_replayed" : "billing.agency_accounting_period.closed", resource: "AgencyAccountingPeriod", resourceId: result.period.id, metadata: { name, startDate, endDate, reasonRecorded: true, reused: result.reused } });
-    return NextResponse.json({ ok: true, ...result });
+    await writeAuditLog(auth.user, { centerId, action: result.reused ? "billing.agency_accounting_period.close_replayed" : "billing.agency_accounting_period.closed", resource: "AgencyAccountingPeriod", resourceId: result.period.id, metadata: { name, startDate, endDate, reasonRecorded: true, reused: result.reused, recoveredClaimReceivableCount: result.recoveredClaimReceivableCount } });
+    const recoveryMessage = result.recoveredClaimReceivableCount
+      ? ` Recovered ${result.recoveredClaimReceivableCount} missing receivable event${result.recoveredClaimReceivableCount === 1 ? "" : "s"} from recorded agency approvals before reconciliation.`
+      : "";
+    return NextResponse.json({ ok: true, ...result, message: result.reused ? "This accounting period was already closed." : `Accounting period closed.${recoveryMessage}` });
   }
 
   if (action === "reopenAccountingPeriod") {

@@ -126,7 +126,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
       setError(responseError);
       callbacks.onError?.(responseError);
     } else {
-      setMessage("Agency billing record saved.");
+      setMessage(typeof body.message === "string" && body.message.trim() ? body.message : "Agency billing record saved.");
       callbacks.onSuccess?.(body);
       const reloadPage = callbacks.reloadClaimPage ?? claimPage;
       setLedgerPage(1); setLedgerCursorByPage({});

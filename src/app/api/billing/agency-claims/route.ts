@@ -156,38 +156,54 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
         status: { notIn: ["void", "denied"] },
       },
       select: {
+        id: true,
         agencyProgramId: true,
         approvedCents: true,
         claimedCents: true,
+        ledgerEntries: {
+          where: {
+            sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
+            type: "claim_approved",
+            effectiveAt: { lt: endExclusive },
+          },
+          select: { id: true },
+        },
         remittances: {
           where: {
-            AND: [
+            OR: [
               {
-                OR: [
-                  {
-                    ledgerEntries: {
-                      some: {
-                        sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
-                        type: "remittance_received",
-                        effectiveAt: { lt: endExclusive },
-                      },
-                    },
+                ledgerEntries: {
+                  some: {
+                    sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
+                    type: "remittance_received",
+                    effectiveAt: { lt: endExclusive },
                   },
-                  {
-                    paidAt: { lt: endExclusive },
-                    ledgerEntries: {
-                      none: {
-                        sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
-                        type: "remittance_received",
-                      },
-                    },
-                  },
-                ],
+                },
               },
-              { OR: [{ reversedAt: null }, { reversedAt: { gte: endExclusive } }] },
+              {
+                paidAt: { lt: endExclusive },
+                ledgerEntries: {
+                  none: {
+                    sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
+                    type: "remittance_received",
+                  },
+                },
+              },
             ],
           },
-          select: { amountCents: true },
+          select: {
+            id: true,
+            amountCents: true,
+            reversedAt: true,
+            ledgerEntries: {
+              where: {
+                sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
+                type: { in: ["remittance_received", "remittance_reversal"] },
+                effectiveAt: { lt: endExclusive },
+              },
+              select: { id: true, type: true },
+            },
+          },
         },
       },
     }),
@@ -213,12 +229,23 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
     current.ledger += account.entries.reduce((total, entry) => total + entry.amountCents, 0);
     current.expected -= agencyUnappliedCashBalance(account.entries);
   }
+  let missingLedgerEventCount = 0;
   for (const claim of claims) {
     const current = row(claim.agencyProgramId);
-    current.expected += (claim.approvedCents ?? claim.claimedCents) - claim.remittances.reduce((total, remittance) => total + remittance.amountCents, 0);
+    const activeRemittedCents = claim.remittances.reduce((total, remittance) => {
+      const reversedAsOfPeriodEnd = remittance.reversedAt && remittance.reversedAt < endExclusive;
+      return reversedAsOfPeriodEnd ? total : total + remittance.amountCents;
+    }, 0);
+    current.expected += (claim.approvedCents ?? claim.claimedCents) - activeRemittedCents;
+    if (!claim.ledgerEntries.length) missingLedgerEventCount += 1;
+    for (const remittance of claim.remittances) {
+      if (!remittance.ledgerEntries.some((entry) => entry.type === "remittance_received")) missingLedgerEventCount += 1;
+      if (remittance.reversedAt && remittance.reversedAt < endExclusive && !remittance.ledgerEntries.some((entry) => entry.type === "remittance_reversal")) missingLedgerEventCount += 1;
+    }
   }
   for (const adjustment of adjustments) row(adjustment.agencyProgramId).expected += adjustment.amountCents;
-  return [...totals.values()].filter((current) => current.ledger !== current.expected).length;
+  const netVarianceCount = [...totals.values()].filter((current) => current.ledger !== current.expected).length;
+  return netVarianceCount + missingLedgerEventCount;
 }
 
 function claimRequirements(claim: {
@@ -340,6 +367,21 @@ type AgencyPostingClaim = AgencyLedgerClaimInput & {
   remittances: Array<{ amountCents: number; reversedAt: Date | null }>;
 };
 
+async function recalculateLegacyFamilyLedgerBalances(tx: Prisma.TransactionClient, billingAccountId: string, finalBalanceCents: number) {
+  const entries = await tx.ledgerEntry.findMany({
+    where: { billingAccountId },
+    orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, amountCents: true, balanceAfterCents: true },
+  });
+  const entryTotalCents = entries.reduce((total, candidate) => total + candidate.amountCents, 0);
+  const runningBalances = agencyLedgerRunningBalances(entries, finalBalanceCents - entryTotalCents);
+  const existingBalanceById = new Map(entries.map((candidate) => [candidate.id, candidate.balanceAfterCents]));
+  for (const running of runningBalances) {
+    if (existingBalanceById.get(running.id) === running.balanceAfterCents) continue;
+    await tx.ledgerEntry.update({ where: { id: running.id }, data: { balanceAfterCents: running.balanceAfterCents } });
+  }
+}
+
 async function applyLegacyFamilyLedgerSettlement(tx: Prisma.TransactionClient, input: {
   claim: AgencyPostingClaim;
   amountCents: number;
@@ -373,7 +415,7 @@ async function applyLegacyFamilyLedgerSettlement(tx: Prisma.TransactionClient, i
     where: { id: billingAccount.id },
     data: { balanceCents: { decrement: appliedCents } },
   });
-  let entry = await tx.ledgerEntry.create({ data: {
+  const entry = await tx.ledgerEntry.create({ data: {
     billingAccountId: billingAccount.id,
     type: "agency_payment",
     description: `Legacy family-ledger settlement for ${input.claim.agencyProgram.name} remittance ${input.claim.number}`,
@@ -392,19 +434,7 @@ async function applyLegacyFamilyLedgerSettlement(tx: Prisma.TransactionClient, i
       legacyCompatibilityMirror: true,
     },
   } });
-  const entries = await tx.ledgerEntry.findMany({
-    where: { billingAccountId: billingAccount.id },
-    orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-    select: { id: true, amountCents: true, balanceAfterCents: true },
-  });
-  const entryTotalCents = entries.reduce((total, candidate) => total + candidate.amountCents, 0);
-  const runningBalances = agencyLedgerRunningBalances(entries, updatedAccount.balanceCents - entryTotalCents);
-  const existingBalanceById = new Map(entries.map((candidate) => [candidate.id, candidate.balanceAfterCents]));
-  for (const running of runningBalances) {
-    if (existingBalanceById.get(running.id) === running.balanceAfterCents) continue;
-    const updated = await tx.ledgerEntry.update({ where: { id: running.id }, data: { balanceAfterCents: running.balanceAfterCents } });
-    if (updated.id === entry.id) entry = updated;
-  }
+  await recalculateLegacyFamilyLedgerBalances(tx, billingAccount.id, updatedAccount.balanceCents);
   return { appliedCents, entryId: entry.id };
 }
 
@@ -551,12 +581,13 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
       type: "agency_payment_reversal",
       description: `Reversed legacy family-ledger agency settlement for ${remittance.claim.number}`,
       amountCents: Math.abs(legacyPaymentEntry.amountCents),
-      balanceAfterCents: updatedAccount.balanceCents,
+      balanceAfterCents: 0,
       effectiveAt: input.reversedAt,
       sourceSystem: "subsidy_agency",
       externalId: `agency-remittance-reversal:${remittance.id}`,
       metadata: { ...recordValue(legacyPaymentEntry.metadata), remittanceId: remittance.id, claimId: remittance.claimId, originalLedgerEntryId: legacyPaymentEntry.id, reason: input.reason, legacyCompatibilityMirror: true },
     } });
+    await recalculateLegacyFamilyLedgerBalances(tx, legacyPaymentEntry.billingAccountId, updatedAccount.balanceCents);
     legacyFamilyReversalLedgerEntryId = reversalEntry.id;
   }
   const activeRemittances = await tx.subsidyRemittance.findMany({ where: { claimId: remittance.claimId, reversedAt: null }, select: { amountCents: true, reversedAt: true } });
@@ -972,7 +1003,7 @@ async function getHandler(request: NextRequest) {
       },
     }),
     prisma.agencyRemittanceBatch.findMany({
-      where: { centerId: { in: centerIds }, reversedAt: null, status: { in: ["pending_review", "unmatched", "partially_allocated", "exception"] } },
+      where: { centerId: { in: centerIds }, reversedAt: null, status: { notIn: ["rejected", "reversed"] } },
       orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
       include: {
         agencyProgram: { select: { name: true, programName: true } },
@@ -986,7 +1017,7 @@ async function getHandler(request: NextRequest) {
       include: { agencyProgram: { select: { name: true, programName: true } }, claim: { select: { number: true } } },
     }),
     prisma.agencyLedgerAdjustment.findMany({
-      where: { centerId: { in: centerIds }, status: "pending_review" },
+      where: { centerId: { in: centerIds }, status: { in: ["pending_review", "posted"] }, reversedAt: null },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       include: { agencyProgram: { select: { name: true, programName: true } }, claim: { select: { number: true } } },
     }),

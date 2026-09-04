@@ -332,7 +332,9 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /paidAt: \{ lt: endExclusive \},\s+ledgerEntries: \{\s+none: \{\s+sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,\s+type: "remittance_received"/);
   assert.match(route, /const approvedAt = decision === "approved" \? new Date\(\) : null;\s+if \(approvedAt\) await assertAgencyPeriodOpen\(tx, current\.centerId, approvedAt\);[\s\S]*ensureAgencyClaimReceivable/);
   assert.match(route, /const effectiveAt = claim\.approvedAt \?\? new Date\(\);\s+await assertAgencyPeriodOpen\(tx, claim\.centerId, effectiveAt\)/);
-  assert.match(route, /agencyLedgerRunningBalances\(entries, updatedAccount\.balanceCents - entryTotalCents\)/);
+  assert.match(route, /agencyLedgerRunningBalances\(entries, finalBalanceCents - entryTotalCents\)/);
+  assert.match(route, /entry\.type === "remittance_received"[\s\S]*entry\.type === "remittance_reversal"/);
+  assert.match(route, /return netVarianceCount \+ missingLedgerEventCount/);
   assert.match(route, /status: "pending_review",\s+createdAt: \{ gte: startInclusive, lt: endExclusive \},\s+batch: \{ centerId, reviewedAt: \{ not: null \} \}/);
   assert.match(route, /if \(overlap\?\.status === "closed"\) return \{ period: overlap, reused: true \}/);
   assert.match(route, /if \(remittance\.reversedAt\) throw new AgencyWorkflowError[\s\S]*await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, input\.reversedAt\)/);
@@ -344,7 +346,8 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(controls, /canReviewRequest\(batch\.enteredById\)/);
   assert.match(controls, /canReviewRequest\(allocation\.requestedById\)/);
   assert.match(controls, /canReviewRequest\(adjustment\.requestedById\)/);
-  assert.match(route, /status: \{ in: \["pending_review", "unmatched", "partially_allocated", "exception"\] \}/);
+  assert.match(route, /status: \{ notIn: \["rejected", "reversed"\] \}/);
+  assert.match(route, /status: \{ in: \["pending_review", "posted"\] \}, reversedAt: null/);
   assert.match(route, /new Map\(\[\.\.\.unresolvedBatches, \.\.\.recentBatches\]/);
   assert.match(route, /new Map\(\[\.\.\.unresolvedAdjustments, \.\.\.recentAdjustments\]/);
   assert.match(retryKeys, /\(\) => globalThis\.sessionStorage, \(\) => globalThis\.localStorage/);
@@ -400,6 +403,7 @@ test("agency remittance reversals preserve history and recalculate paid totals",
   assert.match(route, /action === "reverseRemittance"/);
   assert.match(route, /action === "reverseRemittance"[\s\S]*reverseAgencyRemittanceRecord\(tx, \{[\s\S]*reviewerRole: auth\.user\.role[\s\S]*expectedClaimId: claim\.id[\s\S]*requireUnbatched: true/);
   assert.match(route, /input\.reviewerRole && !canReviewAgencyPosting\(\{ role: input\.reviewerRole, reviewerId: input\.reviewerId, requestedById: remittance\.enteredById \}\)/);
+  assert.match(route, /type: "agency_payment_reversal"[\s\S]*balanceAfterCents: 0[\s\S]*recalculateLegacyFamilyLedgerBalances\(tx, legacyPaymentEntry\.billingAccountId, updatedAccount\.balanceCents\)/);
   assert.match(route, /agency-remittance-reversal:/);
   assert.match(route, /billing\.subsidy_remittance\.reversed/);
   assert.match(route, /type: "agency_payment"/);

@@ -291,6 +291,7 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   const schema = readFileSync("prisma/schema.prisma", "utf8");
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const periodCloseReconciliation = route.slice(route.indexOf("async function agencyReconciliationVarianceCount"), route.indexOf("function claimRequirements"));
+  const periodCloseMutation = route.slice(route.indexOf('if (action === "closeAccountingPeriod")'), route.indexOf('if (action === "reopenAccountingPeriod")'));
   const controls = readFileSync("src/components/agency-reconciliation-controls.tsx", "utf8");
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
   const retryKeys = readFileSync("src/lib/agency-retry-key.ts", "utf8");
@@ -346,7 +347,9 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /recoveredAtPeriodClose'[\s\S]*recoveredById'[\s\S]*ON CONFLICT \("sourceSystem", "externalId"\) DO NOTHING[\s\S]*RETURNING "agencyLedgerAccountId", "claimId"/);
   assert.match(route, /const accountIds = \[\.\.\.new Set\(recovered\.map[\s\S]*recalculateAgencyLedgerBalances\(tx, accountId\)/);
   assert.match(route, /const recoveredClaimReceivableCount = await recoverMissingAgencyClaimReceivables\(tx, centerId, endExclusive, auth\.user\.id\);[\s\S]*agencyReconciliationVarianceCount\(tx, centerId, endExclusive\)/);
-  assert.match(route, /billing\.agency_accounting_period\.closed[\s\S]*recoveredClaimReceivableCount: result\.recoveredClaimReceivableCount/);
+  assert.match(periodCloseMutation, /billing\.agency_accounting_period\.closed[\s\S]*recoveredClaimReceivableCount[\s\S]*\}, tx\);[\s\S]*return \{ period, reused: false, recoveredClaimReceivableCount \}/);
+  assert.match(periodCloseMutation, /billing\.agency_accounting_period\.close_replayed[\s\S]*recoveredClaimReceivableCount: 0[\s\S]*\}, tx\);/);
+  assert.doesNotMatch(periodCloseMutation, /\}\);\s+const recoveryMessage/);
   assert.match(route, /message: result\.reused \? "This accounting period was already closed\." : `Accounting period closed\.\$\{recoveryMessage\}`/);
   assert.match(route, /COALESCE\(approval\."effectiveAt", claim\."approvedAt", claim\."updatedAt", claim\."createdAt"\) AS "approvalEffectiveAt"/);
   assert.match(route, /const \[ledgerAggregates, claimAggregates, remittanceAggregates, adjustmentAggregates\] = await Promise\.all/);
@@ -359,7 +362,7 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /agencyLedgerRunningBalances\(entries, finalBalanceCents - entryTotalCents\)/);
   assert.match(route, /"receivedBeforeEnd"[\s\S]*"reversalBeforeEnd"[\s\S]*"missingLedgerEventCount"/);
   assert.match(route, /return netVarianceCount \+ missingLedgerEventCount/);
-  assert.match(route, /if \(overlap\?\.status === "closed"\) return \{ period: overlap, reused: true, recoveredClaimReceivableCount: 0 \}/);
+  assert.match(route, /if \(overlap\?\.status === "closed"\) \{[\s\S]*return \{ period: overlap, reused: true, recoveredClaimReceivableCount: 0 \}/);
   assert.match(route, /if \(remittance\.reversedAt\) throw new AgencyWorkflowError[\s\S]*await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, input\.reversedAt\)/);
   assert.match(route, /if \(!agencyPaymentEntry\) \{\s+await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, remittance\.paidAt\)/);
   assert.match(route, /COUNT\(\*\) FILTER \(WHERE "approvedCents" > "paidCents" AND "dueDate" IS NOT NULL AND "dueDate" < \$\{today\}\)::bigint AS "overdueClaimCount"/);

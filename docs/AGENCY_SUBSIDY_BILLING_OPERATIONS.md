@@ -80,7 +80,7 @@ If the ledger does not reconcile, stop. Do not add a duplicate remittance or fam
 ## 7. Accounting Period Close
 
 1. Accounting reviews reconciliation variance, pending batches, pending adjustments, unapplied cash, aging, and follow-up exceptions.
-2. Close preflight restores a missing agency-receivable ledger event only when it can be derived exactly from an existing positive claim approval before the period end. The immutable recovery entry identifies the close-time recovery and actor; the close audit records the recovery count. It does not infer an approval, alter the approved amount, or touch family billing.
+2. Close preflight restores a missing agency-receivable ledger event only when it can be derived exactly from an existing positive claim approval before the period end. The immutable recovery entry identifies the close-time recovery and actor; the close audit and period close commit in the same transaction and record the recovery count. It does not infer an approval, alter the approved amount, or touch family billing.
 3. Close the exact school period only after every unresolved batch, additional allocation, and adjustment dated before the period end is cleared, including items from an earlier open gap. The period end cannot be later than the current UTC accounting day.
 4. Closed periods reject remittances and adjustments dated within or before the latest closed period, including dates in an earlier open gap.
 5. Reopening requires accounting access and a retained reason. Reopen later closed periods before earlier ones so every later certification is invalidated in order. Corrections should normally post in the current open period with the original event date retained in metadata.

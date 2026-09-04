@@ -2125,7 +2125,10 @@ async function postHandler(request: NextRequest) {
       result = await prisma.$transaction(async (tx) => {
         const overlap = await tx.agencyAccountingPeriod.findFirst({ where: { centerId, OR: [{ startDate: { lte: endDate }, endDate: { gte: startDate } }] } });
         if (overlap && (overlap.startDate.getTime() !== startDate.getTime() || overlap.endDate.getTime() !== endDate.getTime())) throw new AgencyWorkflowError(`This range overlaps ${overlap.name}.`, 409);
-        if (overlap?.status === "closed") return { period: overlap, reused: true, recoveredClaimReceivableCount: 0 };
+        if (overlap?.status === "closed") {
+          await writeAuditLog(auth.user, { centerId, action: "billing.agency_accounting_period.close_replayed", resource: "AgencyAccountingPeriod", resourceId: overlap.id, metadata: { name, startDate, endDate, reasonRecorded: true, reused: true, recoveredClaimReceivableCount: 0 } }, tx);
+          return { period: overlap, reused: true, recoveredClaimReceivableCount: 0 };
+        }
         const recoveredClaimReceivableCount = await recoverMissingAgencyClaimReceivables(tx, centerId, endExclusive, auth.user.id);
         const [unresolvedBatches, pendingAllocations, pendingAdjustments, reconciliationVariances] = await Promise.all([
           tx.agencyRemittanceBatch.count({
@@ -2158,6 +2161,7 @@ async function postHandler(request: NextRequest) {
         const period = overlap
           ? await tx.agencyAccountingPeriod.update({ where: { id: overlap.id }, data: { name, status: "closed", closedAt: new Date(), closedById: auth.user.id, closeReason: reason } })
           : await tx.agencyAccountingPeriod.create({ data: { centerId, name, startDate, endDate, status: "closed", closedAt: new Date(), closedById: auth.user.id, closeReason: reason } });
+        await writeAuditLog(auth.user, { centerId, action: "billing.agency_accounting_period.closed", resource: "AgencyAccountingPeriod", resourceId: period.id, metadata: { name, startDate, endDate, reasonRecorded: true, reused: false, recoveredClaimReceivableCount } }, tx);
         return { period, reused: false, recoveredClaimReceivableCount };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -2165,7 +2169,6 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The accounting period changed while it was being closed. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId, action: result.reused ? "billing.agency_accounting_period.close_replayed" : "billing.agency_accounting_period.closed", resource: "AgencyAccountingPeriod", resourceId: result.period.id, metadata: { name, startDate, endDate, reasonRecorded: true, reused: result.reused, recoveredClaimReceivableCount: result.recoveredClaimReceivableCount } });
     const recoveryMessage = result.recoveredClaimReceivableCount
       ? ` Recovered ${result.recoveredClaimReceivableCount} missing receivable event${result.recoveredClaimReceivableCount === 1 ? "" : "s"} from recorded agency approvals before reconciliation.`
       : "";

@@ -52,11 +52,13 @@ export function FamilyLedgerCard({
   families,
   schools,
   initialFamilyId = "",
+  readOnly = false,
 }: {
   entries: FamilyLedgerEntry[];
   families: FamilyOption[];
   schools: BillingReceiptSchool[];
   initialFamilyId?: string;
+  readOnly?: boolean;
 }) {
   const timeZone = useSchoolTimeZone();
   const validInitialFamilyId = families.some((family) => family.id === initialFamilyId)
@@ -113,13 +115,15 @@ export function FamilyLedgerCard({
                 {visibleEntries.length} ledger entr{visibleEntries.length === 1 ? "y" : "ies"}
               </div>
             </div>
-            <Link
-              href={`/family-detail?familyId=${encodeURIComponent(selectedFamily.id)}#family-editor`}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <ArrowRight data-icon="inline-start" />
-              Family profile
-            </Link>
+            {!readOnly ? (
+              <Link
+                href={`/family-detail?familyId=${encodeURIComponent(selectedFamily.id)}#family-editor`}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                <ArrowRight data-icon="inline-start" />
+                Family profile
+              </Link>
+            ) : null}
           </div>
         ) : null}
         <Table>

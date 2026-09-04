@@ -18,6 +18,7 @@ const steps = [
       "Sign in through the Director workspace, confirm the exact school, then open Billing & Payments > Billing & invoices > Agency receivables.",
       "Select the school and check Programs ready.",
       "Continue only when the selected program shows Ready and its school-specific provider/vendor identity, submission method, and payment setup are documented.",
+      "Before the expanded workflow is activated for that school, accounting must also configure its A/R, cash, adjustment, and cost-center mappings and verify two distinct authorized reviewers.",
     ],
     stop: "Stop if the wrong school is shown, the program says Setup required, or any provider, portal, or payment setup belongs to another location.",
   },
@@ -113,7 +114,8 @@ export default function AgencyPaymentReconciliationPage() {
             <h1 className="mt-5 max-w-4xl text-4xl font-semibold leading-tight sm:text-5xl">Agency Payment And Reconciliation SOP</h1>
             <p className="mt-5 max-w-3xl text-base leading-7 text-slate-300">Use this guide to stage one agency deposit, obtain independent review, and prove the claims, cash allocation, and dedicated agency ledger agree without changing what the family owes.</p>
             <div className="mt-7 flex flex-wrap gap-3"><Button nativeButton={false} render={<Link href="/billing-invoices#agency-subsidy-billing" />}>Open agency workspace<ArrowRight data-icon="inline-end" /></Button><Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="#preflight" />}>Review preflight</Button></div>
-            <div className="mt-7 rounded-lg border border-red-300/20 bg-red-400/10 p-4 text-sm leading-6 text-red-100">A bank deposit or Stripe payout is not enough. Do not record anything until the exact school, agency, authorization, service period, approved claim, amount, paid date, and external reference match.</div>
+            <div className="mt-7 rounded-lg border border-sky-300/20 bg-sky-400/10 p-4 text-sm leading-6 text-sky-100">Release and school activation are separate. A preview build does not prove compatibility with an unmigrated production database. Until the expanded workflow is released and your exact school is activated, authorized staff should continue the baseline direct <strong>Record remittance</strong> process shown in the production workspace.</div>
+            <div className="mt-3 rounded-lg border border-red-300/20 bg-red-400/10 p-4 text-sm leading-6 text-red-100">A bank deposit or Stripe payout is not enough. Do not record anything until the exact school, agency, authorization, service period, approved claim, amount, paid date, and external reference match.</div>
           </div>
         </div>
       </section>

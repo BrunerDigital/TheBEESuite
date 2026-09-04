@@ -24,8 +24,9 @@ A Stripe payout or bank deposit alone is not agency-remittance proof. It does no
 
 1. Select one exact school. `All authorized schools` is a consolidated read-only accounting view.
 2. Confirm the agency program shows `Ready` and uses this school's provider/vendor identity, submission method, and payment setup.
-3. Record optional A/R, cash, adjustment, and cost-center codes when accounting exports need them.
-4. Stop if setup is incomplete, expired, or belongs to another location.
+3. Baseline direct `Record remittance` remains available to authorized billing staff before activation without requiring accounting export codes.
+4. Before activating the expanded workflow, configure nonblank A/R, cash, adjustment, and cost-center codes for every active program in the exact school. Activation and controlled ledger actions fail closed while any mapping is missing.
+5. Stop if setup is incomplete, expired, or belongs to another location.
 
 ## 2. Confirm Authorization And Claim
 
@@ -48,7 +49,7 @@ Duplicate references and replayed requests are blocked per school and agency. Re
 
 ## 4. Independent Review And Posting
 
-1. A different billing administrator or accounting reviewer compares the batch to the source evidence.
+1. A different billing administrator or accounting reviewer compares the batch to the source evidence. The preparer and reviewer must be two distinct authorized, active users for this exact school.
 2. The reviewer approves or rejects the batch. The preparer cannot approve their own batch.
 3. Approval posts claim allocations and one explicit unapplied-cash entry for any remainder in one serializable transaction.
 4. The reviewer confirms the deposit total equals allocated plus unapplied cash.
@@ -82,7 +83,7 @@ If the ledger does not reconcile, stop. Do not add a duplicate remittance or fam
 ## 7. Accounting Period Close
 
 1. Accounting reviews reconciliation variance, pending batches, pending adjustments, unapplied cash, aging, and follow-up exceptions.
-2. Close preflight restores missing agency-ledger events only when they can be derived exactly from an existing positive claim approval, recorded remittance, or recorded reversal before the period end. Each immutable recovery entry identifies the close-time recovery and actor; the close audit and period close commit in the same transaction and record separate approval, receipt, and reversal recovery counts. It does not infer an approval or payment, alter recorded amounts, or touch family billing.
+2. Close preflight never reconstructs a claim approval, direct remittance, adjustment, or reversal from today's editable program mappings. It may restore a missing controlled-batch event only when immutable event-time batch snapshots and exact source links prove the amount, effective date, school, program, claim, and remittance. Missing or conflicting evidence blocks close. Each recovery entry identifies the close-time recovery and actor; the close audit and period close commit atomically. It does not infer an approval or payment, alter recorded amounts, or touch family billing.
 3. Close the exact school period only after every unresolved batch, additional allocation, and adjustment dated before the period end is cleared, including items from an earlier open gap. The period end cannot be later than the current UTC accounting day.
 4. Closed periods reject remittances and adjustments dated within or before the latest closed period, including dates in an earlier open gap.
 5. Reopening requires accounting access and a retained reason. Reopen later closed periods before earlier ones so every later certification is invalidated in order. Corrections should normally post in the current open period with the original event date retained in metadata.
@@ -106,3 +107,10 @@ The shared software does not activate a school's business process. These are sep
 5. **First-deposit reconciliation approval** requires two authorized users to post and independently verify the pilot school's first real deposit before the workflow is declared live there.
 
 Before activation, each school also needs current provider/payment evidence, authorized users, configured programs and accounting mappings, verified authorizations, an approved dual-review policy, and a reviewed legacy-family-history report. Real payment posting, responsibility changes, and provider/bank changes remain separate approvals.
+
+## Access Continuity
+
+- Platform owners, brand administrators, regional managers, center directors, assistant directors, and billing administrators keep the baseline claim and direct `Record remittance` workflow for schools that have not been activated.
+- After activation, those same exact-school roles may prepare controlled activity. A different authorized accounting-capable user must review it; a preparer cannot approve their own posting.
+- The all-schools workspace is read-only. Read-only auditors may inspect authorized records and exports but cannot mutate them. Teachers, parents/guardians, and authorized pickups have no agency-financial mutation access.
+- Activation changes only the selected school's agency accounting workflow. It does not remove access to unrelated billing, enrollment, classroom, parent, payment-method, or reporting work.

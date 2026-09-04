@@ -10,8 +10,10 @@ import {
   agencyRemittanceReversalLedgerExternalId,
   AGENCY_LEDGER_SOURCE_SYSTEM,
   AGENCY_SUBMISSION_METHODS,
+  agencyControlledLedgerSetupBlockers,
   agencyProgramSetupBlockers,
   agencyProgramStatus,
+  agencyReconciliationActivationBlockers,
   claimAmountCents,
   claimSubmissionBlockers,
   nextRemittanceStatus,
@@ -47,6 +49,7 @@ const REMITTANCE_METHODS = new Set(["ach", "check", "agency_portal", "other"]);
 const SUBMISSION_METHODS = new Set<string>(AGENCY_SUBMISSION_METHODS);
 const UNIT_PRECISION = 1_000_000;
 const POSTGRES_INT_MAX_CENTS = 2_147_483_647;
+const AGENCY_RECEIVABLE_CLAIM_STATUSES = new Set(["approved", "partially_paid", "paid"]);
 const CLAIM_PAGE_SIZE = 100;
 const AGENCY_LEDGER_ENTRY_LIMIT = 250;
 const AGENCY_BATCH_LIMIT = 100;
@@ -142,7 +145,7 @@ async function agencyReconciliationClaimAggregates(centerIds: string[], asOf = n
       LEFT JOIN "SubsidyRemittance" remittance ON remittance."claimId" = claim.id
       WHERE claim."centerId" IN (${Prisma.join(centerIds)})
         AND claim."approvedCents" > 0
-        AND claim.status NOT IN ('void', 'denied')
+        AND claim.status IN ('approved', 'partially_paid', 'paid')
       GROUP BY claim.id, claim."agencyProgramId", claim."dueDate", claim."approvedCents", claim."claimedCents", claim."paidCents"
     ), claim_outstanding AS (
       SELECT *, GREATEST(0::bigint, "approvedCents" - "remittedCents") AS "outstandingCents"
@@ -227,6 +230,33 @@ async function assertAgencyPeriodOpen(tx: Prisma.TransactionClient, centerId: st
   if (closed) throw new AgencyWorkflowError(`${closed.name} or a later accounting period is closed. Post a current-period correcting entry instead of backdating this transaction.`, 409);
 }
 
+async function requireAgencyReconciliationEnabled(tx: Prisma.TransactionClient, centerId: string) {
+  const center = await tx.center.findUnique({
+    where: { id: centerId },
+    select: {
+      agencyReconciliationEnabled: true,
+      agencyPrograms: {
+        where: { status: "active" },
+        select: {
+          name: true,
+          status: true,
+          receivableGlCode: true,
+          cashGlCode: true,
+          adjustmentGlCode: true,
+          costCenterCode: true,
+        },
+      },
+    },
+  });
+  if (!center?.agencyReconciliationEnabled) {
+    throw new AgencyWorkflowError("The reviewed agency reconciliation workflow is not activated for this school. Continue using the existing direct remittance process.", 409);
+  }
+  const blockers = agencyReconciliationActivationBlockers(center.agencyPrograms);
+  if (blockers.length) {
+    throw new AgencyWorkflowError(`Reviewed agency reconciliation is blocked until every active program has complete accounting mappings. ${blockers.join(" ")}`, 409);
+  }
+}
+
 async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, centerId: string, endExclusive: Date) {
   const [ledgerAggregates, claimAggregates, remittanceAggregates, adjustmentAggregates] = await Promise.all([
     tx.$queryRaw<AgencyPeriodLedgerAggregateRow[]>`
@@ -246,7 +276,7 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
       WITH scoped_claims AS (
         SELECT claim."agencyProgramId",
           COALESCE(claim."approvedCents", claim."claimedCents")::bigint AS "approvedCents",
-          COALESCE(approval."effectiveAt", claim."approvedAt", claim."updatedAt", claim."createdAt") AS "approvalEffectiveAt",
+          COALESCE(approval."effectiveAt", claim."approvedAt", claim."createdAt") AS "approvalEffectiveAt",
           approval.id AS "approvalEntryId"
         FROM "SubsidyClaim" claim
         LEFT JOIN LATERAL (
@@ -260,7 +290,7 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
         ) approval ON TRUE
         WHERE claim."centerId" = ${centerId}
           AND claim."approvedCents" > 0
-          AND claim.status NOT IN ('void', 'denied')
+          AND claim.status IN ('approved', 'partially_paid', 'paid')
       )
       SELECT "agencyProgramId",
         COALESCE(SUM("approvedCents") FILTER (WHERE "approvalEffectiveAt" < ${endExclusive}), 0)::bigint AS "expectedCents",
@@ -380,6 +410,50 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
   return netVarianceCount + missingLedgerEventCount;
 }
 
+async function agencyClaimSourceConflictCount(tx: Prisma.TransactionClient, centerId: string, endExclusive: Date) {
+  const [result] = await tx.$queryRaw<Array<{ conflictCount: bigint }>>`
+    WITH claim_sources AS (
+      SELECT claim.id,
+        claim.status,
+        claim."approvedCents",
+        claim."claimedCents",
+        claim."paidCents"::bigint AS "paidCents",
+        (COALESCE(approval."effectiveAt", claim."approvedAt", claim."createdAt") < ${endExclusive}
+          OR COALESCE(BOOL_OR(remittance."paidAt" < ${endExclusive}), FALSE)) AS "sourceInScope",
+        COUNT(remittance.id) FILTER (
+          WHERE remittance."paidAt" >= ${endExclusive}
+             OR remittance."reversedAt" >= ${endExclusive}
+        )::bigint AS "laterFinancialEventCount",
+        COALESCE(SUM(remittance."amountCents") FILTER (
+          WHERE remittance."paidAt" < ${endExclusive}
+            AND (remittance."reversedAt" IS NULL OR remittance."reversedAt" >= ${endExclusive})
+        ), 0)::bigint AS "activeRemittanceCents"
+      FROM "SubsidyClaim" claim
+      LEFT JOIN "SubsidyRemittance" remittance ON remittance."claimId" = claim.id
+      LEFT JOIN "AgencyLedgerEntry" approval
+        ON approval."claimId" = claim.id
+       AND approval."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+       AND approval.type = 'claim_approved'
+      WHERE claim."centerId" = ${centerId}
+      GROUP BY claim.id, claim.status, claim."approvedCents", claim."claimedCents", claim."paidCents", approval."effectiveAt", claim."approvedAt", claim."createdAt"
+    )
+    SELECT COUNT(*)::bigint AS "conflictCount"
+    FROM claim_sources
+    WHERE "sourceInScope" AND (
+      COALESCE("approvedCents", 0) <= 0
+      OR "approvedCents" > "claimedCents"
+      OR ("laterFinancialEventCount" = 0 AND (
+        status NOT IN ('approved', 'partially_paid', 'paid')
+        OR "paidCents" <> "activeRemittanceCents"
+        OR (status = 'approved' AND "activeRemittanceCents" <> 0)
+        OR (status = 'partially_paid' AND ("activeRemittanceCents" <= 0 OR "activeRemittanceCents" >= "approvedCents"))
+        OR (status = 'paid' AND "activeRemittanceCents" <> "approvedCents")
+      ))
+    )
+  `;
+  return Number(result?.conflictCount ?? 0);
+}
+
 function claimRequirements(claim: {
   agencyProgram: { requirements?: unknown };
   authorization?: { requiredDocuments?: unknown } | null;
@@ -404,15 +478,35 @@ type AgencyLedgerClaimInput = {
   centerId: string;
   agencyProgramId: string;
   number: string;
+  status: string;
   approvedCents: number | null;
   approvedAt: Date | null;
   updatedAt: Date;
   createdAt: Date;
   externalReference: string | null;
-  agencyProgram: { name: string };
+  agencyProgram: { name: string; centerId: string };
+  authorization?: { agencyProgramId: string } | null;
 };
 
 async function recalculateAgencyLedgerBalances(tx: Prisma.TransactionClient, agencyLedgerAccountId: string) {
+  const [bounds] = await tx.$queryRaw<Array<{ minimumBalanceCents: bigint | null; maximumBalanceCents: bigint | null }>>`
+    WITH running AS (
+      SELECT SUM("amountCents"::bigint) OVER (
+        ORDER BY "effectiveAt" ASC, "createdAt" ASC, id ASC
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+      ) AS "balanceCents"
+      FROM "AgencyLedgerEntry"
+      WHERE "agencyLedgerAccountId" = ${agencyLedgerAccountId}
+    )
+    SELECT MIN("balanceCents") AS "minimumBalanceCents", MAX("balanceCents") AS "maximumBalanceCents"
+    FROM running
+  `;
+  if (
+    (bounds?.minimumBalanceCents !== null && bounds?.minimumBalanceCents !== undefined && bounds.minimumBalanceCents < BigInt(-POSTGRES_INT_MAX_CENTS - 1))
+    || (bounds?.maximumBalanceCents !== null && bounds?.maximumBalanceCents !== undefined && bounds.maximumBalanceCents > BigInt(POSTGRES_INT_MAX_CENTS))
+  ) {
+    throw new AgencyWorkflowError("This posting would exceed the supported agency-ledger balance range. No financial entry was committed.", 409);
+  }
   await tx.$executeRaw`
     WITH running AS (
       SELECT id,
@@ -454,11 +548,13 @@ async function appendAgencyLedgerEntry(tx: Prisma.TransactionClient, input: {
   externalReference?: string | null;
   externalId: string;
   metadata?: Prisma.InputJsonValue;
+  accountingSnapshot?: { glCode: string | null; costCenterCode: string | null };
 }, options: { recalculate?: boolean } = {}) {
   const account = await tx.agencyLedgerAccount.upsert({
     where: { centerId_agencyProgramId: { centerId: input.centerId, agencyProgramId: input.agencyProgramId } },
     create: { centerId: input.centerId, agencyProgramId: input.agencyProgramId, balanceCents: 0 },
     update: { balanceCents: { increment: 0 } },
+    include: { agencyProgram: { select: { receivableGlCode: true, cashGlCode: true, adjustmentGlCode: true, costCenterCode: true } } },
   });
   const entry = await tx.agencyLedgerEntry.create({ data: {
     agencyLedgerAccountId: account.id,
@@ -472,6 +568,8 @@ async function appendAgencyLedgerEntry(tx: Prisma.TransactionClient, input: {
     balanceAfterCents: 0,
     effectiveAt: input.effectiveAt,
     externalReference: input.externalReference || null,
+    glCodeSnapshot: input.accountingSnapshot ? input.accountingSnapshot.glCode : agencyEntryGlCode(input.type, account.agencyProgram),
+    costCenterCodeSnapshot: input.accountingSnapshot ? input.accountingSnapshot.costCenterCode : account.agencyProgram.costCenterCode,
     sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
     externalId: input.externalId,
     metadata: input.metadata,
@@ -483,14 +581,31 @@ async function appendAgencyLedgerEntry(tx: Prisma.TransactionClient, input: {
 }
 
 async function ensureAgencyClaimReceivable(tx: Prisma.TransactionClient, claim: AgencyLedgerClaimInput, options: { recalculate?: boolean } = {}) {
+  if (claim.agencyProgram.centerId !== claim.centerId) throw new AgencyWorkflowError("The claim and agency program school relationship is inconsistent. No receivable was posted.", 409);
+  if (claim.authorization && claim.authorization.agencyProgramId !== claim.agencyProgramId) throw new AgencyWorkflowError("The claim and authorization agency relationship is inconsistent. No receivable was posted.", 409);
+  const approvedCents = claim.approvedCents ?? 0;
+  if (approvedCents <= 0 || !AGENCY_RECEIVABLE_CLAIM_STATUSES.has(claim.status)) throw new AgencyWorkflowError("Record a supported positive agency approval before creating its receivable.", 409);
+  // Legacy approvals can have no approvedAt. createdAt is the only stable fallback;
+  // updatedAt changes after payments and must never rewrite approval chronology.
+  const effectiveAt = claim.approvedAt ?? claim.createdAt;
   const externalId = agencyClaimApprovalLedgerExternalId(claim.id);
   const existing = await tx.agencyLedgerEntry.findUnique({
     where: { sourceSystem_externalId: { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM, externalId } },
+    include: { agencyLedgerAccount: { select: { centerId: true, agencyProgramId: true } } },
   });
-  if (existing) return { entry: existing, created: false };
-  const approvedCents = claim.approvedCents ?? 0;
-  if (approvedCents <= 0) throw new AgencyWorkflowError("Record a positive agency approval before creating its receivable.", 409);
-  const effectiveAt = claim.approvedAt ?? claim.updatedAt ?? claim.createdAt;
+  if (existing) {
+    if (existing.agencyLedgerAccount.centerId !== claim.centerId
+      || existing.agencyLedgerAccount.agencyProgramId !== claim.agencyProgramId
+      || existing.claimId !== claim.id
+      || existing.remittanceId !== null
+      || existing.type !== "claim_approved"
+      || existing.amountCents !== approvedCents
+      || existing.effectiveAt.getTime() !== effectiveAt.getTime()
+      || existing.externalReference !== claim.externalReference) {
+      throw new AgencyWorkflowError("The existing agency receivable conflicts with the current approved claim evidence.", 409);
+    }
+    return { entry: existing, created: false };
+  }
   await assertAgencyPeriodOpen(tx, claim.centerId, effectiveAt);
   const result = await appendAgencyLedgerEntry(tx, {
     centerId: claim.centerId,
@@ -513,84 +628,270 @@ async function recoverMissingAgencyLedgerCutoverEvents(
   endExclusive: Date,
   recoveredById: string,
 ): Promise<RecoveredAgencyLedgerEventCounts> {
-  await tx.$executeRaw`
-    INSERT INTO "AgencyLedgerAccount" (id, "centerId", "agencyProgramId", "balanceCents", "createdAt", "updatedAt")
-    SELECT
-      'agency-ledger-account:' || program.id,
-      program."centerId",
-      program.id,
-      0,
-      program."createdAt",
-      CURRENT_TIMESTAMP
-    FROM "AgencyProgram" program
-    WHERE program."centerId" = ${centerId}
-      AND EXISTS (
-        SELECT 1
-        FROM "SubsidyClaim" claim
-        WHERE claim."centerId" = ${centerId}
-          AND claim."agencyProgramId" = program.id
-          AND claim."approvedCents" > 0
-          AND claim.status NOT IN ('void', 'denied')
-          AND COALESCE(claim."approvedAt", claim."updatedAt", claim."createdAt") < ${endExclusive}
-          AND NOT EXISTS (
-            SELECT 1
-            FROM "AgencyLedgerEntry" entry
-            WHERE entry."claimId" = claim.id
-              AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
-              AND entry.type = 'claim_approved'
-          )
-      )
-    ON CONFLICT ("centerId", "agencyProgramId") DO NOTHING
-  `;
-  const recoveredClaimReceivables = await tx.$queryRaw<RecoveredAgencyLedgerEventRow[]>`
-    INSERT INTO "AgencyLedgerEntry" (
-      id, "agencyLedgerAccountId", "claimId", type, description,
-      "amountCents", "balanceAfterCents", "effectiveAt", "externalReference",
-      "sourceSystem", "externalId", metadata, "createdAt"
+  const [scopeConflict] = await tx.$queryRaw<Array<{ conflictCount: bigint }>>`
+    /* agency-close:scope-evidence */
+    WITH scope_conflicts AS (
+      SELECT 'claim:' || claim.id AS id
+      FROM "SubsidyClaim" claim
+      JOIN "AgencyProgram" program ON program.id = claim."agencyProgramId"
+      LEFT JOIN "SubsidyAuthorization" authorization_row ON authorization_row.id = claim."authorizationId"
+      WHERE claim."centerId" = ${centerId}
+        AND (program."centerId" <> claim."centerId"
+          OR (authorization_row.id IS NOT NULL AND (
+            authorization_row."centerId" <> claim."centerId"
+            OR authorization_row."agencyProgramId" <> claim."agencyProgramId"
+          )))
+      UNION ALL
+      SELECT 'remittance:' || remittance.id
+      FROM "SubsidyRemittance" remittance
+      JOIN "SubsidyClaim" claim ON claim.id = remittance."claimId"
+      JOIN "AgencyRemittanceAllocation" allocation ON allocation."remittanceId" = remittance.id
+      JOIN "AgencyRemittanceBatch" batch ON batch.id = allocation."batchId"
+      WHERE (claim."centerId" = ${centerId} OR batch."centerId" = ${centerId})
+        AND (allocation."claimId" <> claim.id
+          OR batch."centerId" <> claim."centerId"
+          OR batch."agencyProgramId" <> claim."agencyProgramId")
+      UNION ALL
+      SELECT 'adjustment:' || adjustment.id
+      FROM "AgencyLedgerAdjustment" adjustment
+      JOIN "AgencyLedgerAccount" account ON account.id = adjustment."ledgerAccountId"
+      LEFT JOIN "SubsidyClaim" claim ON claim.id = adjustment."claimId"
+      LEFT JOIN "AgencyRemittanceBatch" batch ON batch.id = adjustment."batchId"
+      WHERE adjustment."centerId" = ${centerId}
+        AND (account."centerId" <> adjustment."centerId"
+          OR account."agencyProgramId" <> adjustment."agencyProgramId"
+          OR (claim.id IS NOT NULL AND (
+            claim."centerId" <> adjustment."centerId"
+            OR claim."agencyProgramId" <> adjustment."agencyProgramId"
+          ))
+          OR (batch.id IS NOT NULL AND (
+            batch."centerId" <> adjustment."centerId"
+            OR batch."agencyProgramId" <> adjustment."agencyProgramId"
+          )))
     )
-    SELECT
-      'agency-ledger-claim:' || claim.id,
-      account.id,
-      claim.id,
-      'claim_approved',
-      program.name || ' approved ' || claim.number,
-      claim."approvedCents",
-      0,
-      COALESCE(claim."approvedAt", claim."updatedAt", claim."createdAt"),
-      claim."externalReference",
-      ${AGENCY_LEDGER_SOURCE_SYSTEM},
-      'claim-approved:' || claim.id,
-      jsonb_build_object(
-        'claimNumber', claim.number,
-        'recoveredAtPeriodClose', true,
-        'recoveredById', ${recoveredById}
-      ),
-      COALESCE(claim."approvedAt", claim."createdAt")
+    SELECT COUNT(*)::bigint AS "conflictCount"
+    FROM scope_conflicts
+  `;
+  if (Number(scopeConflict?.conflictCount ?? 0) > 0) throw new AgencyWorkflowError("Agency ledger close found source evidence outside its exact claim, school, program, batch, or account scope.", 409);
+  // These source rows and their events commit atomically in the application, and the
+  // migrations backfill pre-cutover history. Neither carries enough event-time mapping
+  // evidence to reconstruct a missing event safely at close, so fail closed instead.
+  const [claimEvidenceConflict] = await tx.$queryRaw<Array<{ conflictCount: bigint }>>`
+    /* agency-close:claim-evidence */
+    SELECT COUNT(*)::bigint AS "conflictCount"
     FROM "SubsidyClaim" claim
-    JOIN "AgencyProgram" program
-      ON program.id = claim."agencyProgramId"
-      AND program."centerId" = claim."centerId"
-    JOIN "AgencyLedgerAccount" account
-      ON account."centerId" = claim."centerId"
-      AND account."agencyProgramId" = claim."agencyProgramId"
     WHERE claim."centerId" = ${centerId}
       AND claim."approvedCents" > 0
-      AND claim.status NOT IN ('void', 'denied')
-      AND COALESCE(claim."approvedAt", claim."updatedAt", claim."createdAt") < ${endExclusive}
+      AND claim.status IN ('approved', 'partially_paid', 'paid')
+      AND COALESCE(claim."approvedAt", claim."createdAt") < ${endExclusive}
+      AND (
+        (SELECT COUNT(*)
+         FROM "AgencyLedgerEntry" candidate
+         WHERE (candidate."claimId" = claim.id AND candidate.type = 'claim_approved')
+            OR (candidate."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+              AND candidate."externalId" = 'claim-approved:' || claim.id)) <> 1
+        OR NOT EXISTS (
+          SELECT 1
+          FROM "AgencyLedgerEntry" entry
+          JOIN "AgencyLedgerAccount" account ON account.id = entry."agencyLedgerAccountId"
+          WHERE entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+            AND entry."externalId" = 'claim-approved:' || claim.id
+            AND entry.type = 'claim_approved'
+            AND entry."claimId" = claim.id
+            AND entry."remittanceId" IS NULL
+            AND entry."remittanceBatchId" IS NULL
+            AND entry."adjustmentId" IS NULL
+            AND entry."amountCents" = claim."approvedCents"
+            AND entry."effectiveAt" = COALESCE(claim."approvedAt", claim."createdAt")
+            AND entry."externalReference" IS NOT DISTINCT FROM claim."externalReference"
+            AND account."centerId" = claim."centerId"
+            AND account."agencyProgramId" = claim."agencyProgramId"
+        )
+      )
+  `;
+  if (Number(claimEvidenceConflict?.conflictCount ?? 0) > 0) {
+    throw new AgencyWorkflowError("Agency ledger close found a missing, duplicate, or conflicting claim-approval event. Restore and verify its immutable evidence before closing the period.", 409);
+  }
+
+  const [directReceiptEvidenceConflict] = await tx.$queryRaw<Array<{ conflictCount: bigint }>>`
+    /* agency-close:direct-receipt-evidence */
+    SELECT COUNT(*)::bigint AS "conflictCount"
+    FROM "SubsidyRemittance" remittance
+    JOIN "SubsidyClaim" claim ON claim.id = remittance."claimId"
+    WHERE claim."centerId" = ${centerId}
+      AND remittance."paidAt" < ${endExclusive}
       AND NOT EXISTS (
         SELECT 1
-        FROM "AgencyLedgerEntry" entry
-        WHERE entry."claimId" = claim.id
-          AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
-          AND entry.type = 'claim_approved'
+        FROM "AgencyRemittanceAllocation" allocation
+        WHERE allocation."remittanceId" = remittance.id
       )
-    ON CONFLICT ("sourceSystem", "externalId") DO NOTHING
-    RETURNING "agencyLedgerAccountId"
+      AND (
+        remittance."amountCents" <= 0
+        OR NULLIF(BTRIM(remittance."externalReference"), '') IS NULL
+        OR remittance."paymentMethod" NOT IN ('ach', 'check', 'agency_portal', 'other')
+        OR NULLIF(BTRIM(remittance."enteredById"), '') IS NULL
+        OR (SELECT COUNT(*)
+            FROM "AgencyLedgerEntry" candidate
+            WHERE (candidate."remittanceId" = remittance.id AND candidate.type = 'remittance_received')
+               OR (candidate."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+                 AND candidate."externalId" = 'remittance:' || remittance.id)) <> 1
+        OR NOT EXISTS (
+          SELECT 1
+          FROM "AgencyLedgerEntry" entry
+          JOIN "AgencyLedgerAccount" account ON account.id = entry."agencyLedgerAccountId"
+          WHERE entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+            AND entry."externalId" = 'remittance:' || remittance.id
+            AND entry.type = 'remittance_received'
+            AND entry."claimId" = claim.id
+            AND entry."remittanceId" = remittance.id
+            AND entry."remittanceBatchId" IS NULL
+            AND entry."adjustmentId" IS NULL
+            AND entry."amountCents" = -remittance."amountCents"
+            AND entry."effectiveAt" = remittance."paidAt"
+            AND entry."externalReference" = remittance."externalReference"
+            AND account."centerId" = claim."centerId"
+            AND account."agencyProgramId" = claim."agencyProgramId"
+        )
+      )
   `;
+  if (Number(directReceiptEvidenceConflict?.conflictCount ?? 0) > 0) {
+    throw new AgencyWorkflowError("Agency ledger close found a missing, duplicate, or conflicting direct-remittance receipt. Direct receipts cannot be reconstructed without their original event-time evidence.", 409);
+  }
+
+  // Only a reviewed controlled batch persists the immutable cash and cost-center
+  // snapshots needed for safe receipt recovery. Invalid source state and any
+  // colliding receipt evidence block close before an insert is attempted.
+  const [controlledReceiptConflict] = await tx.$queryRaw<Array<{ conflictCount: bigint }>>`
+    /* agency-close:controlled-receipt-precheck */
+    WITH expected_receipts AS (
+      SELECT remittance.id AS "remittanceId",
+        remittance."amountCents",
+        remittance."paidAt",
+        remittance."externalReference",
+        remittance."enteredById",
+        remittance."reversedAt",
+        claim.id AS "claimId",
+        claim."centerId",
+        claim."agencyProgramId",
+        allocation."claimId" AS "allocationClaimId",
+        allocation."amountCents" AS "allocationAmountCents",
+        allocation.status AS "allocationStatus",
+        allocation."reviewedAt" AS "allocationReviewedAt",
+        allocation."reviewedById" AS "allocationReviewedById",
+        allocation."requestedById" AS "allocationRequestedById",
+        allocation."createdAt" AS "allocationCreatedAt",
+        batch.id AS "batchId",
+        batch."centerId" AS "batchCenterId",
+        batch."agencyProgramId" AS "batchAgencyProgramId",
+        batch.status AS "batchStatus",
+        batch."paidAt" AS "batchPaidAt",
+        batch."externalReference" AS "batchExternalReference",
+        batch."enteredById" AS "batchEnteredById",
+        batch."reviewedAt" AS "batchReviewedAt",
+        batch."reviewedById" AS "batchReviewedById",
+        batch."reversedAt" AS "batchReversedAt",
+        batch."cashGlCodeSnapshot",
+        batch."costCenterCodeSnapshot",
+        account.id AS "accountId",
+        CASE
+          WHEN allocation."createdAt" > batch."reviewedAt" THEN allocation."reviewedAt"
+          ELSE remittance."paidAt"
+        END AS "expectedEffectiveAt"
+      FROM "SubsidyRemittance" remittance
+      JOIN "SubsidyClaim" claim ON claim.id = remittance."claimId"
+      JOIN "AgencyRemittanceAllocation" allocation ON allocation."remittanceId" = remittance.id
+      JOIN "AgencyRemittanceBatch" batch ON batch.id = allocation."batchId"
+      LEFT JOIN "AgencyLedgerAccount" account
+        ON account."centerId" = claim."centerId"
+        AND account."agencyProgramId" = claim."agencyProgramId"
+      WHERE claim."centerId" = ${centerId}
+    ), classified AS (
+      SELECT expected.*,
+        (
+          expected."allocationClaimId" = expected."claimId"
+          AND expected."batchCenterId" = expected."centerId"
+          AND expected."batchAgencyProgramId" = expected."agencyProgramId"
+          AND expected."accountId" IS NOT NULL
+          AND expected."amountCents" > 0
+          AND expected."allocationAmountCents" = expected."amountCents"
+          AND expected."batchPaidAt" = expected."paidAt"
+          AND expected."batchExternalReference" = expected."externalReference"
+          AND NULLIF(BTRIM(expected."externalReference"), '') IS NOT NULL
+          AND NULLIF(BTRIM(expected."enteredById"), '') IS NOT NULL
+          AND expected."batchReviewedAt" IS NOT NULL
+          AND NULLIF(BTRIM(expected."batchReviewedById"), '') IS NOT NULL
+          AND expected."batchReviewedById" <> expected."batchEnteredById"
+          AND expected."allocationReviewedAt" IS NOT NULL
+          AND NULLIF(BTRIM(expected."allocationReviewedById"), '') IS NOT NULL
+          AND expected."allocationReviewedById" = expected."enteredById"
+          AND expected."allocationReviewedById" <> expected."allocationRequestedById"
+          AND (expected."allocationCreatedAt" > expected."batchReviewedAt" OR (
+            expected."allocationRequestedById" = expected."batchEnteredById"
+            AND expected."allocationReviewedById" = expected."batchReviewedById"
+          ))
+          AND NULLIF(BTRIM(expected."cashGlCodeSnapshot"), '') IS NOT NULL
+          AND NULLIF(BTRIM(expected."costCenterCodeSnapshot"), '') IS NOT NULL
+          AND expected."expectedEffectiveAt" IS NOT NULL
+          AND expected."expectedEffectiveAt" >= expected."paidAt"
+          AND (
+            (expected."reversedAt" IS NULL
+              AND expected."batchReversedAt" IS NULL
+              AND expected."allocationStatus" = 'posted'
+              AND expected."batchStatus" IN ('pending_review', 'unmatched', 'partially_allocated', 'exception', 'reconciled'))
+            OR (expected."reversedAt" IS NOT NULL
+              AND expected."batchReversedAt" IS NOT NULL
+              AND expected."reversedAt" = expected."batchReversedAt"
+              AND expected."allocationStatus" = 'reversed'
+              AND expected."batchStatus" = 'reversed')
+          )
+        ) AS "sourceValid"
+      FROM expected_receipts expected
+    )
+    SELECT COUNT(*)::bigint AS "conflictCount"
+    FROM classified expected
+    WHERE (expected."paidAt" < ${endExclusive}
+        OR expected."allocationReviewedAt" < ${endExclusive}
+        OR expected."reversedAt" < ${endExclusive})
+      AND (
+        NOT expected."sourceValid"
+        OR EXISTS (
+          SELECT 1
+          FROM "AgencyLedgerEntry" entry
+          JOIN "AgencyLedgerAccount" account ON account.id = entry."agencyLedgerAccountId"
+          WHERE (
+            (entry."remittanceId" = expected."remittanceId" AND entry.type = 'remittance_received')
+            OR (entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+              AND entry."externalId" = 'remittance:' || expected."remittanceId")
+            OR entry.id = 'agency-ledger-remittance:' || expected."remittanceId"
+          ) AND NOT (
+            entry."agencyLedgerAccountId" IS NOT DISTINCT FROM expected."accountId"
+            AND entry."claimId" IS NOT DISTINCT FROM expected."claimId"
+            AND entry."remittanceId" IS NOT DISTINCT FROM expected."remittanceId"
+            AND entry."remittanceBatchId" IS NOT DISTINCT FROM expected."batchId"
+            AND entry."adjustmentId" IS NULL
+            AND entry.type IS NOT DISTINCT FROM 'remittance_received'
+            AND entry."amountCents" IS NOT DISTINCT FROM -expected."amountCents"
+            AND entry."effectiveAt" IS NOT DISTINCT FROM expected."expectedEffectiveAt"
+            AND entry."externalReference" IS NOT DISTINCT FROM expected."externalReference"
+            AND entry."glCodeSnapshot" IS NOT DISTINCT FROM expected."cashGlCodeSnapshot"
+            AND entry."costCenterCodeSnapshot" IS NOT DISTINCT FROM expected."costCenterCodeSnapshot"
+            AND entry."sourceSystem" IS NOT DISTINCT FROM ${AGENCY_LEDGER_SOURCE_SYSTEM}
+            AND entry."externalId" IS NOT DISTINCT FROM 'remittance:' || expected."remittanceId"
+            AND account."centerId" IS NOT DISTINCT FROM expected."centerId"
+            AND account."agencyProgramId" IS NOT DISTINCT FROM expected."agencyProgramId"
+          )
+        )
+      )
+  `;
+  if (Number(controlledReceiptConflict?.conflictCount ?? 0) > 0) {
+    throw new AgencyWorkflowError("Agency ledger close found invalid controlled-batch source facts or conflicting receipt evidence. Restore and verify the exact batch, allocation, claim, account, date, amount, reference, and accounting snapshots before closing.", 409);
+  }
+
   const recoveredRemittanceReceipts = await tx.$queryRaw<RecoveredAgencyLedgerEventRow[]>`
+    /* agency-close:controlled-receipt-recovery */
     INSERT INTO "AgencyLedgerEntry" (
-      id, "agencyLedgerAccountId", "claimId", "remittanceId", type, description,
-      "amountCents", "balanceAfterCents", "effectiveAt", "externalReference",
+      id, "agencyLedgerAccountId", "claimId", "remittanceId", "remittanceBatchId", type, description,
+      "amountCents", "balanceAfterCents", "effectiveAt", "externalReference", "glCodeSnapshot", "costCenterCodeSnapshot",
       "sourceSystem", "externalId", metadata, "createdAt"
     )
     SELECT
@@ -598,17 +899,25 @@ async function recoverMissingAgencyLedgerCutoverEvents(
       account.id,
       claim.id,
       remittance.id,
+      batch.id,
       'remittance_received',
       program.name || ' remittance for ' || claim.number,
       -remittance."amountCents",
       0,
-      remittance."paidAt",
+      CASE
+        WHEN allocation."createdAt" > batch."reviewedAt" THEN allocation."reviewedAt"
+        ELSE remittance."paidAt"
+      END,
       remittance."externalReference",
+      batch."cashGlCodeSnapshot",
+      batch."costCenterCodeSnapshot",
       ${AGENCY_LEDGER_SOURCE_SYSTEM},
       'remittance:' || remittance.id,
       jsonb_build_object(
         'claimNumber', claim.number,
         'paymentMethod', remittance."paymentMethod",
+        'remittanceBatchId', batch.id,
+        'originalPaidAt', remittance."paidAt",
         'recoveredAtPeriodClose', true,
         'recoveredById', ${recoveredById}
       ),
@@ -622,76 +931,259 @@ async function recoverMissingAgencyLedgerCutoverEvents(
     JOIN "AgencyLedgerAccount" account
       ON account."centerId" = claim."centerId"
       AND account."agencyProgramId" = claim."agencyProgramId"
+    JOIN "AgencyRemittanceAllocation" allocation
+      ON allocation."remittanceId" = remittance.id
+      AND allocation."claimId" = claim.id
+      AND allocation."amountCents" = remittance."amountCents"
+      AND allocation.status IN ('posted', 'reversed')
+      AND allocation."reviewedAt" IS NOT NULL
+      AND NULLIF(BTRIM(allocation."reviewedById"), '') IS NOT NULL
+      AND allocation."reviewedById" = remittance."enteredById"
+      AND allocation."reviewedById" <> allocation."requestedById"
+    JOIN "AgencyRemittanceBatch" batch
+      ON batch.id = allocation."batchId"
+      AND batch."centerId" = claim."centerId"
+      AND batch."agencyProgramId" = claim."agencyProgramId"
+      AND batch."paidAt" = remittance."paidAt"
+      AND batch."externalReference" = remittance."externalReference"
+      AND batch."reviewedAt" IS NOT NULL
+      AND NULLIF(BTRIM(batch."reviewedById"), '') IS NOT NULL
+      AND batch."reviewedById" <> batch."enteredById"
+      AND NULLIF(BTRIM(batch."cashGlCodeSnapshot"), '') IS NOT NULL
+      AND NULLIF(BTRIM(batch."costCenterCodeSnapshot"), '') IS NOT NULL
     WHERE claim."centerId" = ${centerId}
-      AND remittance."paidAt" < ${endExclusive}
+      AND remittance."amountCents" > 0
+      AND NULLIF(BTRIM(remittance."externalReference"), '') IS NOT NULL
+      AND NULLIF(BTRIM(remittance."enteredById"), '') IS NOT NULL
+      AND (allocation."createdAt" > batch."reviewedAt" OR (
+        allocation."requestedById" = batch."enteredById"
+        AND allocation."reviewedById" = batch."reviewedById"
+      ))
+      AND (
+        (remittance."reversedAt" IS NULL
+          AND batch."reversedAt" IS NULL
+          AND allocation.status = 'posted'
+          AND batch.status IN ('pending_review', 'unmatched', 'partially_allocated', 'exception', 'reconciled'))
+        OR (remittance."reversedAt" IS NOT NULL
+          AND batch."reversedAt" IS NOT NULL
+          AND remittance."reversedAt" = batch."reversedAt"
+          AND allocation.status = 'reversed'
+          AND batch.status = 'reversed')
+      )
+      AND CASE
+        WHEN allocation."createdAt" > batch."reviewedAt" THEN allocation."reviewedAt"
+        ELSE remittance."paidAt"
+      END >= remittance."paidAt"
+      AND CASE
+        WHEN allocation."createdAt" > batch."reviewedAt" THEN allocation."reviewedAt"
+        ELSE remittance."paidAt"
+      END < ${endExclusive}
       AND NOT EXISTS (
         SELECT 1
         FROM "AgencyLedgerEntry" entry
-        WHERE entry."remittanceId" = remittance.id
-          AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
-          AND entry.type = 'remittance_received'
+        WHERE (entry."remittanceId" = remittance.id AND entry.type = 'remittance_received')
+           OR (entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+             AND entry."externalId" = 'remittance:' || remittance.id)
+           OR entry.id = 'agency-ledger-remittance:' || remittance.id
       )
-    ON CONFLICT ("sourceSystem", "externalId") DO NOTHING
+    ON CONFLICT DO NOTHING
     RETURNING "agencyLedgerAccountId"
   `;
-  const recoveredRemittanceReversals = await tx.$queryRaw<RecoveredAgencyLedgerEventRow[]>`
-    INSERT INTO "AgencyLedgerEntry" (
-      id, "agencyLedgerAccountId", "claimId", "remittanceId", type, description,
-      "amountCents", "balanceAfterCents", "effectiveAt", "externalReference",
-      "sourceSystem", "externalId", metadata, "createdAt"
+
+  const [controlledReceiptPostRecoveryConflict] = await tx.$queryRaw<Array<{ conflictCount: bigint }>>`
+    /* agency-close:controlled-receipt-postcheck */
+    WITH expected_receipts AS (
+      SELECT remittance.id AS "remittanceId",
+        remittance."amountCents",
+        remittance."paidAt",
+        remittance."externalReference",
+        claim.id AS "claimId",
+        claim."centerId",
+        claim."agencyProgramId",
+        allocation."batchId",
+        CASE
+          WHEN allocation."createdAt" > batch."reviewedAt" THEN allocation."reviewedAt"
+          ELSE remittance."paidAt"
+        END AS "expectedEffectiveAt",
+        batch."cashGlCodeSnapshot",
+        batch."costCenterCodeSnapshot",
+        account.id AS "accountId"
+      FROM "SubsidyRemittance" remittance
+      JOIN "SubsidyClaim" claim ON claim.id = remittance."claimId"
+      JOIN "AgencyRemittanceAllocation" allocation ON allocation."remittanceId" = remittance.id
+      JOIN "AgencyRemittanceBatch" batch ON batch.id = allocation."batchId"
+      JOIN "AgencyLedgerAccount" account
+        ON account."centerId" = claim."centerId"
+        AND account."agencyProgramId" = claim."agencyProgramId"
+      WHERE claim."centerId" = ${centerId}
     )
-    SELECT
-      'agency-ledger-remittance-reversal:' || remittance.id,
-      account.id,
-      claim.id,
-      remittance.id,
-      'remittance_reversal',
-      'Reversed agency remittance for ' || claim.number,
-      remittance."amountCents",
-      0,
-      remittance."reversedAt",
-      remittance."externalReference",
-      ${AGENCY_LEDGER_SOURCE_SYSTEM},
-      'remittance-reversal:' || remittance.id,
-      jsonb_build_object(
-        'claimNumber', claim.number,
-        'reason', remittance."reversalReason",
-        'recoveredAtPeriodClose', true,
-        'recoveredById', ${recoveredById}
-      ),
-      remittance."reversedAt"
+    SELECT COUNT(*)::bigint AS "conflictCount"
+    FROM expected_receipts expected
+    WHERE expected."expectedEffectiveAt" < ${endExclusive}
+      AND (
+        (SELECT COUNT(*)
+         FROM "AgencyLedgerEntry" candidate
+         WHERE (candidate."remittanceId" = expected."remittanceId" AND candidate.type = 'remittance_received')
+            OR (candidate."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+              AND candidate."externalId" = 'remittance:' || expected."remittanceId")
+            OR candidate.id = 'agency-ledger-remittance:' || expected."remittanceId") <> 1
+        OR NOT EXISTS (
+          SELECT 1
+          FROM "AgencyLedgerEntry" entry
+          JOIN "AgencyLedgerAccount" account ON account.id = entry."agencyLedgerAccountId"
+          WHERE entry."agencyLedgerAccountId" = expected."accountId"
+            AND entry."claimId" = expected."claimId"
+            AND entry."remittanceId" = expected."remittanceId"
+            AND entry."remittanceBatchId" = expected."batchId"
+            AND entry."adjustmentId" IS NULL
+            AND entry.type = 'remittance_received'
+            AND entry."amountCents" = -expected."amountCents"
+            AND entry."effectiveAt" = expected."expectedEffectiveAt"
+            AND entry."externalReference" = expected."externalReference"
+            AND entry."glCodeSnapshot" = expected."cashGlCodeSnapshot"
+            AND entry."costCenterCodeSnapshot" = expected."costCenterCodeSnapshot"
+            AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+            AND entry."externalId" = 'remittance:' || expected."remittanceId"
+            AND account."centerId" = expected."centerId"
+            AND account."agencyProgramId" = expected."agencyProgramId"
+        )
+      )
+  `;
+  if (Number(controlledReceiptPostRecoveryConflict?.conflictCount ?? 0) > 0) {
+    throw new AgencyWorkflowError("Agency ledger close could not establish the exact controlled-batch receipt after recovery. No period was closed.", 409);
+  }
+
+  // A reversal has independent reviewer/reason evidence and therefore cannot be
+  // reconstructed. Require the exact receipt-linked compensating event instead.
+  const [remittanceReversalConflict] = await tx.$queryRaw<Array<{ conflictCount: bigint }>>`
+    /* agency-close:remittance-reversal-evidence */
+    SELECT COUNT(*)::bigint AS "conflictCount"
     FROM "SubsidyRemittance" remittance
-    JOIN "SubsidyClaim" claim
-      ON claim.id = remittance."claimId"
-    JOIN "AgencyProgram" program
-      ON program.id = claim."agencyProgramId"
-      AND program."centerId" = claim."centerId"
-    JOIN "AgencyLedgerAccount" account
-      ON account."centerId" = claim."centerId"
-      AND account."agencyProgramId" = claim."agencyProgramId"
+    JOIN "SubsidyClaim" claim ON claim.id = remittance."claimId"
+    LEFT JOIN "AgencyRemittanceAllocation" allocation ON allocation."remittanceId" = remittance.id
     WHERE claim."centerId" = ${centerId}
       AND remittance."reversedAt" IS NOT NULL
       AND remittance."reversedAt" < ${endExclusive}
-      AND NOT EXISTS (
-        SELECT 1
-        FROM "AgencyLedgerEntry" entry
-        WHERE entry."remittanceId" = remittance.id
-          AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
-          AND entry.type = 'remittance_reversal'
+      AND (
+        remittance."reversedAt" < remittance."paidAt"
+        OR NULLIF(BTRIM(remittance."reversedById"), '') IS NULL
+        OR NULLIF(BTRIM(remittance."reversalReason"), '') IS NULL
+        OR (SELECT COUNT(*)
+            FROM "AgencyLedgerEntry" candidate
+            WHERE (candidate."remittanceId" = remittance.id AND candidate.type = 'remittance_reversal')
+               OR (candidate."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+                 AND candidate."externalId" = 'remittance-reversal:' || remittance.id)
+               OR candidate.id = 'agency-ledger-remittance-reversal:' || remittance.id) <> 1
+        OR NOT EXISTS (
+          SELECT 1
+          FROM "AgencyLedgerEntry" reversal
+          JOIN "AgencyLedgerEntry" receipt
+            ON receipt."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+            AND receipt."externalId" = 'remittance:' || remittance.id
+          JOIN "AgencyLedgerAccount" account ON account.id = reversal."agencyLedgerAccountId"
+          WHERE reversal."agencyLedgerAccountId" = receipt."agencyLedgerAccountId"
+            AND reversal."claimId" = claim.id
+            AND reversal."remittanceId" = remittance.id
+            AND reversal."remittanceBatchId" IS NOT DISTINCT FROM allocation."batchId"
+            AND reversal."adjustmentId" IS NULL
+            AND reversal.type = 'remittance_reversal'
+            AND reversal."amountCents" = remittance."amountCents"
+            AND reversal."effectiveAt" = remittance."reversedAt"
+            AND reversal."effectiveAt" >= receipt."effectiveAt"
+            AND reversal."externalReference" = remittance."externalReference"
+            AND reversal."glCodeSnapshot" IS NOT DISTINCT FROM receipt."glCodeSnapshot"
+            AND reversal."costCenterCodeSnapshot" IS NOT DISTINCT FROM receipt."costCenterCodeSnapshot"
+            AND reversal."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+            AND reversal."externalId" = 'remittance-reversal:' || remittance.id
+            AND account."centerId" = claim."centerId"
+            AND account."agencyProgramId" = claim."agencyProgramId"
+        )
       )
-    ON CONFLICT ("sourceSystem", "externalId") DO NOTHING
-    RETURNING "agencyLedgerAccountId"
   `;
-  const accountIds = [...new Set([
-    ...recoveredClaimReceivables,
-    ...recoveredRemittanceReceipts,
-    ...recoveredRemittanceReversals,
-  ].map((row) => row.agencyLedgerAccountId))];
+  if (Number(remittanceReversalConflict?.conflictCount ?? 0) > 0) {
+    throw new AgencyWorkflowError("Agency ledger close found a missing, duplicate, or conflicting remittance reversal. Restore and verify its exact receipt, reviewer, reason, date, amount, source key, and accounting snapshots before closing.", 409);
+  }
+
+  const [adjustmentEvidenceConflict] = await tx.$queryRaw<Array<{ conflictCount: bigint }>>`
+    /* agency-close:adjustment-evidence */
+    SELECT COUNT(*)::bigint AS "conflictCount"
+    FROM "AgencyLedgerAdjustment" adjustment
+    JOIN "AgencyLedgerAccount" account ON account.id = adjustment."ledgerAccountId"
+    WHERE adjustment."centerId" = ${centerId}
+      AND adjustment.status IN ('posted', 'reversed')
+      AND (adjustment."effectiveAt" < ${endExclusive} OR adjustment."reversedAt" < ${endExclusive})
+      AND (
+        account."centerId" <> adjustment."centerId"
+        OR account."agencyProgramId" <> adjustment."agencyProgramId"
+        OR adjustment.type NOT IN ('write_off', 'recoupment', 'overpayment', 'correction_increase', 'correction_decrease')
+        OR adjustment."amountCents" = 0
+        OR adjustment."reviewedAt" IS NULL
+        OR NULLIF(BTRIM(adjustment."reviewedById"), '') IS NULL
+        OR adjustment."reviewedById" = adjustment."requestedById"
+        OR NULLIF(BTRIM(adjustment."evidenceReference"), '') IS NULL
+        OR NULLIF(BTRIM(adjustment."glCodeSnapshot"), '') IS NULL
+        OR NULLIF(BTRIM(adjustment."costCenterCodeSnapshot"), '') IS NULL
+        OR (SELECT COUNT(*)
+            FROM "AgencyLedgerEntry" candidate
+            WHERE candidate."adjustmentId" = adjustment.id
+               OR (candidate."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+                 AND candidate."externalId" IN (
+                   'adjustment:' || adjustment.id,
+                   'adjustment-reversal:' || adjustment.id
+                 ))) <> CASE WHEN adjustment.status = 'reversed' THEN 2 ELSE 1 END
+        OR NOT EXISTS (
+          SELECT 1
+          FROM "AgencyLedgerEntry" entry
+          WHERE entry."agencyLedgerAccountId" = adjustment."ledgerAccountId"
+            AND entry."claimId" IS NOT DISTINCT FROM adjustment."claimId"
+            AND entry."remittanceId" IS NULL
+            AND entry."remittanceBatchId" IS NOT DISTINCT FROM adjustment."batchId"
+            AND entry."adjustmentId" = adjustment.id
+            AND entry.type = 'adjustment_' || adjustment.type
+            AND entry."amountCents" = adjustment."amountCents"
+            AND entry."effectiveAt" = adjustment."effectiveAt"
+            AND entry."externalReference" IS NOT DISTINCT FROM adjustment."evidenceReference"
+            AND entry."glCodeSnapshot" IS NOT DISTINCT FROM adjustment."glCodeSnapshot"
+            AND entry."costCenterCodeSnapshot" IS NOT DISTINCT FROM adjustment."costCenterCodeSnapshot"
+            AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+            AND entry."externalId" = 'adjustment:' || adjustment.id
+        )
+        OR (adjustment.status = 'reversed' AND (
+          adjustment."reversedAt" IS NULL
+          OR adjustment."reversedAt" < adjustment."effectiveAt"
+          OR NULLIF(BTRIM(adjustment."reversedById"), '') IS NULL
+          OR adjustment."reversedById" = adjustment."requestedById"
+          OR NULLIF(BTRIM(adjustment."reversalReason"), '') IS NULL
+          OR NOT EXISTS (
+            SELECT 1
+            FROM "AgencyLedgerEntry" entry
+            WHERE entry."agencyLedgerAccountId" = adjustment."ledgerAccountId"
+              AND entry."claimId" IS NOT DISTINCT FROM adjustment."claimId"
+              AND entry."remittanceId" IS NULL
+              AND entry."remittanceBatchId" IS NOT DISTINCT FROM adjustment."batchId"
+              AND entry."adjustmentId" = adjustment.id
+              AND entry.type = 'adjustment_reversal'
+              AND entry."amountCents" = -adjustment."amountCents"
+              AND entry."effectiveAt" = adjustment."reversedAt"
+              AND entry."externalReference" IS NOT DISTINCT FROM adjustment."evidenceReference"
+              AND entry."glCodeSnapshot" IS NOT DISTINCT FROM adjustment."glCodeSnapshot"
+              AND entry."costCenterCodeSnapshot" IS NOT DISTINCT FROM adjustment."costCenterCodeSnapshot"
+              AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+              AND entry."externalId" = 'adjustment-reversal:' || adjustment.id
+          )
+        ))
+      )
+  `;
+  if (Number(adjustmentEvidenceConflict?.conflictCount ?? 0) > 0) {
+    throw new AgencyWorkflowError("Agency ledger close found missing, duplicate, or conflicting adjustment evidence. Restore and verify the exact original and reversal events before closing.", 409);
+  }
+
+  const accountIds = [...new Set(recoveredRemittanceReceipts.map((row) => row.agencyLedgerAccountId))];
   for (const accountId of accountIds) await recalculateAgencyLedgerBalances(tx, accountId);
   return {
-    recoveredClaimReceivableCount: recoveredClaimReceivables.length,
+    recoveredClaimReceivableCount: 0,
     recoveredRemittanceReceivedCount: recoveredRemittanceReceipts.length,
-    recoveredRemittanceReversalCount: recoveredRemittanceReversals.length,
+    recoveredRemittanceReversalCount: 0,
   };
 }
 
@@ -700,8 +1192,15 @@ type AgencyPostingClaim = AgencyLedgerClaimInput & {
   paidCents: number;
   status: string;
   authorization: {
+    centerId: string;
+    agencyProgramId: string;
+    familyId: string;
     authorizationNumber: string;
-    family: { billingAccount: { id: string } | null };
+    family: {
+      id: string;
+      centerId: string | null;
+      billingAccount: { id: string; familyId: string } | null;
+    };
   } | null;
   remittances: Array<{ amountCents: number; reversedAt: Date | null }>;
 };
@@ -729,9 +1228,25 @@ async function applyLegacyFamilyLedgerSettlement(tx: Prisma.TransactionClient, i
   reference: string;
   remittanceId: string;
 }) {
-  const billingAccount = input.claim.authorization?.family.billingAccount;
+  if (input.claim.agencyProgram.centerId !== input.claim.centerId) {
+    throw new AgencyWorkflowError("The claim and agency program school relationship is inconsistent. No family ledger was changed.", 409);
+  }
+  const authorization = input.claim.authorization;
+  if (!authorization) return { appliedCents: 0, entryId: null as string | null };
+  if (
+    authorization.centerId !== input.claim.centerId
+    || authorization.agencyProgramId !== input.claim.agencyProgramId
+    || authorization.familyId !== authorization.family.id
+    || authorization.family.centerId !== input.claim.centerId
+  ) {
+    throw new AgencyWorkflowError("The claim authorization and family school relationship is inconsistent. No family ledger was changed.", 409);
+  }
+  const billingAccount = authorization.family.billingAccount;
   if (!billingAccount) return { appliedCents: 0, entryId: null as string | null };
-  const authorizationNumber = input.claim.authorization?.authorizationNumber ?? "";
+  if (billingAccount.familyId !== authorization.family.id) {
+    throw new AgencyWorkflowError("The family billing account relationship is inconsistent. No family ledger was changed.", 409);
+  }
+  const authorizationNumber = authorization.authorizationNumber;
   const agencyName = input.claim.agencyProgram.name.trim().toLowerCase();
   const agencyEntries = await tx.ledgerEntry.findMany({
     where: { billingAccountId: billingAccount.id, sourceSystem: "subsidy_agency" },
@@ -767,6 +1282,7 @@ async function applyLegacyFamilyLedgerSettlement(tx: Prisma.TransactionClient, i
       claimId: input.claim.id,
       claimNumber: input.claim.number,
       remittanceId: input.remittanceId,
+      appliedCents,
       agencyName: input.claim.agencyProgram.name,
       authorizationNumber,
       externalReference: input.reference,
@@ -788,7 +1304,12 @@ async function postAgencyClaimAllocation(tx: Prisma.TransactionClient, input: {
   reference: string;
   notes?: string | null;
   reviewerId: string;
+  accountingSnapshot: { glCode: string | null; costCenterCode: string | null };
 }, options: { recalculateAgencyLedger?: boolean } = {}) {
+  // A late allocation becomes effective when its independent review posts it.
+  // Reuse that exact timestamp for the receipt, allocation review, and compatibility mirror.
+  const ledgerEffectiveAt = input.ledgerEffectiveAt ?? input.paidAt;
+  const reviewedAt = input.ledgerEffectiveAt ?? new Date();
   const payable = input.claim.approvedCents ?? input.claim.claimedCents;
   const paidBeforeCents = activeRemittanceTotalCents(input.claim.remittances);
   if (!new Set(["approved", "partially_paid"]).has(input.claim.status)) {
@@ -816,20 +1337,21 @@ async function postAgencyClaimAllocation(tx: Prisma.TransactionClient, input: {
     type: "remittance_received",
     description: `${input.claim.agencyProgram.name} remittance for ${input.claim.number}`,
     amountCents: -input.amountCents,
-    effectiveAt: input.ledgerEffectiveAt ?? input.paidAt,
+    effectiveAt: ledgerEffectiveAt,
     externalReference: input.reference,
     externalId: agencyRemittanceLedgerExternalId(remittance.id),
     metadata: { claimNumber: input.claim.number, paymentMethod: input.paymentMethod, remittanceBatchId: input.batchId },
+    accountingSnapshot: input.accountingSnapshot,
   }, { recalculate: false });
   await tx.agencyRemittanceAllocation.update({
     where: { id: input.allocationId },
-    data: { status: "posted", remittanceId: remittance.id, reviewedById: input.reviewerId, reviewedAt: new Date() },
+    data: { status: "posted", remittanceId: remittance.id, reviewedById: input.reviewerId, reviewedAt },
   });
   const legacy = await applyLegacyFamilyLedgerSettlement(tx, {
     claim: input.claim,
     amountCents: input.amountCents,
     paidAt: input.paidAt,
-    ledgerEffectiveAt: input.ledgerEffectiveAt,
+    ledgerEffectiveAt,
     reference: input.reference,
     remittanceId: remittance.id,
   });
@@ -859,40 +1381,73 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
   remittanceId: string;
   reviewerId: string;
   reviewerRole?: string;
+  requireIndependentReviewer?: boolean;
   expectedClaimId?: string;
+  expectedCenterId?: string;
+  expectedBatchId?: string;
   requireUnbatched?: boolean;
   reason: string;
   reversedAt: Date;
 }, options: { recalculateAgencyLedger?: boolean } = {}) {
   const remittance = await tx.subsidyRemittance.findUnique({
     where: { id: input.remittanceId },
-    include: { claim: { include: { agencyProgram: true } }, allocation: true },
+    include: {
+      claim: { include: { agencyProgram: true, authorization: { include: { family: { include: { billingAccount: true } } } } } },
+      allocation: { include: { batch: { select: {
+        centerId: true,
+        agencyProgramId: true,
+        paidAt: true,
+        externalReference: true,
+        reviewedAt: true,
+        cashGlCodeSnapshot: true,
+        costCenterCodeSnapshot: true,
+      } } } },
+    },
   });
   if (!remittance) throw new AgencyWorkflowError("Remittance not found.", 404);
   if (input.expectedClaimId && remittance.claimId !== input.expectedClaimId) throw new AgencyWorkflowError("Remittance not found.", 404);
-  if (input.reviewerRole && !canReviewAgencyPosting({ role: input.reviewerRole, reviewerId: input.reviewerId, requestedById: remittance.enteredById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must reverse this remittance.", 403);
+  if (input.expectedCenterId && remittance.claim.centerId !== input.expectedCenterId) throw new AgencyWorkflowError("Remittance not found.", 404);
+  if (remittance.claim.agencyProgram.centerId !== remittance.claim.centerId) throw new AgencyWorkflowError("The remittance claim and agency school relationship is inconsistent. No reversal was posted.", 409);
+  if (remittance.allocation && remittance.allocation.claimId !== remittance.claimId) throw new AgencyWorkflowError("The remittance allocation and claim relationship is inconsistent. No reversal was posted.", 409);
+  if (remittance.allocation && (
+    remittance.allocation.batch.centerId !== remittance.claim.centerId
+    || remittance.allocation.batch.agencyProgramId !== remittance.claim.agencyProgramId
+    || remittance.allocation.batch.paidAt.getTime() !== remittance.paidAt.getTime()
+    || remittance.allocation.batch.externalReference !== remittance.externalReference
+  )) throw new AgencyWorkflowError("The remittance allocation and deposit evidence are inconsistent. No reversal was posted.", 409);
+  if (input.expectedBatchId && remittance.allocation?.batchId !== input.expectedBatchId) throw new AgencyWorkflowError("The remittance allocation does not belong to this deposit batch. No reversal was posted.", 409);
+  if (input.requireIndependentReviewer && (!input.reviewerRole || !canReviewAgencyPosting({ role: input.reviewerRole, reviewerId: input.reviewerId, requestedById: remittance.enteredById }))) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must reverse this remittance after reconciliation activation.", 403);
   if (input.requireUnbatched && remittance.allocation) throw new AgencyWorkflowError("This payment belongs to a controlled deposit batch. Reverse the batch from the reconciliation queue so every allocation remains balanced.", 409);
   if (remittance.reversedAt) throw new AgencyWorkflowError("This remittance was already reversed.", 409);
   await ensureAgencyClaimReceivable(tx, remittance.claim, { recalculate: false });
   const agencyPaymentExternalId = agencyRemittanceLedgerExternalId(remittance.id);
-  let agencyPaymentEntry = await tx.agencyLedgerEntry.findUnique({ where: { sourceSystem_externalId: { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM, externalId: agencyPaymentExternalId } } });
-  if (!agencyPaymentEntry) {
-    await assertAgencyPeriodOpen(tx, remittance.claim.centerId, remittance.paidAt);
-    const restored = await appendAgencyLedgerEntry(tx, {
-      centerId: remittance.claim.centerId,
-      agencyProgramId: remittance.claim.agencyProgramId,
-      claimId: remittance.claimId,
-      remittanceId: remittance.id,
-      remittanceBatchId: remittance.allocation?.batchId,
-      type: "remittance_received",
-      description: `${remittance.claim.agencyProgram.name} remittance for ${remittance.claim.number}`,
-      amountCents: -remittance.amountCents,
-      effectiveAt: remittance.paidAt,
-      externalReference: remittance.externalReference,
-      externalId: agencyPaymentExternalId,
-      metadata: { claimNumber: remittance.claim.number, paymentMethod: remittance.paymentMethod, restoredBeforeReversal: true },
-    }, { recalculate: false });
-    agencyPaymentEntry = restored.entry;
+  const agencyPaymentEntry = await tx.agencyLedgerEntry.findUnique({
+    where: { sourceSystem_externalId: { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM, externalId: agencyPaymentExternalId } },
+    include: { agencyLedgerAccount: { select: { centerId: true, agencyProgramId: true } } },
+  });
+  if (!agencyPaymentEntry) throw new AgencyWorkflowError("The remittance is missing its immutable receipt ledger entry. Restore and verify the source evidence before reversing it.", 409);
+  const allocation = remittance.allocation;
+  const isLateAllocation = Boolean(allocation?.batch.reviewedAt && allocation.createdAt > allocation.batch.reviewedAt);
+  const expectedReceiptEffectiveAt = isLateAllocation ? allocation?.reviewedAt : remittance.paidAt;
+  if (!expectedReceiptEffectiveAt
+    || agencyPaymentEntry.agencyLedgerAccount.centerId !== remittance.claim.centerId
+    || agencyPaymentEntry.agencyLedgerAccount.agencyProgramId !== remittance.claim.agencyProgramId
+    || agencyPaymentEntry.claimId !== remittance.claimId
+    || agencyPaymentEntry.remittanceId !== remittance.id
+    || agencyPaymentEntry.remittanceBatchId !== (allocation?.batchId ?? null)
+    || agencyPaymentEntry.adjustmentId !== null
+    || agencyPaymentEntry.type !== "remittance_received"
+    || agencyPaymentEntry.amountCents !== -remittance.amountCents
+    || agencyPaymentEntry.effectiveAt.getTime() !== expectedReceiptEffectiveAt.getTime()
+    || agencyPaymentEntry.effectiveAt < remittance.paidAt
+    || agencyPaymentEntry.externalReference !== remittance.externalReference
+    || agencyPaymentEntry.sourceSystem !== AGENCY_LEDGER_SOURCE_SYSTEM
+    || agencyPaymentEntry.externalId !== agencyPaymentExternalId
+    || (allocation && (
+      agencyPaymentEntry.glCodeSnapshot !== allocation.batch.cashGlCodeSnapshot
+      || agencyPaymentEntry.costCenterCodeSnapshot !== allocation.batch.costCenterCodeSnapshot
+    ))) {
+    throw new AgencyWorkflowError("The immutable remittance receipt conflicts with its exact claim, batch, amount, date, or accounting evidence. No reversal was posted.", 409);
   }
   const reversedAt = agencyReversalEffectiveAt(agencyPaymentEntry.effectiveAt, agencyReversalEffectiveAt(remittance.paidAt, input.reversedAt));
   if (reversedAt < remittance.paidAt || reversedAt < agencyPaymentEntry.effectiveAt) throw new AgencyWorkflowError("A remittance reversal cannot be effective before the original receipt event.", 409);
@@ -915,10 +1470,33 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
     externalReference: remittance.externalReference,
     externalId: agencyRemittanceReversalLedgerExternalId(remittance.id),
     metadata: { claimNumber: remittance.claim.number, originalAgencyLedgerEntryId: agencyPaymentEntry.id, reason: input.reason },
+    accountingSnapshot: { glCode: agencyPaymentEntry.glCodeSnapshot, costCenterCode: agencyPaymentEntry.costCenterCodeSnapshot },
   }, { recalculate: false });
   const legacyPaymentEntry = await tx.ledgerEntry.findUnique({ where: { sourceSystem_externalId: { sourceSystem: "subsidy_agency", externalId: `agency-remittance:${remittance.id}` } } });
   let legacyFamilyReversalLedgerEntryId: string | null = null;
-  if (legacyPaymentEntry && legacyPaymentEntry.amountCents < 0) {
+  if (legacyPaymentEntry) {
+    const authorization = remittance.claim.authorization;
+    const billingAccount = authorization?.family.billingAccount;
+    const metadata = recordValue(legacyPaymentEntry.metadata);
+    if (
+      legacyPaymentEntry.amountCents >= 0
+      || Math.abs(legacyPaymentEntry.amountCents) > remittance.amountCents
+      || legacyPaymentEntry.type !== "agency_payment"
+      || legacyPaymentEntry.effectiveAt.getTime() !== agencyPaymentEntry.effectiveAt.getTime()
+      || !authorization
+      || authorization.centerId !== remittance.claim.centerId
+      || authorization.agencyProgramId !== remittance.claim.agencyProgramId
+      || authorization.familyId !== authorization.family.id
+      || authorization.family.centerId !== remittance.claim.centerId
+      || !billingAccount
+      || billingAccount.familyId !== authorization.family.id
+      || legacyPaymentEntry.billingAccountId !== billingAccount.id
+      || clean(metadata.remittanceId) !== remittance.id
+      || clean(metadata.claimId) !== remittance.claimId
+      || numberValue(metadata.appliedCents) !== Math.abs(legacyPaymentEntry.amountCents)
+      || clean(metadata.externalReference) !== remittance.externalReference
+      || metadata.legacyCompatibilityMirror !== true
+    ) throw new AgencyWorkflowError("The legacy family-ledger settlement conflicts with the remittance's exact family, school, or source evidence. No family ledger was changed.", 409);
     const updatedAccount = await tx.billingAccount.update({ where: { id: legacyPaymentEntry.billingAccountId }, data: { balanceCents: { increment: Math.abs(legacyPaymentEntry.amountCents) } } });
     const reversalEntry = await tx.ledgerEntry.create({ data: {
       billingAccountId: legacyPaymentEntry.billingAccountId,
@@ -963,18 +1541,24 @@ function exportClaimsCsv(centerIds: string[]) {
     async pull(controller) {
       if (finished || cancelled) return;
       try {
-        const claims = await prisma.subsidyClaim.findMany({
+        const claimRows = await prisma.subsidyClaim.findMany({
           where: { centerId: { in: centerIds } },
           orderBy: { id: "asc" },
           take: 250,
           ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
           include: {
-            agencyProgram: { select: { name: true, requirements: true } },
-            authorization: { include: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
+            agencyProgram: { select: { id: true, centerId: true, name: true, requirements: true } },
+            authorization: { include: {
+              agencyProgram: { select: { id: true, centerId: true } },
+              child: { select: { id: true, familyId: true, fullName: true } },
+              family: { select: { id: true, centerId: true, name: true } },
+            } },
+            lines: { select: { childId: true } },
             documents: { orderBy: { name: "asc" } },
           },
         });
         if (cancelled) return;
+        const claims = claimRows.filter(exactAgencyClaimScope);
         const header = headerPending
           ? csvRow(["Claim", "Agency", "Family", "Child", "Service start", "Service end", "Status", "Claimed", "Approved", "Paid", "Missing documents"])
           : "";
@@ -1005,8 +1589,8 @@ function exportClaimsCsv(centerIds: string[]) {
           ]);
         }).join("");
         if (header || rows) controller.enqueue(encoder.encode(header + rows));
-        cursorId = claims.at(-1)?.id;
-        if (claims.length < 250) {
+        cursorId = claimRows.at(-1)?.id;
+        if (claimRows.length < 250) {
           finished = true;
           controller.close();
         }
@@ -1044,7 +1628,7 @@ function exportAgencyLedgerCsv(centerIds: string[]) {
     async pull(controller) {
       if (finished || cancelled) return;
       try {
-        const entries = await prisma.agencyLedgerEntry.findMany({
+        const entryRows = await prisma.agencyLedgerEntry.findMany({
           where: { agencyLedgerAccount: { centerId: { in: centerIds } } },
           orderBy: [
             { agencyLedgerAccountId: "asc" },
@@ -1055,11 +1639,20 @@ function exportAgencyLedgerCsv(centerIds: string[]) {
           take: 250,
           ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
           include: {
-            agencyLedgerAccount: { include: { agencyProgram: { select: { name: true, programName: true, receivableGlCode: true, cashGlCode: true, adjustmentGlCode: true, costCenterCode: true } } } },
-            claim: { include: { authorization: { include: { family: { select: { name: true } }, child: { select: { fullName: true } } } } } },
+            agencyLedgerAccount: { include: { agencyProgram: { select: { id: true, centerId: true, name: true, programName: true } } } },
+            claim: { include: {
+              agencyProgram: { select: { id: true, centerId: true } },
+              authorization: { include: {
+                agencyProgram: { select: { id: true, centerId: true } },
+                family: { select: { id: true, centerId: true, name: true } },
+                child: { select: { id: true, familyId: true, fullName: true } },
+              } },
+              lines: { select: { childId: true } },
+            } },
           },
         });
         if (cancelled) return;
+        const entries = entryRows.filter((entry) => exactAgencyProgramScope(entry.agencyLedgerAccount) && (!entry.claim || exactAgencyClaimScope(entry.claim)));
         const header = headerPending
           ? csvRow(["Date", "Agency", "Program", "Type", "GL code", "Cost center", "Claim", "Family", "Child", "Reference", "Charge", "Payment / credit", "Net", "Balance"])
           : "";
@@ -1069,8 +1662,8 @@ function exportAgencyLedgerCsv(centerIds: string[]) {
           entry.agencyLedgerAccount.agencyProgram.name,
           entry.agencyLedgerAccount.agencyProgram.programName ?? "",
           entry.type,
-          agencyEntryGlCode(entry.type, entry.agencyLedgerAccount.agencyProgram),
-          entry.agencyLedgerAccount.agencyProgram.costCenterCode ?? "",
+          entry.glCodeSnapshot ?? "",
+          entry.costCenterCodeSnapshot ?? "",
           entry.claim?.number ?? "",
           entry.claim?.authorization?.family.name ?? "",
           entry.claim?.authorization?.child.fullName ?? "",
@@ -1081,8 +1674,8 @@ function exportAgencyLedgerCsv(centerIds: string[]) {
           entry.balanceAfterCents / 100,
         ])).join("");
         if (header || rows) controller.enqueue(encoder.encode(header + rows));
-        cursorId = entries.at(-1)?.id;
-        if (entries.length < 250) {
+        cursorId = entryRows.at(-1)?.id;
+        if (entryRows.length < 250) {
           finished = true;
           controller.close();
         }
@@ -1105,11 +1698,11 @@ function exportAgencyLedgerCsv(centerIds: string[]) {
 }
 
 async function exportAgencyReconciliationCsv(centerIds: string[]) {
-  const [accounts, claimAggregates, batchAggregates, adjustmentAggregates, openBatchAggregates] = await Promise.all([
+  const [accountRows, claimAggregates, batchAggregates, adjustmentAggregates, openBatchAggregates] = await Promise.all([
     prisma.agencyLedgerAccount.findMany({
       where: { centerId: { in: centerIds } },
-      orderBy: [{ centerId: "asc" }, { agencyProgram: { name: "asc" } }],
-      include: { center: { select: { name: true } }, agencyProgram: { select: { name: true, programName: true, receivableGlCode: true, cashGlCode: true, adjustmentGlCode: true, costCenterCode: true } } },
+      orderBy: [{ centerId: "asc" }, { agencyProgram: { name: "asc" } }, { agencyProgramId: "asc" }, { id: "asc" }],
+      include: { center: { select: { name: true } }, agencyProgram: { select: { id: true, centerId: true, name: true, programName: true, receivableGlCode: true, cashGlCode: true, adjustmentGlCode: true, costCenterCode: true } } },
     }),
     agencyReconciliationClaimAggregates(centerIds),
     prisma.agencyRemittanceBatch.groupBy({
@@ -1128,6 +1721,7 @@ async function exportAgencyReconciliationCsv(centerIds: string[]) {
       _count: { _all: true },
     }),
   ]);
+  const accounts = accountRows.filter(exactAgencyProgramScope);
   const claimsByProgram = new Map(claimAggregates.map((row) => [row.agencyProgramId, row]));
   const unappliedByProgram = new Map(batchAggregates.map((row) => [row.agencyProgramId, row._sum.unappliedCents ?? 0]));
   const adjustmentsByProgram = new Map(adjustmentAggregates.map((row) => [row.agencyProgramId, row._sum.amountCents ?? 0]));
@@ -1179,18 +1773,22 @@ function exportAgencyDepositsCsv(centerIds: string[]) {
     async pull(controller) {
       if (finished || cancelled) return;
       try {
-        const batches = await prisma.agencyRemittanceBatch.findMany({
+        const batchRows = await prisma.agencyRemittanceBatch.findMany({
           where: { centerId: { in: centerIds } },
           orderBy: [{ paidAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
           take: 100,
           ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
           include: {
             center: { select: { name: true } },
-            agencyProgram: { select: { name: true, programName: true, cashGlCode: true, costCenterCode: true } },
-            allocations: { orderBy: { createdAt: "asc" }, include: { claim: { select: { number: true } } } },
+            agencyProgram: { select: { id: true, centerId: true, name: true, programName: true } },
+            allocations: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], include: { claim: { select: { id: true, centerId: true, agencyProgramId: true, number: true } } } },
           },
         });
         if (cancelled) return;
+        const batches = batchRows.filter(exactAgencyProgramScope).map((batch) => ({
+          ...batch,
+          allocations: batch.allocations.filter((allocation) => allocation.claim.centerId === batch.centerId && allocation.claim.agencyProgramId === batch.agencyProgramId),
+        }));
         const header = headerPending
           ? csvRow(["School", "Agency", "Program", "Paid date", "Deposit reference", "Method", "Cash GL", "Cost center", "Deposit total", "Allocated", "Unapplied", "Batch status", "Evidence", "Evidence reference", "Follow-up owner", "Follow-up due", "Claim", "Claim allocation", "Allocation status"])
           : "";
@@ -1204,8 +1802,8 @@ function exportAgencyDepositsCsv(centerIds: string[]) {
             dateInput(batch.paidAt),
             batch.externalReference,
             batch.paymentMethod,
-            batch.agencyProgram.cashGlCode ?? "",
-            batch.agencyProgram.costCenterCode ?? "",
+            batch.cashGlCodeSnapshot ?? "",
+            batch.costCenterCodeSnapshot ?? "",
             batch.totalCents / 100,
             batch.allocatedCents / 100,
             batch.unappliedCents / 100,
@@ -1220,8 +1818,8 @@ function exportAgencyDepositsCsv(centerIds: string[]) {
           ]));
         }).join("");
         if (header || rows) controller.enqueue(encoder.encode(header + rows));
-        cursorId = batches.at(-1)?.id;
-        if (batches.length < 100) {
+        cursorId = batchRows.at(-1)?.id;
+        if (batchRows.length < 100) {
           finished = true;
           controller.close();
         }
@@ -1253,12 +1851,93 @@ async function currentBillingUser(): Promise<
   return { ok: true, user };
 }
 
+async function currentAgencyBillingReader(): Promise<
+  | { ok: true; user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> }
+  | { ok: false; response: NextResponse }
+> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, response: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }) };
+  if (!canManageBilling(user) && user.role !== "READ_ONLY_AUDITOR") {
+    return { ok: false, response: NextResponse.json({ ok: false, error: "Agency billing access required." }, { status: 403 }) };
+  }
+  return { ok: true, user };
+}
+
 function centerAllowed(user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>, centerId: string) {
   return Boolean(centerId && canAccessCenter(user, centerId));
 }
 
+type AgencyAuthorizationScopeRecord = {
+  id: string;
+  centerId: string;
+  agencyProgramId: string;
+  familyId: string;
+  childId: string;
+  agencyProgram: { id: string; centerId: string };
+  family: { id: string; centerId: string | null };
+  child: { id: string; familyId: string };
+};
+
+function exactAgencyAuthorizationScope(authorization: AgencyAuthorizationScopeRecord) {
+  return authorization.agencyProgram.id === authorization.agencyProgramId
+    && authorization.agencyProgram.centerId === authorization.centerId
+    && authorization.family.id === authorization.familyId
+    && authorization.family.centerId === authorization.centerId
+    && authorization.child.id === authorization.childId
+    && authorization.child.familyId === authorization.familyId;
+}
+
+type AgencyClaimScopeRecord = {
+  centerId: string;
+  agencyProgramId: string;
+  authorizationId: string | null;
+  agencyProgram: { id: string; centerId: string };
+  authorization: AgencyAuthorizationScopeRecord | null;
+  lines: Array<{ childId: string }>;
+};
+
+function exactAgencyClaimScope(claim: AgencyClaimScopeRecord) {
+  if (claim.agencyProgram.id !== claim.agencyProgramId || claim.agencyProgram.centerId !== claim.centerId) return false;
+  if (!claim.authorization) return claim.authorizationId === null && claim.lines.length === 0;
+  return claim.authorizationId === claim.authorization.id
+    && claim.authorization.centerId === claim.centerId
+    && claim.authorization.agencyProgramId === claim.agencyProgramId
+    && exactAgencyAuthorizationScope(claim.authorization)
+    && claim.lines.every((line) => line.childId === claim.authorization?.childId);
+}
+
+function exactAgencyProgramScope(record: { centerId: string; agencyProgramId: string; agencyProgram: { id: string; centerId: string } }) {
+  return record.agencyProgram.id === record.agencyProgramId && record.agencyProgram.centerId === record.centerId;
+}
+
+type AgencyIdempotencyReplay<T> =
+  | { kind: "missing" }
+  | { kind: "not_found" }
+  | { kind: "mismatch" }
+  | { kind: "reused"; record: T };
+
+function agencyIdempotencyReplay<T>(input: {
+  record: T | null;
+  user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
+  expectedCenterId?: string | null;
+  requestedFingerprint: string;
+  centerId(record: T): string;
+  ownerId(record: T): string;
+  fingerprint(record: T): string;
+}): AgencyIdempotencyReplay<T> {
+  if (!input.record) return { kind: "missing" };
+  const recordCenterId = input.centerId(input.record);
+  if (
+    (input.expectedCenterId && recordCenterId !== input.expectedCenterId)
+    || !centerAllowed(input.user, recordCenterId)
+    || input.ownerId(input.record) !== input.user.id
+  ) return { kind: "not_found" };
+  if (input.fingerprint(input.record) !== input.requestedFingerprint) return { kind: "mismatch" };
+  return { kind: "reused", record: input.record };
+}
+
 async function getHandler(request: NextRequest) {
-  const auth = await currentBillingUser();
+  const auth = await currentAgencyBillingReader();
   if (!auth.ok) return auth.response;
   const requestedCenterId = clean(request.nextUrl.searchParams.get("centerId"));
   const exportingClaims = request.nextUrl.searchParams.get("exportClaims") === "true";
@@ -1294,6 +1973,32 @@ async function getHandler(request: NextRequest) {
   if (batchPage > 1 && !batchCursor) return NextResponse.json({ ok: false, error: "Refresh the deposit history before opening that page." }, { status: 400 });
   if (adjustmentPage > 1 && !adjustmentCursor) return NextResponse.json({ ok: false, error: "Refresh the adjustment history before opening that page." }, { status: 400 });
 
+  const activationCenters = await prisma.center.findMany({
+    where: { id: { in: centerIds } },
+    select: {
+      id: true,
+      agencyReconciliationEnabled: true,
+      agencyPrograms: {
+        where: { status: "active" },
+        select: {
+          name: true,
+          status: true,
+          receivableGlCode: true,
+          cashGlCode: true,
+          adjustmentGlCode: true,
+          costCenterCode: true,
+        },
+      },
+    },
+  });
+  const agencyReconciliationActivated = centerIds.length === 1
+    && activationCenters.length === 1
+    && activationCenters[0].agencyReconciliationEnabled;
+  const agencyReconciliationBlockers = centerIds.length === 1 && activationCenters.length === 1
+    ? agencyReconciliationActivationBlockers(activationCenters[0].agencyPrograms)
+    : [];
+  const agencyReconciliationEnabled = agencyReconciliationActivated && agencyReconciliationBlockers.length === 0;
+
   const ledgerWhere: Prisma.AgencyLedgerEntryWhereInput = {
     agencyLedgerAccount: { centerId: { in: centerIds }, ...(ledgerAccountId ? { id: ledgerAccountId } : {}) },
     ...(ledgerType ? { type: ledgerType } : {}),
@@ -1305,7 +2010,7 @@ async function getHandler(request: NextRequest) {
     ] } : {}),
   };
 
-  const [programs, authorizations, claims, summaryRows, families, ledgerAccounts, ledgerEntryRows, recentBatches, unresolvedBatches, recentAdjustments, unresolvedAdjustments, accountingPeriods, reconciliationClaimAggregates, allocationClaims, reconciliationBatches, reconciliationAdjustments, legacyFamilyAgencyAggregate, pendingBatchReviews, pendingAdjustmentReviews, overdueBatchFollowUps, overdueAdjustmentFollowUps] = await Promise.all([
+  const [programs, authorizationRows, claimRows, summaryRows, families, ledgerAccountRows, ledgerEntryRows, recentBatchRows, unresolvedBatchRows, recentAdjustmentRows, unresolvedAdjustmentRows, accountingPeriods, reconciliationClaimAggregates, allocationClaimRows, reconciliationBatches, reconciliationAdjustments, legacyFamilyAgencyAggregate, pendingBatchReviews, pendingAdjustmentReviews, overdueBatchFollowUps, overdueAdjustmentFollowUps] = await Promise.all([
     prisma.agencyProgram.findMany({
       where: { centerId: { in: centerIds } },
       orderBy: [{ stateCode: "asc" }, { name: "asc" }],
@@ -1314,9 +2019,9 @@ async function getHandler(request: NextRequest) {
       where: { centerId: { in: centerIds } },
       orderBy: [{ coverageEnd: "asc" }, { createdAt: "desc" }],
       include: {
-        agencyProgram: { select: { name: true, programName: true } },
-        family: { select: { name: true } },
-        child: { select: { fullName: true, enrollmentStatus: true, classroomId: true } },
+        agencyProgram: { select: { id: true, centerId: true, name: true, programName: true } },
+        family: { select: { id: true, centerId: true, name: true } },
+        child: { select: { id: true, familyId: true, fullName: true, enrollmentStatus: true, classroomId: true } },
       },
     }),
     prisma.subsidyClaim.findMany({
@@ -1325,8 +2030,12 @@ async function getHandler(request: NextRequest) {
       ...(claimCursor ? { cursor: { id: claimCursor }, skip: 1 } : {}),
       take: CLAIM_PAGE_SIZE + 1,
       include: {
-        agencyProgram: { select: { id: true, name: true, programName: true, providerNumber: true, vendorNumber: true, submissionMethod: true, portalUrl: true, paymentInstructions: true, requirements: true } },
-        authorization: { include: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
+        agencyProgram: { select: { id: true, centerId: true, name: true, programName: true, providerNumber: true, vendorNumber: true, submissionMethod: true, portalUrl: true, paymentInstructions: true, requirements: true } },
+        authorization: { include: {
+          agencyProgram: { select: { id: true, centerId: true } },
+          child: { select: { id: true, familyId: true, fullName: true } },
+          family: { select: { id: true, centerId: true, name: true } },
+        } },
         lines: true,
         documents: { orderBy: { name: "asc" } },
         remittances: { orderBy: { paidAt: "desc" }, include: { allocation: { select: { batchId: true } } } },
@@ -1397,7 +2106,7 @@ async function getHandler(request: NextRequest) {
     prisma.agencyLedgerAccount.findMany({
       where: { centerId: { in: centerIds } },
       orderBy: [{ balanceCents: "desc" }, { agencyProgram: { name: "asc" } }],
-      include: { agencyProgram: { select: { name: true, programName: true } } },
+      include: { agencyProgram: { select: { id: true, centerId: true, name: true, programName: true } } },
     }),
     prisma.agencyLedgerEntry.findMany({
       where: ledgerWhere,
@@ -1405,8 +2114,16 @@ async function getHandler(request: NextRequest) {
       ...(ledgerCursor ? { cursor: { id: ledgerCursor }, skip: 1 } : {}),
       take: AGENCY_LEDGER_ENTRY_LIMIT + 1,
       include: {
-        agencyLedgerAccount: { include: { agencyProgram: { select: { name: true, programName: true } } } },
-        claim: { include: { authorization: { include: { family: { select: { name: true } }, child: { select: { fullName: true } } } } } },
+        agencyLedgerAccount: { include: { agencyProgram: { select: { id: true, centerId: true, name: true, programName: true } } } },
+        claim: { include: {
+          agencyProgram: { select: { id: true, centerId: true } },
+          authorization: { include: {
+            agencyProgram: { select: { id: true, centerId: true } },
+            family: { select: { id: true, centerId: true, name: true } },
+            child: { select: { id: true, familyId: true, fullName: true } },
+          } },
+          lines: { select: { childId: true } },
+        } },
         remittance: { select: { paymentMethod: true, reversedAt: true } },
       },
     }),
@@ -1416,16 +2133,32 @@ async function getHandler(request: NextRequest) {
       ...(batchCursor ? { cursor: { id: batchCursor }, skip: 1 } : {}),
       take: AGENCY_BATCH_LIMIT + 1,
       include: {
-        agencyProgram: { select: { name: true, programName: true } },
-        allocations: { orderBy: { createdAt: "asc" }, include: { claim: { include: { authorization: { include: { family: { select: { name: true } }, child: { select: { fullName: true } } } } } } } },
+        agencyProgram: { select: { id: true, centerId: true, name: true, programName: true } },
+        allocations: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], include: { claim: { include: {
+          agencyProgram: { select: { id: true, centerId: true } },
+          authorization: { include: {
+            agencyProgram: { select: { id: true, centerId: true } },
+            family: { select: { id: true, centerId: true, name: true } },
+            child: { select: { id: true, familyId: true, fullName: true } },
+          } },
+          lines: { select: { childId: true } },
+        } }, remittance: { select: { enteredById: true } } } },
       },
     }),
     prisma.agencyRemittanceBatch.findMany({
       where: { centerId: { in: centerIds }, reversedAt: null, status: { in: ["pending_review", "unmatched", "partially_allocated", "exception"] } },
       orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
       include: {
-        agencyProgram: { select: { name: true, programName: true } },
-        allocations: { orderBy: { createdAt: "asc" }, include: { claim: { include: { authorization: { include: { family: { select: { name: true } }, child: { select: { fullName: true } } } } } } } },
+        agencyProgram: { select: { id: true, centerId: true, name: true, programName: true } },
+        allocations: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], include: { claim: { include: {
+          agencyProgram: { select: { id: true, centerId: true } },
+          authorization: { include: {
+            agencyProgram: { select: { id: true, centerId: true } },
+            family: { select: { id: true, centerId: true, name: true } },
+            child: { select: { id: true, familyId: true, fullName: true } },
+          } },
+          lines: { select: { childId: true } },
+        } }, remittance: { select: { enteredById: true } } } },
       },
     }),
     prisma.agencyLedgerAdjustment.findMany({
@@ -1433,12 +2166,12 @@ async function getHandler(request: NextRequest) {
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       ...(adjustmentCursor ? { cursor: { id: adjustmentCursor }, skip: 1 } : {}),
       take: AGENCY_ADJUSTMENT_LIMIT + 1,
-      include: { agencyProgram: { select: { name: true, programName: true } }, claim: { select: { number: true } } },
+      include: { agencyProgram: { select: { id: true, centerId: true, name: true, programName: true } }, claim: { select: { id: true, centerId: true, agencyProgramId: true, number: true } } },
     }),
     prisma.agencyLedgerAdjustment.findMany({
       where: { centerId: { in: centerIds }, status: "pending_review", reversedAt: null },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      include: { agencyProgram: { select: { name: true, programName: true } }, claim: { select: { number: true } } },
+      include: { agencyProgram: { select: { id: true, centerId: true, name: true, programName: true } }, claim: { select: { id: true, centerId: true, agencyProgramId: true, number: true } } },
     }),
     prisma.agencyAccountingPeriod.findMany({
       where: { centerId: { in: centerIds } },
@@ -1450,15 +2183,27 @@ async function getHandler(request: NextRequest) {
       orderBy: [{ dueDate: "asc" }, { id: "asc" }],
       select: {
         id: true,
+        centerId: true,
         agencyProgramId: true,
+        authorizationId: true,
         number: true,
         status: true,
         dueDate: true,
         approvedCents: true,
         claimedCents: true,
         paidCents: true,
-        agencyProgram: { select: { id: true, name: true } },
-        authorization: { select: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
+        agencyProgram: { select: { id: true, centerId: true, name: true } },
+        authorization: { select: {
+          id: true,
+          centerId: true,
+          agencyProgramId: true,
+          familyId: true,
+          childId: true,
+          agencyProgram: { select: { id: true, centerId: true } },
+          child: { select: { id: true, familyId: true, fullName: true } },
+          family: { select: { id: true, centerId: true, name: true } },
+        } },
+        lines: { select: { childId: true } },
       },
     }),
     prisma.agencyRemittanceBatch.groupBy({
@@ -1482,17 +2227,39 @@ async function getHandler(request: NextRequest) {
     prisma.agencyLedgerAdjustment.count({ where: { centerId: { in: centerIds }, followUpDueAt: { lt: new Date() }, status: "pending_review" } }),
   ]);
 
-  const hasNextBatchPage = recentBatches.length > AGENCY_BATCH_LIMIT;
-  const visibleRecentBatches = recentBatches.slice(0, AGENCY_BATCH_LIMIT);
+  // Root center filters are not enough for legacy rows because these models have
+  // independent foreign keys. Omit any row whose joined agency/family/child
+  // relationships do not resolve back to the same exact school.
+  const authorizations = authorizationRows.filter(exactAgencyAuthorizationScope);
+  const claims = claimRows.filter(exactAgencyClaimScope);
+  const allocationClaims = allocationClaimRows.filter(exactAgencyClaimScope);
+  const ledgerAccounts = ledgerAccountRows.filter(exactAgencyProgramScope);
+  const scopedLedgerEntryRows = ledgerEntryRows.filter((entry) => exactAgencyProgramScope(entry.agencyLedgerAccount) && (!entry.claim || exactAgencyClaimScope(entry.claim)));
+  const scopeBatch = <T extends typeof recentBatchRows[number]>(batch: T) => exactAgencyProgramScope(batch) ? [{
+    ...batch,
+    allocations: batch.allocations.filter((allocation) => allocation.claim.centerId === batch.centerId && allocation.claim.agencyProgramId === batch.agencyProgramId && exactAgencyClaimScope(allocation.claim)),
+  }] : [];
+  const recentBatches = recentBatchRows.flatMap(scopeBatch);
+  const unresolvedBatches = unresolvedBatchRows.flatMap(scopeBatch);
+  const scopeAdjustment = <T extends typeof recentAdjustmentRows[number]>(adjustment: T) => exactAgencyProgramScope(adjustment)
+    && (!adjustment.claim || (adjustment.claim.centerId === adjustment.centerId && adjustment.claim.agencyProgramId === adjustment.agencyProgramId));
+  const recentAdjustments = recentAdjustmentRows.filter(scopeAdjustment);
+  const unresolvedAdjustments = unresolvedAdjustmentRows.filter(scopeAdjustment);
+
+  const hasNextBatchPage = recentBatchRows.length > AGENCY_BATCH_LIMIT;
+  const visibleRecentBatches = recentBatches.filter((batch) => recentBatchRows.slice(0, AGENCY_BATCH_LIMIT).some((row) => row.id === batch.id));
+  const nextBatchCursor = hasNextBatchPage ? recentBatchRows.slice(0, AGENCY_BATCH_LIMIT).at(-1)?.id ?? null : null;
   const batches = [...new Map([...unresolvedBatches, ...visibleRecentBatches].map((batch) => [batch.id, batch])).values()]
     .sort((left, right) => right.paidAt.getTime() - left.paidAt.getTime() || right.createdAt.getTime() - left.createdAt.getTime() || right.id.localeCompare(left.id));
-  const hasNextAdjustmentPage = recentAdjustments.length > AGENCY_ADJUSTMENT_LIMIT;
-  const visibleRecentAdjustments = recentAdjustments.slice(0, AGENCY_ADJUSTMENT_LIMIT);
+  const hasNextAdjustmentPage = recentAdjustmentRows.length > AGENCY_ADJUSTMENT_LIMIT;
+  const visibleRecentAdjustments = recentAdjustments.filter((adjustment) => recentAdjustmentRows.slice(0, AGENCY_ADJUSTMENT_LIMIT).some((row) => row.id === adjustment.id));
+  const nextAdjustmentCursor = hasNextAdjustmentPage ? recentAdjustmentRows.slice(0, AGENCY_ADJUSTMENT_LIMIT).at(-1)?.id ?? null : null;
   const adjustments = [...new Map([...unresolvedAdjustments, ...visibleRecentAdjustments].map((adjustment) => [adjustment.id, adjustment])).values()]
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime() || right.id.localeCompare(left.id));
 
-  const hasNextClaimPage = claims.length > CLAIM_PAGE_SIZE;
-  const visibleClaims = claims.slice(0, CLAIM_PAGE_SIZE).map((claim) => ({
+  const hasNextClaimPage = claimRows.length > CLAIM_PAGE_SIZE;
+  const nextClaimCursor = hasNextClaimPage ? claimRows.slice(0, CLAIM_PAGE_SIZE).at(-1)?.id ?? null : null;
+  const visibleClaims = claims.filter((claim) => claimRows.slice(0, CLAIM_PAGE_SIZE).some((row) => row.id === claim.id)).map((claim) => ({
     ...claim,
     requirementBlockers: ["draft", "ready", "submitted"].includes(claim.status) ? claimSubmissionBlockers({
       ...claim.agencyProgram,
@@ -1546,7 +2313,8 @@ async function getHandler(request: NextRequest) {
   });
   const legacyFamilyAgencyBalanceCents = legacyFamilyAgencyAggregate._sum.amountCents ?? 0;
   const hasNextLedgerPage = ledgerEntryRows.length > AGENCY_LEDGER_ENTRY_LIMIT;
-  const visibleLedgerEntries = ledgerEntryRows.slice(0, AGENCY_LEDGER_ENTRY_LIMIT);
+  const nextLedgerCursor = hasNextLedgerPage ? ledgerEntryRows.slice(0, AGENCY_LEDGER_ENTRY_LIMIT).at(-1)?.id ?? null : null;
+  const visibleLedgerEntries = scopedLedgerEntryRows.filter((entry) => ledgerEntryRows.slice(0, AGENCY_LEDGER_ENTRY_LIMIT).some((row) => row.id === entry.id));
   const summary = {
     claimedCents: Number(summaryRow?.claimedCents ?? 0),
     approvedCents: Number(summaryRow?.approvedCents ?? 0),
@@ -1566,7 +2334,8 @@ async function getHandler(request: NextRequest) {
   };
   const programReadiness = programs.map((program) => {
     const setupBlockers = agencyProgramSetupBlockers(program);
-    return { ...program, status: setupBlockers.length ? "setup_required" : "active", setupBlockers };
+    const controlledLedgerBlockers = agencyControlledLedgerSetupBlockers(program);
+    return { ...program, status: setupBlockers.length ? "setup_required" : "active", setupBlockers, controlledLedgerBlockers };
   });
   const expirationCutoff = new Date(today);
   expirationCutoff.setUTCDate(expirationCutoff.getUTCDate() + 31);
@@ -1583,20 +2352,24 @@ async function getHandler(request: NextRequest) {
     authorizations,
     claims: visibleClaims,
     allocationClaims,
-    claimPagination: { page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage, nextCursor: hasNextClaimPage ? visibleClaims.at(-1)?.id ?? null : null },
+    claimPagination: { page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage, nextCursor: nextClaimCursor },
     families,
     summary: { ...summary, ...readiness },
     capabilities: {
       currentUserId: auth.user.id,
+      canManageAgencyBilling: canManageBilling(auth.user),
       canReviewAgencyPosting: canCloseAgencyAccountingPeriod(auth.user.role),
       canCloseAccountingPeriod: canCloseAgencyAccountingPeriod(auth.user.role),
+      agencyReconciliationActivated,
+      agencyReconciliationEnabled,
+      agencyReconciliationBlockers,
     },
     aging,
     reconciliation,
     remittanceBatches: batches,
-    batchPagination: { page: batchPage, pageSize: AGENCY_BATCH_LIMIT, hasNext: hasNextBatchPage, nextCursor: hasNextBatchPage ? visibleRecentBatches.at(-1)?.id ?? null : null },
+    batchPagination: { page: batchPage, pageSize: AGENCY_BATCH_LIMIT, hasNext: hasNextBatchPage, nextCursor: nextBatchCursor },
     adjustments,
-    adjustmentPagination: { page: adjustmentPage, pageSize: AGENCY_ADJUSTMENT_LIMIT, hasNext: hasNextAdjustmentPage, nextCursor: hasNextAdjustmentPage ? visibleRecentAdjustments.at(-1)?.id ?? null : null },
+    adjustmentPagination: { page: adjustmentPage, pageSize: AGENCY_ADJUSTMENT_LIMIT, hasNext: hasNextAdjustmentPage, nextCursor: nextAdjustmentCursor },
     accountingPeriods,
     ledger: {
       accounts: ledgerAccounts,
@@ -1604,7 +2377,7 @@ async function getHandler(request: NextRequest) {
       entryLimit: AGENCY_LEDGER_ENTRY_LIMIT,
       truncated: hasNextLedgerPage,
       hasNext: hasNextLedgerPage,
-      nextCursor: hasNextLedgerPage ? visibleLedgerEntries.at(-1)?.id ?? null : null,
+      nextCursor: nextLedgerCursor,
     },
   });
 }
@@ -1615,9 +2388,11 @@ async function postHandler(request: NextRequest) {
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const action = clean(body.action);
   const centerId = clean(body.centerId);
+  if (!centerId || centerId === "all" || !centerAllowed(auth.user, centerId)) {
+    return NextResponse.json({ ok: false, error: "Choose one authorized school before creating or changing agency records." }, { status: 403 });
+  }
 
   if (action === "createProgram") {
-    if (!centerAllowed(auth.user, centerId)) return NextResponse.json({ ok: false, error: "School access denied." }, { status: 403 });
     const name = clean(body.name);
     const stateCode = normalizeStateCode(body.stateCode);
     if (!name || !stateCode) return NextResponse.json({ ok: false, error: "Agency name and two-letter state are required." }, { status: 400 });
@@ -1634,18 +2409,37 @@ async function postHandler(request: NextRequest) {
       costCenterCode: clean(body.costCenterCode) || null,
     };
     if (!SUBMISSION_METHODS.has(setup.submissionMethod)) return NextResponse.json({ ok: false, error: "Choose a supported agency submission method." }, { status: 400 });
-    const program = await prisma.agencyProgram.create({ data: {
-      centerId, name, stateCode, programName: clean(body.programName) || null,
-      ...setup, remittanceEmail: clean(body.remittanceEmail) || null,
-      requirements, status: agencyProgramStatus(setup),
-    } });
-    await writeAuditLog(auth.user, { centerId, action: "billing.agency_program.created", resource: "AgencyProgram", resourceId: program.id, metadata: { stateCode, name, requirementCount: requirements.length } });
+    const nextStatus = agencyProgramStatus(setup);
+    const program = await prisma.$transaction(async (tx) => {
+      const center = await tx.center.findUnique({
+        where: { id: centerId },
+        select: {
+          agencyReconciliationEnabled: true,
+          agencyPrograms: { select: { name: true, status: true, receivableGlCode: true, cashGlCode: true, adjustmentGlCode: true, costCenterCode: true } },
+        },
+      });
+      if (!center) throw new AgencyWorkflowError("School not found.", 404);
+      const activationBlockers = agencyReconciliationActivationBlockers([
+        ...center.agencyPrograms,
+        { name, status: nextStatus, ...setup },
+      ]);
+      if (center.agencyReconciliationEnabled && activationBlockers.length) {
+        throw new AgencyWorkflowError(`This school already uses reviewed reconciliation. Complete its active-program accounting mappings before saving. ${activationBlockers.join(" ")}`, 409);
+      }
+      const created = await tx.agencyProgram.create({ data: {
+        centerId, name, stateCode, programName: clean(body.programName) || null,
+        ...setup, remittanceEmail: clean(body.remittanceEmail) || null,
+        requirements, status: nextStatus,
+      } });
+      await writeAuditLog(auth.user, { centerId, action: "billing.agency_program.created", resource: "AgencyProgram", resourceId: created.id, metadata: { stateCode, name, requirementCount: requirements.length, accountingMapping: { previous: null, next: { receivableGlCode: created.receivableGlCode, cashGlCode: created.cashGlCode, adjustmentGlCode: created.adjustmentGlCode, costCenterCode: created.costCenterCode } } } }, tx);
+      return created;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return NextResponse.json({ ok: true, program });
   }
 
   if (action === "updateProgram") {
     const program = await prisma.agencyProgram.findUnique({ where: { id: clean(body.agencyProgramId) } });
-    if (!program || !centerAllowed(auth.user, program.centerId)) {
+    if (!program || program.centerId !== centerId) {
       return NextResponse.json({ ok: false, error: "Agency program not found." }, { status: 404 });
     }
     const name = clean(body.name);
@@ -1663,27 +2457,52 @@ async function postHandler(request: NextRequest) {
       costCenterCode: clean(body.costCenterCode) || null,
     };
     if (!SUBMISSION_METHODS.has(setup.submissionMethod)) return NextResponse.json({ ok: false, error: "Choose a supported agency submission method." }, { status: 400 });
-    const requirements = body.requirements === undefined ? program.requirements : normalizeAgencyRequirements(body.requirements);
-    const updated = await prisma.agencyProgram.update({ where: { id: program.id }, data: {
-      name, stateCode, programName: clean(body.programName) || null,
-      ...setup, remittanceEmail: clean(body.remittanceEmail) || null,
-      requirements: requirements ?? undefined, status: agencyProgramStatus(setup),
-    } });
+    const nextStatus = agencyProgramStatus(setup);
+    const updated = await prisma.$transaction(async (tx) => {
+      const current = await tx.agencyProgram.findUnique({ where: { id: program.id } });
+      if (!current || current.centerId !== centerId) throw new AgencyWorkflowError("Agency program not found.", 404);
+      const center = await tx.center.findUnique({
+        where: { id: current.centerId },
+        select: {
+          agencyReconciliationEnabled: true,
+          agencyPrograms: { select: { id: true, name: true, status: true, receivableGlCode: true, cashGlCode: true, adjustmentGlCode: true, costCenterCode: true } },
+        },
+      });
+      if (!center) throw new AgencyWorkflowError("School not found.", 404);
+      const activationBlockers = agencyReconciliationActivationBlockers(center.agencyPrograms.map((candidate) => (
+        candidate.id === current.id ? { name, status: nextStatus, ...setup } : candidate
+      )));
+      if (center.agencyReconciliationEnabled && activationBlockers.length) {
+        throw new AgencyWorkflowError(`This school already uses reviewed reconciliation. Keep at least one active program and complete every active-program accounting mapping. ${activationBlockers.join(" ")}`, 409);
+      }
+      const requirements = body.requirements === undefined ? current.requirements : normalizeAgencyRequirements(body.requirements);
+      const changed = await tx.agencyProgram.update({ where: { id: current.id }, data: {
+        name, stateCode, programName: clean(body.programName) || null,
+        ...setup, remittanceEmail: clean(body.remittanceEmail) || null,
+        requirements: requirements ?? undefined, status: nextStatus,
+      } });
+      await writeAuditLog(auth.user, {
+        centerId: current.centerId,
+        action: "billing.agency_program.updated",
+        resource: "AgencyProgram",
+        resourceId: current.id,
+        metadata: {
+          status: changed.status,
+          hasProviderOrVendorNumber: Boolean(changed.providerNumber || changed.vendorNumber),
+          submissionMethod: changed.submissionMethod,
+          hasPortalUrl: Boolean(changed.portalUrl),
+          hasPaymentInstructions: Boolean(changed.paymentInstructions),
+          accountingMapping: {
+            previous: { receivableGlCode: current.receivableGlCode, cashGlCode: current.cashGlCode, adjustmentGlCode: current.adjustmentGlCode, costCenterCode: current.costCenterCode },
+            next: { receivableGlCode: changed.receivableGlCode, cashGlCode: changed.cashGlCode, adjustmentGlCode: changed.adjustmentGlCode, costCenterCode: changed.costCenterCode },
+          },
+        },
+      }, tx);
+      return changed;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     const blockers = agencyProgramSetupBlockers(updated);
-    await writeAuditLog(auth.user, {
-      centerId: program.centerId,
-      action: "billing.agency_program.updated",
-      resource: "AgencyProgram",
-      resourceId: program.id,
-      metadata: {
-        status: updated.status,
-        hasProviderOrVendorNumber: Boolean(updated.providerNumber || updated.vendorNumber),
-        submissionMethod: updated.submissionMethod,
-        hasPortalUrl: Boolean(updated.portalUrl),
-        hasPaymentInstructions: Boolean(updated.paymentInstructions),
-      },
-    });
-    return NextResponse.json({ ok: true, program: updated, blockers });
+    const controlledLedgerBlockers = agencyControlledLedgerSetupBlockers(updated);
+    return NextResponse.json({ ok: true, program: updated, blockers, controlledLedgerBlockers });
   }
 
   if (action === "createAuthorization") {
@@ -1712,18 +2531,20 @@ async function postHandler(request: NextRequest) {
           tx.family.findUnique({ where: { id: familyId }, include: { children: { select: { id: true, enrollmentStatus: true, classroomId: true } } } }),
         ]);
         const child = family?.children.find((item) => item.id === childId);
-        if (!program || !family || program.centerId !== family.centerId || !centerAllowed(auth.user, program.centerId) || !child) {
+        if (!program || !family || program.centerId !== centerId || family.centerId !== centerId || !child) {
           throw new AgencyWorkflowError("Agency, family, and child must belong to the same accessible school.", 403);
         }
         if (!isCurrentlyEnrolledChildRecord(child)) throw new AgencyWorkflowError("Only a currently enrolled child with an assigned classroom can receive a new agency authorization.", 409);
         const programBlockers = agencyProgramSetupBlockers(program);
         if (programBlockers.length) throw new AgencyWorkflowError(`Complete agency setup before adding child authorizations. ${programBlockers.join(" ")}`, 409);
-        return tx.subsidyAuthorization.create({ data: {
+        const created = await tx.subsidyAuthorization.create({ data: {
           centerId: program.centerId, agencyProgramId, familyId, childId, authorizationNumber,
           coverageStart, coverageEnd, authorizedRateCents, familyCopayCents,
           unitType, authorizedUnits,
           requiredDocuments: normalizeAgencyRequirements(body.requiredDocuments),
         } });
+        await writeAuditLog(auth.user, { centerId: created.centerId, action: "billing.subsidy_authorization.created", resource: "SubsidyAuthorization", resourceId: created.id, metadata: { agencyProgramId, familyId, childId, coverageStart, coverageEnd } }, tx);
+        return created;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
@@ -1732,7 +2553,6 @@ async function postHandler(request: NextRequest) {
       }
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: authorization.centerId, action: "billing.subsidy_authorization.created", resource: "SubsidyAuthorization", resourceId: authorization.id, metadata: { agencyProgramId, familyId, childId, coverageStart, coverageEnd } });
     return NextResponse.json({ ok: true, authorization });
   }
 
@@ -1752,13 +2572,19 @@ async function postHandler(request: NextRequest) {
       correction = await prisma.$transaction(async (tx) => {
         const authorization = await tx.subsidyAuthorization.findUnique({
           where: { id: clean(body.authorizationId) },
-          include: { claims: { where: { status: { not: "void" } }, select: { id: true }, take: 1 } },
+          include: {
+            agencyProgram: { select: { id: true, centerId: true } },
+            family: { select: { id: true, centerId: true } },
+            child: { select: { id: true, familyId: true } },
+            claims: { where: { status: { not: "void" } }, select: { id: true }, take: 1 },
+          },
         });
-        if (!authorization || !centerAllowed(auth.user, authorization.centerId)) throw new AgencyWorkflowError("Authorization not found.", 404);
+        if (!authorization || authorization.centerId !== centerId || !exactAgencyAuthorizationScope(authorization)) throw new AgencyWorkflowError("Authorization not found.", 404);
         if (authorization.claims.length) throw new AgencyWorkflowError("Void every draft claim tied to this authorization before correcting its rate or dates. Submitted and paid claim history cannot be rewritten.", 409);
         const unitType = clean(body.unitType) || authorization.unitType;
         if (!AUTHORIZATION_UNIT_TYPES.has(unitType)) throw new AgencyWorkflowError("Choose a supported authorization rate unit.");
         const updated = await tx.subsidyAuthorization.update({ where: { id: authorization.id }, data: { authorizationNumber, coverageStart, coverageEnd, authorizedRateCents, familyCopayCents, unitType, authorizedUnits } });
+        await writeAuditLog(auth.user, { centerId: authorization.centerId, action: "billing.subsidy_authorization.updated", resource: "SubsidyAuthorization", resourceId: authorization.id, metadata: { previousRateCents: authorization.authorizedRateCents, authorizedRateCents, previousCoverageStart: dateInput(authorization.coverageStart), previousCoverageEnd: dateInput(authorization.coverageEnd), coverageStart: dateInput(coverageStart), coverageEnd: dateInput(coverageEnd), unitType, authorizedUnits } }, tx);
         return { authorization, updated, unitType };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -1767,15 +2593,34 @@ async function postHandler(request: NextRequest) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return NextResponse.json({ ok: false, error: "Another authorization already uses that number for this child and agency." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: correction.authorization.centerId, action: "billing.subsidy_authorization.updated", resource: "SubsidyAuthorization", resourceId: correction.authorization.id, metadata: { previousRateCents: correction.authorization.authorizedRateCents, authorizedRateCents, previousCoverageStart: dateInput(correction.authorization.coverageStart), previousCoverageEnd: dateInput(correction.authorization.coverageEnd), coverageStart: dateInput(coverageStart), coverageEnd: dateInput(coverageEnd), unitType: correction.unitType, authorizedUnits } });
     return NextResponse.json({ ok: true, authorization: correction.updated });
   }
 
   if (action === "archiveAuthorization") {
-    const authorization = await prisma.subsidyAuthorization.findUnique({ where: { id: clean(body.authorizationId) } });
-    if (!authorization || !centerAllowed(auth.user, authorization.centerId)) return NextResponse.json({ ok: false, error: "Authorization not found." }, { status: 404 });
-    const updated = await prisma.subsidyAuthorization.update({ where: { id: authorization.id }, data: { status: "inactive" } });
-    await writeAuditLog(auth.user, { centerId: authorization.centerId, action: "billing.subsidy_authorization.archived", resource: "SubsidyAuthorization", resourceId: authorization.id, metadata: { previousStatus: authorization.status } });
+    let updated;
+    try {
+      updated = await prisma.$transaction(async (tx) => {
+        const authorization = await tx.subsidyAuthorization.findUnique({
+          where: { id: clean(body.authorizationId) },
+          include: {
+            agencyProgram: { select: { id: true, centerId: true } },
+            family: { select: { id: true, centerId: true } },
+            child: { select: { id: true, familyId: true } },
+          },
+        });
+        if (!authorization || authorization.centerId !== centerId || !exactAgencyAuthorizationScope(authorization)) throw new AgencyWorkflowError("Authorization not found.", 404);
+        if (authorization.status === "inactive") return tx.subsidyAuthorization.findUniqueOrThrow({ where: { id: authorization.id } });
+        const transition = await tx.subsidyAuthorization.updateMany({ where: { id: authorization.id, status: authorization.status }, data: { status: "inactive" } });
+        if (transition.count !== 1) throw new AgencyWorkflowError("The authorization changed while it was being archived. Refresh and try again.", 409);
+        const archived = await tx.subsidyAuthorization.findUniqueOrThrow({ where: { id: authorization.id } });
+        await writeAuditLog(auth.user, { centerId: authorization.centerId, action: "billing.subsidy_authorization.archived", resource: "SubsidyAuthorization", resourceId: authorization.id, metadata: { previousStatus: authorization.status } }, tx);
+        return archived;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The authorization changed while it was being archived. Refresh and try again." }, { status: 409 });
+      throw error;
+    }
     return NextResponse.json({ ok: true, authorization: updated });
   }
 
@@ -1783,13 +2628,14 @@ async function postHandler(request: NextRequest) {
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {
-        const authorization = await tx.subsidyAuthorization.findUnique({ where: { id: clean(body.authorizationId) }, include: { agencyProgram: true, child: { select: { enrollmentStatus: true, classroomId: true } } } });
-        if (!authorization || !centerAllowed(auth.user, authorization.centerId)) throw new AgencyWorkflowError("Authorization not found.", 404);
+        const authorization = await tx.subsidyAuthorization.findUnique({ where: { id: clean(body.authorizationId) }, include: { agencyProgram: true, family: { select: { id: true, centerId: true } }, child: { select: { id: true, familyId: true, enrollmentStatus: true, classroomId: true } } } });
+        if (!authorization || authorization.centerId !== centerId || !exactAgencyAuthorizationScope(authorization)) throw new AgencyWorkflowError("Authorization not found.", 404);
         if (!isCurrentlyEnrolledChildRecord(authorization.child)) throw new AgencyWorkflowError("Only an authorization for a currently enrolled child with an assigned classroom can be restored.", 409);
         const programBlockers = agencyProgramSetupBlockers(authorization.agencyProgram);
         if (programBlockers.length) throw new AgencyWorkflowError(`Complete agency setup before restoring this authorization. ${programBlockers.join(" ")}`, 409);
         const transition = await tx.subsidyAuthorization.updateMany({ where: { id: authorization.id, status: { not: "active" } }, data: { status: "active" } });
-        const updated = transition.count ? await tx.subsidyAuthorization.findUniqueOrThrow({ where: { id: authorization.id } }) : authorization;
+        const updated = await tx.subsidyAuthorization.findUniqueOrThrow({ where: { id: authorization.id } });
+        if (transition.count) await writeAuditLog(auth.user, { centerId: authorization.centerId, action: "billing.subsidy_authorization.restored", resource: "SubsidyAuthorization", resourceId: authorization.id, metadata: { previousStatus: authorization.status } }, tx);
         return { authorization, updated };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -1797,13 +2643,11 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The authorization changed while it was being restored. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    const { authorization, updated } = result;
-    await writeAuditLog(auth.user, { centerId: authorization.centerId, action: "billing.subsidy_authorization.restored", resource: "SubsidyAuthorization", resourceId: authorization.id, metadata: { previousStatus: authorization.status } });
+    const { updated } = result;
     return NextResponse.json({ ok: true, authorization: updated });
   }
 
-  if (action === "prepareRemittanceBatch" || action === "recordRemittance") {
-    if (!centerAllowed(auth.user, centerId)) return NextResponse.json({ ok: false, error: "School access denied." }, { status: 403 });
+  if (action === "prepareRemittanceBatch") {
     const reference = clean(body.externalReference);
     const paidAt = dateValue(body.paidAt);
     const paymentMethod = clean(body.paymentMethod) || "ach";
@@ -1826,6 +2670,9 @@ async function postHandler(request: NextRequest) {
     if (allocatedCents > totalCents) return NextResponse.json({ ok: false, error: "Claim allocations cannot exceed the deposit total." }, { status: 400 });
     if (!evidenceName || !evidenceReference || !followUpDueAt) return NextResponse.json({ ok: false, error: "Name the remittance evidence, enter its secure internal reference, and assign a follow-up due date." }, { status: 400 });
     const agencyProgramId = clean(body.agencyProgramId);
+    const idempotencyKey = clean(body.idempotencyKey);
+    if (!idempotencyKey) return NextResponse.json({ ok: false, error: "A retry-safe request key is required before preparing a remittance batch." }, { status: 400 });
+    let requestedFingerprint: string | null = null;
     let prepared;
     try {
       prepared = await prisma.$transaction(async (tx) => {
@@ -1850,12 +2697,25 @@ async function postHandler(request: NextRequest) {
           followUpDueAt,
           allocations,
         });
-        const idempotencyKey = clean(body.idempotencyKey) || `agency-batch:${randomUUID()}`;
+        requestedFingerprint = fingerprint;
         const existingByIdempotency = await tx.agencyRemittanceBatch.findUnique({ where: { idempotencyKey } });
-        if (existingByIdempotency) {
-          if (existingByIdempotency.reconciliationFingerprint !== fingerprint) throw new AgencyWorkflowError("This retry key was already used for a different remittance batch.", 409);
-          return { batch: existingByIdempotency, reused: true };
+        const replay = agencyIdempotencyReplay({
+          record: existingByIdempotency,
+          user: auth.user,
+          expectedCenterId: centerId,
+          requestedFingerprint: fingerprint,
+          centerId: (batch) => batch.centerId,
+          ownerId: (batch) => batch.enteredById,
+          fingerprint: (batch) => batch.reconciliationFingerprint,
+        });
+        if (replay.kind === "not_found") throw new AgencyWorkflowError("Remittance batch not found.", 404);
+        if (replay.kind === "mismatch") throw new AgencyWorkflowError("This retry key was already used for a different remittance batch.", 409);
+        if (replay.kind === "reused") {
+          await writeAuditLog(auth.user, { centerId, action: "billing.agency_remittance_batch.prepared", resource: "AgencyRemittanceBatch", resourceId: replay.record.id, metadata: { agencyProgramId: replay.record.agencyProgramId, totalCents: replay.record.totalCents, allocatedForReviewCents: allocatedCents, reused: true, evidenceRecorded: true } }, tx);
+          return { batch: replay.record, reused: true };
         }
+        await requireAgencyReconciliationEnabled(tx, centerId);
+        if (program.status !== "active" || agencyProgramSetupBlockers(program).length || agencyControlledLedgerSetupBlockers(program).length) throw new AgencyWorkflowError("Complete this school's agency program and accounting mapping setup before preparing a remittance batch.", 409);
         const existingActiveReference = await tx.agencyRemittanceBatch.findFirst({
           where: {
             centerId,
@@ -1881,6 +2741,8 @@ async function postHandler(request: NextRequest) {
           referenceKey,
           paidAt,
           paymentMethod,
+          cashGlCodeSnapshot: program.cashGlCode,
+          costCenterCodeSnapshot: program.costCenterCode,
           totalCents,
           allocatedCents: 0,
           unappliedCents: 0,
@@ -1905,14 +2767,38 @@ async function postHandler(request: NextRequest) {
             requestedById: auth.user.id,
           })) });
         }
+        await writeAuditLog(auth.user, { centerId, action: "billing.agency_remittance_batch.prepared", resource: "AgencyRemittanceBatch", resourceId: batch.id, metadata: { agencyProgramId: batch.agencyProgramId, totalCents: batch.totalCents, allocatedForReviewCents: allocatedCents, reused: false, evidenceRecorded: true } }, tx);
         return { batch, reused: false };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
-      if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "That school and agency already have a remittance batch with this payment reference. Review the existing batch instead of posting it again." }, { status: 409 });
-      throw error;
+      if (prismaConflict(error)) {
+        const existingByIdempotency = requestedFingerprint
+          ? await prisma.agencyRemittanceBatch.findUnique({ where: { idempotencyKey } })
+          : null;
+        const replay = requestedFingerprint
+          ? agencyIdempotencyReplay({
+              record: existingByIdempotency,
+              user: auth.user,
+              expectedCenterId: centerId,
+              requestedFingerprint,
+              centerId: (batch) => batch.centerId,
+              ownerId: (batch) => batch.enteredById,
+              fingerprint: (batch) => batch.reconciliationFingerprint,
+            })
+          : { kind: "missing" as const };
+        if (replay.kind === "not_found") return NextResponse.json({ ok: false, error: "Remittance batch not found." }, { status: 404 });
+        if (replay.kind === "mismatch") return NextResponse.json({ ok: false, error: "This retry key was already used for a different remittance batch." }, { status: 409 });
+        if (replay.kind === "reused") {
+          await writeAuditLog(auth.user, { centerId, action: "billing.agency_remittance_batch.prepared", resource: "AgencyRemittanceBatch", resourceId: replay.record.id, metadata: { agencyProgramId: replay.record.agencyProgramId, totalCents: replay.record.totalCents, allocatedForReviewCents: allocatedCents, reused: true, evidenceRecorded: true } });
+          prepared = { batch: replay.record, reused: true };
+        } else {
+          return NextResponse.json({ ok: false, error: "That school and agency already have a remittance batch with this payment reference. Review the existing batch instead of posting it again." }, { status: 409 });
+        }
+      } else {
+        throw error;
+      }
     }
-    await writeAuditLog(auth.user, { centerId, action: "billing.agency_remittance_batch.prepared", resource: "AgencyRemittanceBatch", resourceId: prepared.batch.id, metadata: { agencyProgramId: prepared.batch.agencyProgramId, totalCents, allocatedForReviewCents: allocatedCents, reused: prepared.reused, evidenceRecorded: true } });
     return NextResponse.json({ ok: true, ...prepared, requiresReview: true });
   }
 
@@ -1921,10 +2807,12 @@ async function postHandler(request: NextRequest) {
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {
-        const batch = await tx.agencyRemittanceBatch.findUnique({ where: { id: batchId }, include: { allocations: { orderBy: { createdAt: "asc" } }, agencyProgram: true } });
-        if (!batch || !centerAllowed(auth.user, batch.centerId)) throw new AgencyWorkflowError("Remittance batch not found.", 404);
+        const batch = await tx.agencyRemittanceBatch.findUnique({ where: { id: batchId }, include: { allocations: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] }, agencyProgram: true } });
+        if (!batch || batch.centerId !== centerId) throw new AgencyWorkflowError("Remittance batch not found.", 404);
+        await requireAgencyReconciliationEnabled(tx, batch.centerId);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: batch.enteredById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must approve this batch.", 403);
         if (batch.status !== "pending_review" || batch.reviewedAt) throw new AgencyWorkflowError("This remittance batch is no longer awaiting initial review.", 409);
+        if (batch.agencyProgram.status !== "active" || agencyProgramSetupBlockers(batch.agencyProgram).length || agencyControlledLedgerSetupBlockers(batch.agencyProgram).length) throw new AgencyWorkflowError("Complete this school's agency program and accounting mapping setup before approving a remittance batch.", 409);
         if (isFutureAgencyAccountingDate(batch.paidAt)) throw new AgencyWorkflowError("A future-dated remittance batch cannot be approved.", 409);
         const pendingAllocations = batch.allocations.filter((allocation) => allocation.status === "pending_review");
         const fingerprint = agencyBatchFingerprint({ centerId: batch.centerId, agencyProgramId: batch.agencyProgramId, externalReference: batch.externalReference, paidAt: batch.paidAt, paymentMethod: batch.paymentMethod, totalCents: batch.totalCents, notes: batch.notes, evidenceName: batch.evidenceName, evidenceReference: batch.evidenceReference, followUpDueAt: batch.followUpDueAt, allocations: pendingAllocations });
@@ -1936,7 +2824,7 @@ async function postHandler(request: NextRequest) {
         for (const allocation of pendingAllocations) {
           const current = await agencyPostingClaim(tx, allocation.claimId);
           if (!current || current.centerId !== batch.centerId || current.agencyProgramId !== batch.agencyProgramId) throw new AgencyWorkflowError("A claim allocation no longer belongs to this school and agency.", 409);
-          const allocationResult = await postAgencyClaimAllocation(tx, { claim: current, batchId: batch.id, allocationId: allocation.id, amountCents: allocation.amountCents, paidAt: batch.paidAt, paymentMethod: batch.paymentMethod, reference: batch.externalReference, notes: allocation.notes, reviewerId: auth.user.id }, { recalculateAgencyLedger: false });
+          const allocationResult = await postAgencyClaimAllocation(tx, { claim: current, batchId: batch.id, allocationId: allocation.id, amountCents: allocation.amountCents, paidAt: batch.paidAt, paymentMethod: batch.paymentMethod, reference: batch.externalReference, notes: allocation.notes, reviewerId: auth.user.id, accountingSnapshot: { glCode: batch.cashGlCodeSnapshot, costCenterCode: batch.costCenterCodeSnapshot } }, { recalculateAgencyLedger: false });
           agencyLedgerAccountId = allocationResult.ledger.account.id;
           allocatedCents += allocation.amountCents;
           posted.push(allocationResult);
@@ -1955,6 +2843,7 @@ async function postHandler(request: NextRequest) {
             externalReference: batch.externalReference,
             externalId: `batch-unapplied:${batch.id}`,
             metadata: { paymentMethod: batch.paymentMethod, evidenceReference: batch.evidenceReference },
+            accountingSnapshot: { glCode: batch.cashGlCodeSnapshot, costCenterCode: batch.costCenterCodeSnapshot },
           }, { recalculate: false });
           agencyLedgerAccountId = unapplied.account.id;
           unappliedEntryId = unapplied.entry.id;
@@ -1969,6 +2858,7 @@ async function postHandler(request: NextRequest) {
           reviewNotes: clean(body.reviewNotes) || null,
           ...(unappliedCents === 0 ? { followUpOwnerId: null, followUpDueAt: null } : {}),
         } });
+        await writeAuditLog(auth.user, { centerId: updated.centerId, action: "billing.agency_remittance_batch.approved", resource: "AgencyRemittanceBatch", resourceId: updated.id, metadata: { postedCount: posted.length, totalCents: updated.totalCents, allocatedCents: updated.allocatedCents, unappliedCents: updated.unappliedCents, unappliedEntryId } }, tx);
         return { batch: updated, postedCount: posted.length, unappliedEntryId };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -1976,7 +2866,6 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The remittance batch or one of its claims changed during review. Refresh before approving it." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: result.batch.centerId, action: "billing.agency_remittance_batch.approved", resource: "AgencyRemittanceBatch", resourceId: result.batch.id, metadata: { postedCount: result.postedCount, totalCents: result.batch.totalCents, allocatedCents: result.batch.allocatedCents, unappliedCents: result.batch.unappliedCents, unappliedEntryId: result.unappliedEntryId } });
     return NextResponse.json({ ok: true, ...result });
   }
 
@@ -1992,13 +2881,25 @@ async function postHandler(request: NextRequest) {
     try {
       result = await prisma.$transaction(async (tx) => {
         const existingByIdempotency = await tx.agencyRemittanceAllocation.findUnique({ where: { idempotencyKey }, include: { batch: true } });
-        if (existingByIdempotency) {
-          if (!centerAllowed(auth.user, existingByIdempotency.batch.centerId)) throw new AgencyWorkflowError("Batch allocation not found.", 404);
-          if (existingByIdempotency.fingerprint !== fingerprint) throw new AgencyWorkflowError("This retry key was already used for a different batch allocation.", 409);
-          return { batch: existingByIdempotency.batch, allocation: existingByIdempotency, reused: true };
+        const replay = agencyIdempotencyReplay({
+          record: existingByIdempotency,
+          user: auth.user,
+          expectedCenterId: centerId,
+          requestedFingerprint: fingerprint,
+          centerId: (allocation) => allocation.batch.centerId,
+          ownerId: (allocation) => allocation.requestedById,
+          fingerprint: (allocation) => allocation.fingerprint,
+        });
+        if (replay.kind === "not_found") throw new AgencyWorkflowError("Batch allocation not found.", 404);
+        if (replay.kind === "mismatch") throw new AgencyWorkflowError("This retry key was already used for a different batch allocation.", 409);
+        if (replay.kind === "reused") {
+          await writeAuditLog(auth.user, { centerId: replay.record.batch.centerId, action: "billing.agency_remittance_allocation.prepared", resource: "AgencyRemittanceAllocation", resourceId: replay.record.id, metadata: { batchId, claimId, amountCents, reused: true } }, tx);
+          return { batch: replay.record.batch, allocation: replay.record, reused: true };
         }
-        const batch = await tx.agencyRemittanceBatch.findUnique({ where: { id: batchId } });
-        if (!batch || !centerAllowed(auth.user, batch.centerId)) throw new AgencyWorkflowError("Remittance batch not found.", 404);
+        const batch = await tx.agencyRemittanceBatch.findUnique({ where: { id: batchId }, include: { agencyProgram: true } });
+        if (!batch || batch.centerId !== centerId) throw new AgencyWorkflowError("Remittance batch not found.", 404);
+        await requireAgencyReconciliationEnabled(tx, batch.centerId);
+        if (batch.agencyProgram.status !== "active" || agencyProgramSetupBlockers(batch.agencyProgram).length || agencyControlledLedgerSetupBlockers(batch.agencyProgram).length) throw new AgencyWorkflowError("Complete this school's agency program and accounting mapping setup before requesting another allocation.", 409);
         if (batch.reversedAt || !new Set(["unmatched", "partially_allocated", "exception"]).has(batch.status)) throw new AgencyWorkflowError("Only an unreversed batch with unapplied cash can receive another allocation.", 409);
         if (amountCents > batch.unappliedCents) throw new AgencyWorkflowError("The new allocation exceeds the batch's unapplied amount.", 409);
         const existingActiveClaimAllocation = await tx.agencyRemittanceAllocation.findFirst({
@@ -2023,14 +2924,34 @@ async function postHandler(request: NextRequest) {
           createdAt: requestedAt,
         } });
         const updated = await tx.agencyRemittanceBatch.update({ where: { id: batch.id }, data: { status: "pending_review" } });
+        await writeAuditLog(auth.user, { centerId: updated.centerId, action: "billing.agency_remittance_allocation.prepared", resource: "AgencyRemittanceAllocation", resourceId: allocation.id, metadata: { batchId, claimId, amountCents, reused: false } }, tx);
         return { batch: updated, allocation, reused: false };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
-      if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The batch or claim changed while the allocation was prepared. Refresh and try again." }, { status: 409 });
-      throw error;
+      if (prismaConflict(error)) {
+        const existingByIdempotency = await prisma.agencyRemittanceAllocation.findUnique({ where: { idempotencyKey }, include: { batch: true } });
+        const replay = agencyIdempotencyReplay({
+          record: existingByIdempotency,
+          user: auth.user,
+          expectedCenterId: centerId,
+          requestedFingerprint: fingerprint,
+          centerId: (allocation) => allocation.batch.centerId,
+          ownerId: (allocation) => allocation.requestedById,
+          fingerprint: (allocation) => allocation.fingerprint,
+        });
+        if (replay.kind === "not_found") return NextResponse.json({ ok: false, error: "Batch allocation not found." }, { status: 404 });
+        if (replay.kind === "mismatch") return NextResponse.json({ ok: false, error: "This retry key was already used for a different batch allocation." }, { status: 409 });
+        if (replay.kind === "reused") {
+          await writeAuditLog(auth.user, { centerId: replay.record.batch.centerId, action: "billing.agency_remittance_allocation.prepared", resource: "AgencyRemittanceAllocation", resourceId: replay.record.id, metadata: { batchId, claimId, amountCents, reused: true } });
+          result = { batch: replay.record.batch, allocation: replay.record, reused: true };
+        } else {
+          return NextResponse.json({ ok: false, error: "The batch or claim changed while the allocation was prepared. Refresh and try again." }, { status: 409 });
+        }
+      } else {
+        throw error;
+      }
     }
-    await writeAuditLog(auth.user, { centerId: result.batch.centerId, action: "billing.agency_remittance_allocation.prepared", resource: "AgencyRemittanceAllocation", resourceId: result.allocation.id, metadata: { batchId, claimId, amountCents, reused: result.reused } });
     return NextResponse.json({ ok: true, ...result, requiresReview: true });
   }
 
@@ -2039,10 +2960,12 @@ async function postHandler(request: NextRequest) {
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {
-        const allocation = await tx.agencyRemittanceAllocation.findUnique({ where: { id: allocationId }, include: { batch: true } });
-        if (!allocation || !centerAllowed(auth.user, allocation.batch.centerId)) throw new AgencyWorkflowError("Batch allocation not found.", 404);
+        const allocation = await tx.agencyRemittanceAllocation.findUnique({ where: { id: allocationId }, include: { batch: { include: { agencyProgram: true } } } });
+        if (!allocation || allocation.batch.centerId !== centerId) throw new AgencyWorkflowError("Batch allocation not found.", 404);
+        await requireAgencyReconciliationEnabled(tx, allocation.batch.centerId);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: allocation.requestedById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must approve this allocation.", 403);
         if (allocation.status !== "pending_review" || allocation.batch.reversedAt) throw new AgencyWorkflowError("This allocation is no longer awaiting review.", 409);
+        if (allocation.batch.agencyProgram.status !== "active" || agencyProgramSetupBlockers(allocation.batch.agencyProgram).length || agencyControlledLedgerSetupBlockers(allocation.batch.agencyProgram).length) throw new AgencyWorkflowError("Complete this school's agency program and accounting mapping setup before approving another allocation.", 409);
         if (allocation.fingerprint !== agencyAllocationFingerprint({ batchId: allocation.batchId, claimId: allocation.claimId, amountCents: allocation.amountCents, notes: allocation.notes })) throw new AgencyWorkflowError("The allocation fingerprint no longer matches. Recreate it from current evidence.", 409);
         if (allocation.amountCents > allocation.batch.unappliedCents) throw new AgencyWorkflowError("The batch's unapplied amount changed before this allocation could be approved.", 409);
         const current = await agencyPostingClaim(tx, allocation.claimId);
@@ -2060,12 +2983,14 @@ async function postHandler(request: NextRequest) {
           externalReference: allocation.batch.externalReference,
           externalId: `batch-unapplied-allocation:${allocation.id}`,
           metadata: { claimId: current.id, originalPaidAt: allocation.batch.paidAt.toISOString() },
+          accountingSnapshot: { glCode: allocation.batch.cashGlCodeSnapshot, costCenterCode: allocation.batch.costCenterCodeSnapshot },
         }, { recalculate: false });
-        const posted = await postAgencyClaimAllocation(tx, { claim: current, batchId: allocation.batch.id, allocationId: allocation.id, amountCents: allocation.amountCents, paidAt: allocation.batch.paidAt, ledgerEffectiveAt: effectiveAt, paymentMethod: allocation.batch.paymentMethod, reference: allocation.batch.externalReference, notes: allocation.notes, reviewerId: auth.user.id }, { recalculateAgencyLedger: false });
+        const posted = await postAgencyClaimAllocation(tx, { claim: current, batchId: allocation.batch.id, allocationId: allocation.id, amountCents: allocation.amountCents, paidAt: allocation.batch.paidAt, ledgerEffectiveAt: effectiveAt, paymentMethod: allocation.batch.paymentMethod, reference: allocation.batch.externalReference, notes: allocation.notes, reviewerId: auth.user.id, accountingSnapshot: { glCode: allocation.batch.cashGlCodeSnapshot, costCenterCode: allocation.batch.costCenterCodeSnapshot } }, { recalculateAgencyLedger: false });
         await recalculateAgencyLedgerBalances(tx, release.account.id);
         const allocatedCents = allocation.batch.allocatedCents + allocation.amountCents;
         const unappliedCents = allocation.batch.unappliedCents - allocation.amountCents;
         const batch = await tx.agencyRemittanceBatch.update({ where: { id: allocation.batch.id }, data: { allocatedCents, unappliedCents, status: agencyBatchStatus({ totalCents: allocation.batch.totalCents, allocatedCents }), ...(unappliedCents === 0 ? { followUpOwnerId: null, followUpDueAt: null } : {}) } });
+        await writeAuditLog(auth.user, { centerId: batch.centerId, action: "billing.agency_remittance_allocation.approved", resource: "AgencyRemittanceAllocation", resourceId: allocation.id, metadata: { batchId: batch.id, remittanceId: posted.remittance.id, releaseEntryId: release.entry.id } }, tx);
         return { batch, allocationId: allocation.id, releaseEntryId: release.entry.id, remittanceId: posted.remittance.id };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -2073,7 +2998,6 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The allocation, batch, or claim changed during review. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: result.batch.centerId, action: "billing.agency_remittance_allocation.approved", resource: "AgencyRemittanceAllocation", resourceId: result.allocationId, metadata: { batchId: result.batch.id, remittanceId: result.remittanceId, releaseEntryId: result.releaseEntryId } });
     return NextResponse.json({ ok: true, ...result });
   }
 
@@ -2085,7 +3009,7 @@ async function postHandler(request: NextRequest) {
     try {
       result = await prisma.$transaction(async (tx) => {
         const allocation = await tx.agencyRemittanceAllocation.findUnique({ where: { id: allocationId }, include: { batch: true } });
-        if (!allocation || !centerAllowed(auth.user, allocation.batch.centerId)) throw new AgencyWorkflowError("Batch allocation not found.", 404);
+        if (!allocation || allocation.batch.centerId !== centerId) throw new AgencyWorkflowError("Batch allocation not found.", 404);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: allocation.requestedById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must reject this allocation.", 403);
         if (allocation.status !== "pending_review" || allocation.batch.reversedAt) throw new AgencyWorkflowError("This allocation is no longer awaiting review.", 409);
         if (!allocation.batch.reviewedAt) throw new AgencyWorkflowError("Reject the unposted deposit batch instead of rejecting one of its initial allocations.", 409);
@@ -2101,6 +3025,7 @@ async function postHandler(request: NextRequest) {
           ? "pending_review"
           : agencyBatchStatus({ totalCents: allocation.batch.totalCents, allocatedCents: allocation.batch.allocatedCents });
         const batch = await tx.agencyRemittanceBatch.update({ where: { id: allocation.batchId }, data: { status: restoredStatus } });
+        await writeAuditLog(auth.user, { centerId: batch.centerId, action: "billing.agency_remittance_allocation.rejected", resource: "AgencyRemittanceAllocation", resourceId: allocation.id, metadata: { batchId: batch.id, reasonRecorded: true } }, tx);
         return { batch, allocationId: allocation.id };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -2108,7 +3033,6 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The allocation or batch changed during rejection. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: result.batch.centerId, action: "billing.agency_remittance_allocation.rejected", resource: "AgencyRemittanceAllocation", resourceId: result.allocationId, metadata: { batchId: result.batch.id, reasonRecorded: true } });
     return NextResponse.json({ ok: true, ...result });
   }
 
@@ -2128,26 +3052,51 @@ async function postHandler(request: NextRequest) {
     if (!ledgerAccountId || !AGENCY_ADJUSTMENT_TYPES.includes(type as (typeof AGENCY_ADJUSTMENT_TYPES)[number]) || !amountCents || Math.abs(amountCents) > POSTGRES_INT_MAX_CENTS || !effectiveAt || !reason || !idempotencyKey) return NextResponse.json({ ok: false, error: "Choose an agency account and adjustment type, then enter a supported positive amount, effective date, specific reason, and retry-safe request key." }, { status: 400 });
     if (isFutureAgencyAccountingDate(effectiveAt)) return NextResponse.json({ ok: false, error: "An agency adjustment cannot be effective after the current UTC accounting day." }, { status: 400 });
     if (!evidenceName || !evidenceReference || !followUpDueAt) return NextResponse.json({ ok: false, error: "Name the adjustment evidence, enter its secure internal reference, and assign a follow-up due date." }, { status: 400 });
+    let requestedCenterId: string | null = null;
+    let requestedFingerprint: string | null = null;
     let prepared;
     try {
       prepared = await prisma.$transaction(async (tx) => {
-        const account = await tx.agencyLedgerAccount.findUnique({ where: { id: ledgerAccountId } });
-        if (!account || !centerAllowed(auth.user, account.centerId)) throw new AgencyWorkflowError("Agency ledger account not found.", 404);
-        const fingerprint = agencyAdjustmentFingerprint({ ledgerAccountId: account.id, claimId, batchId, type, amountCents, effectiveAt, reason, evidenceName, evidenceReference, followUpDueAt });
-        const existingByIdempotency = await tx.agencyLedgerAdjustment.findUnique({ where: { idempotencyKey } });
-        if (existingByIdempotency) {
-          if (existingByIdempotency.fingerprint !== fingerprint) throw new AgencyWorkflowError("This retry key was already used for a different agency adjustment.", 409);
-          return { adjustment: existingByIdempotency, reused: true };
-        }
-        await assertAgencyPeriodOpen(tx, account.centerId, effectiveAt);
+        const account = await tx.agencyLedgerAccount.findUnique({ where: { id: ledgerAccountId }, include: { agencyProgram: true } });
+        if (!account || account.centerId !== centerId) throw new AgencyWorkflowError("Agency ledger account not found.", 404);
+        requestedCenterId = account.centerId;
         if (claimId) {
-          const claim = await tx.subsidyClaim.findFirst({ where: { id: claimId, centerId: account.centerId, agencyProgramId: account.agencyProgramId } });
-          if (!claim) throw new AgencyWorkflowError("The linked claim must belong to this school and agency account.", 409);
+          const linkedClaim = await tx.subsidyClaim.findFirst({
+            where: {
+              id: claimId,
+              centerId: account.centerId,
+              agencyProgramId: account.agencyProgramId,
+              status: { in: ["approved", "partially_paid", "paid"] },
+            },
+            select: { id: true },
+          });
+          if (!linkedClaim) throw new AgencyWorkflowError("A claim-linked adjustment requires an approved, partially paid, or paid claim from this exact school and agency. Use an account-level adjustment when no financial claim applies.", 409);
         }
         if (batchId) {
-          const batch = await tx.agencyRemittanceBatch.findFirst({ where: { id: batchId, centerId: account.centerId, agencyProgramId: account.agencyProgramId } });
-          if (!batch) throw new AgencyWorkflowError("The linked remittance batch must belong to this school and agency account.", 409);
+          const linkedBatch = await tx.agencyRemittanceBatch.findFirst({ where: { id: batchId, centerId: account.centerId, agencyProgramId: account.agencyProgramId }, select: { id: true } });
+          if (!linkedBatch) throw new AgencyWorkflowError("The linked remittance batch must belong to this school and agency account.", 409);
         }
+        const fingerprint = agencyAdjustmentFingerprint({ ledgerAccountId: account.id, claimId, batchId, type, amountCents, effectiveAt, reason, evidenceName, evidenceReference, followUpDueAt });
+        requestedFingerprint = fingerprint;
+        const existingByIdempotency = await tx.agencyLedgerAdjustment.findUnique({ where: { idempotencyKey } });
+        const replay = agencyIdempotencyReplay({
+          record: existingByIdempotency,
+          user: auth.user,
+          expectedCenterId: account.centerId,
+          requestedFingerprint: fingerprint,
+          centerId: (adjustment) => adjustment.centerId,
+          ownerId: (adjustment) => adjustment.requestedById,
+          fingerprint: (adjustment) => adjustment.fingerprint,
+        });
+        if (replay.kind === "not_found") throw new AgencyWorkflowError("Agency adjustment not found.", 404);
+        if (replay.kind === "mismatch") throw new AgencyWorkflowError("This retry key was already used for a different agency adjustment.", 409);
+        if (replay.kind === "reused") {
+          await writeAuditLog(auth.user, { centerId: replay.record.centerId, action: "billing.agency_ledger_adjustment.requested", resource: "AgencyLedgerAdjustment", resourceId: replay.record.id, metadata: { type, amountCents, claimId: replay.record.claimId, batchId: replay.record.batchId, evidenceRecorded: true, reused: true } }, tx);
+          return { adjustment: replay.record, reused: true };
+        }
+        await requireAgencyReconciliationEnabled(tx, account.centerId);
+        if (account.agencyProgram.status !== "active" || agencyProgramSetupBlockers(account.agencyProgram).length || agencyControlledLedgerSetupBlockers(account.agencyProgram).length) throw new AgencyWorkflowError("Complete this school's agency program and accounting mapping setup before requesting an adjustment.", 409);
+        await assertAgencyPeriodOpen(tx, account.centerId, effectiveAt);
         const adjustment = await tx.agencyLedgerAdjustment.create({ data: {
           centerId: account.centerId,
           agencyProgramId: account.agencyProgramId,
@@ -2160,20 +3109,46 @@ async function postHandler(request: NextRequest) {
           reason,
           evidenceName,
           evidenceReference,
+          glCodeSnapshot: account.agencyProgram.adjustmentGlCode,
+          costCenterCodeSnapshot: account.agencyProgram.costCenterCode,
           fingerprint,
           idempotencyKey,
           requestedById: auth.user.id,
           followUpOwnerId: auth.user.id,
           followUpDueAt,
         } });
+        await writeAuditLog(auth.user, { centerId: adjustment.centerId, action: "billing.agency_ledger_adjustment.requested", resource: "AgencyLedgerAdjustment", resourceId: adjustment.id, metadata: { type, amountCents, claimId: adjustment.claimId, batchId: adjustment.batchId, evidenceRecorded: true, reused: false } }, tx);
         return { adjustment, reused: false };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
-      if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The agency account changed while the adjustment was prepared. Refresh and try again." }, { status: 409 });
-      throw error;
+      if (prismaConflict(error)) {
+        const existingByIdempotency = requestedFingerprint
+          ? await prisma.agencyLedgerAdjustment.findUnique({ where: { idempotencyKey } })
+          : null;
+        const replay = requestedFingerprint
+          ? agencyIdempotencyReplay({
+              record: existingByIdempotency,
+              user: auth.user,
+              expectedCenterId: requestedCenterId,
+              requestedFingerprint,
+              centerId: (adjustment) => adjustment.centerId,
+              ownerId: (adjustment) => adjustment.requestedById,
+              fingerprint: (adjustment) => adjustment.fingerprint,
+            })
+          : { kind: "missing" as const };
+        if (replay.kind === "not_found") return NextResponse.json({ ok: false, error: "Agency adjustment not found." }, { status: 404 });
+        if (replay.kind === "mismatch") return NextResponse.json({ ok: false, error: "This retry key was already used for a different agency adjustment." }, { status: 409 });
+        if (replay.kind === "reused") {
+          await writeAuditLog(auth.user, { centerId: replay.record.centerId, action: "billing.agency_ledger_adjustment.requested", resource: "AgencyLedgerAdjustment", resourceId: replay.record.id, metadata: { type, amountCents, claimId: replay.record.claimId, batchId: replay.record.batchId, evidenceRecorded: true, reused: true } });
+          prepared = { adjustment: replay.record, reused: true };
+        } else {
+          return NextResponse.json({ ok: false, error: "The agency account changed while the adjustment was prepared. Refresh and try again." }, { status: 409 });
+        }
+      } else {
+        throw error;
+      }
     }
-    await writeAuditLog(auth.user, { centerId: prepared.adjustment.centerId, action: "billing.agency_ledger_adjustment.requested", resource: "AgencyLedgerAdjustment", resourceId: prepared.adjustment.id, metadata: { type, amountCents, claimId: prepared.adjustment.claimId, batchId: prepared.adjustment.batchId, evidenceRecorded: true, reused: prepared.reused } });
     return NextResponse.json({ ok: true, ...prepared, requiresReview: true });
   }
 
@@ -2184,16 +3159,38 @@ async function postHandler(request: NextRequest) {
     try {
       result = await prisma.$transaction(async (tx) => {
         const adjustment = await tx.agencyLedgerAdjustment.findUnique({ where: { id: adjustmentId }, include: { agencyProgram: true } });
-        if (!adjustment || !centerAllowed(auth.user, adjustment.centerId)) throw new AgencyWorkflowError("Agency adjustment not found.", 404);
+        if (!adjustment || adjustment.centerId !== centerId) throw new AgencyWorkflowError("Agency adjustment not found.", 404);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: adjustment.requestedById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must review this adjustment.", 403);
         if (adjustment.status !== "pending_review") throw new AgencyWorkflowError("This adjustment is no longer awaiting review.", 409);
-        if (isFutureAgencyAccountingDate(adjustment.effectiveAt)) throw new AgencyWorkflowError("A future-dated agency adjustment cannot be approved.", 409);
         const fingerprint = agencyAdjustmentFingerprint({ ledgerAccountId: adjustment.ledgerAccountId, claimId: adjustment.claimId, batchId: adjustment.batchId, type: adjustment.type, amountCents: adjustment.amountCents, effectiveAt: adjustment.effectiveAt, reason: adjustment.reason, evidenceName: adjustment.evidenceName, evidenceReference: adjustment.evidenceReference, followUpDueAt: adjustment.followUpDueAt });
         if (fingerprint !== adjustment.fingerprint) throw new AgencyWorkflowError("The adjustment no longer matches its reviewed fingerprint. Recreate it from current evidence.", 409);
         if (action === "rejectLedgerAdjustment") {
           const rejected = await tx.agencyLedgerAdjustment.update({ where: { id: adjustment.id }, data: { status: "rejected", reviewedById: auth.user.id, reviewedAt: new Date(), reviewNotes: reviewNotes || "Rejected by accounting reviewer." } });
+          await writeAuditLog(auth.user, { centerId: rejected.centerId, action: "billing.agency_ledger_adjustment.rejected", resource: "AgencyLedgerAdjustment", resourceId: rejected.id, metadata: { type: rejected.type, amountCents: rejected.amountCents, ledgerEntryId: null } }, tx);
           return { adjustment: rejected, ledgerEntryId: null as string | null };
         }
+        await requireAgencyReconciliationEnabled(tx, adjustment.centerId);
+        if (adjustment.agencyProgram.status !== "active" || agencyProgramSetupBlockers(adjustment.agencyProgram).length || agencyControlledLedgerSetupBlockers(adjustment.agencyProgram).length) throw new AgencyWorkflowError("Complete this school's agency program and accounting mapping setup before approving an adjustment.", 409);
+        if (adjustment.claimId) {
+          const linkedClaim = await tx.subsidyClaim.findFirst({
+            where: {
+              id: adjustment.claimId,
+              centerId: adjustment.centerId,
+              agencyProgramId: adjustment.agencyProgramId,
+              status: { in: ["approved", "partially_paid", "paid"] },
+            },
+            select: { id: true },
+          });
+          if (!linkedClaim) throw new AgencyWorkflowError("The adjustment's linked claim is no longer an exact approved, partially paid, or paid claim for this school and agency. Reject it and use an account-level correction if appropriate.", 409);
+        }
+        if (adjustment.batchId) {
+          const linkedBatch = await tx.agencyRemittanceBatch.findFirst({
+            where: { id: adjustment.batchId, centerId: adjustment.centerId, agencyProgramId: adjustment.agencyProgramId },
+            select: { id: true },
+          });
+          if (!linkedBatch) throw new AgencyWorkflowError("The adjustment's linked remittance batch no longer belongs to this exact school and agency. Reject the adjustment and investigate its source evidence.", 409);
+        }
+        if (isFutureAgencyAccountingDate(adjustment.effectiveAt)) throw new AgencyWorkflowError("A future-dated agency adjustment cannot be approved.", 409);
         await assertAgencyPeriodOpen(tx, adjustment.centerId, adjustment.effectiveAt);
         const ledger = await appendAgencyLedgerEntry(tx, {
           centerId: adjustment.centerId,
@@ -2208,8 +3205,10 @@ async function postHandler(request: NextRequest) {
           externalReference: adjustment.evidenceReference,
           externalId: `adjustment:${adjustment.id}`,
           metadata: { evidenceName: adjustment.evidenceName, reviewNotes },
+          accountingSnapshot: { glCode: adjustment.glCodeSnapshot, costCenterCode: adjustment.costCenterCodeSnapshot },
         });
         const posted = await tx.agencyLedgerAdjustment.update({ where: { id: adjustment.id }, data: { status: "posted", reviewedById: auth.user.id, reviewedAt: new Date(), reviewNotes: reviewNotes || null } });
+        await writeAuditLog(auth.user, { centerId: posted.centerId, action: "billing.agency_ledger_adjustment.approved", resource: "AgencyLedgerAdjustment", resourceId: posted.id, metadata: { type: posted.type, amountCents: posted.amountCents, ledgerEntryId: ledger.entry.id } }, tx);
         return { adjustment: posted, ledgerEntryId: ledger.entry.id };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -2217,7 +3216,6 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The adjustment or agency account changed during review. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: result.adjustment.centerId, action: action === "approveLedgerAdjustment" ? "billing.agency_ledger_adjustment.approved" : "billing.agency_ledger_adjustment.rejected", resource: "AgencyLedgerAdjustment", resourceId: result.adjustment.id, metadata: { type: result.adjustment.type, amountCents: result.adjustment.amountCents, ledgerEntryId: result.ledgerEntryId } });
     return NextResponse.json({ ok: true, ...result });
   }
 
@@ -2229,9 +3227,32 @@ async function postHandler(request: NextRequest) {
     try {
       result = await prisma.$transaction(async (tx) => {
         const adjustment = await tx.agencyLedgerAdjustment.findUnique({ where: { id: adjustmentId }, include: { agencyProgram: true } });
-        if (!adjustment || !centerAllowed(auth.user, adjustment.centerId)) throw new AgencyWorkflowError("Agency adjustment not found.", 404);
+        if (!adjustment || adjustment.centerId !== centerId) throw new AgencyWorkflowError("Agency adjustment not found.", 404);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: adjustment.requestedById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must reverse this adjustment.", 403);
         if (adjustment.status !== "posted" || adjustment.reversedAt) throw new AgencyWorkflowError("Only an unreversed posted adjustment can be reversed.", 409);
+        const originalExternalId = `adjustment:${adjustment.id}`;
+        const originalEntry = await tx.agencyLedgerEntry.findUnique({
+          where: { sourceSystem_externalId: { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM, externalId: originalExternalId } },
+          include: { agencyLedgerAccount: { select: { centerId: true, agencyProgramId: true } } },
+        });
+        if (!originalEntry) throw new AgencyWorkflowError("The posted adjustment is missing its immutable ledger entry. Restore the source evidence before reversing it.", 409);
+        if (originalEntry.agencyLedgerAccountId !== adjustment.ledgerAccountId
+          || originalEntry.agencyLedgerAccount.centerId !== adjustment.centerId
+          || originalEntry.agencyLedgerAccount.agencyProgramId !== adjustment.agencyProgramId
+          || originalEntry.adjustmentId !== adjustment.id
+          || originalEntry.claimId !== adjustment.claimId
+          || originalEntry.remittanceBatchId !== adjustment.batchId
+          || originalEntry.remittanceId !== null
+          || originalEntry.type !== `adjustment_${adjustment.type}`
+          || originalEntry.amountCents !== adjustment.amountCents
+          || originalEntry.effectiveAt.getTime() !== adjustment.effectiveAt.getTime()
+          || originalEntry.externalReference !== adjustment.evidenceReference
+          || originalEntry.sourceSystem !== AGENCY_LEDGER_SOURCE_SYSTEM
+          || originalEntry.externalId !== originalExternalId
+          || originalEntry.glCodeSnapshot !== adjustment.glCodeSnapshot
+          || originalEntry.costCenterCodeSnapshot !== adjustment.costCenterCodeSnapshot) {
+          throw new AgencyWorkflowError("The immutable adjustment ledger entry conflicts with its exact account, source, amount, date, or accounting evidence. No reversal was posted.", 409);
+        }
         const effectiveAt = agencyReversalEffectiveAt(adjustment.effectiveAt);
         if (effectiveAt < adjustment.effectiveAt) throw new AgencyWorkflowError("An adjustment reversal cannot be effective before the original adjustment.", 409);
         await assertAgencyPeriodOpen(tx, adjustment.centerId, effectiveAt);
@@ -2248,8 +3269,10 @@ async function postHandler(request: NextRequest) {
           externalReference: adjustment.evidenceReference,
           externalId: `adjustment-reversal:${adjustment.id}`,
           metadata: { reason, originalEffectiveAt: adjustment.effectiveAt.toISOString() },
+          accountingSnapshot: { glCode: originalEntry.glCodeSnapshot, costCenterCode: originalEntry.costCenterCodeSnapshot },
         });
         const reversed = await tx.agencyLedgerAdjustment.update({ where: { id: adjustment.id }, data: { status: "reversed", reversedAt: effectiveAt, reversedById: auth.user.id, reversalReason: reason } });
+        await writeAuditLog(auth.user, { centerId: reversed.centerId, action: "billing.agency_ledger_adjustment.reversed", resource: "AgencyLedgerAdjustment", resourceId: reversed.id, metadata: { ledgerEntryId: ledger.entry.id, reasonRecorded: true } }, tx);
         return { adjustment: reversed, ledgerEntryId: ledger.entry.id };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -2257,12 +3280,10 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The adjustment changed while it was being reversed. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: result.adjustment.centerId, action: "billing.agency_ledger_adjustment.reversed", resource: "AgencyLedgerAdjustment", resourceId: result.adjustment.id, metadata: { ledgerEntryId: result.ledgerEntryId, reasonRecorded: true } });
     return NextResponse.json({ ok: true, ...result });
   }
 
   if (action === "closeAccountingPeriod") {
-    if (!centerAllowed(auth.user, centerId)) return NextResponse.json({ ok: false, error: "School access denied." }, { status: 403 });
     if (!canCloseAgencyAccountingPeriod(auth.user.role)) return NextResponse.json({ ok: false, error: "Only a billing administrator or higher accounting role can close an agency accounting period." }, { status: 403 });
     const startDate = dateValue(body.startDate);
     const endDate = dateValue(body.endDate);
@@ -2275,6 +3296,7 @@ async function postHandler(request: NextRequest) {
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {
+        await requireAgencyReconciliationEnabled(tx, centerId);
         const overlap = await tx.agencyAccountingPeriod.findFirst({ where: { centerId, OR: [{ startDate: { lte: endDate }, endDate: { gte: startDate } }] } });
         if (overlap && (overlap.startDate.getTime() !== startDate.getTime() || overlap.endDate.getTime() !== endDate.getTime())) throw new AgencyWorkflowError(`This range overlaps ${overlap.name}.`, 409);
         if (overlap?.status === "closed") {
@@ -2287,7 +3309,7 @@ async function postHandler(request: NextRequest) {
           return { period: overlap, reused: true, ...recoveredCounts };
         }
         const recoveredCounts = await recoverMissingAgencyLedgerCutoverEvents(tx, centerId, endExclusive, auth.user.id);
-        const [unresolvedBatches, pendingAllocations, pendingAdjustments, reconciliationVariances] = await Promise.all([
+        const [unresolvedBatches, pendingAllocations, pendingAdjustments, reconciliationVariances, claimSourceConflicts] = await Promise.all([
           tx.agencyRemittanceBatch.count({
             where: {
               centerId,
@@ -2313,8 +3335,9 @@ async function postHandler(request: NextRequest) {
             },
           }),
           agencyReconciliationVarianceCount(tx, centerId, endExclusive),
+          agencyClaimSourceConflictCount(tx, centerId, endExclusive),
         ]);
-        if (unresolvedBatches || pendingAllocations || pendingAdjustments || reconciliationVariances) throw new AgencyWorkflowError(`Resolve ${unresolvedBatches} remittance batch exception(s), ${pendingAllocations} pending additional allocation(s), ${pendingAdjustments} pending adjustment(s), and ${reconciliationVariances} reconciliation variance(s) before closing this period.`, 409);
+        if (unresolvedBatches || pendingAllocations || pendingAdjustments || reconciliationVariances || claimSourceConflicts) throw new AgencyWorkflowError(`Resolve ${unresolvedBatches} remittance batch exception(s), ${pendingAllocations} pending additional allocation(s), ${pendingAdjustments} pending adjustment(s), ${reconciliationVariances} reconciliation variance(s), and ${claimSourceConflicts} claim/remittance source conflict(s) before closing this period.`, 409);
         const period = overlap
           ? await tx.agencyAccountingPeriod.update({ where: { id: overlap.id }, data: { name, status: "closed", closedAt: new Date(), closedById: auth.user.id, closeReason: reason } })
           : await tx.agencyAccountingPeriod.create({ data: { centerId, name, startDate, endDate, status: "closed", closedAt: new Date(), closedById: auth.user.id, closeReason: reason } });
@@ -2328,7 +3351,7 @@ async function postHandler(request: NextRequest) {
     }
     const recoveredEventCount = result.recoveredClaimReceivableCount + result.recoveredRemittanceReceivedCount + result.recoveredRemittanceReversalCount;
     const recoveryMessage = recoveredEventCount
-      ? ` Recovered ${recoveredEventCount} missing agency-ledger event${recoveredEventCount === 1 ? "" : "s"} from recorded approvals, remittances, and reversals before reconciliation.`
+      ? ` Recovered ${recoveredEventCount} missing controlled-batch receipt event${recoveredEventCount === 1 ? "" : "s"} from exact immutable batch evidence before reconciliation.`
       : "";
     return NextResponse.json({ ok: true, ...result, message: result.reused ? "This accounting period was already closed." : `Accounting period closed.${recoveryMessage}` });
   }
@@ -2342,7 +3365,7 @@ async function postHandler(request: NextRequest) {
     try {
       period = await prisma.$transaction(async (tx) => {
         const existing = await tx.agencyAccountingPeriod.findUnique({ where: { id: periodId } });
-        if (!existing || !centerAllowed(auth.user, existing.centerId)) throw new AgencyWorkflowError("Accounting period not found.", 404);
+        if (!existing || existing.centerId !== centerId) throw new AgencyWorkflowError("Accounting period not found.", 404);
         if (existing.status !== "closed") throw new AgencyWorkflowError("This accounting period is not closed.", 409);
         const laterClosedPeriod = await tx.agencyAccountingPeriod.findFirst({
           where: { centerId: existing.centerId, status: "closed", startDate: { gt: existing.startDate } },
@@ -2355,14 +3378,15 @@ async function postHandler(request: NextRequest) {
           data: { status: "open", reopenedAt: new Date(), reopenedById: auth.user.id, reopenReason: reason },
         });
         if (transition.count !== 1) throw new AgencyWorkflowError("The accounting period changed while it was being reopened. Refresh and try again.", 409);
-        return tx.agencyAccountingPeriod.findUniqueOrThrow({ where: { id: existing.id } });
+        const reopened = await tx.agencyAccountingPeriod.findUniqueOrThrow({ where: { id: existing.id } });
+        await writeAuditLog(auth.user, { centerId: reopened.centerId, action: "billing.agency_accounting_period.reopened", resource: "AgencyAccountingPeriod", resourceId: reopened.id, metadata: { reasonRecorded: true } }, tx);
+        return reopened;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The accounting period changed while it was being reopened. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: period.centerId, action: "billing.agency_accounting_period.reopened", resource: "AgencyAccountingPeriod", resourceId: period.id, metadata: { reasonRecorded: true } });
     return NextResponse.json({ ok: true, period });
   }
 
@@ -2374,11 +3398,20 @@ async function postHandler(request: NextRequest) {
     try {
       result = await prisma.$transaction(async (tx) => {
         const batch = await tx.agencyRemittanceBatch.findUnique({ where: { id: batchId } });
-        if (!batch || !centerAllowed(auth.user, batch.centerId)) throw new AgencyWorkflowError("Remittance batch not found.", 404);
+        if (!batch || batch.centerId !== centerId) throw new AgencyWorkflowError("Remittance batch not found.", 404);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: batch.enteredById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must reject this batch.", 403);
         if (batch.status !== "pending_review" || batch.reviewedAt) throw new AgencyWorkflowError("Only an unposted batch awaiting initial review can be rejected.", 409);
-        await tx.agencyRemittanceAllocation.updateMany({ where: { batchId: batch.id, status: "pending_review" }, data: { status: "rejected", reviewedById: auth.user.id, reviewedAt: new Date() } });
+        await tx.agencyRemittanceAllocation.updateMany({
+          where: { batchId: batch.id, status: "pending_review" },
+          data: {
+            status: "rejected",
+            reviewedById: auth.user.id,
+            reviewedAt: new Date(),
+            reviewNotes: `Rejected because parent batch was rejected: ${reason}`,
+          },
+        });
         const updated = await tx.agencyRemittanceBatch.update({ where: { id: batch.id }, data: { status: "rejected", reviewedById: auth.user.id, reviewedAt: new Date(), reviewNotes: reason } });
+        await writeAuditLog(auth.user, { centerId: updated.centerId, action: "billing.agency_remittance_batch.rejected", resource: "AgencyRemittanceBatch", resourceId: updated.id, metadata: { reasonRecorded: true } }, tx);
         return updated;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -2386,7 +3419,6 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The batch changed while it was being rejected. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: result.centerId, action: "billing.agency_remittance_batch.rejected", resource: "AgencyRemittanceBatch", resourceId: result.id, metadata: { reasonRecorded: true } });
     return NextResponse.json({ ok: true, batch: result });
   }
 
@@ -2397,20 +3429,92 @@ async function postHandler(request: NextRequest) {
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {
-        const batch = await tx.agencyRemittanceBatch.findUnique({ where: { id: batchId }, include: { allocations: true, agencyProgram: true } });
-        if (!batch || !centerAllowed(auth.user, batch.centerId)) throw new AgencyWorkflowError("Remittance batch not found.", 404);
+        const batch = await tx.agencyRemittanceBatch.findUnique({ where: { id: batchId }, include: { allocations: { include: { remittance: { select: { enteredById: true } } } }, agencyProgram: true } });
+        if (!batch || batch.centerId !== centerId) throw new AgencyWorkflowError("Remittance batch not found.", 404);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: batch.enteredById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must reverse this batch.", 403);
+        if (batch.allocations.some((allocation) => allocation.status === "pending_review" && allocation.requestedById === auth.user.id)) {
+          throw new AgencyWorkflowError("A different accounting reviewer must reverse this batch because you requested a still-pending allocation on it.", 403);
+        }
         if (batch.reversedAt || batch.status === "reversed") throw new AgencyWorkflowError("This remittance batch was already reversed.", 409);
         if (batch.status === "rejected") throw new AgencyWorkflowError("A rejected, unposted batch cannot be reversed.", 409);
-        if (!batch.reviewedAt || !REVERSIBLE_REMITTANCE_BATCH_STATUSES.has(batch.status)) throw new AgencyWorkflowError("Reject an unposted batch instead of creating financial reversal entries.", 409);
+        const isLegacyReconciledBatch = batch.status === "reconciled" && !batch.reviewedAt;
+        if ((!batch.reviewedAt && !isLegacyReconciledBatch) || !REVERSIBLE_REMITTANCE_BATCH_STATUSES.has(batch.status)) throw new AgencyWorkflowError("Reject an unposted batch instead of creating financial reversal entries.", 409);
+        const postedAllocations = batch.allocations.filter((allocation) => allocation.status === "posted" && allocation.remittanceId);
+        const initialPostedAllocations = postedAllocations.filter((allocation) => !batch.reviewedAt || allocation.createdAt <= batch.reviewedAt);
+        const latePostedAllocations = postedAllocations.filter((allocation) => batch.reviewedAt && allocation.createdAt > batch.reviewedAt);
+        const postedAllocationCents = postedAllocations.reduce((total, allocation) => total + allocation.amountCents, 0);
+        const initialAllocatedCents = initialPostedAllocations.reduce((total, allocation) => total + allocation.amountCents, 0);
+        const initialUnappliedCents = batch.totalCents - initialAllocatedCents;
+        const expectedCurrentUnappliedCents = initialUnappliedCents - latePostedAllocations.reduce((total, allocation) => total + allocation.amountCents, 0);
+        if (initialUnappliedCents < 0
+          || postedAllocationCents !== batch.allocatedCents
+          || expectedCurrentUnappliedCents !== batch.unappliedCents) {
+          throw new AgencyWorkflowError("The deposit totals conflict with its immutable allocation history. No reversal was posted.", 409);
+        }
+        const unappliedEntries = await tx.agencyLedgerEntry.findMany({
+          where: {
+            remittanceBatchId: batch.id,
+            sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
+            type: { in: ["unapplied_cash", "unapplied_cash_allocation"] },
+          },
+          include: { agencyLedgerAccount: { select: { centerId: true, agencyProgramId: true } } },
+        });
+        const originalUnappliedEntries = unappliedEntries.filter((entry) => entry.type === "unapplied_cash");
+        const releaseEntries = unappliedEntries.filter((entry) => entry.type === "unapplied_cash_allocation");
+        if (initialUnappliedCents === 0 && unappliedEntries.length > 0) {
+          throw new AgencyWorkflowError("The deposit has unexpected unapplied-cash ledger evidence. No reversal was posted.", 409);
+        }
+        if (initialUnappliedCents > 0) {
+          const originalUnapplied = originalUnappliedEntries.length === 1 ? originalUnappliedEntries[0] : null;
+          if (!originalUnapplied
+            || originalUnapplied.agencyLedgerAccount.centerId !== batch.centerId
+            || originalUnapplied.agencyLedgerAccount.agencyProgramId !== batch.agencyProgramId
+            || originalUnapplied.claimId !== null
+            || originalUnapplied.remittanceId !== null
+            || originalUnapplied.adjustmentId !== null
+            || originalUnapplied.amountCents !== -initialUnappliedCents
+            || originalUnapplied.effectiveAt.getTime() !== batch.paidAt.getTime()
+            || originalUnapplied.externalReference !== batch.externalReference
+            || originalUnapplied.externalId !== `batch-unapplied:${batch.id}`
+            || originalUnapplied.glCodeSnapshot !== batch.cashGlCodeSnapshot
+            || originalUnapplied.costCenterCodeSnapshot !== batch.costCenterCodeSnapshot) {
+            throw new AgencyWorkflowError("The deposit's original unapplied-cash ledger evidence is missing or conflicting. No reversal was posted.", 409);
+          }
+          const expectedReleaseByExternalId = new Map(latePostedAllocations.map((allocation) => [`batch-unapplied-allocation:${allocation.id}`, allocation]));
+          if (releaseEntries.length !== expectedReleaseByExternalId.size) throw new AgencyWorkflowError("The deposit's unapplied-cash releases do not match its approved allocations. No reversal was posted.", 409);
+          for (const release of releaseEntries) {
+            const allocation = release.externalId ? expectedReleaseByExternalId.get(release.externalId) : null;
+            if (!allocation?.reviewedAt
+              || release.agencyLedgerAccount.centerId !== batch.centerId
+              || release.agencyLedgerAccount.agencyProgramId !== batch.agencyProgramId
+              || release.claimId !== null
+              || release.remittanceId !== null
+              || release.adjustmentId !== null
+              || release.amountCents !== allocation.amountCents
+              || release.effectiveAt.getTime() !== allocation.reviewedAt.getTime()
+              || release.externalReference !== batch.externalReference
+              || release.glCodeSnapshot !== batch.cashGlCodeSnapshot
+              || release.costCenterCodeSnapshot !== batch.costCenterCodeSnapshot) {
+              throw new AgencyWorkflowError("The deposit's unapplied-cash release evidence conflicts with its exact allocation or accounting snapshot. No reversal was posted.", 409);
+            }
+          }
+          const unappliedNetCents = unappliedEntries.reduce((total, entry) => total + entry.amountCents, 0);
+          if (unappliedNetCents !== -batch.unappliedCents) throw new AgencyWorkflowError("The deposit's unapplied-cash ledger total is out of balance. No reversal was posted.", 409);
+        }
         const reversedAt = agencyReversalEffectiveAt(batch.paidAt);
         if (reversedAt < batch.paidAt) throw new AgencyWorkflowError("A deposit reversal cannot be effective before the original receipt date.", 409);
         await assertAgencyPeriodOpen(tx, batch.centerId, reversedAt);
-        const postedAllocations = batch.allocations.filter((allocation) => allocation.status === "posted" && allocation.remittanceId);
         const reversedRemittances = [];
         let agencyLedgerAccountId: string | null = null;
         for (const allocation of postedAllocations) {
-          const reversed = await reverseAgencyRemittanceRecord(tx, { remittanceId: allocation.remittanceId as string, reviewerId: auth.user.id, reason, reversedAt }, { recalculateAgencyLedger: false });
+          const reversed = await reverseAgencyRemittanceRecord(tx, {
+            remittanceId: allocation.remittanceId as string,
+            reviewerId: auth.user.id,
+            expectedCenterId: batch.centerId,
+            expectedBatchId: batch.id,
+            reason,
+            reversedAt,
+          }, { recalculateAgencyLedger: false });
           agencyLedgerAccountId = reversed.agencyLedgerAccountId;
           reversedRemittances.push(reversed);
         }
@@ -2427,13 +3531,23 @@ async function postHandler(request: NextRequest) {
             externalReference: batch.externalReference,
             externalId: `batch-unapplied-reversal:${batch.id}`,
             metadata: { reason, originalPaidAt: batch.paidAt.toISOString() },
+            accountingSnapshot: { glCode: batch.cashGlCodeSnapshot, costCenterCode: batch.costCenterCodeSnapshot },
           }, { recalculate: false });
           agencyLedgerAccountId = reversal.account.id;
           unappliedReversalEntryId = reversal.entry.id;
         }
         if (agencyLedgerAccountId) await recalculateAgencyLedgerBalances(tx, agencyLedgerAccountId);
-        await tx.agencyRemittanceAllocation.updateMany({ where: { batchId: batch.id, status: "pending_review" }, data: { status: "rejected", reviewedById: auth.user.id, reviewedAt: reversedAt } });
+        await tx.agencyRemittanceAllocation.updateMany({
+          where: { batchId: batch.id, status: "pending_review" },
+          data: {
+            status: "rejected",
+            reviewedById: auth.user.id,
+            reviewedAt: reversedAt,
+            reviewNotes: `Rejected because parent batch was reversed: ${reason}`,
+          },
+        });
         const updated = await tx.agencyRemittanceBatch.update({ where: { id: batch.id }, data: { status: "reversed", reversedAt, reversedById: auth.user.id, reversalReason: reason } });
+        await writeAuditLog(auth.user, { centerId: updated.centerId, action: "billing.agency_remittance_batch.reversed", resource: "AgencyRemittanceBatch", resourceId: updated.id, metadata: { reversedRemittanceCount: reversedRemittances.length, unappliedReversalEntryId, reasonRecorded: true } }, tx);
         return { batch: updated, reversedRemittanceCount: reversedRemittances.length, unappliedReversalEntryId };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -2441,7 +3555,6 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The batch changed while it was being reversed. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: result.batch.centerId, action: "billing.agency_remittance_batch.reversed", resource: "AgencyRemittanceBatch", resourceId: result.batch.id, metadata: { reversedRemittanceCount: result.reversedRemittanceCount, unappliedReversalEntryId: result.unappliedReversalEntryId, reasonRecorded: true } });
     return NextResponse.json({ ok: true, ...result });
   }
 
@@ -2453,8 +3566,17 @@ async function postHandler(request: NextRequest) {
     let claim;
     try {
       claim = await prisma.$transaction(async (tx) => {
-        const authorization = await tx.subsidyAuthorization.findUnique({ where: { id: clean(body.authorizationId) }, include: { agencyProgram: true, child: { select: { fullName: true, enrollmentStatus: true, classroomId: true } } } });
-        if (!authorization || !centerAllowed(auth.user, authorization.centerId)) throw new AgencyWorkflowError("Authorization not found.", 404);
+        const authorization = await tx.subsidyAuthorization.findUnique({
+          where: { id: clean(body.authorizationId) },
+          include: {
+            agencyProgram: true,
+            family: { select: { id: true, centerId: true } },
+            child: { select: { id: true, familyId: true, fullName: true, enrollmentStatus: true, classroomId: true } },
+          },
+        });
+        if (!authorization || authorization.centerId !== centerId || !exactAgencyAuthorizationScope(authorization)) {
+          throw new AgencyWorkflowError("Authorization not found.", 404);
+        }
         if (authorization.status !== "active") throw new AgencyWorkflowError("Only an active authorization can be used for a new claim.", 409);
         if (!isCurrentlyEnrolledChildRecord(authorization.child)) throw new AgencyWorkflowError("Only an authorization for a currently enrolled child with an assigned classroom can be used for a new claim.", 409);
         const requestedRateCents = hasNumericInput(body.rateDollars) ? cents(body.rateDollars) : authorization.authorizedRateCents;
@@ -2469,7 +3591,7 @@ async function postHandler(request: NextRequest) {
         }
         const requirements = [...normalizeAgencyRequirements(authorization.agencyProgram.requirements), ...normalizeAgencyRequirements(authorization.requiredDocuments)]
           .filter((item, index, all) => item.required && all.findIndex((candidate) => candidate.key === item.key) === index);
-        return tx.subsidyClaim.create({ data: {
+        const created = await tx.subsidyClaim.create({ data: {
           centerId: authorization.centerId, agencyProgramId: authorization.agencyProgramId, authorizationId: authorization.id,
           number: subsidyClaimNumber({ stateCode: authorization.agencyProgram.stateCode, centerId: authorization.centerId, suffix: randomUUID() }),
           servicePeriodStart: start, servicePeriodEnd: end, dueDate: dateValue(body.dueDate), claimedCents, createdById: auth.user.id,
@@ -2482,18 +3604,31 @@ async function postHandler(request: NextRequest) {
           documents: { orderBy: { name: "asc" } },
           remittances: { orderBy: { paidAt: "desc" }, include: { allocation: { select: { batchId: true } } } },
         } });
+        await writeAuditLog(auth.user, { centerId: created.centerId, action: "billing.subsidy_claim.created", resource: "SubsidyClaim", resourceId: created.id, metadata: { authorizationId: created.authorizationId, claimedCents: created.claimedCents, servicePeriodStart: start, servicePeriodEnd: end } }, tx);
+        return created;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "Another claim was created for this authorization at the same time. Refresh before trying again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim.created", resource: "SubsidyClaim", resourceId: claim.id, metadata: { authorizationId: claim.authorizationId, claimedCents: claim.claimedCents, servicePeriodStart: start, servicePeriodEnd: end } });
     return NextResponse.json({ ok: true, claim });
   }
 
-  const claim = await prisma.subsidyClaim.findUnique({ where: { id: clean(body.claimId) }, include: { agencyProgram: true, authorization: true, documents: true } });
-  if (!claim || !centerAllowed(auth.user, claim.centerId)) return NextResponse.json({ ok: false, error: "Claim not found." }, { status: 404 });
+  const claim = await prisma.subsidyClaim.findUnique({
+    where: { id: clean(body.claimId) },
+    include: {
+      agencyProgram: true,
+      authorization: { include: {
+        agencyProgram: { select: { id: true, centerId: true } },
+        family: { select: { id: true, centerId: true } },
+        child: { select: { id: true, familyId: true } },
+      } },
+      lines: { select: { childId: true } },
+      documents: true,
+    },
+  });
+  if (!claim || claim.centerId !== centerId || !exactAgencyClaimScope(claim)) return NextResponse.json({ ok: false, error: "Claim not found." }, { status: 404 });
 
   if (action === "syncRequirements") {
     let missing: ReturnType<typeof claimRequirements> = [];
@@ -2512,6 +3647,7 @@ async function postHandler(request: NextRequest) {
         const existing = new Set(current.documents.map((document) => `${document.name.trim().toLowerCase()}|${document.type.trim().toLowerCase()}`));
         const missingRequirements = requirements.filter((requirement) => !existing.has(`${requirement.label.trim().toLowerCase()}|${requirement.type.trim().toLowerCase()}`));
         if (missingRequirements.length) await tx.subsidyClaimDocument.createMany({ data: missingRequirements.map((requirement) => ({ claimId: current.id, name: requirement.label, type: requirement.type })) });
+        await writeAuditLog(auth.user, { centerId: current.centerId, action: "billing.subsidy_claim.requirements_synced", resource: "SubsidyClaim", resourceId: current.id, metadata: { addedCount: missingRequirements.length, requirementLabels: missingRequirements.map((item) => item.label) } }, tx);
         return missingRequirements;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -2519,7 +3655,6 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The claim changed while requirements were synchronized. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim.requirements_synced", resource: "SubsidyClaim", resourceId: claim.id, metadata: { addedCount: missing.length, requirementLabels: missing.map((item) => item.label) } });
     return NextResponse.json({ ok: true, addedCount: missing.length });
   }
 
@@ -2539,13 +3674,15 @@ async function postHandler(request: NextRequest) {
         const linkedDocumentId = clean(body.linkedDocumentId) || document.documentId;
         const notes = clean(body.notes) || document.notes;
         if (status === "verified" && !linkedDocumentId && !notes) throw new AgencyWorkflowError("Add an evidence note or linked document before marking this item verified.");
-        return tx.subsidyClaimDocument.update({ where: { id: document.id }, data: { status, documentId: linkedDocumentId, notes } });
-      });
+        const changed = await tx.subsidyClaimDocument.update({ where: { id: document.id }, data: { status, documentId: linkedDocumentId, notes } });
+        await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim_document.updated", resource: "SubsidyClaimDocument", resourceId: changed.id, metadata: { claimId: claim.id, status } }, tx);
+        return changed;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The claim or document changed at the same time. Refresh before trying again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim_document.updated", resource: "SubsidyClaimDocument", resourceId: updated.id, metadata: { claimId: claim.id, status } });
     return NextResponse.json({ ok: true, document: updated });
   }
 
@@ -2561,6 +3698,7 @@ async function postHandler(request: NextRequest) {
         const blockers = claimSubmissionBlockers({ ...current.agencyProgram, documents: current.documents, requirements: claimRequirements(current) });
         if (blockers.length) throw new AgencyWorkflowError(`Claim is not ready for submission. ${blockers.join(" ")}`, 409);
         const submitted = await tx.subsidyClaim.update({ where: { id: current.id }, data: { status: "submitted", submittedAt: new Date(), externalReference } });
+        await writeAuditLog(auth.user, { centerId: current.centerId, action: "billing.subsidy_claim.marked_submitted", resource: "SubsidyClaim", resourceId: current.id, metadata: { submissionMethod: current.agencyProgram.submissionMethod, externalReference: submitted.externalReference } }, tx);
         return { submitted, submissionMethod: current.agencyProgram.submissionMethod };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -2568,8 +3706,7 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The claim or its requirements changed before submission was recorded. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    const { submitted, submissionMethod } = result;
-    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim.marked_submitted", resource: "SubsidyClaim", resourceId: claim.id, metadata: { submissionMethod, externalReference: submitted.externalReference } });
+    const { submitted } = result;
     return NextResponse.json({ ok: true, claim: submitted, externalSubmissionPerformed: false });
   }
 
@@ -2598,6 +3735,7 @@ async function postHandler(request: NextRequest) {
         if (approvedAt) await assertAgencyPeriodOpen(tx, current.centerId, approvedAt);
         const updated = await tx.subsidyClaim.update({ where: { id: current.id }, data: { status: decision, approvedCents, approvedAt, denialReason: decision === "denied" ? denialReason : null, externalReference } });
         const ledger = decision === "approved" ? await ensureAgencyClaimReceivable(tx, { ...updated, agencyProgram: current.agencyProgram }) : null;
+        await writeAuditLog(auth.user, { centerId: current.centerId, action: `billing.subsidy_claim.${decision}`, resource: "SubsidyClaim", resourceId: current.id, metadata: { approvedCents, externalReference: updated.externalReference, agencyLedgerEntryId: ledger?.entry.id ?? null } }, tx);
         return { updated, ledgerEntryId: ledger?.entry.id ?? null };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -2605,18 +3743,30 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The claim or agency ledger changed before the decision was recorded. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: claim.centerId, action: `billing.subsidy_claim.${decision}`, resource: "SubsidyClaim", resourceId: claim.id, metadata: { approvedCents, externalReference: result.updated.externalReference, agencyLedgerEntryId: result.ledgerEntryId } });
     return NextResponse.json({ ok: true, claim: result.updated, agencyLedgerEntryId: result.ledgerEntryId });
   }
 
   if (action === "voidClaim") {
-    if (!["draft", "ready"].includes(claim.status)) return NextResponse.json({ ok: false, error: "Only an unsubmitted draft claim can be voided here. Submitted decisions and payments must retain their history." }, { status: 409 });
     const reason = clean(body.reason);
     if (!reason) return NextResponse.json({ ok: false, error: "Enter a reason for voiding the draft claim." }, { status: 400 });
-    const transition = await prisma.subsidyClaim.updateMany({ where: { id: claim.id, status: { in: ["draft", "ready"] } }, data: { status: "void", customFields: { ...recordValue(claim.customFields), voidReason: reason, voidedAt: new Date().toISOString(), voidedById: auth.user.id } } });
-    if (transition.count !== 1) return NextResponse.json({ ok: false, error: "The claim changed before it could be voided. Refresh before trying again." }, { status: 409 });
-    const updated = await prisma.subsidyClaim.findUniqueOrThrow({ where: { id: claim.id } });
-    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_claim.voided", resource: "SubsidyClaim", resourceId: claim.id, metadata: { reasonRecorded: true } });
+    let updated;
+    try {
+      updated = await prisma.$transaction(async (tx) => {
+        const current = await tx.subsidyClaim.findUnique({ where: { id: claim.id } });
+        if (!current || current.centerId !== centerId) throw new AgencyWorkflowError("Claim not found.", 404);
+        if (current.status === "void") return current;
+        if (!["draft", "ready"].includes(current.status)) throw new AgencyWorkflowError("Only an unsubmitted draft claim can be voided here. Submitted decisions and payments must retain their history.", 409);
+        const transition = await tx.subsidyClaim.updateMany({ where: { id: current.id, centerId, status: current.status, updatedAt: current.updatedAt }, data: { status: "void", customFields: { ...recordValue(current.customFields), voidReason: reason, voidedAt: new Date().toISOString(), voidedById: auth.user.id } } });
+        if (transition.count !== 1) throw new AgencyWorkflowError("The claim changed before it could be voided. Refresh before trying again.", 409);
+        const voided = await tx.subsidyClaim.findUniqueOrThrow({ where: { id: current.id } });
+        await writeAuditLog(auth.user, { centerId: current.centerId, action: "billing.subsidy_claim.voided", resource: "SubsidyClaim", resourceId: current.id, metadata: { reasonRecorded: true } }, tx);
+        return voided;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The claim changed before it could be voided. Refresh before trying again." }, { status: 409 });
+      throw error;
+    }
     return NextResponse.json({ ok: true, claim: updated });
   }
 
@@ -2635,10 +3785,15 @@ async function postHandler(request: NextRequest) {
           where: { id: claim.id },
           include: { agencyProgram: true, authorization: { include: { family: { include: { billingAccount: true } } } }, remittances: true },
         });
-        if (!current || !new Set(["approved", "partially_paid"]).has(current.status)) throw new AgencyWorkflowError("Record an agency approval before posting a remittance.", 409);
+        if (!current || current.centerId !== centerId) throw new AgencyWorkflowError("Claim not found.", 404);
+        const center = await tx.center.findUnique({ where: { id: current.centerId }, select: { agencyReconciliationEnabled: true } });
+        if (!center) throw new AgencyWorkflowError("School not found.", 404);
+        if (center.agencyReconciliationEnabled) throw new AgencyWorkflowError("This school uses reviewed deposit batches. Prepare the remittance for independent review instead of posting it directly.", 409);
+        if (!new Set(["approved", "partially_paid"]).has(current.status)) throw new AgencyWorkflowError("Record an agency approval before posting a remittance.", 409);
         const payable = current.approvedCents ?? current.claimedCents;
         const paidBeforeCents = activeRemittanceTotalCents(current.remittances);
         if (paidBeforeCents + amountCents > payable) throw new AgencyWorkflowError("The remittance amount cannot exceed the remaining approved claim.");
+        await assertAgencyPeriodOpen(tx, current.centerId, paidAt);
         await ensureAgencyClaimReceivable(tx, current);
         const remittance = await tx.subsidyRemittance.create({ data: { claimId: current.id, amountCents, paidAt, paymentMethod, externalReference: reference, notes: clean(body.notes) || null, enteredById: auth.user.id } });
         const agencyLedger = await appendAgencyLedgerEntry(tx, {
@@ -2654,55 +3809,25 @@ async function postHandler(request: NextRequest) {
           externalId: agencyRemittanceLedgerExternalId(remittance.id),
           metadata: { claimNumber: current.number, paymentMethod },
         });
-        let legacyFamilyLedgerAppliedCents = 0;
-        let legacyFamilyLedgerEntryId: string | null = null;
-        const billingAccount = current.authorization?.family.billingAccount;
-        if (billingAccount) {
-          const authorizationNumber = current.authorization?.authorizationNumber ?? "";
-          const agencyEntries = await tx.ledgerEntry.findMany({
-            where: { billingAccountId: billingAccount.id, sourceSystem: "subsidy_agency" },
-            orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-          });
-          const matchingOutstandingCents = agencyEntries.reduce((total, entry) => {
-            const metadata = recordValue(entry.metadata);
-            const entryAuthorizationNumber = clean(metadata.authorizationNumber);
-            const entryAgencyName = clean(metadata.agencyName).toLowerCase();
-            const agencyName = current.agencyProgram.name.trim().toLowerCase();
-            const matches = entryAuthorizationNumber && entryAgencyName
-              ? entryAuthorizationNumber === authorizationNumber && entryAgencyName === agencyName
-              : entryAuthorizationNumber
-                ? entryAuthorizationNumber === authorizationNumber
-                : entryAgencyName === agencyName;
-            return matches ? total + entry.amountCents : total;
-          }, 0);
-          legacyFamilyLedgerAppliedCents = Math.min(amountCents, Math.max(0, matchingOutstandingCents));
-          if (legacyFamilyLedgerAppliedCents > 0) {
-            const updatedAccount = await tx.billingAccount.update({ where: { id: billingAccount.id }, data: { balanceCents: { decrement: legacyFamilyLedgerAppliedCents } } });
-            const ledgerEntry = await tx.ledgerEntry.create({ data: {
-              billingAccountId: billingAccount.id,
-              type: "agency_payment",
-              description: `Legacy family-ledger settlement for ${current.agencyProgram.name} remittance ${current.number}`,
-              amountCents: -legacyFamilyLedgerAppliedCents,
-              balanceAfterCents: updatedAccount.balanceCents,
-              effectiveAt: paidAt,
-              sourceSystem: "subsidy_agency",
-              externalId: `agency-remittance:${remittance.id}`,
-              metadata: { claimId: current.id, claimNumber: current.number, remittanceId: remittance.id, agencyName: current.agencyProgram.name, authorizationNumber, externalReference: reference, legacyCompatibilityMirror: true },
-            } });
-            legacyFamilyLedgerEntryId = ledgerEntry.id;
-          }
-        }
+        const legacy = await applyLegacyFamilyLedgerSettlement(tx, {
+          claim: current,
+          amountCents,
+          paidAt,
+          reference,
+          remittanceId: remittance.id,
+        });
         const paidCents = paidBeforeCents + amountCents;
         const updated = await tx.subsidyClaim.update({ where: { id: current.id }, data: { paidCents, status: nextRemittanceStatus({ claimedCents: current.claimedCents, approvedCents: current.approvedCents, paidCents }) } });
+        await writeAuditLog(auth.user, { centerId: current.centerId, action: "billing.subsidy_remittance.recorded", resource: "SubsidyRemittance", resourceId: remittance.id, metadata: { claimId: current.id, amountCents, externalReference: reference, agencyLedgerEntryId: agencyLedger.entry.id, agencyLedgerBalanceCents: agencyLedger.account.balanceCents, legacyFamilyLedgerAppliedCents: legacy.appliedCents, legacyFamilyLedgerEntryId: legacy.entryId } }, tx);
         return {
           remittance,
           claim: updated,
           agencyLedgerEntryId: agencyLedger.entry.id,
           agencyLedgerBalanceCents: agencyLedger.account.balanceCents,
-          legacyFamilyLedgerAppliedCents,
-          legacyFamilyLedgerEntryId,
-          ledgerAppliedCents: legacyFamilyLedgerAppliedCents,
-          ledgerEntryId: legacyFamilyLedgerEntryId,
+          legacyFamilyLedgerAppliedCents: legacy.appliedCents,
+          legacyFamilyLedgerEntryId: legacy.entryId,
+          ledgerAppliedCents: legacy.appliedCents,
+          ledgerEntryId: legacy.entryId,
         };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
@@ -2710,7 +3835,6 @@ async function postHandler(request: NextRequest) {
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "That remittance reference is already recorded or the claim changed. Refresh before trying again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_remittance.recorded", resource: "SubsidyRemittance", resourceId: result.remittance.id, metadata: { claimId: claim.id, amountCents, externalReference: reference, agencyLedgerEntryId: result.agencyLedgerEntryId, agencyLedgerBalanceCents: result.agencyLedgerBalanceCents, legacyFamilyLedgerAppliedCents: result.legacyFamilyLedgerAppliedCents, legacyFamilyLedgerEntryId: result.legacyFamilyLedgerEntryId } });
     return NextResponse.json({ ok: true, ...result });
   }
 
@@ -2720,21 +3844,28 @@ async function postHandler(request: NextRequest) {
     if (!remittanceId || !reason) return NextResponse.json({ ok: false, error: "Choose a remittance and enter a correction reason." }, { status: 400 });
     let result;
     try {
-      result = await prisma.$transaction((tx) => reverseAgencyRemittanceRecord(tx, {
-        remittanceId,
-        reviewerId: auth.user.id,
-        reviewerRole: auth.user.role,
-        expectedClaimId: claim.id,
-        requireUnbatched: true,
-        reason,
-        reversedAt: new Date(),
-      }), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      result = await prisma.$transaction(async (tx) => {
+        const center = await tx.center.findUnique({ where: { id: claim.centerId }, select: { agencyReconciliationEnabled: true } });
+        if (!center) throw new AgencyWorkflowError("School not found.", 404);
+        const reversed = await reverseAgencyRemittanceRecord(tx, {
+          remittanceId,
+          reviewerId: auth.user.id,
+          reviewerRole: auth.user.role,
+          requireIndependentReviewer: center.agencyReconciliationEnabled,
+          expectedClaimId: claim.id,
+          expectedCenterId: claim.centerId,
+          requireUnbatched: true,
+          reason,
+          reversedAt: new Date(),
+        });
+        await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_remittance.reversed", resource: "SubsidyRemittance", resourceId: reversed.remittanceId, metadata: { claimId: claim.id, reason, agencyLedgerEntryId: reversed.agencyLedgerEntryId, agencyLedgerBalanceCents: reversed.agencyLedgerBalanceCents, legacyFamilyReversalLedgerEntryId: reversed.legacyFamilyReversalLedgerEntryId } }, tx);
+        return reversed;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The remittance changed while it was being reversed. Refresh and try again." }, { status: 409 });
       throw error;
     }
-    await writeAuditLog(auth.user, { centerId: claim.centerId, action: "billing.subsidy_remittance.reversed", resource: "SubsidyRemittance", resourceId: result.remittanceId, metadata: { claimId: claim.id, reason, agencyLedgerEntryId: result.agencyLedgerEntryId, agencyLedgerBalanceCents: result.agencyLedgerBalanceCents, legacyFamilyReversalLedgerEntryId: result.legacyFamilyReversalLedgerEntryId } });
     return NextResponse.json({ ok: true, ...result });
   }
 

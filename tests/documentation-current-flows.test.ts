@@ -96,10 +96,16 @@ test("agency payment SOP has a stable public route and evidence-first reconcilia
   assert.match(guide, /different billing administrator or accounting reviewer/);
   assert.match(guide, /unchanged parent-visible responsibility/);
   assert.match(guide, /dedicated agency ledger/);
+  assert.match(guide, /A preview build does not prove compatibility with an unmigrated production database/);
+  assert.match(guide, /continue the baseline direct/);
   assert.match(sop, /claim-by-claim allocation/);
   assert.match(sop, /Do not add a duplicate remittance or family payment/);
   assert.match(sop, /Export claims, deposits, ledger activity, and reconciliation/);
   assert.match(sop, /Reverse the whole deposit batch/);
+  assert.match(sop, /Baseline direct `Record remittance` remains available/);
+  assert.match(sop, /two distinct authorized, active users/);
+  assert.match(sop, /Close preflight never reconstructs/);
+  assert.match(sop, /Teachers, parents\/guardians, and authorized pickups have no agency-financial mutation access/);
 });
 
 test("director clean-start guide has a stable public route with steps, FAQs, and stop conditions", () => {

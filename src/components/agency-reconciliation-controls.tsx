@@ -101,7 +101,12 @@ export function AgencyReconciliationControls({ centerId, programs, allocationCla
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const allocations = allocationDrafts.filter((row) => row.claimId && Number(row.amountDollars) > 0).map((row) => ({ claimId: row.claimId, amountDollars: row.amountDollars }));
+    const enteredAllocationDrafts = allocationDrafts.filter((row) => row.claimId || row.amountDollars.trim());
+    if (enteredAllocationDrafts.some((row) => !row.claimId || !row.amountDollars.trim() || !Number.isFinite(Number(row.amountDollars)) || Number(row.amountDollars) <= 0)) {
+      setBatchError("Complete or remove every allocation row before preparing the batch.");
+      return;
+    }
+    const allocations = enteredAllocationDrafts.map((row) => ({ claimId: row.claimId, amountDollars: row.amountDollars }));
     if (new Set(allocations.map((allocation) => allocation.claimId)).size !== allocations.length) {
       setBatchError("Choose each claim only once in a deposit batch.");
       return;

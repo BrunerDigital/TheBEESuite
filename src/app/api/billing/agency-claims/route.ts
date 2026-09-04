@@ -121,15 +121,19 @@ function recordValue(value: unknown): Record<string, unknown> {
 }
 
 function agencyAllocationRows(value: unknown) {
-  if (!Array.isArray(value)) return { allocations: [], hasDuplicateClaims: false };
+  if (!Array.isArray(value)) return { allocations: [], hasDuplicateClaims: false, hasInvalidRows: value !== undefined };
   const seen = new Set<string>();
   const allocations: Array<{ claimId: string; amountCents: number; notes: string | null }> = [];
   let hasDuplicateClaims = false;
+  let hasInvalidRows = false;
   for (const item of value) {
     const row = recordValue(item);
     const claimId = clean(row.claimId);
     const amountCents = cents(row.amountDollars);
-    if (!claimId || amountCents <= 0) continue;
+    if (!claimId || !validCurrencyInput(row.amountDollars) || amountCents <= 0) {
+      hasInvalidRows = true;
+      continue;
+    }
     if (seen.has(claimId)) {
       hasDuplicateClaims = true;
       continue;
@@ -137,7 +141,7 @@ function agencyAllocationRows(value: unknown) {
     seen.add(claimId);
     allocations.push({ claimId, amountCents, notes: clean(row.notes) || null });
   }
-  return { allocations, hasDuplicateClaims };
+  return { allocations, hasDuplicateClaims, hasInvalidRows };
 }
 
 async function assertAgencyPeriodOpen(tx: Prisma.TransactionClient, centerId: string, effectiveAt: Date) {
@@ -162,7 +166,6 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
       where: {
         centerId,
         approvedCents: { gt: 0 },
-        approvedAt: { lt: endExclusive },
         status: { notIn: ["void", "denied"] },
       },
       select: {
@@ -170,13 +173,17 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
         agencyProgramId: true,
         approvedCents: true,
         claimedCents: true,
+        approvedAt: true,
+        updatedAt: true,
+        createdAt: true,
         ledgerEntries: {
           where: {
             sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
             type: "claim_approved",
-            effectiveAt: { lt: endExclusive },
           },
-          select: { id: true },
+          orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+          take: 1,
+          select: { id: true, effectiveAt: true },
         },
       },
     }),
@@ -261,9 +268,12 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
   }
   let missingLedgerEventCount = 0;
   for (const claim of claims) {
+    const approvalEntry = claim.ledgerEntries[0];
+    const approvalEffectiveAt = approvalEntry?.effectiveAt ?? claim.approvedAt ?? claim.updatedAt ?? claim.createdAt;
+    if (approvalEffectiveAt >= endExclusive) continue;
     const current = row(claim.agencyProgramId);
     current.expected += claim.approvedCents ?? claim.claimedCents;
-    if (!claim.ledgerEntries.length) missingLedgerEventCount += 1;
+    if (!approvalEntry) missingLedgerEventCount += 1;
   }
   for (const remittance of remittances) {
     const current = row(remittance.claim.agencyProgramId);
@@ -1410,6 +1420,7 @@ async function postHandler(request: NextRequest) {
     const evidenceReference = clean(body.evidenceReference);
     const followUpDueAt = dateValue(body.followUpDueAt);
     const requestedAllocationRows = agencyAllocationRows(body.allocations);
+    if (requestedAllocationRows.hasInvalidRows) return NextResponse.json({ ok: false, error: "Every allocation needs an approved claim and a positive dollar amount." }, { status: 400 });
     if (requestedAllocationRows.hasDuplicateClaims) return NextResponse.json({ ok: false, error: "Choose each claim only once in a deposit batch." }, { status: 400 });
     const allocations = requestedAllocationRows.allocations.length
       ? requestedAllocationRows.allocations

@@ -328,7 +328,7 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /paidAt: \{ gte: startInclusive, lt: endExclusive \}/);
   assert.match(route, /effectiveAt: \{ gte: startInclusive, lt: endExclusive \}/);
   assert.match(route, /agencyReconciliationVarianceCount\(tx, centerId, endExclusive\)/);
-  assert.match(route, /approvedAt: \{ lt: endExclusive \}/);
+  assert.match(route, /approvedAt: true,[\s\S]*updatedAt: true,[\s\S]*createdAt: true/);
   assert.match(route, /const \[accounts, claims, remittances, adjustments\] = await Promise\.all/);
   assert.match(route, /tx\.subsidyRemittance\.findMany\(\{[\s\S]*claim: \{ centerId \}[\s\S]*type: "remittance_received"/);
   assert.match(route, /for \(const remittance of remittances\) \{[\s\S]*row\(remittance\.claim\.agencyProgramId\)/);
@@ -354,6 +354,13 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /status: \{ in: \["pending_review", "posted"\] \}, reversedAt: null/);
   assert.match(route, /new Map\(\[\.\.\.unresolvedBatches, \.\.\.recentBatches\]/);
   assert.match(route, /new Map\(\[\.\.\.unresolvedAdjustments, \.\.\.recentAdjustments\]/);
+  assert.match(route, /requestedAllocationRows\.hasInvalidRows[\s\S]*Every allocation needs an approved claim and a positive dollar amount/);
+  assert.match(route, /hasInvalidRows: value !== undefined/);
+  assert.match(route, /!claimId \|\| !validCurrencyInput\(row\.amountDollars\) \|\| amountCents <= 0/);
+  assert.match(controls, /enteredAllocationDrafts\.some\(\(row\) => !row\.claimId \|\| !row\.amountDollars\.trim\(\)[\s\S]*Complete or remove every allocation row/);
+  assert.doesNotMatch(route, /approvedAt: \{ lt: endExclusive \}/);
+  assert.match(route, /const approvalEffectiveAt = approvalEntry\?\.effectiveAt \?\? claim\.approvedAt \?\? claim\.updatedAt \?\? claim\.createdAt/);
+  assert.match(route, /if \(approvalEffectiveAt >= endExclusive\) continue/);
   assert.match(route, /status: \{ in: ACTIVE_REMITTANCE_BATCH_STATUSES \}, reversedAt: null/);
   assert.match(route, /batch\.agencyProgramId === account\.agencyProgramId && batch\.reviewedAt/);
   assert.match(route, /OPEN_REMITTANCE_BATCH_STATUSES\.has\(batch\.status\)/);

@@ -815,7 +815,7 @@ async function getHandler(request: NextRequest) {
     ] } : {}),
   };
 
-  const [programs, authorizations, claims, summaryRows, families, ledgerAccounts, ledgerEntryRows, batches, adjustments, accountingPeriods, reconciliationClaims, reconciliationBatches, reconciliationAdjustments, legacyFamilyAgencyEntries, pendingBatchReviews, pendingAdjustmentReviews, overdueBatchFollowUps, overdueAdjustmentFollowUps] = await Promise.all([
+  const [programs, authorizations, claims, summaryRows, families, ledgerAccounts, ledgerEntryRows, recentBatches, unresolvedBatches, recentAdjustments, unresolvedAdjustments, accountingPeriods, reconciliationClaims, reconciliationBatches, reconciliationAdjustments, legacyFamilyAgencyEntries, pendingBatchReviews, pendingAdjustmentReviews, overdueBatchFollowUps, overdueAdjustmentFollowUps] = await Promise.all([
     prisma.agencyProgram.findMany({
       where: { centerId: { in: centerIds } },
       orderBy: [{ stateCode: "asc" }, { name: "asc" }],
@@ -929,10 +929,23 @@ async function getHandler(request: NextRequest) {
         allocations: { orderBy: { createdAt: "asc" }, include: { claim: { include: { authorization: { include: { family: { select: { name: true } }, child: { select: { fullName: true } } } } } } } },
       },
     }),
+    prisma.agencyRemittanceBatch.findMany({
+      where: { centerId: { in: centerIds }, reversedAt: null, status: { in: ["pending_review", "unmatched", "partially_allocated", "exception"] } },
+      orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+      include: {
+        agencyProgram: { select: { name: true, programName: true } },
+        allocations: { orderBy: { createdAt: "asc" }, include: { claim: { include: { authorization: { include: { family: { select: { name: true } }, child: { select: { fullName: true } } } } } } } },
+      },
+    }),
     prisma.agencyLedgerAdjustment.findMany({
       where: { centerId: { in: centerIds } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: AGENCY_ADJUSTMENT_LIMIT,
+      include: { agencyProgram: { select: { name: true, programName: true } }, claim: { select: { number: true } } },
+    }),
+    prisma.agencyLedgerAdjustment.findMany({
+      where: { centerId: { in: centerIds }, status: "pending_review" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       include: { agencyProgram: { select: { name: true, programName: true } }, claim: { select: { number: true } } },
     }),
     prisma.agencyAccountingPeriod.findMany({
@@ -961,6 +974,11 @@ async function getHandler(request: NextRequest) {
     prisma.agencyRemittanceBatch.count({ where: { centerId: { in: centerIds }, reversedAt: null, followUpDueAt: { lt: new Date() }, status: { in: ["pending_review", "unmatched", "partially_allocated", "exception"] } } }),
     prisma.agencyLedgerAdjustment.count({ where: { centerId: { in: centerIds }, followUpDueAt: { lt: new Date() }, status: "pending_review" } }),
   ]);
+
+  const batches = [...new Map([...unresolvedBatches, ...recentBatches].map((batch) => [batch.id, batch])).values()]
+    .sort((left, right) => right.paidAt.getTime() - left.paidAt.getTime() || right.createdAt.getTime() - left.createdAt.getTime());
+  const adjustments = [...new Map([...unresolvedAdjustments, ...recentAdjustments].map((adjustment) => [adjustment.id, adjustment])).values()]
+    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime() || right.id.localeCompare(left.id));
 
   const hasNextClaimPage = claims.length > CLAIM_PAGE_SIZE;
   const visibleClaims = claims.slice(0, CLAIM_PAGE_SIZE).map((claim) => ({
@@ -1306,6 +1324,10 @@ async function postHandler(request: NextRequest) {
           paidAt,
           paymentMethod,
           totalCents,
+          notes: clean(body.notes) || null,
+          evidenceName,
+          evidenceReference,
+          followUpDueAt,
           allocations,
         });
         const idempotencyKey = clean(body.idempotencyKey) || `agency-batch:${randomUUID()}`;
@@ -1358,7 +1380,7 @@ async function postHandler(request: NextRequest) {
             claimId: allocation.claimId,
             amountCents: allocation.amountCents,
             notes: allocation.notes,
-            fingerprint: agencyAllocationFingerprint({ batchId: batch.id, claimId: allocation.claimId, amountCents: allocation.amountCents }),
+            fingerprint: agencyAllocationFingerprint({ batchId: batch.id, claimId: allocation.claimId, amountCents: allocation.amountCents, notes: allocation.notes }),
             idempotencyKey: `batch-allocation:${batch.id}:${allocation.claimId}`,
             requestedById: auth.user.id,
           })) });
@@ -1384,7 +1406,7 @@ async function postHandler(request: NextRequest) {
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: batch.enteredById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must approve this batch.", 403);
         if (batch.status !== "pending_review" || batch.reviewedAt) throw new AgencyWorkflowError("This remittance batch is no longer awaiting initial review.", 409);
         const pendingAllocations = batch.allocations.filter((allocation) => allocation.status === "pending_review");
-        const fingerprint = agencyBatchFingerprint({ centerId: batch.centerId, agencyProgramId: batch.agencyProgramId, externalReference: batch.externalReference, paidAt: batch.paidAt, paymentMethod: batch.paymentMethod, totalCents: batch.totalCents, allocations: pendingAllocations });
+        const fingerprint = agencyBatchFingerprint({ centerId: batch.centerId, agencyProgramId: batch.agencyProgramId, externalReference: batch.externalReference, paidAt: batch.paidAt, paymentMethod: batch.paymentMethod, totalCents: batch.totalCents, notes: batch.notes, evidenceName: batch.evidenceName, evidenceReference: batch.evidenceReference, followUpDueAt: batch.followUpDueAt, allocations: pendingAllocations });
         if (fingerprint !== batch.reconciliationFingerprint) throw new AgencyWorkflowError("The batch no longer matches its reviewed fingerprint. Recreate the batch from current evidence.", 409);
         await assertAgencyPeriodOpen(tx, batch.centerId, batch.paidAt);
         let allocatedCents = 0;
@@ -1437,9 +1459,10 @@ async function postHandler(request: NextRequest) {
     const batchId = clean(body.batchId);
     const claimId = clean(body.claimId);
     const amountCents = cents(body.amountDollars);
+    const notes = clean(body.notes) || null;
     const idempotencyKey = clean(body.idempotencyKey);
     if (!batchId || !claimId || amountCents <= 0 || !idempotencyKey) return NextResponse.json({ ok: false, error: "Choose a batch, approved claim, positive allocation amount, and retry-safe request key." }, { status: 400 });
-    const fingerprint = agencyAllocationFingerprint({ batchId, claimId, amountCents });
+    const fingerprint = agencyAllocationFingerprint({ batchId, claimId, amountCents, notes });
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {
@@ -1461,7 +1484,7 @@ async function postHandler(request: NextRequest) {
           batchId: batch.id,
           claimId,
           amountCents,
-          notes: clean(body.notes) || null,
+          notes,
           fingerprint,
           idempotencyKey,
           requestedById: auth.user.id,
@@ -1487,7 +1510,7 @@ async function postHandler(request: NextRequest) {
         if (!allocation || !centerAllowed(auth.user, allocation.batch.centerId)) throw new AgencyWorkflowError("Batch allocation not found.", 404);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: allocation.requestedById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must approve this allocation.", 403);
         if (allocation.status !== "pending_review" || allocation.batch.reversedAt) throw new AgencyWorkflowError("This allocation is no longer awaiting review.", 409);
-        if (allocation.fingerprint !== agencyAllocationFingerprint({ batchId: allocation.batchId, claimId: allocation.claimId, amountCents: allocation.amountCents })) throw new AgencyWorkflowError("The allocation fingerprint no longer matches. Recreate it from current evidence.", 409);
+        if (allocation.fingerprint !== agencyAllocationFingerprint({ batchId: allocation.batchId, claimId: allocation.claimId, amountCents: allocation.amountCents, notes: allocation.notes })) throw new AgencyWorkflowError("The allocation fingerprint no longer matches. Recreate it from current evidence.", 409);
         if (allocation.amountCents > allocation.batch.unappliedCents) throw new AgencyWorkflowError("The batch's unapplied amount changed before this allocation could be approved.", 409);
         const current = await agencyPostingClaim(tx, allocation.claimId);
         if (!current || current.centerId !== allocation.batch.centerId || current.agencyProgramId !== allocation.batch.agencyProgramId) throw new AgencyWorkflowError("The claim no longer belongs to this batch's school and agency.", 409);
@@ -1540,7 +1563,7 @@ async function postHandler(request: NextRequest) {
       prepared = await prisma.$transaction(async (tx) => {
         const account = await tx.agencyLedgerAccount.findUnique({ where: { id: ledgerAccountId } });
         if (!account || !centerAllowed(auth.user, account.centerId)) throw new AgencyWorkflowError("Agency ledger account not found.", 404);
-        const fingerprint = agencyAdjustmentFingerprint({ ledgerAccountId: account.id, claimId, batchId, type, amountCents, effectiveAt, reason });
+        const fingerprint = agencyAdjustmentFingerprint({ ledgerAccountId: account.id, claimId, batchId, type, amountCents, effectiveAt, reason, evidenceName, evidenceReference, followUpDueAt });
         const existingByIdempotency = await tx.agencyLedgerAdjustment.findUnique({ where: { idempotencyKey } });
         if (existingByIdempotency) {
           if (existingByIdempotency.fingerprint !== fingerprint) throw new AgencyWorkflowError("This retry key was already used for a different agency adjustment.", 409);
@@ -1594,7 +1617,7 @@ async function postHandler(request: NextRequest) {
         if (!adjustment || !centerAllowed(auth.user, adjustment.centerId)) throw new AgencyWorkflowError("Agency adjustment not found.", 404);
         if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: adjustment.requestedById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must review this adjustment.", 403);
         if (adjustment.status !== "pending_review") throw new AgencyWorkflowError("This adjustment is no longer awaiting review.", 409);
-        const fingerprint = agencyAdjustmentFingerprint({ ledgerAccountId: adjustment.ledgerAccountId, claimId: adjustment.claimId, batchId: adjustment.batchId, type: adjustment.type, amountCents: adjustment.amountCents, effectiveAt: adjustment.effectiveAt, reason: adjustment.reason });
+        const fingerprint = agencyAdjustmentFingerprint({ ledgerAccountId: adjustment.ledgerAccountId, claimId: adjustment.claimId, batchId: adjustment.batchId, type: adjustment.type, amountCents: adjustment.amountCents, effectiveAt: adjustment.effectiveAt, reason: adjustment.reason, evidenceName: adjustment.evidenceName, evidenceReference: adjustment.evidenceReference, followUpDueAt: adjustment.followUpDueAt });
         if (fingerprint !== adjustment.fingerprint) throw new AgencyWorkflowError("The adjustment no longer matches its reviewed fingerprint. Recreate it from current evidence.", 409);
         if (action === "rejectLedgerAdjustment") {
           const rejected = await tx.agencyLedgerAdjustment.update({ where: { id: adjustment.id }, data: { status: "rejected", reviewedById: auth.user.id, reviewedAt: new Date(), reviewNotes: reviewNotes || "Rejected by accounting reviewer." } });

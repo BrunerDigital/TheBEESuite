@@ -23,6 +23,7 @@ type ReconciliationRow = { agencyLedgerAccountId: string; agency: { name: string
 type Aging = { current: number; days_1_30: number; days_31_60: number; days_61_90: number; days_91_plus: number };
 
 type Props = {
+  centerId: string;
   programs: Program[];
   claims: Claim[];
   accounts: Account[];
@@ -44,6 +45,25 @@ function dateOnly(value: string) { return value ? new Date(value).toLocaleDateSt
 function today() { return new Date().toISOString().slice(0, 10); }
 function followUpDate() { const value = new Date(); value.setUTCDate(value.getUTCDate() + 7); return value.toISOString().slice(0, 10); }
 function idempotencyKey() { return globalThis.crypto?.randomUUID?.() ?? `agency-batch-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
+function retryStorageKey(centerId: string, userId: string, operation: string) { return `bee:agency-reconciliation:retry:${centerId}:${userId}:${operation}`; }
+function persistentIdempotencyKey(storageKey: string) {
+  const generated = idempotencyKey();
+  try {
+    const existing = globalThis.sessionStorage?.getItem(storageKey);
+    if (existing) return existing;
+    globalThis.sessionStorage?.setItem(storageKey, generated);
+  } catch {
+    // Storage may be unavailable in a restricted browser; the server still enforces unique keys.
+  }
+  return generated;
+}
+function rotatePersistentIdempotencyKey(storageKey: string) {
+  try {
+    globalThis.sessionStorage?.setItem(storageKey, idempotencyKey());
+  } catch {
+    // The next submission will create a fresh in-memory key when storage is unavailable.
+  }
+}
 
 function statusVariant(status: string): "default" | "outline" | "secondary" | "destructive" {
   if (status === "reconciled" || status === "posted" || status === "closed") return "default";
@@ -52,17 +72,14 @@ function statusVariant(status: string): "default" | "outline" | "secondary" | "d
   return "outline";
 }
 
-export function AgencyReconciliationControls({ programs, claims, accounts, batches, adjustments, periods, reconciliation, aging, capabilities: suppliedCapabilities, readOnly, pending, post }: Props) {
+export function AgencyReconciliationControls({ centerId, programs, claims, accounts, batches, adjustments, periods, reconciliation, aging, capabilities: suppliedCapabilities, readOnly, pending, post }: Props) {
   const capabilities = readOnly ? { ...suppliedCapabilities, canReviewAgencyPosting: false, canCloseAccountingPeriod: false } : suppliedCapabilities;
   const canReviewRequest = (requestedById: string) => capabilities.canReviewAgencyPosting && capabilities.currentUserId !== requestedById;
   const [batchProgramId, setBatchProgramId] = useState(programs[0]?.id ?? "");
-  const [batchKey, setBatchKey] = useState(idempotencyKey);
   const [allocationDrafts, setAllocationDrafts] = useState<AllocationDraft[]>([{ key: idempotencyKey(), claimId: "", amountDollars: "" }]);
   const [allocationClaimByBatch, setAllocationClaimByBatch] = useState<Record<string, string>>({});
-  const [allocationKeyByBatch, setAllocationKeyByBatch] = useState<Record<string, string>>({});
   const [adjustmentAccountId, setAdjustmentAccountId] = useState(accounts[0]?.id ?? "");
   const [adjustmentType, setAdjustmentType] = useState("write_off");
-  const [adjustmentKey, setAdjustmentKey] = useState(idempotencyKey);
   const availableClaims = useMemo(() => claims.filter((claim) => ["approved", "partially_paid"].includes(claim.status)), [claims]);
   const selectedBatchProgram = programs.find((program) => program.id === batchProgramId);
   const batchClaims = availableClaims.filter((claim) => claim.agencyProgram.id === selectedBatchProgram?.id);
@@ -73,9 +90,10 @@ export function AgencyReconciliationControls({ programs, claims, accounts, batch
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const allocations = allocationDrafts.filter((row) => row.claimId && Number(row.amountDollars) > 0).map((row) => ({ claimId: row.claimId, amountDollars: row.amountDollars }));
+    const storageKey = retryStorageKey(centerId, capabilities.currentUserId, "remittance-batch");
     const ok = await post("prepareRemittanceBatch", {
       agencyProgramId: batchProgramId,
-      idempotencyKey: batchKey,
+      idempotencyKey: persistentIdempotencyKey(storageKey),
       externalReference: form.get("externalReference"),
       totalDollars: form.get("totalDollars"),
       paidAt: form.get("paidAt"),
@@ -88,7 +106,7 @@ export function AgencyReconciliationControls({ programs, claims, accounts, batch
     });
     if (ok) {
       formElement.reset();
-      setBatchKey(idempotencyKey());
+      rotatePersistentIdempotencyKey(storageKey);
       setAllocationDrafts([{ key: idempotencyKey(), claimId: "", amountDollars: "" }]);
     }
   }
@@ -96,12 +114,12 @@ export function AgencyReconciliationControls({ programs, claims, accounts, batch
   async function requestAdditionalAllocation(event: FormEvent<HTMLFormElement>, batch: Batch) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const requestKey = allocationKeyByBatch[batch.id] ?? idempotencyKey();
-    if (!allocationKeyByBatch[batch.id]) setAllocationKeyByBatch((current) => ({ ...current, [batch.id]: requestKey }));
+    const storageKey = retryStorageKey(centerId, capabilities.currentUserId, `batch-allocation:${batch.id}`);
+    const requestKey = persistentIdempotencyKey(storageKey);
     const ok = await post("requestBatchAllocation", { batchId: batch.id, claimId: allocationClaimByBatch[batch.id], amountDollars: form.get("amountDollars"), notes: form.get("notes"), idempotencyKey: requestKey });
     if (ok) {
       setAllocationClaimByBatch((current) => ({ ...current, [batch.id]: "" }));
-      setAllocationKeyByBatch((current) => ({ ...current, [batch.id]: idempotencyKey() }));
+      rotatePersistentIdempotencyKey(storageKey);
     }
   }
 
@@ -109,10 +127,11 @@ export function AgencyReconciliationControls({ programs, claims, accounts, batch
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const ok = await post("requestLedgerAdjustment", { ledgerAccountId: adjustmentAccountId, adjustmentType, amountDollars: form.get("amountDollars"), effectiveAt: form.get("effectiveAt"), reason: form.get("reason"), evidenceName: form.get("evidenceName"), evidenceReference: form.get("evidenceReference"), followUpDueAt: form.get("followUpDueAt"), idempotencyKey: adjustmentKey });
+    const storageKey = retryStorageKey(centerId, capabilities.currentUserId, "ledger-adjustment");
+    const ok = await post("requestLedgerAdjustment", { ledgerAccountId: adjustmentAccountId, adjustmentType, amountDollars: form.get("amountDollars"), effectiveAt: form.get("effectiveAt"), reason: form.get("reason"), evidenceName: form.get("evidenceName"), evidenceReference: form.get("evidenceReference"), followUpDueAt: form.get("followUpDueAt"), idempotencyKey: persistentIdempotencyKey(storageKey) });
     if (ok) {
       formElement.reset();
-      setAdjustmentKey(idempotencyKey());
+      rotatePersistentIdempotencyKey(storageKey);
     }
   }
 

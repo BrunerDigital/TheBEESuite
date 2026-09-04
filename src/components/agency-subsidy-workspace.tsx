@@ -362,6 +362,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
       </CollapsibleCard>
 
       {data ? <AgencyReconciliationControls
+        centerId={centerId}
         programs={programs}
         claims={claims}
         accounts={ledgerAccounts}

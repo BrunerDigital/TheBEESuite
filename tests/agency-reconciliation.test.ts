@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   agencyAgingBucket,
+  agencyAdjustmentFingerprint,
+  agencyAllocationFingerprint,
   agencyBatchFingerprint,
   agencyBatchStatus,
   agencyLedgerRunningBalances,
@@ -29,8 +31,29 @@ test("agency batch fingerprints ignore allocation order but not material values"
   const first = agencyBatchFingerprint({ ...base, allocations: [{ claimId: "b", amountCents: 2_500 }, { claimId: "a", amountCents: 10_000 }] });
   const reordered = agencyBatchFingerprint({ ...base, allocations: [{ claimId: "a", amountCents: 10_000 }, { claimId: "b", amountCents: 2_500 }] });
   const changed = agencyBatchFingerprint({ ...base, totalCents: 12_501, allocations: [{ claimId: "a", amountCents: 10_000 }, { claimId: "b", amountCents: 2_500 }] });
+  const changedEvidence = agencyBatchFingerprint({ ...base, evidenceReference: "advice-2", allocations: [{ claimId: "a", amountCents: 10_000 }, { claimId: "b", amountCents: 2_500 }] });
   assert.equal(first, reordered);
   assert.notEqual(first, changed);
+  assert.notEqual(first, changedEvidence);
+});
+
+test("agency request fingerprints cover notes, evidence, and follow-up inputs", () => {
+  const allocation = agencyAllocationFingerprint({ batchId: "batch_1", claimId: "claim_1", amountCents: 1_000, notes: "September units" });
+  assert.notEqual(allocation, agencyAllocationFingerprint({ batchId: "batch_1", claimId: "claim_1", amountCents: 1_000, notes: "Corrected September units" }));
+
+  const adjustment = {
+    ledgerAccountId: "account_1",
+    type: "write_off",
+    amountCents: -1_000,
+    effectiveAt: "2026-09-03T00:00:00.000Z",
+    reason: "Agency denial",
+    evidenceName: "Denial notice",
+    evidenceReference: "notice-1",
+    followUpDueAt: "2026-09-10T00:00:00.000Z",
+  };
+  const original = agencyAdjustmentFingerprint(adjustment);
+  assert.notEqual(original, agencyAdjustmentFingerprint({ ...adjustment, evidenceReference: "notice-2" }));
+  assert.notEqual(original, agencyAdjustmentFingerprint({ ...adjustment, followUpDueAt: "2026-09-11T00:00:00.000Z" }));
 });
 
 test("agency batch status distinguishes unapplied cash", () => {

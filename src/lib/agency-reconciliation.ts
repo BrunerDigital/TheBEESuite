@@ -48,6 +48,10 @@ export function agencyBatchFingerprint(input: {
   paidAt: Date | string;
   paymentMethod: string;
   totalCents: number;
+  notes?: string | null;
+  evidenceName?: string | null;
+  evidenceReference?: string | null;
+  followUpDueAt?: Date | string | null;
   allocations: Array<{ claimId: string; amountCents: number }>;
 }) {
   return hash({
@@ -57,6 +61,10 @@ export function agencyBatchFingerprint(input: {
     paidAt: new Date(input.paidAt).toISOString(),
     paymentMethod: clean(input.paymentMethod).toLowerCase(),
     totalCents: Math.round(input.totalCents),
+    notes: clean(input.notes),
+    evidenceName: clean(input.evidenceName),
+    evidenceReference: clean(input.evidenceReference),
+    followUpDueAt: input.followUpDueAt ? new Date(input.followUpDueAt).toISOString() : "",
     allocations: [...input.allocations]
       .map((allocation) => ({ claimId: clean(allocation.claimId), amountCents: Math.round(allocation.amountCents) }))
       .sort((left, right) => left.claimId.localeCompare(right.claimId)),
@@ -67,11 +75,13 @@ export function agencyAllocationFingerprint(input: {
   batchId: string;
   claimId: string;
   amountCents: number;
+  notes?: string | null;
 }) {
   return hash({
     batchId: clean(input.batchId),
     claimId: clean(input.claimId),
     amountCents: Math.round(input.amountCents),
+    notes: clean(input.notes),
   });
 }
 
@@ -83,6 +93,9 @@ export function agencyAdjustmentFingerprint(input: {
   amountCents: number;
   effectiveAt: Date | string;
   reason: string;
+  evidenceName?: string | null;
+  evidenceReference?: string | null;
+  followUpDueAt?: Date | string | null;
 }) {
   return hash({
     ledgerAccountId: clean(input.ledgerAccountId),
@@ -92,6 +105,9 @@ export function agencyAdjustmentFingerprint(input: {
     amountCents: Math.round(input.amountCents),
     effectiveAt: new Date(input.effectiveAt).toISOString(),
     reason: clean(input.reason),
+    evidenceName: clean(input.evidenceName),
+    evidenceReference: clean(input.evidenceReference),
+    followUpDueAt: input.followUpDueAt ? new Date(input.followUpDueAt).toISOString() : "",
   });
 }
 

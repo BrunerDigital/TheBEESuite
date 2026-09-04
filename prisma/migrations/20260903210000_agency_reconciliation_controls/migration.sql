@@ -103,7 +103,8 @@ ALTER TABLE "AgencyLedgerEntry" ADD COLUMN IF NOT EXISTS "remittanceBatchId" TEX
 ALTER TABLE "AgencyLedgerEntry" ADD COLUMN IF NOT EXISTS "adjustmentId" TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceBatch_idempotencyKey_key" ON "AgencyRemittanceBatch"("idempotencyKey");
-CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceBatch_centerId_agencyProgramId_referenceKey_key" ON "AgencyRemittanceBatch"("centerId", "agencyProgramId", "referenceKey");
+CREATE INDEX IF NOT EXISTS "AgencyRemittanceBatch_centerId_agencyProgramId_referenceKey_idx" ON "AgencyRemittanceBatch"("centerId", "agencyProgramId", "referenceKey");
+CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceBatch_active_referenceKey_key" ON "AgencyRemittanceBatch"("centerId", "agencyProgramId", "referenceKey") WHERE "status" NOT IN ('rejected', 'reversed') AND "reversedAt" IS NULL;
 CREATE INDEX IF NOT EXISTS "AgencyRemittanceBatch_centerId_status_paidAt_idx" ON "AgencyRemittanceBatch"("centerId", "status", "paidAt");
 CREATE INDEX IF NOT EXISTS "AgencyRemittanceBatch_agencyProgramId_paidAt_idx" ON "AgencyRemittanceBatch"("agencyProgramId", "paidAt");
 CREATE INDEX IF NOT EXISTS "AgencyRemittanceBatch_centerId_followUpDueAt_idx" ON "AgencyRemittanceBatch"("centerId", "followUpDueAt");

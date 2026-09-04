@@ -270,19 +270,27 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   const supabaseMigration = readFileSync("supabase/migrations/20260903210000_agency_reconciliation_controls.sql", "utf8");
 
   assert.equal(prismaMigration, supabaseMigration);
-  assert.match(schema, /model AgencyRemittanceBatch \{[\s\S]*@@unique\(\[centerId, agencyProgramId, referenceKey\]\)/);
+  assert.match(schema, /model AgencyRemittanceBatch \{[\s\S]*@@index\(\[centerId, agencyProgramId, referenceKey\]\)/);
   assert.match(schema, /model AgencyRemittanceAllocation \{[\s\S]*remittanceId\s+String\?\s+@unique/);
   assert.match(schema, /model AgencyLedgerAdjustment \{[\s\S]*status\s+String\s+@default\("pending_review"\)/);
   assert.match(schema, /model AgencyProgram \{[\s\S]*receivableGlCode\s+String\?[\s\S]*cashGlCode\s+String\?[\s\S]*adjustmentGlCode\s+String\?[\s\S]*costCenterCode\s+String\?/);
   assert.match(schema, /model AgencyRemittanceBatch \{[\s\S]*followUpOwnerId\s+String\?[\s\S]*followUpDueAt\s+DateTime\?/);
   assert.match(schema, /model AgencyAccountingPeriod \{[\s\S]*@@unique\(\[centerId, startDate, endDate\]\)/);
   assert.match(prismaMigration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(prismaMigration, /CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceBatch_active_referenceKey_key"[\s\S]*WHERE "status" NOT IN \('rejected', 'reversed'\) AND "reversedAt" IS NULL/);
   assert.match(prismaMigration, /Historical record retained; no new approval was inferred/);
   assert.match(route, /type: "unapplied_cash"/);
   assert.match(route, /type: "unapplied_cash_allocation"/);
   assert.match(route, /action === "requestLedgerAdjustment"/);
   assert.match(route, /action === "closeAccountingPeriod"/);
   assert.match(route, /assertAgencyPeriodOpen/);
+  assert.match(route, /agencyLedgerRunningBalances\(entries\)/);
+  assert.match(route, /orderBy: \[\{ effectiveAt: "asc" \}, \{ createdAt: "asc" \}, \{ id: "asc" \}\]/);
+  assert.match(route, /status: \{ notIn: \["rejected", "reversed"\] \}[\s\S]*reversedAt: null/);
+  assert.match(route, /paidAt: \{ gte: startInclusive, lt: endExclusive \}/);
+  assert.match(route, /effectiveAt: \{ gte: startInclusive, lt: endExclusive \}/);
+  assert.match(route, /agencyReconciliationVarianceCount\(tx, centerId, endExclusive\)/);
+  assert.match(route, /isAgencyClaimOverdue\(claim\.dueDate, now\)/);
   assert.match(route, /exportAgencyReconciliationCsv/);
   assert.match(route, /exportAgencyDepositsCsv/);
   assert.match(route, /overdueFollowUpCount/);

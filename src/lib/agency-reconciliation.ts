@@ -110,6 +110,22 @@ export function agencyBatchStatus(input: { totalCents: number; allocatedCents: n
 
 export type AgencyAgingBucket = "current" | "days_1_30" | "days_31_60" | "days_61_90" | "days_91_plus";
 
+export function agencyUtcCalendarRange(startDate: Date | string, endDate: Date | string) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const startInclusive = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  const endExclusive = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate() + 1));
+  return { startInclusive, endExclusive };
+}
+
+export function agencyLedgerRunningBalances<T extends { id: string; amountCents: number }>(entries: T[]) {
+  let balanceAfterCents = 0;
+  return entries.map((entry) => {
+    balanceAfterCents += entry.amountCents;
+    return { id: entry.id, balanceAfterCents };
+  });
+}
+
 export function agencyAgingBucket(dueDate: Date | string | null | undefined, asOf = new Date()): AgencyAgingBucket {
   if (!dueDate) return "current";
   const due = new Date(dueDate);
@@ -121,6 +137,10 @@ export function agencyAgingBucket(dueDate: Date | string | null | undefined, asO
   if (days <= 60) return "days_31_60";
   if (days <= 90) return "days_61_90";
   return "days_91_plus";
+}
+
+export function isAgencyClaimOverdue(dueDate: Date | string | null | undefined, asOf = new Date()) {
+  return agencyAgingBucket(dueDate, asOf) !== "current";
 }
 
 export function canCloseAgencyAccountingPeriod(role: string) {

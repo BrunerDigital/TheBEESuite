@@ -1477,7 +1477,7 @@ model AgencyRemittanceBatch {
   ledgerEntries AgencyLedgerEntry[]
   adjustments   AgencyLedgerAdjustment[]
 
-  @@unique([centerId, agencyProgramId, referenceKey])
+  @@index([centerId, agencyProgramId, referenceKey])
   @@index([centerId, status, paidAt])
   @@index([centerId, followUpDueAt])
   @@index([agencyProgramId, paidAt])

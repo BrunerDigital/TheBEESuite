@@ -4,8 +4,11 @@ import {
   agencyAgingBucket,
   agencyBatchFingerprint,
   agencyBatchStatus,
+  agencyLedgerRunningBalances,
   agencyRemittanceReferenceKey,
+  agencyUtcCalendarRange,
   canReviewAgencyPosting,
+  isAgencyClaimOverdue,
   signedAgencyAdjustmentCents,
 } from "../src/lib/agency-reconciliation";
 
@@ -51,6 +54,27 @@ test("agency aging uses UTC calendar days", () => {
   assert.equal(agencyAgingBucket("2026-07-20T00:00:00.000Z", asOf), "days_31_60");
   assert.equal(agencyAgingBucket("2026-06-20T00:00:00.000Z", asOf), "days_61_90");
   assert.equal(agencyAgingBucket("2026-05-01T00:00:00.000Z", asOf), "days_91_plus");
+  assert.equal(isAgencyClaimOverdue("2026-09-03T00:00:00.000Z", asOf), false);
+  assert.equal(isAgencyClaimOverdue("2026-09-02T23:59:59.999Z", asOf), true);
+  assert.equal(isAgencyClaimOverdue(null, asOf), false);
+});
+
+test("agency accounting ranges include both requested UTC calendar dates", () => {
+  const range = agencyUtcCalendarRange("2026-09-01T12:00:00.000Z", "2026-09-30T12:00:00.000Z");
+  assert.equal(range.startInclusive.toISOString(), "2026-09-01T00:00:00.000Z");
+  assert.equal(range.endExclusive.toISOString(), "2026-10-01T00:00:00.000Z");
+});
+
+test("agency ledger running balances recalculate every later row after a backdated entry", () => {
+  assert.deepEqual(agencyLedgerRunningBalances([
+    { id: "opening", amountCents: 10_000 },
+    { id: "backdated", amountCents: 2_500 },
+    { id: "later-payment", amountCents: -4_000 },
+  ]), [
+    { id: "opening", balanceAfterCents: 10_000 },
+    { id: "backdated", balanceAfterCents: 12_500 },
+    { id: "later-payment", balanceAfterCents: 8_500 },
+  ]);
 });
 
 test("agency postings require an accounting reviewer who is not the preparer", () => {

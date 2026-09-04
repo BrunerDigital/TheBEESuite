@@ -26,9 +26,12 @@ import {
   agencyAllocationFingerprint,
   agencyBatchFingerprint,
   agencyBatchStatus,
+  agencyLedgerRunningBalances,
   agencyRemittanceReferenceKey,
+  agencyUtcCalendarRange,
   canCloseAgencyAccountingPeriod,
   canReviewAgencyPosting,
+  isAgencyClaimOverdue,
   normalizeAgencyPaymentReference,
   signedAgencyAdjustmentCents,
 } from "@/lib/agency-reconciliation";
@@ -135,15 +138,58 @@ async function assertAgencyPeriodOpen(tx: Prisma.TransactionClient, centerId: st
   if (closed) throw new AgencyWorkflowError(`${closed.name} is closed. Post a current-period correcting entry instead of backdating this transaction.`, 409);
 }
 
-async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, centerId: string) {
+async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, centerId: string, endExclusive: Date) {
   const [accounts, claims, batches, adjustments] = await Promise.all([
-    tx.agencyLedgerAccount.findMany({ where: { centerId }, select: { agencyProgramId: true, balanceCents: true } }),
-    tx.subsidyClaim.findMany({
-      where: { centerId, approvedCents: { gt: 0 }, status: { notIn: ["void", "denied"] } },
-      select: { agencyProgramId: true, approvedCents: true, claimedCents: true, remittances: { where: { reversedAt: null }, select: { amountCents: true } } },
+    tx.agencyLedgerAccount.findMany({
+      where: { centerId },
+      select: {
+        agencyProgramId: true,
+        entries: { where: { effectiveAt: { lt: endExclusive } }, select: { amountCents: true } },
+      },
     }),
-    tx.agencyRemittanceBatch.findMany({ where: { centerId, reviewedAt: { not: null }, reversedAt: null }, select: { agencyProgramId: true, unappliedCents: true } }),
-    tx.agencyLedgerAdjustment.findMany({ where: { centerId, status: "posted" }, select: { agencyProgramId: true, amountCents: true } }),
+    tx.subsidyClaim.findMany({
+      where: {
+        centerId,
+        approvedCents: { gt: 0 },
+        status: { notIn: ["void", "denied"] },
+        OR: [
+          { approvedAt: { lt: endExclusive } },
+          { approvedAt: null, createdAt: { lt: endExclusive } },
+        ],
+      },
+      select: {
+        agencyProgramId: true,
+        approvedCents: true,
+        claimedCents: true,
+        remittances: {
+          where: {
+            paidAt: { lt: endExclusive },
+            OR: [{ reversedAt: null }, { reversedAt: { gte: endExclusive } }],
+          },
+          select: { amountCents: true },
+        },
+      },
+    }),
+    tx.agencyRemittanceBatch.findMany({
+      where: {
+        centerId,
+        reviewedAt: { not: null },
+        paidAt: { lt: endExclusive },
+        status: { not: "rejected" },
+        OR: [{ reversedAt: null }, { reversedAt: { gte: endExclusive } }],
+      },
+      select: { agencyProgramId: true, unappliedCents: true },
+    }),
+    tx.agencyLedgerAdjustment.findMany({
+      where: {
+        centerId,
+        reviewedAt: { not: null },
+        effectiveAt: { lt: endExclusive },
+        status: { not: "rejected" },
+        OR: [{ reversedAt: null }, { reversedAt: { gte: endExclusive } }],
+      },
+      select: { agencyProgramId: true, amountCents: true },
+    }),
   ]);
   const totals = new Map<string, { expected: number; ledger: number }>();
   const row = (agencyProgramId: string) => {
@@ -151,7 +197,9 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
     totals.set(agencyProgramId, current);
     return current;
   };
-  for (const account of accounts) row(account.agencyProgramId).ledger += account.balanceCents;
+  for (const account of accounts) {
+    row(account.agencyProgramId).ledger += account.entries.reduce((total, entry) => total + entry.amountCents, 0);
+  }
   for (const claim of claims) {
     const current = row(claim.agencyProgramId);
     current.expected += (claim.approvedCents ?? claim.claimedCents) - claim.remittances.reduce((total, remittance) => total + remittance.amountCents, 0);
@@ -203,10 +251,10 @@ async function appendAgencyLedgerEntry(tx: Prisma.TransactionClient, input: {
 }) {
   const account = await tx.agencyLedgerAccount.upsert({
     where: { centerId_agencyProgramId: { centerId: input.centerId, agencyProgramId: input.agencyProgramId } },
-    create: { centerId: input.centerId, agencyProgramId: input.agencyProgramId, balanceCents: input.amountCents },
-    update: { balanceCents: { increment: input.amountCents } },
+    create: { centerId: input.centerId, agencyProgramId: input.agencyProgramId, balanceCents: 0 },
+    update: { balanceCents: { increment: 0 } },
   });
-  const entry = await tx.agencyLedgerEntry.create({ data: {
+  let entry = await tx.agencyLedgerEntry.create({ data: {
     agencyLedgerAccountId: account.id,
     claimId: input.claimId || null,
     remittanceId: input.remittanceId || null,
@@ -215,14 +263,33 @@ async function appendAgencyLedgerEntry(tx: Prisma.TransactionClient, input: {
     type: input.type,
     description: input.description,
     amountCents: input.amountCents,
-    balanceAfterCents: account.balanceCents,
+    balanceAfterCents: 0,
     effectiveAt: input.effectiveAt,
     externalReference: input.externalReference || null,
     sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
     externalId: input.externalId,
     metadata: input.metadata,
   } });
-  return { account, entry };
+  const entries = await tx.agencyLedgerEntry.findMany({
+    where: { agencyLedgerAccountId: account.id },
+    orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, amountCents: true, balanceAfterCents: true },
+  });
+  const runningBalances = agencyLedgerRunningBalances(entries);
+  const existingBalanceById = new Map(entries.map((candidate) => [candidate.id, candidate.balanceAfterCents]));
+  for (const running of runningBalances) {
+    if (existingBalanceById.get(running.id) === running.balanceAfterCents) continue;
+    const updated = await tx.agencyLedgerEntry.update({
+      where: { id: running.id },
+      data: { balanceAfterCents: running.balanceAfterCents },
+    });
+    if (updated.id === entry.id) entry = updated;
+  }
+  const updatedAccount = await tx.agencyLedgerAccount.update({
+    where: { id: account.id },
+    data: { balanceCents: runningBalances.at(-1)?.balanceAfterCents ?? 0 },
+  });
+  return { account: updatedAccount, entry };
 }
 
 async function ensureAgencyClaimReceivable(tx: Prisma.TransactionClient, claim: AgencyLedgerClaimInput) {
@@ -899,13 +966,15 @@ async function getHandler(request: NextRequest) {
     }).filter((blocker) => blocker.startsWith("Add current required item:")) : [],
   }));
   const summaryRow = summaryRows[0];
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const aging = { current: 0, days_1_30: 0, days_31_60: 0, days_61_90: 0, days_91_plus: 0 };
   const claimTotalsByProgram = new Map<string, { approvedCents: number; remittedCents: number }>();
   for (const claim of reconciliationClaims) {
     const approvedCents = claim.approvedCents ?? claim.claimedCents;
     const remittedCents = claim.remittances.reduce((total, remittance) => total + remittance.amountCents, 0);
     const outstandingCents = Math.max(0, approvedCents - remittedCents);
-    aging[agencyAgingBucket(claim.dueDate, new Date())] += outstandingCents;
+    aging[agencyAgingBucket(claim.dueDate, now)] += outstandingCents;
     const current = claimTotalsByProgram.get(claim.agencyProgramId) ?? { approvedCents: 0, remittedCents: 0 };
     current.approvedCents += approvedCents;
     current.remittedCents += remittedCents;
@@ -952,7 +1021,7 @@ async function getHandler(request: NextRequest) {
     unappliedCashCents: reconciliationBatches.reduce((total, batch) => total + batch.unappliedCents, 0),
     pendingBatchReviews,
     pendingAdjustmentReviews,
-    overdueClaimCount: reconciliationClaims.filter((claim) => (claim.approvedCents ?? claim.claimedCents) > claim.paidCents && claim.dueDate && claim.dueDate < new Date()).length,
+    overdueClaimCount: reconciliationClaims.filter((claim) => (claim.approvedCents ?? claim.claimedCents) > claim.paidCents && isAgencyClaimOverdue(claim.dueDate, now)).length,
     overdueFollowUpCount: overdueBatchFollowUps + overdueAdjustmentFollowUps,
     legacyFamilyAgencyBalanceCents,
     legacyFamilyAgencyEntryCount: legacyFamilyAgencyEntries.length,
@@ -961,8 +1030,6 @@ async function getHandler(request: NextRequest) {
     const setupBlockers = agencyProgramSetupBlockers(program);
     return { ...program, status: setupBlockers.length ? "setup_required" : "active", setupBlockers };
   });
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const expirationCutoff = new Date(today);
   expirationCutoff.setUTCDate(expirationCutoff.getUTCDate() + 31);
   const readiness = {
@@ -1240,6 +1307,17 @@ async function postHandler(request: NextRequest) {
           if (existingByIdempotency.reconciliationFingerprint !== fingerprint) throw new AgencyWorkflowError("This retry key was already used for a different remittance batch.", 409);
           return { batch: existingByIdempotency, reused: true };
         }
+        const existingActiveReference = await tx.agencyRemittanceBatch.findFirst({
+          where: {
+            centerId,
+            agencyProgramId: program.id,
+            referenceKey,
+            status: { notIn: ["rejected", "reversed"] },
+            reversedAt: null,
+          },
+          select: { id: true },
+        });
+        if (existingActiveReference) throw new AgencyWorkflowError("That school and agency already have an active remittance batch with this payment reference. Review or reverse it before entering a corrected batch.", 409);
         for (const allocation of allocations) {
           const current = await agencyPostingClaim(tx, allocation.claimId);
           if (!current || current.centerId !== centerId || current.agencyProgramId !== program.id) throw new AgencyWorkflowError("Every allocation must use an approved claim from the selected school and agency.", 409);
@@ -1570,15 +1648,28 @@ async function postHandler(request: NextRequest) {
     const name = clean(body.name);
     const reason = clean(body.reason);
     if (!startDate || !endDate || endDate < startDate || !name || !reason) return NextResponse.json({ ok: false, error: "Period name, valid start/end dates, and a close reason are required." }, { status: 400 });
+    const { startInclusive, endExclusive } = agencyUtcCalendarRange(startDate, endDate);
     let period;
     try {
       period = await prisma.$transaction(async (tx) => {
         const overlap = await tx.agencyAccountingPeriod.findFirst({ where: { centerId, OR: [{ startDate: { lte: endDate }, endDate: { gte: startDate } }] } });
         if (overlap && (overlap.startDate.getTime() !== startDate.getTime() || overlap.endDate.getTime() !== endDate.getTime())) throw new AgencyWorkflowError(`This range overlaps ${overlap.name}.`, 409);
         const [unresolvedBatches, pendingAdjustments, reconciliationVariances] = await Promise.all([
-          tx.agencyRemittanceBatch.count({ where: { centerId, status: { in: ["unmatched", "pending_review", "partially_allocated", "exception"] } } }),
-          tx.agencyLedgerAdjustment.count({ where: { centerId, status: "pending_review" } }),
-          agencyReconciliationVarianceCount(tx, centerId),
+          tx.agencyRemittanceBatch.count({
+            where: {
+              centerId,
+              status: { in: ["unmatched", "pending_review", "partially_allocated", "exception"] },
+              paidAt: { gte: startInclusive, lt: endExclusive },
+            },
+          }),
+          tx.agencyLedgerAdjustment.count({
+            where: {
+              centerId,
+              status: "pending_review",
+              effectiveAt: { gte: startInclusive, lt: endExclusive },
+            },
+          }),
+          agencyReconciliationVarianceCount(tx, centerId, endExclusive),
         ]);
         if (unresolvedBatches || pendingAdjustments || reconciliationVariances) throw new AgencyWorkflowError(`Resolve ${unresolvedBatches} remittance batch exception(s), ${pendingAdjustments} pending adjustment(s), and ${reconciliationVariances} reconciliation variance(s) before closing this period.`, 409);
         if (overlap) return tx.agencyAccountingPeriod.update({ where: { id: overlap.id }, data: { name, status: "closed", closedAt: new Date(), closedById: auth.user.id, closeReason: reason } });

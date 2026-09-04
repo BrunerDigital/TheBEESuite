@@ -33,6 +33,7 @@ test("agency remittance corrections replay safely in both migration ledgers", ()
     "20260824150000_agency_remittance_corrections",
     "20260824173000_active_agency_remittance_reference",
     "20260903190000_agency_receivable_ledger",
+    "20260903210000_agency_reconciliation_controls",
   ];
 
   for (const migrationName of migrationNames) {
@@ -42,6 +43,17 @@ test("agency remittance corrections replay safely in both migration ledgers", ()
     assert.doesNotMatch(prismaMigration, /\b(?:ADD COLUMN|CREATE (?:UNIQUE )?INDEX|DROP INDEX)\s+"/);
     assert.match(prismaMigration, /IF (?:NOT )?EXISTS/);
   }
+
+  const reconciliationMigration = readFileSync(
+    "prisma/migrations/20260903210000_agency_reconciliation_controls/migration.sql",
+    "utf8",
+  );
+  assert.match(reconciliationMigration, /keeping reversed attempts separate from active corrections/);
+  assert.match(reconciliationMigration, /WHEN remittance\."reversedAt" IS NULL THEN 'active'/);
+  assert.match(reconciliationMigration, /'reversed:' \|\| TO_CHAR\(remittance\."reversedAt" AT TIME ZONE 'UTC'/);
+  assert.match(reconciliationMigration, /grouped\.normalized_reference \|\| ':' \|\| grouped\.lifecycle_key/);
+  assert.match(reconciliationMigration, /ON batch\.id = 'agency-remittance-batch:' \|\| MD5/);
+  assert.doesNotMatch(reconciliationMigration, /grouped\.any_reversed/);
 });
 
 test("claim math and identifiers are deterministic", () => {

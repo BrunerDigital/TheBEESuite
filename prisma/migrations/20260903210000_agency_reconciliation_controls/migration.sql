@@ -169,32 +169,54 @@ BEGIN
 END
 $migration$;
 
--- Preserve historical remittances by grouping every shared school/agency/reference into one legacy batch.
-WITH grouped AS (
+-- Preserve historical remittances while keeping reversed attempts separate from active corrections.
+WITH historical AS (
     SELECT
         claim."centerId",
         claim."agencyProgramId",
         remittance."paymentMethod",
         UPPER(REGEXP_REPLACE(BTRIM(remittance."externalReference"), '\s+', ' ', 'g')) AS normalized_reference,
-        MIN(remittance."externalReference") AS display_reference,
-        MIN(remittance."paidAt") AS paid_at,
-        SUM(remittance."amountCents")::integer AS total_cents,
-        SUM(remittance."amountCents") FILTER (WHERE remittance."reversedAt" IS NULL)::integer AS active_cents,
-        BOOL_AND(remittance."reversedAt" IS NOT NULL) AS all_reversed,
-        BOOL_OR(remittance."reversedAt" IS NOT NULL) AS any_reversed,
-        MIN(remittance."enteredById") AS entered_by,
-        MIN(remittance."createdAt") AS created_at
+        CASE
+            WHEN remittance."reversedAt" IS NULL THEN 'active'
+            ELSE 'reversed:' || TO_CHAR(remittance."reversedAt" AT TIME ZONE 'UTC', 'YYYYMMDDHH24MISS.US')
+        END AS lifecycle_key,
+        remittance."externalReference",
+        remittance."paidAt",
+        remittance."amountCents",
+        remittance."enteredById",
+        remittance."reversedAt",
+        remittance."reversedById",
+        remittance."reversalReason",
+        remittance."createdAt"
     FROM "SubsidyRemittance" remittance
     JOIN "SubsidyClaim" claim ON claim.id = remittance."claimId"
-    GROUP BY claim."centerId", claim."agencyProgramId", remittance."paymentMethod", UPPER(REGEXP_REPLACE(BTRIM(remittance."externalReference"), '\s+', ' ', 'g'))
+), grouped AS (
+    SELECT
+        historical."centerId",
+        historical."agencyProgramId",
+        historical."paymentMethod",
+        historical.normalized_reference,
+        historical.lifecycle_key,
+        MIN(historical."externalReference") AS display_reference,
+        MIN(historical."paidAt") AS paid_at,
+        SUM(historical."amountCents")::integer AS total_cents,
+        BOOL_AND(historical."reversedAt" IS NOT NULL) AS is_reversed,
+        MIN(historical."enteredById") AS entered_by,
+        MAX(historical."reversedAt") AS reversed_at,
+        MIN(historical."reversedById") AS reversed_by,
+        MIN(historical."reversalReason") AS reversal_reason,
+        MIN(historical."createdAt") AS created_at
+    FROM historical
+    GROUP BY historical."centerId", historical."agencyProgramId", historical."paymentMethod", historical.normalized_reference, historical.lifecycle_key
 )
 INSERT INTO "AgencyRemittanceBatch" (
     "id", "centerId", "agencyProgramId", "externalReference", "referenceKey", "paidAt", "paymentMethod",
     "totalCents", "allocatedCents", "unappliedCents", "status", "notes", "idempotencyKey",
-    "reconciliationFingerprint", "enteredById", "reviewedById", "reviewedAt", "reviewNotes", "createdAt", "updatedAt"
+    "reconciliationFingerprint", "enteredById", "reviewedById", "reviewedAt", "reviewNotes",
+    "reversedAt", "reversedById", "reversalReason", "createdAt", "updatedAt"
 )
 SELECT
-    'agency-remittance-batch:' || MD5(grouped."centerId" || ':' || grouped."agencyProgramId" || ':' || LOWER(grouped."paymentMethod") || ':' || grouped.normalized_reference),
+    'agency-remittance-batch:' || MD5(grouped."centerId" || ':' || grouped."agencyProgramId" || ':' || LOWER(grouped."paymentMethod") || ':' || grouped.normalized_reference || ':' || grouped.lifecycle_key),
     grouped."centerId",
     grouped."agencyProgramId",
     grouped.display_reference,
@@ -202,16 +224,19 @@ SELECT
     grouped.paid_at,
     grouped."paymentMethod",
     grouped.total_cents,
-    COALESCE(grouped.active_cents, 0),
+    CASE WHEN grouped.is_reversed THEN 0 ELSE grouped.total_cents END,
     0,
-    CASE WHEN grouped.all_reversed THEN 'reversed' WHEN grouped.any_reversed THEN 'exception' ELSE 'reconciled' END,
+    CASE WHEN grouped.is_reversed THEN 'reversed' ELSE 'reconciled' END,
     'Historical remittance batch created during dedicated agency-ledger migration.',
-    'legacy:' || MD5(grouped."centerId" || ':' || grouped."agencyProgramId" || ':' || LOWER(grouped."paymentMethod") || ':' || grouped.normalized_reference),
-    MD5(grouped."centerId" || ':' || grouped."agencyProgramId" || ':' || grouped.total_cents::text),
+    'legacy:' || MD5(grouped."centerId" || ':' || grouped."agencyProgramId" || ':' || LOWER(grouped."paymentMethod") || ':' || grouped.normalized_reference || ':' || grouped.lifecycle_key),
+    MD5(grouped."centerId" || ':' || grouped."agencyProgramId" || ':' || grouped.total_cents::text || ':' || grouped.lifecycle_key),
     grouped.entered_by,
-    grouped.entered_by,
-    grouped.created_at,
+    COALESCE(grouped.reversed_by, grouped.entered_by),
+    COALESCE(grouped.reversed_at, grouped.created_at),
     'Historical record retained; no new approval was inferred.',
+    grouped.reversed_at,
+    grouped.reversed_by,
+    grouped.reversal_reason,
     grouped.created_at,
     CURRENT_TIMESTAMP
 FROM grouped
@@ -239,9 +264,14 @@ SELECT
 FROM "SubsidyRemittance" remittance
 JOIN "SubsidyClaim" claim ON claim.id = remittance."claimId"
 JOIN "AgencyRemittanceBatch" batch
-  ON batch."centerId" = claim."centerId"
- AND batch."agencyProgramId" = claim."agencyProgramId"
- AND batch."referenceKey" = LOWER(remittance."paymentMethod") || ':' || UPPER(REGEXP_REPLACE(BTRIM(remittance."externalReference"), '\s+', ' ', 'g'))
+  ON batch.id = 'agency-remittance-batch:' || MD5(
+      claim."centerId" || ':' || claim."agencyProgramId" || ':' || LOWER(remittance."paymentMethod") || ':' ||
+      UPPER(REGEXP_REPLACE(BTRIM(remittance."externalReference"), '\s+', ' ', 'g')) || ':' ||
+      CASE
+          WHEN remittance."reversedAt" IS NULL THEN 'active'
+          ELSE 'reversed:' || TO_CHAR(remittance."reversedAt" AT TIME ZONE 'UTC', 'YYYYMMDDHH24MISS.US')
+      END
+  )
 ON CONFLICT ("remittanceId") DO NOTHING;
 
 UPDATE "AgencyLedgerEntry" entry

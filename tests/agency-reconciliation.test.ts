@@ -38,6 +38,28 @@ test("agency retry keys persist across remounts and rotate only when explicitly 
   }
 });
 
+test("agency retry keys stay stable when session storage is unavailable", () => {
+  const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    value: {
+      getItem: () => { throw new Error("storage unavailable"); },
+      setItem: () => { throw new Error("storage unavailable"); },
+    } as unknown as Storage,
+  });
+  try {
+    const storageKey = "agency:test:restricted-storage";
+    const first = persistentAgencyRetryKey(storageKey);
+    assert.equal(persistentAgencyRetryKey(storageKey), first);
+    const replacement = rotateAgencyRetryKey(storageKey);
+    assert.notEqual(replacement, first);
+    assert.equal(persistentAgencyRetryKey(storageKey), replacement);
+  } finally {
+    if (originalStorage) Object.defineProperty(globalThis, "sessionStorage", originalStorage);
+    else Reflect.deleteProperty(globalThis, "sessionStorage");
+  }
+});
+
 test("agency remittance references normalize into a deterministic account-scoped key", () => {
   assert.equal(agencyRemittanceReferenceKey({ paymentMethod: "ACH", externalReference: " trace  100 " }), "ach:TRACE 100");
 });

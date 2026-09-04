@@ -171,7 +171,7 @@ export function CustomerStatementPrintButton({
   schools: BillingReceiptSchool[];
   currentBalanceCents: number | null;
 }) {
-  const timeZone = useSchoolTimeZone();
+  const timeZone = useSchoolTimeZone(entries[0]?.billingAccount.family.centerId);
   const { active, generatedAt, print } = usePrintableReport();
   const familyName = entries[0]?.billingAccount.family.name.trim();
   const school = entries.length
@@ -213,7 +213,7 @@ export function CustomerStatementPrintButton({
 }
 
 export function ChargeCreditSummaryPrintButton({ entries, schools }: { entries: BillingLedgerPrintEntry[]; schools: BillingReceiptSchool[] }) {
-  const timeZone = useSchoolTimeZone();
+  const timeZone = useSchoolTimeZone(entries[0]?.billingAccount.family.centerId);
   const { active, generatedAt, print } = usePrintableReport();
   const familyName = entries[0]?.billingAccount.family.name.trim();
   const school = entries.length

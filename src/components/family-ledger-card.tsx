@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { useSchoolTimeZoneResolver } from "@/components/school-time-zone-context";
 import { filterFamilyLedgerEntries, filterLedgerEntriesByDateRange, standardCustomerStatementEntries } from "@/lib/family-ledger";
 import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
 
@@ -64,7 +64,7 @@ export function FamilyLedgerCard({
   schools: BillingReceiptSchool[];
   initialFamilyId?: string;
 }) {
-  const timeZone = useSchoolTimeZone();
+  const resolveSchoolTimeZone = useSchoolTimeZoneResolver();
   const validInitialFamilyId = families.some((family) => family.id === initialFamilyId)
     ? initialFamilyId
     : "";
@@ -76,6 +76,7 @@ export function FamilyLedgerCard({
     () => filterFamilyLedgerEntries(entries, familyId),
     [entries, familyId],
   );
+  const timeZone = resolveSchoolTimeZone(visibleEntries[0]?.billingAccount.family.centerId);
   const rangedEntries = useMemo(
     () => filterLedgerEntriesByDateRange(visibleEntries, startDate, endDate, (value) => zonedDateKey(value, timeZone)),
     [visibleEntries, startDate, endDate, timeZone],

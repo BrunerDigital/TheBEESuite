@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { filterFamilyLedgerEntries, filterLedgerEntriesByDateRange, standardCustomerStatementEntries } from "../src/lib/family-ledger";
+import { readFileSync } from "node:fs";
 
 const entries = [
   { id: "harris-1", billingAccount: { family: { id: "harris" } } },
@@ -43,4 +44,10 @@ test("standard statements hide both sides of a voided invoice without deleting l
     ["valid", "payment", "chargeback", "chargeback-reversal"],
   );
   assert.equal(history.length, 6);
+});
+
+test("family statement date ranges resolve the selected family's school time zone", () => {
+  const component = readFileSync(new URL("../src/components/family-ledger-card.tsx", import.meta.url), "utf8");
+  assert.match(component, /useSchoolTimeZoneResolver/);
+  assert.match(component, /resolveSchoolTimeZone\(visibleEntries\[0\]\?\.billingAccount\.family\.centerId\)/);
 });

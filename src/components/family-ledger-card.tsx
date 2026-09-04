@@ -42,6 +42,7 @@ export type FamilyLedgerEntry = {
 type FamilyOption = {
   id: string;
   name: string;
+  centerId: string | null;
 };
 
 function money(cents: number) {
@@ -85,7 +86,10 @@ export function FamilyLedgerCard({
     () => filterFamilyLedgerEntries(entries, familyId),
     [entries, familyId],
   );
-  const selectedCenterId = selectedAccount?.centerId ?? visibleEntries[0]?.billingAccount.family.centerId ?? null;
+  const selectedCenterId = selectedAccount?.centerId
+    ?? visibleEntries[0]?.billingAccount.family.centerId
+    ?? selectedFamily?.centerId
+    ?? null;
   const timeZone = resolveSchoolTimeZone(selectedCenterId);
   const rangedEntries = useMemo(
     () => filterLedgerEntriesByDateRange(visibleEntries, startDate, endDate, (value) => zonedDateKey(value, timeZone)),

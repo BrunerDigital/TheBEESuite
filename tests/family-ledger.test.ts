@@ -50,6 +50,7 @@ test("family statement date ranges resolve the selected family's school time zon
   const component = readFileSync(new URL("../src/components/family-ledger-card.tsx", import.meta.url), "utf8");
   assert.match(component, /useSchoolTimeZoneResolver/);
   assert.match(component, /resolveSchoolTimeZone\(selectedCenterId\)/);
+  assert.match(component, /selectedFamily\?\.centerId/);
   assert.match(component, /currentBalanceCents = selectedAccount\?\.balanceCents/);
   assert.match(component, /familyName=\{selectedAccount\?\.familyName/);
 });

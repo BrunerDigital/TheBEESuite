@@ -5241,10 +5241,17 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
   }
 
   const ledgerFamilyOptions = Array.from(new Map([
-    ...data.workbench.families.map((family) => [family.id, { id: family.id, name: family.name }] as const),
+    ...data.workbench.families.map((family) => [
+      family.id,
+      { id: family.id, name: family.name, centerId: family.centerId },
+    ] as const),
     ...data.ledgerEntries.map((entry) => [
       entry.billingAccount.family.id,
-      { id: entry.billingAccount.family.id, name: entry.billingAccount.family.name },
+      {
+        id: entry.billingAccount.family.id,
+        name: entry.billingAccount.family.name,
+        centerId: entry.billingAccount.family.centerId,
+      },
     ] as const),
   ]).values()).toSorted((left, right) => left.name.localeCompare(right.name));
 

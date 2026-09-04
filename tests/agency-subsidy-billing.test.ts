@@ -328,6 +328,9 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /effectiveAt: \{ gte: startInclusive, lt: endExclusive \}/);
   assert.match(route, /agencyReconciliationVarianceCount\(tx, centerId, endExclusive\)/);
   assert.match(route, /approvedAt: \{ lt: endExclusive \}/);
+  assert.match(route, /const \[accounts, claims, remittances, adjustments\] = await Promise\.all/);
+  assert.match(route, /tx\.subsidyRemittance\.findMany\(\{[\s\S]*claim: \{ centerId \}[\s\S]*type: "remittance_received"/);
+  assert.match(route, /for \(const remittance of remittances\) \{[\s\S]*row\(remittance\.claim\.agencyProgramId\)/);
   assert.doesNotMatch(route, /approvedCents: \{ gt: 0 \},\s+status:[\s\S]{0,200}ledgerEntries:/);
   assert.match(route, /paidAt: \{ lt: endExclusive \},\s+ledgerEntries: \{\s+none: \{\s+sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,\s+type: "remittance_received"/);
   assert.match(route, /const approvedAt = decision === "approved" \? new Date\(\) : null;\s+if \(approvedAt\) await assertAgencyPeriodOpen\(tx, current\.centerId, approvedAt\);[\s\S]*ensureAgencyClaimReceivable/);

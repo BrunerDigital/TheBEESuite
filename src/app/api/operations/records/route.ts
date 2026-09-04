@@ -783,6 +783,7 @@ async function POSTHandler(request: NextRequest) {
         guardianId: id,
         newEmail: requestedEmail,
         actorEmail: user.email,
+        allowedCenterIds: user.centerIds,
       });
       if (!emailChange.ok) {
         const emailChangeErrors: Record<string, string> = {
@@ -791,6 +792,7 @@ async function POSTHandler(request: NextRequest) {
           linked_parent_user_not_found: "The linked parent login could not be found.",
           user_tenant_mismatch: "The linked parent login belongs to a different tenant.",
           linked_guardian_tenant_mismatch: "This parent login has a guardian link outside the selected tenant and must be reviewed before its email can change.",
+          linked_guardian_scope_mismatch: "This parent login is linked to another school outside your active workspace. Switch to an authorized all-locations workspace or contact an administrator before changing its email.",
           existing_parent_login_email_invalid: "The existing parent login email must be repaired before it can be changed.",
           new_email_already_in_use: "That email is already assigned to another parent or user.",
         };

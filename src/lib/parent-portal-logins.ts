@@ -279,10 +279,12 @@ export async function changeParentPortalLoginEmail({
   guardianId,
   newEmail,
   actorEmail,
+  allowedCenterIds,
 }: {
   guardianId: string;
   newEmail: string;
   actorEmail?: string | null;
+  allowedCenterIds: string[];
 }): Promise<ParentPortalEmailChangeResult> {
   const normalizedNewEmail = normalizeEmail(newEmail);
   if (!isSupabaseAuthCompatibleEmail(normalizedNewEmail)) {
@@ -348,6 +350,10 @@ export async function changeParentPortalLoginEmail({
   const tenantCenterIds = new Set(tenantCenters.map((item) => item.id));
   if (linkedGuardians.some((item) => !item.family.centerId || !tenantCenterIds.has(item.family.centerId))) {
     return { ok: false, status: 409, reason: "linked_guardian_tenant_mismatch" };
+  }
+  const allowedCenterIdSet = new Set(allowedCenterIds);
+  if (linkedGuardians.some((item) => !item.family.centerId || !allowedCenterIdSet.has(item.family.centerId))) {
+    return { ok: false, status: 403, reason: "linked_guardian_scope_mismatch" };
   }
   const conflictingGuardian = await prisma.guardian.findFirst({
     where: {

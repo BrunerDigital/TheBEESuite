@@ -27,7 +27,12 @@ function storeRetryKey(storageKey: string, retryKey: string, storages: Storage[]
 }
 
 export function newAgencyRetryKey(prefix = "agency") {
-  return `${prefix}:${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (randomUuid) return `${prefix}:${randomUuid}`;
+  if (!globalThis.crypto?.getRandomValues) throw new Error(AGENCY_RETRY_STORAGE_ERROR);
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return `${prefix}:${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}`;
 }
 
 export function agencyRetryStorageKey(centerId: string, userId: string, operation: string) {

@@ -14,7 +14,26 @@ import {
   isAgencyClaimOverdue,
   signedAgencyAdjustmentCents,
 } from "../src/lib/agency-reconciliation";
-import { persistentAgencyRetryKey, rotateAgencyRetryKey } from "../src/lib/agency-retry-key";
+import { newAgencyRetryKey, persistentAgencyRetryKey, rotateAgencyRetryKey } from "../src/lib/agency-retry-key";
+
+test("agency retry keys use cryptographic random bytes when UUID generation is unavailable", () => {
+  const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+  Object.defineProperty(globalThis, "crypto", {
+    configurable: true,
+    value: {
+      getRandomValues: (bytes: Uint8Array) => {
+        bytes.forEach((_, index) => { bytes[index] = index + 1; });
+        return bytes;
+      },
+    },
+  });
+  try {
+    assert.equal(newAgencyRetryKey("agency-test"), "agency-test:0102030405060708090a0b0c0d0e0f10");
+  } finally {
+    if (originalCrypto) Object.defineProperty(globalThis, "crypto", originalCrypto);
+    else Reflect.deleteProperty(globalThis, "crypto");
+  }
+});
 
 test("agency retry keys persist across remounts and rotate only when explicitly completed or abandoned", () => {
   const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");

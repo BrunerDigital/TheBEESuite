@@ -118,16 +118,23 @@ function recordValue(value: unknown): Record<string, unknown> {
 }
 
 function agencyAllocationRows(value: unknown) {
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) return { allocations: [], hasDuplicateClaims: false };
   const seen = new Set<string>();
-  return value.flatMap((item) => {
+  const allocations: Array<{ claimId: string; amountCents: number; notes: string | null }> = [];
+  let hasDuplicateClaims = false;
+  for (const item of value) {
     const row = recordValue(item);
     const claimId = clean(row.claimId);
     const amountCents = cents(row.amountDollars);
-    if (!claimId || amountCents <= 0 || seen.has(claimId)) return [];
+    if (!claimId || amountCents <= 0) continue;
+    if (seen.has(claimId)) {
+      hasDuplicateClaims = true;
+      continue;
+    }
     seen.add(claimId);
-    return [{ claimId, amountCents, notes: clean(row.notes) || null }];
-  });
+    allocations.push({ claimId, amountCents, notes: clean(row.notes) || null });
+  }
+  return { allocations, hasDuplicateClaims };
 }
 
 async function assertAgencyPeriodOpen(tx: Prisma.TransactionClient, centerId: string, effectiveAt: Date) {
@@ -1047,7 +1054,19 @@ async function getHandler(request: NextRequest) {
     }),
     prisma.subsidyClaim.findMany({
       where: { centerId: { in: centerIds }, approvedCents: { gt: 0 }, status: { notIn: ["void", "denied"] } },
-      select: { id: true, agencyProgramId: true, number: true, dueDate: true, approvedCents: true, claimedCents: true, paidCents: true, remittances: { where: { reversedAt: null }, select: { amountCents: true } } },
+      select: {
+        id: true,
+        agencyProgramId: true,
+        number: true,
+        status: true,
+        dueDate: true,
+        approvedCents: true,
+        claimedCents: true,
+        paidCents: true,
+        agencyProgram: { select: { id: true, name: true } },
+        authorization: { select: { child: { select: { fullName: true } }, family: { select: { name: true } } } },
+        remittances: { where: { reversedAt: null }, select: { amountCents: true } },
+      },
     }),
     prisma.agencyRemittanceBatch.findMany({
       where: { centerId: { in: centerIds }, reviewedAt: { not: null }, reversedAt: null },
@@ -1160,6 +1179,7 @@ async function getHandler(request: NextRequest) {
     programs: programReadiness,
     authorizations,
     claims: visibleClaims,
+    allocationClaims: reconciliationClaims.filter((claim) => ["approved", "partially_paid"].includes(claim.status)),
     claimPagination: { page: claimPage, pageSize: CLAIM_PAGE_SIZE, hasNext: hasNextClaimPage, nextCursor: hasNextClaimPage ? visibleClaims.at(-1)?.id ?? null : null },
     families,
     summary: { ...summary, ...readiness },
@@ -1386,9 +1406,10 @@ async function postHandler(request: NextRequest) {
     const evidenceName = clean(body.evidenceName);
     const evidenceReference = clean(body.evidenceReference);
     const followUpDueAt = dateValue(body.followUpDueAt);
-    const requestedAllocations = agencyAllocationRows(body.allocations);
-    const allocations = requestedAllocations.length
-      ? requestedAllocations
+    const requestedAllocationRows = agencyAllocationRows(body.allocations);
+    if (requestedAllocationRows.hasDuplicateClaims) return NextResponse.json({ ok: false, error: "Choose each claim only once in a deposit batch." }, { status: 400 });
+    const allocations = requestedAllocationRows.allocations.length
+      ? requestedAllocationRows.allocations
       : clean(body.claimId) && cents(body.amountDollars) > 0
         ? [{ claimId: clean(body.claimId), amountCents: cents(body.amountDollars), notes: clean(body.notes) || null }]
         : [];

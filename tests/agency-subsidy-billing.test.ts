@@ -216,7 +216,7 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   assert.match(workspace, /response\.blob\(\)/);
   assert.match(workspace, /const blob = await response\.blob\(\);\s+if \(centerIdRef\.current !== exportCenterId\) return;/);
   assert.match(workspace, /centerIdRef\.current !== requestCenterId/);
-  assert.match(workspace, /setPending\(true\); setClaimCursorByPage/);
+  assert.match(workspace, /setPending\(true\); setError\(""\); setClaimCursorByPage/);
   assert.match(workspace, /\.finally\(\(\) => \{ if \(active\) setPending\(false\); \}\)/);
   assert.match(workspace, /<Label htmlFor="claim-authorization">Authorization<\/Label><Select value=\{authorizationId\} disabled=\{pending\}/);
   assert.match(route, /new ReadableStream<Uint8Array>/);
@@ -288,6 +288,7 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   const schema = readFileSync("prisma/schema.prisma", "utf8");
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const controls = readFileSync("src/components/agency-reconciliation-controls.tsx", "utf8");
+  const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
   const retryKeys = readFileSync("src/lib/agency-retry-key.ts", "utf8");
   const prismaMigration = readFileSync("prisma/migrations/20260903210000_agency_reconciliation_controls/migration.sql", "utf8");
   const supabaseMigration = readFileSync("supabase/migrations/20260903210000_agency_reconciliation_controls.sql", "utf8");
@@ -355,6 +356,16 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /new Map\(\[\.\.\.unresolvedAdjustments, \.\.\.recentAdjustments\]/);
   assert.match(retryKeys, /\(\) => globalThis\.sessionStorage, \(\) => globalThis\.localStorage/);
   assert.match(retryKeys, /if \(!persisted\) throw new Error\(AGENCY_RETRY_STORAGE_ERROR\)/);
+  assert.match(retryKeys, /crypto\?\.getRandomValues/);
+  assert.doesNotMatch(retryKeys, /Math\.random/);
+  assert.match(route, /if \(requestedAllocationRows\.hasDuplicateClaims\) return NextResponse\.json\(\{ ok: false, error: "Choose each claim only once in a deposit batch\." \}/);
+  assert.match(route, /allocationClaims: reconciliationClaims\.filter\(\(claim\) => \["approved", "partially_paid"\]\.includes\(claim\.status\)\)/);
+  assert.match(controls, /allocationClaims\.filter\(\(claim\) => \["approved", "partially_paid"\]\.includes\(claim\.status\)\)/);
+  assert.match(controls, /disabled=\{selectedElsewhere\.has\(claim\.id\)\}/);
+  assert.match(workspace, /const \[pending, setPending\] = useState\(Boolean\(centers\[0\]\?\.id\)\)/);
+  assert.match(workspace, /centerIdRef\.current = value; setCenterId\(value\); setPending\(true\)/);
+  assert.doesNotMatch(workspace, /useEffect\(\(\) => \{\s+let active = true;\s+setPending/);
+  assert.match(workspace, /allocationClaims=\{data\.allocationClaims\}/);
   assert.match(controls, /agencyRetryStorageKey\(centerId, capabilities\.currentUserId, `batch-allocation:\$\{batch\.id\}`\)/);
   assert.match(controls, /agencyRetryStorageKey\(centerId, capabilities\.currentUserId, "ledger-adjustment"\)/);
   assert.match(controls, /post\("requestBatchAllocation"[\s\S]*idempotencyKey: requestKey/);

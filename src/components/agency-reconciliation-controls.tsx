@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { CollapsibleCard } from "@/components/workspace-preferences";
-import { AGENCY_RETRY_STORAGE_ERROR, agencyRetryStorageKey, persistentAgencyRetryKey, rotateAgencyRetryKey } from "@/lib/agency-retry-key";
+import { AGENCY_RETRY_STORAGE_ERROR, agencyRetryStorageKey, newAgencyRetryKey, persistentAgencyRetryKey, rotateAgencyRetryKey } from "@/lib/agency-retry-key";
 
 type Program = { id: string; name: string; programName: string | null };
 type Claim = { id: string; number: string; status: string; claimedCents: number; approvedCents: number | null; paidCents: number; agencyProgram: { id: string; name: string }; authorization: { child: { fullName: string }; family: { name: string } } | null };
@@ -26,7 +26,7 @@ type Aging = { current: number; days_1_30: number; days_31_60: number; days_61_9
 type Props = {
   centerId: string;
   programs: Program[];
-  claims: Claim[];
+  allocationClaims: Claim[];
   accounts: Account[];
   batches: Batch[];
   adjustments: Adjustment[];
@@ -45,7 +45,7 @@ function money(cents: number) { return new Intl.NumberFormat("en-US", { style: "
 function dateOnly(value: string) { return value ? new Date(value).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"; }
 function today() { return new Date().toISOString().slice(0, 10); }
 function followUpDate() { const value = new Date(); value.setUTCDate(value.getUTCDate() + 7); return value.toISOString().slice(0, 10); }
-function idempotencyKey() { return globalThis.crypto?.randomUUID?.() ?? `agency-batch-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
+function allocationDraftKey() { return newAgencyRetryKey("agency-draft"); }
 function statusVariant(status: string): "default" | "outline" | "secondary" | "destructive" {
   if (status === "reconciled" || status === "posted" || status === "closed") return "default";
   if (status === "exception" || status === "reversed" || status === "rejected") return "destructive";
@@ -53,16 +53,17 @@ function statusVariant(status: string): "default" | "outline" | "secondary" | "d
   return "outline";
 }
 
-export function AgencyReconciliationControls({ centerId, programs, claims, accounts, batches, adjustments, periods, reconciliation, aging, capabilities: suppliedCapabilities, readOnly, pending, post }: Props) {
+export function AgencyReconciliationControls({ centerId, programs, allocationClaims, accounts, batches, adjustments, periods, reconciliation, aging, capabilities: suppliedCapabilities, readOnly, pending, post }: Props) {
   const capabilities = readOnly ? { ...suppliedCapabilities, canReviewAgencyPosting: false, canCloseAccountingPeriod: false } : suppliedCapabilities;
   const canReviewRequest = (requestedById: string) => capabilities.canReviewAgencyPosting && capabilities.currentUserId !== requestedById;
   const [batchProgramId, setBatchProgramId] = useState(programs[0]?.id ?? "");
-  const [allocationDrafts, setAllocationDrafts] = useState<AllocationDraft[]>([{ key: idempotencyKey(), claimId: "", amountDollars: "" }]);
+  const [allocationDrafts, setAllocationDrafts] = useState<AllocationDraft[]>([{ key: allocationDraftKey(), claimId: "", amountDollars: "" }]);
   const [allocationClaimByBatch, setAllocationClaimByBatch] = useState<Record<string, string>>({});
   const [adjustmentAccountId, setAdjustmentAccountId] = useState(accounts[0]?.id ?? "");
   const [adjustmentType, setAdjustmentType] = useState("write_off");
   const [retryError, setRetryError] = useState("");
-  const availableClaims = useMemo(() => claims.filter((claim) => ["approved", "partially_paid"].includes(claim.status)), [claims]);
+  const [batchError, setBatchError] = useState("");
+  const availableClaims = useMemo(() => allocationClaims.filter((claim) => ["approved", "partially_paid"].includes(claim.status)), [allocationClaims]);
   const selectedBatchProgram = programs.find((program) => program.id === batchProgramId);
   const batchClaims = availableClaims.filter((claim) => claim.agencyProgram.id === selectedBatchProgram?.id);
   const selectedAdjustmentAccount = accounts.find((account) => account.id === adjustmentAccountId);
@@ -99,6 +100,11 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const allocations = allocationDrafts.filter((row) => row.claimId && Number(row.amountDollars) > 0).map((row) => ({ claimId: row.claimId, amountDollars: row.amountDollars }));
+    if (new Set(allocations.map((allocation) => allocation.claimId)).size !== allocations.length) {
+      setBatchError("Choose each claim only once in a deposit batch.");
+      return;
+    }
+    setBatchError("");
     const storageKey = agencyRetryStorageKey(centerId, capabilities.currentUserId, "remittance-batch");
     const retryKey = requireRetryKey(storageKey);
     if (!retryKey) return;
@@ -118,7 +124,7 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
     if (ok) {
       formElement.reset();
       replaceRetryKey(storageKey);
-      setAllocationDrafts([{ key: idempotencyKey(), claimId: "", amountDollars: "" }]);
+      setAllocationDrafts([{ key: allocationDraftKey(), claimId: "", amountDollars: "" }]);
     }
   }
 
@@ -163,14 +169,15 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
 
     {!readOnly ? <div className="grid gap-4 xl:grid-cols-2">
       <Card><CardHeader><CardTitle as="h3"><Landmark data-icon="inline-start" /> Prepare deposit batch</CardTitle><CardDescription>Record the bank/check advice once, allocate it across claims, and send it to a different accounting reviewer. Leave allocations blank to hold the full deposit as unapplied cash.</CardDescription></CardHeader><CardContent><form className="space-y-3" onSubmit={prepareBatch}>
-        <div><Label htmlFor="batch-program">Agency account</Label><Select value={batchProgramId} onValueChange={(value) => { setBatchProgramId(value ?? ""); setAllocationDrafts([{ key: idempotencyKey(), claimId: "", amountDollars: "" }]); }}><SelectTrigger id="batch-program"><SelectValue /></SelectTrigger><SelectContent>{programs.map((program) => <SelectItem key={program.id} value={program.id}>{program.name}{program.programName ? ` · ${program.programName}` : ""}</SelectItem>)}</SelectContent></Select></div>
+        <div><Label htmlFor="batch-program">Agency account</Label><Select value={batchProgramId} onValueChange={(value) => { setBatchProgramId(value ?? ""); setBatchError(""); setAllocationDrafts([{ key: allocationDraftKey(), claimId: "", amountDollars: "" }]); }}><SelectTrigger id="batch-program"><SelectValue /></SelectTrigger><SelectContent>{programs.map((program) => <SelectItem key={program.id} value={program.id}>{program.name}{program.programName ? ` · ${program.programName}` : ""}</SelectItem>)}</SelectContent></Select></div>
         <div className="grid grid-cols-2 gap-3"><div><Label htmlFor="batch-reference">Payment reference</Label><Input id="batch-reference" name="externalReference" required /></div><div><Label htmlFor="batch-total">Deposit total</Label><Input id="batch-total" name="totalDollars" type="number" inputMode="decimal" min="0.01" step="0.01" required /></div></div>
         <div className="grid grid-cols-2 gap-3"><div><Label htmlFor="batch-paid-at">Paid date</Label><Input id="batch-paid-at" name="paidAt" type="date" defaultValue={today()} required /></div><div><Label htmlFor="batch-method">Method</Label><select id="batch-method" name="paymentMethod" defaultValue="ach" className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"><option value="ach">ACH</option><option value="check">Check</option><option value="agency_portal">Agency portal</option><option value="other">Other</option></select></div></div>
         <div className="grid grid-cols-2 gap-3"><div><Label htmlFor="batch-evidence-name">Evidence name</Label><Input id="batch-evidence-name" name="evidenceName" placeholder="September remittance advice" required /></div><div><Label htmlFor="batch-evidence-reference">Secure document/advice reference</Label><Input id="batch-evidence-reference" name="evidenceReference" placeholder="Internal document ID or portal advice ID" required /></div></div>
         <div><Label htmlFor="batch-follow-up">Follow-up due</Label><Input id="batch-follow-up" name="followUpDueAt" type="date" defaultValue={followUpDate()} required /><p className="mt-1 text-xs text-muted-foreground">Assigned to the preparer until a different reviewer reconciles the batch.</p></div>
-        <div className="space-y-2"><div className="flex items-center justify-between"><Label>Claim allocations</Label><Button type="button" size="sm" variant="outline" onClick={() => setAllocationDrafts((rows) => [...rows, { key: idempotencyKey(), claimId: "", amountDollars: "" }])}><Plus data-icon="inline-start" /> Add claim</Button></div>
-          {allocationDrafts.map((row, index) => <div key={row.key} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_9rem_auto]"><Select value={row.claimId} onValueChange={(value) => setAllocationDrafts((rows) => rows.map((candidate) => candidate.key === row.key ? { ...candidate, claimId: value ?? "" } : candidate))}><SelectTrigger aria-label={`Allocation ${index + 1} claim`}><SelectValue placeholder="Choose approved claim" /></SelectTrigger><SelectContent>{batchClaims.map((claim) => <SelectItem key={claim.id} value={claim.id}>{claim.number} · {claim.authorization?.child.fullName ?? "Unlinked"} · {money((claim.approvedCents ?? claim.claimedCents) - claim.paidCents)} open</SelectItem>)}</SelectContent></Select><Input aria-label={`Allocation ${index + 1} amount`} type="number" min="0.01" step="0.01" placeholder="Amount" value={row.amountDollars} onChange={(event) => setAllocationDrafts((rows) => rows.map((candidate) => candidate.key === row.key ? { ...candidate, amountDollars: event.target.value } : candidate))} /><Button type="button" size="sm" variant="ghost" disabled={allocationDrafts.length === 1} onClick={() => setAllocationDrafts((rows) => rows.filter((candidate) => candidate.key !== row.key))}>Remove</Button></div>)}
+        <div className="space-y-2"><div className="flex items-center justify-between"><Label>Claim allocations</Label><Button type="button" size="sm" variant="outline" onClick={() => setAllocationDrafts((rows) => [...rows, { key: allocationDraftKey(), claimId: "", amountDollars: "" }])}><Plus data-icon="inline-start" /> Add claim</Button></div>
+          {allocationDrafts.map((row, index) => { const selectedElsewhere = new Set(allocationDrafts.filter((candidate) => candidate.key !== row.key).map((candidate) => candidate.claimId).filter(Boolean)); return <div key={row.key} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_9rem_auto]"><Select value={row.claimId} onValueChange={(value) => { setBatchError(""); setAllocationDrafts((rows) => rows.map((candidate) => candidate.key === row.key ? { ...candidate, claimId: value ?? "" } : candidate)); }}><SelectTrigger aria-label={`Allocation ${index + 1} claim`}><SelectValue placeholder="Choose approved claim" /></SelectTrigger><SelectContent>{batchClaims.map((claim) => <SelectItem key={claim.id} value={claim.id} disabled={selectedElsewhere.has(claim.id)}>{claim.number} · {claim.authorization?.child.fullName ?? "Unlinked"} · {money((claim.approvedCents ?? claim.claimedCents) - claim.paidCents)} open</SelectItem>)}</SelectContent></Select><Input aria-label={`Allocation ${index + 1} amount`} type="number" min="0.01" step="0.01" placeholder="Amount" value={row.amountDollars} onChange={(event) => setAllocationDrafts((rows) => rows.map((candidate) => candidate.key === row.key ? { ...candidate, amountDollars: event.target.value } : candidate))} /><Button type="button" size="sm" variant="ghost" disabled={allocationDrafts.length === 1} onClick={() => setAllocationDrafts((rows) => rows.filter((candidate) => candidate.key !== row.key))}>Remove</Button></div>; })}
         </div>
+        {batchError ? <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{batchError}</p> : null}
         <div><Label htmlFor="batch-notes">Notes</Label><Textarea id="batch-notes" name="notes" /></div>
         <div className="flex flex-wrap gap-2"><Button type="submit" disabled={pending || !batchProgramId}><ShieldCheck data-icon="inline-start" /> Prepare for review</Button><Button type="button" variant="ghost" disabled={pending} onClick={() => startDifferentRequest(agencyRetryStorageKey(centerId, capabilities.currentUserId, "remittance-batch"), "deposit batch")}>Start different batch</Button></div>
       </form></CardContent></Card>

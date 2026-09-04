@@ -179,6 +179,16 @@ test("agency ledger running balances recalculate every later row after a backdat
   ]);
 });
 
+test("ledger running balances preserve an existing opening balance", () => {
+  assert.deepEqual(agencyLedgerRunningBalances([
+    { id: "backdated", amountCents: -2_500 },
+    { id: "later-charge", amountCents: 4_000 },
+  ], 1_000), [
+    { id: "backdated", balanceAfterCents: -1_500 },
+    { id: "later-charge", balanceAfterCents: 2_500 },
+  ]);
+});
+
 test("agency unapplied cash is reconstructed from immutable effective-dated ledger activity", () => {
   const received = [{ type: "unapplied_cash", amountCents: -10_000 }];
   const partlyAllocated = [...received, { type: "unapplied_cash_allocation", amountCents: 6_000 }];

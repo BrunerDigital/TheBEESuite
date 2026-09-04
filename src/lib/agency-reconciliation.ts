@@ -134,8 +134,8 @@ export function agencyUtcCalendarRange(startDate: Date | string, endDate: Date |
   return { startInclusive, endExclusive };
 }
 
-export function agencyLedgerRunningBalances<T extends { id: string; amountCents: number }>(entries: T[]) {
-  let balanceAfterCents = 0;
+export function agencyLedgerRunningBalances<T extends { id: string; amountCents: number }>(entries: T[], openingBalanceCents = 0) {
+  let balanceAfterCents = openingBalanceCents;
   return entries.map((entry) => {
     balanceAfterCents += entry.amountCents;
     return { id: entry.id, balanceAfterCents };

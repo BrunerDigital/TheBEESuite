@@ -195,7 +195,7 @@ export function CustomerStatementPrintButton({
           <div>Current balance: {currentBalanceCents === null ? "Not set" : money(currentBalanceCents)}</div>
         </header>
         <table>
-          <thead><tr><th>Date</th><th>Description</th><th>Charge</th><th>Payment / credit</th><th>Balance</th></tr></thead>
+          <thead><tr><th>Date</th><th>Description</th><th>Charge</th><th>Payment / credit</th></tr></thead>
           <tbody>
             {entries.map((entry) => (
               <tr key={entry.id}>
@@ -203,7 +203,6 @@ export function CustomerStatementPrintButton({
                 <td>{entry.description}</td>
                 <td>{entry.amountCents > 0 ? money(entry.amountCents) : ""}</td>
                 <td>{entry.amountCents < 0 ? money(Math.abs(entry.amountCents)) : ""}</td>
-                <td>{entry.balanceAfterCents === null ? "Not set" : money(entry.balanceAfterCents)}</td>
               </tr>
             ))}
           </tbody>

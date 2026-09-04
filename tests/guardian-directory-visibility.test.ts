@@ -53,6 +53,7 @@ test("linked parent email changes preserve the existing account and billing hist
   assert.match(parentLogins, /linked_guardian_tenant_mismatch/);
   assert.match(parentLogins, /linkedGuardians\.some\(\(item\) => !item\.family\.centerId \|\| !tenantCenterIds\.has\(item\.family\.centerId\)\)/);
   assert.match(operationsRoute, /allowedCenterIds: user\.centerIds/);
+  assert.match(operationsRoute, /existing\?\.userId && parentPortalLoginEnabled && existingEmail !== requestedEmail/);
   assert.match(parentLogins, /linked_guardian_scope_mismatch/);
   assert.match(parentLogins, /linkedGuardians\.some\(\(item\) => !item\.family\.centerId \|\| !allowedCenterIdSet\.has\(item\.family\.centerId\)\)/);
 });

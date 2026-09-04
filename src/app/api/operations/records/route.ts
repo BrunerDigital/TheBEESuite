@@ -778,7 +778,7 @@ async function POSTHandler(request: NextRequest) {
     }
     const existingEmail = clean(existing?.email).toLowerCase();
     const requestedEmail = clean(data.email).toLowerCase();
-    if (id && existing?.userId && existingEmail !== requestedEmail) {
+    if (id && existing?.userId && parentPortalLoginEnabled && existingEmail !== requestedEmail) {
       const emailChange = await changeParentPortalLoginEmail({
         guardianId: id,
         newEmail: requestedEmail,

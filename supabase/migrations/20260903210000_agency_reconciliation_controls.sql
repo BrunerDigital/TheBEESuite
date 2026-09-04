@@ -211,7 +211,7 @@ SELECT
     grouped.created_at,
     CURRENT_TIMESTAMP
 FROM grouped
-ON CONFLICT ("centerId", "agencyProgramId", "referenceKey") DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO "AgencyRemittanceAllocation" (
     "id", "batchId", "claimId", "remittanceId", "amountCents", "status", "notes", "fingerprint",

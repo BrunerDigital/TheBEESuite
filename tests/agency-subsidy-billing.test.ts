@@ -278,6 +278,8 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(schema, /model AgencyAccountingPeriod \{[\s\S]*@@unique\(\[centerId, startDate, endDate\]\)/);
   assert.match(prismaMigration, /ENABLE ROW LEVEL SECURITY/);
   assert.match(prismaMigration, /CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceBatch_active_referenceKey_key"[\s\S]*WHERE "status" NOT IN \('rejected', 'reversed'\) AND "reversedAt" IS NULL/);
+  assert.match(prismaMigration, /FROM grouped\s+ON CONFLICT DO NOTHING;/);
+  assert.doesNotMatch(prismaMigration, /ON CONFLICT \("centerId", "agencyProgramId", "referenceKey"\)/);
   assert.match(prismaMigration, /Historical record retained; no new approval was inferred/);
   assert.match(route, /type: "unapplied_cash"/);
   assert.match(route, /type: "unapplied_cash_allocation"/);

@@ -341,15 +341,19 @@ export async function changeParentPortalLoginEmail({
     }),
     prisma.guardian.findMany({
       where: { userId: parentUser.id },
-      select: { id: true, customFields: true },
+      select: { id: true, customFields: true, family: { select: { centerId: true } } },
     }),
   ]);
   if (conflictingUser) return { ok: false, status: 409, reason: "new_email_already_in_use" };
+  const tenantCenterIds = new Set(tenantCenters.map((item) => item.id));
+  if (linkedGuardians.some((item) => !item.family.centerId || !tenantCenterIds.has(item.family.centerId))) {
+    return { ok: false, status: 409, reason: "linked_guardian_tenant_mismatch" };
+  }
   const conflictingGuardian = await prisma.guardian.findFirst({
     where: {
       email: { equals: normalizedNewEmail, mode: "insensitive" },
       id: { notIn: linkedGuardians.map((item) => item.id) },
-      family: { centerId: { in: tenantCenters.map((item) => item.id) } },
+      family: { centerId: { in: [...tenantCenterIds] } },
     },
     select: { id: true },
   });

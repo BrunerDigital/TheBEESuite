@@ -35,7 +35,12 @@ test("standard statements hide both sides of a voided invoice without deleting l
     { id: "void", type: "invoice_void", invoiceId: "invoice-1", effectiveAt: "2026-09-02T12:00:00.000Z" },
     { id: "valid", type: "invoice", invoiceId: "invoice-2", effectiveAt: "2026-09-03T12:00:00.000Z" },
     { id: "payment", type: "payment", invoiceId: "invoice-2", effectiveAt: "2026-09-04T12:00:00.000Z" },
+    { id: "chargeback", type: "chargeback", effectiveAt: "2026-09-05T12:00:00.000Z" },
+    { id: "chargeback-reversal", type: "chargeback_reversal", effectiveAt: "2026-09-06T12:00:00.000Z" },
   ];
-  assert.deepEqual(standardCustomerStatementEntries(history).map((entry) => entry.id), ["valid", "payment"]);
-  assert.equal(history.length, 4);
+  assert.deepEqual(
+    standardCustomerStatementEntries(history).map((entry) => entry.id),
+    ["valid", "payment", "chargeback", "chargeback-reversal"],
+  );
+  assert.equal(history.length, 6);
 });

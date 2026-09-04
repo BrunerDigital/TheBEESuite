@@ -790,6 +790,7 @@ async function POSTHandler(request: NextRequest) {
           parent_portal_login_not_linked: "This parent does not have a linked portal login.",
           linked_parent_user_not_found: "The linked parent login could not be found.",
           user_tenant_mismatch: "The linked parent login belongs to a different tenant.",
+          linked_guardian_tenant_mismatch: "This parent login has a guardian link outside the selected tenant and must be reviewed before its email can change.",
           existing_parent_login_email_invalid: "The existing parent login email must be repaired before it can be changed.",
           new_email_already_in_use: "That email is already assigned to another parent or user.",
         };

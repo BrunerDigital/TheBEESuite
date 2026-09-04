@@ -50,4 +50,6 @@ test("linked parent email changes preserve the existing account and billing hist
   assert.doesNotMatch(parentLogins, /billingAccount\.(?:update|delete)|payment\.(?:update|delete)|invoice\.(?:update|delete)/);
   assert.match(supabaseAuth, /updateSupabaseAuthUserEmailByCurrentEmail/);
   assert.match(parentLogins, /parent_portal_email_change_rollback/);
+  assert.match(parentLogins, /linked_guardian_tenant_mismatch/);
+  assert.match(parentLogins, /linkedGuardians\.some\(\(item\) => !item\.family\.centerId \|\| !tenantCenterIds\.has\(item\.family\.centerId\)\)/);
 });

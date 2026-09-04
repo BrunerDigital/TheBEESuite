@@ -33,7 +33,7 @@ export function standardCustomerStatementEntries<T extends DatedLedgerEntry>(ent
 
   return entries.filter((entry) => {
     const type = entry.type.trim().toLowerCase();
-    if (type === "invoice_void" || type.endsWith("_reversal")) return false;
+    if (type === "invoice_void") return false;
     return !entry.invoiceId || !voidedInvoiceIds.has(entry.invoiceId);
   });
 }

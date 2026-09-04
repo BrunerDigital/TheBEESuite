@@ -33,7 +33,8 @@ type AgencyRemittanceBatch = { id: string; agencyProgramId: string; externalRefe
 type AgencyAdjustment = { id: string; ledgerAccountId: string; type: string; amountCents: number; effectiveAt: string; status: string; reason: string; evidenceName: string | null; evidenceReference: string | null; requestedById: string; followUpOwnerId: string | null; followUpDueAt: string | null; reviewedAt: string | null; claim: { number: string } | null; agencyProgram: { id: string; name: string; programName: string | null } };
 type AgencyPeriod = { id: string; name: string; startDate: string; endDate: string; status: string; closeReason: string | null; reopenedAt: string | null };
 type AgencyReconciliation = { agencyLedgerAccountId: string; agency: { name: string; programName: string | null }; approvedCents: number; remittedCents: number; unappliedCents: number; adjustmentCents: number; expectedBalanceCents: number; ledgerBalanceCents: number; varianceCents: number };
-type Workspace = { programs: Program[]; authorizations: Authorization[]; claims: Claim[]; allocationClaims: AllocationClaim[]; claimPagination: { page: number; pageSize: number; hasNext: boolean; nextCursor: string | null }; families: Family[]; summary: { claimedCents: number; approvedCents: number; paidCents: number; outstandingCents: number; agencyLedgerBalanceCents: number; reconciliationVarianceCents: number; unappliedCashCents: number; pendingBatchReviews: number; pendingAdjustmentReviews: number; overdueClaimCount: number; overdueFollowUpCount: number; legacyFamilyAgencyBalanceCents: number; legacyFamilyAgencyEntryCount: number; needsSubmission: number; missingDocumentClaims: number; readyPrograms: number; setupRequiredPrograms: number; expiredAuthorizations: number; expiringAuthorizations: number }; capabilities: { currentUserId: string; canReviewAgencyPosting: boolean; canCloseAccountingPeriod: boolean }; aging: { current: number; days_1_30: number; days_31_60: number; days_61_90: number; days_91_plus: number }; reconciliation: AgencyReconciliation[]; remittanceBatches: AgencyRemittanceBatch[]; adjustments: AgencyAdjustment[]; accountingPeriods: AgencyPeriod[]; ledger: { accounts: AgencyLedgerAccount[]; entries: AgencyLedgerEntry[]; entryLimit: number; truncated: boolean; hasNext: boolean; nextCursor: string | null } };
+type CursorPagination = { page: number; pageSize: number; hasNext: boolean; nextCursor: string | null };
+type Workspace = { programs: Program[]; authorizations: Authorization[]; claims: Claim[]; allocationClaims: AllocationClaim[]; claimPagination: CursorPagination; families: Family[]; summary: { claimedCents: number; approvedCents: number; paidCents: number; outstandingCents: number; agencyLedgerBalanceCents: number; reconciliationVarianceCents: number; unappliedCashCents: number; pendingBatchReviews: number; pendingAdjustmentReviews: number; overdueClaimCount: number; overdueFollowUpCount: number; legacyFamilyAgencyBalanceCents: number; legacyFamilyAgencyEntryCount: number; needsSubmission: number; missingDocumentClaims: number; readyPrograms: number; setupRequiredPrograms: number; expiredAuthorizations: number; expiringAuthorizations: number }; capabilities: { currentUserId: string; canReviewAgencyPosting: boolean; canCloseAccountingPeriod: boolean }; aging: { current: number; days_1_30: number; days_31_60: number; days_61_90: number; days_91_plus: number }; reconciliation: AgencyReconciliation[]; remittanceBatches: AgencyRemittanceBatch[]; batchPagination: CursorPagination; adjustments: AgencyAdjustment[]; adjustmentPagination: CursorPagination; accountingPeriods: AgencyPeriod[]; ledger: { accounts: AgencyLedgerAccount[]; entries: AgencyLedgerEntry[]; entryLimit: number; truncated: boolean; hasNext: boolean; nextCursor: string | null } };
 
 function money(cents: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100); }
 function dateOnly(value: string) { return value ? new Date(value).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"; }
@@ -60,6 +61,10 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const [claimMessage, setClaimMessage] = useState("");
   const [claimPage, setClaimPage] = useState(1);
   const [claimCursorByPage, setClaimCursorByPage] = useState<Record<number, string>>({});
+  const [batchPage, setBatchPage] = useState(1);
+  const [batchCursorByPage, setBatchCursorByPage] = useState<Record<number, string>>({});
+  const [adjustmentPage, setAdjustmentPage] = useState(1);
+  const [adjustmentCursorByPage, setAdjustmentCursorByPage] = useState<Record<number, string>>({});
   const [exportingClaims, setExportingClaims] = useState(false);
   const [exportingLedger, setExportingLedger] = useState(false);
   const [exportingReconciliation, setExportingReconciliation] = useState(false);
@@ -75,26 +80,28 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
   const [claimAction, setClaimAction] = useState<ClaimAction | null>(null);
   const centerIdRef = useRef(centerId);
   const claimCursor = claimPage === 1 ? "" : claimCursorByPage[claimPage] ?? "";
+  const batchCursor = batchPage === 1 ? "" : batchCursorByPage[batchPage] ?? "";
+  const adjustmentCursor = adjustmentPage === 1 ? "" : adjustmentCursorByPage[adjustmentPage] ?? "";
   const ledgerCursor = ledgerPage === 1 ? "" : ledgerCursorByPage[ledgerPage] ?? "";
   const ledgerSearchParams = `${ledgerAccountId !== "all" ? `&ledgerAccountId=${encodeURIComponent(ledgerAccountId)}` : ""}${ledgerType ? `&ledgerType=${encodeURIComponent(ledgerType)}` : ""}${ledgerQuery ? `&ledgerQuery=${encodeURIComponent(ledgerQuery)}` : ""}${ledgerFrom ? `&ledgerFrom=${encodeURIComponent(ledgerFrom)}` : ""}${ledgerTo ? `&ledgerTo=${encodeURIComponent(ledgerTo)}` : ""}`;
 
-  const load = useCallback(async (requestedClaimPage = claimPage, requestedClaimCursor = claimCursor, requestedLedgerCursor = ledgerCursor) => {
+  const load = useCallback(async (requestedClaimPage = claimPage, requestedClaimCursor = claimCursor, requestedLedgerCursor = ledgerCursor, requestedBatchPage = batchPage, requestedBatchCursor = batchCursor, requestedAdjustmentPage = adjustmentPage, requestedAdjustmentCursor = adjustmentCursor) => {
     const requestCenterId = centerId;
     if (!requestCenterId) return;
     setPending(true); setError("");
     const centerParam = requestCenterId === "all" ? "" : `centerId=${encodeURIComponent(requestCenterId)}&`;
-    const response = await fetch(`/api/billing/agency-claims?${centerParam}claimPage=${requestedClaimPage}${requestedClaimCursor ? `&claimCursor=${encodeURIComponent(requestedClaimCursor)}` : ""}${requestedLedgerCursor ? `&ledgerCursor=${encodeURIComponent(requestedLedgerCursor)}` : ""}${ledgerSearchParams}`, { cache: "no-store" });
+    const response = await fetch(`/api/billing/agency-claims?${centerParam}claimPage=${requestedClaimPage}${requestedClaimCursor ? `&claimCursor=${encodeURIComponent(requestedClaimCursor)}` : ""}&batchPage=${requestedBatchPage}${requestedBatchCursor ? `&batchCursor=${encodeURIComponent(requestedBatchCursor)}` : ""}&adjustmentPage=${requestedAdjustmentPage}${requestedAdjustmentCursor ? `&adjustmentCursor=${encodeURIComponent(requestedAdjustmentCursor)}` : ""}${requestedLedgerCursor ? `&ledgerCursor=${encodeURIComponent(requestedLedgerCursor)}` : ""}${ledgerSearchParams}`, { cache: "no-store" });
     const body = await response.json().catch(() => ({}));
     if (centerIdRef.current !== requestCenterId) return;
     if (!response.ok) setError(body.error || "Agency billing workspace could not be loaded.");
     else setData(body);
     setPending(false);
-  }, [centerId, claimCursor, claimPage, ledgerCursor, ledgerSearchParams]);
+  }, [adjustmentCursor, adjustmentPage, batchCursor, batchPage, centerId, claimCursor, claimPage, ledgerCursor, ledgerSearchParams]);
 
   useEffect(() => {
     let active = true;
     const centerParam = centerId === "all" ? "" : `centerId=${encodeURIComponent(centerId)}&`;
-    fetch(`/api/billing/agency-claims?${centerParam}claimPage=${claimPage}${claimCursor ? `&claimCursor=${encodeURIComponent(claimCursor)}` : ""}${ledgerCursor ? `&ledgerCursor=${encodeURIComponent(ledgerCursor)}` : ""}${ledgerSearchParams}`, { cache: "no-store" })
+    fetch(`/api/billing/agency-claims?${centerParam}claimPage=${claimPage}${claimCursor ? `&claimCursor=${encodeURIComponent(claimCursor)}` : ""}&batchPage=${batchPage}${batchCursor ? `&batchCursor=${encodeURIComponent(batchCursor)}` : ""}&adjustmentPage=${adjustmentPage}${adjustmentCursor ? `&adjustmentCursor=${encodeURIComponent(adjustmentCursor)}` : ""}${ledgerCursor ? `&ledgerCursor=${encodeURIComponent(ledgerCursor)}` : ""}${ledgerSearchParams}`, { cache: "no-store" })
       .then(async (response) => ({ response, body: await response.json().catch(() => ({})) }))
       .then(({ response, body }) => {
         if (!active) return;
@@ -104,7 +111,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
       .catch(() => { if (active) setError("Agency billing workspace could not be loaded."); })
       .finally(() => { if (active) setPending(false); });
     return () => { active = false; };
-  }, [centerId, claimCursor, claimPage, ledgerCursor, ledgerSearchParams]);
+  }, [adjustmentCursor, adjustmentPage, batchCursor, batchPage, centerId, claimCursor, claimPage, ledgerCursor, ledgerSearchParams]);
 
   async function post(action: string, fields: Record<string, unknown>, callbacks: { onError?: (message: string) => void; onSuccess?: (body: Record<string, unknown>) => void; reloadClaimPage?: number } = {}) {
     const requestCenterId = centerId;
@@ -123,7 +130,9 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
       callbacks.onSuccess?.(body);
       const reloadPage = callbacks.reloadClaimPage ?? claimPage;
       setLedgerPage(1); setLedgerCursorByPage({});
-      await load(reloadPage, reloadPage === 1 ? "" : claimCursorByPage[reloadPage] ?? "", "");
+      setBatchPage(1); setBatchCursorByPage({});
+      setAdjustmentPage(1); setAdjustmentCursorByPage({});
+      await load(reloadPage, reloadPage === 1 ? "" : claimCursorByPage[reloadPage] ?? "", "", 1, "", 1, "");
     }
     setPending(false);
     return response.ok;
@@ -367,7 +376,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="max-w-md space-y-2"><Label htmlFor="agency-subsidy-school">Workspace</Label><Select value={centerId} onValueChange={(value) => { if (!value) return; centerIdRef.current = value; setCenterId(value); setPending(true); setExportingClaims(false); setExportingLedger(false); setExportingReconciliation(false); setExportingDeposits(false); setLedgerAccountId("all"); setLedgerPage(1); setLedgerCursorByPage({}); setLedgerQuery(""); setLedgerQueryDraft(""); setLedgerType(""); setLedgerFrom(""); setLedgerTo(""); setSetupProgramId("new"); setProgramId(""); setFamilyId(""); setChildId(""); setAuthorizationId(""); setEditingAuthorizationId(""); setClaimPage(1); setClaimCursorByPage({}); setClaimError(""); setClaimMessage(""); setData(null); setError(""); }}><SelectTrigger id="agency-subsidy-school"><SelectValue /></SelectTrigger><SelectContent>{centers.length > 1 ? <SelectItem value="all">All authorized schools</SelectItem> : null}{centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>)}</SelectContent></Select>{centerId === "all" ? <p className="text-xs text-muted-foreground">Consolidated accounting view. Choose one school before preparing, approving, reversing, or closing financial records.</p> : null}</div>
+          <div className="max-w-md space-y-2"><Label htmlFor="agency-subsidy-school">Workspace</Label><Select value={centerId} onValueChange={(value) => { if (!value) return; centerIdRef.current = value; setCenterId(value); setPending(true); setExportingClaims(false); setExportingLedger(false); setExportingReconciliation(false); setExportingDeposits(false); setLedgerAccountId("all"); setLedgerPage(1); setLedgerCursorByPage({}); setLedgerQuery(""); setLedgerQueryDraft(""); setLedgerType(""); setLedgerFrom(""); setLedgerTo(""); setSetupProgramId("new"); setProgramId(""); setFamilyId(""); setChildId(""); setAuthorizationId(""); setEditingAuthorizationId(""); setClaimPage(1); setClaimCursorByPage({}); setBatchPage(1); setBatchCursorByPage({}); setAdjustmentPage(1); setAdjustmentCursorByPage({}); setClaimError(""); setClaimMessage(""); setData(null); setError(""); }}><SelectTrigger id="agency-subsidy-school"><SelectValue /></SelectTrigger><SelectContent>{centers.length > 1 ? <SelectItem value="all">All authorized schools</SelectItem> : null}{centers.map((center) => <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>)}</SelectContent></Select>{centerId === "all" ? <p className="text-xs text-muted-foreground">Consolidated accounting view. Choose one school before preparing, approving, reversing, or closing financial records.</p> : null}</div>
           {error ? <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
           {message ? <p role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200">{message}</p> : null}
           {summary ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -416,7 +425,13 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
         allocationClaims={data.allocationClaims}
         accounts={ledgerAccounts}
         batches={data.remittanceBatches}
+        batchPagination={data.batchPagination}
+        onPreviousBatchPage={() => { setPending(true); setError(""); setBatchPage((page) => Math.max(page - 1, 1)); }}
+        onNextBatchPage={() => { const nextCursor = data.batchPagination.nextCursor; if (!nextCursor) return; setPending(true); setError(""); setBatchCursorByPage((cursors) => ({ ...cursors, [batchPage + 1]: nextCursor })); setBatchPage((page) => page + 1); }}
         adjustments={data.adjustments}
+        adjustmentPagination={data.adjustmentPagination}
+        onPreviousAdjustmentPage={() => { setPending(true); setError(""); setAdjustmentPage((page) => Math.max(page - 1, 1)); }}
+        onNextAdjustmentPage={() => { const nextCursor = data.adjustmentPagination.nextCursor; if (!nextCursor) return; setPending(true); setError(""); setAdjustmentCursorByPage((cursors) => ({ ...cursors, [adjustmentPage + 1]: nextCursor })); setAdjustmentPage((page) => page + 1); }}
         periods={data.accountingPeriods}
         reconciliation={data.reconciliation}
         aging={data.aging}

@@ -22,6 +22,7 @@ type Adjustment = { id: string; ledgerAccountId: string; type: string; amountCen
 type Period = { id: string; name: string; startDate: string; endDate: string; status: string; closeReason: string | null; reopenedAt: string | null };
 type ReconciliationRow = { agencyLedgerAccountId: string; agency: { name: string; programName: string | null }; approvedCents: number; remittedCents: number; unappliedCents: number; adjustmentCents: number; expectedBalanceCents: number; ledgerBalanceCents: number; varianceCents: number };
 type Aging = { current: number; days_1_30: number; days_31_60: number; days_61_90: number; days_91_plus: number };
+type CursorPagination = { page: number; pageSize: number; hasNext: boolean; nextCursor: string | null };
 
 type Props = {
   centerId: string;
@@ -29,7 +30,13 @@ type Props = {
   allocationClaims: Claim[];
   accounts: Account[];
   batches: Batch[];
+  batchPagination: CursorPagination;
+  onPreviousBatchPage: () => void;
+  onNextBatchPage: () => void;
   adjustments: Adjustment[];
+  adjustmentPagination: CursorPagination;
+  onPreviousAdjustmentPage: () => void;
+  onNextAdjustmentPage: () => void;
   periods: Period[];
   reconciliation: ReconciliationRow[];
   aging: Aging;
@@ -55,7 +62,7 @@ function statusVariant(status: string): "default" | "outline" | "secondary" | "d
   return "outline";
 }
 
-export function AgencyReconciliationControls({ centerId, programs, allocationClaims, accounts, batches, adjustments, periods, reconciliation, aging, capabilities: suppliedCapabilities, readOnly, pending, post }: Props) {
+export function AgencyReconciliationControls({ centerId, programs, allocationClaims, accounts, batches, batchPagination, onPreviousBatchPage, onNextBatchPage, adjustments, adjustmentPagination, onPreviousAdjustmentPage, onNextAdjustmentPage, periods, reconciliation, aging, capabilities: suppliedCapabilities, readOnly, pending, post }: Props) {
   const capabilities = readOnly ? { ...suppliedCapabilities, canReviewAgencyPosting: false, canCloseAccountingPeriod: false } : suppliedCapabilities;
   const canReviewRequest = (requestedById: string) => capabilities.canReviewAgencyPosting && capabilities.currentUserId !== requestedById;
   const [batchProgramId, setBatchProgramId] = useState(programs[0]?.id ?? "");
@@ -221,11 +228,13 @@ export function AgencyReconciliationControls({ centerId, programs, allocationCla
           {pendingAllocations.some((allocation) => !canReviewRequest(allocation.requestedById)) ? <p className="mt-3 text-xs text-muted-foreground"><Clock3 data-icon="inline-start" /> A different billing administrator or accounting reviewer must post the pending allocation.</p> : null}
         </div>;
       })}{!batches.length ? <p className="py-8 text-center text-muted-foreground">No deposit batches recorded yet.</p> : null}</div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Deposit history page {batchPagination.page}. Actionable batches remain visible while older posted and reversed history is paged.</p><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={pending || batchPagination.page <= 1} onClick={onPreviousBatchPage}>Previous</Button><Button type="button" size="sm" variant="outline" disabled={pending || !batchPagination.hasNext || !batchPagination.nextCursor} onClick={onNextBatchPage}>Next</Button></div></div>
     </CollapsibleCard>
 
     <div className="grid gap-4 xl:grid-cols-2">
       <CollapsibleCard id="agency-adjustment-review" title="Adjustment review" description="Every material correction preserves the request, independent review, posting, and any later reversal." collapsedSummary={`${adjustments.filter((adjustment) => adjustment.status === "pending_review").length} awaiting review`} defaultCollapsed>
         <div className="space-y-3">{adjustments.map((adjustment) => <div key={adjustment.id} className="rounded-lg border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-medium">{adjustment.agencyProgram.name} · {adjustment.type.replaceAll("_", " ")}</div><div className="text-xs text-muted-foreground">{dateOnly(adjustment.effectiveAt)} · {adjustment.claim?.number ?? "Account level"} · {adjustment.evidenceName} / {adjustment.evidenceReference}</div>{adjustment.followUpDueAt ? <div className="text-xs text-muted-foreground">Follow-up: assigned · due {dateOnly(adjustment.followUpDueAt)}</div> : null}</div><div className="flex items-center gap-2"><Badge variant={statusVariant(adjustment.status)}>{adjustment.status.replaceAll("_", " ")}</Badge><span className={adjustment.amountCents < 0 ? "text-emerald-700 dark:text-emerald-300" : "text-foreground"}>{money(adjustment.amountCents)}</span></div></div><p className="mt-2 text-sm">{adjustment.reason}</p>{adjustment.status === "pending_review" && canReviewRequest(adjustment.requestedById) ? <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" onClick={() => void post("approveLedgerAdjustment", { adjustmentId: adjustment.id })} disabled={pending}>Approve and post</Button><Button size="sm" variant="outline" onClick={() => void post("rejectLedgerAdjustment", { adjustmentId: adjustment.id, reviewNotes: "Rejected from agency adjustment review." })} disabled={pending}>Reject</Button></div> : null}{adjustment.status === "posted" && canReviewRequest(adjustment.requestedById) ? <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void post("reverseLedgerAdjustment", { adjustmentId: adjustment.id, reason: form.get("reason") }); }}><Input name="reason" required placeholder="Specific reversal reason" /><Button type="submit" size="sm" variant="destructive" disabled={pending}>Reverse</Button></form> : null}</div>)}{!adjustments.length ? <p className="py-8 text-center text-muted-foreground">No agency adjustments have been requested.</p> : null}</div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Adjustment history page {adjustmentPagination.page}. Pending reviews remain visible while older posted and reversed history is paged.</p><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={pending || adjustmentPagination.page <= 1} onClick={onPreviousAdjustmentPage}>Previous</Button><Button type="button" size="sm" variant="outline" disabled={pending || !adjustmentPagination.hasNext || !adjustmentPagination.nextCursor} onClick={onNextAdjustmentPage}>Next</Button></div></div>
       </CollapsibleCard>
 
       <CollapsibleCard id="agency-period-close" title="Accounting periods" description="Closed periods reject backdated remittances and adjustments. Reopening requires a retained reason." collapsedSummary={`${periods.filter((period) => period.status === "closed").length} closed period${periods.filter((period) => period.status === "closed").length === 1 ? "" : "s"}`} defaultCollapsed>

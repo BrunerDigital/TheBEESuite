@@ -211,7 +211,7 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   assert.match(workspace, /setClaimPage\(1\)/);
   assert.match(workspace, /setClaimError\(""\); setClaimMessage\(""\); setData\(null\)/);
   assert.match(workspace, /reloadClaimPage: 1/);
-  assert.match(workspace, /const reloadPage = callbacks\.reloadClaimPage \?\? claimPage;[\s\S]*setLedgerPage\(1\); setLedgerCursorByPage\(\{\}\);[\s\S]*await load\(reloadPage, reloadPage === 1 \? "" : claimCursorByPage\[reloadPage\] \?\? "", ""\)/);
+  assert.match(workspace, /const reloadPage = callbacks\.reloadClaimPage \?\? claimPage;[\s\S]*setLedgerPage\(1\); setLedgerCursorByPage\(\{\}\);[\s\S]*setBatchPage\(1\); setBatchCursorByPage\(\{\}\);[\s\S]*setAdjustmentPage\(1\); setAdjustmentCursorByPage\(\{\}\);[\s\S]*await load\(reloadPage, reloadPage === 1 \? "" : claimCursorByPage\[reloadPage\] \?\? "", "", 1, "", 1, ""\)/);
   assert.match(workspace, /exportClaims=true/);
   assert.match(workspace, /response\.blob\(\)/);
   assert.match(workspace, /const blob = await response\.blob\(\);\s+if \(centerIdRef\.current !== exportCenterId\) return;/);
@@ -223,6 +223,8 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   assert.match(route, /orderBy: \{ id: "asc" \}/);
   assert.match(route, /take: 250/);
   assert.match(route, /cursor: \{ id: cursorId \}, skip: 1/);
+  assert.match(route, /const formulaSafeText = typeof value === "string" && \/\^\\s\*\[=\+\\-@\]\//);
+  assert.match(route, /formulaSafeText\.replaceAll\('"', '""'\)/);
   assert.match(route, /if \(exportingClaims\) return exportClaimsCsv\(centerIds\)/);
 });
 
@@ -327,11 +329,14 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /status: \{ in: \["unmatched", "partially_allocated", "exception"\] \}[\s\S]*paidAt: \{ lt: endExclusive \}/);
   assert.match(route, /status: "pending_review",\s+createdAt: \{ lt: endExclusive \},\s+batch: \{ centerId, reviewedAt: \{ not: null \} \}/);
   assert.match(route, /agencyLedgerAdjustment\.count\(\{[\s\S]*status: "pending_review",\s+effectiveAt: \{ lt: endExclusive \}/);
-  assert.match(route, /agencyLedgerRunningBalances\(entries\)/);
+  assert.match(route, /WITH running AS \([\s\S]*SUM\("amountCents"\) OVER \([\s\S]*ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW[\s\S]*UPDATE "AgencyLedgerEntry" AS ledger_entry/);
+  assert.match(route, /if \(options\.recalculate === false\) return \{ account, entry \}/);
+  assert.match(route, /postAgencyClaimAllocation\(tx,[\s\S]*\{ recalculateAgencyLedger: false \}\)/);
+  assert.match(route, /await recalculateAgencyLedgerBalances\(tx, agencyLedgerAccountId\)/);
   assert.match(route, /agencyUnappliedCashBalance\(account\.entries\)/);
   assert.match(route, /type: "remittance_received",\s+effectiveAt: \{ lt: endExclusive \}/);
   assert.match(route, /orderBy: \[\{ effectiveAt: "asc" \}, \{ createdAt: "asc" \}, \{ id: "asc" \}\]/);
-  assert.match(route, /status: \{ notIn: \["rejected", "reversed"\] \}[\s\S]*reversedAt: null/);
+  assert.match(route, /reversedAt: null, status: \{ in: \["pending_review", "unmatched", "partially_allocated", "exception"\] \}/);
   assert.match(route, /agencyReconciliationVarianceCount\(tx, centerId, endExclusive\)/);
   assert.match(route, /approvedAt: true,[\s\S]*updatedAt: true,[\s\S]*createdAt: true/);
   assert.match(route, /const \[accounts, claims, remittances, adjustments\] = await Promise\.all/);
@@ -354,10 +359,17 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(controls, /canReviewRequest\(batch\.enteredById\)/);
   assert.match(controls, /canReviewRequest\(allocation\.requestedById\)/);
   assert.match(controls, /canReviewRequest\(adjustment\.requestedById\)/);
-  assert.match(route, /status: \{ notIn: \["rejected", "reversed"\] \}/);
-  assert.match(route, /status: \{ in: \["pending_review", "posted"\] \}, reversedAt: null/);
-  assert.match(route, /new Map\(\[\.\.\.unresolvedBatches, \.\.\.recentBatches\]/);
-  assert.match(route, /new Map\(\[\.\.\.unresolvedAdjustments, \.\.\.recentAdjustments\]/);
+  assert.match(route, /cursor: \{ id: batchCursor \}, skip: 1[\s\S]*take: AGENCY_BATCH_LIMIT \+ 1/);
+  assert.match(route, /cursor: \{ id: adjustmentCursor \}, skip: 1[\s\S]*take: AGENCY_ADJUSTMENT_LIMIT \+ 1/);
+  assert.match(route, /where: \{ centerId: \{ in: centerIds \}, status: "pending_review", reversedAt: null \}/);
+  assert.match(route, /new Map\(\[\.\.\.unresolvedBatches, \.\.\.visibleRecentBatches\]/);
+  assert.match(route, /new Map\(\[\.\.\.unresolvedAdjustments, \.\.\.visibleRecentAdjustments\]/);
+  assert.match(route, /batchPagination: \{ page: batchPage, pageSize: AGENCY_BATCH_LIMIT, hasNext: hasNextBatchPage/);
+  assert.match(route, /adjustmentPagination: \{ page: adjustmentPage, pageSize: AGENCY_ADJUSTMENT_LIMIT, hasNext: hasNextAdjustmentPage/);
+  assert.match(controls, /Deposit history page \{batchPagination\.page\}/);
+  assert.match(controls, /Adjustment history page \{adjustmentPagination\.page\}/);
+  assert.match(workspace, /setBatchPage\(1\); setBatchCursorByPage\(\{\}\)/);
+  assert.match(workspace, /setAdjustmentPage\(1\); setAdjustmentCursorByPage\(\{\}\)/);
   assert.match(route, /requestedAllocationRows\.hasInvalidRows[\s\S]*Every allocation needs an approved claim and a positive dollar amount/);
   assert.match(route, /hasInvalidRows: value !== undefined/);
   assert.match(route, /!claimId \|\| !validCurrencyInput\(row\.amountDollars\) \|\| amountCents <= 0/);

@@ -65,7 +65,8 @@ Verify all of the following:
 5. Aging, overdue claims, pending reviews, and overdue follow-ups are explained.
 6. Parent-visible family responsibility did not change.
 7. Legacy family-ledger agency rows remain immutable historical entries and are not reused for new activity.
-8. Export claims, deposits, ledger activity, and reconciliation as needed. Accounting codes appear where configured.
+8. Export claims, deposits, ledger activity, and reconciliation as needed. Accounting codes appear where configured. Formula-like external text is preserved as text in CSV exports so opening a report cannot execute spreadsheet formulas.
+9. Use the deposit and adjustment history controls to reach older posted, rejected, reversed, or reconciled records. Actionable batches and pending adjustments remain visible on every history page.
 
 If the ledger does not reconcile, stop. Do not add a duplicate remittance or family payment to force a match.
 

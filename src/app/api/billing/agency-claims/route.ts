@@ -299,7 +299,11 @@ function claimRequirements(claim: {
 }
 
 function csvRow(values: unknown[]) {
-  return `${values.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")}\r\n`;
+  return `${values.map((value) => {
+    const text = String(value ?? "");
+    const formulaSafeText = typeof value === "string" && /^\s*[=+\-@]/.test(text) ? `'${text}` : text;
+    return `"${formulaSafeText.replaceAll('"', '""')}"`;
+  }).join(",")}\r\n`;
 }
 
 type AgencyLedgerClaimInput = {
@@ -315,6 +319,34 @@ type AgencyLedgerClaimInput = {
   agencyProgram: { name: string };
 };
 
+async function recalculateAgencyLedgerBalances(tx: Prisma.TransactionClient, agencyLedgerAccountId: string) {
+  await tx.$executeRaw`
+    WITH running AS (
+      SELECT id,
+        SUM("amountCents") OVER (
+          ORDER BY "effectiveAt" ASC, "createdAt" ASC, id ASC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        )::integer AS "balanceAfterCents"
+      FROM "AgencyLedgerEntry"
+      WHERE "agencyLedgerAccountId" = ${agencyLedgerAccountId}
+    )
+    UPDATE "AgencyLedgerEntry" AS ledger_entry
+    SET "balanceAfterCents" = running."balanceAfterCents"
+    FROM running
+    WHERE ledger_entry.id = running.id
+      AND ledger_entry."balanceAfterCents" IS DISTINCT FROM running."balanceAfterCents"
+  `;
+  const latestEntry = await tx.agencyLedgerEntry.findFirst({
+    where: { agencyLedgerAccountId },
+    orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+    select: { balanceAfterCents: true },
+  });
+  return tx.agencyLedgerAccount.update({
+    where: { id: agencyLedgerAccountId },
+    data: { balanceCents: latestEntry?.balanceAfterCents ?? 0 },
+  });
+}
+
 async function appendAgencyLedgerEntry(tx: Prisma.TransactionClient, input: {
   centerId: string;
   agencyProgramId: string;
@@ -329,13 +361,13 @@ async function appendAgencyLedgerEntry(tx: Prisma.TransactionClient, input: {
   externalReference?: string | null;
   externalId: string;
   metadata?: Prisma.InputJsonValue;
-}) {
+}, options: { recalculate?: boolean } = {}) {
   const account = await tx.agencyLedgerAccount.upsert({
     where: { centerId_agencyProgramId: { centerId: input.centerId, agencyProgramId: input.agencyProgramId } },
     create: { centerId: input.centerId, agencyProgramId: input.agencyProgramId, balanceCents: 0 },
     update: { balanceCents: { increment: 0 } },
   });
-  let entry = await tx.agencyLedgerEntry.create({ data: {
+  const entry = await tx.agencyLedgerEntry.create({ data: {
     agencyLedgerAccountId: account.id,
     claimId: input.claimId || null,
     remittanceId: input.remittanceId || null,
@@ -351,29 +383,13 @@ async function appendAgencyLedgerEntry(tx: Prisma.TransactionClient, input: {
     externalId: input.externalId,
     metadata: input.metadata,
   } });
-  const entries = await tx.agencyLedgerEntry.findMany({
-    where: { agencyLedgerAccountId: account.id },
-    orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-    select: { id: true, amountCents: true, balanceAfterCents: true },
-  });
-  const runningBalances = agencyLedgerRunningBalances(entries);
-  const existingBalanceById = new Map(entries.map((candidate) => [candidate.id, candidate.balanceAfterCents]));
-  for (const running of runningBalances) {
-    if (existingBalanceById.get(running.id) === running.balanceAfterCents) continue;
-    const updated = await tx.agencyLedgerEntry.update({
-      where: { id: running.id },
-      data: { balanceAfterCents: running.balanceAfterCents },
-    });
-    if (updated.id === entry.id) entry = updated;
-  }
-  const updatedAccount = await tx.agencyLedgerAccount.update({
-    where: { id: account.id },
-    data: { balanceCents: runningBalances.at(-1)?.balanceAfterCents ?? 0 },
-  });
-  return { account: updatedAccount, entry };
+  if (options.recalculate === false) return { account, entry };
+  const updatedAccount = await recalculateAgencyLedgerBalances(tx, account.id);
+  const updatedEntry = await tx.agencyLedgerEntry.findUniqueOrThrow({ where: { id: entry.id } });
+  return { account: updatedAccount, entry: updatedEntry };
 }
 
-async function ensureAgencyClaimReceivable(tx: Prisma.TransactionClient, claim: AgencyLedgerClaimInput) {
+async function ensureAgencyClaimReceivable(tx: Prisma.TransactionClient, claim: AgencyLedgerClaimInput, options: { recalculate?: boolean } = {}) {
   const externalId = agencyClaimApprovalLedgerExternalId(claim.id);
   const existing = await tx.agencyLedgerEntry.findUnique({
     where: { sourceSystem_externalId: { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM, externalId } },
@@ -394,7 +410,7 @@ async function ensureAgencyClaimReceivable(tx: Prisma.TransactionClient, claim: 
     externalReference: claim.externalReference,
     externalId,
     metadata: { claimNumber: claim.number },
-  });
+  }, options);
   return { entry: result.entry, created: true };
 }
 
@@ -491,7 +507,7 @@ async function postAgencyClaimAllocation(tx: Prisma.TransactionClient, input: {
   reference: string;
   notes?: string | null;
   reviewerId: string;
-}) {
+}, options: { recalculateAgencyLedger?: boolean } = {}) {
   const payable = input.claim.approvedCents ?? input.claim.claimedCents;
   const paidBeforeCents = activeRemittanceTotalCents(input.claim.remittances);
   if (!new Set(["approved", "partially_paid"]).has(input.claim.status)) {
@@ -500,7 +516,7 @@ async function postAgencyClaimAllocation(tx: Prisma.TransactionClient, input: {
   if (paidBeforeCents + input.amountCents > payable) {
     throw new AgencyWorkflowError(`The allocation for ${input.claim.number} exceeds its remaining approved amount.`, 409);
   }
-  await ensureAgencyClaimReceivable(tx, input.claim);
+  await ensureAgencyClaimReceivable(tx, input.claim, { recalculate: false });
   const remittance = await tx.subsidyRemittance.create({ data: {
     claimId: input.claim.id,
     amountCents: input.amountCents,
@@ -523,7 +539,7 @@ async function postAgencyClaimAllocation(tx: Prisma.TransactionClient, input: {
     externalReference: input.reference,
     externalId: agencyRemittanceLedgerExternalId(remittance.id),
     metadata: { claimNumber: input.claim.number, paymentMethod: input.paymentMethod, remittanceBatchId: input.batchId },
-  });
+  }, { recalculate: false });
   await tx.agencyRemittanceAllocation.update({
     where: { id: input.allocationId },
     data: { status: "posted", remittanceId: remittance.id, reviewedById: input.reviewerId, reviewedAt: new Date() },
@@ -541,7 +557,10 @@ async function postAgencyClaimAllocation(tx: Prisma.TransactionClient, input: {
     where: { id: input.claim.id },
     data: { paidCents, status: nextRemittanceStatus({ claimedCents: input.claim.claimedCents, approvedCents: input.claim.approvedCents, paidCents }) },
   });
-  return { remittance, ledger, legacy, updatedClaim };
+  const agencyLedgerAccount = options.recalculateAgencyLedger === false
+    ? ledger.account
+    : await recalculateAgencyLedgerBalances(tx, ledger.account.id);
+  return { remittance, ledger: { ...ledger, account: agencyLedgerAccount }, legacy, updatedClaim };
 }
 
 async function agencyPostingClaim(tx: Prisma.TransactionClient, claimId: string) {
@@ -563,7 +582,7 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
   requireUnbatched?: boolean;
   reason: string;
   reversedAt: Date;
-}) {
+}, options: { recalculateAgencyLedger?: boolean } = {}) {
   const remittance = await tx.subsidyRemittance.findUnique({
     where: { id: input.remittanceId },
     include: { claim: { include: { agencyProgram: true } }, allocation: true },
@@ -579,7 +598,7 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
     data: { reversedAt: input.reversedAt, reversedById: input.reviewerId, reversalReason: input.reason },
   });
   if (transition.count !== 1) throw new AgencyWorkflowError("The remittance changed before it could be reversed.", 409);
-  await ensureAgencyClaimReceivable(tx, remittance.claim);
+  await ensureAgencyClaimReceivable(tx, remittance.claim, { recalculate: false });
   const agencyPaymentExternalId = agencyRemittanceLedgerExternalId(remittance.id);
   let agencyPaymentEntry = await tx.agencyLedgerEntry.findUnique({ where: { sourceSystem_externalId: { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM, externalId: agencyPaymentExternalId } } });
   if (!agencyPaymentEntry) {
@@ -597,7 +616,7 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
       externalReference: remittance.externalReference,
       externalId: agencyPaymentExternalId,
       metadata: { claimNumber: remittance.claim.number, paymentMethod: remittance.paymentMethod, restoredBeforeReversal: true },
-    });
+    }, { recalculate: false });
     agencyPaymentEntry = restored.entry;
   }
   const agencyReversal = await appendAgencyLedgerEntry(tx, {
@@ -613,7 +632,7 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
     externalReference: remittance.externalReference,
     externalId: agencyRemittanceReversalLedgerExternalId(remittance.id),
     metadata: { claimNumber: remittance.claim.number, originalAgencyLedgerEntryId: agencyPaymentEntry.id, reason: input.reason },
-  });
+  }, { recalculate: false });
   const legacyPaymentEntry = await tx.ledgerEntry.findUnique({ where: { sourceSystem_externalId: { sourceSystem: "subsidy_agency", externalId: `agency-remittance:${remittance.id}` } } });
   let legacyFamilyReversalLedgerEntryId: string | null = null;
   if (legacyPaymentEntry && legacyPaymentEntry.amountCents < 0) {
@@ -636,12 +655,16 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
   const paidCents = activeRemittanceTotalCents(activeRemittances);
   const claim = await tx.subsidyClaim.update({ where: { id: remittance.claimId }, data: { paidCents, status: nextRemittanceStatus({ claimedCents: remittance.claim.claimedCents, approvedCents: remittance.claim.approvedCents, paidCents }) } });
   if (remittance.allocation) await tx.agencyRemittanceAllocation.update({ where: { id: remittance.allocation.id }, data: { status: "reversed" } });
+  const agencyLedgerAccount = options.recalculateAgencyLedger === false
+    ? agencyReversal.account
+    : await recalculateAgencyLedgerBalances(tx, agencyReversal.account.id);
   return {
     remittance,
     remittanceId: remittance.id,
     claim,
+    agencyLedgerAccountId: agencyReversal.account.id,
     agencyLedgerEntryId: agencyReversal.entry.id,
-    agencyLedgerBalanceCents: agencyReversal.account.balanceCents,
+    agencyLedgerBalanceCents: agencyLedgerAccount.balanceCents,
     legacyFamilyReversalLedgerEntryId,
     reversalLedgerEntryId: legacyFamilyReversalLedgerEntryId,
   };
@@ -901,7 +924,13 @@ async function getHandler(request: NextRequest) {
   const exportingDeposits = request.nextUrl.searchParams.get("exportDeposits") === "true";
   const requestedClaimPage = Number.parseInt(clean(request.nextUrl.searchParams.get("claimPage")) || "1", 10);
   const claimPage = Math.min(Math.max(Number.isFinite(requestedClaimPage) ? requestedClaimPage : 1, 1), 10_000);
+  const requestedBatchPage = Number.parseInt(clean(request.nextUrl.searchParams.get("batchPage")) || "1", 10);
+  const batchPage = Math.min(Math.max(Number.isFinite(requestedBatchPage) ? requestedBatchPage : 1, 1), 10_000);
+  const requestedAdjustmentPage = Number.parseInt(clean(request.nextUrl.searchParams.get("adjustmentPage")) || "1", 10);
+  const adjustmentPage = Math.min(Math.max(Number.isFinite(requestedAdjustmentPage) ? requestedAdjustmentPage : 1, 1), 10_000);
   const claimCursor = clean(request.nextUrl.searchParams.get("claimCursor"));
+  const batchCursor = clean(request.nextUrl.searchParams.get("batchCursor"));
+  const adjustmentCursor = clean(request.nextUrl.searchParams.get("adjustmentCursor"));
   const ledgerCursor = clean(request.nextUrl.searchParams.get("ledgerCursor"));
   const ledgerAccountId = clean(request.nextUrl.searchParams.get("ledgerAccountId"));
   const ledgerType = clean(request.nextUrl.searchParams.get("ledgerType"));
@@ -919,6 +948,8 @@ async function getHandler(request: NextRequest) {
   if (exportingReconciliation) return exportAgencyReconciliationCsv(centerIds);
   if (exportingDeposits) return exportAgencyDepositsCsv(centerIds);
   if (claimPage > 1 && !claimCursor) return NextResponse.json({ ok: false, error: "Refresh the claim queue before opening that page." }, { status: 400 });
+  if (batchPage > 1 && !batchCursor) return NextResponse.json({ ok: false, error: "Refresh the deposit history before opening that page." }, { status: 400 });
+  if (adjustmentPage > 1 && !adjustmentCursor) return NextResponse.json({ ok: false, error: "Refresh the adjustment history before opening that page." }, { status: 400 });
 
   const ledgerWhere: Prisma.AgencyLedgerEntryWhereInput = {
     agencyLedgerAccount: { centerId: { in: centerIds }, ...(ledgerAccountId ? { id: ledgerAccountId } : {}) },
@@ -1038,16 +1069,17 @@ async function getHandler(request: NextRequest) {
     }),
     prisma.agencyRemittanceBatch.findMany({
       where: { centerId: { in: centerIds } },
-      orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
-      take: AGENCY_BATCH_LIMIT,
+      orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+      ...(batchCursor ? { cursor: { id: batchCursor }, skip: 1 } : {}),
+      take: AGENCY_BATCH_LIMIT + 1,
       include: {
         agencyProgram: { select: { name: true, programName: true } },
         allocations: { orderBy: { createdAt: "asc" }, include: { claim: { include: { authorization: { include: { family: { select: { name: true } }, child: { select: { fullName: true } } } } } } } },
       },
     }),
     prisma.agencyRemittanceBatch.findMany({
-      where: { centerId: { in: centerIds }, reversedAt: null, status: { notIn: ["rejected", "reversed"] } },
-      orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+      where: { centerId: { in: centerIds }, reversedAt: null, status: { in: ["pending_review", "unmatched", "partially_allocated", "exception"] } },
+      orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
       include: {
         agencyProgram: { select: { name: true, programName: true } },
         allocations: { orderBy: { createdAt: "asc" }, include: { claim: { include: { authorization: { include: { family: { select: { name: true } }, child: { select: { fullName: true } } } } } } } },
@@ -1056,11 +1088,12 @@ async function getHandler(request: NextRequest) {
     prisma.agencyLedgerAdjustment.findMany({
       where: { centerId: { in: centerIds } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: AGENCY_ADJUSTMENT_LIMIT,
+      ...(adjustmentCursor ? { cursor: { id: adjustmentCursor }, skip: 1 } : {}),
+      take: AGENCY_ADJUSTMENT_LIMIT + 1,
       include: { agencyProgram: { select: { name: true, programName: true } }, claim: { select: { number: true } } },
     }),
     prisma.agencyLedgerAdjustment.findMany({
-      where: { centerId: { in: centerIds }, status: { in: ["pending_review", "posted"] }, reversedAt: null },
+      where: { centerId: { in: centerIds }, status: "pending_review", reversedAt: null },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       include: { agencyProgram: { select: { name: true, programName: true } }, claim: { select: { number: true } } },
     }),
@@ -1102,9 +1135,13 @@ async function getHandler(request: NextRequest) {
     prisma.agencyLedgerAdjustment.count({ where: { centerId: { in: centerIds }, followUpDueAt: { lt: new Date() }, status: "pending_review" } }),
   ]);
 
-  const batches = [...new Map([...unresolvedBatches, ...recentBatches].map((batch) => [batch.id, batch])).values()]
-    .sort((left, right) => right.paidAt.getTime() - left.paidAt.getTime() || right.createdAt.getTime() - left.createdAt.getTime());
-  const adjustments = [...new Map([...unresolvedAdjustments, ...recentAdjustments].map((adjustment) => [adjustment.id, adjustment])).values()]
+  const hasNextBatchPage = recentBatches.length > AGENCY_BATCH_LIMIT;
+  const visibleRecentBatches = recentBatches.slice(0, AGENCY_BATCH_LIMIT);
+  const batches = [...new Map([...unresolvedBatches, ...visibleRecentBatches].map((batch) => [batch.id, batch])).values()]
+    .sort((left, right) => right.paidAt.getTime() - left.paidAt.getTime() || right.createdAt.getTime() - left.createdAt.getTime() || right.id.localeCompare(left.id));
+  const hasNextAdjustmentPage = recentAdjustments.length > AGENCY_ADJUSTMENT_LIMIT;
+  const visibleRecentAdjustments = recentAdjustments.slice(0, AGENCY_ADJUSTMENT_LIMIT);
+  const adjustments = [...new Map([...unresolvedAdjustments, ...visibleRecentAdjustments].map((adjustment) => [adjustment.id, adjustment])).values()]
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime() || right.id.localeCompare(left.id));
 
   const hasNextClaimPage = claims.length > CLAIM_PAGE_SIZE;
@@ -1207,7 +1244,9 @@ async function getHandler(request: NextRequest) {
     aging,
     reconciliation,
     remittanceBatches: batches,
+    batchPagination: { page: batchPage, pageSize: AGENCY_BATCH_LIMIT, hasNext: hasNextBatchPage, nextCursor: hasNextBatchPage ? visibleRecentBatches.at(-1)?.id ?? null : null },
     adjustments,
+    adjustmentPagination: { page: adjustmentPage, pageSize: AGENCY_ADJUSTMENT_LIMIT, hasNext: hasNextAdjustmentPage, nextCursor: hasNextAdjustmentPage ? visibleRecentAdjustments.at(-1)?.id ?? null : null },
     accountingPeriods,
     ledger: {
       accounts: ledgerAccounts,
@@ -1541,10 +1580,12 @@ async function postHandler(request: NextRequest) {
         await assertAgencyPeriodOpen(tx, batch.centerId, batch.paidAt);
         let allocatedCents = 0;
         const posted = [];
+        let agencyLedgerAccountId: string | null = null;
         for (const allocation of pendingAllocations) {
           const current = await agencyPostingClaim(tx, allocation.claimId);
           if (!current || current.centerId !== batch.centerId || current.agencyProgramId !== batch.agencyProgramId) throw new AgencyWorkflowError("A claim allocation no longer belongs to this school and agency.", 409);
-          const allocationResult = await postAgencyClaimAllocation(tx, { claim: current, batchId: batch.id, allocationId: allocation.id, amountCents: allocation.amountCents, paidAt: batch.paidAt, paymentMethod: batch.paymentMethod, reference: batch.externalReference, notes: allocation.notes, reviewerId: auth.user.id });
+          const allocationResult = await postAgencyClaimAllocation(tx, { claim: current, batchId: batch.id, allocationId: allocation.id, amountCents: allocation.amountCents, paidAt: batch.paidAt, paymentMethod: batch.paymentMethod, reference: batch.externalReference, notes: allocation.notes, reviewerId: auth.user.id }, { recalculateAgencyLedger: false });
+          agencyLedgerAccountId = allocationResult.ledger.account.id;
           allocatedCents += allocation.amountCents;
           posted.push(allocationResult);
         }
@@ -1562,9 +1603,11 @@ async function postHandler(request: NextRequest) {
             externalReference: batch.externalReference,
             externalId: `batch-unapplied:${batch.id}`,
             metadata: { paymentMethod: batch.paymentMethod, evidenceReference: batch.evidenceReference },
-          });
+          }, { recalculate: false });
+          agencyLedgerAccountId = unapplied.account.id;
           unappliedEntryId = unapplied.entry.id;
         }
+        if (agencyLedgerAccountId) await recalculateAgencyLedgerBalances(tx, agencyLedgerAccountId);
         const updated = await tx.agencyRemittanceBatch.update({ where: { id: batch.id }, data: {
           allocatedCents,
           unappliedCents,
@@ -1665,8 +1708,9 @@ async function postHandler(request: NextRequest) {
           externalReference: allocation.batch.externalReference,
           externalId: `batch-unapplied-allocation:${allocation.id}`,
           metadata: { claimId: current.id, originalPaidAt: allocation.batch.paidAt.toISOString() },
-        });
-        const posted = await postAgencyClaimAllocation(tx, { claim: current, batchId: allocation.batch.id, allocationId: allocation.id, amountCents: allocation.amountCents, paidAt: allocation.batch.paidAt, ledgerEffectiveAt: effectiveAt, paymentMethod: allocation.batch.paymentMethod, reference: allocation.batch.externalReference, notes: allocation.notes, reviewerId: auth.user.id });
+        }, { recalculate: false });
+        const posted = await postAgencyClaimAllocation(tx, { claim: current, batchId: allocation.batch.id, allocationId: allocation.id, amountCents: allocation.amountCents, paidAt: allocation.batch.paidAt, ledgerEffectiveAt: effectiveAt, paymentMethod: allocation.batch.paymentMethod, reference: allocation.batch.externalReference, notes: allocation.notes, reviewerId: auth.user.id }, { recalculateAgencyLedger: false });
+        await recalculateAgencyLedgerBalances(tx, release.account.id);
         const allocatedCents = allocation.batch.allocatedCents + allocation.amountCents;
         const unappliedCents = allocation.batch.unappliedCents - allocation.amountCents;
         const batch = await tx.agencyRemittanceBatch.update({ where: { id: allocation.batch.id }, data: { allocatedCents, unappliedCents, status: agencyBatchStatus({ totalCents: allocation.batch.totalCents, allocatedCents }), ...(unappliedCents === 0 ? { followUpOwnerId: null, followUpDueAt: null } : {}) } });
@@ -1995,8 +2039,11 @@ async function postHandler(request: NextRequest) {
         await assertAgencyPeriodOpen(tx, batch.centerId, reversedAt);
         const postedAllocations = batch.allocations.filter((allocation) => allocation.status === "posted" && allocation.remittanceId);
         const reversedRemittances = [];
+        let agencyLedgerAccountId: string | null = null;
         for (const allocation of postedAllocations) {
-          reversedRemittances.push(await reverseAgencyRemittanceRecord(tx, { remittanceId: allocation.remittanceId as string, reviewerId: auth.user.id, reason, reversedAt }));
+          const reversed = await reverseAgencyRemittanceRecord(tx, { remittanceId: allocation.remittanceId as string, reviewerId: auth.user.id, reason, reversedAt }, { recalculateAgencyLedger: false });
+          agencyLedgerAccountId = reversed.agencyLedgerAccountId;
+          reversedRemittances.push(reversed);
         }
         let unappliedReversalEntryId: string | null = null;
         if (batch.unappliedCents > 0) {
@@ -2011,9 +2058,11 @@ async function postHandler(request: NextRequest) {
             externalReference: batch.externalReference,
             externalId: `batch-unapplied-reversal:${batch.id}`,
             metadata: { reason, originalPaidAt: batch.paidAt.toISOString() },
-          });
+          }, { recalculate: false });
+          agencyLedgerAccountId = reversal.account.id;
           unappliedReversalEntryId = reversal.entry.id;
         }
+        if (agencyLedgerAccountId) await recalculateAgencyLedgerBalances(tx, agencyLedgerAccountId);
         await tx.agencyRemittanceAllocation.updateMany({ where: { batchId: batch.id, status: "pending_review" }, data: { status: "rejected", reviewedById: auth.user.id, reviewedAt: reversedAt } });
         const updated = await tx.agencyRemittanceBatch.update({ where: { id: batch.id }, data: { status: "reversed", reversedAt, reversedById: auth.user.id, reversalReason: reason } });
         return { batch: updated, reversedRemittanceCount: reversedRemittances.length, unappliedReversalEntryId };

@@ -329,11 +329,14 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /agencyReconciliationVarianceCount\(tx, centerId, endExclusive\)/);
   assert.match(route, /approvedAt: \{ lt: endExclusive \}/);
   assert.doesNotMatch(route, /approvedCents: \{ gt: 0 \},\s+status:[\s\S]{0,200}ledgerEntries:/);
+  assert.match(route, /paidAt: \{ lt: endExclusive \},\s+ledgerEntries: \{\s+none: \{\s+sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,\s+type: "remittance_received"/);
   assert.match(route, /const approvedAt = decision === "approved" \? new Date\(\) : null;\s+if \(approvedAt\) await assertAgencyPeriodOpen\(tx, current\.centerId, approvedAt\);[\s\S]*ensureAgencyClaimReceivable/);
   assert.match(route, /const effectiveAt = claim\.approvedAt \?\? new Date\(\);\s+await assertAgencyPeriodOpen\(tx, claim\.centerId, effectiveAt\)/);
   assert.match(route, /agencyLedgerRunningBalances\(entries, updatedAccount\.balanceCents - entryTotalCents\)/);
   assert.match(route, /status: "pending_review",\s+createdAt: \{ gte: startInclusive, lt: endExclusive \},\s+batch: \{ centerId, reviewedAt: \{ not: null \} \}/);
   assert.match(route, /if \(overlap\?\.status === "closed"\) return \{ period: overlap, reused: true \}/);
+  assert.match(route, /if \(remittance\.reversedAt\) throw new AgencyWorkflowError[\s\S]*await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, input\.reversedAt\)/);
+  assert.match(route, /if \(!agencyPaymentEntry\) \{\s+await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, remittance\.paidAt\)/);
   assert.match(route, /isAgencyClaimOverdue\(claim\.dueDate, now\)/);
   assert.match(route, /orderBy: \[\s*\{ agencyLedgerAccountId: "asc" \},\s*\{ effectiveAt: "asc" \},\s*\{ createdAt: "asc" \},\s*\{ id: "asc" \}/);
   assert.match(route, /currentUserId: auth\.user\.id/);

@@ -161,14 +161,31 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
         claimedCents: true,
         remittances: {
           where: {
-            ledgerEntries: {
-              some: {
-                sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
-                type: "remittance_received",
-                effectiveAt: { lt: endExclusive },
+            AND: [
+              {
+                OR: [
+                  {
+                    ledgerEntries: {
+                      some: {
+                        sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
+                        type: "remittance_received",
+                        effectiveAt: { lt: endExclusive },
+                      },
+                    },
+                  },
+                  {
+                    paidAt: { lt: endExclusive },
+                    ledgerEntries: {
+                      none: {
+                        sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
+                        type: "remittance_received",
+                      },
+                    },
+                  },
+                ],
               },
-            },
-            OR: [{ reversedAt: null }, { reversedAt: { gte: endExclusive } }],
+              { OR: [{ reversedAt: null }, { reversedAt: { gte: endExclusive } }] },
+            ],
           },
           select: { amountCents: true },
         },
@@ -478,6 +495,7 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
   });
   if (!remittance) throw new AgencyWorkflowError("Remittance not found.", 404);
   if (remittance.reversedAt) throw new AgencyWorkflowError("This remittance was already reversed.", 409);
+  await assertAgencyPeriodOpen(tx, remittance.claim.centerId, input.reversedAt);
   const transition = await tx.subsidyRemittance.updateMany({
     where: { id: remittance.id, reversedAt: null },
     data: { reversedAt: input.reversedAt, reversedById: input.reviewerId, reversalReason: input.reason },
@@ -487,6 +505,7 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
   const agencyPaymentExternalId = agencyRemittanceLedgerExternalId(remittance.id);
   let agencyPaymentEntry = await tx.agencyLedgerEntry.findUnique({ where: { sourceSystem_externalId: { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM, externalId: agencyPaymentExternalId } } });
   if (!agencyPaymentEntry) {
+    await assertAgencyPeriodOpen(tx, remittance.claim.centerId, remittance.paidAt);
     const restored = await appendAgencyLedgerEntry(tx, {
       centerId: remittance.claim.centerId,
       agencyProgramId: remittance.claim.agencyProgramId,

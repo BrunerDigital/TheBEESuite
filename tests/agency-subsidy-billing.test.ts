@@ -290,6 +290,7 @@ test("agency receivables use a dedicated immutable ledger with a legacy-only fam
 test("agency reconciliation controls cover deposit batches, exceptions, period close, and complete exports", () => {
   const schema = readFileSync("prisma/schema.prisma", "utf8");
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  const periodCloseReconciliation = route.slice(route.indexOf("async function agencyReconciliationVarianceCount"), route.indexOf("function claimRequirements"));
   const controls = readFileSync("src/components/agency-reconciliation-controls.tsx", "utf8");
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
   const retryKeys = readFileSync("src/lib/agency-retry-key.ts", "utf8");
@@ -337,20 +338,20 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /tx\.\$queryRaw<AgencyPeriodLedgerAggregateRow\[\]>`[\s\S]*SUM\(entry\."amountCents"\)[\s\S]*"unappliedLedgerCents"/);
   assert.match(route, /current\.ledger \+= Number\(aggregate\.ledgerCents\);\s+current\.expected \+= Number\(aggregate\.unappliedLedgerCents\)/);
   assert.doesNotMatch(route, /entries: \{ where: \{ effectiveAt: \{ lt: endExclusive \} \}/);
-  assert.match(route, /type: "remittance_received",\s+effectiveAt: \{ lt: endExclusive \}/);
-  assert.match(route, /orderBy: \[\{ effectiveAt: "asc" \}, \{ createdAt: "asc" \}, \{ id: "asc" \}\]/);
+  assert.match(route, /BOOL_OR\(entry\.type = 'remittance_received' AND entry\."effectiveAt" < \$\{endExclusive\}\)/);
+  assert.match(route, /ORDER BY entry\."effectiveAt" ASC, entry\."createdAt" ASC, entry\.id ASC\s+LIMIT 1/);
   assert.match(route, /reversedAt: null, status: \{ in: \["pending_review", "unmatched", "partially_allocated", "exception"\] \}/);
   assert.match(route, /agencyReconciliationVarianceCount\(tx, centerId, endExclusive\)/);
-  assert.match(route, /approvedAt: true,[\s\S]*updatedAt: true,[\s\S]*createdAt: true/);
-  assert.match(route, /const \[ledgerAggregates, claims, remittances, adjustments\] = await Promise\.all/);
-  assert.match(route, /tx\.subsidyRemittance\.findMany\(\{[\s\S]*claim: \{ centerId \}[\s\S]*type: "remittance_received"/);
-  assert.match(route, /for \(const remittance of remittances\) \{[\s\S]*row\(remittance\.claim\.agencyProgramId\)/);
-  assert.doesNotMatch(route, /approvedCents: \{ gt: 0 \},\s+status:[\s\S]{0,200}ledgerEntries:/);
-  assert.match(route, /paidAt: \{ lt: endExclusive \},\s+ledgerEntries: \{\s+none: \{\s+sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,\s+type: "remittance_received"/);
+  assert.match(route, /COALESCE\(approval\."effectiveAt", claim\."approvedAt", claim\."updatedAt", claim\."createdAt"\) AS "approvalEffectiveAt"/);
+  assert.match(route, /const \[ledgerAggregates, claimAggregates, remittanceAggregates, adjustmentAggregates\] = await Promise\.all/);
+  assert.match(route, /WITH scoped_remittances AS[\s\S]*JOIN "SubsidyClaim" claim[\s\S]*WITH scoped_claims|WITH scoped_claims AS[\s\S]*WITH scoped_remittances AS/);
+  assert.match(route, /applicable_remittances[\s\S]*"paidAt" < \$\{endExclusive\} AND NOT "receivedAny"/);
+  assert.match(route, /for \(const aggregate of \[\.\.\.claimAggregates, \.\.\.remittanceAggregates, \.\.\.adjustmentAggregates\]\)/);
+  assert.doesNotMatch(periodCloseReconciliation, /\.findMany\(/);
   assert.match(route, /const approvedAt = decision === "approved" \? new Date\(\) : null;\s+if \(approvedAt\) await assertAgencyPeriodOpen\(tx, current\.centerId, approvedAt\);[\s\S]*ensureAgencyClaimReceivable/);
   assert.match(route, /const effectiveAt = claim\.approvedAt \?\? claim\.updatedAt \?\? claim\.createdAt;\s+await assertAgencyPeriodOpen\(tx, claim\.centerId, effectiveAt\)/);
   assert.match(route, /agencyLedgerRunningBalances\(entries, finalBalanceCents - entryTotalCents\)/);
-  assert.match(route, /entry\.type === "remittance_received"[\s\S]*entry\.type === "remittance_reversal"/);
+  assert.match(route, /"receivedBeforeEnd"[\s\S]*"reversalBeforeEnd"[\s\S]*"missingLedgerEventCount"/);
   assert.match(route, /return netVarianceCount \+ missingLedgerEventCount/);
   assert.match(route, /if \(overlap\?\.status === "closed"\) return \{ period: overlap, reused: true \}/);
   assert.match(route, /if \(remittance\.reversedAt\) throw new AgencyWorkflowError[\s\S]*await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, input\.reversedAt\)/);
@@ -378,8 +379,8 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /!claimId \|\| !validCurrencyInput\(row\.amountDollars\) \|\| amountCents <= 0/);
   assert.match(controls, /enteredAllocationDrafts\.some\(\(row\) => !row\.claimId \|\| !row\.amountDollars\.trim\(\)[\s\S]*Complete or remove every allocation row/);
   assert.doesNotMatch(route, /approvedAt: \{ lt: endExclusive \}/);
-  assert.match(route, /const approvalEffectiveAt = approvalEntry\?\.effectiveAt \?\? claim\.approvedAt \?\? claim\.updatedAt \?\? claim\.createdAt/);
-  assert.match(route, /if \(approvalEffectiveAt >= endExclusive\) continue/);
+  assert.match(route, /SUM\("approvedCents"\) FILTER \(WHERE "approvalEffectiveAt" < \$\{endExclusive\}\)/);
+  assert.match(route, /"approvalEffectiveAt" < \$\{endExclusive\} AND "approvalEntryId" IS NULL/);
   assert.match(route, /const effectiveAt = claim\.approvedAt \?\? claim\.updatedAt \?\? claim\.createdAt/);
   assert.match(route, /const ledgerFrom = ledgerFromInput \? agencyUtcCalendarRange\(ledgerFromInput, ledgerFromInput\)\.startInclusive : null/);
   assert.match(route, /const ledgerToExclusive = ledgerToInput \? agencyUtcCalendarRange\(ledgerToInput, ledgerToInput\)\.endExclusive : null/);

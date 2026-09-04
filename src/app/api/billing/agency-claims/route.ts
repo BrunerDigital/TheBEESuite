@@ -85,6 +85,12 @@ type AgencyPeriodLedgerAggregateRow = {
   unappliedLedgerCents: bigint;
 };
 
+type AgencyPeriodExpectedAggregateRow = {
+  agencyProgramId: string;
+  expectedCents: bigint;
+  missingLedgerEventCount: bigint;
+};
+
 function prismaConflict(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code);
 }
@@ -209,7 +215,7 @@ async function assertAgencyPeriodOpen(tx: Prisma.TransactionClient, centerId: st
 }
 
 async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, centerId: string, endExclusive: Date) {
-  const [ledgerAggregates, claims, remittances, adjustments] = await Promise.all([
+  const [ledgerAggregates, claimAggregates, remittanceAggregates, adjustmentAggregates] = await Promise.all([
     tx.$queryRaw<AgencyPeriodLedgerAggregateRow[]>`
       SELECT account."agencyProgramId",
         COALESCE(SUM(entry."amountCents"), 0)::bigint AS "ledgerCents",
@@ -223,98 +229,89 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
       WHERE account."centerId" = ${centerId}
       GROUP BY account."agencyProgramId"
     `,
-    tx.subsidyClaim.findMany({
-      where: {
-        centerId,
-        approvedCents: { gt: 0 },
-        status: { notIn: ["void", "denied"] },
-      },
-      select: {
-        id: true,
-        agencyProgramId: true,
-        approvedCents: true,
-        claimedCents: true,
-        approvedAt: true,
-        updatedAt: true,
-        createdAt: true,
-        ledgerEntries: {
-          where: {
-            sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
-            type: "claim_approved",
-          },
-          orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-          take: 1,
-          select: { id: true, effectiveAt: true },
-        },
-      },
-    }),
-    tx.subsidyRemittance.findMany({
-      where: {
-        claim: { centerId },
-        OR: [
-          {
-            ledgerEntries: {
-              some: {
-                sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
-                type: "remittance_received",
-                effectiveAt: { lt: endExclusive },
-              },
-            },
-          },
-          {
-            paidAt: { lt: endExclusive },
-            ledgerEntries: {
-              none: {
-                sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
-                type: "remittance_received",
-              },
-            },
-          },
-          {
-            ledgerEntries: {
-              some: {
-                sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
-                type: "remittance_reversal",
-                effectiveAt: { lt: endExclusive },
-              },
-            },
-          },
-          {
-            reversedAt: { lt: endExclusive },
-            ledgerEntries: {
-              none: {
-                sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
-                type: "remittance_reversal",
-              },
-            },
-          },
-        ],
-      },
-      select: {
-        id: true,
-        amountCents: true,
-        reversedAt: true,
-        claim: { select: { agencyProgramId: true } },
-        ledgerEntries: {
-          where: {
-            sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
-            type: { in: ["remittance_received", "remittance_reversal"] },
-            effectiveAt: { lt: endExclusive },
-          },
-          select: { id: true, type: true },
-        },
-      },
-    }),
-    tx.agencyLedgerAdjustment.findMany({
-      where: {
-        centerId,
-        reviewedAt: { not: null },
-        effectiveAt: { lt: endExclusive },
-        status: { not: "rejected" },
-        OR: [{ reversedAt: null }, { reversedAt: { gte: endExclusive } }],
-      },
-      select: { agencyProgramId: true, amountCents: true },
-    }),
+    tx.$queryRaw<AgencyPeriodExpectedAggregateRow[]>`
+      WITH scoped_claims AS (
+        SELECT claim."agencyProgramId",
+          COALESCE(claim."approvedCents", claim."claimedCents")::bigint AS "approvedCents",
+          COALESCE(approval."effectiveAt", claim."approvedAt", claim."updatedAt", claim."createdAt") AS "approvalEffectiveAt",
+          approval.id AS "approvalEntryId"
+        FROM "SubsidyClaim" claim
+        LEFT JOIN LATERAL (
+          SELECT entry.id, entry."effectiveAt"
+          FROM "AgencyLedgerEntry" entry
+          WHERE entry."claimId" = claim.id
+            AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+            AND entry.type = 'claim_approved'
+          ORDER BY entry."effectiveAt" ASC, entry."createdAt" ASC, entry.id ASC
+          LIMIT 1
+        ) approval ON TRUE
+        WHERE claim."centerId" = ${centerId}
+          AND claim."approvedCents" > 0
+          AND claim.status NOT IN ('void', 'denied')
+      )
+      SELECT "agencyProgramId",
+        COALESCE(SUM("approvedCents") FILTER (WHERE "approvalEffectiveAt" < ${endExclusive}), 0)::bigint AS "expectedCents",
+        COUNT(*) FILTER (WHERE "approvalEffectiveAt" < ${endExclusive} AND "approvalEntryId" IS NULL)::bigint AS "missingLedgerEventCount"
+      FROM scoped_claims
+      GROUP BY "agencyProgramId"
+    `,
+    tx.$queryRaw<AgencyPeriodExpectedAggregateRow[]>`
+      WITH scoped_remittances AS (
+        SELECT remittance.id,
+          remittance."amountCents",
+          remittance."paidAt",
+          remittance."reversedAt",
+          claim."agencyProgramId"
+        FROM "SubsidyRemittance" remittance
+        JOIN "SubsidyClaim" claim ON claim.id = remittance."claimId"
+        WHERE claim."centerId" = ${centerId}
+      ), remittance_events AS (
+        SELECT remittance.id,
+          remittance."amountCents",
+          remittance."paidAt",
+          remittance."reversedAt",
+          remittance."agencyProgramId",
+          COALESCE(BOOL_OR(entry.type = 'remittance_received' AND entry."effectiveAt" < ${endExclusive}), FALSE) AS "receivedBeforeEnd",
+          COALESCE(BOOL_OR(entry.type = 'remittance_received'), FALSE) AS "receivedAny",
+          COALESCE(BOOL_OR(entry.type = 'remittance_reversal' AND entry."effectiveAt" < ${endExclusive}), FALSE) AS "reversalBeforeEnd",
+          COALESCE(BOOL_OR(entry.type = 'remittance_reversal'), FALSE) AS "reversalAny"
+        FROM scoped_remittances remittance
+        LEFT JOIN "AgencyLedgerEntry" entry
+          ON entry."remittanceId" = remittance.id
+          AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+        GROUP BY remittance.id, remittance."amountCents", remittance."paidAt", remittance."reversedAt", remittance."agencyProgramId"
+      ), applicable_remittances AS (
+        SELECT *
+        FROM remittance_events
+        WHERE "receivedBeforeEnd"
+          OR ("paidAt" < ${endExclusive} AND NOT "receivedAny")
+          OR "reversalBeforeEnd"
+          OR ("reversedAt" < ${endExclusive} AND NOT "reversalAny")
+      )
+      SELECT "agencyProgramId",
+        COALESCE(SUM(CASE
+          WHEN "reversedAt" IS NULL OR "reversedAt" >= ${endExclusive} THEN -"amountCents"
+          ELSE 0
+        END), 0)::bigint AS "expectedCents",
+        COALESCE(SUM(
+          CASE WHEN NOT "receivedBeforeEnd" THEN 1 ELSE 0 END
+          + CASE WHEN "reversedAt" < ${endExclusive} AND NOT "reversalBeforeEnd" THEN 1 ELSE 0 END
+        ), 0)::bigint AS "missingLedgerEventCount"
+      FROM applicable_remittances
+      GROUP BY "agencyProgramId"
+    `,
+    tx.$queryRaw<AgencyPeriodExpectedAggregateRow[]>`
+      SELECT adjustment."agencyProgramId",
+        COALESCE(SUM(adjustment."amountCents"), 0)::bigint AS "expectedCents",
+        0::bigint AS "missingLedgerEventCount"
+      FROM "AgencyLedgerAdjustment" adjustment
+      WHERE adjustment."centerId" = ${centerId}
+        AND adjustment."reviewedAt" IS NOT NULL
+        AND adjustment."effectiveAt" < ${endExclusive}
+        AND adjustment.status <> 'rejected'
+        AND (adjustment."reversedAt" IS NULL OR adjustment."reversedAt" >= ${endExclusive})
+      GROUP BY adjustment."agencyProgramId"
+    `,
   ]);
   const totals = new Map<string, { expected: number; ledger: number }>();
   const row = (agencyProgramId: string) => {
@@ -328,22 +325,10 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
     current.expected += Number(aggregate.unappliedLedgerCents);
   }
   let missingLedgerEventCount = 0;
-  for (const claim of claims) {
-    const approvalEntry = claim.ledgerEntries[0];
-    const approvalEffectiveAt = approvalEntry?.effectiveAt ?? claim.approvedAt ?? claim.updatedAt ?? claim.createdAt;
-    if (approvalEffectiveAt >= endExclusive) continue;
-    const current = row(claim.agencyProgramId);
-    current.expected += claim.approvedCents ?? claim.claimedCents;
-    if (!approvalEntry) missingLedgerEventCount += 1;
+  for (const aggregate of [...claimAggregates, ...remittanceAggregates, ...adjustmentAggregates]) {
+    row(aggregate.agencyProgramId).expected += Number(aggregate.expectedCents);
+    missingLedgerEventCount += Number(aggregate.missingLedgerEventCount);
   }
-  for (const remittance of remittances) {
-    const current = row(remittance.claim.agencyProgramId);
-    const reversedAsOfPeriodEnd = remittance.reversedAt && remittance.reversedAt < endExclusive;
-    if (!reversedAsOfPeriodEnd) current.expected -= remittance.amountCents;
-    if (!remittance.ledgerEntries.some((entry) => entry.type === "remittance_received")) missingLedgerEventCount += 1;
-    if (reversedAsOfPeriodEnd && !remittance.ledgerEntries.some((entry) => entry.type === "remittance_reversal")) missingLedgerEventCount += 1;
-  }
-  for (const adjustment of adjustments) row(adjustment.agencyProgramId).expected += adjustment.amountCents;
   const netVarianceCount = [...totals.values()].filter((current) => current.ledger !== current.expected).length;
   return netVarianceCount + missingLedgerEventCount;
 }

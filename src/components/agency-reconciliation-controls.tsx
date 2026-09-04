@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { CollapsibleCard } from "@/components/workspace-preferences";
-import { agencyRetryStorageKey, persistentAgencyRetryKey, rotateAgencyRetryKey } from "@/lib/agency-retry-key";
+import { AGENCY_RETRY_STORAGE_ERROR, agencyRetryStorageKey, persistentAgencyRetryKey, rotateAgencyRetryKey } from "@/lib/agency-retry-key";
 
 type Program = { id: string; name: string; programName: string | null };
 type Claim = { id: string; number: string; status: string; claimedCents: number; approvedCents: number | null; paidCents: number; agencyProgram: { id: string; name: string }; authorization: { child: { fullName: string }; family: { name: string } } | null };
@@ -46,12 +46,6 @@ function dateOnly(value: string) { return value ? new Date(value).toLocaleDateSt
 function today() { return new Date().toISOString().slice(0, 10); }
 function followUpDate() { const value = new Date(); value.setUTCDate(value.getUTCDate() + 7); return value.toISOString().slice(0, 10); }
 function idempotencyKey() { return globalThis.crypto?.randomUUID?.() ?? `agency-batch-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
-function startDifferentRequest(storageKey: string, label: string) {
-  if (!globalThis.confirm(`Start a different ${label}? First check the review queue in case the earlier request was saved.`)) return false;
-  rotateAgencyRetryKey(storageKey);
-  return true;
-}
-
 function statusVariant(status: string): "default" | "outline" | "secondary" | "destructive" {
   if (status === "reconciled" || status === "posted" || status === "closed") return "default";
   if (status === "exception" || status === "reversed" || status === "rejected") return "destructive";
@@ -67,10 +61,38 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
   const [allocationClaimByBatch, setAllocationClaimByBatch] = useState<Record<string, string>>({});
   const [adjustmentAccountId, setAdjustmentAccountId] = useState(accounts[0]?.id ?? "");
   const [adjustmentType, setAdjustmentType] = useState("write_off");
+  const [retryError, setRetryError] = useState("");
   const availableClaims = useMemo(() => claims.filter((claim) => ["approved", "partially_paid"].includes(claim.status)), [claims]);
   const selectedBatchProgram = programs.find((program) => program.id === batchProgramId);
   const batchClaims = availableClaims.filter((claim) => claim.agencyProgram.id === selectedBatchProgram?.id);
   const selectedAdjustmentAccount = accounts.find((account) => account.id === adjustmentAccountId);
+
+  function requireRetryKey(storageKey: string) {
+    try {
+      const retryKey = persistentAgencyRetryKey(storageKey);
+      setRetryError("");
+      return retryKey;
+    } catch {
+      setRetryError(AGENCY_RETRY_STORAGE_ERROR);
+      return null;
+    }
+  }
+
+  function replaceRetryKey(storageKey: string) {
+    try {
+      const retryKey = rotateAgencyRetryKey(storageKey);
+      setRetryError("");
+      return retryKey;
+    } catch {
+      setRetryError(AGENCY_RETRY_STORAGE_ERROR);
+      return null;
+    }
+  }
+
+  function startDifferentRequest(storageKey: string, label: string) {
+    if (!globalThis.confirm(`Start a different ${label}? First check the review queue in case the earlier request was saved.`)) return false;
+    return Boolean(replaceRetryKey(storageKey));
+  }
 
   async function prepareBatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,9 +100,11 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
     const form = new FormData(formElement);
     const allocations = allocationDrafts.filter((row) => row.claimId && Number(row.amountDollars) > 0).map((row) => ({ claimId: row.claimId, amountDollars: row.amountDollars }));
     const storageKey = agencyRetryStorageKey(centerId, capabilities.currentUserId, "remittance-batch");
+    const retryKey = requireRetryKey(storageKey);
+    if (!retryKey) return;
     const ok = await post("prepareRemittanceBatch", {
       agencyProgramId: batchProgramId,
-      idempotencyKey: persistentAgencyRetryKey(storageKey),
+      idempotencyKey: retryKey,
       externalReference: form.get("externalReference"),
       totalDollars: form.get("totalDollars"),
       paidAt: form.get("paidAt"),
@@ -93,7 +117,7 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
     });
     if (ok) {
       formElement.reset();
-      rotateAgencyRetryKey(storageKey);
+      replaceRetryKey(storageKey);
       setAllocationDrafts([{ key: idempotencyKey(), claimId: "", amountDollars: "" }]);
     }
   }
@@ -102,11 +126,12 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const storageKey = agencyRetryStorageKey(centerId, capabilities.currentUserId, `batch-allocation:${batch.id}`);
-    const requestKey = persistentAgencyRetryKey(storageKey);
+    const requestKey = requireRetryKey(storageKey);
+    if (!requestKey) return;
     const ok = await post("requestBatchAllocation", { batchId: batch.id, claimId: allocationClaimByBatch[batch.id], amountDollars: form.get("amountDollars"), notes: form.get("notes"), idempotencyKey: requestKey });
     if (ok) {
       setAllocationClaimByBatch((current) => ({ ...current, [batch.id]: "" }));
-      rotateAgencyRetryKey(storageKey);
+      replaceRetryKey(storageKey);
     }
   }
 
@@ -115,14 +140,17 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const storageKey = agencyRetryStorageKey(centerId, capabilities.currentUserId, "ledger-adjustment");
-    const ok = await post("requestLedgerAdjustment", { ledgerAccountId: adjustmentAccountId, adjustmentType, amountDollars: form.get("amountDollars"), effectiveAt: form.get("effectiveAt"), reason: form.get("reason"), evidenceName: form.get("evidenceName"), evidenceReference: form.get("evidenceReference"), followUpDueAt: form.get("followUpDueAt"), idempotencyKey: persistentAgencyRetryKey(storageKey) });
+    const retryKey = requireRetryKey(storageKey);
+    if (!retryKey) return;
+    const ok = await post("requestLedgerAdjustment", { ledgerAccountId: adjustmentAccountId, adjustmentType, amountDollars: form.get("amountDollars"), effectiveAt: form.get("effectiveAt"), reason: form.get("reason"), evidenceName: form.get("evidenceName"), evidenceReference: form.get("evidenceReference"), followUpDueAt: form.get("followUpDueAt"), idempotencyKey: retryKey });
     if (ok) {
       formElement.reset();
-      rotateAgencyRetryKey(storageKey);
+      replaceRetryKey(storageKey);
     }
   }
 
   return <div className="space-y-4">
+    {retryError ? <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{retryError}</p> : null}
     <CollapsibleCard id="agency-reconciliation" title="Agency reconciliation" description="Three-way control across approved claims, deposit batches, and the immutable agency ledger." collapsedSummary={`${reconciliation.filter((row) => row.varianceCents !== 0).length} variance${reconciliation.filter((row) => row.varianceCents !== 0).length === 1 ? "" : "s"} · ${money(Object.values(aging).reduce((total, amount) => total + amount, 0))} outstanding`}>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {[["Current", aging.current], ["1–30 days", aging.days_1_30], ["31–60 days", aging.days_31_60], ["61–90 days", aging.days_61_90], ["91+ days", aging.days_91_plus]].map(([label, cents]) => <div key={String(label)} className="rounded-lg border bg-background/50 p-3"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 font-semibold">{money(Number(cents))}</div></div>)}

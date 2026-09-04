@@ -1,4 +1,30 @@
-const memoryRetryKeys = new Map<string, string>();
+export const AGENCY_RETRY_STORAGE_ERROR = "This browser cannot safely retain financial retry protection. Enable site storage or use another browser before submitting.";
+
+function retryStorages() {
+  const storages: Storage[] = [];
+  for (const getStorage of [() => globalThis.sessionStorage, () => globalThis.localStorage]) {
+    try {
+      const storage = getStorage();
+      if (storage && !storages.includes(storage)) storages.push(storage);
+    } catch {
+      // Accessing browser storage can itself throw in restricted environments.
+    }
+  }
+  return storages;
+}
+
+function storeRetryKey(storageKey: string, retryKey: string, storages: Storage[]) {
+  let persisted = false;
+  for (const storage of storages) {
+    try {
+      storage.setItem(storageKey, retryKey);
+      if (storage.getItem(storageKey) === retryKey) persisted = true;
+    } catch {
+      // Try the next reload-safe storage provider.
+    }
+  }
+  if (!persisted) throw new Error(AGENCY_RETRY_STORAGE_ERROR);
+}
 
 export function newAgencyRetryKey(prefix = "agency") {
   return `${prefix}:${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
@@ -9,35 +35,25 @@ export function agencyRetryStorageKey(centerId: string, userId: string, operatio
 }
 
 export function persistentAgencyRetryKey(storageKey: string) {
-  const generated = newAgencyRetryKey();
-  const memoryExisting = memoryRetryKeys.get(storageKey);
-  try {
-    const existing = globalThis.sessionStorage?.getItem(storageKey);
-    if (existing) {
-      memoryRetryKeys.set(storageKey, existing);
-      return existing;
+  const storages = retryStorages();
+  for (const storage of storages) {
+    try {
+      const existing = storage.getItem(storageKey);
+      if (existing) {
+        storeRetryKey(storageKey, existing, storages);
+        return existing;
+      }
+    } catch {
+      // Try the next reload-safe storage provider.
     }
-    const next = memoryExisting ?? generated;
-    globalThis.sessionStorage?.setItem(storageKey, next);
-    if (globalThis.sessionStorage) {
-      memoryRetryKeys.set(storageKey, next);
-      return next;
-    }
-  } catch {
-    // Storage may be unavailable in a restricted browser.
   }
-  if (memoryExisting) return memoryExisting;
-  memoryRetryKeys.set(storageKey, generated);
+  const generated = newAgencyRetryKey();
+  storeRetryKey(storageKey, generated, storages);
   return generated;
 }
 
 export function rotateAgencyRetryKey(storageKey: string) {
   const replacement = newAgencyRetryKey();
-  memoryRetryKeys.set(storageKey, replacement);
-  try {
-    globalThis.sessionStorage?.setItem(storageKey, replacement);
-  } catch {
-    // The module-level fallback retains the replacement for this tab lifetime.
-  }
+  storeRetryKey(storageKey, replacement, retryStorages());
   return replacement;
 }

@@ -224,7 +224,7 @@ SELECT
     grouped.paid_at,
     grouped."paymentMethod",
     grouped.total_cents,
-    CASE WHEN grouped.is_reversed THEN 0 ELSE grouped.total_cents END,
+    grouped.total_cents,
     0,
     CASE WHEN grouped.is_reversed THEN 'reversed' ELSE 'reconciled' END,
     'Historical remittance batch created during dedicated agency-ledger migration.',

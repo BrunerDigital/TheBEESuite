@@ -38,14 +38,23 @@ test("agency retry keys persist across remounts and rotate only when explicitly 
   }
 });
 
-test("agency retry keys stay stable when session storage is unavailable", () => {
+test("agency retry keys fall back to reload-safe local storage when session storage is unavailable", () => {
   const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const originalLocalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const values = new Map<string, string>();
   Object.defineProperty(globalThis, "sessionStorage", {
     configurable: true,
     value: {
       getItem: () => { throw new Error("storage unavailable"); },
       setItem: () => { throw new Error("storage unavailable"); },
     } as unknown as Storage,
+  });
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+    } as Storage,
   });
   try {
     const storageKey = "agency:test:restricted-storage";
@@ -57,6 +66,28 @@ test("agency retry keys stay stable when session storage is unavailable", () => 
   } finally {
     if (originalStorage) Object.defineProperty(globalThis, "sessionStorage", originalStorage);
     else Reflect.deleteProperty(globalThis, "sessionStorage");
+    if (originalLocalStorage) Object.defineProperty(globalThis, "localStorage", originalLocalStorage);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});
+
+test("agency retry-sensitive actions fail closed without reload-safe browser storage", () => {
+  const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const originalLocalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const blockedStorage = {
+    getItem: () => { throw new Error("storage unavailable"); },
+    setItem: () => { throw new Error("storage unavailable"); },
+  } as unknown as Storage;
+  Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: blockedStorage });
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: blockedStorage });
+  try {
+    assert.throws(() => persistentAgencyRetryKey("agency:test:no-storage"), /cannot safely retain financial retry protection/);
+    assert.throws(() => rotateAgencyRetryKey("agency:test:no-storage"), /cannot safely retain financial retry protection/);
+  } finally {
+    if (originalStorage) Object.defineProperty(globalThis, "sessionStorage", originalStorage);
+    else Reflect.deleteProperty(globalThis, "sessionStorage");
+    if (originalLocalStorage) Object.defineProperty(globalThis, "localStorage", originalLocalStorage);
+    else Reflect.deleteProperty(globalThis, "localStorage");
   }
 });
 

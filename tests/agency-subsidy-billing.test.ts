@@ -52,6 +52,7 @@ test("agency remittance corrections replay safely in both migration ledgers", ()
   assert.match(reconciliationMigration, /WHEN remittance\."reversedAt" IS NULL THEN 'active'/);
   assert.match(reconciliationMigration, /'reversed:' \|\| TO_CHAR\(remittance\."reversedAt" AT TIME ZONE 'UTC'/);
   assert.match(reconciliationMigration, /grouped\.normalized_reference \|\| ':' \|\| grouped\.lifecycle_key/);
+  assert.match(reconciliationMigration, /grouped\."paymentMethod",\s+grouped\.total_cents,\s+grouped\.total_cents,\s+0,/);
   assert.match(reconciliationMigration, /ON batch\.id = 'agency-remittance-batch:' \|\| MD5/);
   assert.doesNotMatch(reconciliationMigration, /grouped\.any_reversed/);
 });
@@ -332,11 +333,12 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /status: \{ in: \["pending_review", "unmatched", "partially_allocated", "exception"\] \}/);
   assert.match(route, /new Map\(\[\.\.\.unresolvedBatches, \.\.\.recentBatches\]/);
   assert.match(route, /new Map\(\[\.\.\.unresolvedAdjustments, \.\.\.recentAdjustments\]/);
-  assert.match(retryKeys, /globalThis\.sessionStorage\?\.getItem\(storageKey\)/);
+  assert.match(retryKeys, /\(\) => globalThis\.sessionStorage, \(\) => globalThis\.localStorage/);
+  assert.match(retryKeys, /if \(!persisted\) throw new Error\(AGENCY_RETRY_STORAGE_ERROR\)/);
   assert.match(controls, /agencyRetryStorageKey\(centerId, capabilities\.currentUserId, `batch-allocation:\$\{batch\.id\}`\)/);
   assert.match(controls, /agencyRetryStorageKey\(centerId, capabilities\.currentUserId, "ledger-adjustment"\)/);
   assert.match(controls, /post\("requestBatchAllocation"[\s\S]*idempotencyKey: requestKey/);
-  assert.match(controls, /post\("requestLedgerAdjustment"[\s\S]*idempotencyKey: persistentAgencyRetryKey\(storageKey\)/);
+  assert.match(controls, /const retryKey = requireRetryKey\(storageKey\);[\s\S]*post\("requestLedgerAdjustment"[\s\S]*idempotencyKey: retryKey/);
   assert.match(controls, /Start different batch/);
   assert.match(controls, /Start different adjustment/);
   assert.match(controls, /Start different allocation/);

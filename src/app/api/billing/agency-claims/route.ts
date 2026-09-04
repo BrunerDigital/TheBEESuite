@@ -1543,6 +1543,41 @@ async function postHandler(request: NextRequest) {
     return NextResponse.json({ ok: true, ...result });
   }
 
+  if (action === "rejectBatchAllocation") {
+    const allocationId = clean(body.allocationId);
+    const reason = clean(body.reason);
+    if (!reason) return NextResponse.json({ ok: false, error: "Enter a specific allocation rejection reason." }, { status: 400 });
+    let result;
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        const allocation = await tx.agencyRemittanceAllocation.findUnique({ where: { id: allocationId }, include: { batch: true } });
+        if (!allocation || !centerAllowed(auth.user, allocation.batch.centerId)) throw new AgencyWorkflowError("Batch allocation not found.", 404);
+        if (!canReviewAgencyPosting({ role: auth.user.role, reviewerId: auth.user.id, requestedById: allocation.requestedById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must reject this allocation.", 403);
+        if (allocation.status !== "pending_review" || allocation.batch.reversedAt) throw new AgencyWorkflowError("This allocation is no longer awaiting review.", 409);
+        if (!allocation.batch.reviewedAt) throw new AgencyWorkflowError("Reject the unposted deposit batch instead of rejecting one of its initial allocations.", 409);
+        if (allocation.fingerprint !== agencyAllocationFingerprint({ batchId: allocation.batchId, claimId: allocation.claimId, amountCents: allocation.amountCents, notes: allocation.notes })) throw new AgencyWorkflowError("The allocation fingerprint no longer matches. Refresh before rejecting it.", 409);
+        const reviewedAt = new Date();
+        const transition = await tx.agencyRemittanceAllocation.updateMany({
+          where: { id: allocation.id, status: "pending_review" },
+          data: { status: "rejected", reviewedById: auth.user.id, reviewedAt, reviewNotes: reason },
+        });
+        if (transition.count !== 1) throw new AgencyWorkflowError("The allocation changed during review. Refresh and try again.", 409);
+        const remainingPending = await tx.agencyRemittanceAllocation.count({ where: { batchId: allocation.batchId, status: "pending_review" } });
+        const restoredStatus = remainingPending
+          ? "pending_review"
+          : agencyBatchStatus({ totalCents: allocation.batch.totalCents, allocatedCents: allocation.batch.allocatedCents });
+        const batch = await tx.agencyRemittanceBatch.update({ where: { id: allocation.batchId }, data: { status: restoredStatus } });
+        return { batch, allocationId: allocation.id };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The allocation or batch changed during rejection. Refresh and try again." }, { status: 409 });
+      throw error;
+    }
+    await writeAuditLog(auth.user, { centerId: result.batch.centerId, action: "billing.agency_remittance_allocation.rejected", resource: "AgencyRemittanceAllocation", resourceId: result.allocationId, metadata: { batchId: result.batch.id, reasonRecorded: true } });
+    return NextResponse.json({ ok: true, ...result });
+  }
+
   if (action === "requestLedgerAdjustment") {
     const ledgerAccountId = clean(body.ledgerAccountId);
     const type = clean(body.adjustmentType);
@@ -1968,6 +2003,7 @@ async function postHandler(request: NextRequest) {
           if (blockers.length) throw new AgencyWorkflowError("Complete every required claim document before recording agency approval.", 409);
         }
         const approvedAt = decision === "approved" ? new Date() : null;
+        if (approvedAt) await assertAgencyPeriodOpen(tx, current.centerId, approvedAt);
         const updated = await tx.subsidyClaim.update({ where: { id: current.id }, data: { status: decision, approvedCents, approvedAt, denialReason: decision === "denied" ? denialReason : null, externalReference } });
         const ledger = decision === "approved" ? await ensureAgencyClaimReceivable(tx, { ...updated, agencyProgram: current.agencyProgram }) : null;
         return { updated, ledgerEntryId: ledger?.entry.id ?? null };

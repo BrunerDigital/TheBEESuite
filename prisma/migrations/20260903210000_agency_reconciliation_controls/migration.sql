@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS "AgencyRemittanceAllocation" (
     "requestedById" TEXT NOT NULL,
     "reviewedById" TEXT,
     "reviewedAt" TIMESTAMP(3),
+    "reviewNotes" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "AgencyRemittanceAllocation_pkey" PRIMARY KEY ("id")

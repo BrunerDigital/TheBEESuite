@@ -233,6 +233,9 @@ test("agency remittances are staged, independently reviewed, and posted serializ
   assert.match(route, /action === "prepareRemittanceBatch" \|\| action === "recordRemittance"/);
   assert.match(route, /agencyPostingClaim\(tx, allocation\.claimId\)/);
   assert.match(route, /action === "approveRemittanceBatch"/);
+  assert.match(route, /action === "rejectBatchAllocation"/);
+  assert.match(route, /reviewNotes: reason/);
+  assert.match(route, /agencyBatchStatus\(\{ totalCents: allocation\.batch\.totalCents, allocatedCents: allocation\.batch\.allocatedCents \}\)/);
   assert.match(route, /canReviewAgencyPosting\(\{ role: auth\.user\.role, reviewerId: auth\.user\.id, requestedById: batch\.enteredById \}\)/);
   assert.match(route, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
   assert.match(route, /REMITTANCE_METHODS/);
@@ -245,6 +248,7 @@ test("agency remittances are staged, independently reviewed, and posted serializ
   assert.doesNotMatch(workspace, /agency-single:\$\{claimAction\.claim\.id\}:\$\{externalReference\.trim\(\)\.toUpperCase\(\)\}/);
   assert.match(workspace, /Prepare remittance/);
   assert.match(reconciliation, /Approve and post/);
+  assert.match(reconciliation, /post\("rejectBatchAllocation", \{ allocationId: allocation\.id, reason: form\.get\("reason"\) \}\)/);
   assert.match(workspace, /Approvals and remittances post to the separate agency ledger/);
 });
 
@@ -323,6 +327,7 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /paidAt: \{ gte: startInclusive, lt: endExclusive \}/);
   assert.match(route, /effectiveAt: \{ gte: startInclusive, lt: endExclusive \}/);
   assert.match(route, /agencyReconciliationVarianceCount\(tx, centerId, endExclusive\)/);
+  assert.match(route, /const approvedAt = decision === "approved" \? new Date\(\) : null;\s+if \(approvedAt\) await assertAgencyPeriodOpen\(tx, current\.centerId, approvedAt\);[\s\S]*ensureAgencyClaimReceivable/);
   assert.match(route, /isAgencyClaimOverdue\(claim\.dueDate, now\)/);
   assert.match(route, /orderBy: \[\s*\{ agencyLedgerAccountId: "asc" \},\s*\{ effectiveAt: "asc" \},\s*\{ createdAt: "asc" \},\s*\{ id: "asc" \}/);
   assert.match(route, /currentUserId: auth\.user\.id/);

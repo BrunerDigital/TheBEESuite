@@ -3,16 +3,22 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { LedgerPrintButton, type BillingReceiptSchool } from "@/components/billing-print-actions";
+import {
+  ChargeCreditSummaryPrintButton,
+  CustomerStatementPrintButton,
+  LedgerPrintButton,
+  type BillingReceiptSchool,
+} from "@/components/billing-print-actions";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
-import { filterFamilyLedgerEntries } from "@/lib/family-ledger";
-import { formatZonedDateTime } from "@/lib/zoned-date-time";
+import { filterFamilyLedgerEntries, filterLedgerEntriesByDateRange, standardCustomerStatementEntries } from "@/lib/family-ledger";
+import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
 
 export type FamilyLedgerEntry = {
   id: string;
@@ -63,17 +69,36 @@ export function FamilyLedgerCard({
     ? initialFamilyId
     : "";
   const [familyId, setFamilyId] = useState(validInitialFamilyId);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const selectedFamily = families.find((family) => family.id === familyId) ?? null;
   const visibleEntries = useMemo(
     () => filterFamilyLedgerEntries(entries, familyId),
     [entries, familyId],
   );
+  const rangedEntries = useMemo(
+    () => filterLedgerEntriesByDateRange(visibleEntries, startDate, endDate, (value) => zonedDateKey(value, timeZone)),
+    [visibleEntries, startDate, endDate, timeZone],
+  );
   const printableEntries = useMemo(
-    () => visibleEntries.map((entry) => ({
+    () => rangedEntries.map((entry) => ({
       ...entry,
       effectiveAt: new Date(entry.effectiveAt).toISOString(),
     })),
-    [visibleEntries],
+    [rangedEntries],
+  );
+  const currentBalanceCents = visibleEntries.find((entry) => entry.balanceAfterCents !== null)?.balanceAfterCents ?? null;
+  const customerStatementEntries = useMemo(
+    () => filterLedgerEntriesByDateRange(
+      standardCustomerStatementEntries(visibleEntries),
+      startDate,
+      endDate,
+      (value) => zonedDateKey(value, timeZone),
+    ).map((entry) => ({
+      ...entry,
+      effectiveAt: new Date(entry.effectiveAt).toISOString(),
+    })),
+    [visibleEntries, startDate, endDate, timeZone],
   );
 
   return (
@@ -85,7 +110,7 @@ export function FamilyLedgerCard({
             Select one family to see only that family&apos;s tuition, credits, payments, and adjustments.
           </CardDescription>
         </div>
-        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end lg:w-auto">
+        <div className="flex w-full flex-col gap-3 lg:w-auto">
           <div className="grid min-w-0 flex-1 gap-1.5 sm:min-w-72">
             <Label htmlFor="family-ledger-family">Family</Label>
             <Select value={familyId} onValueChange={(value) => setFamilyId(value ?? "")}>
@@ -101,7 +126,21 @@ export function FamilyLedgerCard({
               </SelectContent>
             </Select>
           </div>
-          <LedgerPrintButton entries={printableEntries} schools={schools} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="family-ledger-start-date">From</Label>
+              <Input id="family-ledger-start-date" type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="family-ledger-end-date">Through</Label>
+              <Input id="family-ledger-end-date" type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <CustomerStatementPrintButton entries={customerStatementEntries} schools={schools} currentBalanceCents={currentBalanceCents} />
+            <ChargeCreditSummaryPrintButton entries={printableEntries} schools={schools} />
+            <LedgerPrintButton entries={printableEntries} schools={schools} />
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -110,7 +149,7 @@ export function FamilyLedgerCard({
             <div>
               <div className="font-medium">{selectedFamily.name}</div>
               <div className="text-xs text-muted-foreground">
-                {visibleEntries.length} ledger entr{visibleEntries.length === 1 ? "y" : "ies"}
+                {rangedEntries.length} ledger entr{rangedEntries.length === 1 ? "y" : "ies"} in the selected date range
               </div>
             </div>
             <Link
@@ -133,7 +172,7 @@ export function FamilyLedgerCard({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visibleEntries.map((entry) => (
+            {rangedEntries.map((entry) => (
               <TableRow key={entry.id}>
                 <TableCell>
                   {formatZonedDateTime(entry.effectiveAt, timeZone, {
@@ -155,10 +194,10 @@ export function FamilyLedgerCard({
                 </TableCell>
               </TableRow>
             ) : null}
-            {familyId && !visibleEntries.length ? (
+            {familyId && !rangedEntries.length ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-muted-foreground">
-                  No ledger entries have been created for this family.
+                  No ledger entries match this family and date range.
                 </TableCell>
               </TableRow>
             ) : null}

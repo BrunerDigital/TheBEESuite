@@ -3,7 +3,11 @@ import { UserRole } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { DEFAULT_PARENT_INITIAL_PASSWORD, PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
 import { prisma } from "@/lib/prisma";
-import { isSupabaseAuthCompatibleEmail, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import {
+  isSupabaseAuthCompatibleEmail,
+  updateSupabaseAuthUserEmailByCurrentEmail,
+  upsertSupabaseAuthUserWithPassword,
+} from "@/lib/supabase-auth";
 
 type ParentPortalProvisionResult =
   | {
@@ -23,6 +27,10 @@ type ParentPortalDisableResult =
       unlinkedUserId: string | null;
       deactivatedUser: boolean;
     }
+  | { ok: false; reason: string; status?: number };
+
+type ParentPortalEmailChangeResult =
+  | { ok: true; userId: string; previousEmail: string; newEmail: string; updatedGuardianIds: string[] }
   | { ok: false; reason: string; status?: number };
 
 function normalizeEmail(value: string) {
@@ -264,6 +272,133 @@ export async function ensureParentPortalLoginForGuardian({
     reactivated: Boolean(existingUser && !existingUser.isActive),
     credentialCreated,
     requiresSetupLink,
+  };
+}
+
+export async function changeParentPortalLoginEmail({
+  guardianId,
+  newEmail,
+  actorEmail,
+}: {
+  guardianId: string;
+  newEmail: string;
+  actorEmail?: string | null;
+}): Promise<ParentPortalEmailChangeResult> {
+  const normalizedNewEmail = normalizeEmail(newEmail);
+  if (!isSupabaseAuthCompatibleEmail(normalizedNewEmail)) {
+    return { ok: false, status: 400, reason: "guardian_email_invalid" };
+  }
+  const guardian = await prisma.guardian.findUnique({
+    where: { id: guardianId },
+    select: {
+      id: true,
+      familyId: true,
+      email: true,
+      userId: true,
+      family: {
+        select: {
+          billingEmail: true,
+          centerId: true,
+        },
+      },
+    },
+  });
+  if (!guardian?.userId) return { ok: false, status: 409, reason: "parent_portal_login_not_linked" };
+  const [parentUser, familyCenter] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: guardian.userId },
+      select: { id: true, tenantId: true, role: true, email: true },
+    }),
+    guardian.family.centerId
+      ? prisma.center.findUnique({
+          where: { id: guardian.family.centerId },
+          select: { organization: { select: { tenantId: true } } },
+        })
+      : null,
+  ]);
+  if (!parentUser || parentUser.role !== UserRole.PARENT_GUARDIAN) {
+    return { ok: false, status: 409, reason: "linked_parent_user_not_found" };
+  }
+  if (!familyCenter || parentUser.tenantId !== familyCenter.organization.tenantId) {
+    return { ok: false, status: 409, reason: "user_tenant_mismatch" };
+  }
+  const previousEmail = normalizeEmail(parentUser.email || guardian.email || "");
+  if (!isSupabaseAuthCompatibleEmail(previousEmail)) {
+    return { ok: false, status: 409, reason: "existing_parent_login_email_invalid" };
+  }
+  if (previousEmail === normalizedNewEmail) {
+    return { ok: true, userId: parentUser.id, previousEmail, newEmail: normalizedNewEmail, updatedGuardianIds: [guardian.id] };
+  }
+
+  const [conflictingUser, tenantCenters, linkedGuardians] = await Promise.all([
+    prisma.user.findFirst({
+      where: { email: { equals: normalizedNewEmail, mode: "insensitive" }, id: { not: parentUser.id } },
+      select: { id: true },
+    }),
+    prisma.center.findMany({
+      where: { organization: { tenantId: parentUser.tenantId } },
+      select: { id: true },
+    }),
+    prisma.guardian.findMany({
+      where: { userId: parentUser.id },
+      select: { id: true, customFields: true },
+    }),
+  ]);
+  if (conflictingUser) return { ok: false, status: 409, reason: "new_email_already_in_use" };
+  const conflictingGuardian = await prisma.guardian.findFirst({
+    where: {
+      email: { equals: normalizedNewEmail, mode: "insensitive" },
+      id: { notIn: linkedGuardians.map((item) => item.id) },
+      family: { centerId: { in: tenantCenters.map((item) => item.id) } },
+    },
+    select: { id: true },
+  });
+  if (conflictingGuardian) return { ok: false, status: 409, reason: "new_email_already_in_use" };
+
+  const authChange = await updateSupabaseAuthUserEmailByCurrentEmail({ currentEmail: previousEmail, newEmail: normalizedNewEmail });
+  if (!authChange.ok) return { ok: false, status: 502, reason: authChange.error };
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.updateMany({
+        where: { id: parentUser.id, email: { equals: previousEmail, mode: "insensitive" } },
+        data: { email: normalizedNewEmail, sessionVersion: { increment: 1 } },
+      });
+      if (updatedUser.count !== 1) throw new Error("The parent login changed before the email update completed.");
+      for (const linkedGuardian of linkedGuardians) {
+        await tx.guardian.update({
+          where: { id: linkedGuardian.id },
+          data: {
+            email: normalizedNewEmail,
+            customFields: parentPortalLinkedFields({
+              customFields: linkedGuardian.customFields,
+              loginEmail: normalizedNewEmail,
+              linkedBy: actorEmail,
+              linkedReason: "parent_portal_email_change",
+            }),
+          },
+        });
+      }
+      if (guardian.family.billingEmail?.trim().toLowerCase() === previousEmail) {
+        await tx.family.update({ where: { id: guardian.familyId }, data: { billingEmail: normalizedNewEmail } });
+      }
+    });
+  } catch (error) {
+    const rollback = await updateSupabaseAuthUserEmailByCurrentEmail({
+      currentEmail: normalizedNewEmail,
+      newEmail: previousEmail,
+      metadataSource: "parent_portal_email_change_rollback",
+    });
+    if (!rollback.ok) throw new Error(`Parent email update failed and Auth rollback also failed: ${rollback.error}`);
+    throw error;
+  }
+
+  return {
+    ok: true,
+    userId: parentUser.id,
+    previousEmail,
+    newEmail: normalizedNewEmail,
+    updatedGuardianIds: linkedGuardians.map((item) => item.id),
   };
 }
 

@@ -1533,7 +1533,12 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               Parent portal login
             </label>
             {selectedGuardian?.userId && parentPortalLoginEnabled ? (
-              <Badge variant="secondary" className="w-fit self-center">Portal linked</Badge>
+              <div className="space-y-1 self-center">
+                <Badge variant="secondary" className="w-fit">Portal linked</Badge>
+                <p className="max-w-sm text-xs text-muted-foreground">
+                  Changing this email updates the existing parent login and linked billing contact without removing saved payment methods, invoices, or history. The parent will sign in with the new email.
+                </p>
+              </div>
             ) : null}
           </div>
           {isBillingContact && !isValidGuardianEmail(guardianEmail) ? (

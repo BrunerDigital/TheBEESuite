@@ -162,6 +162,103 @@ export function LedgerPrintButton({ entries, schools }: { entries: BillingLedger
   );
 }
 
+export function CustomerStatementPrintButton({
+  entries,
+  schools,
+  currentBalanceCents,
+}: {
+  entries: BillingLedgerPrintEntry[];
+  schools: BillingReceiptSchool[];
+  currentBalanceCents: number | null;
+}) {
+  const timeZone = useSchoolTimeZone();
+  const { active, generatedAt, print } = usePrintableReport();
+  const familyName = entries[0]?.billingAccount.family.name.trim();
+  const school = entries.length
+    ? schoolForCenterId(schools, entries[0].billingAccount.family.centerId)
+    : schools.length === 1 ? schools[0] : null;
+
+  return (
+    <>
+      <ReportPrintStyles />
+      <Button type="button" variant="outline" size="sm" onClick={print} disabled={!entries.length}>
+        <Printer data-icon="inline-start" />
+        Customer statement
+      </Button>
+      <PrintableReport active={active} label="Printable standard customer statement">
+        <header style={{ marginBottom: 20 }}>
+          <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>Standard Customer Statement</h1>
+          <div>Family: {familyName || "Not selected"}</div>
+          <div>School: {schoolLabel(school)}</div>
+          <div>School EIN: {schoolEinLabel(school)}</div>
+          <div>Generated: {formatPrintDateTime(generatedAt, timeZone)}</div>
+          <div>Current balance: {currentBalanceCents === null ? "Not set" : money(currentBalanceCents)}</div>
+        </header>
+        <table>
+          <thead><tr><th>Date</th><th>Description</th><th>Charge</th><th>Payment / credit</th><th>Balance</th></tr></thead>
+          <tbody>
+            {entries.map((entry) => (
+              <tr key={entry.id}>
+                <td>{formatDate(entry.effectiveAt, timeZone)}</td>
+                <td>{entry.description}</td>
+                <td>{entry.amountCents > 0 ? money(entry.amountCents) : ""}</td>
+                <td>{entry.amountCents < 0 ? money(Math.abs(entry.amountCents)) : ""}</td>
+                <td>{entry.balanceAfterCents === null ? "Not set" : money(entry.balanceAfterCents)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </PrintableReport>
+    </>
+  );
+}
+
+export function ChargeCreditSummaryPrintButton({ entries, schools }: { entries: BillingLedgerPrintEntry[]; schools: BillingReceiptSchool[] }) {
+  const timeZone = useSchoolTimeZone();
+  const { active, generatedAt, print } = usePrintableReport();
+  const familyName = entries[0]?.billingAccount.family.name.trim();
+  const school = entries.length
+    ? schoolForCenterId(schools, entries[0].billingAccount.family.centerId)
+    : schools.length === 1 ? schools[0] : null;
+  const totalCharges = entries.reduce((sum, entry) => sum + Math.max(entry.amountCents, 0), 0);
+  const totalCredits = entries.reduce((sum, entry) => sum + Math.abs(Math.min(entry.amountCents, 0)), 0);
+  const grouped = Array.from(entries.reduce((groups, entry) => {
+    const label = displayLabel(entry.type);
+    const current = groups.get(label) ?? { charges: 0, credits: 0 };
+    if (entry.amountCents > 0) current.charges += entry.amountCents;
+    if (entry.amountCents < 0) current.credits += Math.abs(entry.amountCents);
+    groups.set(label, current);
+    return groups;
+  }, new Map<string, { charges: number; credits: number }>())).sort(([left], [right]) => left.localeCompare(right));
+
+  return (
+    <>
+      <ReportPrintStyles />
+      <Button type="button" variant="outline" size="sm" onClick={print} disabled={!entries.length}>
+        <Printer data-icon="inline-start" />
+        Charge / credit summary
+      </Button>
+      <PrintableReport active={active} label="Printable charge and credit summary">
+        <header style={{ marginBottom: 20 }}>
+          <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>Charge / Credit Summary</h1>
+          <div>Family: {familyName || "Not selected"}</div>
+          <div>School: {schoolLabel(school)}</div>
+          <div>School EIN: {schoolEinLabel(school)}</div>
+          <div>Generated: {formatPrintDateTime(generatedAt, timeZone)}</div>
+        </header>
+        <table>
+          <thead><tr><th>Activity type</th><th>Charges</th><th>Payments / credits</th></tr></thead>
+          <tbody>
+            {grouped.map(([label, totals]) => <tr key={label}><td>{label}</td><td>{money(totals.charges)}</td><td>{money(totals.credits)}</td></tr>)}
+            <tr><th>Total</th><th>{money(totalCharges)}</th><th>{money(totalCredits)}</th></tr>
+            <tr><th>Net activity</th><th colSpan={2}>{money(totalCharges - totalCredits)}</th></tr>
+          </tbody>
+        </table>
+      </PrintableReport>
+    </>
+  );
+}
+
 export function PaymentReceiptPrintButton({
   payment,
   schools,

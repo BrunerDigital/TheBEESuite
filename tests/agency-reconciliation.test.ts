@@ -14,6 +14,29 @@ import {
   isAgencyClaimOverdue,
   signedAgencyAdjustmentCents,
 } from "../src/lib/agency-reconciliation";
+import { persistentAgencyRetryKey, rotateAgencyRetryKey } from "../src/lib/agency-retry-key";
+
+test("agency retry keys persist across remounts and rotate only when explicitly completed or abandoned", () => {
+  const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const values = new Map<string, string>();
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+    } as Storage,
+  });
+  try {
+    const first = persistentAgencyRetryKey("agency:test");
+    assert.equal(persistentAgencyRetryKey("agency:test"), first);
+    const replacement = rotateAgencyRetryKey("agency:test");
+    assert.notEqual(replacement, first);
+    assert.equal(persistentAgencyRetryKey("agency:test"), replacement);
+  } finally {
+    if (originalStorage) Object.defineProperty(globalThis, "sessionStorage", originalStorage);
+    else Reflect.deleteProperty(globalThis, "sessionStorage");
+  }
+});
 
 test("agency remittance references normalize into a deterministic account-scoped key", () => {
   assert.equal(agencyRemittanceReferenceKey({ paymentMethod: "ACH", externalReference: " trace  100 " }), "ach:TRACE 100");
@@ -32,9 +55,11 @@ test("agency batch fingerprints ignore allocation order but not material values"
   const reordered = agencyBatchFingerprint({ ...base, allocations: [{ claimId: "a", amountCents: 10_000 }, { claimId: "b", amountCents: 2_500 }] });
   const changed = agencyBatchFingerprint({ ...base, totalCents: 12_501, allocations: [{ claimId: "a", amountCents: 10_000 }, { claimId: "b", amountCents: 2_500 }] });
   const changedEvidence = agencyBatchFingerprint({ ...base, evidenceReference: "advice-2", allocations: [{ claimId: "a", amountCents: 10_000 }, { claimId: "b", amountCents: 2_500 }] });
+  const changedAllocationNote = agencyBatchFingerprint({ ...base, allocations: [{ claimId: "a", amountCents: 10_000, notes: "Corrected allocation" }, { claimId: "b", amountCents: 2_500 }] });
   assert.equal(first, reordered);
   assert.notEqual(first, changed);
   assert.notEqual(first, changedEvidence);
+  assert.notEqual(first, changedAllocationNote);
 });
 
 test("agency request fingerprints cover notes, evidence, and follow-up inputs", () => {

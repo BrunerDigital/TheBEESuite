@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { CollapsibleCard } from "@/components/workspace-preferences";
+import { agencyRetryStorageKey, persistentAgencyRetryKey, rotateAgencyRetryKey } from "@/lib/agency-retry-key";
 
 type Program = { id: string; name: string; programName: string | null };
 type Claim = { id: string; number: string; status: string; claimedCents: number; approvedCents: number | null; paidCents: number; agencyProgram: { id: string; name: string }; authorization: { child: { fullName: string }; family: { name: string } } | null };
@@ -45,24 +46,10 @@ function dateOnly(value: string) { return value ? new Date(value).toLocaleDateSt
 function today() { return new Date().toISOString().slice(0, 10); }
 function followUpDate() { const value = new Date(); value.setUTCDate(value.getUTCDate() + 7); return value.toISOString().slice(0, 10); }
 function idempotencyKey() { return globalThis.crypto?.randomUUID?.() ?? `agency-batch-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
-function retryStorageKey(centerId: string, userId: string, operation: string) { return `bee:agency-reconciliation:retry:${centerId}:${userId}:${operation}`; }
-function persistentIdempotencyKey(storageKey: string) {
-  const generated = idempotencyKey();
-  try {
-    const existing = globalThis.sessionStorage?.getItem(storageKey);
-    if (existing) return existing;
-    globalThis.sessionStorage?.setItem(storageKey, generated);
-  } catch {
-    // Storage may be unavailable in a restricted browser; the server still enforces unique keys.
-  }
-  return generated;
-}
-function rotatePersistentIdempotencyKey(storageKey: string) {
-  try {
-    globalThis.sessionStorage?.setItem(storageKey, idempotencyKey());
-  } catch {
-    // The next submission will create a fresh in-memory key when storage is unavailable.
-  }
+function startDifferentRequest(storageKey: string, label: string) {
+  if (!globalThis.confirm(`Start a different ${label}? First check the review queue in case the earlier request was saved.`)) return false;
+  rotateAgencyRetryKey(storageKey);
+  return true;
 }
 
 function statusVariant(status: string): "default" | "outline" | "secondary" | "destructive" {
@@ -90,10 +77,10 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const allocations = allocationDrafts.filter((row) => row.claimId && Number(row.amountDollars) > 0).map((row) => ({ claimId: row.claimId, amountDollars: row.amountDollars }));
-    const storageKey = retryStorageKey(centerId, capabilities.currentUserId, "remittance-batch");
+    const storageKey = agencyRetryStorageKey(centerId, capabilities.currentUserId, "remittance-batch");
     const ok = await post("prepareRemittanceBatch", {
       agencyProgramId: batchProgramId,
-      idempotencyKey: persistentIdempotencyKey(storageKey),
+      idempotencyKey: persistentAgencyRetryKey(storageKey),
       externalReference: form.get("externalReference"),
       totalDollars: form.get("totalDollars"),
       paidAt: form.get("paidAt"),
@@ -106,7 +93,7 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
     });
     if (ok) {
       formElement.reset();
-      rotatePersistentIdempotencyKey(storageKey);
+      rotateAgencyRetryKey(storageKey);
       setAllocationDrafts([{ key: idempotencyKey(), claimId: "", amountDollars: "" }]);
     }
   }
@@ -114,12 +101,12 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
   async function requestAdditionalAllocation(event: FormEvent<HTMLFormElement>, batch: Batch) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const storageKey = retryStorageKey(centerId, capabilities.currentUserId, `batch-allocation:${batch.id}`);
-    const requestKey = persistentIdempotencyKey(storageKey);
+    const storageKey = agencyRetryStorageKey(centerId, capabilities.currentUserId, `batch-allocation:${batch.id}`);
+    const requestKey = persistentAgencyRetryKey(storageKey);
     const ok = await post("requestBatchAllocation", { batchId: batch.id, claimId: allocationClaimByBatch[batch.id], amountDollars: form.get("amountDollars"), notes: form.get("notes"), idempotencyKey: requestKey });
     if (ok) {
       setAllocationClaimByBatch((current) => ({ ...current, [batch.id]: "" }));
-      rotatePersistentIdempotencyKey(storageKey);
+      rotateAgencyRetryKey(storageKey);
     }
   }
 
@@ -127,11 +114,11 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const storageKey = retryStorageKey(centerId, capabilities.currentUserId, "ledger-adjustment");
-    const ok = await post("requestLedgerAdjustment", { ledgerAccountId: adjustmentAccountId, adjustmentType, amountDollars: form.get("amountDollars"), effectiveAt: form.get("effectiveAt"), reason: form.get("reason"), evidenceName: form.get("evidenceName"), evidenceReference: form.get("evidenceReference"), followUpDueAt: form.get("followUpDueAt"), idempotencyKey: persistentIdempotencyKey(storageKey) });
+    const storageKey = agencyRetryStorageKey(centerId, capabilities.currentUserId, "ledger-adjustment");
+    const ok = await post("requestLedgerAdjustment", { ledgerAccountId: adjustmentAccountId, adjustmentType, amountDollars: form.get("amountDollars"), effectiveAt: form.get("effectiveAt"), reason: form.get("reason"), evidenceName: form.get("evidenceName"), evidenceReference: form.get("evidenceReference"), followUpDueAt: form.get("followUpDueAt"), idempotencyKey: persistentAgencyRetryKey(storageKey) });
     if (ok) {
       formElement.reset();
-      rotatePersistentIdempotencyKey(storageKey);
+      rotateAgencyRetryKey(storageKey);
     }
   }
 
@@ -157,7 +144,7 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
           {allocationDrafts.map((row, index) => <div key={row.key} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_9rem_auto]"><Select value={row.claimId} onValueChange={(value) => setAllocationDrafts((rows) => rows.map((candidate) => candidate.key === row.key ? { ...candidate, claimId: value ?? "" } : candidate))}><SelectTrigger aria-label={`Allocation ${index + 1} claim`}><SelectValue placeholder="Choose approved claim" /></SelectTrigger><SelectContent>{batchClaims.map((claim) => <SelectItem key={claim.id} value={claim.id}>{claim.number} · {claim.authorization?.child.fullName ?? "Unlinked"} · {money((claim.approvedCents ?? claim.claimedCents) - claim.paidCents)} open</SelectItem>)}</SelectContent></Select><Input aria-label={`Allocation ${index + 1} amount`} type="number" min="0.01" step="0.01" placeholder="Amount" value={row.amountDollars} onChange={(event) => setAllocationDrafts((rows) => rows.map((candidate) => candidate.key === row.key ? { ...candidate, amountDollars: event.target.value } : candidate))} /><Button type="button" size="sm" variant="ghost" disabled={allocationDrafts.length === 1} onClick={() => setAllocationDrafts((rows) => rows.filter((candidate) => candidate.key !== row.key))}>Remove</Button></div>)}
         </div>
         <div><Label htmlFor="batch-notes">Notes</Label><Textarea id="batch-notes" name="notes" /></div>
-        <Button type="submit" disabled={pending || !batchProgramId}><ShieldCheck data-icon="inline-start" /> Prepare for review</Button>
+        <div className="flex flex-wrap gap-2"><Button type="submit" disabled={pending || !batchProgramId}><ShieldCheck data-icon="inline-start" /> Prepare for review</Button><Button type="button" variant="ghost" disabled={pending} onClick={() => startDifferentRequest(agencyRetryStorageKey(centerId, capabilities.currentUserId, "remittance-batch"), "deposit batch")}>Start different batch</Button></div>
       </form></CardContent></Card>
 
       <Card><CardHeader><CardTitle as="h3"><FileClock data-icon="inline-start" /> Adjustment request</CardTitle><CardDescription>Write-offs, recoupments, overpayments, and corrections remain pending until a different accounting reviewer posts them.</CardDescription></CardHeader><CardContent><form className="space-y-3" onSubmit={requestAdjustment}>
@@ -168,7 +155,7 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
         <div className="grid grid-cols-2 gap-3"><div><Label htmlFor="adjustment-evidence-name">Evidence name</Label><Input id="adjustment-evidence-name" name="evidenceName" required /></div><div><Label htmlFor="adjustment-evidence-reference">Secure evidence reference</Label><Input id="adjustment-evidence-reference" name="evidenceReference" required /></div></div>
         <div><Label htmlFor="adjustment-follow-up">Follow-up due</Label><Input id="adjustment-follow-up" name="followUpDueAt" type="date" defaultValue={followUpDate()} required /><p className="mt-1 text-xs text-muted-foreground">Assigned to the requester until the exception is reviewed.</p></div>
         <p className="text-xs text-muted-foreground">{selectedAdjustmentAccount ? `${selectedAdjustmentAccount.agencyProgram.name} current balance: ${money(selectedAdjustmentAccount.balanceCents)}` : "Choose an agency account."}</p>
-        <Button type="submit" disabled={pending || !adjustmentAccountId}>Request review</Button>
+        <div className="flex flex-wrap gap-2"><Button type="submit" disabled={pending || !adjustmentAccountId}>Request review</Button><Button type="button" variant="ghost" disabled={pending} onClick={() => startDifferentRequest(agencyRetryStorageKey(centerId, capabilities.currentUserId, "ledger-adjustment"), "adjustment request")}>Start different adjustment</Button></div>
       </form></CardContent></Card>
     </div> : <Card><CardHeader><CardTitle as="h3"><Landmark data-icon="inline-start" /> Consolidated accounting view</CardTitle><CardDescription>Review aging, variances, deposit batches, adjustments, and periods across authorized schools. Choose one school before creating or changing a financial record.</CardDescription></CardHeader></Card>}
 
@@ -180,7 +167,7 @@ export function AgencyReconciliationControls({ centerId, programs, claims, accou
           <div className="mt-3 space-y-2">{batch.allocations.map((allocation) => <div key={allocation.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm"><span>{allocation.claim.number} · {allocation.claim.authorization?.family.name ?? "Unlinked family"} · {allocation.claim.authorization?.child.fullName ?? "Unlinked child"}</span><span className="flex items-center gap-2"><Badge variant={statusVariant(allocation.status)}>{allocation.status.replaceAll("_", " ")}</Badge>{money(allocation.amountCents)}{allocation.status === "pending_review" && batch.reviewedAt && canReviewRequest(allocation.requestedById) ? <Button type="button" size="sm" onClick={() => void post("approveBatchAllocation", { allocationId: allocation.id })} disabled={pending}>Approve allocation</Button> : null}</span></div>)}</div>
           {batch.status === "pending_review" && !batch.reviewedAt && canReviewRequest(batch.enteredById) ? <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void post("approveRemittanceBatch", { batchId: batch.id, reviewNotes: form.get("reviewNotes") }); }}><div className="min-w-64 flex-1"><Label htmlFor={`batch-review-${batch.id}`}>Reviewer notes</Label><Input id={`batch-review-${batch.id}`} name="reviewNotes" /></div><Button type="submit" disabled={pending}><CheckCircle2 data-icon="inline-start" /> Approve and post</Button></form> : null}
           {batch.status === "pending_review" && !batch.reviewedAt && canReviewRequest(batch.enteredById) ? <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void post("rejectRemittanceBatch", { batchId: batch.id, reason: form.get("reason") }); }}><div className="min-w-64 flex-1"><Label htmlFor={`batch-reject-${batch.id}`}>Rejection reason</Label><Input id={`batch-reject-${batch.id}`} name="reason" required /></div><Button type="submit" variant="outline" disabled={pending}>Reject batch</Button></form> : null}
-          {batch.reviewedAt && batch.unappliedCents > 0 && !batch.reversedAt ? <form className="mt-3 grid gap-2 rounded-lg border border-dashed p-3 sm:grid-cols-[1fr_9rem_1fr_auto]" onSubmit={(event) => void requestAdditionalAllocation(event, batch)}><div><Label htmlFor={`batch-claim-${batch.id}`}>Allocate remaining cash</Label><Select value={allocationClaimByBatch[batch.id] ?? ""} onValueChange={(value) => setAllocationClaimByBatch((current) => ({ ...current, [batch.id]: value ?? "" }))}><SelectTrigger id={`batch-claim-${batch.id}`}><SelectValue placeholder="Choose approved claim" /></SelectTrigger><SelectContent>{eligibleClaims.map((claim) => <SelectItem key={claim.id} value={claim.id}>{claim.number} · {money((claim.approvedCents ?? claim.claimedCents) - claim.paidCents)} open</SelectItem>)}</SelectContent></Select></div><div><Label htmlFor={`batch-amount-${batch.id}`}>Amount</Label><Input id={`batch-amount-${batch.id}`} name="amountDollars" type="number" min="0.01" max={(batch.unappliedCents / 100).toFixed(2)} step="0.01" required /></div><div><Label htmlFor={`batch-notes-${batch.id}`}>Notes</Label><Input id={`batch-notes-${batch.id}`} name="notes" /></div><Button className="self-end" type="submit" disabled={pending || !allocationClaimByBatch[batch.id]}>Request allocation</Button></form> : null}
+          {batch.reviewedAt && batch.unappliedCents > 0 && !batch.reversedAt ? <form className="mt-3 grid gap-2 rounded-lg border border-dashed p-3 sm:grid-cols-[1fr_9rem_1fr_auto_auto]" onSubmit={(event) => void requestAdditionalAllocation(event, batch)}><div><Label htmlFor={`batch-claim-${batch.id}`}>Allocate remaining cash</Label><Select value={allocationClaimByBatch[batch.id] ?? ""} onValueChange={(value) => setAllocationClaimByBatch((current) => ({ ...current, [batch.id]: value ?? "" }))}><SelectTrigger id={`batch-claim-${batch.id}`}><SelectValue placeholder="Choose approved claim" /></SelectTrigger><SelectContent>{eligibleClaims.map((claim) => <SelectItem key={claim.id} value={claim.id}>{claim.number} · {money((claim.approvedCents ?? claim.claimedCents) - claim.paidCents)} open</SelectItem>)}</SelectContent></Select></div><div><Label htmlFor={`batch-amount-${batch.id}`}>Amount</Label><Input id={`batch-amount-${batch.id}`} name="amountDollars" type="number" min="0.01" max={(batch.unappliedCents / 100).toFixed(2)} step="0.01" required /></div><div><Label htmlFor={`batch-notes-${batch.id}`}>Notes</Label><Input id={`batch-notes-${batch.id}`} name="notes" /></div><Button className="self-end" type="submit" disabled={pending || !allocationClaimByBatch[batch.id]}>Request allocation</Button><Button className="self-end" type="button" variant="ghost" disabled={pending} onClick={() => startDifferentRequest(agencyRetryStorageKey(centerId, capabilities.currentUserId, `batch-allocation:${batch.id}`), "allocation request")}>Start different allocation</Button></form> : null}
           {batch.reviewedAt && !batch.reversedAt && canReviewRequest(batch.enteredById) ? <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void post("reverseRemittanceBatch", { batchId: batch.id, reason: form.get("reason") }); }}><div className="min-w-64 flex-1"><Label htmlFor={`batch-reversal-${batch.id}`}>Batch reversal reason</Label><Input id={`batch-reversal-${batch.id}`} name="reason" required /></div><Button type="submit" variant="destructive" disabled={pending}><RotateCcw data-icon="inline-start" /> Reverse batch</Button></form> : null}
           {pendingAllocations.some((allocation) => !canReviewRequest(allocation.requestedById)) ? <p className="mt-3 text-xs text-muted-foreground"><Clock3 data-icon="inline-start" /> A different billing administrator or accounting reviewer must post the pending allocation.</p> : null}
         </div>;

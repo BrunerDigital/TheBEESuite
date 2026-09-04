@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
 import { CollapsibleCard } from "@/components/workspace-preferences";
 import { AgencyReconciliationControls } from "@/components/agency-reconciliation-controls";
+import { agencyRetryStorageKey, persistentAgencyRetryKey, rotateAgencyRetryKey } from "@/lib/agency-retry-key";
 import { agencyProgramSetupBlockers } from "@/lib/agency-subsidy-billing";
 import { isCurrentlyEnrolledChildRecord, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
 
@@ -36,7 +37,6 @@ type Workspace = { programs: Program[]; authorizations: Authorization[]; claims:
 function money(cents: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100); }
 function dateOnly(value: string) { return value ? new Date(value).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"; }
 function today() { return new Date().toISOString().slice(0, 10); }
-function agencyPreparationKey() { return `agency-single:${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`; }
 function familyOptionLabel(family: Family) {
   const people = [...family.children.map((child) => child.fullName), ...family.guardians.map((guardian) => guardian.fullName)]
     .filter((name, index, names) => name && names.indexOf(name) === index);
@@ -196,6 +196,13 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
     if (!claimAction) return;
     const form = new FormData(event.currentTarget);
     const common = { claimId: claimAction.claim.id };
+    const remittanceStorageKey = claimAction.kind === "remit" && data
+      ? agencyRetryStorageKey(centerId, data.capabilities.currentUserId, `single-claim-remittance:${claimAction.claim.id}`)
+      : "";
+    if (claimAction.kind === "remit" && !remittanceStorageKey) {
+      setClaimError("Reload this school before preparing the remittance.");
+      return;
+    }
     let action = "";
     let fields: Record<string, unknown> = common;
     if (claimAction.kind === "document") { action = "updateDocument"; fields = { ...common, documentId: claimAction.document?.id, status: "verified", notes: form.get("notes") }; }
@@ -203,9 +210,12 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
     if (claimAction.kind === "approve") { action = "recordDecision"; fields = { ...common, decision: "approved", approvedDollars: form.get("approvedDollars"), externalReference: form.get("externalReference") }; }
     if (claimAction.kind === "deny") { action = "recordDecision"; fields = { ...common, decision: "denied", denialReason: form.get("reason"), externalReference: form.get("externalReference") }; }
     if (claimAction.kind === "void") { action = "voidClaim"; fields = { ...common, reason: form.get("reason") }; }
-    if (claimAction.kind === "remit") { const externalReference = String(form.get("externalReference") ?? ""); action = "prepareRemittanceBatch"; fields = { ...common, amountDollars: form.get("amountDollars"), totalDollars: form.get("amountDollars"), externalReference, paidAt: form.get("paidAt"), paymentMethod: form.get("paymentMethod"), evidenceName: form.get("evidenceName"), evidenceReference: form.get("evidenceReference"), followUpDueAt: form.get("followUpDueAt"), notes: form.get("notes"), allocations: [{ claimId: claimAction.claim.id, amountDollars: form.get("amountDollars") }], idempotencyKey: claimAction.preparationKey ?? agencyPreparationKey() }; }
+    if (claimAction.kind === "remit") { const externalReference = String(form.get("externalReference") ?? ""); action = "prepareRemittanceBatch"; fields = { ...common, amountDollars: form.get("amountDollars"), totalDollars: form.get("amountDollars"), externalReference, paidAt: form.get("paidAt"), paymentMethod: form.get("paymentMethod"), evidenceName: form.get("evidenceName"), evidenceReference: form.get("evidenceReference"), followUpDueAt: form.get("followUpDueAt"), notes: form.get("notes"), allocations: [{ claimId: claimAction.claim.id, amountDollars: form.get("amountDollars"), notes: form.get("notes") }], idempotencyKey: claimAction.preparationKey ?? persistentAgencyRetryKey(remittanceStorageKey) }; }
     if (claimAction.kind === "reverse") { action = "reverseRemittance"; fields = { ...common, remittanceId: claimAction.remittance?.id, reason: form.get("reason") }; }
-    if (action && await post(action, fields)) setClaimAction(null);
+    if (action && await post(action, fields)) {
+      if (remittanceStorageKey) rotateAgencyRetryKey(remittanceStorageKey);
+      setClaimAction(null);
+    }
   }
 
   async function exportClaims() {
@@ -434,7 +444,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
         {claims.map((claim) => { const incomplete = claim.documents.filter((document) => !["received", "verified", "not_applicable"].includes(document.status)); const documentsEditable = centerId !== "all" && ["draft", "ready", "submitted"].includes(claim.status); return <TableRow key={claim.id}><TableCell className="font-medium">{claim.number}</TableCell><TableCell>{claim.agencyProgram.name}<div className="text-xs text-muted-foreground">{claim.authorization?.child.fullName ?? "No child"}</div></TableCell><TableCell>{dateOnly(claim.servicePeriodStart)} – {dateOnly(claim.servicePeriodEnd)}</TableCell><TableCell><Badge variant="outline">{claim.status.replaceAll("_", " ")}</Badge></TableCell><TableCell>{money(claim.claimedCents)}<div className="text-xs text-muted-foreground">Paid {money(claim.paidCents)}</div>{claim.remittances?.length ? <div className="mt-2 space-y-1">{claim.remittances.map((remittance) => <div key={remittance.id} className="text-xs text-muted-foreground"><span className={remittance.reversedAt ? "line-through" : ""}>{dateOnly(remittance.paidAt)} · {money(remittance.amountCents)} · {remittance.externalReference}</span>{remittance.reversedAt ? <span> · reversed</span> : remittance.allocation ? <span> · batch controlled</span> : centerId !== "all" ? <button type="button" className="ml-2 underline" onClick={() => setClaimAction({ kind: "reverse", claim, remittance })}>Reverse</button> : null}</div>)}</div> : null}</TableCell><TableCell>{claim.requirementBlockers?.length ? <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 p-2 text-xs"><div>Requirements changed.</div>{centerId !== "all" ? <Button className="mt-2" size="sm" variant="outline" onClick={() => void post("syncRequirements", { claimId: claim.id })}>Sync required items</Button> : null}</div> : null}{incomplete.length ? <div className="space-y-1">{claim.documents.map((document) => <button key={document.id} type="button" disabled={!documentsEditable} className="block text-left text-xs underline-offset-2 enabled:hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground" onClick={() => toggleClaimDocument(claim, document)}>{document.status === "verified" ? "✓" : "○"} {document.name}</button>)}</div> : <span className="inline-flex items-center gap-1 text-sm text-emerald-700"><FileCheck2 className="size-4" /> Complete</span>}</TableCell><TableCell><div className="flex flex-wrap gap-2">
           {centerId !== "all" && ["draft", "ready"].includes(claim.status) ? <><Button size="sm" variant="outline" onClick={() => setClaimAction({ kind: "submit", claim })}>Mark submitted</Button><Button size="sm" variant="outline" onClick={() => setClaimAction({ kind: "void", claim })}>Void draft</Button></> : null}
           {centerId !== "all" && claim.status === "submitted" ? <><Button size="sm" variant="outline" onClick={() => setClaimAction({ kind: "approve", claim })}><CheckCircle2 data-icon="inline-start" /> Record approval</Button><Button size="sm" variant="outline" onClick={() => setClaimAction({ kind: "deny", claim })}>Record denial</Button></> : null}
-          {centerId !== "all" && ["approved", "partially_paid"].includes(claim.status) ? <Button size="sm" onClick={() => setClaimAction({ kind: "remit", claim, preparationKey: agencyPreparationKey() })}><BadgeDollarSign data-icon="inline-start" /> Prepare remittance</Button> : null}
+          {centerId !== "all" && data && ["approved", "partially_paid"].includes(claim.status) ? <Button size="sm" onClick={() => { const storageKey = agencyRetryStorageKey(centerId, data.capabilities.currentUserId, `single-claim-remittance:${claim.id}`); setClaimAction({ kind: "remit", claim, preparationKey: persistentAgencyRetryKey(storageKey) }); }}><BadgeDollarSign data-icon="inline-start" /> Prepare remittance</Button> : null}
         </div></TableCell></TableRow>; })}
         {!claims.length ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No agency claims for this school yet.</TableCell></TableRow> : null}
       </TableBody></Table></div>{claimPagination ? <div className="mt-4 flex items-center justify-between gap-3"><span className="text-sm text-muted-foreground">Claim queue page {claimPagination.page}</span><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={pending || claimPagination.page <= 1} onClick={() => { setPending(true); setClaimPage((page) => Math.max(page - 1, 1)); }}>Previous</Button><Button type="button" size="sm" variant="outline" disabled={pending || !claimPagination.hasNext || !claimPagination.nextCursor} onClick={() => { if (!claimPagination.nextCursor) return; setPending(true); setClaimCursorByPage((cursors) => ({ ...cursors, [claimPage + 1]: claimPagination.nextCursor as string })); setClaimPage((page) => page + 1); }}>Next</Button></div></div> : null}
@@ -460,7 +470,7 @@ export function AgencySubsidyWorkspace({ centers }: { centers: Array<{ id: strin
               <p className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-sm">Saving prepares a deposit batch for a different billing administrator or accounting reviewer. The claim and ledger do not change until that review is approved.</p>
             </> : null}
             {claimAction.kind === "reverse" ? <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">This preserves the original remittance, marks it reversed, restores any linked agency receivable, and recalculates the claim. Re-enter the corrected remittance afterward.</p> : null}
-            <DialogFooter><Button type="button" variant="outline" onClick={() => setClaimAction(null)} disabled={pending}>Cancel</Button><Button type="submit" disabled={pending}>{pending ? "Saving…" : claimAction.kind === "reverse" ? "Reverse remittance" : claimAction.kind === "remit" ? "Prepare for review" : "Review complete — save"}</Button></DialogFooter>
+            <DialogFooter>{claimAction.kind === "remit" && data ? <Button type="button" variant="ghost" disabled={pending} onClick={() => { if (!globalThis.confirm("Start a different remittance? First check the review queue in case the earlier request was saved.")) return; const storageKey = agencyRetryStorageKey(centerId, data.capabilities.currentUserId, `single-claim-remittance:${claimAction.claim.id}`); const preparationKey = rotateAgencyRetryKey(storageKey); setClaimAction((current) => current ? { ...current, preparationKey } : current); }}>Start different remittance</Button> : null}<Button type="button" variant="outline" onClick={() => setClaimAction(null)} disabled={pending}>Cancel</Button><Button type="submit" disabled={pending}>{pending ? "Saving…" : claimAction.kind === "reverse" ? "Reverse remittance" : claimAction.kind === "remit" ? "Prepare for review" : "Review complete — save"}</Button></DialogFooter>
           </form> : null}
         </DialogContent>
       </Dialog>

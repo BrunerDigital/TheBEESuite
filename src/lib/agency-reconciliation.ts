@@ -52,7 +52,7 @@ export function agencyBatchFingerprint(input: {
   evidenceName?: string | null;
   evidenceReference?: string | null;
   followUpDueAt?: Date | string | null;
-  allocations: Array<{ claimId: string; amountCents: number }>;
+  allocations: Array<{ claimId: string; amountCents: number; notes?: string | null }>;
 }) {
   return hash({
     centerId: clean(input.centerId),
@@ -66,7 +66,7 @@ export function agencyBatchFingerprint(input: {
     evidenceReference: clean(input.evidenceReference),
     followUpDueAt: input.followUpDueAt ? new Date(input.followUpDueAt).toISOString() : "",
     allocations: [...input.allocations]
-      .map((allocation) => ({ claimId: clean(allocation.claimId), amountCents: Math.round(allocation.amountCents) }))
+      .map((allocation) => ({ claimId: clean(allocation.claimId), amountCents: Math.round(allocation.amountCents), notes: clean(allocation.notes) }))
       .sort((left, right) => left.claimId.localeCompare(right.claimId)),
   });
 }

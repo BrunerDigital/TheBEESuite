@@ -225,8 +225,10 @@ test("agency remittances are staged, independently reviewed, and posted serializ
   assert.match(route, /REMITTANCE_METHODS/);
   assert.match(route, /entryAuthorizationNumber && entryAgencyName[\s\S]*entryAuthorizationNumber === authorizationNumber && entryAgencyName === agencyName/);
   assert.match(route, /already have a remittance batch with this payment reference/);
-  assert.match(workspace, /preparationKey: agencyPreparationKey\(\)/);
-  assert.match(workspace, /idempotencyKey: claimAction\.preparationKey \?\? agencyPreparationKey\(\)/);
+  assert.match(workspace, /preparationKey: persistentAgencyRetryKey\(storageKey\)/);
+  assert.match(workspace, /idempotencyKey: claimAction\.preparationKey \?\? persistentAgencyRetryKey\(remittanceStorageKey\)/);
+  assert.match(workspace, /allocations: \[\{ claimId: claimAction\.claim\.id, amountDollars: form\.get\("amountDollars"\), notes: form\.get\("notes"\) \}\]/);
+  assert.match(workspace, /Start different remittance/);
   assert.doesNotMatch(workspace, /agency-single:\$\{claimAction\.claim\.id\}:\$\{externalReference\.trim\(\)\.toUpperCase\(\)\}/);
   assert.match(workspace, /Prepare remittance/);
   assert.match(reconciliation, /Approve and post/);
@@ -269,6 +271,7 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   const schema = readFileSync("prisma/schema.prisma", "utf8");
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const controls = readFileSync("src/components/agency-reconciliation-controls.tsx", "utf8");
+  const retryKeys = readFileSync("src/lib/agency-retry-key.ts", "utf8");
   const prismaMigration = readFileSync("prisma/migrations/20260903210000_agency_reconciliation_controls/migration.sql", "utf8");
   const supabaseMigration = readFileSync("supabase/migrations/20260903210000_agency_reconciliation_controls.sql", "utf8");
 
@@ -317,12 +320,15 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /status: \{ in: \["pending_review", "unmatched", "partially_allocated", "exception"\] \}/);
   assert.match(route, /new Map\(\[\.\.\.unresolvedBatches, \.\.\.recentBatches\]/);
   assert.match(route, /new Map\(\[\.\.\.unresolvedAdjustments, \.\.\.recentAdjustments\]/);
-  assert.match(controls, /globalThis\.sessionStorage\?\.getItem\(storageKey\)/);
-  assert.match(controls, /retryStorageKey\(centerId, capabilities\.currentUserId, `batch-allocation:\$\{batch\.id\}`\)/);
-  assert.match(controls, /retryStorageKey\(centerId, capabilities\.currentUserId, "ledger-adjustment"\)/);
+  assert.match(retryKeys, /globalThis\.sessionStorage\?\.getItem\(storageKey\)/);
+  assert.match(controls, /agencyRetryStorageKey\(centerId, capabilities\.currentUserId, `batch-allocation:\$\{batch\.id\}`\)/);
+  assert.match(controls, /agencyRetryStorageKey\(centerId, capabilities\.currentUserId, "ledger-adjustment"\)/);
   assert.match(controls, /post\("requestBatchAllocation"[\s\S]*idempotencyKey: requestKey/);
-  assert.match(controls, /post\("requestLedgerAdjustment"[\s\S]*idempotencyKey: persistentIdempotencyKey\(storageKey\)/);
-  assert.match(controls, /rotatePersistentIdempotencyKey\(storageKey\)/);
+  assert.match(controls, /post\("requestLedgerAdjustment"[\s\S]*idempotencyKey: persistentAgencyRetryKey\(storageKey\)/);
+  assert.match(controls, /Start different batch/);
+  assert.match(controls, /Start different adjustment/);
+  assert.match(controls, /Start different allocation/);
+  assert.match(controls, /rotateAgencyRetryKey\(storageKey\)/);
   assert.match(route, /exportAgencyReconciliationCsv/);
   assert.match(route, /exportAgencyDepositsCsv/);
   assert.match(route, /overdueFollowUpCount/);

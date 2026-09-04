@@ -5168,6 +5168,13 @@ export type BillingInvoicesPageData = {
     paymentId?: string | null;
     billingAccount: { family: { id: string; name: string; billingEmail: string | null; centerId: string | null } };
   }>;
+  ledgerAccounts: Array<{
+    familyId: string;
+    familyName: string;
+    billingEmail: string | null;
+    centerId: string | null;
+    balanceCents: number;
+  }>;
   stats: {
     total: number;
     open: number;
@@ -5234,10 +5241,17 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
   }
 
   const ledgerFamilyOptions = Array.from(new Map([
-    ...data.workbench.families.map((family) => [family.id, { id: family.id, name: family.name }] as const),
+    ...data.workbench.families.map((family) => [
+      family.id,
+      { id: family.id, name: family.name, centerId: family.centerId },
+    ] as const),
     ...data.ledgerEntries.map((entry) => [
       entry.billingAccount.family.id,
-      { id: entry.billingAccount.family.id, name: entry.billingAccount.family.name },
+      {
+        id: entry.billingAccount.family.id,
+        name: entry.billingAccount.family.name,
+        centerId: entry.billingAccount.family.centerId,
+      },
     ] as const),
   ]).values()).toSorted((left, right) => left.name.localeCompare(right.name));
 
@@ -5527,6 +5541,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       </Card>
       <FamilyLedgerCard
         entries={data.ledgerEntries}
+        accounts={data.ledgerAccounts}
         families={ledgerFamilyOptions}
         schools={data.receiptSchools}
         initialFamilyId={data.initialSelection?.familyId}

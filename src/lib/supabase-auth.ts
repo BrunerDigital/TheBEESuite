@@ -349,6 +349,40 @@ export async function supabaseAuthUserExistsByEmail(email: string) {
   return Boolean(user);
 }
 
+export async function updateSupabaseAuthUserEmailByCurrentEmail({
+  currentEmail,
+  newEmail,
+  metadataSource = "parent_portal_email_change",
+}: {
+  currentEmail: string;
+  newEmail: string;
+  metadataSource?: "parent_portal_email_change" | "parent_portal_email_change_rollback";
+}) {
+  const normalizedCurrentEmail = currentEmail.trim().toLowerCase();
+  const normalizedNewEmail = newEmail.trim().toLowerCase();
+  if (!isSupabaseAuthCompatibleEmail(normalizedCurrentEmail) || !isSupabaseAuthCompatibleEmail(normalizedNewEmail)) {
+    return { ok: false as const, error: "A valid current and new parent login email is required." };
+  }
+  const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedCurrentEmail);
+  if (!user) return { ok: false as const, error: "The existing parent login was not found in Supabase Auth." };
+  const { user: conflictingUser } = await findSupabaseAuthUserByEmail(normalizedNewEmail);
+  if (conflictingUser && conflictingUser.id !== user.id) {
+    return { ok: false as const, error: "The new email is already assigned to another login." };
+  }
+  const changedAt = new Date().toISOString();
+  const { error } = await supabase.auth.admin.updateUserById(user.id, {
+    email: normalizedNewEmail,
+    email_confirm: true,
+    user_metadata: {
+      ...(user.user_metadata ?? {}),
+      email_change_source: metadataSource,
+      email_changed_at: changedAt,
+    },
+  });
+  if (error) return { ok: false as const, error: error.message || "The parent login email could not be updated." };
+  return { ok: true as const, authUserId: user.id, changedAt };
+}
+
 export async function getSupabaseAuthUserMetadataByEmail(email: string) {
   const { user } = await findSupabaseAuthUserByEmail(email.toLowerCase());
   if (!user) return null;

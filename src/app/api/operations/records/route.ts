@@ -32,10 +32,12 @@ import {
   DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY,
 } from "@/lib/daily-report-email-settings";
 import {
+  changeParentPortalLoginEmail,
   disableParentPortalLoginForGuardian,
   ensureParentPortalLoginForGuardian,
   hasConflictingGuardianFamilyLinks,
   parentPortalAccessFields,
+  parentPortalLinkedFields,
 } from "@/lib/parent-portal-logins";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
 import { activeClassroomWhere } from "@/lib/classroom-status";
@@ -738,7 +740,7 @@ async function POSTHandler(request: NextRequest) {
     if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
     centerId = access.centerId;
     const existing = id
-      ? await prisma.guardian.findUnique({ where: { id }, select: { familyId: true, checkInPinHash: true, customFields: true, userId: true } })
+      ? await prisma.guardian.findUnique({ where: { id }, select: { familyId: true, checkInPinHash: true, customFields: true, userId: true, email: true } })
       : null;
     if (id) {
       const guard = scopedUpdateGuard({ entity: "Guardian", expectedScopeId: familyId, actualScopeId: existing?.familyId, scopeLabel: "family" });
@@ -773,6 +775,45 @@ async function POSTHandler(request: NextRequest) {
         { ok: false, error: "A billing contact needs a valid email address before parent portal access can be prepared." },
         { status: 400 },
       );
+    }
+    const existingEmail = clean(existing?.email).toLowerCase();
+    const requestedEmail = clean(data.email).toLowerCase();
+    if (id && existing?.userId && parentPortalLoginEnabled && existingEmail !== requestedEmail) {
+      const emailChange = await changeParentPortalLoginEmail({
+        guardianId: id,
+        newEmail: requestedEmail,
+        actorEmail: user.email,
+        allowedCenterIds: user.centerIds,
+      });
+      if (!emailChange.ok) {
+        const emailChangeErrors: Record<string, string> = {
+          guardian_email_invalid: "Enter a valid new parent login email.",
+          parent_portal_login_not_linked: "This parent does not have a linked portal login.",
+          linked_parent_user_not_found: "The linked parent login could not be found.",
+          user_tenant_mismatch: "The linked parent login belongs to a different tenant.",
+          linked_guardian_tenant_mismatch: "This parent login has a guardian link outside the selected tenant and must be reviewed before its email can change.",
+          linked_guardian_scope_mismatch: "This parent login is linked to another school outside your active workspace. Switch to an authorized all-locations workspace or contact an administrator before changing its email.",
+          existing_parent_login_email_invalid: "The existing parent login email must be repaired before it can be changed.",
+          new_email_already_in_use: "That email is already assigned to another parent or user.",
+        };
+        return NextResponse.json(
+          { ok: false, error: emailChangeErrors[emailChange.reason] ?? emailChange.reason },
+          { status: emailChange.status ?? 409 },
+        );
+      }
+      auditMetadata.parentPortalEmailChange = {
+        previousEmail: emailChange.previousEmail,
+        newEmail: emailChange.newEmail,
+        userId: emailChange.userId,
+        updatedGuardianIds: emailChange.updatedGuardianIds,
+        billingAndPaymentHistoryPreserved: true,
+      };
+      data.customFields = parentPortalLinkedFields({
+        customFields: data.customFields,
+        loginEmail: emailChange.newEmail,
+        linkedBy: user.email,
+        linkedReason: "parent_portal_email_change",
+      });
     }
     const guardian = id ? await prisma.guardian.update({ where: { id }, data }) : await prisma.guardian.create({ data });
     const defaultPinData = !guardian.checkInPinHash

@@ -49,5 +49,7 @@ test("standard statements hide both sides of a voided invoice without deleting l
 test("family statement date ranges resolve the selected family's school time zone", () => {
   const component = readFileSync(new URL("../src/components/family-ledger-card.tsx", import.meta.url), "utf8");
   assert.match(component, /useSchoolTimeZoneResolver/);
-  assert.match(component, /resolveSchoolTimeZone\(visibleEntries\[0\]\?\.billingAccount\.family\.centerId\)/);
+  assert.match(component, /resolveSchoolTimeZone\(selectedCenterId\)/);
+  assert.match(component, /currentBalanceCents = selectedAccount\?\.balanceCents/);
+  assert.match(component, /familyName=\{selectedAccount\?\.familyName/);
 });

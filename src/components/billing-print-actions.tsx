@@ -99,7 +99,7 @@ function paymentTypeLabel(provider: string) {
 }
 
 export function LedgerPrintButton({ entries, schools }: { entries: BillingLedgerPrintEntry[]; schools: BillingReceiptSchool[] }) {
-  const timeZone = useSchoolTimeZone();
+  const timeZone = useSchoolTimeZone(entries[0]?.billingAccount.family.centerId);
   const { active, generatedAt, print } = usePrintableReport();
   const familyName = entries[0]?.billingAccount.family.name.trim();
   const reportTitle = familyName ? `${familyName} Ledger Report` : "Family Ledger Report";
@@ -165,23 +165,24 @@ export function LedgerPrintButton({ entries, schools }: { entries: BillingLedger
 export function CustomerStatementPrintButton({
   entries,
   schools,
+  familyName,
+  centerId,
   currentBalanceCents,
 }: {
   entries: BillingLedgerPrintEntry[];
   schools: BillingReceiptSchool[];
+  familyName: string | null;
+  centerId: string | null;
   currentBalanceCents: number | null;
 }) {
-  const timeZone = useSchoolTimeZone(entries[0]?.billingAccount.family.centerId);
+  const timeZone = useSchoolTimeZone(centerId);
   const { active, generatedAt, print } = usePrintableReport();
-  const familyName = entries[0]?.billingAccount.family.name.trim();
-  const school = entries.length
-    ? schoolForCenterId(schools, entries[0].billingAccount.family.centerId)
-    : schools.length === 1 ? schools[0] : null;
+  const school = schoolForCenterId(schools, centerId);
 
   return (
     <>
       <ReportPrintStyles />
-      <Button type="button" variant="outline" size="sm" onClick={print} disabled={!entries.length}>
+      <Button type="button" variant="outline" size="sm" onClick={print} disabled={!familyName}>
         <Printer data-icon="inline-start" />
         Customer statement
       </Button>
@@ -205,6 +206,7 @@ export function CustomerStatementPrintButton({
                 <td>{entry.amountCents < 0 ? money(Math.abs(entry.amountCents)) : ""}</td>
               </tr>
             ))}
+            {!entries.length ? <tr><td colSpan={4}>No charge or payment activity in the selected date range.</td></tr> : null}
           </tbody>
         </table>
       </PrintableReport>

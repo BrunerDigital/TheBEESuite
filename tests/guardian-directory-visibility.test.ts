@@ -47,6 +47,8 @@ test("linked parent email changes preserve the existing account and billing hist
   assert.match(operationsRoute, /billingAndPaymentHistoryPreserved: true/);
   assert.match(parentLogins, /sessionVersion: \{ increment: 1 \}/);
   assert.match(parentLogins, /billingEmail: normalizedNewEmail/);
+  assert.match(parentLogins, /billingFamilyIds/);
+  assert.match(parentLogins, /tx\.family\.updateMany/);
   assert.doesNotMatch(parentLogins, /billingAccount\.(?:update|delete)|payment\.(?:update|delete)|invoice\.(?:update|delete)/);
   assert.match(supabaseAuth, /updateSupabaseAuthUserEmailByCurrentEmail/);
   assert.match(parentLogins, /parent_portal_email_change_rollback/);

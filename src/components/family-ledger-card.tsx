@@ -55,11 +55,19 @@ function ledgerTypeLabel(value: string) {
 
 export function FamilyLedgerCard({
   entries,
+  accounts,
   families,
   schools,
   initialFamilyId = "",
 }: {
   entries: FamilyLedgerEntry[];
+  accounts: Array<{
+    familyId: string;
+    familyName: string;
+    billingEmail: string | null;
+    centerId: string | null;
+    balanceCents: number;
+  }>;
   families: FamilyOption[];
   schools: BillingReceiptSchool[];
   initialFamilyId?: string;
@@ -72,11 +80,13 @@ export function FamilyLedgerCard({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const selectedFamily = families.find((family) => family.id === familyId) ?? null;
+  const selectedAccount = accounts.find((account) => account.familyId === familyId) ?? null;
   const visibleEntries = useMemo(
     () => filterFamilyLedgerEntries(entries, familyId),
     [entries, familyId],
   );
-  const timeZone = resolveSchoolTimeZone(visibleEntries[0]?.billingAccount.family.centerId);
+  const selectedCenterId = selectedAccount?.centerId ?? visibleEntries[0]?.billingAccount.family.centerId ?? null;
+  const timeZone = resolveSchoolTimeZone(selectedCenterId);
   const rangedEntries = useMemo(
     () => filterLedgerEntriesByDateRange(visibleEntries, startDate, endDate, (value) => zonedDateKey(value, timeZone)),
     [visibleEntries, startDate, endDate, timeZone],
@@ -88,7 +98,7 @@ export function FamilyLedgerCard({
     })),
     [rangedEntries],
   );
-  const currentBalanceCents = visibleEntries.find((entry) => entry.balanceAfterCents !== null)?.balanceAfterCents ?? null;
+  const currentBalanceCents = selectedAccount?.balanceCents ?? null;
   const customerStatementEntries = useMemo(
     () => filterLedgerEntriesByDateRange(
       standardCustomerStatementEntries(visibleEntries),
@@ -138,7 +148,13 @@ export function FamilyLedgerCard({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <CustomerStatementPrintButton entries={customerStatementEntries} schools={schools} currentBalanceCents={currentBalanceCents} />
+            <CustomerStatementPrintButton
+              entries={customerStatementEntries}
+              schools={schools}
+              familyName={selectedAccount?.familyName ?? selectedFamily?.name ?? null}
+              centerId={selectedCenterId}
+              currentBalanceCents={currentBalanceCents}
+            />
             <ChargeCreditSummaryPrintButton entries={printableEntries} schools={schools} />
             <LedgerPrintButton entries={printableEntries} schools={schools} />
           </div>

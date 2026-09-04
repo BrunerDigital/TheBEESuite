@@ -3894,7 +3894,10 @@ async function renderLivePage(
           balanceCents: true,
           family: {
             select: {
+              id: true,
               name: true,
+              billingEmail: true,
+              centerId: true,
               _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
             },
           },
@@ -4328,6 +4331,13 @@ async function renderLivePage(
             _count: invoice._count,
           })),
           ledgerEntries,
+          ledgerAccounts: billingAccountRows.map((account) => ({
+            familyId: account.family.id,
+            familyName: account.family.name,
+            billingEmail: account.family.billingEmail,
+            centerId: account.family.centerId,
+            balanceCents: account.balanceCents,
+          })),
           stats: { total, open, paid, outstandingCents: currentFamilyOutstandingCents },
           formerFamilyBalanceSummary,
           arReport,

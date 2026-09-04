@@ -343,7 +343,12 @@ export async function changeParentPortalLoginEmail({
     }),
     prisma.guardian.findMany({
       where: { userId: parentUser.id },
-      select: { id: true, customFields: true, family: { select: { centerId: true } } },
+      select: {
+        id: true,
+        familyId: true,
+        customFields: true,
+        family: { select: { centerId: true, billingEmail: true } },
+      },
     }),
   ]);
   if (conflictingUser) return { ok: false, status: 409, reason: "new_email_already_in_use" };
@@ -389,8 +394,11 @@ export async function changeParentPortalLoginEmail({
           },
         });
       }
-      if (guardian.family.billingEmail?.trim().toLowerCase() === previousEmail) {
-        await tx.family.update({ where: { id: guardian.familyId }, data: { billingEmail: normalizedNewEmail } });
+      const billingFamilyIds = [...new Set(linkedGuardians.flatMap((item) => (
+        item.family.billingEmail?.trim().toLowerCase() === previousEmail ? [item.familyId] : []
+      )))];
+      if (billingFamilyIds.length) {
+        await tx.family.updateMany({ where: { id: { in: billingFamilyIds } }, data: { billingEmail: normalizedNewEmail } });
       }
     });
   } catch (error) {

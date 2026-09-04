@@ -5168,6 +5168,13 @@ export type BillingInvoicesPageData = {
     paymentId?: string | null;
     billingAccount: { family: { id: string; name: string; billingEmail: string | null; centerId: string | null } };
   }>;
+  ledgerAccounts: Array<{
+    familyId: string;
+    familyName: string;
+    billingEmail: string | null;
+    centerId: string | null;
+    balanceCents: number;
+  }>;
   stats: {
     total: number;
     open: number;
@@ -5527,6 +5534,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       </Card>
       <FamilyLedgerCard
         entries={data.ledgerEntries}
+        accounts={data.ledgerAccounts}
         families={ledgerFamilyOptions}
         schools={data.receiptSchools}
         initialFamilyId={data.initialSelection?.familyId}

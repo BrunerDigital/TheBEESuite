@@ -253,7 +253,7 @@ Use `docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md` or the public guide at `https://
 1. Open `Billing & Payments` -> `Billing & invoices` -> `Agency receivables` for the exact school.
 2. Confirm the school-specific agency program shows `Ready`.
 3. Match the approved claim and remittance evidence to the agency, child, authorization, service period, amount, paid date, method, and unique payment reference.
-4. Prepare one deposit batch and its exact claim allocations. Unsupported cash remains unapplied with an owner and follow-up date; never guess an allocation or use the family cash/check action.
+4. Prepare one deposit batch and its exact claim allocations. Use each claim only once per active batch allocation. Unsupported cash remains unapplied with an owner and follow-up date; never guess an allocation or use the family cash/check action.
 5. A different billing administrator or accounting reviewer approves or rejects the batch. The preparer cannot post their own batch.
 6. Refresh and verify deposit total equals allocated plus unapplied cash, the calculated and agency-ledger balances have zero variance, and family responsibility is unchanged.
 7. Use reviewed adjustment or batch-reversal controls for corrections. Never delete or overwrite financial evidence.

@@ -313,6 +313,7 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /action === "requestLedgerAdjustment"/);
   assert.match(route, /action === "requestBatchAllocation"[\s\S]*agencyRemittanceAllocation\.findUnique\(\{ where: \{ idempotencyKey \}/);
   assert.match(route, /This retry key was already used for a different batch allocation/);
+  assert.match(route, /existingActiveClaimAllocation[\s\S]*batchId: batch\.id, claimId, status: \{ in: \["pending_review", "posted"\] \}[\s\S]*already has an active allocation for that claim/);
   assert.match(route, /idempotencyKey: `batch-allocation:\$\{batch\.id\}:\$\{allocation\.claimId\}`/);
   assert.match(route, /agencyAllocationFingerprint\(\{ batchId, claimId, amountCents, notes \}\)/);
   assert.match(route, /action === "requestLedgerAdjustment"[\s\S]*agencyLedgerAdjustment\.findUnique\(\{ where: \{ idempotencyKey \}/);

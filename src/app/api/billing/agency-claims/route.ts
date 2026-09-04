@@ -1606,6 +1606,11 @@ async function postHandler(request: NextRequest) {
         if (!batch || !centerAllowed(auth.user, batch.centerId)) throw new AgencyWorkflowError("Remittance batch not found.", 404);
         if (batch.reversedAt || !new Set(["unmatched", "partially_allocated", "exception"]).has(batch.status)) throw new AgencyWorkflowError("Only an unreversed batch with unapplied cash can receive another allocation.", 409);
         if (amountCents > batch.unappliedCents) throw new AgencyWorkflowError("The new allocation exceeds the batch's unapplied amount.", 409);
+        const existingActiveClaimAllocation = await tx.agencyRemittanceAllocation.findFirst({
+          where: { batchId: batch.id, claimId, status: { in: ["pending_review", "posted"] } },
+          select: { id: true },
+        });
+        if (existingActiveClaimAllocation) throw new AgencyWorkflowError("This batch already has an active allocation for that claim. Review or reverse it before creating another.", 409);
         const current = await agencyPostingClaim(tx, claimId);
         if (!current || current.centerId !== batch.centerId || current.agencyProgramId !== batch.agencyProgramId) throw new AgencyWorkflowError("Choose an approved claim from this batch's school and agency.", 409);
         const paidBeforeCents = activeRemittanceTotalCents(current.remittances);

@@ -50,7 +50,7 @@ Duplicate references and replayed requests are blocked per school and agency. Re
 2. The reviewer approves or rejects the batch. The preparer cannot approve their own batch.
 3. Approval posts claim allocations and one explicit unapplied-cash entry for any remainder in one serializable transaction.
 4. The reviewer confirms the deposit total equals allocated plus unapplied cash.
-5. Later allocations from unapplied cash also require a different reviewer and post in the current open accounting period while retaining the original paid date.
+5. Later allocations from unapplied cash also require a different reviewer and post in the current open accounting period while retaining the original paid date. A batch may have only one pending or posted allocation for the same claim; review or reverse it before entering a corrected allocation.
 
 No agency payment is final until independent review succeeds.
 

@@ -308,6 +308,8 @@ type AgencyLedgerClaimInput = {
   number: string;
   approvedCents: number | null;
   approvedAt: Date | null;
+  updatedAt: Date;
+  createdAt: Date;
   externalReference: string | null;
   agencyProgram: { name: string };
 };
@@ -378,7 +380,7 @@ async function ensureAgencyClaimReceivable(tx: Prisma.TransactionClient, claim: 
   if (existing) return { entry: existing, created: false };
   const approvedCents = claim.approvedCents ?? 0;
   if (approvedCents <= 0) throw new AgencyWorkflowError("Record a positive agency approval before creating its receivable.", 409);
-  const effectiveAt = claim.approvedAt ?? new Date();
+  const effectiveAt = claim.approvedAt ?? claim.updatedAt ?? claim.createdAt;
   await assertAgencyPeriodOpen(tx, claim.centerId, effectiveAt);
   const result = await appendAgencyLedgerEntry(tx, {
     centerId: claim.centerId,
@@ -903,9 +905,10 @@ async function getHandler(request: NextRequest) {
   const ledgerAccountId = clean(request.nextUrl.searchParams.get("ledgerAccountId"));
   const ledgerType = clean(request.nextUrl.searchParams.get("ledgerType"));
   const ledgerQuery = clean(request.nextUrl.searchParams.get("ledgerQuery"));
-  const ledgerFrom = dateValue(request.nextUrl.searchParams.get("ledgerFrom"));
+  const ledgerFromInput = dateValue(request.nextUrl.searchParams.get("ledgerFrom"));
   const ledgerToInput = dateValue(request.nextUrl.searchParams.get("ledgerTo"));
-  const ledgerTo = ledgerToInput ? new Date(ledgerToInput.getTime() + 86_400_000 - 1) : null;
+  const ledgerFrom = ledgerFromInput ? agencyUtcCalendarRange(ledgerFromInput, ledgerFromInput).startInclusive : null;
+  const ledgerToExclusive = ledgerToInput ? agencyUtcCalendarRange(ledgerToInput, ledgerToInput).endExclusive : null;
   const centerIds = requestedCenterId
     ? centerAllowed(auth.user, requestedCenterId) ? [requestedCenterId] : []
     : auth.user.centerIds;
@@ -919,7 +922,7 @@ async function getHandler(request: NextRequest) {
   const ledgerWhere: Prisma.AgencyLedgerEntryWhereInput = {
     agencyLedgerAccount: { centerId: { in: centerIds }, ...(ledgerAccountId ? { id: ledgerAccountId } : {}) },
     ...(ledgerType ? { type: ledgerType } : {}),
-    ...(ledgerFrom || ledgerTo ? { effectiveAt: { ...(ledgerFrom ? { gte: ledgerFrom } : {}), ...(ledgerTo ? { lte: ledgerTo } : {}) } } : {}),
+    ...(ledgerFrom || ledgerToExclusive ? { effectiveAt: { ...(ledgerFrom ? { gte: ledgerFrom } : {}), ...(ledgerToExclusive ? { lt: ledgerToExclusive } : {}) } } : {}),
     ...(ledgerQuery ? { OR: [
       { externalReference: { contains: ledgerQuery, mode: "insensitive" } },
       { description: { contains: ledgerQuery, mode: "insensitive" } },
@@ -1063,7 +1066,6 @@ async function getHandler(request: NextRequest) {
     prisma.agencyAccountingPeriod.findMany({
       where: { centerId: { in: centerIds } },
       orderBy: [{ startDate: "desc" }, { id: "desc" }],
-      take: 36,
     }),
     prisma.subsidyClaim.findMany({
       where: { centerId: { in: centerIds }, approvedCents: { gt: 0 }, status: { notIn: ["void", "denied"] } },
@@ -1916,11 +1918,31 @@ async function postHandler(request: NextRequest) {
     const reason = clean(body.reason);
     if (!canCloseAgencyAccountingPeriod(auth.user.role)) return NextResponse.json({ ok: false, error: "Only a billing administrator or higher accounting role can reopen an agency accounting period." }, { status: 403 });
     if (!reason) return NextResponse.json({ ok: false, error: "Enter a specific reason for reopening the period." }, { status: 400 });
-    const existing = await prisma.agencyAccountingPeriod.findUnique({ where: { id: periodId } });
-    if (!existing || !centerAllowed(auth.user, existing.centerId)) return NextResponse.json({ ok: false, error: "Accounting period not found." }, { status: 404 });
-    if (existing.status !== "closed") return NextResponse.json({ ok: false, error: "This accounting period is not closed." }, { status: 409 });
-    const period = await prisma.agencyAccountingPeriod.update({ where: { id: existing.id }, data: { status: "open", reopenedAt: new Date(), reopenedById: auth.user.id, reopenReason: reason } });
-    await writeAuditLog(auth.user, { centerId: existing.centerId, action: "billing.agency_accounting_period.reopened", resource: "AgencyAccountingPeriod", resourceId: period.id, metadata: { reasonRecorded: true } });
+    let period;
+    try {
+      period = await prisma.$transaction(async (tx) => {
+        const existing = await tx.agencyAccountingPeriod.findUnique({ where: { id: periodId } });
+        if (!existing || !centerAllowed(auth.user, existing.centerId)) throw new AgencyWorkflowError("Accounting period not found.", 404);
+        if (existing.status !== "closed") throw new AgencyWorkflowError("This accounting period is not closed.", 409);
+        const laterClosedPeriod = await tx.agencyAccountingPeriod.findFirst({
+          where: { centerId: existing.centerId, status: "closed", startDate: { gt: existing.startDate } },
+          orderBy: [{ startDate: "desc" }, { id: "desc" }],
+          select: { name: true },
+        });
+        if (laterClosedPeriod) throw new AgencyWorkflowError(`Reopen the later closed period ${laterClosedPeriod.name} first.`, 409);
+        const transition = await tx.agencyAccountingPeriod.updateMany({
+          where: { id: existing.id, status: "closed" },
+          data: { status: "open", reopenedAt: new Date(), reopenedById: auth.user.id, reopenReason: reason },
+        });
+        if (transition.count !== 1) throw new AgencyWorkflowError("The accounting period changed while it was being reopened. Refresh and try again.", 409);
+        return tx.agencyAccountingPeriod.findUniqueOrThrow({ where: { id: existing.id } });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+      if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The accounting period changed while it was being reopened. Refresh and try again." }, { status: 409 });
+      throw error;
+    }
+    await writeAuditLog(auth.user, { centerId: period.centerId, action: "billing.agency_accounting_period.reopened", resource: "AgencyAccountingPeriod", resourceId: period.id, metadata: { reasonRecorded: true } });
     return NextResponse.json({ ok: true, period });
   }
 

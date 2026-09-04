@@ -335,7 +335,7 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.doesNotMatch(route, /approvedCents: \{ gt: 0 \},\s+status:[\s\S]{0,200}ledgerEntries:/);
   assert.match(route, /paidAt: \{ lt: endExclusive \},\s+ledgerEntries: \{\s+none: \{\s+sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,\s+type: "remittance_received"/);
   assert.match(route, /const approvedAt = decision === "approved" \? new Date\(\) : null;\s+if \(approvedAt\) await assertAgencyPeriodOpen\(tx, current\.centerId, approvedAt\);[\s\S]*ensureAgencyClaimReceivable/);
-  assert.match(route, /const effectiveAt = claim\.approvedAt \?\? new Date\(\);\s+await assertAgencyPeriodOpen\(tx, claim\.centerId, effectiveAt\)/);
+  assert.match(route, /const effectiveAt = claim\.approvedAt \?\? claim\.updatedAt \?\? claim\.createdAt;\s+await assertAgencyPeriodOpen\(tx, claim\.centerId, effectiveAt\)/);
   assert.match(route, /agencyLedgerRunningBalances\(entries, finalBalanceCents - entryTotalCents\)/);
   assert.match(route, /entry\.type === "remittance_received"[\s\S]*entry\.type === "remittance_reversal"/);
   assert.match(route, /return netVarianceCount \+ missingLedgerEventCount/);
@@ -361,6 +361,13 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.doesNotMatch(route, /approvedAt: \{ lt: endExclusive \}/);
   assert.match(route, /const approvalEffectiveAt = approvalEntry\?\.effectiveAt \?\? claim\.approvedAt \?\? claim\.updatedAt \?\? claim\.createdAt/);
   assert.match(route, /if \(approvalEffectiveAt >= endExclusive\) continue/);
+  assert.match(route, /const effectiveAt = claim\.approvedAt \?\? claim\.updatedAt \?\? claim\.createdAt/);
+  assert.match(route, /const ledgerFrom = ledgerFromInput \? agencyUtcCalendarRange\(ledgerFromInput, ledgerFromInput\)\.startInclusive : null/);
+  assert.match(route, /const ledgerToExclusive = ledgerToInput \? agencyUtcCalendarRange\(ledgerToInput, ledgerToInput\)\.endExclusive : null/);
+  assert.match(route, /effectiveAt: \{[\s\S]*gte: ledgerFrom[\s\S]*lt: ledgerToExclusive/);
+  assert.doesNotMatch(route, /agencyAccountingPeriod\.findMany\(\{[\s\S]{0,240}take: 36/);
+  assert.match(route, /action === "reopenAccountingPeriod"[\s\S]*laterClosedPeriod[\s\S]*Reopen the later closed period/);
+  assert.match(route, /agencyAccountingPeriod\.updateMany\([\s\S]*isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
   assert.match(route, /status: \{ in: ACTIVE_REMITTANCE_BATCH_STATUSES \}, reversedAt: null/);
   assert.match(route, /batch\.agencyProgramId === account\.agencyProgramId && batch\.reviewedAt/);
   assert.match(route, /OPEN_REMITTANCE_BATCH_STATUSES\.has\(batch\.status\)/);

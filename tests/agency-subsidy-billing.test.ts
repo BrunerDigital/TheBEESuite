@@ -322,13 +322,14 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /assertAgencyPeriodOpen/);
   assert.match(route, /status: "closed", endDate: \{ gte: accountingDate \}[\s\S]*or a later accounting period is closed/);
   assert.doesNotMatch(route, /status: "closed", startDate: \{ lte: accountingDate \}, endDate: \{ gte: accountingDate \}/);
+  assert.match(route, /status: \{ in: \["unmatched", "partially_allocated", "exception"\] \}[\s\S]*paidAt: \{ lt: endExclusive \}/);
+  assert.match(route, /status: "pending_review",\s+createdAt: \{ lt: endExclusive \},\s+batch: \{ centerId, reviewedAt: \{ not: null \} \}/);
+  assert.match(route, /agencyLedgerAdjustment\.count\(\{[\s\S]*status: "pending_review",\s+effectiveAt: \{ lt: endExclusive \}/);
   assert.match(route, /agencyLedgerRunningBalances\(entries\)/);
   assert.match(route, /agencyUnappliedCashBalance\(account\.entries\)/);
   assert.match(route, /type: "remittance_received",\s+effectiveAt: \{ lt: endExclusive \}/);
   assert.match(route, /orderBy: \[\{ effectiveAt: "asc" \}, \{ createdAt: "asc" \}, \{ id: "asc" \}\]/);
   assert.match(route, /status: \{ notIn: \["rejected", "reversed"\] \}[\s\S]*reversedAt: null/);
-  assert.match(route, /paidAt: \{ gte: startInclusive, lt: endExclusive \}/);
-  assert.match(route, /effectiveAt: \{ gte: startInclusive, lt: endExclusive \}/);
   assert.match(route, /agencyReconciliationVarianceCount\(tx, centerId, endExclusive\)/);
   assert.match(route, /approvedAt: true,[\s\S]*updatedAt: true,[\s\S]*createdAt: true/);
   assert.match(route, /const \[accounts, claims, remittances, adjustments\] = await Promise\.all/);
@@ -341,7 +342,6 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /agencyLedgerRunningBalances\(entries, finalBalanceCents - entryTotalCents\)/);
   assert.match(route, /entry\.type === "remittance_received"[\s\S]*entry\.type === "remittance_reversal"/);
   assert.match(route, /return netVarianceCount \+ missingLedgerEventCount/);
-  assert.match(route, /status: "pending_review",\s+createdAt: \{ gte: startInclusive, lt: endExclusive \},\s+batch: \{ centerId, reviewedAt: \{ not: null \} \}/);
   assert.match(route, /if \(overlap\?\.status === "closed"\) return \{ period: overlap, reused: true \}/);
   assert.match(route, /if \(remittance\.reversedAt\) throw new AgencyWorkflowError[\s\S]*await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, input\.reversedAt\)/);
   assert.match(route, /if \(!agencyPaymentEntry\) \{\s+await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, remittance\.paidAt\)/);

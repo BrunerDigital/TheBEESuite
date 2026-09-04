@@ -1880,13 +1880,13 @@ async function postHandler(request: NextRequest) {
                 { status: { in: ["unmatched", "partially_allocated", "exception"] } },
                 { status: "pending_review", reviewedAt: null },
               ],
-              paidAt: { gte: startInclusive, lt: endExclusive },
+              paidAt: { lt: endExclusive },
             },
           }),
           tx.agencyRemittanceAllocation.count({
             where: {
               status: "pending_review",
-              createdAt: { gte: startInclusive, lt: endExclusive },
+              createdAt: { lt: endExclusive },
               batch: { centerId, reviewedAt: { not: null } },
             },
           }),
@@ -1894,7 +1894,7 @@ async function postHandler(request: NextRequest) {
             where: {
               centerId,
               status: "pending_review",
-              effectiveAt: { gte: startInclusive, lt: endExclusive },
+              effectiveAt: { lt: endExclusive },
             },
           }),
           agencyReconciliationVarianceCount(tx, centerId, endExclusive),

@@ -35,3 +35,27 @@ test("billing contacts require a valid email before portal preparation", () => {
   assert.match(familyEditor, /isBillingContact && !isValidGuardianEmail\(guardianEmail\)/);
   assert.match(operationsRoute, /A billing contact needs a valid email address before parent portal access can be prepared/);
 });
+
+test("linked parent email changes preserve the existing account and billing history", () => {
+  const familyEditor = readFileSync(new URL("../src/components/family-record-editor.tsx", import.meta.url), "utf8");
+  const operationsRoute = readFileSync(new URL("../src/app/api/operations/records/route.ts", import.meta.url), "utf8");
+  const parentLogins = readFileSync(new URL("../src/lib/parent-portal-logins.ts", import.meta.url), "utf8");
+  const supabaseAuth = readFileSync(new URL("../src/lib/supabase-auth.ts", import.meta.url), "utf8");
+
+  assert.match(familyEditor, /Changing this email updates the existing parent login/);
+  assert.match(operationsRoute, /changeParentPortalLoginEmail/);
+  assert.match(operationsRoute, /billingAndPaymentHistoryPreserved: true/);
+  assert.match(parentLogins, /sessionVersion: \{ increment: 1 \}/);
+  assert.match(parentLogins, /billingEmail: normalizedNewEmail/);
+  assert.match(parentLogins, /billingFamilyIds/);
+  assert.match(parentLogins, /tx\.family\.updateMany/);
+  assert.doesNotMatch(parentLogins, /billingAccount\.(?:update|delete)|payment\.(?:update|delete)|invoice\.(?:update|delete)/);
+  assert.match(supabaseAuth, /updateSupabaseAuthUserEmailByCurrentEmail/);
+  assert.match(parentLogins, /parent_portal_email_change_rollback/);
+  assert.match(parentLogins, /linked_guardian_tenant_mismatch/);
+  assert.match(parentLogins, /linkedGuardians\.some\(\(item\) => !item\.family\.centerId \|\| !tenantCenterIds\.has\(item\.family\.centerId\)\)/);
+  assert.match(operationsRoute, /allowedCenterIds: user\.centerIds/);
+  assert.match(operationsRoute, /existing\?\.userId && parentPortalLoginEnabled && existingEmail !== requestedEmail/);
+  assert.match(parentLogins, /linked_guardian_scope_mismatch/);
+  assert.match(parentLogins, /linkedGuardians\.some\(\(item\) => !item\.family\.centerId \|\| !allowedCenterIdSet\.has\(item\.family\.centerId\)\)/);
+});

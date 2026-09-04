@@ -14,10 +14,10 @@ const {
   assertAuthorizedRehearsalDatabaseTarget,
 } = rehearsalTarget;
 
-const EXPECTED_SOURCE_SHAPE_SHA256 = "6e0333b1705ddd5e21d6be6832b7f6ef0f8610d39d77bd78792b086d6c987560";
+const EXPECTED_SOURCE_SHAPE_SHA256 = "a8304df5ba2c68761c5b90525784557be3dab250f96c0530da2c0c86705c2793";
 const EXPECTED_MIGRATION_SHA256 = Object.freeze({
-  agencyReceivableLedger: "f97efba6de09c76ae3b5919c97fa364783b4abc4aea22845384018e6891aa90a",
-  agencyReconciliationControls: "5c50fefe9d174e3106c9cf0d762953372102751d67c09416126cbbffaca32919",
+  agencyReceivableLedger: "ef3d32acb21cca1e11d08db5098c850bca79b1bea89382a2c60e27454d59c0c5",
+  agencyReconciliationControls: "5576f0ae9f743e45a713151dd7a87809d3596c33bc75b29b4e9ef4b9f3a99bd8",
 });
 const REHEARSAL_TENANT_ID = "agency-ledger-rehearsal-tenant";
 const REHEARSAL_ORGANIZATION_ID = "agency-ledger-rehearsal-organization";
@@ -32,8 +32,8 @@ const EXPECTED_PRODUCTION_DERIVED_SEED = Object.freeze({
   subsidyRemittanceCount: 0n,
   familyCount: 3n,
   billingAccountCount: 3n,
-  billingAccountBalanceCents: 15_100n,
-  billingAccountChecksum: "87874cd039624d49ec67db7aa6d50ee1",
+  billingAccountBalanceCents: 12_400n,
+  billingAccountChecksum: "7b0b4e8d7cd60bbbfcd2c0de865dbdb3",
   invoiceCount: 0n,
   paymentCount: 0n,
   familyLedgerEntryCount: 4n,
@@ -95,10 +95,10 @@ const EXPORT_QUERIES = Object.freeze({
   reconciliation: "exportReconciliation=true",
 });
 const CSV_HEADERS = Object.freeze({
-  claims: ["Claim", "Agency", "Family", "Child", "Service start", "Service end", "Status", "Claimed", "Approved", "Paid", "Missing documents"],
-  deposits: ["School", "Agency", "Program", "Paid date", "Deposit reference", "Method", "Cash GL", "Cost center", "Deposit total", "Allocated", "Unapplied", "Batch status", "Evidence", "Evidence reference", "Follow-up owner", "Follow-up due", "Claim", "Claim allocation", "Allocation status"],
-  ledger: ["Date", "Agency", "Program", "Type", "GL code", "Cost center", "Claim", "Family", "Child", "Reference", "Charge", "Payment / credit", "Net", "Balance"],
-  reconciliation: ["School", "Agency", "Program", "A/R GL", "Cash GL", "Adjustment GL", "Cost center", "Approved", "Remitted", "Unapplied cash", "Adjustments", "Expected balance", "Ledger balance", "Variance", "Open batch exceptions"],
+  claims: ["School ID", "School", "Claim", "Agency", "Family", "Child", "Service start", "Service end", "Status", "Claimed", "Approved", "Paid", "Missing documents"],
+  deposits: ["School ID", "School", "Agency", "Program", "Paid date", "Deposit reference", "Method", "Cash GL", "Cost center", "Deposit total", "Allocated", "Unapplied", "Batch status", "Evidence", "Evidence reference", "Follow-up owner", "Follow-up due", "Claim", "Claim allocation", "Allocation status"],
+  ledger: ["School ID", "School", "Date", "Agency", "Program", "Type", "GL code", "Cost center", "Claim", "Family", "Child", "Reference", "Charge", "Payment / credit", "Net", "Balance"],
+  reconciliation: ["School ID", "School", "Agency", "Program", "A/R GL", "Cash GL", "Adjustment GL", "Cost center", "Approved", "Remitted", "Unapplied cash", "Adjustments", "Expected balance", "Ledger balance", "Variance", "Open batch exceptions"],
 });
 const ROLLBACK = new Error("Intentional rollback after agency workflow rehearsal");
 const REHEARSAL_DATE_ANCHOR = new Date();
@@ -164,6 +164,31 @@ async function flushDeferredConstraints() {
   await activeTx.$executeRawUnsafe("SET CONSTRAINTS ALL DEFERRED");
 }
 
+async function flushBaselineCompatibilityProjection({ claim = false, remittance = false } = {}) {
+  // At a real COMMIT every deferred source guard runs while the dependent
+  // ledger/account guards remain deferred. Reproduce that ordering explicitly
+  // inside this one outer rollback transaction before validating every guard.
+  if (remittance) {
+    await activeTx.$executeRawUnsafe(`
+      SET CONSTRAINTS
+        "SubsidyRemittance_activation_control_guard",
+        "SubsidyRemittance_claim_financial_state_guard"
+      IMMEDIATE
+    `);
+    await activeTx.$executeRawUnsafe(`
+      SET CONSTRAINTS
+        "SubsidyRemittance_activation_control_guard",
+        "SubsidyRemittance_claim_financial_state_guard"
+      DEFERRED
+    `);
+  }
+  if (claim) {
+    await activeTx.$executeRawUnsafe('SET CONSTRAINTS "SubsidyClaim_financial_state_guard" IMMEDIATE');
+    await activeTx.$executeRawUnsafe('SET CONSTRAINTS "SubsidyClaim_financial_state_guard" DEFERRED');
+  }
+  await flushDeferredConstraints();
+}
+
 const prismaProxy = new Proxy({}, {
   get(_target, property) {
     if (!activeTx) throw new Error("The rehearsal database proxy was used outside its rollback transaction.");
@@ -224,7 +249,9 @@ function currentUser(role, ids, centerIds, overrides = {}) {
     role,
     centerIds,
     accessScope: "center",
-    workspace: { mode: centerIds.length > 1 ? "all" : "center" },
+    workspace: centerIds.length > 1
+      ? { mode: "all", activeCenterId: null }
+      : { mode: "center", activeCenterId: centerIds[0] },
     ...overrides,
   };
 }
@@ -275,15 +302,24 @@ async function verifyAuthorizedRehearsalTarget() {
             AND "tenantId" = ${REHEARSAL_TENANT_ID}
             AND name = 'Sanitized rehearsal organization'
         ) AS "organizationMarkerPresent",
+        (SELECT COUNT(*)::bigint FROM "Center" WHERE "organizationId" = ${REHEARSAL_ORGANIZATION_ID}) AS "seedCenterCount",
+        (SELECT COUNT(*)::bigint
+         FROM "Center"
+         WHERE "organizationId" = ${REHEARSAL_ORGANIZATION_ID}
+           AND "customFields" ->> 'agencyLedgerRehearsalSourceShapeSha256' = ${EXPECTED_SOURCE_SHAPE_SHA256}) AS "sourceShapeMarkerCount",
+        (SELECT MIN("customFields" ->> 'agencyLedgerRehearsalSourceShapeSha256')
+         FROM "Center"
+         WHERE "organizationId" = ${REHEARSAL_ORGANIZATION_ID}) AS "sourceShapeSha256",
         (
-          SELECT COUNT(*) = 6
+          SELECT COUNT(*) = 7
           FROM (VALUES
             (to_regclass('public."AgencyLedgerAccount"')),
             (to_regclass('public."AgencyLedgerEntry"')),
             (to_regclass('public."AgencyRemittanceBatch"')),
             (to_regclass('public."AgencyRemittanceAllocation"')),
             (to_regclass('public."AgencyLedgerAdjustment"')),
-            (to_regclass('public."AgencyAccountingPeriod"'))
+            (to_regclass('public."AgencyAccountingPeriod"')),
+            (to_regclass('public."AgencyAccountingPeriodEvent"'))
           ) expected(table_oid)
           WHERE table_oid IS NOT NULL
         ) AS "agencySchemaPresent"
@@ -321,6 +357,9 @@ async function verifyAuthorizedRehearsalTarget() {
   assert.equal(result.identity.databaseMarker, AGENCY_REHEARSAL_DATABASE_MARKER, "The exact authorized disposable-branch database marker is missing.");
   assert.equal(result.identity.tenantMarkerPresent, true, "The durable sanitized-seed tenant marker is missing.");
   assert.equal(result.identity.organizationMarkerPresent, true, "The durable sanitized-seed organization marker is missing.");
+  assert.ok(result.identity.seedCenterCount > 0n, "The durable sanitized seed must include at least one school.");
+  assert.equal(result.identity.sourceShapeMarkerCount, result.identity.seedCenterCount, "Every sanitized rehearsal school must carry the captured source-shape marker.");
+  assert.equal(result.identity.sourceShapeSha256, EXPECTED_SOURCE_SHAPE_SHA256, "The durable sanitized-seed source-shape marker does not match the captured seed output.");
   assert.equal(result.identity.agencySchemaPresent, true, "Both agency migrations must already be present before the workflow rehearsal.");
   for (const [field, expected] of Object.entries(EXPECTED_PRODUCTION_DERIVED_SEED)) {
     assert.equal(result.seed[field], expected, `Production-derived rehearsal seed mismatch for ${field}.`);
@@ -341,7 +380,7 @@ async function verifyAuthorizedRehearsalTarget() {
       organizationId: REHEARSAL_ORGANIZATION_ID,
       present: true,
     },
-    capturedSeedSourceShapeSha256: EXPECTED_SOURCE_SHAPE_SHA256,
+    capturedSeedSourceShapeSha256: result.identity.sourceShapeSha256,
     productionDerivedSeed: result.seed,
     databaseSeedFactsAndChecksumsMatchCapturedSourceShape: true,
     agencySchemaAlreadyMigrated: true,
@@ -775,7 +814,6 @@ async function seedWorkflow(tx, ids) {
     status: "active",
     requiredDocuments: [],
   } });
-  await tx.agencyLedgerAccount.create({ data: { id: ids.secondaryAccount, centerId: ids.secondaryCenter, agencyProgramId: ids.secondaryProgram, balanceCents: 5_000 } });
   const secondaryApprovedAt = utcDay(-6);
   const secondaryExternalReference = `SECOND-DECISION-${ids.run}`;
   await tx.subsidyClaim.create({ data: {
@@ -801,22 +839,24 @@ async function seedWorkflow(tx, ids) {
     where: { id: ids.secondaryClaim },
     data: { status: "approved", approvedCents: 5_000, approvedAt: secondaryApprovedAt, externalReference: secondaryExternalReference },
   });
-  await tx.agencyLedgerEntry.create({ data: {
-    id: ids.secondaryClaimLedgerEntry,
-    agencyLedgerAccountId: ids.secondaryAccount,
-    claimId: ids.secondaryClaim,
-    type: "claim_approved",
-    description: `Second-school agency receivable for SECOND-CLAIM-${ids.run}`,
-    amountCents: 5_000,
-    balanceAfterCents: 5_000,
-    effectiveAt: secondaryApprovedAt,
-    externalReference: secondaryExternalReference,
-    glCodeSnapshot: "1200-AR-SECOND",
-    costCenterCodeSnapshot: "REHEARSAL-SECOND",
-    sourceSystem: "subsidy_agency",
-    externalId: `claim-approved:${ids.secondaryClaim}`,
-    createdAt: secondaryApprovedAt,
-  } });
+  // Simulate the production baseline application: it changes only the claim
+  // source row. The migrated database must create the exact dedicated-ledger
+  // compatibility projection before the transaction can commit.
+  await flushBaselineCompatibilityProjection({ claim: true });
+  const [baselineClaimProjection] = await tx.$queryRaw`
+    SELECT account.id AS "accountId", account."balanceCents",
+      entry.id AS "entryId", entry."amountCents", entry."effectiveAt", entry.metadata
+    FROM "AgencyLedgerAccount" account
+    JOIN "AgencyLedgerEntry" entry ON entry."agencyLedgerAccountId" = account.id
+    WHERE account.id = ${ids.secondaryAccount}
+      AND entry.id = ${ids.secondaryClaimLedgerEntry}
+      AND entry."claimId" = ${ids.secondaryClaim}
+      AND entry."sourceSystem" = 'subsidy_agency'
+      AND entry."externalId" = ${`claim-approved:${ids.secondaryClaim}`}
+  `;
+  assert.equal(baselineClaimProjection?.balanceCents, 5_000);
+  assert.equal(baselineClaimProjection?.amountCents, 5_000);
+  assert.equal(baselineClaimProjection?.metadata?.baselineCompatibilityProjection, true);
   await tx.subsidyAuthorization.create({ data: {
     id: ids.authorization,
     centerId: ids.center,
@@ -972,7 +1012,8 @@ async function databaseSecurityEvidence(tx) {
       ('AgencyRemittanceBatch'),
       ('AgencyRemittanceAllocation'),
       ('AgencyLedgerAdjustment'),
-      ('AgencyAccountingPeriod')
+      ('AgencyAccountingPeriod'),
+      ('AgencyAccountingPeriodEvent')
     )
     SELECT expected.table_name AS "tableName",
       table_row.relrowsecurity AS "rlsEnabled",
@@ -985,7 +1026,7 @@ async function databaseSecurityEvidence(tx) {
      AND table_row.relnamespace = 'public'::regnamespace
     ORDER BY expected.table_name
   `;
-  assert.equal(rows.length, 6);
+  assert.equal(rows.length, 7);
   for (const row of rows) {
     assert.equal(row.rlsEnabled, true, `${row.tableName} must have RLS enabled.`);
     assert.equal(row.anonHasDataPrivilege, false, `${row.tableName} must deny anon data privileges.`);
@@ -1030,17 +1071,19 @@ async function validateWorkflowExports(tx, ids, exportContents) {
   assert.equal(parsed.claims.length - 1, claimRows.length);
   for (const [index, claim] of claimRows.entries()) {
     const row = parsed.claims[index + 1];
-    assert.equal(row[0], claim.number);
-    assert.equal(row[1], "Rehearsal Agency");
-    assert.equal(row[2], "Rollback-only rehearsal family");
-    assert.equal(row[3], "Rollback-only rehearsal child");
-    assert.equal(row[4], claim.servicePeriodStart.toISOString().slice(0, 10));
-    assert.equal(row[5], claim.servicePeriodEnd.toISOString().slice(0, 10));
-    assert.equal(row[6], claim.status);
-    assert.equal(numericCell(row[7]), claim.claimedCents / 100);
-    assert.equal(numericCell(row[8]), claim.approvedCents / 100);
-    assert.equal(numericCell(row[9]), claim.paidCents / 100);
-    assert.equal(row[10], "");
+    assert.equal(row[0], ids.center);
+    assert.equal(row[1], "Rollback-only rehearsal school");
+    assert.equal(row[2], claim.number);
+    assert.equal(row[3], "Rehearsal Agency");
+    assert.equal(row[4], "Rollback-only rehearsal family");
+    assert.equal(row[5], "Rollback-only rehearsal child");
+    assert.equal(row[6], claim.servicePeriodStart.toISOString().slice(0, 10));
+    assert.equal(row[7], claim.servicePeriodEnd.toISOString().slice(0, 10));
+    assert.equal(row[8], claim.status);
+    assert.equal(numericCell(row[9]), claim.claimedCents / 100);
+    assert.equal(numericCell(row[10]), claim.approvedCents / 100);
+    assert.equal(numericCell(row[11]), claim.paidCents / 100);
+    assert.equal(row[12], "");
   }
   const claimStatuses = Object.fromEntries(claimRows.map((claim) => [claim.number, claim.status]));
   assert.deepEqual(Object.values(claimStatuses).sort(), ["approved", "approved", "paid", "partially_paid"]);
@@ -1063,26 +1106,27 @@ async function validateWorkflowExports(tx, ids, exportContents) {
   for (const [index, expected] of expectedDepositRows.entries()) {
     const { batch, allocation } = expected;
     const row = parsed.deposits[index + 1];
-    assert.equal(row[0], batch.center.name);
-    assert.equal(row[1], batch.agencyProgram.name);
-    assert.equal(row[2], batch.agencyProgram.programName ?? "");
-    assert.equal(row[3], batch.paidAt.toISOString().slice(0, 10));
-    assert.equal(row[4], batch.externalReference);
-    assert.equal(row[5], batch.paymentMethod);
-    assert.equal(row[6], batch.cashGlCodeSnapshot ?? "");
-    assert.equal(row[7], batch.costCenterCodeSnapshot ?? "");
-    assert.equal(numericCell(row[8]), batch.totalCents / 100);
-    assert.equal(numericCell(row[9]), batch.allocatedCents / 100);
-    assert.equal(numericCell(row[10]), batch.unappliedCents / 100);
-    assert.equal(row[11], batch.status);
-    assert.equal(row[12], batch.evidenceName ?? "");
-    assert.equal(row[13], batch.evidenceReference ?? "");
-    assert.equal(row[14], batch.followUpOwnerId ?? "");
-    assert.equal(row[15], batch.followUpDueAt?.toISOString().slice(0, 10) ?? "");
-    assert.equal(row[16], allocation?.claim.number ?? "");
-    if (allocation) assert.equal(numericCell(row[17]), allocation.amountCents / 100);
-    else assert.equal(row[17], "");
-    assert.equal(row[18], allocation?.status ?? "");
+    assert.equal(row[0], ids.center);
+    assert.equal(row[1], batch.center.name);
+    assert.equal(row[2], batch.agencyProgram.name);
+    assert.equal(row[3], batch.agencyProgram.programName ?? "");
+    assert.equal(row[4], batch.paidAt.toISOString().slice(0, 10));
+    assert.equal(row[5], batch.externalReference);
+    assert.equal(row[6], batch.paymentMethod);
+    assert.equal(row[7], batch.cashGlCodeSnapshot ?? "");
+    assert.equal(row[8], batch.costCenterCodeSnapshot ?? "");
+    assert.equal(numericCell(row[9]), batch.totalCents / 100);
+    assert.equal(numericCell(row[10]), batch.allocatedCents / 100);
+    assert.equal(numericCell(row[11]), batch.unappliedCents / 100);
+    assert.equal(row[12], batch.status);
+    assert.equal(row[13], batch.evidenceName ?? "");
+    assert.equal(row[14], batch.evidenceReference ?? "");
+    assert.equal(row[15], batch.followUpOwnerId ?? "");
+    assert.equal(row[16], batch.followUpDueAt?.toISOString().slice(0, 10) ?? "");
+    assert.equal(row[17], allocation?.claim.number ?? "");
+    if (allocation) assert.equal(numericCell(row[18]), allocation.amountCents / 100);
+    else assert.equal(row[18], "");
+    assert.equal(row[19], allocation?.status ?? "");
   }
   const batchStatuses = Object.fromEntries([...new Set(batches.map((batch) => batch.status))].sort().map((status) => [status, batches.filter((batch) => batch.status === status).length]));
   assert.deepEqual(batchStatuses, { reconciled: 2, rejected: 2, reversed: 1 });
@@ -1106,22 +1150,24 @@ async function validateWorkflowExports(tx, ids, exportContents) {
     runningBalanceCents += entry.amountCents;
     assert.equal(entry.balanceAfterCents, runningBalanceCents, `Stored running balance is wrong at ${entry.id}.`);
     const row = parsed.ledger[index + 1];
-    assert.equal(row[0], entry.effectiveAt.toISOString().slice(0, 10));
-    assert.equal(row[1], entry.agencyLedgerAccount.agencyProgram.name);
-    assert.equal(row[2], entry.agencyLedgerAccount.agencyProgram.programName ?? "");
-    assert.equal(row[3], entry.type);
-    assert.equal(row[4], entry.glCodeSnapshot ?? "");
-    assert.equal(row[5], entry.costCenterCodeSnapshot ?? "");
-    assert.equal(row[6], entry.claim?.number ?? "");
-    assert.equal(row[7], entry.claim?.authorization?.family.name ?? "");
-    assert.equal(row[8], entry.claim?.authorization?.child.fullName ?? "");
-    assert.equal(row[9], entry.externalReference ?? "");
-    if (entry.amountCents > 0) assert.equal(numericCell(row[10]), entry.amountCents / 100);
-    else assert.equal(row[10], "");
-    if (entry.amountCents < 0) assert.equal(numericCell(row[11]), Math.abs(entry.amountCents) / 100);
-    else assert.equal(row[11], "");
-    assert.equal(numericCell(row[12]), entry.amountCents / 100);
-    assert.equal(numericCell(row[13]), entry.balanceAfterCents / 100);
+    assert.equal(row[0], ids.center);
+    assert.equal(row[1], "Rollback-only rehearsal school");
+    assert.equal(row[2], entry.effectiveAt.toISOString().slice(0, 10));
+    assert.equal(row[3], entry.agencyLedgerAccount.agencyProgram.name);
+    assert.equal(row[4], entry.agencyLedgerAccount.agencyProgram.programName ?? "");
+    assert.equal(row[5], entry.type);
+    assert.equal(row[6], entry.glCodeSnapshot ?? "");
+    assert.equal(row[7], entry.costCenterCodeSnapshot ?? "");
+    assert.equal(row[8], entry.claim?.number ?? "");
+    assert.equal(row[9], entry.claim?.authorization?.family.name ?? "");
+    assert.equal(row[10], entry.claim?.authorization?.child.fullName ?? "");
+    assert.equal(row[11], entry.externalReference ?? "");
+    if (entry.amountCents > 0) assert.equal(numericCell(row[12]), entry.amountCents / 100);
+    else assert.equal(row[12], "");
+    if (entry.amountCents < 0) assert.equal(numericCell(row[13]), Math.abs(entry.amountCents) / 100);
+    else assert.equal(row[13], "");
+    assert.equal(numericCell(row[14]), entry.amountCents / 100);
+    assert.equal(numericCell(row[15]), entry.balanceAfterCents / 100);
   }
   assert.equal(runningBalanceCents, 28_000);
   const ledgerTypeCounts = Object.fromEntries([...new Set(ledgerEntries.map((entry) => entry.type))].sort().map((type) => [type, ledgerEntries.filter((entry) => entry.type === type).length]));
@@ -1133,7 +1179,8 @@ async function validateWorkflowExports(tx, ids, exportContents) {
 
   assert.equal(parsed.reconciliation.length, 2);
   const reconciliation = parsed.reconciliation[1];
-  assert.deepEqual(reconciliation.slice(0, 7), [
+  assert.deepEqual(reconciliation.slice(0, 8), [
+    ids.center,
     "Rollback-only rehearsal school",
     "Rehearsal Agency",
     "",
@@ -1142,7 +1189,7 @@ async function validateWorkflowExports(tx, ids, exportContents) {
     "6900-ADJ",
     "REHEARSAL-CENTER",
   ]);
-  const reconciliationValues = reconciliation.slice(7).map(numericCell);
+  const reconciliationValues = reconciliation.slice(8).map(numericCell);
   assert.deepEqual(reconciliationValues, [400, 120, 0, 0, 280, 280, 0, 0]);
 
   return {
@@ -1292,22 +1339,30 @@ async function verifyAccessContinuity(tx, ids, canonicalExports) {
   const primaryOnlyConsolidated = await getAs(preparer);
   assert.ok(primaryOnlyConsolidated.programs.some((program) => program.id === ids.program));
   assert.ok(primaryOnlyConsolidated.programs.every((program) => program.centerId === ids.center));
-  assertDeniedWithoutAgencyData(await postAs(multiCenterReader, { action: "createProgram", centerId: "all", name: "Forbidden", stateCode: "IN" }, 403));
+  assertDeniedWithoutAgencyData(await postAs(multiCenterReader, { action: "createProgram", centerId: "all", name: "Forbidden", stateCode: "IN" }, 409));
+  assertDeniedWithoutAgencyData(await postAs(multiCenterReader, { action: "createProgram", centerId: ids.center, name: "Forbidden", stateCode: "IN" }, 409));
+
+  const multiCenterPrimary = currentUser("BRAND_ADMIN", ids, [ids.center, ids.secondaryCenter], {
+    workspace: { mode: "center", activeCenterId: ids.center },
+  });
+  const multiCenterSecondary = currentUser("BRAND_ADMIN", ids, [ids.center, ids.secondaryCenter], {
+    workspace: { mode: "center", activeCenterId: ids.secondaryCenter },
+  });
 
   const auditCountBeforeCrossScope = await tx.auditLog.count({ where: { tenantId: ids.tenant } });
-  await postAs(multiCenterReader, {
+  await postAs(multiCenterPrimary, {
     action: "updateProgram",
     centerId: ids.center,
     agencyProgramId: ids.secondaryProgram,
     name: "Cross-scope mutation must remain invisible",
     stateCode: "IN",
   }, 404);
-  await postAs(multiCenterReader, {
+  await postAs(multiCenterSecondary, {
     action: "approveRemittanceBatch",
     centerId: ids.secondaryCenter,
     batchId: ids.primaryBatchId,
   }, 404);
-  await postAs(multiCenterReader, {
+  await postAs(multiCenterSecondary, {
     action: "recordRemittance",
     centerId: ids.secondaryCenter,
     claimId: ids.claims[0],
@@ -1316,7 +1371,7 @@ async function verifyAccessContinuity(tx, ids, canonicalExports) {
     paidAt: dayInput(0),
     paymentMethod: "ach",
   }, 404);
-  await postAs(multiCenterReader, {
+  await postAs(multiCenterSecondary, {
     action: "requestLedgerAdjustment",
     centerId: ids.secondaryCenter,
     ledgerAccountId: ids.account,
@@ -1341,6 +1396,7 @@ async function verifyAccessContinuity(tx, ids, canonicalExports) {
       crossCenterResourceIdsReturn404WithoutAudit: true,
       omittedCenterConsolidationRestrictedToResolvedAuthorizedCenters: true,
       postCenterIdAllDenied: true,
+      allSchoolsWorkspaceExactCenterMutationDeniedBeforeResourceLookup: true,
     },
     databaseFixtureEvidence: {
       activeUserCount: seededUsers.length,
@@ -1460,10 +1516,13 @@ async function runWorkflow(tx, ids) {
   const reversalDayStart = new Date(`${dayInput(0)}T00:00:00.000Z`);
   const reversalFollowingDayStart = new Date(reversalDayStart);
   reversalFollowingDayStart.setUTCDate(reversalFollowingDayStart.getUTCDate() + 1);
+  const receiptOnlyCutoff = new Date(Math.min(...chronology.map((row) => row.reversalEffectiveAt.getTime())));
+  assert.ok(chronology.every((row) => row.receiptEffectiveAt < receiptOnlyCutoff && row.reversalEffectiveAt >= receiptOnlyCutoff));
   const cutoffSnapshots = {
     receiptDayStart: await periodReconciliationSnapshot(tx, ids, receiptDayStart),
     receiptFollowingDayStart: await periodReconciliationSnapshot(tx, ids, receiptFollowingDayStart),
     reversalDayStart: await periodReconciliationSnapshot(tx, ids, reversalDayStart),
+    afterReceiptsBeforeReversals: await periodReconciliationSnapshot(tx, ids, receiptOnlyCutoff),
     reversalFollowingDayStart: await periodReconciliationSnapshot(tx, ids, reversalFollowingDayStart),
   };
   assert.deepEqual(
@@ -1475,7 +1534,7 @@ async function runWorkflow(tx, ids) {
       cutoffSnapshots.receiptDayStart.varianceCents,
     ],
     [0n, 0n, 40_000n, 40_000n, 0n],
-    "The 00:00 UTC start of the receipt day must exclude that day's noon receipt.",
+    "The 00:00 UTC start of the source receipt day must exclude cash until independent review posts it.",
   );
   assert.deepEqual(
     [
@@ -1487,8 +1546,8 @@ async function runWorkflow(tx, ids) {
       cutoffSnapshots.receiptFollowingDayStart.ledgerBalanceCents,
       cutoffSnapshots.receiptFollowingDayStart.varianceCents,
     ],
-    [15_000n, 0n, -15_000n, -10_000n, 15_000n, 15_000n, 0n],
-    "The next 00:00 UTC cutoff must include receipt events independently and exclude later allocations/reversals.",
+    [0n, 0n, 0n, 0n, 40_000n, 40_000n, 0n],
+    "The next 00:00 UTC cutoff must still exclude cash that has not passed independent review.",
   );
   assert.deepEqual(
     [
@@ -1498,8 +1557,19 @@ async function runWorkflow(tx, ids) {
       cutoffSnapshots.reversalDayStart.ledgerBalanceCents,
       cutoffSnapshots.reversalDayStart.varianceCents,
     ],
-    [15_000n, 0n, 15_000n, 15_000n, 0n],
-    "The 00:00 UTC start of the reversal day must still exclude that day's reversal.",
+    [0n, 0n, 40_000n, 40_000n, 0n],
+    "The 00:00 UTC start of the review/reversal day must exclude both later events.",
+  );
+  assert.deepEqual(
+    [
+      cutoffSnapshots.afterReceiptsBeforeReversals.receiptEventCents,
+      cutoffSnapshots.afterReceiptsBeforeReversals.reversalEventCents,
+      cutoffSnapshots.afterReceiptsBeforeReversals.expectedBalanceCents,
+      cutoffSnapshots.afterReceiptsBeforeReversals.ledgerBalanceCents,
+      cutoffSnapshots.afterReceiptsBeforeReversals.varianceCents,
+    ],
+    [25_000n, 0n, 15_000n, 15_000n, 0n],
+    "The exact cutoff immediately before reversal must include every independently posted receipt and no reversal.",
   );
   assert.deepEqual(
     [
@@ -1579,6 +1649,118 @@ async function runWorkflow(tx, ids) {
   await postAs(reviewer, { action: "reopenAccountingPeriod", centerId: ids.center, periodId: laterPeriod.period.id, reason: "Valid chronological reopen" });
   await postAs(reviewer, { action: "reopenAccountingPeriod", centerId: ids.center, periodId: olderPeriod.period.id, reason: "Valid chronological reopen" });
 
+  await tx.$executeRawUnsafe("SAVEPOINT corrected_historical_deposit_probe");
+  await tx.ledgerEntry.createMany({ data: [
+    {
+      id: `${ids.prefix}-mixed-agency-positive`,
+      billingAccountId: ids.billingAccount,
+      type: "agency_receivable",
+      description: "Mixed-history matching agency responsibility",
+      amountCents: 4_000,
+      balanceAfterCents: 7_000,
+      effectiveAt: utcDay(-5),
+      createdAt: utcDay(-5),
+      sourceSystem: "subsidy_agency",
+      externalId: `mixed-agency-positive:${ids.run}`,
+      metadata: { authorizationNumber: `AUTH-${ids.run}`, agencyName: "Rehearsal Agency" },
+    },
+    {
+      id: `${ids.prefix}-mixed-agency-negative`,
+      billingAccountId: ids.billingAccount,
+      type: "agency_payment",
+      description: "Mixed-history unrelated agency credit",
+      amountCents: -1_500,
+      balanceAfterCents: 5_500,
+      effectiveAt: utcDay(-4),
+      createdAt: utcDay(-4),
+      sourceSystem: "legacy_subsidy_import",
+      externalId: `mixed-agency-negative:${ids.run}`,
+      metadata: { authorizationNumber: `OTHER-${ids.run}`, agencyName: "Another Agency" },
+    },
+  ] });
+  await tx.billingAccount.update({ where: { id: ids.billingAccount }, data: { balanceCents: 5_500 } });
+  const mixedHistoryBefore = { accountBalanceCents: 5_500, agencyOnlyBalanceCents: 1_300, parentVisibleBalanceCents: 4_200 };
+  const historicalCorrection = await postAs(preparer, {
+    ...batchBody,
+    totalDollars: "20.00",
+    externalReference: `HISTORICAL-CORRECTION-${ids.run}`,
+    paidAt: dayInput(-3),
+    allocations: [{ claimId: ids.claims[2], amountDollars: "20.00", notes: "Current-period correction with original receipt date" }],
+    idempotencyKey: randomUUID(),
+  });
+  const historicalCorrectionPosted = await postAs(reviewer, {
+    action: "approveRemittanceBatch",
+    centerId: ids.center,
+    batchId: historicalCorrection.batch.id,
+    reviewNotes: "Post correction in current open period",
+  });
+  const [historicalCorrectionEvidence] = await tx.$queryRaw`
+    SELECT batch."paidAt" AS "sourcePaidAt", batch."reviewedAt" AS "postingEffectiveAt",
+      receipt."effectiveAt" AS "receiptEffectiveAt", receipt.metadata AS "receiptMetadata",
+      remittance.id AS "remittanceId"
+    FROM "AgencyRemittanceBatch" batch
+    JOIN "AgencyLedgerEntry" receipt
+      ON receipt."remittanceBatchId" = batch.id
+     AND receipt.type = 'remittance_received'
+     AND receipt."sourceSystem" = 'subsidy_agency'
+    JOIN "SubsidyRemittance" remittance ON remittance.id = receipt."remittanceId"
+    WHERE batch.id = ${historicalCorrection.batch.id}
+  `;
+  assert.equal(new Date(historicalCorrectionPosted.batch.reviewedAt).toISOString(), historicalCorrectionEvidence.postingEffectiveAt.toISOString());
+  assert.equal(historicalCorrectionEvidence.receiptEffectiveAt.toISOString(), historicalCorrectionEvidence.postingEffectiveAt.toISOString());
+  assert.equal(historicalCorrectionEvidence.sourcePaidAt.toISOString().slice(0, 10), dayInput(-3));
+  assert.equal(historicalCorrectionEvidence.receiptMetadata.originalPaidAt, historicalCorrectionEvidence.sourcePaidAt.toISOString());
+  assert.equal(historicalCorrectionEvidence.receiptMetadata.postingRule, "independent_review");
+  assert.ok(historicalCorrectionEvidence.receiptEffectiveAt > historicalCorrectionEvidence.sourcePaidAt);
+  const [mixedHistoryAfter] = await tx.$queryRaw`
+    SELECT account."balanceCents" AS "accountBalanceCents",
+      COALESCE(SUM(entry."amountCents") FILTER (
+        WHERE entry.type IN ('agency_payment', 'agency_receivable', 'agency_voucher_credit', 'subsidy_payment', 'subsidy_receivable')
+           OR entry."sourceSystem" = 'subsidy_agency'
+      ), 0)::integer AS "agencyOnlyBalanceCents",
+      account."balanceCents" - GREATEST(0, COALESCE(SUM(entry."amountCents") FILTER (
+        WHERE entry.type IN ('agency_payment', 'agency_receivable', 'agency_voucher_credit', 'subsidy_payment', 'subsidy_receivable')
+           OR entry."sourceSystem" = 'subsidy_agency'
+      ), 0))::integer AS "parentVisibleBalanceCents",
+      COALESCE(SUM(entry."amountCents") FILTER (
+        WHERE entry."externalId" = ${`agency-remittance:${historicalCorrectionEvidence.remittanceId}`}
+      ), 0)::integer AS "compatibilityMirrorCents",
+      COUNT(*) FILTER (
+        WHERE entry."externalId" = ${`agency-remittance:${historicalCorrectionEvidence.remittanceId}`}
+      )::bigint AS "compatibilityMirrorCount",
+      MAX(entry."effectiveAt") FILTER (
+        WHERE entry."externalId" = ${`agency-remittance:${historicalCorrectionEvidence.remittanceId}`}
+      ) AS "compatibilityMirrorEffectiveAt",
+      MAX(entry.metadata::text) FILTER (
+        WHERE entry."externalId" = ${`agency-remittance:${historicalCorrectionEvidence.remittanceId}`}
+      ) AS "compatibilityMirrorMetadata"
+    FROM "BillingAccount" account
+    JOIN "LedgerEntry" entry ON entry."billingAccountId" = account.id
+    WHERE account.id = ${ids.billingAccount}
+    GROUP BY account.id
+  `;
+  assert.deepEqual(serializable({
+    accountBalanceCents: mixedHistoryAfter.accountBalanceCents,
+    agencyOnlyBalanceCents: mixedHistoryAfter.agencyOnlyBalanceCents,
+    parentVisibleBalanceCents: mixedHistoryAfter.parentVisibleBalanceCents,
+    compatibilityMirrorCents: mixedHistoryAfter.compatibilityMirrorCents,
+  }), {
+    accountBalanceCents: 4_200,
+    agencyOnlyBalanceCents: 0,
+    parentVisibleBalanceCents: 4_200,
+    compatibilityMirrorCents: -1_300,
+  });
+  assert.equal(mixedHistoryAfter.compatibilityMirrorCount, 1n);
+  assert.equal(mixedHistoryAfter.compatibilityMirrorEffectiveAt.toISOString(), historicalCorrectionEvidence.postingEffectiveAt.toISOString());
+  assert.ok(mixedHistoryAfter.compatibilityMirrorEffectiveAt > historicalCorrectionEvidence.sourcePaidAt);
+  const compatibilityMirrorMetadata = JSON.parse(mixedHistoryAfter.compatibilityMirrorMetadata);
+  assert.equal(compatibilityMirrorMetadata.originalPaidAt, historicalCorrectionEvidence.sourcePaidAt.toISOString());
+  assert.equal(compatibilityMirrorMetadata.postingRule, "independent_review");
+  assert.equal(mixedHistoryAfter.parentVisibleBalanceCents, mixedHistoryBefore.parentVisibleBalanceCents);
+  await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT corrected_historical_deposit_probe");
+  await tx.$executeRawUnsafe("RELEASE SAVEPOINT corrected_historical_deposit_probe");
+  await tx.$executeRawUnsafe("SET CONSTRAINTS ALL DEFERRED");
+
   const canonicalExports = await fetchExports(reviewer, ids.center);
   const repeatedExports = await fetchExports(reviewer, ids.center);
   for (const name of Object.keys(EXPORT_QUERIES)) assert.equal(canonicalExports[name], repeatedExports[name], `${name} export must be deterministic.`);
@@ -1614,6 +1796,18 @@ async function runWorkflow(tx, ids) {
       snapshots: serializable(cutoffSnapshots),
       receiptAndReversalEventsEvaluatedIndependently: true,
       utcCalendarDayBoundariesVerified: true,
+    },
+    correctedHistoricalDeposit: {
+      immutableSourcePaidAtRetained: true,
+      currentOpenPeriodReviewTimestampUsedAsPostingEffectiveAt: true,
+      explicitOriginalPaidAtMetadataVerified: true,
+      mixedLegacyHistoryMirrorCappedAtPositiveNetAgencyResponsibility: true,
+      parentVisibleResponsibilityBeforeAndAfter: [mixedHistoryBefore.parentVisibleBalanceCents, mixedHistoryAfter.parentVisibleBalanceCents],
+      compatibilityMirrorCents: mixedHistoryAfter.compatibilityMirrorCents,
+      compatibilityMirrorEffectiveAt: mixedHistoryAfter.compatibilityMirrorEffectiveAt,
+      compatibilityMirrorMetadata,
+      evidence: serializable(historicalCorrectionEvidence),
+      fixtureRolledBackToSavepoint: true,
     },
     concurrency: {
       liveMultiConnectionRaceExecuted: false,
@@ -1913,6 +2107,18 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
     /Agency reconciliation activation evidence is immutable after activation/i,
   ));
 
+  await tx.$executeRaw`
+    UPDATE "Center"
+    SET "agencyReconciliationEnabled" = TRUE,
+      "agencyReconciliationActivatedAt" = CURRENT_TIMESTAMP,
+      "agencyReconciliationActivatedById" = ${ids.users.BRAND_ADMIN},
+      "agencyReconciliationActivationReason" = 'Rollback-only direct SQL period ordering proof',
+      "updatedAt" = CURRENT_TIMESTAMP
+    WHERE id = ${ids.secondaryCenter}
+      AND status = 'active'
+      AND "agencyReconciliationEnabled" = FALSE
+  `;
+
   const directPeriodClosedAt = utcDay(-20);
   await tx.$executeRaw`
     INSERT INTO "AgencyAccountingPeriod" (
@@ -1959,6 +2165,72 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
     /later closed agency accounting period must be reopened first/i,
   ));
 
+  await tx.$executeRaw`
+    UPDATE "AgencyAccountingPeriod"
+    SET status = 'open',
+      "reopenedAt" = CURRENT_TIMESTAMP,
+      "reopenedById" = ${ids.users.BRAND_ADMIN},
+      "reopenReason" = 'Valid latest-period reopen rehearsal',
+      "updatedAt" = CURRENT_TIMESTAMP
+    WHERE id = ${ids.directLaterPeriod}
+  `;
+  await tx.$executeRaw`
+    UPDATE "AgencyAccountingPeriod"
+    SET status = 'closed',
+      "closedAt" = CURRENT_TIMESTAMP,
+      "closedById" = ${ids.users.BRAND_ADMIN},
+      "closeReason" = 'Fresh reconciliation before re-close',
+      "updatedAt" = CURRENT_TIMESTAMP
+    WHERE id = ${ids.directLaterPeriod}
+  `;
+  await flushDeferredConstraints();
+  const [reclosedPeriod] = await tx.$queryRaw`
+    SELECT status, "closedAt", "closedById", "closeReason", "reopenedAt", "reopenedById", "reopenReason"
+    FROM "AgencyAccountingPeriod"
+    WHERE id = ${ids.directLaterPeriod}
+  `;
+  const periodTransitionEvents = await tx.$queryRaw`
+    SELECT sequence, action, "occurredAt", "actorId", reason, evidence
+    FROM "AgencyAccountingPeriodEvent"
+    WHERE "periodId" = ${ids.directLaterPeriod}
+    ORDER BY sequence ASC
+  `;
+  assert.equal(reclosedPeriod?.status, "closed");
+  assert.ok(reclosedPeriod?.closedAt >= reclosedPeriod?.reopenedAt);
+  assert.deepEqual(periodTransitionEvents.map((event) => event.sequence), [1, 2, 3]);
+  assert.deepEqual(periodTransitionEvents.map((event) => event.action), ["closed", "reopened", "closed"]);
+  assert.deepEqual(periodTransitionEvents.map((event) => event.actorId), [ids.users.BRAND_ADMIN, ids.users.BRAND_ADMIN, ids.users.BRAND_ADMIN]);
+  assert.deepEqual(periodTransitionEvents.map((event) => event.reason), [
+    "Rollback-only period ordering proof",
+    "Valid latest-period reopen rehearsal",
+    "Fresh reconciliation before re-close",
+  ]);
+  assert.equal(periodTransitionEvents.every((event, index) => index === 0 || event.occurredAt >= periodTransitionEvents[index - 1].occurredAt), true);
+  assert.deepEqual(periodTransitionEvents.map((event) => [event.evidence?.previousStatus ?? null, event.evidence?.nextStatus]), [
+    [null, "closed"],
+    ["closed", "open"],
+    ["open", "closed"],
+  ]);
+  assert.equal(periodTransitionEvents.every((event) => event.evidence?.periodName === "Direct SQL later closed period"), true);
+
+  // Return the second school to its pre-activation state so the next probe can
+  // exercise the migrated schema's exact baseline direct-remittance behavior.
+  // This is rollback-only test setup; production activation remains immutable.
+  await tx.$executeRawUnsafe('ALTER TABLE "Center" DISABLE TRIGGER "Center_agency_reconciliation_00_adoption_guard"');
+  await tx.$executeRawUnsafe('ALTER TABLE "Center" DISABLE TRIGGER "Center_agency_reconciliation_activation_readiness_guard"');
+  await tx.$executeRaw`
+    UPDATE "Center"
+    SET "agencyReconciliationEnabled" = FALSE,
+      "agencyReconciliationActivatedAt" = NULL,
+      "agencyReconciliationActivatedById" = NULL,
+      "agencyReconciliationActivationReason" = NULL,
+      "updatedAt" = CURRENT_TIMESTAMP
+    WHERE id = ${ids.secondaryCenter}
+  `;
+  await tx.$executeRawUnsafe('ALTER TABLE "Center" ENABLE TRIGGER "Center_agency_reconciliation_00_adoption_guard"');
+  await tx.$executeRawUnsafe('ALTER TABLE "Center" ENABLE TRIGGER "Center_agency_reconciliation_activation_readiness_guard"');
+  await flushDeferredConstraints();
+
   const adoptionReference = `POST-MIGRATION-DIRECT-${ids.run}`;
   const directRemittancePaidAt = utcDay(0);
   const [secondaryFamilyBillingAccount] = await tx.$queryRaw`
@@ -1978,56 +2250,24 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
     )
   `;
   await tx.$executeRaw`
-    INSERT INTO "AgencyLedgerEntry" (
-      id, "agencyLedgerAccountId", "claimId", "remittanceId", "remittanceBatchId", "adjustmentId",
-      type, description, "amountCents", "balanceAfterCents", "effectiveAt", "externalReference",
-      "glCodeSnapshot", "costCenterCodeSnapshot", "sourceSystem", "externalId", metadata, "createdAt"
-    ) VALUES (
-      ${ids.directBaselineReceiptLedgerEntry}, ${ids.secondaryAccount}, ${ids.secondaryClaim},
-      ${ids.directBaselineRemittance}, NULL, NULL, 'remittance_received',
-      'Rollback-only post-migration direct-SQL remittance receipt', -1000, 0,
-      ${directRemittancePaidAt}, ${adoptionReference}, '1000-CASH-SECOND', 'REHEARSAL-SECOND',
-      'subsidy_agency', ${`remittance:${ids.directBaselineRemittance}`},
-      ${JSON.stringify({ rehearsalOnly: true, postMigrationDirectSqlBaseline: true })}::jsonb, CURRENT_TIMESTAMP
-    )
-  `;
-  await tx.$executeRaw`
     UPDATE "SubsidyClaim"
     SET "paidCents" = 1000,
       status = 'partially_paid',
       "updatedAt" = CURRENT_TIMESTAMP
     WHERE id = ${ids.secondaryClaim}
   `;
-  await tx.$executeRaw`
-    WITH running AS (
-      SELECT entry.id,
-        SUM(entry."amountCents"::bigint) OVER (
-          PARTITION BY entry."agencyLedgerAccountId"
-          ORDER BY entry."effectiveAt", entry."createdAt", entry.id
-          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        )::integer AS exact_balance
-      FROM "AgencyLedgerEntry" entry
-      WHERE entry."agencyLedgerAccountId" = ${ids.secondaryAccount}
-    )
-    UPDATE "AgencyLedgerEntry" entry
-    SET "balanceAfterCents" = running.exact_balance
-    FROM running
-    WHERE entry.id = running.id
-  `;
-  await tx.$executeRaw`
-    UPDATE "AgencyLedgerAccount" account
-    SET "balanceCents" = (
-      SELECT COALESCE(SUM(entry."amountCents"::bigint), 0)::integer
-      FROM "AgencyLedgerEntry" entry
-      WHERE entry."agencyLedgerAccountId" = account.id
-    )
-    WHERE account.id = ${ids.secondaryAccount}
-  `;
-  await flushDeferredConstraints();
+  // Again emulate the baseline binary: it does not know the dedicated ledger.
+  // The deferred migrated-schema compatibility guard must project the receipt,
+  // recalculate deterministic balances, and reject any conflicting projection.
+  await flushBaselineCompatibilityProjection({ claim: true, remittance: true });
   const preActivationAdoptionRows = await tx.$queryRaw`
     SELECT remittance.id AS "remittanceId",
       allocation.id AS "allocationId",
-      receipt."remittanceBatchId" AS "receiptBatchId"
+      receipt.id AS "receiptLedgerEntryId",
+      receipt."remittanceBatchId" AS "receiptBatchId",
+      receipt."amountCents" AS "receiptAmountCents",
+      receipt."effectiveAt" AS "receiptEffectiveAt",
+      receipt.metadata AS "receiptMetadata"
     FROM "SubsidyRemittance" remittance
     LEFT JOIN "AgencyRemittanceAllocation" allocation ON allocation."remittanceId" = remittance.id
     JOIN "AgencyLedgerEntry" receipt
@@ -2039,8 +2279,107 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
   assert.deepEqual(serializable(preActivationAdoptionRows), [{
     remittanceId: ids.directBaselineRemittance,
     allocationId: null,
+    receiptLedgerEntryId: ids.directBaselineReceiptLedgerEntry,
     receiptBatchId: null,
+    receiptAmountCents: -1_000,
+    receiptEffectiveAt: directRemittancePaidAt.toISOString(),
+    receiptMetadata: {
+      claimNumber: `SECOND-CLAIM-${ids.run}`,
+      paymentMethod: "ach",
+      baselineCompatibilityProjection: true,
+    },
   }], "The baseline direct remittance was unexpectedly controlled before school activation.");
+
+  const compatibilityReversedPaidAt = utcDay(-1);
+  const compatibilityCreatedAt = new Date(compatibilityReversedPaidAt);
+  compatibilityCreatedAt.setUTCHours(8, 0, 0, 0);
+  const compatibilityReversedAt = new Date(compatibilityReversedPaidAt);
+  compatibilityReversedAt.setUTCHours(9, 0, 0, 0);
+  const unsupportedPriorDayReversedAt = utcDay(-2);
+  assert.ok(compatibilityCreatedAt < compatibilityReversedAt);
+  assert.ok(compatibilityReversedAt < compatibilityReversedPaidAt);
+  assert.equal(compatibilityReversedAt.toISOString().slice(0, 10), compatibilityReversedPaidAt.toISOString().slice(0, 10));
+  await tx.$executeRaw`
+    INSERT INTO "SubsidyRemittance" (
+      id, "claimId", "amountCents", "paidAt", "paymentMethod", "externalReference",
+      notes, "enteredById", "createdAt"
+    ) VALUES (
+      ${ids.directBaselineReversedRemittance}, ${ids.secondaryClaim}, 500, ${compatibilityReversedPaidAt}, 'check',
+      ${`POST-MIGRATION-REVERSED-${ids.run}`}, 'Baseline-binary receipt/reversal compatibility rehearsal',
+      ${ids.wrongSchoolUser}, ${compatibilityCreatedAt}
+    )
+  `;
+  await tx.$executeRaw`
+    UPDATE "SubsidyClaim"
+    SET "paidCents" = 1500, status = 'partially_paid', "updatedAt" = CURRENT_TIMESTAMP
+    WHERE id = ${ids.secondaryClaim}
+  `;
+  await flushBaselineCompatibilityProjection({ claim: true, remittance: true });
+  rejectedWrites.push(await expectDirectSqlRejected(
+    tx,
+    "prior-day remittance reversal before its UTC receipt day",
+    () => tx.$executeRaw`
+      UPDATE "SubsidyRemittance"
+      SET "reversedAt" = ${unsupportedPriorDayReversedAt},
+        "reversedById" = ${ids.users.BRAND_ADMIN},
+        "reversalReason" = 'Unsupported prior-day reversal rehearsal'
+      WHERE id = ${ids.directBaselineReversedRemittance}
+    `,
+    /SubsidyRemittance_reversal_chronology_check|remittance.*reversal.*chronology/i,
+  ));
+  await tx.$executeRaw`
+    UPDATE "SubsidyRemittance"
+    SET "reversedAt" = ${compatibilityReversedAt},
+      "reversedById" = ${ids.users.BRAND_ADMIN},
+      "reversalReason" = 'Baseline-binary reversal compatibility rehearsal'
+    WHERE id = ${ids.directBaselineReversedRemittance}
+  `;
+  await tx.$executeRaw`
+    UPDATE "SubsidyClaim"
+    SET "paidCents" = 1000, status = 'partially_paid', "updatedAt" = CURRENT_TIMESTAMP
+    WHERE id = ${ids.secondaryClaim}
+  `;
+  await flushBaselineCompatibilityProjection({ claim: true, remittance: true });
+  const compatibilityReversalRows = await tx.$queryRaw`
+    SELECT entry.id, entry.type, entry."amountCents", entry."effectiveAt", entry.metadata,
+      remittance."reversedAt" AS "sourceReversedAt",
+      account."balanceCents" AS "accountBalanceCents"
+    FROM "AgencyLedgerEntry" entry
+    JOIN "AgencyLedgerAccount" account ON account.id = entry."agencyLedgerAccountId"
+    JOIN "SubsidyRemittance" remittance ON remittance.id = entry."remittanceId"
+    WHERE entry."remittanceId" = ${ids.directBaselineReversedRemittance}
+    ORDER BY entry."effectiveAt", entry."createdAt", entry.id
+  `;
+  assert.deepEqual(serializable(compatibilityReversalRows), [
+    {
+      id: ids.directBaselineReversedReceiptLedgerEntry,
+      type: "remittance_received",
+      amountCents: -500,
+      effectiveAt: compatibilityReversedPaidAt.toISOString(),
+      sourceReversedAt: compatibilityReversedAt.toISOString(),
+      metadata: {
+        claimNumber: `SECOND-CLAIM-${ids.run}`,
+        paymentMethod: "check",
+        baselineCompatibilityProjection: true,
+      },
+      accountBalanceCents: 4000,
+    },
+    {
+      id: ids.directBaselineReversalLedgerEntry,
+      type: "remittance_reversal",
+      amountCents: 500,
+      effectiveAt: compatibilityReversedPaidAt.toISOString(),
+      sourceReversedAt: compatibilityReversedAt.toISOString(),
+      metadata: {
+        claimNumber: `SECOND-CLAIM-${ids.run}`,
+        reason: "Baseline-binary reversal compatibility rehearsal",
+        baselineCompatibilityProjection: true,
+        sourceReversedAt: compatibilityReversedAt.toISOString(),
+        postingRule: "later of source reversal and receipt effective time",
+      },
+      accountBalanceCents: 4000,
+    },
+  ]);
 
   const activationAt = utcDay(0);
   await tx.$executeRaw`
@@ -2146,6 +2485,28 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
   assert.deepEqual(serializable(adoptionCountsAfterReplay), serializable(adoptionCountsBeforeReplay), "The transaction-scoped activation retry duplicated adopted financial rows.");
   assert.deepEqual(serializable(adoptionCountsAfterReplay), [{ batchCount: "1", allocationCount: "1", ledgerEntryCount: "1" }]);
 
+  const sameDayLegacyClose = await postAs(
+    currentUser("BRAND_ADMIN", ids, [ids.secondaryCenter]),
+    {
+      action: "closeAccountingPeriod",
+      centerId: ids.secondaryCenter,
+      name: "Exact same-day reversal chronology proof",
+      startDate: dayInput(-29),
+      endDate: dayInput(-1),
+      reason: "A same-day legacy source timestamp is normalized so its reversal cannot precede the receipt event",
+    },
+  );
+  const sameDayLegacyEntries = await tx.$queryRaw`
+    SELECT type, "amountCents", "effectiveAt"
+    FROM "AgencyLedgerEntry"
+    WHERE "remittanceId" = ${ids.directBaselineReversedRemittance}
+    ORDER BY "effectiveAt", "createdAt", id
+  `;
+  assert.equal(sameDayLegacyClose.period.status, "closed");
+  assert.deepEqual(sameDayLegacyEntries.map((entry) => entry.type), ["remittance_received", "remittance_reversal"]);
+  assert.equal(sameDayLegacyEntries.reduce((sum, entry) => sum + entry.amountCents, 0), 0);
+  assert.equal(sameDayLegacyEntries.every((entry) => entry.effectiveAt.toISOString().slice(0, 10) === dayInput(-1)), true);
+
   return {
     markerPolicy: "The exact database marker is rechecked in the mutating transaction before its first write.",
     rejectedDirectSqlWrites: rejectedWrites,
@@ -2171,6 +2532,11 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
     accountingPeriodInvariants: {
       overlappingPeriodRejected: true,
       outOfOrderReopenRejected: true,
+      closeReopenRecloseSucceededInChronologicalOrder: true,
+      sameUtcDayLegacyReversalEarlierByClockTimeClosedSuccessfully: true,
+      sameDayLegacyClose: serializable(sameDayLegacyClose.period),
+      reclosedPeriod: serializable(reclosedPeriod),
+      transitionEvents: serializable(periodTransitionEvents),
     },
     postMigrationBaselineAdoption: {
       directRemittanceId: ids.directBaselineRemittance,
@@ -2186,10 +2552,18 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
       countsBeforeReplay: serializable(adoptionCountsBeforeReplay[0]),
       countsAfterReplay: serializable(adoptionCountsAfterReplay[0]),
     },
+    migratedSchemaBaselineBinaryCompatibility: {
+      claimApprovalProjectedFromExactSourceWithoutApplicationLedgerWrite: true,
+      remittanceReceiptProjectedFromExactSourceWithoutApplicationLedgerWrite: true,
+      remittanceReversalProjectedFromExactSourceWithoutApplicationLedgerWrite: true,
+      deterministicRunningBalancesRecalculated: true,
+      unsupportedClaimApprovalOrRemittanceInferenceOccurred: false,
+      compatibilityReversalRows: serializable(compatibilityReversalRows),
+    },
     literalSecondMigrationFileReplay: {
       executed: false,
-      residualLimitation: "The migration file has its own top-level BEGIN/COMMIT. Running it inside this rollback-only Prisma transaction would commit the immutable financial fixture, while another connection cannot see this transaction's uncommitted post-migration remittance. This script instead retries the migration-installed activation adoption/relink path against already-adopted exact rows under a transaction-scoped table lock and proves row preservation, but does not claim a literal whole-file second replay or ON CONFLICT backfill replay.",
-      safeFutureVerificationDesign: "After the final migration file is frozen, use one dedicated PostgreSQL session on a newly recreated disposable branch: BEGIN; create the post-migration remittance fixture; execute an audited copy of the migration body with only its outer BEGIN/COMMIT removed; assert exact rows; ROLLBACK. Do not use that technique on production or represent activation-trigger re-entry as whole-file replay.",
+      residualLimitation: "This rollback-only transaction proves the installed trigger/adoption replay paths but cannot execute the migration's four committed phases without making its immutable fixture durable. It therefore does not claim a literal whole-file replay.",
+      safeFutureVerificationDesign: "After the final migration file is frozen, recreate the authorized disposable branch, apply both migrations, create a persisted re-close/adoption fixture, execute the exact unmodified reconciliation migration a second time, verify exact row preservation, and then reset or discard that disposable branch. If a transaction-wrapped transformed body is ever used instead, remove and audit every top-level BEGIN and COMMIT (not only the first/last pair), pin both source and transformed hashes, and prove zero residual rows. Never use either rehearsal technique on production.",
     },
     everyMutationCoveredByOuterRollback: true,
     eachExpectedFailureRecoveredBySavepoint: true,
@@ -2226,20 +2600,24 @@ const ids = {
   authorization: `${prefix}-authorization`,
   secondaryAuthorization: `${prefix}-secondary-authorization`,
   account: `${prefix}-account`,
-  secondaryAccount: `${prefix}-secondary-account`,
+  secondaryAccount: `agency-ledger-account:${prefix}-secondary-program`,
   secondaryClaim: `${prefix}-secondary-claim`,
   secondaryClaimLine: `${prefix}-secondary-claim-line`,
-  secondaryClaimLedgerEntry: `${prefix}-secondary-claim-ledger-entry`,
+  secondaryClaimLedgerEntry: `agency-ledger-claim:${prefix}-secondary-claim`,
   directBatch: `${prefix}-direct-sql-batch`,
   directAllocation: `${prefix}-direct-sql-allocation`,
   directClaim: `${prefix}-direct-sql-claim`,
   directClaimLine: `${prefix}-direct-sql-claim-line`,
   directClaimLedgerEntry: `${prefix}-direct-sql-claim-ledger-entry`,
   directBaselineRemittance: `${prefix}-direct-sql-baseline-remittance`,
-  directBaselineReceiptLedgerEntry: `${prefix}-direct-sql-baseline-receipt`,
+  directBaselineReceiptLedgerEntry: `agency-ledger-remittance:${prefix}-direct-sql-baseline-remittance`,
+  directBaselineReversedRemittance: `${prefix}-direct-sql-baseline-reversed-remittance`,
+  directBaselineReversedReceiptLedgerEntry: `agency-ledger-remittance:${prefix}-direct-sql-baseline-reversed-remittance`,
+  directBaselineReversalLedgerEntry: `agency-ledger-remittance-reversal:${prefix}-direct-sql-baseline-reversed-remittance`,
   directEarlierPeriod: `${prefix}-direct-sql-period-earlier`,
   directLaterPeriod: `${prefix}-direct-sql-period-later`,
   directOverlapPeriod: `${prefix}-direct-sql-period-overlap`,
+  sameDayLegacyPeriod: `${prefix}-direct-sql-period-same-day-legacy`,
   forgedBatch: `${prefix}-direct-sql-forged-legacy-batch`,
   forgedLedgerEntry: `${prefix}-direct-sql-forged-ledger-entry`,
   claims: Array.from({ length: 4 }, (_value, index) => `${prefix}-claim-${index + 1}`),
@@ -2303,7 +2681,9 @@ try {
       schemaState: "Both additive agency migrations were already applied before this script started.",
       cleanupScope: "All workflow fixture and route mutations execute inside one Serializable transaction that is intentionally rolled back.",
       schemaRollbackTested: false,
-      oldApplicationAgainstMigratedSchemaTested: false,
+      oldApplicationSourceWriteShapeAgainstMigratedSchemaTested: true,
+      exactProductionApplicationBinaryAgainstMigratedSchemaTested: false,
+      rollbackSafetyRule: "The database projection covers exact baseline claim/remittance source writes, not an older binary's family-ledger mirror. Keep agency financial writes frozen on any raw pre-release application rollback; use only a separately verified compatibility build before lifting that freeze.",
       startedAt,
       completedAt: new Date(),
       familyFinancialSafety: {
@@ -2325,7 +2705,7 @@ try {
       workflow,
       directSqlInvariants,
       reproducibleInvocation: "$env:REHEARSAL_DATABASE_URL='<exact authorized direct or session-pooler postgres URL with sslmode=require>'; node --import tsx --experimental-test-module-mocks .\\scripts\\rehearse-agency-ledger-workflow.mjs",
-      generatedClientRequirement: "Run npx prisma generate from the exact final schema before this invocation; the script also refuses to start unless all six migrated agency tables are present.",
+      generatedClientRequirement: "Run npx prisma generate from the exact final schema before this invocation; the script also refuses to start unless all seven migrated agency tables are present.",
     };
     throw ROLLBACK;
   }, { isolationLevel: "Serializable", maxWait: 30_000, timeout: 300_000 });
@@ -2358,6 +2738,7 @@ try {
       (SELECT COUNT(*) FROM "AgencyRemittanceAllocation" allocation JOIN "AgencyRemittanceBatch" batch ON batch.id = allocation."batchId" WHERE batch."centerId" = ANY(${[ids.center, ids.secondaryCenter]}))::bigint AS "allocationCount",
       (SELECT COUNT(*) FROM "AgencyLedgerAdjustment" WHERE "centerId" = ANY(${[ids.center, ids.secondaryCenter]}))::bigint AS "adjustmentCount",
       (SELECT COUNT(*) FROM "AgencyAccountingPeriod" WHERE "centerId" = ANY(${[ids.center, ids.secondaryCenter]}))::bigint AS "periodCount",
+      (SELECT COUNT(*) FROM "AgencyAccountingPeriodEvent" WHERE "centerId" = ANY(${[ids.center, ids.secondaryCenter]}))::bigint AS "periodEventCount",
       (SELECT COUNT(*) FROM "AuditLog" WHERE "tenantId" = ANY(${[ids.tenant, ids.wrongTenant]}))::bigint AS "auditLogCount"
   `;
   assert.ok(Object.values(residual).every((value) => value === 0n), `Rollback left rehearsal rows behind: ${JSON.stringify(serializable(residual))}`);

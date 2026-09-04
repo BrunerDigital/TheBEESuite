@@ -25,9 +25,23 @@ async function main() {
   if (!url) throw new Error("REHEARSAL_DATABASE_URL is required.");
   assertAuthorizedRehearsalDatabaseTarget(url);
   const prisma = new PrismaClient({ datasources: { db: { url } }, log: ["error"] });
+  const queryFingerprint = (process.env.AGENCY_MIGRATION_QUERY_FINGERPRINT || "").trim();
+  const queryApplication = (process.env.AGENCY_MIGRATION_QUERY_APPLICATION || "").trim();
+  if (queryApplication && !/^[A-Za-z0-9_:%-]{1,128}$/.test(queryApplication)) {
+    throw new Error("AGENCY_MIGRATION_QUERY_APPLICATION must be a bounded exact application name.");
+  }
+  const applicationLike = (process.env.AGENCY_MIGRATION_APPLICATION_LIKE || `${MIGRATION_APPLICATION_PREFIX}%`).trim();
+  if (!/^[A-Za-z0-9_:%-]{3,128}$/.test(applicationLike)) {
+    throw new Error("AGENCY_MIGRATION_APPLICATION_LIKE must be a bounded application-name LIKE pattern.");
+  }
   const startedAt = Date.now();
-  const deadline = startedAt + 120_000;
+  const monitorTimeoutMs = Number(process.env.AGENCY_MIGRATION_MONITOR_TIMEOUT_MS || 16 * 60_000);
+  if (!Number.isFinite(monitorTimeoutMs) || monitorTimeoutMs < 10_000 || monitorTimeoutMs > 20 * 60_000) {
+    throw new Error("AGENCY_MIGRATION_MONITOR_TIMEOUT_MS must be between 10000 and 1200000 milliseconds.");
+  }
+  const deadline = startedAt + monitorTimeoutMs;
   let observedSession = false;
+  let sessionCompletedBeforeDeadline = false;
   let completedSamples = 0;
   let sampleCount = 0;
   let waitingSampleCount = 0;
@@ -56,7 +70,14 @@ async function main() {
         FROM pg_stat_activity activity
         JOIN pg_locks lock_row ON lock_row.pid = activity.pid
         WHERE activity.datname = current_database()
-          AND activity.application_name LIKE ${`${MIGRATION_APPLICATION_PREFIX}%`}
+          AND activity.pid <> pg_backend_pid()
+          AND (
+            activity.application_name LIKE ${applicationLike}
+            OR (${queryFingerprint} <> ''
+              AND (${queryApplication} = '' OR activity.application_name = ${queryApplication})
+              AND POSITION(LOWER(${queryFingerprint}) IN LOWER(activity.query)) > 0)
+          )
+          AND activity.state <> 'idle'
         GROUP BY activity.application_name, activity.state, activity.wait_event_type, activity.wait_event,
           lock_row.relation, lock_row.mode, lock_row.granted
         ORDER BY activity.application_name, lock_row.granted, "relationName", lock_row.mode
@@ -74,19 +95,27 @@ async function main() {
         }
       } else if (observedSession) {
         completedSamples += 1;
-        if (completedSamples >= 3) break;
+        if (completedSamples >= 3) {
+          sessionCompletedBeforeDeadline = true;
+          break;
+        }
       }
       await delay(50);
     }
     if (!observedSession) throw new Error("No rehearsal migration session was observed before the monitor deadline.");
+    if (!sessionCompletedBeforeDeadline) throw new Error("The rehearsal migration session was still active when lock monitoring reached its deadline.");
     console.log(JSON.stringify({
       mode: "agency_ledger_migration_lock_monitor",
       startedAt: new Date(startedAt).toISOString(),
       finishedAt: new Date().toISOString(),
       sampleIntervalMs: 50,
+      applicationLike,
+      queryFingerprint: queryFingerprint || null,
+      queryApplication: queryApplication || null,
       sampleCount,
       waitingSampleCount,
       maxActiveSessions,
+      sessionCompletedBeforeDeadline,
       observedLocks: [...observedLocks.entries()].map(([key, maximumCount]) => ({ key, maximumCount })),
     }, null, 2));
   } finally {

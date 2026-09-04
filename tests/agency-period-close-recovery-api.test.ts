@@ -54,6 +54,9 @@ test("period close source contains no approval, direct-receipt, adjustment, or r
   assert.doesNotMatch(recovery, /'agency-ledger-remittance-reversal:' \|\|[\s\S]*INSERT INTO/);
   assert.equal((recovery.match(/INSERT INTO "AgencyLedgerEntry"/g) ?? []).length, 1);
   assert.match(recovery, /agency-close:controlled-receipt-recovery/);
+  assert.match(recovery, /COALESCE\(allocation\."reviewedAt", remittance\."paidAt"\)/);
+  assert.match(recovery, /legacy-allocation:adoption:/);
+  assert.match(recovery, /expectedLegacyBatchId/);
   assert.match(recovery, /recoveredClaimReceivableCount: 0/);
   assert.match(recovery, /recoveredRemittanceReversalCount: 0/);
   assert.match(recovery, /agency-close:claim-evidence/);

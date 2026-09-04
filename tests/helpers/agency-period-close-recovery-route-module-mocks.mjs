@@ -8,6 +8,7 @@ const currentUser = {
   name: "Reviewer User",
   role: "BILLING_ADMIN",
   centerIds: ["center-test"],
+  workspace: { mode: "fixed", activeCenterId: "center-test" },
 };
 
 let scenario = "none";

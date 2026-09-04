@@ -362,10 +362,10 @@ const guides: ResourceGuide[] = [
       "Sign in at https://thebeesuite.io/directors, confirm the exact school, then go to Billing & Payments > Billing & invoices > Agency receivables.",
       "Continue only when the school-specific agency program shows Ready and the provider/vendor, submission, and payment setup are documented.",
       "Match the agency, child, authorization, service period, approved claim, amount, paid date, method, and unique remittance reference to the agency evidence.",
-      "Use Prepare deposit batch, or Prepare remittance from one approved or partially paid claim, to stage the exact evidence and allocation. Never use a family cash/check payment or a Stripe payout as substitute evidence.",
-      "A different billing administrator or accounting reviewer must compare and approve the pending batch before any claim or ledger balance changes.",
+      "Before exact-school activation, choose Record remittance on the approved claim; enter the exact amount, paid date, method, and unique reference, save once, then refresh and verify the recorded result.",
+      "Only after release and exact-school activation, use Prepare deposit batch or Prepare remittance to stage the evidence and allocation for a different billing administrator or accounting reviewer to approve.",
       "Refresh and verify the claim paid amount and status, deposit allocation, dedicated agency-ledger payment and balance, and unchanged parent-visible family responsibility.",
-      "Reverse an incorrect deposit batch with a correction reason, then prepare the corrected batch for independent review. Keep the original evidence and stop when any allocation is unclear.",
+      "Before activation, reverse an incorrect direct remittance with a reason; after activation, reverse the deposit batch and prepare its correction for independent review. Keep the original evidence.",
     ],
     visual: [
       { label: "Match", detail: "Claim and remittance evidence", icon: FileText },

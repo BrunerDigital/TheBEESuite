@@ -252,6 +252,16 @@ Release gate: the expanded batch, ledger, dual-review, adjustment, and period-cl
 
 Until release, use the public guide at `https://thebeesuite.io/resources/agency-payment-reconciliation` only for the baseline direct-remittance workflow. After the migrations and application release are validated, use `docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md` and the release-aligned public guide for the complete expanded workflow.
 
+Baseline procedure before exact-school activation:
+
+1. Open the approved or partially paid claim for the exact school and choose `Record remittance`.
+2. Enter the exact remittance amount, agency paid date, payment method, and unique external ACH, check, or portal reference from the evidence.
+3. Review those fields and save once. After a timeout or ambiguous response, refresh before retrying.
+4. Verify the claim paid amount/status and the saved remittance/reference, and confirm parent-visible family responsibility is unchanged.
+5. Correct an error with `Reverse remittance` and a specific reason, then verify the original and compensating history. Never delete or overwrite the original entry.
+
+Expanded procedure only after application release, database migration, and exact-school activation:
+
 1. Open `Billing & Payments` -> `Billing & invoices` -> `Agency receivables` for the exact school.
 2. Confirm the school-specific agency program shows `Ready`.
 3. Match the approved claim and remittance evidence to the agency, child, authorization, service period, amount, paid date, method, and unique payment reference.

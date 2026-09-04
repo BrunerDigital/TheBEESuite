@@ -164,16 +164,37 @@ async function main() {
     const programMap = new Map(source.programs.map((program) => [program.id, id("rehearsal-program", program.id)]));
     const familyMap = new Map(source.legacyEntries.map((entry) => [entry.familyId, id("rehearsal-family", entry.familyId)]));
     const accountMap = new Map(source.legacyEntries.map((entry) => [entry.billingAccountId, id("rehearsal-account", entry.billingAccountId)]));
+    const sourceShapeChecksum = checksum({
+      programs: source.programs.map((program) => withoutKeys(program, ["id", "centerId"])),
+      claims: source.claims.map((claim) => withoutKeys(claim, ["id", "centerId", "agencyProgramId"])),
+      legacyEntries: source.legacyEntries.map((entry) => withoutKeys(entry, ["id", "billingAccountId", "familyId", "centerId"])),
+    });
 
     await rehearsal.$transaction(async (tx) => {
-      const [targetIdentity] = await tx.$queryRaw<Array<{ databaseName: string; databaseUser: string; databaseMarker: string | null; programCount: bigint; claimCount: bigint; remittanceCount: bigint; legacyCount: bigint }>>`
+      const [targetIdentity] = await tx.$queryRaw<Array<{
+        databaseName: string;
+        databaseUser: string;
+        databaseMarker: string | null;
+        programCount: bigint;
+        claimCount: bigint;
+        remittanceCount: bigint;
+        legacyCount: bigint;
+        hasAgencyLedgerSchema: boolean;
+        hasReconciliationSchema: boolean;
+        hasPrismaMigrationHistory: boolean;
+        hasSupabaseMigrationHistory: boolean;
+      }>>`
         SELECT current_database() AS "databaseName",
           current_user AS "databaseUser",
           shobj_description(database_row.oid, 'pg_database') AS "databaseMarker",
           (SELECT COUNT(*) FROM "AgencyProgram")::bigint AS "programCount",
           (SELECT COUNT(*) FROM "SubsidyClaim")::bigint AS "claimCount",
           (SELECT COUNT(*) FROM "SubsidyRemittance")::bigint AS "remittanceCount",
-          (SELECT COUNT(*) FROM "LedgerEntry" WHERE type = 'agency_payment')::bigint AS "legacyCount"
+          (SELECT COUNT(*) FROM "LedgerEntry" WHERE type = 'agency_payment')::bigint AS "legacyCount",
+          (to_regclass('public."AgencyLedgerAccount"') IS NOT NULL) AS "hasAgencyLedgerSchema",
+          (to_regclass('public."AgencyRemittanceBatch"') IS NOT NULL) AS "hasReconciliationSchema",
+          (to_regclass('public."_prisma_migrations"') IS NOT NULL) AS "hasPrismaMigrationHistory",
+          (to_regclass('supabase_migrations.schema_migrations') IS NOT NULL) AS "hasSupabaseMigrationHistory"
         FROM pg_database database_row
         WHERE database_row.datname = current_database()
       `;
@@ -182,6 +203,31 @@ async function main() {
       }
       if (targetIdentity.programCount !== BigInt(0) || targetIdentity.claimCount !== BigInt(0) || targetIdentity.remittanceCount !== BigInt(0) || targetIdentity.legacyCount !== BigInt(0)) {
         throw new Error("The disposable rehearsal target is not empty; refusing to overwrite or mix data.");
+      }
+      if (targetIdentity.hasAgencyLedgerSchema || targetIdentity.hasReconciliationSchema) {
+        throw new Error("The disposable rehearsal target already contains a candidate migration schema or history row; reset it to the exact production predecessor before seeding.");
+      }
+      if (targetIdentity.hasSupabaseMigrationHistory) {
+        const [candidateSupabaseHistory] = await tx.$queryRaw<Array<{ count: bigint }>>`
+          SELECT COUNT(*)::bigint AS count
+          FROM supabase_migrations.schema_migrations
+          WHERE version IN ('20260903190000', '20260903210000')
+             OR name ILIKE '%agency_receivable_ledger%'
+             OR name ILIKE '%agency_reconciliation_controls%'
+        `;
+        if ((candidateSupabaseHistory?.count ?? BigInt(0)) !== BigInt(0)) {
+          throw new Error("The disposable rehearsal target already contains a candidate Supabase migration history row; reset it to the exact production predecessor before seeding.");
+        }
+      }
+      if (targetIdentity.hasPrismaMigrationHistory) {
+        const [candidatePrismaHistory] = await tx.$queryRaw<Array<{ count: bigint }>>`
+          SELECT COUNT(*)::bigint AS count
+          FROM "_prisma_migrations"
+          WHERE migration_name IN ('20260903190000_agency_receivable_ledger', '20260903210000_agency_reconciliation_controls')
+        `;
+        if ((candidatePrismaHistory?.count ?? BigInt(0)) !== BigInt(0)) {
+          throw new Error("The disposable rehearsal target already contains a candidate Prisma migration history row; reset it to the exact production predecessor before seeding.");
+        }
       }
 
       await tx.$executeRaw`
@@ -195,8 +241,13 @@ async function main() {
       for (const [index, sourceCenterId] of centerIds.entries()) {
         const mapped = centerMap.get(sourceCenterId)!;
         await tx.$executeRaw`
-          INSERT INTO "Center" (id, "organizationId", name, status, "licensedCapacity", timezone, "createdAt", "updatedAt")
-          VALUES (${mapped.id}, ${REHEARSAL_ORGANIZATION_ID}, ${mapped.name}, 'active', ${Math.max(1, index + 1)}, 'America/New_York', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          INSERT INTO "Center" (
+            id, "organizationId", name, status, "customFields", "licensedCapacity", timezone, "createdAt", "updatedAt"
+          ) VALUES (
+            ${mapped.id}, ${REHEARSAL_ORGANIZATION_ID}, ${mapped.name}, 'active',
+            ${JSON.stringify({ agencyLedgerRehearsalSourceShapeSha256: sourceShapeChecksum })}::jsonb,
+            ${Math.max(1, index + 1)}, 'America/New_York', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+          )
         `;
       }
       for (const [index, program] of source.programs.entries()) {
@@ -269,11 +320,7 @@ async function main() {
         subsidyRemittances: source.remittanceCount.toString(),
         legacyAgencyPayments: source.legacyEntries.length,
       },
-      sourceShapeChecksum: checksum({
-        programs: source.programs.map((program) => withoutKeys(program, ["id", "centerId"])),
-        claims: source.claims.map((claim) => withoutKeys(claim, ["id", "centerId", "agencyProgramId"])),
-        legacyEntries: source.legacyEntries.map((entry) => withoutKeys(entry, ["id", "billingAccountId", "familyId", "centerId"])),
-      }),
+      sourceShapeChecksum,
       privacy: "Names, emails, URLs, provider/vendor identifiers, claim references, and family identities were replaced or omitted.",
     }, null, 2));
   } finally {

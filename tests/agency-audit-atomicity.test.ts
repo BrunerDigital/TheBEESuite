@@ -16,8 +16,8 @@ test("authorization mutations write audit evidence inside their serializable tra
     const block = actionBlock(`if (action === "${action}")`);
     assert.match(block, /prisma\.\$transaction\(async \(tx\) => \{/i, action);
     assert.match(block, /writeAuditLog\([\s\S]*?, tx\);/i, action);
-    assert.match(block, /TransactionIsolationLevel\.Serializable/i, action);
-    const transactionEnd = block.lastIndexOf("TransactionIsolationLevel.Serializable");
+    assert.match(block, /AGENCY_WRITE_TRANSACTION_OPTIONS/i, action);
+    const transactionEnd = block.lastIndexOf("AGENCY_WRITE_TRANSACTION_OPTIONS");
     assert.ok(block.lastIndexOf("writeAuditLog") < transactionEnd, `${action} audit must precede transaction completion`);
   }
 });
@@ -27,8 +27,17 @@ test("claim preparation mutations write audit evidence inside their serializable
     const block = actionBlock(`if (action === "${action}")`);
     assert.match(block, /prisma\.\$transaction\(async \(tx\) => \{/i, action);
     assert.match(block, /writeAuditLog\([\s\S]*?, tx\);/i, action);
-    assert.match(block, /TransactionIsolationLevel\.Serializable/i, action);
+    assert.match(block, /AGENCY_WRITE_TRANSACTION_OPTIONS/i, action);
   }
+});
+
+test("claim mutations revalidate exact-school scope inside each transaction", () => {
+  for (const action of ["syncRequirements", "updateDocument", "submitClaim", "recordDecision"]) {
+    const block = actionBlock(`if (action === "${action}")`);
+    assert.match(block, /requireCurrentAgencyClaimMutationScope\(tx, claim\.id, centerId, auth\.user\)/i, action);
+    assert.match(block, /updateMany\(\{[\s\S]*?where: \{ id: [^,]+, centerId,[\s\S]*?updatedAt:/i, action);
+  }
+  assert.match(routeSource, /requireCurrentAgencyClaimMutationScope[\s\S]*agencyMutationCenterAllowed\(user, current\.centerId\)[\s\S]*exactAgencyClaimScope\(current\)/);
 });
 
 test("archive and void use transactional compare-and-set guards and safe completed retries", () => {

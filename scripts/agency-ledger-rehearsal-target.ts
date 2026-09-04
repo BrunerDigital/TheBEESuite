@@ -16,9 +16,12 @@ export function assertExactSupabaseDatabaseTarget(rawUrl: string, expectedProjec
   const { parsed, username, isPoolerHost } = parsedSupabaseTarget(rawUrl);
   const isExactDirectTarget = parsed.hostname === `db.${expectedProjectRef}.supabase.co` && username === "postgres";
   const isExactPoolerTarget = isPoolerHost && username === `postgres.${expectedProjectRef}`;
+  const port = parsed.port || "5432";
+  const isSupportedPort = (isExactDirectTarget && port === "5432")
+    || (isExactPoolerTarget && (port === "5432" || port === "6543"));
   if (
     !["postgres:", "postgresql:"].includes(parsed.protocol)
-    || (parsed.port || "5432") !== "5432"
+    || !isSupportedPort
     || parsed.pathname !== "/postgres"
     || parsed.searchParams.get("sslmode") !== "require"
     || (!isExactDirectTarget && !isExactPoolerTarget)

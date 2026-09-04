@@ -3,6 +3,7 @@ BEGIN;
 SET LOCAL lock_timeout = '10s';
 SET LOCAL statement_timeout = '15min';
 SET LOCAL TIME ZONE 'UTC';
+SET LOCAL bee.agency_reconciliation_migration = 'authorized';
 
 ALTER TABLE "AgencyProgram" ADD COLUMN IF NOT EXISTS "receivableGlCode" TEXT;
 ALTER TABLE "AgencyProgram" ADD COLUMN IF NOT EXISTS "cashGlCode" TEXT;
@@ -12,6 +13,77 @@ ALTER TABLE "Center" ADD COLUMN IF NOT EXISTS "agencyReconciliationEnabled" BOOL
 ALTER TABLE "Center" ADD COLUMN IF NOT EXISTS "agencyReconciliationActivatedAt" TIMESTAMP(3);
 ALTER TABLE "Center" ADD COLUMN IF NOT EXISTS "agencyReconciliationActivatedById" TEXT;
 ALTER TABLE "Center" ADD COLUMN IF NOT EXISTS "agencyReconciliationActivationReason" TEXT;
+
+-- A committed multi-phase migration must never leave an older application able
+-- to create source or ledger facts before the compatibility/integrity triggers
+-- exist. This temporary database fence survives any later phase failure. Only
+-- this migration connection carries the transaction-local bypass; the fence is
+-- removed atomically at the very end after every durable guard is installed.
+CREATE OR REPLACE FUNCTION public.block_agency_writes_during_reconciliation_migration()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+BEGIN
+    IF pg_catalog.current_setting('bee.agency_reconciliation_migration', TRUE) IS DISTINCT FROM 'authorized' THEN
+        RAISE EXCEPTION 'Agency financial changes are temporarily frozen until the reconciliation migration completes';
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END
+$function$;
+
+REVOKE ALL ON FUNCTION public.block_agency_writes_during_reconciliation_migration() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS "AgencyProgram_00_reconciliation_migration_fence" ON "AgencyProgram";
+CREATE TRIGGER "AgencyProgram_00_reconciliation_migration_fence"
+BEFORE INSERT OR UPDATE OR DELETE ON "AgencyProgram"
+FOR EACH ROW EXECUTE FUNCTION public.block_agency_writes_during_reconciliation_migration();
+
+DROP TRIGGER IF EXISTS "SubsidyAuthorization_00_reconciliation_migration_fence" ON "SubsidyAuthorization";
+CREATE TRIGGER "SubsidyAuthorization_00_reconciliation_migration_fence"
+BEFORE INSERT OR UPDATE OR DELETE ON "SubsidyAuthorization"
+FOR EACH ROW EXECUTE FUNCTION public.block_agency_writes_during_reconciliation_migration();
+
+DROP TRIGGER IF EXISTS "SubsidyClaim_00_reconciliation_migration_fence" ON "SubsidyClaim";
+CREATE TRIGGER "SubsidyClaim_00_reconciliation_migration_fence"
+BEFORE INSERT OR UPDATE OR DELETE ON "SubsidyClaim"
+FOR EACH ROW EXECUTE FUNCTION public.block_agency_writes_during_reconciliation_migration();
+
+DROP TRIGGER IF EXISTS "SubsidyClaimLine_00_reconciliation_migration_fence" ON "SubsidyClaimLine";
+CREATE TRIGGER "SubsidyClaimLine_00_reconciliation_migration_fence"
+BEFORE INSERT OR UPDATE OR DELETE ON "SubsidyClaimLine"
+FOR EACH ROW EXECUTE FUNCTION public.block_agency_writes_during_reconciliation_migration();
+
+DROP TRIGGER IF EXISTS "SubsidyRemittance_00_reconciliation_migration_fence" ON "SubsidyRemittance";
+CREATE TRIGGER "SubsidyRemittance_00_reconciliation_migration_fence"
+BEFORE INSERT OR UPDATE OR DELETE ON "SubsidyRemittance"
+FOR EACH ROW EXECUTE FUNCTION public.block_agency_writes_during_reconciliation_migration();
+
+DROP TRIGGER IF EXISTS "AgencyLedgerAccount_00_reconciliation_migration_fence" ON "AgencyLedgerAccount";
+CREATE TRIGGER "AgencyLedgerAccount_00_reconciliation_migration_fence"
+BEFORE INSERT OR UPDATE OR DELETE ON "AgencyLedgerAccount"
+FOR EACH ROW EXECUTE FUNCTION public.block_agency_writes_during_reconciliation_migration();
+
+DROP TRIGGER IF EXISTS "AgencyLedgerEntry_00_reconciliation_migration_fence" ON "AgencyLedgerEntry";
+CREATE TRIGGER "AgencyLedgerEntry_00_reconciliation_migration_fence"
+BEFORE INSERT OR UPDATE OR DELETE ON "AgencyLedgerEntry"
+FOR EACH ROW EXECUTE FUNCTION public.block_agency_writes_during_reconciliation_migration();
+
+-- Release the ACCESS EXCLUSIVE column-add locks immediately. The following
+-- object creation, index builds, and constraint catalog work must not retain a
+-- lock on the hot Center table for their duration. Agency financial posting is
+-- operationally frozen across the complete migration window.
+COMMIT;
+
+BEGIN;
+SET LOCAL lock_timeout = '10s';
+SET LOCAL statement_timeout = '15min';
+SET LOCAL TIME ZONE 'UTC';
+SET LOCAL bee.agency_reconciliation_migration = 'authorized';
 
 CREATE TABLE IF NOT EXISTS "AgencyRemittanceBatch" (
     "id" TEXT NOT NULL,
@@ -116,6 +188,20 @@ CREATE TABLE IF NOT EXISTS "AgencyAccountingPeriod" (
     CONSTRAINT "AgencyAccountingPeriod_pkey" PRIMARY KEY ("id")
 );
 
+CREATE TABLE IF NOT EXISTS "AgencyAccountingPeriodEvent" (
+    "id" TEXT NOT NULL,
+    "centerId" TEXT NOT NULL,
+    "periodId" TEXT NOT NULL,
+    "sequence" INTEGER NOT NULL,
+    "action" TEXT NOT NULL,
+    "occurredAt" TIMESTAMP(3) NOT NULL,
+    "actorId" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "evidence" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "AgencyAccountingPeriodEvent_pkey" PRIMARY KEY ("id")
+);
+
 ALTER TABLE "AgencyRemittanceBatch" ADD COLUMN IF NOT EXISTS "cashGlCodeSnapshot" TEXT;
 ALTER TABLE "AgencyRemittanceBatch" ADD COLUMN IF NOT EXISTS "costCenterCodeSnapshot" TEXT;
 ALTER TABLE "AgencyLedgerAdjustment" ADD COLUMN IF NOT EXISTS "glCodeSnapshot" TEXT;
@@ -165,10 +251,12 @@ ALTER TABLE "AgencyRemittanceBatch" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "AgencyRemittanceAllocation" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "AgencyLedgerAdjustment" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "AgencyAccountingPeriod" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "AgencyAccountingPeriodEvent" ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE "AgencyRemittanceBatch" FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE "AgencyRemittanceAllocation" FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE "AgencyLedgerAdjustment" FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE "AgencyAccountingPeriod" FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE "AgencyAccountingPeriodEvent" FROM PUBLIC, anon, authenticated;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "AgencyRemittanceBatch_idempotencyKey_key" ON "AgencyRemittanceBatch"("idempotencyKey");
 CREATE INDEX IF NOT EXISTS "AgencyRemittanceBatch_centerId_agencyProgramId_referenceKey_idx" ON "AgencyRemittanceBatch"("centerId", "agencyProgramId", "referenceKey");
@@ -190,6 +278,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS "AgencyLedgerAdjustment_idempotencyKey_key" ON
 CREATE INDEX IF NOT EXISTS "AgencyLedgerAdjustment_centerId_followUpDueAt_idx" ON "AgencyLedgerAdjustment"("centerId", "followUpDueAt");
 CREATE UNIQUE INDEX IF NOT EXISTS "AgencyAccountingPeriod_centerId_startDate_endDate_key" ON "AgencyAccountingPeriod"("centerId", "startDate", "endDate");
 CREATE INDEX IF NOT EXISTS "AgencyAccountingPeriod_centerId_status_startDate_endDate_idx" ON "AgencyAccountingPeriod"("centerId", "status", "startDate", "endDate");
+CREATE UNIQUE INDEX IF NOT EXISTS "AgencyAccountingPeriodEvent_periodId_sequence_key" ON "AgencyAccountingPeriodEvent"("periodId", "sequence");
+CREATE INDEX IF NOT EXISTS "AgencyAccountingPeriodEvent_periodId_occurredAt_id_idx" ON "AgencyAccountingPeriodEvent"("periodId", "occurredAt", "id");
+CREATE INDEX IF NOT EXISTS "AgencyAccountingPeriodEvent_centerId_occurredAt_id_idx" ON "AgencyAccountingPeriodEvent"("centerId", "occurredAt", "id");
 CREATE INDEX IF NOT EXISTS "AgencyLedgerEntry_remittanceBatchId_idx" ON "AgencyLedgerEntry"("remittanceBatchId");
 CREATE INDEX IF NOT EXISTS "AgencyLedgerEntry_adjustmentId_idx" ON "AgencyLedgerEntry"("adjustmentId");
 
@@ -215,10 +306,19 @@ BEGIN
         ) NOT VALID;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SubsidyRemittance_reversal_chronology_check' AND conrelid = '"SubsidyRemittance"'::regclass) THEN
-        ALTER TABLE "SubsidyRemittance" ADD CONSTRAINT "SubsidyRemittance_reversal_chronology_check" CHECK ("reversedAt" IS NULL OR "reversedAt" >= "paidAt") NOT VALID;
+        ALTER TABLE "SubsidyRemittance" ADD CONSTRAINT "SubsidyRemittance_reversal_chronology_check" CHECK (
+            "reversedAt" IS NULL
+            OR DATE_TRUNC('day', "reversedAt") >= DATE_TRUNC('day', "paidAt")
+        ) NOT VALID;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AgencyRemittanceBatch_reversal_chronology_check' AND conrelid = '"AgencyRemittanceBatch"'::regclass) THEN
-        ALTER TABLE "AgencyRemittanceBatch" ADD CONSTRAINT "AgencyRemittanceBatch_reversal_chronology_check" CHECK ("reversedAt" IS NULL OR "reversedAt" >= "paidAt") NOT VALID;
+        ALTER TABLE "AgencyRemittanceBatch" ADD CONSTRAINT "AgencyRemittanceBatch_reversal_chronology_check" CHECK (
+            "reversedAt" IS NULL
+            OR (
+                DATE_TRUNC('day', "reversedAt") >= DATE_TRUNC('day', "paidAt")
+                AND ("reviewedAt" IS NULL OR "reversedAt" >= "reviewedAt")
+            )
+        ) NOT VALID;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AgencyLedgerAdjustment_reversal_chronology_check' AND conrelid = '"AgencyLedgerAdjustment"'::regclass) THEN
         ALTER TABLE "AgencyLedgerAdjustment" ADD CONSTRAINT "AgencyLedgerAdjustment_reversal_chronology_check" CHECK ("reversedAt" IS NULL OR "reversedAt" >= "effectiveAt") NOT VALID;
@@ -317,6 +417,16 @@ BEGIN
             )
         ) NOT VALID;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AgencyAccountingPeriodEvent_evidence_check' AND conrelid = '"AgencyAccountingPeriodEvent"'::regclass) THEN
+        ALTER TABLE "AgencyAccountingPeriodEvent" ADD CONSTRAINT "AgencyAccountingPeriodEvent_evidence_check" CHECK (
+            sequence > 0
+            AND action IN ('closed', 'reopened')
+            AND NULLIF(BTRIM("actorId"), '') IS NOT NULL
+            AND NULLIF(BTRIM(reason), '') IS NOT NULL
+            AND evidence IS NOT NULL
+            AND JSONB_TYPEOF(evidence) = 'object'
+        ) NOT VALID;
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AgencyRemittanceBatch_centerId_fkey' AND conrelid = '"AgencyRemittanceBatch"'::regclass) THEN
         ALTER TABLE "AgencyRemittanceBatch" ADD CONSTRAINT "AgencyRemittanceBatch_centerId_fkey" FOREIGN KEY ("centerId") REFERENCES "Center"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
     END IF;
@@ -350,6 +460,12 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AgencyAccountingPeriod_centerId_fkey' AND conrelid = '"AgencyAccountingPeriod"'::regclass) THEN
         ALTER TABLE "AgencyAccountingPeriod" ADD CONSTRAINT "AgencyAccountingPeriod_centerId_fkey" FOREIGN KEY ("centerId") REFERENCES "Center"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AgencyAccountingPeriodEvent_centerId_fkey' AND conrelid = '"AgencyAccountingPeriodEvent"'::regclass) THEN
+        ALTER TABLE "AgencyAccountingPeriodEvent" ADD CONSTRAINT "AgencyAccountingPeriodEvent_centerId_fkey" FOREIGN KEY ("centerId") REFERENCES "Center"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AgencyAccountingPeriodEvent_periodId_fkey' AND conrelid = '"AgencyAccountingPeriodEvent"'::regclass) THEN
+        ALTER TABLE "AgencyAccountingPeriodEvent" ADD CONSTRAINT "AgencyAccountingPeriodEvent_periodId_fkey" FOREIGN KEY ("periodId") REFERENCES "AgencyAccountingPeriod"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'AgencyLedgerEntry_remittanceBatchId_fkey' AND conrelid = '"AgencyLedgerEntry"'::regclass) THEN
         ALTER TABLE "AgencyLedgerEntry" ADD CONSTRAINT "AgencyLedgerEntry_remittanceBatchId_fkey" FOREIGN KEY ("remittanceBatchId") REFERENCES "AgencyRemittanceBatch"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
     END IF;
@@ -358,6 +474,119 @@ BEGIN
     END IF;
 END
 $migration$;
+
+-- Release the expand-object and constraint catalog locks before installing the
+-- integrity functions and performing any compatibility backfill. Every later
+-- statement is replay-safe so a failed phase can be repaired and rerun.
+COMMIT;
+
+BEGIN;
+SET LOCAL lock_timeout = '10s';
+SET LOCAL statement_timeout = '15min';
+SET LOCAL TIME ZONE 'UTC';
+SET LOCAL bee.agency_reconciliation_migration = 'authorized';
+
+-- Every agency financial source, ledger posting, activation, close, and reopen
+-- takes the same school-scoped advisory lock. Non-Center callers also write one
+-- harmless Center row version per transaction. That write makes a caller whose
+-- snapshot predates activation or close abort/re-evaluate instead of committing
+-- across the boundary; a transaction-local marker avoids repeated row churn.
+CREATE OR REPLACE FUNCTION public.lock_agency_financial_center(target_center_id TEXT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    transaction_marker TEXT;
+BEGIN
+    IF NULLIF(BTRIM(target_center_id), '') IS NULL THEN
+        RAISE EXCEPTION 'Agency financial activity requires an exact school';
+    END IF;
+    PERFORM pg_catalog.pg_advisory_xact_lock(
+        pg_catalog.hashtext('agency-financial-center'),
+        pg_catalog.hashtext(target_center_id)
+    );
+    transaction_marker := 'bee.agency_financial_center_' || pg_catalog.md5(target_center_id);
+    IF pg_catalog.current_setting(transaction_marker, TRUE) IS DISTINCT FROM 'held' THEN
+        UPDATE public."Center" center
+        SET "updatedAt" = center."updatedAt"
+        WHERE center.id = target_center_id;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Agency financial activity school is missing';
+        END IF;
+        PERFORM pg_catalog.set_config(transaction_marker, 'held', TRUE);
+    END IF;
+END
+$function$;
+
+REVOKE ALL ON FUNCTION public.lock_agency_financial_center(TEXT) FROM PUBLIC, anon, authenticated;
+
+-- Parent/child tenant-graph changes can touch two schools. Acquire every
+-- affected school in a stable order so graph writes and financial writes share
+-- one serialization protocol without introducing order-dependent deadlocks.
+CREATE OR REPLACE FUNCTION public.lock_agency_financial_centers(target_center_ids TEXT[])
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    candidate_center_id TEXT;
+BEGIN
+    FOR candidate_center_id IN
+        SELECT DISTINCT candidate.value
+        FROM pg_catalog.unnest(target_center_ids) AS candidate(value)
+        WHERE NULLIF(BTRIM(candidate.value), '') IS NOT NULL
+        ORDER BY candidate.value
+    LOOP
+        PERFORM public.lock_agency_financial_center(candidate_center_id);
+    END LOOP;
+END
+$function$;
+
+REVOKE ALL ON FUNCTION public.lock_agency_financial_centers(TEXT[]) FROM PUBLIC, anon, authenticated;
+
+-- Reinstall the first migration's shared graph serialization protocol verbatim.
+-- Keeping the bodies identical makes either migration safe to replay without
+-- weakening protection against concurrent account and program-scope changes.
+CREATE OR REPLACE FUNCTION public.enforce_agency_ledger_account_scope()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    affected_center_ids TEXT[];
+    program_center_id TEXT;
+BEGIN
+    SELECT ARRAY_AGG(DISTINCT scope.center_id ORDER BY scope.center_id)
+    INTO affected_center_ids
+    FROM (
+        SELECT NEW."centerId" AS center_id
+        UNION ALL SELECT CASE WHEN TG_OP = 'UPDATE' THEN OLD."centerId" END
+        UNION ALL SELECT program."centerId" FROM public."AgencyProgram" program WHERE program.id = NEW."agencyProgramId"
+        UNION ALL
+        SELECT program."centerId"
+        FROM public."AgencyProgram" program
+        WHERE TG_OP = 'UPDATE' AND program.id = OLD."agencyProgramId"
+    ) scope
+    WHERE scope.center_id IS NOT NULL;
+    PERFORM public.lock_agency_financial_centers(affected_center_ids);
+
+    SELECT program."centerId"
+    INTO program_center_id
+    FROM public."AgencyProgram" program
+    WHERE program.id = NEW."agencyProgramId";
+
+    IF program_center_id IS NULL OR program_center_id <> NEW."centerId" THEN
+        RAISE EXCEPTION 'Agency ledger account scope conflict';
+    END IF;
+    RETURN NEW;
+END
+$function$;
+
+REVOKE ALL ON FUNCTION public.enforce_agency_ledger_account_scope() FROM PUBLIC, anon, authenticated;
 
 -- Validate complete tenant relationships on every backend/service-role write.
 CREATE OR REPLACE FUNCTION public.enforce_agency_remittance_batch_scope()
@@ -375,6 +604,7 @@ DECLARE
     expected_reference_key TEXT;
     requires_mapped_program BOOLEAN := FALSE;
 BEGIN
+    PERFORM public.lock_agency_financial_center(NEW."centerId");
     SELECT program."centerId", program.status, program."cashGlCode", program."costCenterCode", center."agencyReconciliationEnabled"
     INTO program_center_id, program_status, program_cash_gl_code, program_cost_center_code, reconciliation_enabled
     FROM public."AgencyProgram" program
@@ -450,7 +680,8 @@ BEGIN
         RAISE EXCEPTION 'Agency remittance batch receipt, review, or reversal cannot be future-dated';
     END IF;
     IF NEW."reviewedAt" < NEW."createdAt"
-       OR NEW."reversedAt" < COALESCE(NEW."reviewedAt", NEW."paidAt") THEN
+       OR (NEW."reviewedAt" IS NOT NULL AND NEW."reversedAt" < NEW."reviewedAt")
+       OR DATE_TRUNC('day', NEW."reversedAt") < DATE_TRUNC('day', NEW."paidAt") THEN
         RAISE EXCEPTION 'Agency remittance batch review or reversal chronology is invalid';
     END IF;
     RETURN NEW;
@@ -464,6 +695,7 @@ SECURITY INVOKER
 SET search_path = ''
 AS $function$
 DECLARE
+    affected_center_ids TEXT[];
     batch_center_id TEXT;
     batch_program_id TEXT;
     batch_paid_at TIMESTAMP(3);
@@ -483,6 +715,32 @@ DECLARE
     program_cost_center_code TEXT;
     requires_mapped_program BOOLEAN := FALSE;
 BEGIN
+    -- Discover every candidate school first, acquire the shared financial
+    -- fences in deterministic order, and only then trust authoritative rows.
+    -- The post-lock rereads close claim-move/allocation and program-state races
+    -- under READ COMMITTED without relying on application transaction settings.
+    SELECT ARRAY_AGG(DISTINCT scope.center_id ORDER BY scope.center_id)
+    INTO affected_center_ids
+    FROM (
+        SELECT batch."centerId" AS center_id
+        FROM public."AgencyRemittanceBatch" batch
+        WHERE batch.id = NEW."batchId"
+        UNION ALL
+        SELECT claim."centerId"
+        FROM public."SubsidyClaim" claim
+        WHERE claim.id = NEW."claimId"
+        UNION ALL
+        SELECT batch."centerId"
+        FROM public."AgencyRemittanceBatch" batch
+        WHERE TG_OP = 'UPDATE' AND batch.id = OLD."batchId"
+        UNION ALL
+        SELECT claim."centerId"
+        FROM public."SubsidyClaim" claim
+        WHERE TG_OP = 'UPDATE' AND claim.id = OLD."claimId"
+    ) scope
+    WHERE scope.center_id IS NOT NULL;
+    PERFORM public.lock_agency_financial_centers(affected_center_ids);
+
     SELECT batch."centerId", batch."agencyProgramId", batch."paidAt", batch."paymentMethod", batch."externalReference", center."agencyReconciliationEnabled", program.status, program."cashGlCode", program."costCenterCode"
     INTO batch_center_id, batch_program_id, batch_paid_at, batch_payment_method, batch_external_reference, reconciliation_enabled, program_status, program_cash_gl_code, program_cost_center_code
     FROM public."AgencyRemittanceBatch" batch
@@ -500,7 +758,6 @@ BEGIN
        OR batch_program_id <> claim_program_id THEN
         RAISE EXCEPTION 'Agency remittance allocation scope conflict';
     END IF;
-
     IF NEW."remittanceId" IS NOT NULL THEN
         SELECT remittance."claimId", remittance."amountCents", remittance."paidAt", remittance."paymentMethod", remittance."externalReference", remittance."reversedAt"
         INTO remittance_claim_id, remittance_amount_cents, remittance_paid_at, remittance_payment_method, remittance_external_reference, remittance_reversed_at
@@ -575,11 +832,35 @@ SECURITY INVOKER
 SET search_path = ''
 AS $function$
 DECLARE
+    affected_center_ids TEXT[];
     program_center_id TEXT;
     family_center_id TEXT;
     child_family_id TEXT;
     child_classroom_center_id TEXT;
 BEGIN
+    SELECT ARRAY_AGG(DISTINCT scope.center_id ORDER BY scope.center_id)
+    INTO affected_center_ids
+    FROM (
+        SELECT NEW."centerId" AS center_id
+        UNION ALL SELECT CASE WHEN TG_OP = 'UPDATE' THEN OLD."centerId" END
+        UNION ALL SELECT program."centerId" FROM public."AgencyProgram" program WHERE program.id = NEW."agencyProgramId"
+        UNION ALL SELECT family."centerId" FROM public."Family" family WHERE family.id = NEW."familyId"
+        UNION ALL
+        SELECT family."centerId"
+        FROM public."Child" child
+        JOIN public."Family" family ON family.id = child."familyId"
+        WHERE child.id = NEW."childId"
+        UNION ALL
+        SELECT classroom."centerId"
+        FROM public."Child" child
+        JOIN public."Classroom" classroom ON classroom.id = child."classroomId"
+        WHERE child.id = NEW."childId"
+    ) scope
+    WHERE scope.center_id IS NOT NULL;
+    PERFORM public.lock_agency_financial_centers(affected_center_ids);
+
+    -- Re-read every relationship after the shared school locks are held. This
+    -- makes a concurrent parent move or claim creation visible before commit.
     SELECT program."centerId" INTO program_center_id
     FROM public."AgencyProgram" program
     WHERE program.id = NEW."agencyProgramId";
@@ -631,25 +912,36 @@ SECURITY INVOKER
 SET search_path = ''
 AS $function$
 DECLARE
+    affected_center_ids TEXT[];
     claim_center_id TEXT;
     authorization_child_id TEXT;
     child_family_center_id TEXT;
+    child_classroom_center_id TEXT;
 BEGIN
+    SELECT ARRAY_AGG(DISTINCT claim."centerId" ORDER BY claim."centerId")
+    INTO affected_center_ids
+    FROM public."SubsidyClaim" claim
+    WHERE claim.id = NEW."claimId"
+       OR (TG_OP = 'UPDATE' AND claim.id = OLD."claimId");
+    PERFORM public.lock_agency_financial_centers(affected_center_ids);
+
     SELECT claim."centerId", subsidy_authorization."childId"
     INTO claim_center_id, authorization_child_id
     FROM public."SubsidyClaim" claim
     LEFT JOIN public."SubsidyAuthorization" subsidy_authorization ON subsidy_authorization.id = claim."authorizationId"
     WHERE claim.id = NEW."claimId";
 
-    SELECT family."centerId"
-    INTO child_family_center_id
+    SELECT family."centerId", classroom."centerId"
+    INTO child_family_center_id, child_classroom_center_id
     FROM public."Child" child
     JOIN public."Family" family ON family.id = child."familyId"
+    LEFT JOIN public."Classroom" classroom ON classroom.id = child."classroomId"
     WHERE child.id = NEW."childId";
 
     IF claim_center_id IS NULL
        OR child_family_center_id IS NULL
        OR child_family_center_id <> claim_center_id
+       OR (child_classroom_center_id IS NOT NULL AND child_classroom_center_id <> claim_center_id)
        OR (authorization_child_id IS NOT NULL AND NEW."childId" <> authorization_child_id) THEN
         RAISE EXCEPTION 'Subsidy claim line child scope conflicts with its claim or authorization';
     END IF;
@@ -676,6 +968,10 @@ DECLARE
     authorization_child_id TEXT;
     requires_mapped_program BOOLEAN := FALSE;
 BEGIN
+    PERFORM public.lock_agency_financial_centers(ARRAY[
+        NEW."centerId",
+        CASE WHEN TG_OP = 'UPDATE' THEN OLD."centerId" END
+    ]);
     SELECT
         program."centerId",
         program.status,
@@ -725,13 +1021,28 @@ BEGIN
         FROM public."SubsidyClaimLine" line
         JOIN public."Child" child ON child.id = line."childId"
         JOIN public."Family" family ON family.id = child."familyId"
+        LEFT JOIN public."Classroom" classroom ON classroom.id = child."classroomId"
         WHERE line."claimId" = NEW.id
           AND (
               family."centerId" IS DISTINCT FROM NEW."centerId"
+              OR (child."classroomId" IS NOT NULL AND classroom."centerId" IS DISTINCT FROM NEW."centerId")
               OR (authorization_child_id IS NOT NULL AND line."childId" <> authorization_child_id)
           )
     ) THEN
         RAISE EXCEPTION 'Subsidy claim update conflicts with an existing claim-line child';
+    END IF;
+
+    IF TG_OP = 'UPDATE'
+       AND (
+           NEW."centerId" IS DISTINCT FROM OLD."centerId"
+           OR NEW."agencyProgramId" IS DISTINCT FROM OLD."agencyProgramId"
+       )
+       AND EXISTS (
+           SELECT 1
+           FROM public."AgencyRemittanceAllocation" allocation
+           WHERE allocation."claimId" = OLD.id
+       ) THEN
+        RAISE EXCEPTION 'A subsidy claim with remittance allocation history cannot move schools or programs';
     END IF;
 
     IF TG_OP = 'INSERT' THEN
@@ -763,6 +1074,7 @@ SECURITY INVOKER
 SET search_path = ''
 AS $function$
 BEGIN
+    PERFORM public.lock_agency_financial_centers(ARRAY[OLD."centerId", NEW."centerId"]);
     IF NEW."centerId" IS DISTINCT FROM OLD."centerId" AND (
         EXISTS (SELECT 1 FROM public."SubsidyAuthorization" subsidy_authorization WHERE subsidy_authorization."agencyProgramId" = OLD.id)
         OR EXISTS (SELECT 1 FROM public."SubsidyClaim" claim WHERE claim."agencyProgramId" = OLD.id)
@@ -783,6 +1095,7 @@ SECURITY INVOKER
 SET search_path = ''
 AS $function$
 BEGIN
+    PERFORM public.lock_agency_financial_centers(ARRAY[OLD."centerId", NEW."centerId"]);
     IF NEW."centerId" IS DISTINCT FROM OLD."centerId" AND (
         EXISTS (
             SELECT 1
@@ -812,9 +1125,27 @@ SECURITY INVOKER
 SET search_path = ''
 AS $function$
 DECLARE
+    affected_center_ids TEXT[];
     family_center_id TEXT;
     classroom_center_id TEXT;
 BEGIN
+    SELECT ARRAY_AGG(DISTINCT scope.center_id ORDER BY scope.center_id)
+    INTO affected_center_ids
+    FROM (
+        SELECT family."centerId" FROM public."Family" family WHERE family.id IN (OLD."familyId", NEW."familyId")
+        UNION ALL
+        SELECT classroom."centerId" FROM public."Classroom" classroom WHERE classroom.id IN (OLD."classroomId", NEW."classroomId")
+        UNION ALL
+        SELECT subsidy_authorization."centerId" FROM public."SubsidyAuthorization" subsidy_authorization WHERE subsidy_authorization."childId" = OLD.id
+        UNION ALL
+        SELECT claim."centerId"
+        FROM public."SubsidyClaimLine" line
+        JOIN public."SubsidyClaim" claim ON claim.id = line."claimId"
+        WHERE line."childId" = OLD.id
+    ) scope
+    WHERE scope.center_id IS NOT NULL;
+    PERFORM public.lock_agency_financial_centers(affected_center_ids);
+
     SELECT family."centerId" INTO family_center_id
     FROM public."Family" family
     WHERE family.id = NEW."familyId";
@@ -839,7 +1170,10 @@ BEGIN
         FROM public."SubsidyClaimLine" line
         JOIN public."SubsidyClaim" claim ON claim.id = line."claimId"
         WHERE line."childId" = OLD.id
-          AND claim."centerId" IS DISTINCT FROM family_center_id
+          AND (
+              claim."centerId" IS DISTINCT FROM family_center_id
+              OR (NEW."classroomId" IS NOT NULL AND claim."centerId" IS DISTINCT FROM classroom_center_id)
+          )
     ) THEN
         RAISE EXCEPTION 'A child update conflicts with agency authorization or claim history';
     END IF;
@@ -854,6 +1188,7 @@ SECURITY INVOKER
 SET search_path = ''
 AS $function$
 BEGIN
+    PERFORM public.lock_agency_financial_centers(ARRAY[OLD."centerId", NEW."centerId"]);
     IF NEW."centerId" IS DISTINCT FROM OLD."centerId" AND EXISTS (
         SELECT 1
         FROM public."Child" child
@@ -879,22 +1214,63 @@ SECURITY INVOKER
 SET search_path = ''
 AS $function$
 DECLARE
+    affected_center_ids TEXT[];
+    candidate_center_id TEXT;
     reconciliation_enabled BOOLEAN;
+    excluded_program_id TEXT;
+    projected_active_program_count BIGINT;
 BEGIN
-    SELECT center."agencyReconciliationEnabled"
-    INTO reconciliation_enabled
-    FROM public."Center" center
-    WHERE center.id = NEW."centerId";
+    affected_center_ids := CASE
+        WHEN TG_OP = 'INSERT' THEN ARRAY[NEW."centerId"]
+        WHEN TG_OP = 'DELETE' THEN ARRAY[OLD."centerId"]
+        ELSE ARRAY[OLD."centerId", NEW."centerId"]
+    END;
+    PERFORM public.lock_agency_financial_centers(affected_center_ids);
+    excluded_program_id := CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE OLD.id END;
 
-    IF reconciliation_enabled
-       AND NEW.status = 'active'
-       AND (
-           NULLIF(BTRIM(NEW."receivableGlCode"), '') IS NULL
-           OR NULLIF(BTRIM(NEW."cashGlCode"), '') IS NULL
-           OR NULLIF(BTRIM(NEW."adjustmentGlCode"), '') IS NULL
-           OR NULLIF(BTRIM(NEW."costCenterCode"), '') IS NULL
-       ) THEN
-        RAISE EXCEPTION 'An active agency program requires complete accounting mappings for reconciliation';
+    FOR candidate_center_id IN
+        SELECT DISTINCT candidate.value
+        FROM pg_catalog.unnest(affected_center_ids) AS candidate(value)
+        WHERE NULLIF(BTRIM(candidate.value), '') IS NOT NULL
+        ORDER BY candidate.value
+    LOOP
+        SELECT center."agencyReconciliationEnabled"
+        INTO reconciliation_enabled
+        FROM public."Center" center
+        WHERE center.id = candidate_center_id;
+
+        IF reconciliation_enabled THEN
+            IF TG_OP <> 'DELETE'
+               AND NEW."centerId" = candidate_center_id
+               AND NEW.status = 'active'
+               AND (
+                   NULLIF(BTRIM(NEW."receivableGlCode"), '') IS NULL
+                   OR NULLIF(BTRIM(NEW."cashGlCode"), '') IS NULL
+                   OR NULLIF(BTRIM(NEW."adjustmentGlCode"), '') IS NULL
+                   OR NULLIF(BTRIM(NEW."costCenterCode"), '') IS NULL
+               ) THEN
+                RAISE EXCEPTION 'An active agency program requires complete accounting mappings for reconciliation';
+            END IF;
+
+            SELECT COUNT(*)
+            INTO projected_active_program_count
+            FROM public."AgencyProgram" program
+            WHERE program."centerId" = candidate_center_id
+              AND program.status = 'active'
+              AND (excluded_program_id IS NULL OR program.id <> excluded_program_id);
+            IF TG_OP <> 'DELETE'
+               AND NEW."centerId" = candidate_center_id
+               AND NEW.status = 'active' THEN
+                projected_active_program_count := projected_active_program_count + 1;
+            END IF;
+            IF projected_active_program_count = 0 THEN
+                RAISE EXCEPTION 'An activated school must retain at least one active mapped agency program';
+            END IF;
+        END IF;
+    END LOOP;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
     END IF;
     RETURN NEW;
 END
@@ -919,6 +1295,7 @@ DECLARE
     reconciliation_enabled BOOLEAN;
     requires_mapped_program BOOLEAN := FALSE;
 BEGIN
+    PERFORM public.lock_agency_financial_center(NEW."centerId");
     SELECT program."centerId", program.status, program."adjustmentGlCode", program."costCenterCode", center."agencyReconciliationEnabled"
     INTO program_center_id, program_status, program_adjustment_gl_code, program_cost_center_code, reconciliation_enabled
     FROM public."AgencyProgram" program
@@ -1041,6 +1418,7 @@ BEGIN
     IF account_center_id IS NULL THEN
         RAISE EXCEPTION 'Agency ledger entry account is missing';
     END IF;
+    PERFORM public.lock_agency_financial_center(account_center_id);
 
     IF TG_OP = 'INSERT' AND EXISTS (
         SELECT 1
@@ -1114,6 +1492,7 @@ DECLARE
     source_external_reference TEXT;
     allocation_batch_id TEXT;
     allocation_reviewed_at TIMESTAMP(3);
+    allocation_idempotency_key TEXT;
     batch_gl_code TEXT;
     batch_cost_center_code TEXT;
     has_allocation BOOLEAN := FALSE;
@@ -1157,8 +1536,8 @@ BEGIN
             RAISE EXCEPTION 'Agency ledger entry remittance provenance is missing';
         END IF;
 
-        SELECT allocation."batchId", allocation."reviewedAt", batch."cashGlCodeSnapshot", batch."costCenterCodeSnapshot"
-        INTO allocation_batch_id, allocation_reviewed_at, batch_gl_code, batch_cost_center_code
+        SELECT allocation."batchId", allocation."reviewedAt", allocation."idempotencyKey", batch."cashGlCodeSnapshot", batch."costCenterCodeSnapshot"
+        INTO allocation_batch_id, allocation_reviewed_at, allocation_idempotency_key, batch_gl_code, batch_cost_center_code
         FROM public."AgencyRemittanceAllocation" allocation
         JOIN public."AgencyRemittanceBatch" batch ON batch.id = allocation."batchId"
         WHERE allocation."remittanceId" = entry_row."remittanceId";
@@ -1174,11 +1553,16 @@ BEGIN
             IF entry_row."sourceSystem" IS DISTINCT FROM 'subsidy_agency'
                OR entry_row."externalId" IS DISTINCT FROM 'remittance:' || entry_row."remittanceId"
                OR entry_row."amountCents" <> -source_amount_cents
-               OR entry_row."effectiveAt" < source_paid_at
+               -- paidAt is date-only source evidence represented at noon UTC;
+               -- a controlled reviewer may post earlier on that same UTC day.
+               OR DATE_TRUNC('day', entry_row."effectiveAt") < DATE_TRUNC('day', source_paid_at)
                OR entry_row."externalReference" IS DISTINCT FROM source_external_reference
-               OR (entry_row."effectiveAt" > source_paid_at AND (
-                   NOT has_allocation OR allocation_reviewed_at IS DISTINCT FROM entry_row."effectiveAt"
-               ))
+               OR (has_allocation
+                   AND allocation_reviewed_at IS NULL
+                   AND allocation_idempotency_key NOT LIKE 'legacy-allocation:%')
+               OR (has_allocation
+                   AND entry_row."effectiveAt" IS DISTINCT FROM COALESCE(allocation_reviewed_at, source_paid_at))
+               OR (NOT has_allocation AND entry_row."effectiveAt" IS DISTINCT FROM source_paid_at)
                OR (has_allocation AND (
                    entry_row."glCodeSnapshot" IS DISTINCT FROM batch_gl_code
                    OR entry_row."costCenterCodeSnapshot" IS DISTINCT FROM batch_cost_center_code
@@ -1196,8 +1580,7 @@ BEGIN
                OR entry_row."sourceSystem" IS DISTINCT FROM 'subsidy_agency'
                OR entry_row."externalId" IS DISTINCT FROM 'remittance-reversal:' || entry_row."remittanceId"
                OR entry_row."amountCents" <> source_amount_cents
-               OR entry_row."effectiveAt" IS DISTINCT FROM source_reversed_at
-               OR source_reversed_at < receipt_effective_at
+               OR entry_row."effectiveAt" IS DISTINCT FROM GREATEST(source_reversed_at, receipt_effective_at)
                OR entry_row."externalReference" IS DISTINCT FROM source_external_reference
                OR NOT FOUND
                OR entry_row."glCodeSnapshot" IS DISTINCT FROM receipt_gl_code
@@ -1317,7 +1700,7 @@ BEGIN
                 IF entry_row."externalId" IS DISTINCT FROM 'batch-unapplied:' || batch_row.id
                    OR batch_row."reviewedAt" IS NULL
                    OR batch_row.status = 'rejected'
-                   OR entry_row."effectiveAt" IS DISTINCT FROM batch_row."paidAt"
+                   OR entry_row."effectiveAt" IS DISTINCT FROM batch_row."reviewedAt"
                    OR initial_unapplied_cents <= 0
                    OR entry_row."amountCents"::bigint <> -initial_unapplied_cents THEN
                     RAISE EXCEPTION 'Agency ledger unapplied cash receipt conflicts with exact batch facts';
@@ -1381,6 +1764,7 @@ END
 $function$;
 
 REVOKE ALL ON FUNCTION public.enforce_agency_remittance_batch_scope() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.lock_agency_financial_centers(TEXT[]) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.enforce_agency_remittance_allocation_scope() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.enforce_subsidy_authorization_scope() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.enforce_subsidy_claim_scope() FROM PUBLIC, anon, authenticated;
@@ -1417,7 +1801,7 @@ FOR EACH ROW EXECUTE FUNCTION public.enforce_subsidy_claim_line_scope();
 
 DROP TRIGGER IF EXISTS "AgencyProgram_activation_readiness_guard" ON "AgencyProgram";
 CREATE TRIGGER "AgencyProgram_activation_readiness_guard"
-BEFORE INSERT OR UPDATE OF "centerId", "status", "receivableGlCode", "cashGlCode", "adjustmentGlCode", "costCenterCode" ON "AgencyProgram"
+BEFORE INSERT OR UPDATE OR DELETE ON "AgencyProgram"
 FOR EACH ROW EXECUTE FUNCTION public.enforce_agency_program_activation_readiness();
 
 DROP TRIGGER IF EXISTS "AgencyProgram_parent_scope_guard" ON "AgencyProgram";
@@ -1472,6 +1856,7 @@ SECURITY INVOKER
 SET search_path = ''
 AS $function$
 DECLARE
+    affected_center_ids TEXT[];
     reconciliation_enabled BOOLEAN;
     receivable_gl_code TEXT;
     cost_center_code TEXT;
@@ -1480,6 +1865,23 @@ BEGIN
         RETURN NEW;
     END IF;
 
+    SELECT ARRAY_AGG(DISTINCT scope.center_id ORDER BY scope.center_id)
+    INTO affected_center_ids
+    FROM (
+        SELECT claim."centerId" AS center_id
+        FROM public."SubsidyClaim" claim
+        WHERE claim.id = NEW."claimId"
+        UNION ALL
+        SELECT account."centerId"
+        FROM public."AgencyLedgerAccount" account
+        WHERE account.id = NEW."agencyLedgerAccountId"
+    ) scope
+    WHERE scope.center_id IS NOT NULL;
+    PERFORM public.lock_agency_financial_centers(affected_center_ids);
+
+    -- Re-read the program mapping after the shared school fence. A concurrent
+    -- mapping change must either finish before this snapshot is validated or
+    -- wait until the approval entry has committed with its exact snapshots.
     SELECT center."agencyReconciliationEnabled", program."receivableGlCode", program."costCenterCode"
     INTO reconciliation_enabled, receivable_gl_code, cost_center_code
     FROM public."SubsidyClaim" claim
@@ -1638,6 +2040,253 @@ BEGIN
 END
 $function$;
 
+-- The production-safe migration order intentionally places the additive schema
+-- ahead of the application promotion. During that bounded interval (and during
+-- an application rollback), the baseline application still writes the source
+-- claim/remittance and legacy family compatibility entry. These deferred helpers
+-- add only the exact, evidence-backed dedicated-ledger projection. They never
+-- infer a claim, approval, remittance, allocation, or reviewer.
+CREATE OR REPLACE FUNCTION public.recalculate_compatibility_agency_ledger_account(target_account_id TEXT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    minimum_running_balance BIGINT;
+    maximum_running_balance BIGINT;
+    final_balance BIGINT;
+BEGIN
+    SELECT MIN(running_balance), MAX(running_balance)
+    INTO minimum_running_balance, maximum_running_balance
+    FROM (
+        SELECT SUM(entry."amountCents"::bigint) OVER (
+            ORDER BY entry."effectiveAt", entry."createdAt", entry.id
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS running_balance
+        FROM public."AgencyLedgerEntry" entry
+        WHERE entry."agencyLedgerAccountId" = target_account_id
+    ) ordered_entries;
+
+    IF minimum_running_balance NOT BETWEEN -2147483648 AND 2147483647
+       OR maximum_running_balance NOT BETWEEN -2147483648 AND 2147483647 THEN
+        RAISE EXCEPTION 'Agency ledger compatibility projection exceeds the supported INTEGER balance range';
+    END IF;
+
+    WITH running AS (
+        SELECT entry.id,
+            SUM(entry."amountCents"::bigint) OVER (
+                ORDER BY entry."effectiveAt", entry."createdAt", entry.id
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            )::integer AS exact_balance
+        FROM public."AgencyLedgerEntry" entry
+        WHERE entry."agencyLedgerAccountId" = target_account_id
+    )
+    UPDATE public."AgencyLedgerEntry" entry
+    SET "balanceAfterCents" = running.exact_balance
+    FROM running
+    WHERE entry.id = running.id
+      AND entry."balanceAfterCents" IS DISTINCT FROM running.exact_balance;
+
+    SELECT COALESCE(SUM(entry."amountCents"::bigint), 0)
+    INTO final_balance
+    FROM public."AgencyLedgerEntry" entry
+    WHERE entry."agencyLedgerAccountId" = target_account_id;
+
+    IF final_balance NOT BETWEEN -2147483648 AND 2147483647 THEN
+        RAISE EXCEPTION 'Agency ledger compatibility projection exceeds the supported INTEGER balance range';
+    END IF;
+
+    UPDATE public."AgencyLedgerAccount"
+    SET "balanceCents" = final_balance::integer,
+        "updatedAt" = CURRENT_TIMESTAMP
+    WHERE id = target_account_id
+      AND "balanceCents" IS DISTINCT FROM final_balance::integer;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.ensure_baseline_claim_ledger_projection(target_claim_id TEXT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    claim_row public."SubsidyClaim"%ROWTYPE;
+    program_row public."AgencyProgram"%ROWTYPE;
+    reconciliation_enabled BOOLEAN;
+    target_account_id TEXT;
+BEGIN
+    SELECT claim.* INTO claim_row
+    FROM public."SubsidyClaim" claim
+    WHERE claim.id = target_claim_id;
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+    SELECT program.* INTO program_row
+    FROM public."AgencyProgram" program
+    WHERE program.id = claim_row."agencyProgramId"
+      AND program."centerId" = claim_row."centerId";
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Baseline agency claim compatibility projection has conflicting program scope';
+    END IF;
+    SELECT center."agencyReconciliationEnabled" INTO reconciliation_enabled
+    FROM public."Center" center
+    WHERE center.id = claim_row."centerId";
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Baseline agency claim compatibility projection is missing its school';
+    END IF;
+
+    IF reconciliation_enabled
+       OR claim_row.status NOT IN ('approved', 'partially_paid', 'paid')
+       OR COALESCE(claim_row."approvedCents", 0) <= 0 THEN
+        RETURN;
+    END IF;
+
+    PERFORM public.lock_agency_financial_center(claim_row."centerId");
+    INSERT INTO public."AgencyLedgerAccount" (id, "centerId", "agencyProgramId", "balanceCents", "createdAt", "updatedAt")
+    VALUES ('agency-ledger-account:' || program_row.id, claim_row."centerId", program_row.id, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT ("centerId", "agencyProgramId") DO NOTHING;
+
+    SELECT account.id
+    INTO target_account_id
+    FROM public."AgencyLedgerAccount" account
+    WHERE account."centerId" = claim_row."centerId"
+      AND account."agencyProgramId" = program_row.id;
+
+    IF target_account_id IS NULL THEN
+        RAISE EXCEPTION 'Baseline agency claim compatibility projection is missing its exact ledger account';
+    END IF;
+
+    INSERT INTO public."AgencyLedgerEntry" (
+        id, "agencyLedgerAccountId", "claimId", "remittanceId", "remittanceBatchId", "adjustmentId",
+        type, description, "amountCents", "balanceAfterCents", "effectiveAt", "externalReference",
+        "glCodeSnapshot", "costCenterCodeSnapshot", "sourceSystem", "externalId", metadata, "createdAt"
+    ) VALUES (
+        'agency-ledger-claim:' || claim_row.id, target_account_id, claim_row.id, NULL, NULL, NULL,
+        'claim_approved', program_row.name || ' approved ' || claim_row.number,
+        claim_row."approvedCents", 0, COALESCE(claim_row."approvedAt", claim_row."createdAt"), claim_row."externalReference",
+        program_row."receivableGlCode", program_row."costCenterCode", 'subsidy_agency', 'claim-approved:' || claim_row.id,
+        jsonb_build_object('claimNumber', claim_row.number, 'baselineCompatibilityProjection', true),
+        COALESCE(claim_row."approvedAt", claim_row."createdAt")
+    )
+    ON CONFLICT ("sourceSystem", "externalId") DO NOTHING;
+
+    PERFORM public.recalculate_compatibility_agency_ledger_account(target_account_id);
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.ensure_baseline_remittance_ledger_projection(target_remittance_id TEXT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    remittance_row public."SubsidyRemittance"%ROWTYPE;
+    claim_row public."SubsidyClaim"%ROWTYPE;
+    program_row public."AgencyProgram"%ROWTYPE;
+    reconciliation_enabled BOOLEAN;
+    target_account_id TEXT;
+    receipt_gl_code TEXT;
+    receipt_cost_center_code TEXT;
+BEGIN
+    SELECT remittance.* INTO remittance_row
+    FROM public."SubsidyRemittance" remittance
+    WHERE remittance.id = target_remittance_id;
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+    SELECT claim.* INTO claim_row
+    FROM public."SubsidyClaim" claim
+    WHERE claim.id = remittance_row."claimId";
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Baseline agency remittance compatibility projection is missing its claim';
+    END IF;
+    SELECT program.* INTO program_row
+    FROM public."AgencyProgram" program
+    WHERE program.id = claim_row."agencyProgramId"
+      AND program."centerId" = claim_row."centerId";
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Baseline agency remittance compatibility projection has conflicting program scope';
+    END IF;
+    SELECT center."agencyReconciliationEnabled" INTO reconciliation_enabled
+    FROM public."Center" center
+    WHERE center.id = claim_row."centerId";
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Baseline agency remittance compatibility projection is missing its school';
+    END IF;
+
+    IF reconciliation_enabled OR EXISTS (
+        SELECT 1 FROM public."AgencyRemittanceAllocation" allocation
+        WHERE allocation."remittanceId" = target_remittance_id
+    ) THEN
+        RETURN;
+    END IF;
+
+    PERFORM public.lock_agency_financial_center(claim_row."centerId");
+    PERFORM public.ensure_baseline_claim_ledger_projection(claim_row.id);
+
+    SELECT account.id
+    INTO target_account_id
+    FROM public."AgencyLedgerAccount" account
+    WHERE account."centerId" = claim_row."centerId"
+      AND account."agencyProgramId" = program_row.id;
+
+    IF target_account_id IS NULL THEN
+        RAISE EXCEPTION 'Baseline agency remittance compatibility projection is missing its exact ledger account';
+    END IF;
+
+    INSERT INTO public."AgencyLedgerEntry" (
+        id, "agencyLedgerAccountId", "claimId", "remittanceId", "remittanceBatchId", "adjustmentId",
+        type, description, "amountCents", "balanceAfterCents", "effectiveAt", "externalReference",
+        "glCodeSnapshot", "costCenterCodeSnapshot", "sourceSystem", "externalId", metadata, "createdAt"
+    ) VALUES (
+        'agency-ledger-remittance:' || remittance_row.id, target_account_id, claim_row.id, remittance_row.id, NULL, NULL,
+        'remittance_received', program_row.name || ' remittance for ' || claim_row.number,
+        -remittance_row."amountCents", 0, remittance_row."paidAt", remittance_row."externalReference",
+        program_row."cashGlCode", program_row."costCenterCode", 'subsidy_agency', 'remittance:' || remittance_row.id,
+        jsonb_build_object('claimNumber', claim_row.number, 'paymentMethod', remittance_row."paymentMethod", 'baselineCompatibilityProjection', true),
+        remittance_row."createdAt"
+    )
+    ON CONFLICT ("sourceSystem", "externalId") DO NOTHING;
+
+    IF remittance_row."reversedAt" IS NOT NULL THEN
+        SELECT receipt."glCodeSnapshot", receipt."costCenterCodeSnapshot"
+        INTO receipt_gl_code, receipt_cost_center_code
+        FROM public."AgencyLedgerEntry" receipt
+        WHERE receipt."sourceSystem" = 'subsidy_agency'
+          AND receipt."externalId" = 'remittance:' || remittance_row.id;
+
+        INSERT INTO public."AgencyLedgerEntry" (
+            id, "agencyLedgerAccountId", "claimId", "remittanceId", "remittanceBatchId", "adjustmentId",
+            type, description, "amountCents", "balanceAfterCents", "effectiveAt", "externalReference",
+            "glCodeSnapshot", "costCenterCodeSnapshot", "sourceSystem", "externalId", metadata, "createdAt"
+        ) VALUES (
+            'agency-ledger-remittance-reversal:' || remittance_row.id, target_account_id, claim_row.id, remittance_row.id, NULL, NULL,
+            'remittance_reversal', 'Reversed agency remittance for ' || claim_row.number,
+            remittance_row."amountCents", 0, GREATEST(remittance_row."reversedAt", remittance_row."paidAt"), remittance_row."externalReference",
+            receipt_gl_code, receipt_cost_center_code, 'subsidy_agency', 'remittance-reversal:' || remittance_row.id,
+            jsonb_build_object(
+                'claimNumber', claim_row.number,
+                'reason', remittance_row."reversalReason",
+                'baselineCompatibilityProjection', true,
+                'sourceReversedAt', TO_CHAR(remittance_row."reversedAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+                'postingRule', 'later of source reversal and receipt effective time'
+            ),
+            remittance_row."reversedAt"
+        )
+        ON CONFLICT ("sourceSystem", "externalId") DO NOTHING;
+    END IF;
+
+    PERFORM public.recalculate_compatibility_agency_ledger_account(target_account_id);
+END
+$function$;
+
+REVOKE ALL ON FUNCTION public.recalculate_compatibility_agency_ledger_account(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.ensure_baseline_claim_ledger_projection(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.ensure_baseline_remittance_ledger_projection(TEXT) FROM PUBLIC, anon, authenticated;
+
 CREATE OR REPLACE FUNCTION public.assert_subsidy_claim_financial_state(target_claim_id TEXT)
 RETURNS void
 LANGUAGE plpgsql
@@ -1669,6 +2318,11 @@ BEGIN
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Subsidy claim financial state is missing its school';
+    END IF;
+
+    PERFORM public.lock_agency_financial_center(claim_row."centerId");
+    IF NOT reconciliation_enabled THEN
+        PERFORM public.ensure_baseline_claim_ledger_projection(claim_row.id);
     END IF;
 
     SELECT
@@ -1704,10 +2358,8 @@ BEGIN
            OR active_remittance_cents < 0
            OR active_remittance_cents > claim_row."approvedCents"::bigint
            OR claim_row."paidCents"::bigint <> active_remittance_cents
-           OR ((reconciliation_enabled OR claim_ledger_entry_count > 0) AND (
-               approval_entry_count <> 1
-               OR exact_approval_entry_count <> 1
-           ))
+           OR approval_entry_count <> 1
+           OR exact_approval_entry_count <> 1
            OR (active_remittance_cents = 0 AND claim_row.status <> 'approved')
            OR (active_remittance_cents > 0 AND active_remittance_cents < claim_row."approvedCents"::bigint AND claim_row.status <> 'partially_paid')
            OR (active_remittance_cents = claim_row."approvedCents"::bigint AND claim_row.status <> 'paid') THEN
@@ -1758,11 +2410,98 @@ BEGIN
 END
 $function$;
 
+CREATE OR REPLACE FUNCTION public.lock_subsidy_remittance_financial_center()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    candidate_claim_id TEXT;
+    candidate_center_id TEXT;
+BEGIN
+    FOR candidate_claim_id IN
+        SELECT DISTINCT value
+        FROM (VALUES
+            (CASE WHEN TG_OP <> 'INSERT' THEN OLD."claimId" END),
+            (CASE WHEN TG_OP <> 'DELETE' THEN NEW."claimId" END)
+        ) candidates(value)
+        WHERE value IS NOT NULL
+    LOOP
+        SELECT claim."centerId"
+        INTO candidate_center_id
+        FROM public."SubsidyClaim" claim
+        WHERE claim.id = candidate_claim_id;
+        IF candidate_center_id IS NULL THEN
+            RAISE EXCEPTION 'Agency remittance financial activity is missing its exact school';
+        END IF;
+        PERFORM public.lock_agency_financial_center(candidate_center_id);
+    END LOOP;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.lock_subsidy_claim_financial_center()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+BEGIN
+    PERFORM public.lock_agency_financial_centers(ARRAY[
+        CASE WHEN TG_OP <> 'INSERT' THEN OLD."centerId" END,
+        CASE WHEN TG_OP <> 'DELETE' THEN NEW."centerId" END
+    ]);
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.lock_subsidy_claim_line_financial_center()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    affected_center_ids TEXT[];
+BEGIN
+    SELECT ARRAY_AGG(DISTINCT claim."centerId" ORDER BY claim."centerId")
+    INTO affected_center_ids
+    FROM public."SubsidyClaim" claim
+    WHERE (TG_OP <> 'INSERT' AND claim.id = OLD."claimId")
+       OR (TG_OP <> 'DELETE' AND claim.id = NEW."claimId");
+    PERFORM public.lock_agency_financial_centers(affected_center_ids);
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END
+$function$;
+
 REVOKE ALL ON FUNCTION public.protect_subsidy_claim_financial_source() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.protect_subsidy_claim_line_financial_source() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.assert_subsidy_claim_financial_state(TEXT) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.enforce_subsidy_claim_financial_state() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.enforce_subsidy_remittance_claim_financial_state() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.lock_subsidy_remittance_financial_center() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.lock_subsidy_claim_financial_center() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.lock_subsidy_claim_line_financial_center() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS "SubsidyClaim_01_financial_center_lock_guard" ON "SubsidyClaim";
+CREATE TRIGGER "SubsidyClaim_01_financial_center_lock_guard"
+BEFORE INSERT OR UPDATE OR DELETE ON "SubsidyClaim"
+FOR EACH ROW EXECUTE FUNCTION public.lock_subsidy_claim_financial_center();
+
+DROP TRIGGER IF EXISTS "SubsidyClaimLine_01_financial_center_lock_guard" ON "SubsidyClaimLine";
+CREATE TRIGGER "SubsidyClaimLine_01_financial_center_lock_guard"
+BEFORE INSERT OR UPDATE OR DELETE ON "SubsidyClaimLine"
+FOR EACH ROW EXECUTE FUNCTION public.lock_subsidy_claim_line_financial_center();
 
 DROP TRIGGER IF EXISTS "SubsidyClaim_immutable_financial_source_guard" ON "SubsidyClaim";
 CREATE TRIGGER "SubsidyClaim_immutable_financial_source_guard"
@@ -1781,6 +2520,11 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION public.enforce_subsidy_claim_financial_state();
 
 DROP TRIGGER IF EXISTS "SubsidyRemittance_claim_financial_state_guard" ON "SubsidyRemittance";
+DROP TRIGGER IF EXISTS "SubsidyRemittance_00_financial_center_lock_guard" ON "SubsidyRemittance";
+CREATE TRIGGER "SubsidyRemittance_00_financial_center_lock_guard"
+BEFORE INSERT OR UPDATE OR DELETE ON "SubsidyRemittance"
+FOR EACH ROW EXECUTE FUNCTION public.lock_subsidy_remittance_financial_center();
+
 CREATE CONSTRAINT TRIGGER "SubsidyRemittance_claim_financial_state_guard"
 AFTER INSERT OR UPDATE OR DELETE ON "SubsidyRemittance"
 DEFERRABLE INITIALLY DEFERRED
@@ -1819,6 +2563,7 @@ BEGIN
     IF target_claim_id IS NULL THEN
         RETURN NEW;
     END IF;
+    PERFORM public.lock_agency_financial_center(claim_center_id);
     IF target_paid_at >= DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 day'
        OR target_reversed_at >= DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 day' THEN
         RAISE EXCEPTION 'Agency remittance receipt or reversal cannot be future-dated';
@@ -1829,6 +2574,10 @@ BEGIN
         FROM public."AgencyRemittanceAllocation" allocation
         WHERE allocation."remittanceId" = target_remittance_id
     ) INTO has_allocation_record;
+
+    IF NOT reconciliation_enabled AND NOT has_allocation_record THEN
+        PERFORM public.ensure_baseline_remittance_ledger_projection(target_remittance_id);
+    END IF;
 
     SELECT reconciliation_enabled OR EXISTS (
         SELECT 1
@@ -1861,32 +2610,40 @@ BEGIN
         RAISE EXCEPTION 'Activated agency reconciliation requires a matching reviewed batch allocation';
     END IF;
 
-    IF (reconciliation_enabled OR has_allocation_record) AND NOT EXISTS (
+    IF NOT EXISTS (
         SELECT 1
         FROM public."AgencyLedgerEntry" receipt
-        JOIN public."AgencyRemittanceAllocation" allocation ON allocation."remittanceId" = target_remittance_id
         WHERE receipt."remittanceId" = target_remittance_id
           AND receipt."claimId" = target_claim_id
-          AND receipt."remittanceBatchId" = allocation."batchId"
+          AND receipt."remittanceBatchId" IS NOT DISTINCT FROM (
+              SELECT allocation."batchId"
+              FROM public."AgencyRemittanceAllocation" allocation
+              WHERE allocation."remittanceId" = target_remittance_id
+          )
+          AND receipt."adjustmentId" IS NULL
           AND receipt.type = 'remittance_received'
           AND receipt."sourceSystem" = 'subsidy_agency'
           AND receipt."externalId" = 'remittance:' || target_remittance_id
     ) THEN
-        RAISE EXCEPTION 'Controlled agency remittance is missing its exact receipt ledger provenance';
+        RAISE EXCEPTION 'Agency remittance is missing its exact receipt ledger provenance';
     END IF;
 
-    IF (reconciliation_enabled OR has_allocation_record) AND target_reversed_at IS NOT NULL AND NOT EXISTS (
+    IF target_reversed_at IS NOT NULL AND NOT EXISTS (
         SELECT 1
         FROM public."AgencyLedgerEntry" reversal
-        JOIN public."AgencyRemittanceAllocation" allocation ON allocation."remittanceId" = target_remittance_id
         WHERE reversal."remittanceId" = target_remittance_id
           AND reversal."claimId" = target_claim_id
-          AND reversal."remittanceBatchId" = allocation."batchId"
+          AND reversal."remittanceBatchId" IS NOT DISTINCT FROM (
+              SELECT allocation."batchId"
+              FROM public."AgencyRemittanceAllocation" allocation
+              WHERE allocation."remittanceId" = target_remittance_id
+          )
+          AND reversal."adjustmentId" IS NULL
           AND reversal.type = 'remittance_reversal'
           AND reversal."sourceSystem" = 'subsidy_agency'
           AND reversal."externalId" = 'remittance-reversal:' || target_remittance_id
     ) THEN
-        RAISE EXCEPTION 'Controlled agency remittance is missing its exact reversal ledger provenance';
+        RAISE EXCEPTION 'Agency remittance is missing its exact reversal ledger provenance';
     END IF;
     RETURN NEW;
 END
@@ -2389,6 +3146,23 @@ AS $function$
 DECLARE
     adoption_remittance_ids TEXT[];
 BEGIN
+    -- The outer Center UPDATE itself creates the row-version fence. Calling the
+    -- general helper here would recursively update the same row from its BEFORE
+    -- trigger, so activation acquires the identical advisory key directly.
+    IF NOT pg_catalog.pg_try_advisory_xact_lock(
+        pg_catalog.hashtext('agency-financial-center'),
+        pg_catalog.hashtext(NEW.id)
+    ) THEN
+        RAISE EXCEPTION 'Agency reconciliation activation is busy; retry after the in-flight school financial change completes';
+    END IF;
+    -- The outer Center update already owns this row version. Mark the school as
+    -- locked so adoption's nested batch/allocation triggers do not recursively
+    -- issue a second update against the same Center row.
+    PERFORM pg_catalog.set_config(
+        'bee.agency_financial_center_' || pg_catalog.md5(NEW.id),
+        'held',
+        TRUE
+    );
     IF NOT NEW."agencyReconciliationEnabled" OR OLD."agencyReconciliationEnabled" THEN
         RETURN NEW;
     END IF;
@@ -2428,7 +3202,7 @@ BEGIN
               OR NULLIF(BTRIM(remittance."enteredById"), '') IS NULL
               OR remittance."paidAt" >= DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 day'
               OR remittance."reversedAt" >= DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 day'
-              OR remittance."reversedAt" < remittance."paidAt"
+              OR DATE_TRUNC('day', remittance."reversedAt") < DATE_TRUNC('day', remittance."paidAt")
               OR (remittance."reversedAt" IS NULL AND (remittance."reversedById" IS NOT NULL OR remittance."reversalReason" IS NOT NULL))
               OR (remittance."reversedAt" IS NOT NULL AND (
                   NULLIF(BTRIM(remittance."reversedById"), '') IS NULL
@@ -2459,7 +3233,7 @@ BEGIN
                   OR reversal."adjustmentId" IS NOT NULL
                   OR reversal.type <> 'remittance_reversal'
                   OR reversal."amountCents" <> remittance."amountCents"
-                  OR reversal."effectiveAt" IS DISTINCT FROM remittance."reversedAt"
+                  OR reversal."effectiveAt" IS DISTINCT FROM GREATEST(remittance."reversedAt", receipt."effectiveAt")
                   OR reversal."externalReference" IS DISTINCT FROM remittance."externalReference"
                   OR reversal."glCodeSnapshot" IS DISTINCT FROM receipt."glCodeSnapshot"
                   OR reversal."costCenterCodeSnapshot" IS DISTINCT FROM receipt."costCenterCodeSnapshot"
@@ -2980,6 +3754,81 @@ ALTER TABLE "AgencyLedgerAdjustment" VALIDATE CONSTRAINT "AgencyLedgerAdjustment
 ALTER TABLE "AgencyLedgerAdjustment" VALIDATE CONSTRAINT "AgencyLedgerAdjustment_accounting_snapshot_check";
 ALTER TABLE "AgencyLedgerAdjustment" VALIDATE CONSTRAINT "AgencyLedgerAdjustment_state_check";
 ALTER TABLE "AgencyAccountingPeriod" VALIDATE CONSTRAINT "AgencyAccountingPeriod_state_check";
+ALTER TABLE "AgencyAccountingPeriodEvent" VALIDATE CONSTRAINT "AgencyAccountingPeriodEvent_evidence_check";
+
+-- Center DDL locks are released before the production-derived backfill. The
+-- final phase deliberately takes stable, school-scoped row/advisory fences so
+-- stale financial or agency-graph transactions cannot cross the boundary.
+COMMIT;
+
+BEGIN;
+SET LOCAL lock_timeout = '10s';
+SET LOCAL statement_timeout = '15min';
+SET LOCAL TIME ZONE 'UTC';
+SET LOCAL bee.agency_reconciliation_migration = 'authorized';
+
+-- Acquire every affected school fence once, in lexical order, before any
+-- trigger-driven backfill. This preserves the row-version stale-snapshot abort
+-- while preventing arbitrary source-row order from introducing lock inversions.
+DO $migration$
+DECLARE
+    affected_center_ids TEXT[];
+BEGIN
+    SELECT ARRAY_AGG(scope.center_id ORDER BY scope.center_id)
+    INTO affected_center_ids
+    FROM (
+        SELECT center.id AS center_id FROM public."Center" center WHERE center."agencyReconciliationEnabled"
+        UNION SELECT program."centerId" FROM public."AgencyProgram" program
+        UNION SELECT subsidy_authorization."centerId" FROM public."SubsidyAuthorization" subsidy_authorization
+        UNION SELECT claim."centerId" FROM public."SubsidyClaim" claim
+        UNION SELECT account."centerId" FROM public."AgencyLedgerAccount" account
+        UNION SELECT batch."centerId" FROM public."AgencyRemittanceBatch" batch
+        UNION SELECT adjustment."centerId" FROM public."AgencyLedgerAdjustment" adjustment
+        UNION SELECT period."centerId" FROM public."AgencyAccountingPeriod" period
+        UNION SELECT event."centerId" FROM public."AgencyAccountingPeriodEvent" event
+    ) scope;
+
+    PERFORM public.lock_agency_financial_centers(COALESCE(affected_center_ids, ARRAY[]::TEXT[]));
+END
+$migration$;
+
+-- Heal only exact, existing baseline source facts if a previously interrupted
+-- rehearsal or deployment predates the temporary write fence. No claim,
+-- approval, remittance, reversal, date, amount, or family obligation is
+-- inferred. Each helper takes the same school serialization fence.
+DO $migration$
+DECLARE
+    source_id TEXT;
+BEGIN
+    FOR source_id IN
+        SELECT claim.id
+        FROM public."SubsidyClaim" claim
+        JOIN public."Center" center ON center.id = claim."centerId"
+        WHERE NOT center."agencyReconciliationEnabled"
+          AND claim.status IN ('approved', 'partially_paid', 'paid')
+          AND COALESCE(claim."approvedCents", 0) > 0
+        ORDER BY claim."centerId", claim.id
+    LOOP
+        PERFORM public.ensure_baseline_claim_ledger_projection(source_id);
+    END LOOP;
+
+    FOR source_id IN
+        SELECT remittance.id
+        FROM public."SubsidyRemittance" remittance
+        JOIN public."SubsidyClaim" claim ON claim.id = remittance."claimId"
+        JOIN public."Center" center ON center.id = claim."centerId"
+        WHERE NOT center."agencyReconciliationEnabled"
+          AND NOT EXISTS (
+              SELECT 1
+              FROM public."AgencyRemittanceAllocation" allocation
+              WHERE allocation."remittanceId" = remittance.id
+          )
+        ORDER BY claim."centerId", remittance.id
+    LOOP
+        PERFORM public.ensure_baseline_remittance_ledger_projection(source_id);
+    END LOOP;
+END
+$migration$;
 
 DO $migration$
 BEGIN
@@ -3167,7 +4016,7 @@ BEGIN
                   OR reversal."remittanceBatchId" IS NOT NULL
                   OR reversal.type <> 'remittance_reversal'
                   OR reversal."amountCents" <> remittance."amountCents"
-                  OR reversal."effectiveAt" IS DISTINCT FROM remittance."reversedAt"
+                  OR reversal."effectiveAt" IS DISTINCT FROM GREATEST(remittance."reversedAt", receipt."effectiveAt")
                   OR reversal."externalReference" IS DISTINCT FROM remittance."externalReference"
                   OR reversal."glCodeSnapshot" IS DISTINCT FROM receipt."glCodeSnapshot"
                   OR reversal."costCenterCodeSnapshot" IS DISTINCT FROM receipt."costCenterCodeSnapshot"
@@ -3500,10 +4349,12 @@ $function$;
 REVOKE ALL ON FUNCTION public.protect_agency_legacy_batch_insert_context() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.protect_agency_legacy_allocation_insert_context() FROM PUBLIC, anon, authenticated;
 
+DROP TRIGGER IF EXISTS "AgencyRemittanceBatch_legacy_insert_context_guard" ON "AgencyRemittanceBatch";
 CREATE TRIGGER "AgencyRemittanceBatch_legacy_insert_context_guard"
 BEFORE INSERT ON "AgencyRemittanceBatch"
 FOR EACH ROW EXECUTE FUNCTION public.protect_agency_legacy_batch_insert_context();
 
+DROP TRIGGER IF EXISTS "AgencyRemittanceAllocation_legacy_insert_context_guard" ON "AgencyRemittanceAllocation";
 CREATE TRIGGER "AgencyRemittanceAllocation_legacy_insert_context_guard"
 BEFORE INSERT ON "AgencyRemittanceAllocation"
 FOR EACH ROW EXECUTE FUNCTION public.protect_agency_legacy_allocation_insert_context();
@@ -3729,7 +4580,8 @@ BEGIN
             OR NULLIF(BTRIM(NEW."reversedById"), '') IS NULL
             OR NEW."reversedById" = OLD."enteredById"
             OR NULLIF(BTRIM(NEW."reversalReason"), '') IS NULL
-            OR NEW."reversedAt" < OLD."paidAt"
+            OR DATE_TRUNC('day', NEW."reversedAt") < DATE_TRUNC('day', OLD."paidAt")
+            OR (OLD."reviewedAt" IS NOT NULL AND NEW."reversedAt" < OLD."reviewedAt")
             OR (OLD."reviewedAt" IS NULL AND OLD."idempotencyKey" NOT LIKE 'legacy:%')
         ) THEN
             RAISE EXCEPTION 'Agency remittance batch reversal evidence or reviewer is invalid';
@@ -3922,6 +4774,268 @@ BEGIN
 END
 $function$;
 
+CREATE OR REPLACE FUNCTION public.protect_agency_accounting_period_event_history()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+BEGIN
+    RAISE EXCEPTION 'Agency accounting period transition events are append-only';
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.enforce_agency_accounting_period_event_scope()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    period_row public."AgencyAccountingPeriod"%ROWTYPE;
+    last_sequence INTEGER;
+    last_occurred_at TIMESTAMP(3);
+    expected_action TEXT;
+BEGIN
+    PERFORM public.lock_agency_financial_center(NEW."centerId");
+    SELECT period.*
+    INTO period_row
+    FROM public."AgencyAccountingPeriod" period
+    WHERE period.id = NEW."periodId";
+
+    IF NOT FOUND OR period_row."centerId" <> NEW."centerId" THEN
+        RAISE EXCEPTION 'Agency accounting period transition school scope conflicts with its period';
+    END IF;
+
+    SELECT COALESCE(MAX(event.sequence), 0),
+           (ARRAY_AGG(event."occurredAt" ORDER BY event.sequence DESC))[1]
+    INTO last_sequence, last_occurred_at
+    FROM public."AgencyAccountingPeriodEvent" event
+    WHERE event."periodId" = NEW."periodId";
+
+    expected_action := CASE WHEN MOD(NEW.sequence, 2) = 1 THEN 'closed' ELSE 'reopened' END;
+    IF NEW.sequence <> last_sequence + 1
+       OR NEW.action <> expected_action
+       OR (last_occurred_at IS NOT NULL AND NEW."occurredAt" < last_occurred_at)
+       OR NEW."occurredAt" >= DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 day' THEN
+        RAISE EXCEPTION 'Agency accounting period transition sequence or chronology is invalid';
+    END IF;
+
+    IF NEW.action = 'closed' AND (
+        period_row.status <> 'closed'
+        OR period_row."closedAt" IS DISTINCT FROM NEW."occurredAt"
+        OR period_row."closedById" IS DISTINCT FROM NEW."actorId"
+        OR period_row."closeReason" IS DISTINCT FROM NEW.reason
+    ) THEN
+        RAISE EXCEPTION 'Agency accounting period close event conflicts with its current projection';
+    END IF;
+    IF NEW.action = 'reopened' AND (
+        period_row.status <> 'open'
+        OR period_row."reopenedAt" IS DISTINCT FROM NEW."occurredAt"
+        OR period_row."reopenedById" IS DISTINCT FROM NEW."actorId"
+        OR period_row."reopenReason" IS DISTINCT FROM NEW.reason
+    ) THEN
+        RAISE EXCEPTION 'Agency accounting period reopen event conflicts with its current projection';
+    END IF;
+    RETURN NEW;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.record_agency_accounting_period_transition()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    next_sequence INTEGER;
+    transition_action TEXT;
+    transition_at TIMESTAMP(3);
+    transition_actor_id TEXT;
+    transition_reason TEXT;
+    previous_status TEXT;
+BEGIN
+    IF NOT (
+        (TG_OP = 'INSERT' AND NEW.status = 'closed')
+        OR (TG_OP = 'UPDATE' AND NEW.status IS DISTINCT FROM OLD.status)
+    ) THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT COALESCE(MAX(event.sequence), 0) + 1
+    INTO next_sequence
+    FROM public."AgencyAccountingPeriodEvent" event
+    WHERE event."periodId" = NEW.id;
+
+    previous_status := CASE WHEN TG_OP = 'UPDATE' THEN OLD.status ELSE NULL END;
+    IF NEW.status = 'closed' THEN
+        transition_action := 'closed';
+        transition_at := NEW."closedAt";
+        transition_actor_id := NEW."closedById";
+        transition_reason := NEW."closeReason";
+    ELSE
+        transition_action := 'reopened';
+        transition_at := NEW."reopenedAt";
+        transition_actor_id := NEW."reopenedById";
+        transition_reason := NEW."reopenReason";
+    END IF;
+
+    INSERT INTO public."AgencyAccountingPeriodEvent" (
+        id, "centerId", "periodId", sequence, action, "occurredAt", "actorId", reason, evidence, "createdAt"
+    ) VALUES (
+        'agency-period-event:' || pg_catalog.md5(
+            NEW.id || ':' || next_sequence::text || ':' || transition_action || ':' || transition_at::text || ':' || transition_actor_id || ':' || transition_reason
+        ),
+        NEW."centerId",
+        NEW.id,
+        next_sequence,
+        transition_action,
+        transition_at,
+        transition_actor_id,
+        transition_reason,
+        pg_catalog.jsonb_build_object(
+            'periodName', NEW.name,
+            'startDate', NEW."startDate",
+            'endDate', NEW."endDate",
+            'previousStatus', previous_status,
+            'nextStatus', NEW.status
+        ),
+        CURRENT_TIMESTAMP
+    );
+    RETURN NEW;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.assert_agency_accounting_period_event_state(target_period_id TEXT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    period_row public."AgencyAccountingPeriod"%ROWTYPE;
+    event_count BIGINT;
+    minimum_sequence INTEGER;
+    maximum_sequence INTEGER;
+    invalid_action_count BIGINT;
+    invalid_chronology_count BIGINT;
+    latest_action TEXT;
+    latest_close_at TIMESTAMP(3);
+    latest_close_actor_id TEXT;
+    latest_close_reason TEXT;
+    latest_reopen_at TIMESTAMP(3);
+    latest_reopen_actor_id TEXT;
+    latest_reopen_reason TEXT;
+BEGIN
+    SELECT period.*
+    INTO period_row
+    FROM public."AgencyAccountingPeriod" period
+    WHERE period.id = target_period_id;
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+
+    PERFORM public.lock_agency_financial_center(period_row."centerId");
+    WITH ordered AS (
+        SELECT event.*,
+            LAG(event."occurredAt") OVER (ORDER BY event.sequence) AS previous_occurred_at
+        FROM public."AgencyAccountingPeriodEvent" event
+        WHERE event."periodId" = target_period_id
+    )
+    SELECT COUNT(*), COALESCE(MIN(sequence), 0), COALESCE(MAX(sequence), 0),
+        COUNT(*) FILTER (WHERE action <> CASE WHEN MOD(sequence, 2) = 1 THEN 'closed' ELSE 'reopened' END),
+        COUNT(*) FILTER (WHERE previous_occurred_at IS NOT NULL AND "occurredAt" < previous_occurred_at)
+    INTO event_count, minimum_sequence, maximum_sequence, invalid_action_count, invalid_chronology_count
+    FROM ordered;
+
+    IF event_count = 0 THEN
+        IF period_row.status <> 'open'
+           OR period_row."closedAt" IS NOT NULL
+           OR period_row."reopenedAt" IS NOT NULL THEN
+            RAISE EXCEPTION 'Agency accounting period is missing append-only transition evidence';
+        END IF;
+        RETURN;
+    END IF;
+
+    IF minimum_sequence <> 1
+       OR maximum_sequence::bigint <> event_count
+       OR invalid_action_count <> 0
+       OR invalid_chronology_count <> 0 THEN
+        RAISE EXCEPTION 'Agency accounting period transition history is incomplete or out of order';
+    END IF;
+
+    SELECT event.action
+    INTO latest_action
+    FROM public."AgencyAccountingPeriodEvent" event
+    WHERE event."periodId" = target_period_id
+    ORDER BY event.sequence DESC
+    LIMIT 1;
+
+    SELECT event."occurredAt", event."actorId", event.reason
+    INTO latest_close_at, latest_close_actor_id, latest_close_reason
+    FROM public."AgencyAccountingPeriodEvent" event
+    WHERE event."periodId" = target_period_id AND event.action = 'closed'
+    ORDER BY event.sequence DESC
+    LIMIT 1;
+
+    SELECT event."occurredAt", event."actorId", event.reason
+    INTO latest_reopen_at, latest_reopen_actor_id, latest_reopen_reason
+    FROM public."AgencyAccountingPeriodEvent" event
+    WHERE event."periodId" = target_period_id AND event.action = 'reopened'
+    ORDER BY event.sequence DESC
+    LIMIT 1;
+
+    IF latest_close_at IS DISTINCT FROM period_row."closedAt"
+       OR latest_close_actor_id IS DISTINCT FROM period_row."closedById"
+       OR latest_close_reason IS DISTINCT FROM period_row."closeReason"
+       OR latest_reopen_at IS DISTINCT FROM period_row."reopenedAt"
+       OR latest_reopen_actor_id IS DISTINCT FROM period_row."reopenedById"
+       OR latest_reopen_reason IS DISTINCT FROM period_row."reopenReason"
+       OR (period_row.status = 'closed' AND latest_action <> 'closed')
+       OR (period_row.status = 'open' AND latest_action <> 'reopened') THEN
+        RAISE EXCEPTION 'Agency accounting period projection conflicts with its append-only transition history';
+    END IF;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.enforce_agency_accounting_period_event_state()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+BEGIN
+    PERFORM public.assert_agency_accounting_period_event_state(NEW.id);
+    RETURN NEW;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.enforce_agency_accounting_period_event_parent_state()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    candidate_period_id TEXT;
+BEGIN
+    FOR candidate_period_id IN
+        SELECT DISTINCT value
+        FROM (VALUES
+            (CASE WHEN TG_OP <> 'INSERT' THEN OLD."periodId" END),
+            (CASE WHEN TG_OP <> 'DELETE' THEN NEW."periodId" END)
+        ) candidates(value)
+        WHERE value IS NOT NULL
+    LOOP
+        PERFORM public.assert_agency_accounting_period_event_state(candidate_period_id);
+    END LOOP;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END
+$function$;
+
 -- Serialize period-range decisions per school so concurrent direct SQL cannot
 -- create overlapping inclusive ranges or reopen history out of order.
 CREATE OR REPLACE FUNCTION public.enforce_agency_accounting_period_order()
@@ -3930,11 +5044,20 @@ LANGUAGE plpgsql
 SECURITY INVOKER
 SET search_path = ''
 AS $function$
+DECLARE
+    reconciliation_enabled BOOLEAN;
 BEGIN
-    PERFORM pg_catalog.pg_advisory_xact_lock(
-        pg_catalog.hashtext('agency-accounting-period'),
-        pg_catalog.hashtext(NEW."centerId")
-    );
+    PERFORM public.lock_agency_financial_centers(ARRAY[
+        NEW."centerId",
+        CASE WHEN TG_OP = 'UPDATE' THEN OLD."centerId" END
+    ]);
+    SELECT center."agencyReconciliationEnabled"
+    INTO reconciliation_enabled
+    FROM public."Center" center
+    WHERE center.id = NEW."centerId";
+    IF NOT COALESCE(reconciliation_enabled, FALSE) THEN
+        RAISE EXCEPTION 'Agency accounting periods require school reconciliation activation';
+    END IF;
 
     IF NEW."closedAt" >= DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 day'
        OR NEW."reopenedAt" >= DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 day' THEN
@@ -3947,8 +5070,13 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'Agency accounting period cannot close a future boundary or predate its period end';
     END IF;
-    IF NEW."reopenedAt" IS NOT NULL AND NEW."reopenedAt" < NEW."closedAt" THEN
-        RAISE EXCEPTION 'Agency accounting period reopen evidence cannot predate its close';
+    IF (NEW.status = 'open'
+        AND NEW."reopenedAt" IS NOT NULL
+        AND NEW."reopenedAt" < NEW."closedAt")
+       OR (NEW.status = 'closed'
+           AND NEW."reopenedAt" IS NOT NULL
+           AND NEW."closedAt" < NEW."reopenedAt") THEN
+        RAISE EXCEPTION 'Agency accounting period transition chronology is invalid';
     END IF;
 
     IF EXISTS (
@@ -3984,6 +5112,14 @@ DO $migration$
 BEGIN
     IF EXISTS (
         SELECT 1
+        FROM public."AgencyAccountingPeriod" period
+        LEFT JOIN public."Center" center ON center.id = period."centerId"
+        WHERE NOT COALESCE(center."agencyReconciliationEnabled", FALSE)
+    ) THEN
+        RAISE EXCEPTION 'Agency reconciliation migration blocked: an accounting period belongs to an inactive or missing school';
+    END IF;
+    IF EXISTS (
+        SELECT 1
         FROM public."AgencyAccountingPeriod" earlier
         JOIN public."AgencyAccountingPeriod" later
           ON later."centerId" = earlier."centerId"
@@ -4000,7 +5136,12 @@ BEGIN
                   period."endDate" >= DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 day'
                   OR DATE_TRUNC('day', period."closedAt") < DATE_TRUNC('day', period."endDate")
               ))
-           OR (period."reopenedAt" IS NOT NULL AND period."reopenedAt" < period."closedAt")
+           OR (period.status = 'open'
+               AND period."reopenedAt" IS NOT NULL
+               AND period."reopenedAt" < period."closedAt")
+           OR (period.status = 'closed'
+               AND period."reopenedAt" IS NOT NULL
+               AND period."closedAt" < period."reopenedAt")
     ) THEN
         RAISE EXCEPTION 'Agency reconciliation migration blocked: existing accounting period chronology is invalid';
     END IF;
@@ -4011,6 +5152,12 @@ REVOKE ALL ON FUNCTION public.protect_agency_remittance_batch_history() FROM PUB
 REVOKE ALL ON FUNCTION public.protect_agency_remittance_allocation_history() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.protect_agency_ledger_adjustment_history() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.protect_agency_accounting_period_history() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.protect_agency_accounting_period_event_history() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.enforce_agency_accounting_period_event_scope() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.record_agency_accounting_period_transition() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.assert_agency_accounting_period_event_state(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.enforce_agency_accounting_period_event_state() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.enforce_agency_accounting_period_event_parent_state() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.enforce_agency_accounting_period_order() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS "AgencyRemittanceBatch_immutable_history_guard" ON "AgencyRemittanceBatch";
@@ -4037,5 +5184,57 @@ DROP TRIGGER IF EXISTS "AgencyAccountingPeriod_order_guard" ON "AgencyAccounting
 CREATE TRIGGER "AgencyAccountingPeriod_order_guard"
 BEFORE INSERT OR UPDATE ON "AgencyAccountingPeriod"
 FOR EACH ROW EXECUTE FUNCTION public.enforce_agency_accounting_period_order();
+
+DROP TRIGGER IF EXISTS "AgencyAccountingPeriodEvent_scope_guard" ON "AgencyAccountingPeriodEvent";
+CREATE TRIGGER "AgencyAccountingPeriodEvent_scope_guard"
+BEFORE INSERT ON "AgencyAccountingPeriodEvent"
+FOR EACH ROW EXECUTE FUNCTION public.enforce_agency_accounting_period_event_scope();
+
+DROP TRIGGER IF EXISTS "AgencyAccountingPeriodEvent_immutable_history_guard" ON "AgencyAccountingPeriodEvent";
+CREATE TRIGGER "AgencyAccountingPeriodEvent_immutable_history_guard"
+BEFORE UPDATE OR DELETE ON "AgencyAccountingPeriodEvent"
+FOR EACH ROW EXECUTE FUNCTION public.protect_agency_accounting_period_event_history();
+
+DROP TRIGGER IF EXISTS "AgencyAccountingPeriod_transition_event_guard" ON "AgencyAccountingPeriod";
+CREATE TRIGGER "AgencyAccountingPeriod_transition_event_guard"
+AFTER INSERT OR UPDATE ON "AgencyAccountingPeriod"
+FOR EACH ROW EXECUTE FUNCTION public.record_agency_accounting_period_transition();
+
+DROP TRIGGER IF EXISTS "AgencyAccountingPeriod_event_state_guard" ON "AgencyAccountingPeriod";
+CREATE CONSTRAINT TRIGGER "AgencyAccountingPeriod_event_state_guard"
+AFTER INSERT OR UPDATE ON "AgencyAccountingPeriod"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION public.enforce_agency_accounting_period_event_state();
+
+DROP TRIGGER IF EXISTS "AgencyAccountingPeriodEvent_parent_state_guard" ON "AgencyAccountingPeriodEvent";
+CREATE CONSTRAINT TRIGGER "AgencyAccountingPeriodEvent_parent_state_guard"
+AFTER INSERT OR UPDATE OR DELETE ON "AgencyAccountingPeriodEvent"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION public.enforce_agency_accounting_period_event_parent_state();
+
+DO $migration$
+DECLARE
+    period_id TEXT;
+BEGIN
+    FOR period_id IN
+        SELECT period.id
+        FROM public."AgencyAccountingPeriod" period
+        ORDER BY period."centerId", period."startDate", period.id
+    LOOP
+        PERFORM public.assert_agency_accounting_period_event_state(period_id);
+    END LOOP;
+END
+$migration$;
+
+-- Removing the temporary fence is the final operation in the final transaction.
+-- Any failure above rolls this transaction back and leaves every fence installed.
+DROP TRIGGER IF EXISTS "AgencyProgram_00_reconciliation_migration_fence" ON "AgencyProgram";
+DROP TRIGGER IF EXISTS "SubsidyAuthorization_00_reconciliation_migration_fence" ON "SubsidyAuthorization";
+DROP TRIGGER IF EXISTS "SubsidyClaim_00_reconciliation_migration_fence" ON "SubsidyClaim";
+DROP TRIGGER IF EXISTS "SubsidyClaimLine_00_reconciliation_migration_fence" ON "SubsidyClaimLine";
+DROP TRIGGER IF EXISTS "SubsidyRemittance_00_reconciliation_migration_fence" ON "SubsidyRemittance";
+DROP TRIGGER IF EXISTS "AgencyLedgerAccount_00_reconciliation_migration_fence" ON "AgencyLedgerAccount";
+DROP TRIGGER IF EXISTS "AgencyLedgerEntry_00_reconciliation_migration_fence" ON "AgencyLedgerEntry";
+DROP FUNCTION IF EXISTS public.block_agency_writes_during_reconciliation_migration();
 
 COMMIT;

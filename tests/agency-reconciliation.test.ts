@@ -199,9 +199,13 @@ test("agency server date rules reject future UTC accounting days", () => {
 test("remittance and adjustment reversals never precede their original effective event", () => {
   const requestTime = new Date("2026-09-04T09:00:00.000Z");
   const sameDayNoon = new Date("2026-09-04T12:00:00.000Z");
+  const sameDayMorningReceipt = new Date("2026-09-04T08:00:00.000Z");
   const priorDay = new Date("2026-09-03T12:00:00.000Z");
+  assert.equal(agencyUtcAccountingDate(sameDayMorningReceipt).getTime(), agencyUtcAccountingDate(sameDayNoon).getTime());
+  assert.equal(agencyReversalEffectiveAt(sameDayMorningReceipt, requestTime).toISOString(), requestTime.toISOString());
   assert.equal(agencyReversalEffectiveAt(sameDayNoon, requestTime).toISOString(), sameDayNoon.toISOString());
   assert.equal(agencyReversalEffectiveAt(priorDay, requestTime).toISOString(), requestTime.toISOString());
+  assert.ok(agencyUtcAccountingDate(priorDay) < agencyUtcAccountingDate(sameDayNoon));
 });
 
 test("agency ledger running balances recalculate every later row after a backdated entry", () => {

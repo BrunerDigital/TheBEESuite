@@ -148,43 +148,44 @@ model Center {
   createdAt                            DateTime  @default(now())
   updatedAt                            DateTime  @updatedAt
 
-  organization             Organization              @relation(fields: [organizationId], references: [id])
-  ownerGroup               OwnerGroup?               @relation(fields: [ownerGroupId], references: [id])
-  classrooms               Classroom[]
-  leads                    Lead[]
-  tours                    Tour[]
-  staff                    StaffProfile[]
-  schedules                StaffSchedule[]
-  announcements            Announcement[]
-  auditLogs                AuditLog[]
-  checkLogs                CheckInOutLog[]
-  childLiveLocations       ChildLiveLocation[]
-  childLocationTransitions ChildLocationTransition[]
-  procareImports           ProcareImportBatch[]
-  fteReports               FteReport[]
-  accessGrants             UserAccessGrant[]
-  brandAssets              BrandAsset[]
-  customizations           BrandCustomization[]
-  integrations             Integration[]
-  integrationCredentials   IntegrationCredential[]
-  integrationDeliveries    IntegrationDelivery[]
-  messageTemplates         MessageTemplate[]
-  calendarEvents           CalendarEvent[]
-  reviews                  Review[]
-  surveys                  Survey[]
-  surveyResponses          SurveyResponse[]
-  emergencyDrillLogs       EmergencyDrillLog[]
-  complianceTasks          ComplianceTask[]
-  dataDeletionRequests     DataDeletionRequest[]
-  tuitionPlans             TuitionPlan[]
-  refundRequests           RefundRequest[]
-  agencyPrograms           AgencyProgram[]
-  agencyLedgerAccounts     AgencyLedgerAccount[]
-  agencyRemittanceBatches  AgencyRemittanceBatch[]
-  agencyAccountingPeriods  AgencyAccountingPeriod[]
-  agencyLedgerAdjustments  AgencyLedgerAdjustment[]
-  subsidyAuthorizations    SubsidyAuthorization[]
-  subsidyClaims            SubsidyClaim[]
+  organization                 Organization                  @relation(fields: [organizationId], references: [id])
+  ownerGroup                   OwnerGroup?                   @relation(fields: [ownerGroupId], references: [id])
+  classrooms                   Classroom[]
+  leads                        Lead[]
+  tours                        Tour[]
+  staff                        StaffProfile[]
+  schedules                    StaffSchedule[]
+  announcements                Announcement[]
+  auditLogs                    AuditLog[]
+  checkLogs                    CheckInOutLog[]
+  childLiveLocations           ChildLiveLocation[]
+  childLocationTransitions     ChildLocationTransition[]
+  procareImports               ProcareImportBatch[]
+  fteReports                   FteReport[]
+  accessGrants                 UserAccessGrant[]
+  brandAssets                  BrandAsset[]
+  customizations               BrandCustomization[]
+  integrations                 Integration[]
+  integrationCredentials       IntegrationCredential[]
+  integrationDeliveries        IntegrationDelivery[]
+  messageTemplates             MessageTemplate[]
+  calendarEvents               CalendarEvent[]
+  reviews                      Review[]
+  surveys                      Survey[]
+  surveyResponses              SurveyResponse[]
+  emergencyDrillLogs           EmergencyDrillLog[]
+  complianceTasks              ComplianceTask[]
+  dataDeletionRequests         DataDeletionRequest[]
+  tuitionPlans                 TuitionPlan[]
+  refundRequests               RefundRequest[]
+  agencyPrograms               AgencyProgram[]
+  agencyLedgerAccounts         AgencyLedgerAccount[]
+  agencyRemittanceBatches      AgencyRemittanceBatch[]
+  agencyAccountingPeriods      AgencyAccountingPeriod[]
+  agencyAccountingPeriodEvents AgencyAccountingPeriodEvent[]
+  agencyLedgerAdjustments      AgencyLedgerAdjustment[]
+  subsidyAuthorizations        SubsidyAuthorization[]
+  subsidyClaims                SubsidyClaim[]
 
   @@index([crmLocationId])
   @@index([locationId])
@@ -1578,10 +1579,31 @@ model AgencyAccountingPeriod {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  center Center @relation(fields: [centerId], references: [id])
+  center Center                        @relation(fields: [centerId], references: [id])
+  events AgencyAccountingPeriodEvent[]
 
   @@unique([centerId, startDate, endDate])
   @@index([centerId, status, startDate, endDate])
+}
+
+model AgencyAccountingPeriodEvent {
+  id         String   @id @default(cuid())
+  centerId   String
+  periodId   String
+  sequence   Int
+  action     String
+  occurredAt DateTime
+  actorId    String
+  reason     String
+  evidence   Json?
+  createdAt  DateTime @default(now())
+
+  center Center                 @relation(fields: [centerId], references: [id])
+  period AgencyAccountingPeriod @relation(fields: [periodId], references: [id])
+
+  @@unique([periodId, sequence])
+  @@index([periodId, occurredAt, id])
+  @@index([centerId, occurredAt, id])
 }
 
 model Invoice {

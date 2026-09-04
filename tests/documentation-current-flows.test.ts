@@ -72,9 +72,9 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
   assert.match(resources, /A blank field is not proof that none exists/);
   assert.match(resources, /keep agency responsibility separate from the parent's family balance/);
   assert.match(resources, /id: "agency-payment-reconciliation"/);
-  assert.match(resources, /Prepare deposit batch, or Prepare remittance from one approved or partially paid claim/);
-  assert.match(resources, /different billing administrator or accounting reviewer must compare and approve the pending batch/);
-  assert.match(resources, /Reverse an incorrect deposit batch with a correction reason/);
+  assert.match(resources, /Before exact-school activation, choose Record remittance/);
+  assert.match(resources, /Only after release and exact-school activation, use Prepare deposit batch or Prepare remittance/);
+  assert.match(resources, /Before activation, reverse an incorrect direct remittance/);
   assert.match(resources, /object-contain/);
   assert.match(resources, /Tap a screen to open the full view/);
   assert.doesNotMatch(resources, /Section link/);
@@ -98,6 +98,12 @@ test("agency payment SOP has a stable public route and evidence-first reconcilia
   assert.match(guide, /dedicated agency ledger/);
   assert.match(guide, /A preview build does not prove compatibility with an unmigrated production database/);
   assert.match(guide, /continue the baseline direct/);
+  assert.match(guide, /Before activation: baseline Record remittance/);
+  assert.match(guide, /Enter the exact amount, agency paid date, payment method, and unique ACH, check, or portal reference/);
+  assert.match(guide, /choose Save remittance once/);
+  assert.match(guide, /Refresh and verify the claim paid amount and status, the recorded remittance and reference/);
+  assert.match(guide, /Reverse remittance and a specific reason/);
+  assert.match(guide, /After release and exact-school activation: expanded reconciliation/);
   assert.match(sop, /claim-by-claim allocation/);
   assert.match(sop, /Do not add a duplicate remittance or family payment/);
   assert.match(sop, /Export claims, deposits, ledger activity, and reconciliation/);

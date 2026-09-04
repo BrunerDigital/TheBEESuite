@@ -10,6 +10,7 @@ const currentUser = {
   name: "Billing User",
   role: "BILLING_ADMIN",
   centerIds: ["center-test"],
+  workspace: { mode: "fixed", activeCenterId: "center-test" },
 };
 
 mock.module("@/lib/prisma", {

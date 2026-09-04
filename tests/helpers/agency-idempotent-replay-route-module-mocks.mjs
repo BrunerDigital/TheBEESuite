@@ -9,6 +9,7 @@ const currentUser = {
   name: "Billing User",
   role: "BILLING_ADMIN",
   centerIds: ["center-test", "center-other"],
+  workspace: { mode: "fixed", activeCenterId: "center-test" },
 };
 
 const program = {

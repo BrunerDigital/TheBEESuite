@@ -16,6 +16,9 @@ const productionPooler =
 test("rehearsal target validation accepts only the exact branch identity", () => {
   assert.doesNotThrow(() => assertAuthorizedRehearsalDatabaseTarget(rehearsalPooler));
   assert.doesNotThrow(() => assertAuthorizedRehearsalDatabaseTarget(
+    `postgresql://postgres.${AGENCY_REHEARSAL_PROJECT_REF}:secret@aws-0-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=true`,
+  ));
+  assert.doesNotThrow(() => assertAuthorizedRehearsalDatabaseTarget(
     `postgresql://postgres:secret@db.${AGENCY_REHEARSAL_PROJECT_REF}.supabase.co:5432/postgres?sslmode=require`,
   ));
   assert.throws(() => assertAuthorizedRehearsalDatabaseTarget(productionPooler), /production project/);
@@ -33,7 +36,7 @@ test("database target validation rejects lookalikes and unsafe transport", () =>
     `postgresql://postgres.wrongref:secret@aws-0-us-west-1.pooler.supabase.com:5432/postgres?sslmode=require&ref=${AGENCY_REHEARSAL_PROJECT_REF}`,
     `postgresql://postgres.${AGENCY_REHEARSAL_PROJECT_REF}:secret@aws-0-us-west-1.pooler.supabase.com:5432/other?sslmode=require`,
     `postgresql://postgres.${AGENCY_REHEARSAL_PROJECT_REF}:secret@aws-0-us-west-1.pooler.supabase.com:5432/postgres`,
-    `postgresql://postgres.${AGENCY_REHEARSAL_PROJECT_REF}:secret@aws-0-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require`,
+    `postgresql://postgres.${AGENCY_REHEARSAL_PROJECT_REF}:secret@aws-0-us-west-1.pooler.supabase.com:6432/postgres?sslmode=require`,
   ];
   for (const url of invalidTargets) {
     assert.throws(() => assertAuthorizedRehearsalDatabaseTarget(url), /exact expected Supabase project/);
@@ -43,6 +46,11 @@ test("database target validation rejects lookalikes and unsafe transport", () =>
 test("production source validation requires the exact production project", () => {
   assert.doesNotThrow(() => assertExactSupabaseDatabaseTarget(
     productionPooler,
+    AGENCY_PRODUCTION_PROJECT_REF,
+    "Production source URL",
+  ));
+  assert.doesNotThrow(() => assertExactSupabaseDatabaseTarget(
+    `postgresql://postgres.${AGENCY_PRODUCTION_PROJECT_REF}:secret@aws-1-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=true`,
     AGENCY_PRODUCTION_PROJECT_REF,
     "Production source URL",
   ));

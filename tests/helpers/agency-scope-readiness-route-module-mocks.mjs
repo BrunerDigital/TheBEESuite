@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Prisma } from "@prisma/client";
 import { mock, test } from "node:test";
 
 const currentUser = {
@@ -8,6 +9,7 @@ const currentUser = {
   name: "Reviewer B",
   role: "BILLING_ADMIN",
   centerIds: ["center-test", "center-other"],
+  workspace: { mode: "fixed", activeCenterId: "center-test" },
 };
 
 const completeProgram = {
@@ -59,16 +61,23 @@ let accountingMappingsComplete = true;
 let claimCreates = 0;
 let auditCalls = [];
 let reverseBatchMode = "self-pending";
+let missingProgramCenter = false;
+let transactionErrorCode = null;
+let transactionOptions = [];
 
 const database = {
   center: {
     async findUnique() {
+      if (missingProgramCenter) return null;
       const program = accountingMappingsComplete ? completeProgram : { ...completeProgram, cashGlCode: null };
       return { agencyReconciliationEnabled: true, agencyPrograms: [program] };
     },
   },
   agencyProgram: {
     async findFirst() { return accountingMappingsComplete ? completeProgram : { ...completeProgram, cashGlCode: null }; },
+    async findUnique() { return completeProgram; },
+    async create() { throw new Error("A missing-school program create must not write"); },
+    async update() { throw new Error("A missing-school program update must not write"); },
   },
   subsidyAuthorization: {
     async findUnique() { return authorizationRecord; },
@@ -128,7 +137,13 @@ const database = {
 
 const prisma = {
   ...database,
-  async $transaction(callback) { return callback(database); },
+  async $transaction(callback, options) {
+    transactionOptions.push(options);
+    if (transactionErrorCode) {
+      throw new Prisma.PrismaClientKnownRequestError("write transaction failed", { code: transactionErrorCode, clientVersion: "6.19.3" });
+    }
+    return callback(database);
+  },
 };
 
 mock.module("@/lib/prisma", { namedExports: { prisma } });
@@ -190,12 +205,14 @@ test("createClaim requires every authorization relationship and current enrollme
 test("valid exact-school createClaim commits its audit through the transaction client", async () => {
   authorizationRecord = authorization();
   auditCalls = [];
+  transactionOptions = [];
   const response = await post(validClaimBody());
   assert.equal(response.status, 200);
   assert.equal(claimCreates > 0, true);
   assert.equal(auditCalls.length, 1);
   assert.equal(auditCalls[0].input.action, "billing.subsidy_claim.created");
   assert.equal(auditCalls[0].client, database);
+  assert.deepEqual(transactionOptions, [{ isolationLevel: "Serializable", maxWait: 10_000, timeout: 120_000 }]);
 });
 
 test("all-locations and stale authorized-school mutation contexts fail closed", async () => {
@@ -227,6 +244,44 @@ test("controlled remittance preparation requires complete accounting mappings", 
   assert.equal(response.status, 409);
   assert.match((await response.json()).error, /accounting mapping/i);
   accountingMappingsComplete = true;
+});
+
+function validProgramBody(action) {
+  return {
+    action,
+    centerId: "center-test",
+    agencyProgramId: completeProgram.id,
+    name: "Test Agency",
+    stateCode: "IN",
+    providerNumber: "provider-test",
+    submissionMethod: "agency_portal",
+    portalUrl: "https://agency.example.test",
+    paymentInstructions: "Verified",
+    receivableGlCode: "1200",
+    cashGlCode: "1010",
+    adjustmentGlCode: "6900",
+    costCenterCode: "school-test",
+  };
+}
+
+test("program transaction blockers preserve authored 404 and retryable 409 responses", async () => {
+  missingProgramCenter = true;
+  for (const action of ["createProgram", "updateProgram"]) {
+    const response = await post(validProgramBody(action));
+    assert.equal(response.status, 404);
+    assert.match((await response.json()).error, /school not found/i);
+  }
+  missingProgramCenter = false;
+
+  for (const errorCode of ["P2034", "P2028"]) {
+    transactionErrorCode = errorCode;
+    for (const action of ["createProgram", "updateProgram"]) {
+      const response = await post(validProgramBody(action));
+      assert.equal(response.status, 409);
+      assert.match((await response.json()).error, /changed at the same time/i);
+    }
+  }
+  transactionErrorCode = null;
 });
 
 test("a reviewer with a self-requested pending late allocation cannot reverse the batch", async () => {

@@ -79,8 +79,64 @@ BEGIN
 END
 $migration$;
 
+-- Install the shared school serialization primitive in the first phase too. The
+-- second migration reuses these exact definitions. Replaying this file after the
+-- second migration therefore cannot temporarily downgrade the account scope guard.
+CREATE OR REPLACE FUNCTION public.lock_agency_financial_center(target_center_id TEXT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    transaction_marker TEXT;
+BEGIN
+    IF NULLIF(BTRIM(target_center_id), '') IS NULL THEN
+        RAISE EXCEPTION 'Agency financial activity requires an exact school';
+    END IF;
+    PERFORM pg_catalog.pg_advisory_xact_lock(
+        pg_catalog.hashtext('agency-financial-center'),
+        pg_catalog.hashtext(target_center_id)
+    );
+    transaction_marker := 'bee.agency_financial_center_' || pg_catalog.md5(target_center_id);
+    IF pg_catalog.current_setting(transaction_marker, TRUE) IS DISTINCT FROM 'held' THEN
+        UPDATE public."Center" center
+        SET "updatedAt" = center."updatedAt"
+        WHERE center.id = target_center_id;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Agency financial activity school is missing';
+        END IF;
+        PERFORM pg_catalog.set_config(transaction_marker, 'held', TRUE);
+    END IF;
+END
+$function$;
+
+REVOKE ALL ON FUNCTION public.lock_agency_financial_center(TEXT) FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.lock_agency_financial_centers(target_center_ids TEXT[])
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $function$
+DECLARE
+    candidate_center_id TEXT;
+BEGIN
+    FOR candidate_center_id IN
+        SELECT DISTINCT candidate.value
+        FROM pg_catalog.unnest(target_center_ids) AS candidate(value)
+        WHERE NULLIF(BTRIM(candidate.value), '') IS NOT NULL
+        ORDER BY candidate.value
+    LOOP
+        PERFORM public.lock_agency_financial_center(candidate_center_id);
+    END LOOP;
+END
+$function$;
+
+REVOKE ALL ON FUNCTION public.lock_agency_financial_centers(TEXT[]) FROM PUBLIC, anon, authenticated;
+
 -- Independent foreign keys do not prove that their rows belong to the same school.
--- Enforce the complete tenant/program relationship for every service-role write.
+-- Enforce the complete tenant/program relationship under the shared school lock.
 CREATE OR REPLACE FUNCTION public.enforce_agency_ledger_account_scope()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -88,8 +144,23 @@ SECURITY INVOKER
 SET search_path = ''
 AS $function$
 DECLARE
+    affected_center_ids TEXT[];
     program_center_id TEXT;
 BEGIN
+    SELECT ARRAY_AGG(DISTINCT scope.center_id ORDER BY scope.center_id)
+    INTO affected_center_ids
+    FROM (
+        SELECT NEW."centerId" AS center_id
+        UNION ALL SELECT CASE WHEN TG_OP = 'UPDATE' THEN OLD."centerId" END
+        UNION ALL SELECT program."centerId" FROM public."AgencyProgram" program WHERE program.id = NEW."agencyProgramId"
+        UNION ALL
+        SELECT program."centerId"
+        FROM public."AgencyProgram" program
+        WHERE TG_OP = 'UPDATE' AND program.id = OLD."agencyProgramId"
+    ) scope
+    WHERE scope.center_id IS NOT NULL;
+    PERFORM public.lock_agency_financial_centers(affected_center_ids);
+
     SELECT program."centerId"
     INTO program_center_id
     FROM public."AgencyProgram" program
@@ -101,6 +172,8 @@ BEGIN
     RETURN NEW;
 END
 $function$;
+
+REVOKE ALL ON FUNCTION public.enforce_agency_ledger_account_scope() FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.enforce_agency_ledger_entry_scope()
 RETURNS trigger
@@ -238,7 +311,8 @@ BEGIN
     END IF;
     IF EXISTS (
         SELECT 1 FROM "SubsidyRemittance"
-        WHERE "reversedAt" IS NOT NULL AND "reversedAt" < "paidAt"
+        WHERE "reversedAt" IS NOT NULL
+          AND DATE_TRUNC('day', "reversedAt") < DATE_TRUNC('day', "paidAt")
     ) THEN
         RAISE EXCEPTION 'Agency ledger migration blocked: a remittance reversal predates its receipt';
     END IF;
@@ -330,6 +404,13 @@ SELECT
     program."createdAt",
     CURRENT_TIMESTAMP
 FROM "AgencyProgram" program
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM "AgencyLedgerAccount" existing
+    WHERE existing."centerId" = program."centerId"
+      AND existing."agencyProgramId" = program.id
+)
+ORDER BY program."centerId", program.id
 ON CONFLICT ("centerId", "agencyProgramId") DO NOTHING;
 
 -- Any nonzero approved amount outside an explicit approved lifecycle is conflicting evidence,
@@ -375,6 +456,12 @@ JOIN "AgencyProgram" program ON program.id = claim."agencyProgramId"
 JOIN "AgencyLedgerAccount" account ON account."centerId" = claim."centerId" AND account."agencyProgramId" = claim."agencyProgramId"
 WHERE COALESCE(claim."approvedCents", 0) > 0
   AND claim.status IN ('approved', 'partially_paid', 'paid')
+  AND NOT EXISTS (
+      SELECT 1
+      FROM "AgencyLedgerEntry" existing
+      WHERE existing."sourceSystem" = 'subsidy_agency'
+        AND existing."externalId" = 'claim-approved:' || claim.id
+  )
 ON CONFLICT ("sourceSystem", "externalId") DO NOTHING;
 
 -- Every remittance remains an immutable payment entry, including remittances later reversed.
@@ -404,6 +491,12 @@ FROM "SubsidyRemittance" remittance
 JOIN "SubsidyClaim" claim ON claim.id = remittance."claimId"
 JOIN "AgencyProgram" program ON program.id = claim."agencyProgramId"
 JOIN "AgencyLedgerAccount" account ON account."centerId" = claim."centerId" AND account."agencyProgramId" = claim."agencyProgramId"
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM "AgencyLedgerEntry" existing
+    WHERE existing."sourceSystem" = 'subsidy_agency'
+      AND existing."externalId" = 'remittance:' || remittance.id
+)
 ON CONFLICT ("sourceSystem", "externalId") DO NOTHING;
 
 INSERT INTO "AgencyLedgerEntry" (
@@ -420,13 +513,19 @@ SELECT
     'Reversed agency remittance for ' || claim.number,
     remittance."amountCents",
     0,
-    remittance."reversedAt",
+    GREATEST(remittance."reversedAt", receipt."effectiveAt"),
     remittance."externalReference",
     receipt."glCodeSnapshot",
     receipt."costCenterCodeSnapshot",
     'subsidy_agency',
     'remittance-reversal:' || remittance.id,
-    jsonb_build_object('claimNumber', claim.number, 'reason', remittance."reversalReason", 'backfilled', true),
+    jsonb_build_object(
+        'claimNumber', claim.number,
+        'reason', remittance."reversalReason",
+        'backfilled', true,
+        'sourceReversedAt', TO_CHAR(remittance."reversedAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+        'postingRule', 'later of source reversal and receipt effective time'
+    ),
     remittance."reversedAt"
 FROM "SubsidyRemittance" remittance
 JOIN "SubsidyClaim" claim ON claim.id = remittance."claimId"
@@ -434,6 +533,12 @@ JOIN "AgencyProgram" program ON program.id = claim."agencyProgramId"
 JOIN "AgencyLedgerAccount" account ON account."centerId" = claim."centerId" AND account."agencyProgramId" = claim."agencyProgramId"
 JOIN "AgencyLedgerEntry" receipt ON receipt."sourceSystem" = 'subsidy_agency' AND receipt."externalId" = 'remittance:' || remittance.id
 WHERE remittance."reversedAt" IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM "AgencyLedgerEntry" existing
+      WHERE existing."sourceSystem" = 'subsidy_agency'
+        AND existing."externalId" = 'remittance-reversal:' || remittance.id
+  )
 ON CONFLICT ("sourceSystem", "externalId") DO NOTHING;
 
 -- A replay may reuse a deterministic source key only when every material financial
@@ -467,7 +572,7 @@ BEGIN
            OR entry."remittanceId" IS DISTINCT FROM remittance.id
            OR entry.type <> 'remittance_received'
            OR entry."amountCents" <> -remittance."amountCents"
-           OR entry."effectiveAt" < remittance."paidAt"
+           OR DATE_TRUNC('day', entry."effectiveAt") < DATE_TRUNC('day', remittance."paidAt")
            OR entry."externalReference" IS DISTINCT FROM remittance."externalReference"
     ) OR EXISTS (
         SELECT 1
@@ -483,7 +588,7 @@ BEGIN
               OR entry."remittanceId" IS DISTINCT FROM remittance.id
               OR entry.type <> 'remittance_reversal'
               OR entry."amountCents" <> remittance."amountCents"
-              OR entry."effectiveAt" <> remittance."reversedAt"
+              OR entry."effectiveAt" <> GREATEST(remittance."reversedAt", receipt."effectiveAt")
               OR entry."externalReference" IS DISTINCT FROM remittance."externalReference"
               OR entry."glCodeSnapshot" IS DISTINCT FROM receipt."glCodeSnapshot"
               OR entry."costCenterCodeSnapshot" IS DISTINCT FROM receipt."costCenterCodeSnapshot"
@@ -517,7 +622,7 @@ BEGIN
                     JOIN public."SubsidyRemittance" remittance ON remittance.id = entry."remittanceId"
                     WHERE entry."sourceSystem" = 'subsidy_agency'
                       AND entry."externalId" = 'remittance:' || remittance.id
-                      AND entry."effectiveAt" > remittance."paidAt"
+                      AND entry."effectiveAt" IS DISTINCT FROM remittance."paidAt"
                       AND NOT EXISTS (
                           SELECT 1
                           FROM public."AgencyRemittanceAllocation" allocation

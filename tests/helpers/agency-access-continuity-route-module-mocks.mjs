@@ -23,6 +23,7 @@ const currentUser = {
   name: "Billing User",
   role: "BILLING_ADMIN",
   centerIds: ["center-test"],
+  workspace: { mode: "fixed", activeCenterId: "center-test" },
 };
 
 let claimReads = 0;
@@ -235,4 +236,24 @@ test("same-user direct correction remains available only before exact-school act
   const nonAccountingReviewer = await postDirectReversal();
   assert.equal(nonAccountingReviewer.status, 403);
   assert.match((await nonAccountingReviewer.json()).error, /different billing administrator or accounting reviewer/i);
+});
+
+test("all-location workspace keeps exact-school reads separate and rejects crafted mutations before data access", async () => {
+  currentUser.id = "same-user";
+  currentUser.role = "PLATFORM_OWNER";
+  currentUser.centerIds = ["center-test", "center-other"];
+  currentUser.workspace = { mode: "all", activeCenterId: null };
+  const before = claimReads;
+  const response = await post("recordRemittance");
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /switch the global workspace to one authorized school/i);
+  assert.equal(claimReads, before, "An all-location mutation must fail before reading any school financial record.");
+
+  currentUser.workspace = { mode: "center", activeCenterId: "center-other" };
+  const mismatchedSelection = await post("recordRemittance");
+  assert.equal(mismatchedSelection.status, 403);
+  assert.equal(claimReads, before, "A body school that differs from the selected global workspace must fail before data access.");
+
+  currentUser.role = "BILLING_ADMIN";
+  currentUser.workspace = { mode: "fixed", activeCenterId: "center-test" };
 });

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { prisma } from "@/lib/prisma";
+import { PrismaClient } from "@prisma/client";
+import { getRuntimeDatabaseUrl } from "@/lib/readiness-guardrails";
 import { AGENCY_PRODUCTION_PROJECT_REF, assertExactSupabaseDatabaseTarget } from "./agency-ledger-rehearsal-target";
 
 type CountRow = { status: string; count: bigint };
@@ -7,11 +8,22 @@ type LegacyRow = { id: string; centerName: string; amountCents: number; effectiv
 type AccessRow = { centerId: string; centerName: string; accountingUserCount: bigint };
 type ChecksumRow = { recordCount: bigint; amountCents: bigint; checksum: string | null };
 type ClaimIntegrityRow = {
-  positiveApprovalUnsupportedStatusCount: bigint;
+  unsupportedStatusApprovalAmountCount: bigint;
   supportedStatusMissingApprovalAmountCount: bigint;
   supportedStatusNullApprovedAtCount: bigint;
+  approvedLifecycleMissingAuthorizationCount: bigint;
+  futureApprovalEventCount: bigint;
+  approvalExceedsClaimCount: bigint;
   paidCentsMismatchCount: bigint;
   statusMismatchCount: bigint;
+};
+type RemittanceIntegrityRow = {
+  count: bigint;
+  amountCents: bigint;
+  nonpositiveAmountCount: bigint;
+  actorOrReversalEvidenceIncompleteCount: bigint;
+  reversalChronologyViolations: bigint;
+  futureEventCount: bigint;
 };
 type RelationshipIntegrityRow = {
   authorizationProgramSchoolMismatchCount: bigint;
@@ -30,10 +42,12 @@ function json(value: unknown) {
 }
 
 async function main() {
-  const productionUrl = process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL;
+  const productionUrl = getRuntimeDatabaseUrl(process.env);
   if (!productionUrl) throw new Error("A production database URL is required for the readiness audit.");
   assertExactSupabaseDatabaseTarget(productionUrl, AGENCY_PRODUCTION_PROJECT_REF, "Production readiness source URL");
-  const result = await prisma.$transaction(async (tx) => {
+  const auditClient = new PrismaClient({ datasources: { db: { url: productionUrl } }, log: ["error"] });
+  try {
+    const result = await auditClient.$transaction(async (tx) => {
   await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
   const [databaseIdentity] = await tx.$queryRaw<Array<{ databaseName: string; serverVersion: string }>>`
     SELECT current_database() AS "databaseName", current_setting('server_version') AS "serverVersion"
@@ -48,32 +62,43 @@ async function main() {
     WITH claim_sources AS (
       SELECT claim.id,
         claim.status,
+        claim."authorizationId",
         claim."approvedCents",
         claim."approvedAt",
+        claim."createdAt",
         claim."claimedCents",
         claim."paidCents"::bigint AS "paidCents",
         COALESCE(SUM(remittance."amountCents") FILTER (WHERE remittance."reversedAt" IS NULL), 0)::bigint AS "activeRemittanceCents"
       FROM "SubsidyClaim" claim
       LEFT JOIN "SubsidyRemittance" remittance ON remittance."claimId" = claim.id
-      GROUP BY claim.id, claim.status, claim."approvedCents", claim."approvedAt", claim."claimedCents", claim."paidCents"
+      GROUP BY claim.id, claim.status, claim."authorizationId", claim."approvedCents", claim."approvedAt", claim."createdAt", claim."claimedCents", claim."paidCents"
     )
     SELECT
-      COUNT(*) FILTER (WHERE "approvedCents" > 0 AND status NOT IN ('approved', 'partially_paid', 'paid'))::bigint AS "positiveApprovalUnsupportedStatusCount",
+      COUNT(*) FILTER (WHERE COALESCE("approvedCents", 0) <> 0 AND status NOT IN ('approved', 'partially_paid', 'paid'))::bigint AS "unsupportedStatusApprovalAmountCount",
       COUNT(*) FILTER (WHERE status IN ('approved', 'partially_paid', 'paid') AND COALESCE("approvedCents", 0) <= 0)::bigint AS "supportedStatusMissingApprovalAmountCount",
       COUNT(*) FILTER (WHERE status IN ('approved', 'partially_paid', 'paid') AND "approvedAt" IS NULL)::bigint AS "supportedStatusNullApprovedAtCount",
+      COUNT(*) FILTER (WHERE status IN ('approved', 'partially_paid', 'paid') AND "authorizationId" IS NULL)::bigint AS "approvedLifecycleMissingAuthorizationCount",
+      COUNT(*) FILTER (WHERE status IN ('approved', 'partially_paid', 'paid') AND COALESCE("approvedAt", "createdAt") >= DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 day')::bigint AS "futureApprovalEventCount",
+      COUNT(*) FILTER (WHERE "approvedCents" > "claimedCents")::bigint AS "approvalExceedsClaimCount",
       COUNT(*) FILTER (WHERE "paidCents" <> "activeRemittanceCents")::bigint AS "paidCentsMismatchCount",
       COUNT(*) FILTER (WHERE
         (status = 'approved' AND "activeRemittanceCents" <> 0)
         OR (status = 'partially_paid' AND ("activeRemittanceCents" <= 0 OR "activeRemittanceCents" >= COALESCE("approvedCents", "claimedCents")))
-        OR (status = 'paid' AND "activeRemittanceCents" < COALESCE("approvedCents", "claimedCents"))
+        OR (status = 'paid' AND "activeRemittanceCents" <> COALESCE("approvedCents", "claimedCents"))
         OR (status NOT IN ('approved', 'partially_paid', 'paid') AND "activeRemittanceCents" <> 0)
       )::bigint AS "statusMismatchCount"
     FROM claim_sources
   `;
-  const remittanceSummary = await tx.$queryRaw<Array<{ count: bigint; amountCents: bigint; reversalChronologyViolations: bigint }>>`
+  const remittanceSummary = await tx.$queryRaw<RemittanceIntegrityRow[]>`
     SELECT COUNT(*)::bigint AS count,
       COALESCE(SUM("amountCents"), 0)::bigint AS "amountCents",
-      COUNT(*) FILTER (WHERE "reversedAt" IS NOT NULL AND "reversedAt" < "paidAt")::bigint AS "reversalChronologyViolations"
+      COUNT(*) FILTER (WHERE "amountCents" <= 0)::bigint AS "nonpositiveAmountCount",
+      COUNT(*) FILTER (WHERE NULLIF(BTRIM("enteredById"), '') IS NULL
+        OR ("reversedAt" IS NOT NULL AND (NULLIF(BTRIM("reversedById"), '') IS NULL OR NULLIF(BTRIM("reversalReason"), '') IS NULL))
+        OR ("reversedAt" IS NULL AND ("reversedById" IS NOT NULL OR "reversalReason" IS NOT NULL)))::bigint AS "actorOrReversalEvidenceIncompleteCount",
+      COUNT(*) FILTER (WHERE "reversedAt" IS NOT NULL AND DATE_TRUNC('day', "reversedAt") < DATE_TRUNC('day', "paidAt"))::bigint AS "reversalChronologyViolations",
+      COUNT(*) FILTER (WHERE "paidAt" >= DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 day'
+        OR "reversedAt" >= DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '1 day')::bigint AS "futureEventCount"
     FROM "SubsidyRemittance"
   `;
   const [relationshipIntegrity] = await tx.$queryRaw<RelationshipIntegrityRow[]>`
@@ -171,6 +196,22 @@ async function main() {
     ORDER BY center.name
   `;
 
+  const hardBlockerCounts = [
+    claimIntegrity?.unsupportedStatusApprovalAmountCount,
+    claimIntegrity?.supportedStatusMissingApprovalAmountCount,
+    claimIntegrity?.approvedLifecycleMissingAuthorizationCount,
+    claimIntegrity?.futureApprovalEventCount,
+    claimIntegrity?.approvalExceedsClaimCount,
+    claimIntegrity?.paidCentsMismatchCount,
+    claimIntegrity?.statusMismatchCount,
+    remittanceSummary[0]?.nonpositiveAmountCount,
+    remittanceSummary[0]?.actorOrReversalEvidenceIncompleteCount,
+    remittanceSummary[0]?.reversalChronologyViolations,
+    remittanceSummary[0]?.futureEventCount,
+    ...Object.values(relationshipIntegrity ?? {}),
+  ].map((value) => value ?? BigInt(0));
+  const migrationBlockerCount = hardBlockerCounts.reduce((sum, value) => sum + value, BigInt(0));
+
   return {
     mode: "read_only",
     generatedAt: new Date().toISOString(),
@@ -180,6 +221,8 @@ async function main() {
     subsidyClaimIntegrity: claimIntegrity,
     relationshipIntegrity,
     subsidyRemittances: remittanceSummary[0],
+    migrationBlockerCount,
+    readyForMigrationDataShape: migrationBlockerCount === BigInt(0),
     legacyAgencyPayments: {
       ...legacySummary[0],
       checksum: sourceChecksums[0]?.checksum ?? null,
@@ -195,7 +238,13 @@ async function main() {
     activeProgramCenterAccountingAccess: accountingAccess,
   };
   }, { isolationLevel: "RepeatableRead", maxWait: 10_000, timeout: 30_000 });
-  console.log(json(result));
+    console.log(json(result));
+  } finally {
+    await auditClient.$disconnect();
+  }
 }
 
-main().finally(() => prisma.$disconnect());
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});

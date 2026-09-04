@@ -83,7 +83,7 @@ test("agency reconciliation migration keeps controlled history fail closed witho
     migration.indexOf("CREATE OR REPLACE FUNCTION public.protect_agency_remittance_allocation_history"),
   );
 
-  assert.match(migration, /SubsidyRemittance_reversal_chronology_check[\s\S]*"reversedAt" >= "paidAt"/);
+  assert.match(migration, /SubsidyRemittance_reversal_chronology_check[\s\S]*DATE_TRUNC\('day', "reversedAt"\) >= DATE_TRUNC\('day', "paidAt"\)/);
   assert.match(migration, /SubsidyRemittance_reversal_chronology_check";/);
   assert.match(remittanceHistory, /NEW\."reversedById" = batch\."enteredById"[\s\S]*controlled remittance reversal requires an actor other than the batch preparer/i);
   assert.doesNotMatch(remittanceHistory, /NEW\."reversedById"\s*=\s*OLD\."enteredById"/);
@@ -97,6 +97,7 @@ test("agency reconciliation migration keeps controlled history fail closed witho
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.assert_agency_remittance_batch_material_state\(TEXT\) FROM PUBLIC, anon, authenticated/);
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.assert_agency_ledger_entry_provenance[\s\S]*AgencyLedgerEntry_exact_provenance_guard/);
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.enforce_controlled_claim_approval_snapshot[\s\S]*NEW\."glCodeSnapshot" IS DISTINCT FROM receivable_gl_code[\s\S]*NEW\."costCenterCodeSnapshot" IS DISTINCT FROM cost_center_code[\s\S]*AgencyLedgerEntry_claim_approval_snapshot_guard/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.enforce_controlled_claim_approval_snapshot[\s\S]*lock_agency_financial_centers\(affected_center_ids\)[\s\S]*Re-read the program mapping after the shared school fence/);
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.protect_subsidy_claim_financial_source[\s\S]*Approved subsidy claim source facts are immutable/);
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.protect_subsidy_claim_line_financial_source[\s\S]*Approved subsidy claim lines are immutable financial source evidence/);
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.assert_subsidy_claim_financial_state[\s\S]*active_remittance_cents[\s\S]*exact_approval_entry_count[\s\S]*SubsidyClaim_financial_state_guard/);
@@ -106,12 +107,16 @@ test("agency reconciliation migration keeps controlled history fail closed witho
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.assert_agency_ledger_account_balances[\s\S]*ORDER BY entry\."effectiveAt", entry\."createdAt", entry\.id[\s\S]*Agency ledger running balances conflict/);
   assert.match(migration, /AgencyLedgerAccount_exact_balance_guard"[\s\S]*DEFERRABLE INITIALLY DEFERRED[\s\S]*enforce_agency_ledger_account_balances/);
   assert.match(migration, /AgencyLedgerEntry_exact_balance_guard"[\s\S]*DEFERRABLE INITIALLY DEFERRED[\s\S]*enforce_agency_ledger_entry_account_balances/);
-  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.enforce_agency_accounting_period_order[\s\S]*pg_catalog\.pg_advisory_xact_lock[\s\S]*period\."startDate" <= NEW\."endDate"[\s\S]*period\."endDate" >= NEW\."startDate"[\s\S]*later closed agency accounting period must be reopened first/i);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.lock_agency_financial_center[\s\S]*pg_catalog\.pg_advisory_xact_lock/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.lock_agency_financial_centers[\s\S]*ORDER BY candidate\.value[\s\S]*lock_agency_financial_center/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.enforce_agency_accounting_period_order[\s\S]*lock_agency_financial_centers\(ARRAY\[[\s\S]*Agency accounting periods require school reconciliation activation[\s\S]*period\."startDate" <= NEW\."endDate"[\s\S]*period\."endDate" >= NEW\."startDate"[\s\S]*later closed agency accounting period must be reopened first/i);
   assert.match(migration, /AgencyAccountingPeriod_order_guard"[\s\S]*BEFORE INSERT OR UPDATE[\s\S]*enforce_agency_accounting_period_order/);
   assert.match(migration, /existing accounting period ranges overlap/);
   assert.match(migration, /JOIN public\."AgencyLedgerEntry" receipt[\s\S]*COUNT\(DISTINCT \(receipt\."glCodeSnapshot", receipt\."costCenterCodeSnapshot"\)\) <> 1/);
   assert.match(migration, /Agency reconciliation activation requires at least one active agency program/);
   assert.match(migration, /Agency reconciliation activation requires complete mappings for every active agency program/);
+  assert.match(migration, /An activated school must retain at least one active mapped agency program/);
+  assert.match(migration, /AgencyProgram_activation_readiness_guard"[\s\S]*BEFORE INSERT OR UPDATE OR DELETE/);
   assert.match(migration, /Agency reconciliation activation cannot be disabled after controlled financial history exists/);
   assert.match(migration, /Center_agency_reconciliation_inactive_evidence_check[\s\S]*"agencyReconciliationActivatedAt" IS NULL/);
   assert.match(migration, /Agency reconciliation activation evidence is immutable after activation/);
@@ -119,8 +124,15 @@ test("agency reconciliation migration keeps controlled history fail closed witho
   assert.match(migration, /Agency reconciliation activation evidence is incomplete or future-dated/);
   assert.match(migration, /BEFORE UPDATE OF "agencyReconciliationEnabled", "agencyReconciliationActivatedAt", "agencyReconciliationActivatedById", "agencyReconciliationActivationReason"/);
   assert.match(migration, /Subsidy authorization update conflicts with an existing claim or claim-line scope/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.enforce_agency_ledger_account_scope[\s\S]*lock_agency_financial_centers[\s\S]*Agency ledger account scope conflict/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.enforce_agency_remittance_allocation_scope[\s\S]*post-lock rereads[\s\S]*lock_agency_financial_centers\(affected_center_ids\)[\s\S]*SELECT batch\."centerId"[\s\S]*SELECT claim\."centerId"/);
+  assert.match(migration, /A subsidy claim with remittance allocation history cannot move schools or programs/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.enforce_subsidy_authorization_scope[\s\S]*lock_agency_financial_centers[\s\S]*Re-read every relationship after the shared school locks/);
   assert.match(migration, /COALESCE\(claim_row\."approvedCents", 0\) <> 0[\s\S]*A nonfinancial subsidy claim cannot retain approval or remittance postings/);
-  assert.match(migration, /reconciliation_enabled OR claim_ledger_entry_count > 0[\s\S]*approval_entry_count <> 1[\s\S]*exact_approval_entry_count <> 1/);
+  assert.match(migration, /IF NOT reconciliation_enabled THEN[\s\S]*ensure_baseline_claim_ledger_projection\(claim_row\.id\)[\s\S]*approval_entry_count <> 1[\s\S]*exact_approval_entry_count <> 1/);
+  assert.match(migration, /IF NOT reconciliation_enabled AND NOT has_allocation_record THEN[\s\S]*ensure_baseline_remittance_ledger_projection\(target_remittance_id\)/);
+  assert.match(migration, /SubsidyRemittance_00_financial_center_lock_guard[\s\S]*BEFORE INSERT OR UPDATE OR DELETE[\s\S]*lock_subsidy_remittance_financial_center/);
+  assert.match(migration, /period\.status = 'open'[\s\S]*period\."reopenedAt" < period\."closedAt"[\s\S]*period\.status = 'closed'[\s\S]*period\."closedAt" < period\."reopenedAt"/);
   assert.match(migration, /Agency reconciliation activation blocked: a financial claim lacks exact receivable ledger evidence/);
   assert.match(migration, /COALESCE\(claim_row\."approvedAt", claim_row\."createdAt"\) >= DATE_TRUNC\('day', CURRENT_TIMESTAMP AT TIME ZONE 'UTC'\) \+ INTERVAL '1 day'/);
   assert.ok(migration.includes("NEW.\"reconciliationFingerprint\" !~ '^[0-9a-f]{64}$'"));
@@ -141,7 +153,12 @@ test("agency reconciliation migration keeps controlled history fail closed witho
   assert.match(migration, /Agency ledger adjustment review or reversal chronology is invalid/);
   assert.match(migration, /Agency accounting period close or reopen evidence cannot be future-dated/);
   assert.match(migration, /Agency accounting period cannot close a future boundary or predate its period end/);
-  assert.match(migration, /Agency accounting period reopen evidence cannot predate its close/);
+  assert.match(migration, /Agency accounting period transition chronology is invalid/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS "AgencyAccountingPeriodEvent"[\s\S]*"sequence" INTEGER NOT NULL[\s\S]*"evidence" JSONB/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.record_agency_accounting_period_transition[\s\S]*AgencyAccountingPeriodEvent/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.protect_agency_accounting_period_event_history[\s\S]*append-only/);
+  assert.match(migration, /AgencyAccountingPeriod_event_state_guard[\s\S]*DEFERRABLE INITIALLY DEFERRED/);
+  assert.match(migration, /block_agency_writes_during_reconciliation_migration[\s\S]*temporarily frozen[\s\S]*DROP FUNCTION IF EXISTS public\.block_agency_writes_during_reconciliation_migration/);
   assert.match(migration, /Agency reconciliation migration blocked: existing accounting period chronology is invalid/);
   assert.match(migration, /AgencyAccountingPeriod_state_check[\s\S]*"startDate" = DATE_TRUNC\('day', "startDate"\) \+ INTERVAL '12 hours'[\s\S]*"endDate" = DATE_TRUNC\('day', "endDate"\) \+ INTERVAL '12 hours'/);
   assert.match(migration, /TG_OP = 'INSERT'[\s\S]*DATE_TRUNC\('day', period\."endDate"\) >= DATE_TRUNC\('day', NEW\."effectiveAt"\)[\s\S]*Agency ledger activity cannot post before or within a later closed accounting period/);
@@ -150,6 +167,7 @@ test("agency reconciliation migration keeps controlled history fail closed witho
   assert.match(migration, /NEW\."idempotencyKey" LIKE 'legacy:%' AND pg_trigger_depth\(\) <= 1[\s\S]*Legacy agency remittance batches may only be created by verified activation adoption/);
   assert.match(migration, /NEW\."idempotencyKey" LIKE 'legacy-allocation:%' AND pg_trigger_depth\(\) <= 1[\s\S]*Legacy agency remittance allocations may only be created by verified activation adoption/);
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.adopt_pre_activation_agency_remittances[\s\S]*SET timezone = 'UTC'/);
+  assert.match(migration, /pg_try_advisory_xact_lock[\s\S]*agency_financial_center_[\s\S]*'held'/);
   assert.match(migration, /DROP TRIGGER IF EXISTS "AgencyLedgerEntry_immutable_history_guard"[\s\S]*JOIN "_AgencyReconciliationLegacyRemittanceBackfill" expected[\s\S]*allocation\."idempotencyKey" = 'legacy-allocation:' \|\| expected\.remittance_id/);
   assert.match(migration, /Agency ledger financial facts are immutable; post a compensating reversal/);
 });
@@ -256,7 +274,7 @@ test("authorization corrections fail closed and return useful duplicate guidance
   assert.match(route, /no more than two decimal places/);
   assert.match(route, /date\.toISOString\(\)\.slice\(0, 10\) !== text/);
   assert.match(route, /AUTHORIZATION_UNIT_TYPES/);
-  assert.match(route, /updateAuthorization"\)[\s\S]*prisma\.\$transaction[\s\S]*TransactionIsolationLevel\.Serializable/);
+  assert.match(route, /updateAuthorization"\)[\s\S]*prisma\.\$transaction[\s\S]*AGENCY_WRITE_TRANSACTION_OPTIONS/);
   assert.match(workspace, /Edit authorization/);
   assert.match(workspace, /Save correction/);
   assert.match(workspace, /Restore/);
@@ -276,14 +294,14 @@ test("agency claims enforce active authorizations, periods, units, and state tra
   assert.match(route, /\|\\\.\\d\+\)\$\/\.test\(text\)/);
   assert.match(route, /cannot exceed the authorization rate/);
   assert.match(route, /claim\.status !== "submitted"/);
-  assert.match(route, /recordDecision"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*findUniqueOrThrow[\s\S]*claimSubmissionBlockers/);
+  assert.match(route, /recordDecision"\)[\s\S]*requireCurrentAgencyClaimMutationScope\(tx, claim\.id, centerId, auth\.user\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*centerId[\s\S]*updatedAt: current\.updatedAt[\s\S]*claimSubmissionBlockers/);
   assert.match(route, /Complete every required claim document before recording agency approval/);
-  assert.match(route, /updateDocument"\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*status: \{ in: \["draft", "ready", "submitted"\] \}/);
+  assert.match(route, /updateDocument"\)[\s\S]*requireCurrentAgencyClaimMutationScope\(tx, claim\.id, centerId, auth\.user\)[\s\S]*tx\.subsidyClaim\.updateMany[\s\S]*status: \{ in: \["draft", "ready", "submitted"\] \}/);
   assert.match(route, /COUNT\(\*\) FILTER \(WHERE claim\.status IN \('draft', 'ready', 'submitted'\) AND \(/);
   assert.match(route, /Documents cannot be changed after the agency decision is recorded/);
   assert.match(route, /Enter the agency denial reason or code/);
   assert.match(route, /action === "voidClaim"/);
-  assert.match(route, /updateMany\(\{ where: \{ id: claim\.id, status: \{ in: \["draft", "ready"\] \} \}/);
+  assert.match(route, /submitClaim"\)[\s\S]*requireCurrentAgencyClaimMutationScope\(tx, claim\.id, centerId, auth\.user\)[\s\S]*updateMany\(\{ where: \{ id: current\.id, centerId, status: \{ in: \["draft", "ready"\] \}, updatedAt: current\.updatedAt \}/);
   assert.match(route, /The claim changed before it could be voided/);
   assert.match(workspace, /Record denial/);
   assert.match(workspace, /Void draft/);
@@ -316,14 +334,14 @@ test("agency queue keeps new sibling claims visible and older actionable claims 
   assert.match(workspace, /setPending\(true\); setError\(""\); setClaimCursorByPage/);
   assert.match(workspace, /\.finally\(\(\) => \{ if \(active\) setPending\(false\); \}\)/);
   assert.match(workspace, /<Label htmlFor="claim-authorization">Authorization<\/Label><Select value=\{authorizationId\} disabled=\{pending\}/);
-  assert.match(route, /new ReadableStream<Uint8Array>/);
+  assert.match(route, /const fileStream = createReadStream\(exportPath\)/);
   assert.match(route, /orderBy: \{ id: "asc" \}/);
   assert.match(route, /take: 250/);
   assert.match(route, /cursor: \{ id: cursorId \}, skip: 1/);
   assert.match(route, /const formulaSafeText = typeof value === "string" && \/\^\\s\*\[=\+\\-@\]\//);
   assert.match(route, /if \(typeof value === "number" && Number\.isFinite\(value\)\) return String\(value\)/);
   assert.match(route, /formulaSafeText\.replaceAll\('"', '""'\)/);
-  assert.match(route, /if \(exportingClaims\) return exportClaimsCsv\(centerIds\)/);
+  assert.match(route, /if \(exportingClaims\) return await exportClaimsCsv\(centerIds\)/);
 });
 
 test("agency remittances are staged, independently reviewed, and posted serializably", () => {
@@ -338,7 +356,9 @@ test("agency remittances are staged, independently reviewed, and posted serializ
   assert.match(route, /reviewNotes: reason/);
   assert.match(route, /agencyBatchStatus\(\{ totalCents: allocation\.batch\.totalCents, allocatedCents: allocation\.batch\.allocatedCents \}\)/);
   assert.match(route, /canReviewAgencyPosting\(\{ role: auth\.user\.role, reviewerId: auth\.user\.id, requestedById: batch\.enteredById \}\)/);
-  assert.match(route, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(route, /const AGENCY_WRITE_TRANSACTION_OPTIONS = \{[\s\S]*isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable,[\s\S]*maxWait: 10_000,[\s\S]*timeout: 120_000/);
+  assert.match(route, /\["P2002", "P2028", "P2034"\]/);
+  assert.equal((route.match(/}, AGENCY_WRITE_TRANSACTION_OPTIONS\);/g) ?? []).length, 26);
   assert.match(route, /REMITTANCE_METHODS/);
   assert.match(route, /entryAuthorizationNumber && entryAgencyName[\s\S]*entryAuthorizationNumber === authorizationNumber && entryAgencyName === agencyName/);
   assert.match(route, /already have a remittance batch with this payment reference/);
@@ -366,6 +386,10 @@ test("agency receivables use a dedicated immutable ledger with a legacy-only fam
   assert.match(migration, /'remittance_received'/);
   assert.match(migration, /'remittance_reversal'/);
   assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.lock_agency_financial_center[\s\S]*pg_catalog\.pg_advisory_xact_lock/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.lock_agency_financial_centers[\s\S]*ORDER BY candidate\.value[\s\S]*lock_agency_financial_center/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.enforce_agency_ledger_account_scope[\s\S]*lock_agency_financial_centers[\s\S]*Agency ledger account scope conflict/);
+  assert.match(migration, /FROM "AgencyProgram" program[\s\S]*WHERE NOT EXISTS \([\s\S]*ORDER BY program\."centerId", program\.id[\s\S]*ON CONFLICT \("centerId", "agencyProgramId"\) DO NOTHING/);
   assert.doesNotMatch(migration, /(?:UPDATE|DELETE FROM|INSERT INTO) "BillingAccount"|(?:UPDATE|DELETE FROM|INSERT INTO) "LedgerEntry"/);
 
   assert.match(route, /ensureAgencyClaimReceivable/);
@@ -374,9 +398,10 @@ test("agency receivables use a dedicated immutable ledger with a legacy-only fam
   assert.match(route, /type: "remittance_reversal"/);
   assert.match(route, /agencyLedgerAccount\.findMany/);
   assert.match(route, /agencyLedgerEntry\.findMany/);
-  assert.match(route, /if \(exportingLedger\) return exportAgencyLedgerCsv\(centerIds\)/);
+  assert.match(route, /if \(exportingLedger\) return await exportAgencyLedgerCsv\(centerIds\)/);
   assert.match(route, /legacyCompatibilityMirror: true/);
-  assert.match(route, /const appliedCents = Math\.min\(input\.amountCents, Math\.max\(0, matchingOutstandingCents\)\)/);
+  assert.match(route, /const appliedCents = Math\.min\([\s\S]*input\.amountCents,[\s\S]*Math\.max\(0, matchingOutstandingCents\),[\s\S]*Math\.max\(0, totalAgencyResponsibilityCents\)/);
+  assert.match(route, /parentVisibleAfterCents !== parentVisibleBeforeCents[\s\S]*legacy compatibility mirror would change parent-visible responsibility/i);
 
   assert.match(workspace, /title="Agency ledger"/);
   assert.match(workspace, /Ledger receivable/);
@@ -452,6 +477,9 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(periodCloseRecovery, /agency-close:direct-receipt-evidence[\s\S]*Direct receipts cannot be reconstructed/);
   assert.match(periodCloseRecovery, /agency-close:controlled-receipt-recovery[\s\S]*JOIN "AgencyRemittanceAllocation" allocation[\s\S]*allocation\.status IN \('posted', 'reversed'\)[\s\S]*batch\."cashGlCodeSnapshot"[\s\S]*batch\."costCenterCodeSnapshot"/);
   assert.match(periodCloseRecovery, /agency-close:remittance-reversal-evidence[\s\S]*missing, duplicate, or conflicting remittance reversal/);
+  assert.match(periodCloseRecovery, /reversal\."effectiveAt" = GREATEST\(remittance\."reversedAt", receipt\."effectiveAt"\)/);
+  assert.match(periodCloseRecovery, /reversal\."effectiveAt" >= receipt\."effectiveAt"/);
+  assert.doesNotMatch(periodCloseRecovery, /DATE_TRUNC\('day', reversal\."effectiveAt"\) >= DATE_TRUNC\('day', receipt\."effectiveAt"\)/);
   assert.match(periodCloseRecovery, /agency-close:adjustment-evidence[\s\S]*missing, duplicate, or conflicting adjustment evidence/);
   assert.match(periodCloseRecovery, /const accountIds = \[\.\.\.new Set\(recoveredRemittanceReceipts\.map[\s\S]*recalculateAgencyLedgerBalances\(tx, accountId\)/);
   assert.match(periodCloseRecovery, /recoveredClaimReceivableCount: 0,[\s\S]*recoveredRemittanceReceivedCount: recoveredRemittanceReceipts\.length,[\s\S]*recoveredRemittanceReversalCount: 0/);
@@ -474,13 +502,16 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /WITH scoped_adjustments AS[\s\S]*"adjustmentBeforeEnd"[\s\S]*"reversalBeforeEnd"[\s\S]*applicable_adjustments/);
   assert.match(route, /return netVarianceCount \+ missingLedgerEventCount/);
   assert.match(route, /if \(overlap\?\.status === "closed"\) \{[\s\S]*return \{ period: overlap, reused: true, \.\.\.recoveredCounts \}/);
-  assert.match(route, /if \(remittance\.reversedAt\) throw new AgencyWorkflowError[\s\S]*const reversedAt = agencyReversalEffectiveAt\(agencyPaymentEntry\.effectiveAt, agencyReversalEffectiveAt\(remittance\.paidAt, input\.reversedAt\)\)[\s\S]*await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, reversedAt\)/);
+  assert.match(route, /if \(remittance\.reversedAt\) throw new AgencyWorkflowError[\s\S]*const sourceReversedAt = input\.reversedAt[\s\S]*isBeforeUtcAccountingDay\(sourceReversedAt, remittance\.paidAt\)[\s\S]*const postingEffectiveAt = agencyReversalEffectiveAt\(agencyPaymentEntry\.effectiveAt, sourceReversedAt\)[\s\S]*await assertAgencyPeriodOpen\(tx, remittance\.claim\.centerId, postingEffectiveAt\)[\s\S]*data: \{ reversedAt: sourceReversedAt[\s\S]*effectiveAt: postingEffectiveAt[\s\S]*sourceReversedAt: sourceReversedAt\.toISOString\(\)[\s\S]*postingRule: "later of source reversal and receipt effective time"/);
   assert.match(route, /isFutureAgencyAccountingDate\(paidAt\)[\s\S]*payment date cannot be after the current UTC accounting day/);
   assert.match(route, /isFutureAgencyAccountingDate\(batch\.paidAt\)[\s\S]*future-dated remittance batch cannot be approved/);
   assert.match(route, /isFutureAgencyAccountingDate\(effectiveAt\)[\s\S]*adjustment cannot be effective after the current UTC accounting day/);
   assert.match(route, /isFutureAgencyAccountingDate\(adjustment\.effectiveAt\)[\s\S]*future-dated agency adjustment cannot be approved/);
   assert.match(route, /const effectiveAt = agencyReversalEffectiveAt\(adjustment\.effectiveAt\)/);
-  assert.match(prismaMigration, /SubsidyRemittance_reversal_chronology_check[\s\S]*"reversedAt" >= "paidAt"/);
+  assert.match(prismaMigration, /SubsidyRemittance_reversal_chronology_check[\s\S]*DATE_TRUNC\('day', "reversedAt"\) >= DATE_TRUNC\('day', "paidAt"\)/);
+  assert.match(prismaMigration, /GREATEST\(remittance_row\."reversedAt", remittance_row\."paidAt"\)/);
+  assert.match(prismaMigration, /sourceReversedAt[\s\S]*later of source reversal and receipt effective time/);
+  assert.match(prismaMigration, /entry_row\."effectiveAt" IS DISTINCT FROM GREATEST\(source_reversed_at, receipt_effective_at\)/);
   assert.match(prismaMigration, /AgencyLedgerAdjustment_reversal_chronology_check[\s\S]*"reversedAt" >= "effectiveAt"/);
   assert.match(route, /if \(!agencyPaymentEntry\) throw new AgencyWorkflowError\("The remittance is missing its immutable receipt ledger entry\./);
   assert.match(route, /if \(action === "recordRemittance"\)[\s\S]*await assertAgencyPeriodOpen\(tx, current\.centerId, paidAt\);[\s\S]*await ensureAgencyClaimReceivable\(tx, current\)/);
@@ -517,14 +548,14 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /effectiveAt: \{[\s\S]*gte: ledgerFrom[\s\S]*lt: ledgerToExclusive/);
   assert.doesNotMatch(route, /agencyAccountingPeriod\.findMany\(\{[\s\S]{0,240}take: 36/);
   assert.match(route, /action === "reopenAccountingPeriod"[\s\S]*laterClosedPeriod[\s\S]*Reopen the later closed period/);
-  assert.match(route, /agencyAccountingPeriod\.updateMany\([\s\S]*isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(route, /agencyAccountingPeriod\.updateMany\([\s\S]*AGENCY_WRITE_TRANSACTION_OPTIONS/);
   assert.match(route, /status: \{ in: ACTIVE_REMITTANCE_BATCH_STATUSES \}[\s\S]{0,120}reversedAt: null/);
   assert.match(route, /agencyRemittanceBatch\.groupBy\(\{[\s\S]*reviewedAt: \{ not: null \}[\s\S]*_sum: \{ unappliedCents: true \}/);
   assert.match(route, /openBatchesByProgram\.get\(account\.agencyProgramId\) \?\? 0/);
   assert.match(route, /async function agencyReconciliationClaimAggregates[\s\S]*WITH claim_balances AS[\s\S]*LEFT JOIN "SubsidyRemittance"[\s\S]*GROUP BY "agencyProgramId"/);
-  assert.match(route, /reconciliationClaimAggregates, allocationClaimRows[\s\S]*status: \{ in: \["approved", "partially_paid"\] \}/);
+  assert.match(route, /agencyReconciliationClaimAggregates\(tx, centerIds, snapshotAsOf\)[\s\S]*tx\.subsidyClaim\.findMany\(\{[\s\S]*status: \{ in: \["approved", "partially_paid"\] \}/);
   assert.doesNotMatch(route, /const \[programs,[^\n]*reconciliationClaims/);
-  assert.match(route, /prisma\.ledgerEntry\.aggregate\(\{[\s\S]*sourceSystem: "subsidy_agency"[\s\S]*_sum: \{ amountCents: true \}[\s\S]*_count: \{ _all: true \}/);
+  assert.match(route, /tx\.ledgerEntry\.aggregate\(\{[\s\S]*sourceSystem: "subsidy_agency"[\s\S]*_sum: \{ amountCents: true \}[\s\S]*_count: \{ _all: true \}/);
   assert.match(route, /batch\.status === "rejected"[\s\S]*A rejected, unposted batch cannot be reversed/);
   assert.match(route, /const isLegacyReconciledBatch = batch\.status === "reconciled" && !batch\.reviewedAt;\s+if \(\(!batch\.reviewedAt && !isLegacyReconciledBatch\) \|\| !REVERSIBLE_REMITTANCE_BATCH_STATUSES\.has\(batch\.status\)\)/);
   assert.match(route, /canReviewAgencyPosting\(\{ role: auth\.user\.role, reviewerId: auth\.user\.id, requestedById: batch\.enteredById \}\)[\s\S]*different billing administrator or accounting reviewer must reverse this batch/);
@@ -555,18 +586,33 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /exportAgencyReconciliationCsv/);
   assert.match(route, /exportAgencyDepositsCsv/);
   assert.doesNotMatch(route, /\.toFixed\(2\)/);
-  assert.match(route, /function exportClaimsCsv[\s\S]*new ReadableStream<Uint8Array>[\s\S]*async pull\(controller\)[\s\S]*subsidyClaim\.findMany\([\s\S]*take: 250,[\s\S]*cursor: \{ id: cursorId \}, skip: 1/);
-  assert.match(route, /function exportClaimsCsv[\s\S]*cancel\(\) \{\s+cancelled = true/);
-  assert.doesNotMatch(route, /function exportClaimsCsv[\s\S]*async start\(controller\)/);
-  assert.match(route, /function exportAgencyLedgerCsv[\s\S]*new ReadableStream<Uint8Array>[\s\S]*async pull\(controller\)[\s\S]*agencyLedgerEntry\.findMany\([\s\S]*take: 250,[\s\S]*cursor: \{ id: cursorId \}, skip: 1/);
-  assert.match(route, /function exportAgencyLedgerCsv[\s\S]*cancel\(\) \{\s+cancelled = true/);
-  assert.doesNotMatch(route, /function exportAgencyLedgerCsv[\s\S]*async start\(controller\)/);
-  assert.match(route, /function exportAgencyDepositsCsv[\s\S]*new ReadableStream<Uint8Array>[\s\S]*async pull\(controller\)[\s\S]*agencyRemittanceBatch\.findMany\([\s\S]*orderBy: \[\{ paidAt: "asc" \}, \{ createdAt: "asc" \}, \{ id: "asc" \}\][\s\S]*take: 100,[\s\S]*cursor: \{ id: cursorId \}, skip: 1/);
-  assert.match(route, /function exportAgencyDepositsCsv[\s\S]*cancel\(\) \{\s+cancelled = true/);
-  assert.doesNotMatch(route, /function exportAgencyDepositsCsv[\s\S]*async start\(controller\)/);
+  assert.match(route, /const AGENCY_READ_SNAPSHOT_OPTIONS = \{[\s\S]*isolationLevel: Prisma\.TransactionIsolationLevel\.RepeatableRead/);
+  const exportHelper = route.slice(route.indexOf("async function agencyCsvSnapshotResponse"), route.indexOf("function exportClaimsCsv"));
+  assert.match(exportHelper, /AGENCY_CSV_EXPORT_MAX_ROWS/);
+  assert.match(exportHelper, /AGENCY_CSV_EXPORT_MAX_BYTES/);
+  assert.match(exportHelper, /mkdtemp\(join\(tmpdir\(\), "bee-agency-export-"\)\)/);
+  assert.match(exportHelper, /Buffer\.byteLength\(text, "utf8"\)[\s\S]*Buffer\.from\(text, "utf8"\)/);
+  assert.match(exportHelper, /while \(offset < bytes\.byteLength\)[\s\S]*bytesWritten[\s\S]*offset \+= bytesWritten/);
+  assert.match(exportHelper, /await prisma\.\$transaction[\s\S]*await flush\(\)[\s\S]*AGENCY_READ_SNAPSHOT_OPTIONS[\s\S]*await handle\.close\(\)[\s\S]*createReadStream\(exportPath\)/);
+  assert.match(exportHelper, /fileStream\.once\("close", cleanup\)/);
+  assert.match(exportHelper, /fileStream\.once\("error", cleanup\)/);
+  assert.match(exportHelper, /Readable\.toWeb\(fileStream\)/);
+  assert.match(exportHelper, /await rm\(exportDirectory, \{ recursive: true, force: true \}\)\.catch/);
+  assert.doesNotMatch(exportHelper, /desiredSize|waitForDemand|snapshotChunks|chunks\.join/);
+  assert.doesNotMatch(route.slice(route.indexOf("function exportClaimsCsv"), route.indexOf("async function currentBillingUser")), /\.map\([\s\S]{0,5000}\.join\(""\)|flatMap/);
+  assert.match(route, /if \(error instanceof AgencyWorkflowError\) \{[\s\S]*status: error\.status/);
+  assert.match(route, /function exportClaimsCsv[\s\S]*agencyCsvSnapshotResponse\("agency-claims\.csv"[\s\S]*tx\.subsidyClaim\.findMany\([\s\S]*take: 250,[\s\S]*cursor: \{ id: cursorId \}, skip: 1/);
+  assert.match(route, /function exportAgencyLedgerCsv[\s\S]*agencyCsvSnapshotResponse\("agency-ledger\.csv"[\s\S]*tx\.agencyLedgerEntry\.findMany\([\s\S]*take: 250,[\s\S]*cursor: \{ id: cursorId \}, skip: 1/);
+  assert.match(route, /function exportAgencyDepositsCsv[\s\S]*agencyCsvSnapshotResponse\("agency-deposits\.csv"[\s\S]*tx\.agencyRemittanceBatch\.findMany\([\s\S]*orderBy: \[\{ paidAt: "asc" \}, \{ createdAt: "asc" \}, \{ id: "asc" \}\][\s\S]*take: 100,[\s\S]*cursor: \{ id: cursorId \}, skip: 1/);
+  assert.match(route, /csvRow\(\["School ID", "School", "Claim"/);
+  assert.match(route, /csvRow\(\["School ID", "School", "Date"/);
+  assert.match(route, /csvRow\(\["School ID", "School", "Agency", "Program"/);
   assert.match(route, /batch\.totalCents \/ 100,[\s\S]*batch\.allocatedCents \/ 100,[\s\S]*batch\.unappliedCents \/ 100/);
   assert.match(route, /overdueFollowUpCount/);
   assert.match(route, /legacyFamilyAgencyBalanceCents/);
+  assert.match(route, /originalPaidAt: input\.paidAt\.toISOString\(\),[\s\S]*postingRule: \(input\.ledgerEffectiveAt \?\? input\.paidAt\)[\s\S]*legacyCompatibilityMirror: true/);
+  assert.match(route, /const baselineCompatibilityEvidence = !Object\.prototype\.hasOwnProperty\.call\(metadata, "appliedCents"\)[\s\S]*legacyPaymentEntry\.description === `\$\{baselineAgencyName\} remittance for \$\{remittance\.claim\.number\}`/);
+  assert.match(route, /const parentVisibleBeforeCents = billingAccount\.balanceCents - Math\.max\(0, totalAgencyResponsibilityBeforeCents\)[\s\S]*parentVisibleAfterCents !== parentVisibleBeforeCents[\s\S]*separately reviewed historical correction/);
   assert.match(controls, /Prepare deposit batch/);
   assert.match(controls, /Adjustment request/);
   assert.match(controls, /Accounting periods/);
@@ -610,6 +656,9 @@ test("agency remittance reversals preserve history and recalculate paid totals",
   assert.match(route, /action === "reverseRemittance"[\s\S]*center\.findUnique\(\{ where: \{ id: claim\.centerId \}, select: \{ agencyReconciliationEnabled: true \} \}\)[\s\S]*reverseAgencyRemittanceRecord\(tx, \{[\s\S]*reviewerId: auth\.user\.id[\s\S]*reviewerRole: auth\.user\.role[\s\S]*requireIndependentReviewer: center\.agencyReconciliationEnabled[\s\S]*expectedClaimId: claim\.id[\s\S]*requireUnbatched: true/);
   assert.match(reversalHelper, /input\.requireIndependentReviewer && \(!input\.reviewerRole \|\| !canReviewAgencyPosting\(\{ role: input\.reviewerRole, reviewerId: input\.reviewerId, requestedById: remittance\.enteredById \}\)\)/);
   assert.match(route, /type: "agency_payment_reversal"[\s\S]*balanceAfterCents: 0[\s\S]*recalculateLegacyFamilyLedgerBalances\(tx, legacyPaymentEntry\.billingAccountId, updatedAccount\.balanceCents\)/);
+  assert.match(reversalHelper, /const baselineAgencyName = clean\(metadata\.agencyName\)[\s\S]*baselineCompatibilityEvidence[\s\S]*legacyPaymentEntry\.description === `\$\{baselineAgencyName\} remittance for \$\{remittance\.claim\.number\}`/);
+  assert.doesNotMatch(reversalHelper, /clean\(metadata\.agencyName\) === remittance\.claim\.agencyProgram\.name/);
+  assert.match(reversalHelper, /totalAgencyResponsibilityBeforeCents[\s\S]*parentVisibleAfterCents !== parentVisibleBeforeCents[\s\S]*separately reviewed historical correction/);
   assert.match(route, /agency-remittance-reversal:/);
   assert.match(route, /billing\.subsidy_remittance\.reversed/);
   assert.match(route, /type: "agency_payment"/);
@@ -620,8 +669,8 @@ test("agency remittance reversals preserve history and recalculate paid totals",
 
 test("agency dashboard totals use bounded database aggregates for the full non-void claim set", () => {
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
-  const aggregateStart = route.indexOf("prisma.$queryRaw<AgencySummaryRow[]>");
-  const aggregateEnd = route.indexOf("prisma.family.findMany", aggregateStart);
+  const aggregateStart = route.indexOf("tx.$queryRaw<AgencySummaryRow[]>");
+  const aggregateEnd = route.indexOf("tx.family.findMany", aggregateStart);
   assert.notEqual(aggregateStart, -1);
   assert.notEqual(aggregateEnd, -1);
   const summaryAggregate = route.slice(aggregateStart, aggregateEnd);
@@ -633,6 +682,12 @@ test("agency dashboard totals use bounded database aggregates for the full non-v
   assert.doesNotMatch(summaryAggregate, /LEFT JOIN "SubsidyAuthorization" authorization/);
   assert.match(summaryAggregate, /claim\.status <> 'void'/);
   assert.doesNotMatch(summaryAggregate, /summaryClaims\.reduce/);
+});
+
+test("agency program serializable writes preserve authored errors and retry guidance", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  assert.match(route, /action === "createProgram"[\s\S]*try \{[\s\S]*prisma\.\$transaction[\s\S]*error instanceof AgencyWorkflowError[\s\S]*prismaConflict\(error\)/);
+  assert.match(route, /action === "updateProgram"[\s\S]*try \{[\s\S]*prisma\.\$transaction[\s\S]*error instanceof AgencyWorkflowError[\s\S]*prismaConflict\(error\)/);
 });
 
 test("remittance status uses approved amount when available", () => {

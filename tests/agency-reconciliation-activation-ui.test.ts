@@ -55,7 +55,7 @@ test("the server advertises activation only for one authorized exact school", ()
   assert.match(routeSource, /if \(!centerIds\.length\) return NextResponse\.json\(\{ ok: false, error: "No accessible school selected\." \}, \{ status: 403 \}\)/);
   assert.match(routeSource, /const agencyReconciliationActivated = centerIds\.length === 1\s+&& activationCenters\.length === 1\s+&& activationCenters\[0\]\.agencyReconciliationEnabled/);
   assert.match(routeSource, /const agencyReconciliationEnabled = agencyReconciliationActivated && agencyReconciliationBlockers\.length === 0/);
-  assert.match(routeSource, /if \(!centerId \|\| centerId === "all" \|\| !centerAllowed\(auth\.user, centerId\)\)/);
+  assert.match(routeSource, /if \(!centerId \|\| centerId === "all" \|\| !agencyMutationCenterAllowed\(auth\.user, centerId\)\)/);
 });
 
 test("inactive schools keep direct remittance while reviewed posting actions require activation", () => {
@@ -210,7 +210,7 @@ test("two-user controlled flow allows A to prepare and B to approve then reverse
 
 test("auditor UI remains readable and hides every mutation surface", () => {
   assert.match(routeSource, /!canManageBilling\(user\) && user\.role !== "READ_ONLY_AUDITOR"/);
-  assert.match(routeSource, /canManageAgencyBilling: canManageBilling\(auth\.user\)/);
+  assert.match(routeSource, /canManageAgencyBilling: mutationCenterSelected && canManageBilling\(auth\.user\)/);
   assert.match(workspaceSource, /actionDestinations=\{!canManageAgencyBilling \? \[\] : \[/);
   assert.match(workspaceSource, /\{canManageAgencyBilling \? <div className="grid gap-4 xl:grid-cols-3">/);
   assert.match(workspaceSource, /const documentsEditable = canManageAgencyBilling/);

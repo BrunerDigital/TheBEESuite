@@ -398,10 +398,13 @@ test("agency remittance reversals preserve history and recalculate paid totals",
   const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
   assert.match(route, /action === "reverseRemittance"/);
+  assert.match(route, /action === "reverseRemittance"[\s\S]*reverseAgencyRemittanceRecord\(tx, \{[\s\S]*reviewerRole: auth\.user\.role[\s\S]*expectedClaimId: claim\.id[\s\S]*requireUnbatched: true/);
+  assert.match(route, /input\.reviewerRole && !canReviewAgencyPosting\(\{ role: input\.reviewerRole, reviewerId: input\.reviewerId, requestedById: remittance\.enteredById \}\)/);
   assert.match(route, /agency-remittance-reversal:/);
   assert.match(route, /billing\.subsidy_remittance\.reversed/);
   assert.match(route, /type: "agency_payment"/);
   assert.match(workspace, /Reverse remittance/);
+  assert.match(workspace, /data\?\.capabilities\.canReviewAgencyPosting && data\.capabilities\.currentUserId !== remittance\.enteredById/);
   assert.doesNotMatch(workspace, /window\.prompt/);
 });
 

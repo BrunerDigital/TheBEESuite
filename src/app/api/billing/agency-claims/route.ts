@@ -486,6 +486,9 @@ async function agencyPostingClaim(tx: Prisma.TransactionClient, claimId: string)
 async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input: {
   remittanceId: string;
   reviewerId: string;
+  reviewerRole?: string;
+  expectedClaimId?: string;
+  requireUnbatched?: boolean;
   reason: string;
   reversedAt: Date;
 }) {
@@ -494,6 +497,9 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
     include: { claim: { include: { agencyProgram: true } }, allocation: true },
   });
   if (!remittance) throw new AgencyWorkflowError("Remittance not found.", 404);
+  if (input.expectedClaimId && remittance.claimId !== input.expectedClaimId) throw new AgencyWorkflowError("Remittance not found.", 404);
+  if (input.reviewerRole && !canReviewAgencyPosting({ role: input.reviewerRole, reviewerId: input.reviewerId, requestedById: remittance.enteredById })) throw new AgencyWorkflowError("A different billing administrator or accounting reviewer must reverse this remittance.", 403);
+  if (input.requireUnbatched && remittance.allocation) throw new AgencyWorkflowError("This payment belongs to a controlled deposit batch. Reverse the batch from the reconciliation queue so every allocation remains balanced.", 409);
   if (remittance.reversedAt) throw new AgencyWorkflowError("This remittance was already reversed.", 409);
   await assertAgencyPeriodOpen(tx, remittance.claim.centerId, input.reversedAt);
   const transition = await tx.subsidyRemittance.updateMany({
@@ -557,7 +563,15 @@ async function reverseAgencyRemittanceRecord(tx: Prisma.TransactionClient, input
   const paidCents = activeRemittanceTotalCents(activeRemittances);
   const claim = await tx.subsidyClaim.update({ where: { id: remittance.claimId }, data: { paidCents, status: nextRemittanceStatus({ claimedCents: remittance.claim.claimedCents, approvedCents: remittance.claim.approvedCents, paidCents }) } });
   if (remittance.allocation) await tx.agencyRemittanceAllocation.update({ where: { id: remittance.allocation.id }, data: { status: "reversed" } });
-  return { remittance, claim, agencyLedgerEntryId: agencyReversal.entry.id, legacyFamilyReversalLedgerEntryId };
+  return {
+    remittance,
+    remittanceId: remittance.id,
+    claim,
+    agencyLedgerEntryId: agencyReversal.entry.id,
+    agencyLedgerBalanceCents: agencyReversal.account.balanceCents,
+    legacyFamilyReversalLedgerEntryId,
+    reversalLedgerEntryId: legacyFamilyReversalLedgerEntryId,
+  };
 }
 
 function exportClaimsCsv(centerIds: string[]) {
@@ -2171,74 +2185,15 @@ async function postHandler(request: NextRequest) {
     if (!remittanceId || !reason) return NextResponse.json({ ok: false, error: "Choose a remittance and enter a correction reason." }, { status: 400 });
     let result;
     try {
-      result = await prisma.$transaction(async (tx) => {
-        const remittance = await tx.subsidyRemittance.findFirst({ where: { id: remittanceId, claimId: claim.id }, include: { claim: { include: { agencyProgram: true } }, allocation: true } });
-        if (!remittance) throw new AgencyWorkflowError("Remittance not found.", 404);
-        if (remittance.allocation) throw new AgencyWorkflowError("This payment belongs to a controlled deposit batch. Reverse the batch from the reconciliation queue so every allocation remains balanced.", 409);
-        if (remittance.reversedAt) throw new AgencyWorkflowError("This remittance was already reversed.", 409);
-        const reversedAt = new Date();
-        const transition = await tx.subsidyRemittance.updateMany({ where: { id: remittance.id, reversedAt: null }, data: { reversedAt, reversedById: auth.user.id, reversalReason: reason } });
-        if (transition.count !== 1) throw new AgencyWorkflowError("The remittance changed before it could be reversed. Refresh and try again.", 409);
-        await ensureAgencyClaimReceivable(tx, remittance.claim);
-        const agencyPaymentExternalId = agencyRemittanceLedgerExternalId(remittance.id);
-        let agencyPaymentEntry = await tx.agencyLedgerEntry.findUnique({ where: { sourceSystem_externalId: { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM, externalId: agencyPaymentExternalId } } });
-        if (!agencyPaymentEntry) {
-          const agencyPayment = await appendAgencyLedgerEntry(tx, {
-            centerId: remittance.claim.centerId,
-            agencyProgramId: remittance.claim.agencyProgramId,
-            claimId: remittance.claimId,
-            remittanceId: remittance.id,
-            type: "remittance_received",
-            description: `${remittance.claim.agencyProgram.name} remittance for ${remittance.claim.number}`,
-            amountCents: -remittance.amountCents,
-            effectiveAt: remittance.paidAt,
-            externalReference: remittance.externalReference,
-            externalId: agencyPaymentExternalId,
-            metadata: { claimNumber: remittance.claim.number, paymentMethod: remittance.paymentMethod, restoredBeforeReversal: true },
-          });
-          agencyPaymentEntry = agencyPayment.entry;
-        }
-        const agencyReversal = await appendAgencyLedgerEntry(tx, {
-          centerId: remittance.claim.centerId,
-          agencyProgramId: remittance.claim.agencyProgramId,
-          claimId: remittance.claimId,
-          remittanceId: remittance.id,
-          type: "remittance_reversal",
-          description: `Reversed agency remittance for ${remittance.claim.number}`,
-          amountCents: remittance.amountCents,
-          effectiveAt: reversedAt,
-          externalReference: remittance.externalReference,
-          externalId: agencyRemittanceReversalLedgerExternalId(remittance.id),
-          metadata: { claimNumber: remittance.claim.number, originalAgencyLedgerEntryId: agencyPaymentEntry.id, reason },
-        });
-        const legacyPaymentEntry = await tx.ledgerEntry.findUnique({ where: { sourceSystem_externalId: { sourceSystem: "subsidy_agency", externalId: `agency-remittance:${remittance.id}` } } });
-        let legacyFamilyReversalLedgerEntryId: string | null = null;
-        if (legacyPaymentEntry && legacyPaymentEntry.amountCents < 0) {
-          const updatedAccount = await tx.billingAccount.update({ where: { id: legacyPaymentEntry.billingAccountId }, data: { balanceCents: { increment: Math.abs(legacyPaymentEntry.amountCents) } } });
-          const reversalEntry = await tx.ledgerEntry.create({ data: {
-            billingAccountId: legacyPaymentEntry.billingAccountId,
-            type: "agency_payment_reversal",
-            description: `Reversed legacy family-ledger agency settlement for ${remittance.claim.number}`,
-            amountCents: Math.abs(legacyPaymentEntry.amountCents),
-            balanceAfterCents: updatedAccount.balanceCents,
-            sourceSystem: "subsidy_agency",
-            externalId: `agency-remittance-reversal:${remittance.id}`,
-            metadata: { ...recordValue(legacyPaymentEntry.metadata), remittanceId: remittance.id, claimId: claim.id, originalLedgerEntryId: legacyPaymentEntry.id, reason, legacyCompatibilityMirror: true },
-          } });
-          legacyFamilyReversalLedgerEntryId = reversalEntry.id;
-        }
-        const activeRemittances = await tx.subsidyRemittance.findMany({ where: { claimId: claim.id, reversedAt: null }, select: { amountCents: true, reversedAt: true } });
-        const paidCents = activeRemittanceTotalCents(activeRemittances);
-        const updated = await tx.subsidyClaim.update({ where: { id: claim.id }, data: { paidCents, status: nextRemittanceStatus({ claimedCents: remittance.claim.claimedCents, approvedCents: remittance.claim.approvedCents, paidCents }) } });
-        return {
-          remittanceId: remittance.id,
-          claim: updated,
-          agencyLedgerEntryId: agencyReversal.entry.id,
-          agencyLedgerBalanceCents: agencyReversal.account.balanceCents,
-          legacyFamilyReversalLedgerEntryId,
-          reversalLedgerEntryId: legacyFamilyReversalLedgerEntryId,
-        };
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      result = await prisma.$transaction((tx) => reverseAgencyRemittanceRecord(tx, {
+        remittanceId,
+        reviewerId: auth.user.id,
+        reviewerRole: auth.user.role,
+        expectedClaimId: claim.id,
+        requireUnbatched: true,
+        reason,
+        reversedAt: new Date(),
+      }), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof AgencyWorkflowError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
       if (prismaConflict(error)) return NextResponse.json({ ok: false, error: "The remittance changed while it was being reversed. Refresh and try again." }, { status: 409 });

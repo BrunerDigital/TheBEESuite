@@ -259,7 +259,7 @@ Use `docs/AGENCY_SUBSIDY_BILLING_OPERATIONS.md` or the public guide at `https://
 7. Use reviewed adjustment or batch-reversal controls for corrections. Never delete or overwrite financial evidence.
 8. Export deposits, ledger activity, and reconciliation before closing the school accounting period. If a historical period must be reopened, reopen later closed periods first and retain the reason for each period.
 
-Stop when a bank deposit or Stripe payout cannot be tied to exact agency evidence, a batch reference is duplicated, a period is closed, or reconciliation has a variance. Do not write off or shift a balance to the family without separate documented approval.
+Stop when a bank deposit or Stripe payout cannot be tied to exact agency evidence, a batch reference is duplicated, the effective date falls within or before the latest closed period, or reconciliation has a variance. Do not write off or shift a balance to the family without separate documented approval.
 
 ## Reconciliation Procedure
 

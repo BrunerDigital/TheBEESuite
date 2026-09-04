@@ -147,10 +147,11 @@ function agencyAllocationRows(value: unknown) {
 async function assertAgencyPeriodOpen(tx: Prisma.TransactionClient, centerId: string, effectiveAt: Date) {
   const accountingDate = dateValue(dateInput(effectiveAt)) ?? effectiveAt;
   const closed = await tx.agencyAccountingPeriod.findFirst({
-    where: { centerId, status: "closed", startDate: { lte: accountingDate }, endDate: { gte: accountingDate } },
+    where: { centerId, status: "closed", endDate: { gte: accountingDate } },
+    orderBy: [{ startDate: "asc" }, { id: "asc" }],
     select: { name: true },
   });
-  if (closed) throw new AgencyWorkflowError(`${closed.name} is closed. Post a current-period correcting entry instead of backdating this transaction.`, 409);
+  if (closed) throw new AgencyWorkflowError(`${closed.name} or a later accounting period is closed. Post a current-period correcting entry instead of backdating this transaction.`, 409);
 }
 
 async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, centerId: string, endExclusive: Date) {

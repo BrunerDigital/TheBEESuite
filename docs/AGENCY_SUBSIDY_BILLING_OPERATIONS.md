@@ -80,7 +80,7 @@ If the ledger does not reconcile, stop. Do not add a duplicate remittance or fam
 
 1. Accounting reviews reconciliation variance, pending batches, pending adjustments, unapplied cash, aging, and follow-up exceptions.
 2. Close the exact school period only after unresolved review items are cleared.
-3. Closed periods reject backdated remittances and adjustments.
+3. Closed periods reject remittances and adjustments dated within or before the latest closed period, including dates in an earlier open gap.
 4. Reopening requires accounting access and a retained reason. Reopen later closed periods before earlier ones so every later certification is invalidated in order. Corrections should normally post in the current open period with the original event date retained in metadata.
 
 ## 8. Reverse Incorrect Activity

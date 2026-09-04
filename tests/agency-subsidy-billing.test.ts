@@ -320,6 +320,8 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.match(route, /agencyAdjustmentFingerprint\(\{ ledgerAccountId: account\.id, claimId, batchId, type, amountCents, effectiveAt, reason, evidenceName, evidenceReference, followUpDueAt \}\)/);
   assert.match(route, /action === "closeAccountingPeriod"/);
   assert.match(route, /assertAgencyPeriodOpen/);
+  assert.match(route, /status: "closed", endDate: \{ gte: accountingDate \}[\s\S]*or a later accounting period is closed/);
+  assert.doesNotMatch(route, /status: "closed", startDate: \{ lte: accountingDate \}, endDate: \{ gte: accountingDate \}/);
   assert.match(route, /agencyLedgerRunningBalances\(entries\)/);
   assert.match(route, /agencyUnappliedCashBalance\(account\.entries\)/);
   assert.match(route, /type: "remittance_received",\s+effectiveAt: \{ lt: endExclusive \}/);

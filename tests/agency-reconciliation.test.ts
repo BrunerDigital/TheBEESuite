@@ -6,6 +6,7 @@ import {
   agencyBatchStatus,
   agencyLedgerRunningBalances,
   agencyRemittanceReferenceKey,
+  agencyUnappliedCashBalance,
   agencyUtcCalendarRange,
   canReviewAgencyPosting,
   isAgencyClaimOverdue,
@@ -75,6 +76,15 @@ test("agency ledger running balances recalculate every later row after a backdat
     { id: "backdated", balanceAfterCents: 12_500 },
     { id: "later-payment", balanceAfterCents: 8_500 },
   ]);
+});
+
+test("agency unapplied cash is reconstructed from immutable effective-dated ledger activity", () => {
+  const received = [{ type: "unapplied_cash", amountCents: -10_000 }];
+  const partlyAllocated = [...received, { type: "unapplied_cash_allocation", amountCents: 6_000 }];
+  const reversed = [...partlyAllocated, { type: "unapplied_cash_reversal", amountCents: 4_000 }];
+  assert.equal(agencyUnappliedCashBalance(received), 10_000);
+  assert.equal(agencyUnappliedCashBalance(partlyAllocated), 4_000);
+  assert.equal(agencyUnappliedCashBalance(reversed), 0);
 });
 
 test("agency postings require an accounting reviewer who is not the preparer", () => {

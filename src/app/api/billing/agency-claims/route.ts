@@ -28,6 +28,7 @@ import {
   agencyBatchStatus,
   agencyLedgerRunningBalances,
   agencyRemittanceReferenceKey,
+  agencyUnappliedCashBalance,
   agencyUtcCalendarRange,
   canCloseAgencyAccountingPeriod,
   canReviewAgencyPosting,
@@ -139,12 +140,12 @@ async function assertAgencyPeriodOpen(tx: Prisma.TransactionClient, centerId: st
 }
 
 async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, centerId: string, endExclusive: Date) {
-  const [accounts, claims, batches, adjustments] = await Promise.all([
+  const [accounts, claims, adjustments] = await Promise.all([
     tx.agencyLedgerAccount.findMany({
       where: { centerId },
       select: {
         agencyProgramId: true,
-        entries: { where: { effectiveAt: { lt: endExclusive } }, select: { amountCents: true } },
+        entries: { where: { effectiveAt: { lt: endExclusive } }, select: { type: true, amountCents: true } },
       },
     }),
     tx.subsidyClaim.findMany({
@@ -152,10 +153,13 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
         centerId,
         approvedCents: { gt: 0 },
         status: { notIn: ["void", "denied"] },
-        OR: [
-          { approvedAt: { lt: endExclusive } },
-          { approvedAt: null, createdAt: { lt: endExclusive } },
-        ],
+        ledgerEntries: {
+          some: {
+            sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
+            type: "claim_approved",
+            effectiveAt: { lt: endExclusive },
+          },
+        },
       },
       select: {
         agencyProgramId: true,
@@ -163,22 +167,18 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
         claimedCents: true,
         remittances: {
           where: {
-            paidAt: { lt: endExclusive },
+            ledgerEntries: {
+              some: {
+                sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM,
+                type: "remittance_received",
+                effectiveAt: { lt: endExclusive },
+              },
+            },
             OR: [{ reversedAt: null }, { reversedAt: { gte: endExclusive } }],
           },
           select: { amountCents: true },
         },
       },
-    }),
-    tx.agencyRemittanceBatch.findMany({
-      where: {
-        centerId,
-        reviewedAt: { not: null },
-        paidAt: { lt: endExclusive },
-        status: { not: "rejected" },
-        OR: [{ reversedAt: null }, { reversedAt: { gte: endExclusive } }],
-      },
-      select: { agencyProgramId: true, unappliedCents: true },
     }),
     tx.agencyLedgerAdjustment.findMany({
       where: {
@@ -198,13 +198,14 @@ async function agencyReconciliationVarianceCount(tx: Prisma.TransactionClient, c
     return current;
   };
   for (const account of accounts) {
-    row(account.agencyProgramId).ledger += account.entries.reduce((total, entry) => total + entry.amountCents, 0);
+    const current = row(account.agencyProgramId);
+    current.ledger += account.entries.reduce((total, entry) => total + entry.amountCents, 0);
+    current.expected -= agencyUnappliedCashBalance(account.entries);
   }
   for (const claim of claims) {
     const current = row(claim.agencyProgramId);
     current.expected += (claim.approvedCents ?? claim.claimedCents) - claim.remittances.reduce((total, remittance) => total + remittance.amountCents, 0);
   }
-  for (const batch of batches) row(batch.agencyProgramId).expected -= batch.unappliedCents;
   for (const adjustment of adjustments) row(adjustment.agencyProgramId).expected += adjustment.amountCents;
   return [...totals.values()].filter((current) => current.ledger !== current.expected).length;
 }
@@ -611,7 +612,12 @@ function exportAgencyLedgerCsv(centerIds: string[]) {
         while (true) {
           const entries = await prisma.agencyLedgerEntry.findMany({
             where: { agencyLedgerAccount: { centerId: { in: centerIds } } },
-            orderBy: { id: "asc" },
+            orderBy: [
+              { agencyLedgerAccountId: "asc" },
+              { effectiveAt: "asc" },
+              { createdAt: "asc" },
+              { id: "asc" },
+            ],
             take: 250,
             ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
             include: {
@@ -1048,6 +1054,7 @@ async function getHandler(request: NextRequest) {
     families,
     summary: { ...summary, ...readiness },
     capabilities: {
+      currentUserId: auth.user.id,
       canReviewAgencyPosting: canCloseAgencyAccountingPeriod(auth.user.role),
       canCloseAccountingPeriod: canCloseAgencyAccountingPeriod(auth.user.role),
     },

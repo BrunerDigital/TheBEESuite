@@ -126,6 +126,12 @@ export function agencyLedgerRunningBalances<T extends { id: string; amountCents:
   });
 }
 
+export function agencyUnappliedCashBalance(entries: Array<{ type: string; amountCents: number }>) {
+  const unappliedTypes = new Set(["unapplied_cash", "unapplied_cash_allocation", "unapplied_cash_reversal"]);
+  const balanceCents = -entries.reduce((total, entry) => unappliedTypes.has(entry.type) ? total + entry.amountCents : total, 0);
+  return balanceCents === 0 ? 0 : balanceCents;
+}
+
 export function agencyAgingBucket(dueDate: Date | string | null | undefined, asOf = new Date()): AgencyAgingBucket {
   if (!dueDate) return "current";
   const due = new Date(dueDate);

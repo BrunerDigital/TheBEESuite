@@ -230,7 +230,25 @@ const prisma = {
       return { _sum: { amountCents: null }, _count: { _all: 0 } };
     },
   },
-  async $queryRaw() { snapshotRead(); return []; },
+  async $queryRaw() {
+    snapshotRead();
+    if (!duplicateSchoolExports) return [];
+    return exportFixtures.map((fixture) => ({
+      agencyLedgerAccountId: fixture.account.id,
+      mappingCategory: "receivable",
+      glCodeSnapshot: fixture.entry.glCodeSnapshot,
+      costCenterCodeSnapshot: fixture.entry.costCenterCodeSnapshot,
+      snapshotStatus: "COMPLETE",
+      approvedCents: 0n,
+      remittedCents: 0n,
+      unappliedCents: 0n,
+      adjustmentCents: 0n,
+      ledgerBalanceCents: BigInt(fixture.entry.amountCents),
+      openBatchExceptionCount: 0n,
+      missingImmutableEventCount: 0n,
+      unsupportedLedgerEntryCount: 0n,
+    }));
+  },
   async $transaction(callback, options) {
     assert.equal(options?.isolationLevel, "RepeatableRead");
     repeatableReadTransactions += 1;

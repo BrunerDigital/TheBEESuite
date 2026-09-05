@@ -28,6 +28,7 @@ const currentUser = {
 
 let claimReads = 0;
 let activationEnabled = false;
+let currentRemittances = [];
 
 const agencyProgram = {
   id: "program-test",
@@ -94,7 +95,7 @@ mock.module("@/lib/prisma", {
       subsidyClaim: {
         async findUnique() {
           claimReads += 1;
-          return approvedClaim;
+          return { ...approvedClaim, remittances: currentRemittances };
         },
       },
       center: {
@@ -173,6 +174,22 @@ async function postDirectReversal() {
   }));
 }
 
+async function postDirectRemittance(externalReference) {
+  return POST(new Request("https://app.test/api/billing/agency-claims", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      action: "recordRemittance",
+      centerId: "center-test",
+      claimId: approvedClaim.id,
+      amountDollars: "10.00",
+      paidAt: "2026-09-02",
+      paymentMethod: "ach",
+      externalReference,
+    }),
+  }));
+}
+
 test("all six billing roles reach baseline direct record and same-user reverse actions", async () => {
   for (const role of billingRoles) {
     currentUser.role = role;
@@ -236,6 +253,21 @@ test("same-user direct correction remains available only before exact-school act
   const nonAccountingReviewer = await postDirectReversal();
   assert.equal(nonAccountingReviewer.status, 403);
   assert.match((await nonAccountingReviewer.json()).error, /different billing administrator or accounting reviewer/i);
+});
+
+test("baseline direct retry rejects a historical active reference after canonical normalization", async () => {
+  currentUser.id = "same-user";
+  currentUser.role = "BILLING_ADMIN";
+  currentUser.centerIds = ["center-test"];
+  currentUser.workspace = { mode: "fixed", activeCenterId: "center-test" };
+  activationEnabled = false;
+  currentRemittances = [{ ...directRemittance, externalReference: "trace  100", reversedAt: null }];
+
+  const response = await postDirectRemittance(" TRACE 100 ");
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /remittance reference is already recorded/i);
+
+  currentRemittances = [];
 });
 
 test("all-location workspace keeps exact-school reads separate and rejects crafted mutations before data access", async () => {

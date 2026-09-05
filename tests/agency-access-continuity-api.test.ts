@@ -35,5 +35,6 @@ test("agency API preserves the billing-role access boundary", () => {
   assert.match(result.stdout, /teacher, parent, and pickup roles remain denied/i);
   assert.match(result.stdout, /read-only auditor remains denied for every mutation/i);
   assert.match(result.stdout, /same-user direct correction remains available only before exact-school activation/i);
+  assert.match(result.stdout, /baseline direct retry rejects a historical active reference after canonical normalization/i);
   assert.match(result.stdout, /all-location workspace keeps exact-school reads separate and rejects crafted mutations/i);
 });

@@ -1,141 +1,120 @@
 # Agency Payment And Reconciliation SOP - The BEE Suite
 
-Last updated: September 2, 2026
+Last updated: September 3, 2026
 
 Audience: school directors, assistant directors, billing administrators, accounting users, and launch support.
 
+Pre-release status: this document describes the expanded agency-ledger workflow shipped with PR #310. Until both production database migrations and the exact reviewed application commit are released and validated, the public SOP and production application remain on the baseline direct `Record remittance` workflow. A successful Vercel preview build does not prove that the expanded runtime is compatible with an unmigrated production schema.
+
 ## Purpose
 
-Use this SOP to prepare an agency claim, record an approved ACH, check, or agency-portal remittance, and prove that the payment reconciled to the correct agency receivable. The workflow keeps agency responsibility separate from the family's responsibility and never charges the family.
+Use this SOP to prepare agency claims, stage ACH/check/portal deposits, obtain independent review, and prove that claim allocations, deposits, and the dedicated agency ledger agree. Agency responsibility remains separate from the family ledger and never charges the family.
 
-Public step-by-step guide: `https://thebeesuite.io/resources/agency-payment-reconciliation`
+Public guide: `https://thebeesuite.io/resources/agency-payment-reconciliation`
 
-Live workspace: sign in at `https://thebeesuite.io/directors`, then open `Billing & Payments` -> `Billing & invoices` -> `Agency receivables`.
+Workspace: sign in at `https://thebeesuite.io/directors`, then open `Billing & Payments` -> `Billing & invoices` -> `Agency receivables`.
 
-## Before The School Records A Payment
+## Required Evidence
 
-Have all of the following in front of you:
+Have the exact school and agency program, provider/vendor identity, child authorization and coverage period, submitted claim confirmation, agency decision/reference, remittance advice/check stub/portal transaction, paid date, payment method, unique payment reference, total deposit, and claim-by-claim allocation. Store only a secure internal document/advice reference in the ledger; never store credentials or full bank details.
 
-- The exact school and agency program.
-- The agency's current remittance notice, portal record, check stub, or ACH advice.
-- The school-specific provider or vendor/payee number.
-- The child authorization number and covered service period.
-- The submitted claim confirmation and agency decision/reference.
-- The approved claim amount, amount paid, paid date, payment method, and external payment reference.
-- A claim-by-claim allocation when one deposit covers more than one claim.
+A Stripe payout or bank deposit alone is not agency-remittance proof. It does not establish the agency, authorization, service period, approved claim, or allocation.
 
-Do not use a Stripe school payout, bank deposit alone, parent payment, or family balance as proof of an agency remittance. Those records do not prove which agency, child, authorization, service period, or claim the money belongs to.
+## 1. Confirm School And Program Readiness
 
-## Step 1 - Confirm The School And Program Are Ready
+1. Select one exact school. `All authorized schools` is a consolidated read-only accounting view.
+2. Confirm the agency program shows `Ready` and uses this school's provider/vendor identity, submission method, and payment setup.
+3. Baseline direct `Record remittance` remains available to authorized billing staff before activation without requiring accounting export codes.
+4. Before activating the expanded workflow, configure nonblank A/R, cash, adjustment, and cost-center codes for every active program in the exact school. Activation and controlled ledger actions fail closed while any mapping is missing.
+5. Stop if setup is incomplete, expired, or belongs to another location.
 
-1. Sign in through the director entry point and confirm the school shown in the workspace.
-2. Open `Agency receivables` and select the exact school.
-3. Check `Programs ready`. Select the program under `1. Complete agency setup`.
-4. Continue only when the program shows `Ready` and the school-specific provider/vendor identity, official submission method, and verified payment setup are documented.
-5. Never reuse another school's provider number, vendor number, portal identity, or payment setup.
+## 2. Confirm Authorization And Claim
 
-If the program says `Setup required`, stop. Complete the missing setup from current agency evidence before creating an authorization, claim, approval, or remittance.
+1. Match the program, family, child, authorization number, coverage dates, rate, units, and family copay.
+2. Confirm the service period is authorized and required evidence is complete.
+3. Submit through the agency's approved external channel. `Mark submitted` records the external confirmation; it does not transmit the claim.
+4. Record a decision only from current agency evidence. Payment may be allocated only to an `approved` or `partially paid` claim and may not exceed the remaining approved amount.
 
-## Step 2 - Confirm The Child Authorization And Claim
+Never manufacture a submission or approval to fit an old deposit. Send incomplete historical records to accounting for reconstruction or controlled exception handling.
 
-1. Match the agency program, family, child, authorization number, coverage dates, rate, units, and family copay to the source record.
-2. Confirm the claim service dates are inside the authorization dates and do not overlap another open claim for the same authorization.
-3. Confirm every required claim item is received, verified, or correctly marked not applicable with evidence.
-4. Submit the claim through the agency's approved external channel. `Mark submitted` in The BEE Suite records the external confirmation after submission; it does not transmit the claim.
-5. Record the agency decision only after the agency approves or denies the submitted claim. An approval needs the agency decision/reference and exact approved amount.
+## 3. Prepare One Deposit Batch
 
-Do not mark an old payment as submitted or approved merely to make it fit the workflow. If a historical payment has no exact claim, authorization, service-period, and decision evidence, stop and send it to accounting for reconstruction or exception handling.
+1. Choose `Prepare deposit batch`, or `Prepare remittance` from a single approved claim.
+2. Enter the unique ACH/check/portal reference, exact deposit total, paid date, method, evidence name, secure evidence reference, and follow-up due date.
+3. Add every claim allocation shown on the remittance advice. The allocations may not exceed the deposit.
+4. If exact allocation detail is missing, leave that amount unapplied. Do not guess or spread it across families.
+5. Save once. The batch becomes `pending review`; no claim or ledger balance changes yet.
 
-## Step 3 - Match The Payment Before Entry
+Duplicate references and replayed requests are blocked per school and agency. Review the existing batch instead of trying a second entry.
 
-In the `Agency claim queue`, open the claim that matches the remittance notice and confirm:
+## 4. Independent Review And Posting
 
-- Status is `approved` or `partially paid`.
-- School, agency, child, authorization, and service period all match.
-- Claimed, approved, already paid, and remaining amounts are correct.
-- The payment will not exceed the remaining approved amount.
-- The paid date and method match the agency evidence.
-- The external reference is the ACH trace/reference, check number, or agency portal transaction/reference.
+1. A different billing administrator or accounting reviewer compares the batch to the source evidence. The preparer and reviewer must be two distinct authorized, active users for this exact school.
+2. The reviewer approves or rejects the batch. The preparer cannot approve their own batch.
+3. Approval posts claim allocations and one explicit unapplied-cash entry for any remainder in one serializable transaction.
+4. The reviewer confirms the deposit total equals allocated plus unapplied cash.
+5. Later allocations from unapplied cash also require a different reviewer and post in the current open accounting period while retaining the original paid date. A batch may have only one pending or posted allocation for the same claim; review or reverse it before entering a corrected allocation.
 
-When one deposit covers several claims, use the agency remittance detail to allocate the exact amount to each claim. Record one remittance on each matched claim, then prove that the claim allocations add up to the deposit. Do not spread a deposit across families or claims by guesswork.
+No agency payment is final until independent review succeeds.
 
-## Step 4 - Record The Remittance
+## 5. Reconcile
 
-1. Select `Record remittance` on the matched claim.
-2. Enter the exact `External reference`.
-3. Enter the exact `Remittance amount` for this claim.
-4. Enter the agency's paid date, not the date you happen to enter it.
-5. Choose `ACH`, `Check`, `Agency portal`, or `Other` to match the evidence.
-6. Add a short note only when it helps identify the remittance; never enter portal passwords, routing numbers, bank account numbers, tokens, or full credentials.
-7. Review the claim, amount, date, method, and reference with the second person when two-person review is available.
-8. Select `Review complete - save` once. Wait for `Agency billing record saved` and the refreshed claim queue before doing anything else.
+Verify all of the following:
 
-Recording a remittance does not charge the family. When a matching agency receivable exists, The BEE Suite posts the agency payment against that receivable while preserving the parent-visible family responsibility.
+1. Claim paid amounts and statuses changed exactly once.
+2. Deposit total equals posted allocations plus unapplied cash.
+3. Approved claims minus active remittances minus unapplied cash plus posted adjustments equals the expected agency receivable.
+4. Expected and ledger balances have zero variance.
+5. Aging, overdue claims, pending reviews, and overdue follow-ups are explained.
+6. Parent-visible family responsibility did not change.
+7. Legacy family-ledger agency rows remain immutable historical entries and are not reused for new activity.
+8. Export claims, deposits, ledger activity, and reconciliation as needed. Accounting codes appear where configured. Formula-like external text is preserved as text in CSV exports so opening a report cannot execute spreadsheet formulas.
+9. Use the deposit and adjustment history controls to reach older posted, rejected, reversed, or reconciled records. Actionable batches and pending adjustments remain visible on every history page.
 
-## Step 5 - Reconcile Immediately
+If the ledger does not reconcile, stop. Do not add a duplicate remittance or family payment to force a match.
 
-Refresh the agency workspace and verify all of the following:
+## 6. Exceptions And Adjustments
 
-1. The claim's paid amount increased by exactly the remittance amount.
-2. The claim status is `partially paid` when money remains or `paid` when the approved amount is fully covered.
-3. The remittance history shows the exact paid date, amount, and external reference once.
-4. The agency outstanding total decreased by the amount applied.
-5. When the family ledger had a matching agency receivable, it contains the corresponding `agency_payment` entry and the agency receivable decreased by the applied amount.
-6. The parent's visible family responsibility did not increase or decrease because of the agency remittance.
-7. For a multi-claim deposit, the sum recorded across claims equals the deposit exactly.
-8. Export the agency-claims CSV or retain the school-approved reconciliation evidence required by accounting.
+- Unmatched or partially allocated cash remains open with an owner and due date until resolved.
+- Write-offs, recoupments, overpayments, and correction increases/decreases require a reason, evidence reference, follow-up date, and independent reviewer.
+- Posted adjustments and payments are immutable. Correct them with a compensating reversal and a new reviewed record.
+- A short payment or denial never shifts responsibility to the family without a separate documented billing decision and approval.
 
-If the claim saved but no matching agency receivable was available to apply in the family ledger, keep the remittance as claim evidence and escalate the unmatched receivable to accounting. Do not post a second manual family payment to force the balance to match.
+## 7. Accounting Period Close
 
-## Reverse an incorrect remittance
+1. Accounting reviews reconciliation variance, pending batches, pending adjustments, unapplied cash, aging, and follow-up exceptions.
+2. Close preflight never reconstructs a claim approval, direct remittance, adjustment, or reversal from today's editable program mappings. It may restore a missing controlled-batch event only when immutable event-time batch snapshots and exact source links prove the amount, effective date, school, program, claim, and remittance. Missing or conflicting evidence blocks close. Each recovery entry identifies the close-time recovery and actor; the close audit and period close commit atomically. It does not infer an approval or payment, alter recorded amounts, or touch family billing.
+3. Close the exact school period only after every unresolved batch, additional allocation, and adjustment dated before the period end is cleared, including items from an earlier open gap. The period end cannot be later than the current UTC accounting day.
+4. Closed periods reject remittances and adjustments dated within or before the latest closed period, including dates in an earlier open gap.
+5. Reopening requires accounting access and a retained reason. Reopen later closed periods before earlier ones so every later certification is invalidated in order. A reopened period may be closed again only after a fresh preflight, and each close/reopen action remains in the audit log.
+6. For controlled deposits, `paidAt` is immutable UTC calendar-day source evidence and the independent review timestamp is the ledger posting effective time. A morning review is valid for a source date represented internally at noon on that same UTC day; it is not a backdated event. That rule lets a corrected historical deposit retain its true receipt date while its compensating replacement posts in the current open period. Receipt and reversal events are reconciled independently by their own ledger effective dates; a reversal still cannot precede its exact receipt/posting event, and `paidAt` must never be changed to force a period match.
+7. A direct-remittance reversal may retain a same-UTC-day source timestamp that is earlier by clock time than its noon-normalized `paidAt`. Migration and the server preserve that immutable source timestamp, while the dedicated reversal ledger event posts at the later of the source reversal timestamp and the immutable receipt event. The ledger metadata records both the source time and this posting rule. A reversal from an earlier UTC day is invalid and blocks migration.
 
-1. Find the exact remittance in the claim history.
-2. Select `Reverse` and enter a specific correction reason.
-3. Confirm the original remittance is shown as reversed and the claim paid amount/status recalculates.
-4. Confirm any linked agency-receivable ledger amount was restored through a compensating reversal entry.
-5. Enter the corrected remittance as a new record using the correct source evidence.
+## 8. Reverse Incorrect Activity
 
-Never delete, overwrite, backdate without evidence, or reuse the family cash/check payment workflow to correct an agency remittance. The original record, reversal, correction reason, and replacement must remain in the audit history.
+Reverse the whole deposit batch when its payment reference, total, or evidence is wrong. The system preserves every original allocation, restores receivables with compensating entries, reverses unapplied cash, and records the reason and reviewer. Exact pre-release family-ledger mirrors remain reversible even when an agency display name was later changed. If an old mirror sits within a negative net agency-only family history, automated reversal fails closed because it would transfer responsibility to the parent; use a separately reviewed historical correction and do not partially change the remittance or either ledger. Reverse a posted adjustment through its own control. Never delete, overwrite, or silently backdate financial history.
 
 ## Stop And Escalate
 
-- The school, agency, child, family, authorization, service period, claim, or payment does not match.
-- The program says `Setup required` or provider/vendor enrollment is incomplete or expired.
-- The claim is still draft, ready, submitted, denied, void, or otherwise not approved for payment.
-- Attendance or required documents conflict with the billed units.
-- The approved amount exceeds the claim or the payment exceeds the remaining approved amount.
-- A deposit covers multiple claims but the agency has not supplied an exact allocation.
-- A denial or short payment might shift responsibility to the family.
-- The remittance has no unique ACH, check, or agency-portal reference.
-- A portal requires credentials, banking changes, an electronic signature, or an agreement not already approved by the school.
-- Agency rules are unclear, outdated, or conflict with the authorization.
+Stop for any school, agency, child, authorization, service-period, approval, amount, date, method, evidence, or reference mismatch; an unapproved claim; a payment above the approved remainder; missing multi-claim allocation; duplicate reference; closed period; unexplained variance; expired setup; credentials/bank changes; or a proposed change to family responsibility.
 
-<!-- pagebreak -->
+## Activation And Cutover Gates
 
-## School Readiness Gate
+The shared software does not activate a school's business process. A preview build proves compilation only; it does not prove that runtime queries are compatible with an unmigrated production schema. These are separate gates, in this release order:
 
-The software workflow is shared across schools, but each school is ready only after its own evidence is complete:
+1. **Backup and preflight** records a current verified backup/PITR restore point, confirms production-derived rehearsal parity, rechecks source counts and checksums, and freezes agency program/authorization/claim/remittance/ledger changes plus related family, child, and classroom school moves for the short migration window. Unrelated parent, classroom, enrollment, attendance, communication, and payment-method work remains available.
+2. **Database migration** uses the Supabase migration registry as the sole migration writer for this release. Production's historical Supabase and Prisma registries are not equivalent, so `npm run db:migrate`, `prisma migrate deploy`, `prisma migrate resolve`, and manual `_prisma_migrations` edits are prohibited for this cutover unless a separate, reviewed history-reconciliation plan is approved first. Through the authorized Supabase production migration path, apply the exact LF-only files named `20260903190000_agency_receivable_ledger` and `20260903210000_agency_reconciliation_controls` in that order and verify the stored statement bytes against the final reviewed SHA-256 values before deploying application code. The reconciliation migration uses short DDL/enforcement/backfill phases, releases broad `Center` DDL locks before the longest data phase, then holds affected `Center` row fences and school-scoped advisory locks in lexical order until the final phase commits (bounded by the 15-minute statement timeout). Any update to an affected `Center` row, including unrelated school-setting changes, can wait or time out; agency graph writes may reject on the durable fence or wait. Reads and work at other schools remain available. If any phase partially applies or fails, keep the operational freeze and any committed database fence in place and capture the Supabase error, registry state, and exact catalog evidence. Never edit the original migration bytes, never reuse either original name/version for altered SQL or object definitions, never mark a migration successful by hand, and never insert or edit a migration-history row or switch migration writers. Preserve the partial schema and failure evidence, then use a separately reviewed migration with a new identity as a forward repair; rerun the full preflight and catalog/history verification against that reviewed repair before any application promotion. Before promotion, verify exactly one successful Supabase registry row for each authorized migration identity, its exact stored statement hash, all expected objects and invariants, and removal of the temporary database fence only by an explicitly reviewed successful phase.
+3. **Software deployment** puts the exact reviewed, green application commit on the canonical production aliases only after every migration object and invariant is verified. The migrated database includes an inactive-school source compatibility projection: if a baseline claim or remittance source row is written, it creates only the matching exact dedicated-ledger entry and never infers a claim, approval, remittance, or family obligation. That database projection does not make an older application build's legacy family-ledger mirror safe. Keep all agency approval and remittance writes frozen until the reviewed application is validated. A failed release may roll back only to a separately verified compatibility build; if the raw pre-release build must be restored, keep agency financial writes frozen until a forward correction is verified.
+4. **End-to-end validation** checks authenticated access for every affected role, exact-school mutation scope, all-authorized-school reads/exports, tenant isolation, independent review, accounting totals, and unchanged parent/family responsibility before the posting freeze is lifted.
+5. **Per-school operational activation** enables only an explicitly approved, fully configured school; `setup_required` programs remain blocked. If validation fails, roll back the application while leaving the additive schema intact and keep controlled financial posting frozen until a forward correction is verified.
+6. **Staff training** confirms that preparers and independent reviewers can use the evidence, exception, reversal, close, and export controls.
+7. **First-deposit reconciliation approval** requires two authorized users to post and independently verify the pilot school's first real deposit before the workflow is declared live there.
 
-- An authorized director or billing user can access only the intended school.
-- Every participating agency program shows `Ready`.
-- Provider/vendor enrollment, external submission, and payment setup are current.
-- Current child authorizations and agency/family responsibility are verified.
-- Claims have complete evidence and follow the real external submission and decision sequence.
-- Accounting has approved the remittance notice and claim allocation used for posting.
-- A first school-specific remittance has been entered with two-person review and reconciled successfully.
+Before activation, each school also needs current provider/payment evidence, authorized users, configured programs and accounting mappings, verified authorizations, an approved dual-review policy, and a reviewed legacy-family-history report. Real payment posting, responsibility changes, and provider/bank changes remain separate approvals.
 
-## First Remittance Review Record
+## Access Continuity
 
-Retain these details in the school's approved internal reconciliation record:
-
-- School and agency program.
-- Claim number or numbers and covered service period.
-- Deposit or remittance total and external reference.
-- Exact amount allocated to each claim.
-- Claim status, agency outstanding total, and ledger result after posting.
-- Parent-visible responsibility before and after posting.
-- Person who entered the remittance and date reviewed.
-- Second reviewer and date reviewed.
-- Any exception, accountable owner, and required follow-up.
-
-Training, program setup, claim submission, recording an agency payment, changing family responsibility, and external provider/bank changes are separate approval gates. A guide or successful software release does not activate a school's agency process by itself.
+- Platform owners, brand administrators, regional managers, center directors, assistant directors, and billing administrators keep the baseline claim and direct `Record remittance` workflow for schools that have not been activated.
+- After activation, those same exact-school roles may prepare controlled activity. A different authorized accounting-capable user must review it; a preparer cannot approve their own posting.
+- The all-schools workspace retains consolidated reads and school-attributed exports but is read-only. A global user selects one exact authorized school before a financial mutation. Fixed-school operational roles keep their existing authorized school actions. Read-only auditors may inspect authorized records and exports but cannot mutate them. Teachers, parents/guardians, and authorized pickups have no agency-financial mutation access.
+- Activation changes only the selected school's agency accounting workflow. It does not remove access to unrelated billing, enrollment, classroom, parent, payment-method, or reporting work.

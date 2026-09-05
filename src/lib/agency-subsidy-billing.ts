@@ -51,6 +51,35 @@ export function agencyProgramSetupBlockers(input: {
   return blockers;
 }
 
+export function agencyControlledLedgerSetupBlockers(input: {
+  receivableGlCode?: string | null;
+  cashGlCode?: string | null;
+  adjustmentGlCode?: string | null;
+  costCenterCode?: string | null;
+}) {
+  const blockers: string[] = [];
+  if (!clean(input.receivableGlCode)) blockers.push("Add the agency receivable GL code.");
+  if (!clean(input.cashGlCode)) blockers.push("Add the agency cash GL code.");
+  if (!clean(input.adjustmentGlCode)) blockers.push("Add the agency adjustment GL code.");
+  if (!clean(input.costCenterCode)) blockers.push("Add the agency cost center code.");
+  return blockers;
+}
+
+export function agencyReconciliationActivationBlockers(programs: Array<{
+  name?: string | null;
+  status: string;
+  receivableGlCode?: string | null;
+  cashGlCode?: string | null;
+  adjustmentGlCode?: string | null;
+  costCenterCode?: string | null;
+}>) {
+  const activePrograms = programs.filter((program) => program.status === "active");
+  if (!activePrograms.length) return ["Configure at least one active agency program before activating reviewed reconciliation."];
+  return activePrograms.flatMap((program) => agencyControlledLedgerSetupBlockers(program).map((blocker) => (
+    `${clean(program.name) || "Agency program"}: ${blocker}`
+  )));
+}
+
 export function agencyProgramStatus(input: Parameters<typeof agencyProgramSetupBlockers>[0]) {
   return agencyProgramSetupBlockers(input).length ? "setup_required" : "active";
 }
@@ -106,4 +135,18 @@ export function nextRemittanceStatus(input: { claimedCents: number; approvedCent
   const payable = input.approvedCents ?? input.claimedCents;
   if (input.paidCents <= 0) return input.approvedCents === null || input.approvedCents === undefined ? "submitted" : "approved";
   return input.paidCents >= payable ? "paid" : "partially_paid";
+}
+
+export const AGENCY_LEDGER_SOURCE_SYSTEM = "subsidy_agency";
+
+export function agencyClaimApprovalLedgerExternalId(claimId: string) {
+  return `claim-approved:${claimId.trim()}`;
+}
+
+export function agencyRemittanceLedgerExternalId(remittanceId: string) {
+  return `remittance:${remittanceId.trim()}`;
+}
+
+export function agencyRemittanceReversalLedgerExternalId(remittanceId: string) {
+  return `remittance-reversal:${remittanceId.trim()}`;
 }

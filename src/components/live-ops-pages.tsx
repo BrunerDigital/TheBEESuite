@@ -5103,6 +5103,7 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
 }
 
 export type BillingInvoicesPageData = {
+  readOnly: boolean;
   canProcessAutopay: boolean;
   invoiceStatus: DirectorInvoiceStatus;
   initialSelection?: {
@@ -5230,7 +5231,7 @@ export type BillingInvoicesPageData = {
 };
 
 export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData }) {
-  if (data.initialSelection?.workspace === "terminal") {
+  if (data.initialSelection?.workspace === "terminal" && !data.readOnly) {
     return (
       <DirectorPaymentTerminalWorkspace
         families={data.workbench.families}
@@ -5285,12 +5286,24 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
               Family billing accounts, tuition invoices, balances, imported ledger activity, and secure checkout readiness for parent tuition payments.
             </p>
           </div>
-          <Link href="/billing-invoices?workspace=terminal" className={buttonVariants({ size: "lg" })}>
-            <RadioTower data-icon="inline-start" />
-            Open Payment Terminal
-          </Link>
+          {!data.readOnly ? (
+            <Link href="/billing-invoices?workspace=terminal" className={buttonVariants({ size: "lg" })}>
+              <RadioTower data-icon="inline-start" />
+              Open Payment Terminal
+            </Link>
+          ) : null}
         </div>
       </section>
+      {data.readOnly ? (
+        <Card className="glass-panel border-sky-500/30">
+          <CardHeader>
+            <CardTitle as="h2">Read-only billing view</CardTitle>
+            <CardDescription>
+              Review authorized invoices, ledgers, reconciliation reports, and agency exports. Payment, invoice, enrollment, and billing-setup changes are hidden for auditor accounts.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="All invoices" value={data.stats.total} />
         <StatCard label="Current-family open" value={data.stats.open} />
@@ -5410,7 +5423,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                     <TableHead>Family</TableHead>
                     <TableHead>Child</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Action</TableHead>
+                    <TableHead>{data.readOnly ? "Access" : "Action"}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -5420,10 +5433,14 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                       <TableCell>{child.fullName}</TableCell>
                       <TableCell><Badge variant="outline">Needs classroom</Badge></TableCell>
                       <TableCell>
-                        <Link href={enrollmentSetupHref(family, child.id)} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                          <ArrowRight data-icon="inline-start" />
-                          Complete enrollment
-                        </Link>
+                        {data.readOnly ? (
+                          <span className="text-xs text-muted-foreground">Read only</span>
+                        ) : (
+                          <Link href={enrollmentSetupHref(family, child.id)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                            <ArrowRight data-icon="inline-start" />
+                            Complete enrollment
+                          </Link>
+                        )}
                       </TableCell>
                     </TableRow>
                   )))}
@@ -5435,18 +5452,20 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
           )}
         </CardContent>
       </Card>
-      <BillingWorkbench
-        key={`${data.initialSelection?.familyId ?? ""}-${data.initialSelection?.centerId ?? ""}-${data.initialSelection?.childId ?? ""}-${data.initialSelection?.searchQuery ?? ""}`}
-        families={data.workbench.families}
-        centers={data.workbench.centers}
-        products={data.workbench.products}
-        tuitionPlans={data.workbench.tuitionPlans}
-        currentRole={data.workbench.currentRole}
-        initialFamilyId={data.initialSelection?.familyId}
-        initialCenterId={data.initialSelection?.centerId}
-        initialChildId={data.initialSelection?.childId}
-        searchQuery={data.initialSelection?.searchQuery}
-      />
+      {!data.readOnly ? (
+        <BillingWorkbench
+          key={`${data.initialSelection?.familyId ?? ""}-${data.initialSelection?.centerId ?? ""}-${data.initialSelection?.childId ?? ""}-${data.initialSelection?.searchQuery ?? ""}`}
+          families={data.workbench.families}
+          centers={data.workbench.centers}
+          products={data.workbench.products}
+          tuitionPlans={data.workbench.tuitionPlans}
+          currentRole={data.workbench.currentRole}
+          initialFamilyId={data.initialSelection?.familyId}
+          initialCenterId={data.initialSelection?.centerId}
+          initialChildId={data.initialSelection?.childId}
+          searchQuery={data.initialSelection?.searchQuery}
+        />
+      ) : null}
       <Card className="glass-panel" id="invoices">
         <CardHeader className="gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1.5">
@@ -5465,35 +5484,41 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                 <TableHead>Due</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Items</TableHead>
-                <TableHead>Payment Actions</TableHead>
+                {!data.readOnly ? <TableHead>Payment Actions</TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.invoices.map((invoice) => (
                 <TableRow key={invoice.id} className="group">
                   <TableCell className="font-medium">
-                    <Link
-                      href={billingFamilyHref(invoice.billingAccount.family.currentFamilyMatch ?? invoice.billingAccount.family)}
-                      className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {invoice.number}
-                      <ArrowRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
-                    </Link>
+                    {data.readOnly ? invoice.number : (
+                      <Link
+                        href={billingFamilyHref(invoice.billingAccount.family.currentFamilyMatch ?? invoice.billingAccount.family)}
+                        className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {invoice.number}
+                        <ArrowRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+                      </Link>
+                    )}
                   </TableCell>
                   <TableCell>
-                    <Link
-                      href={familyProfileHref(invoice.billingAccount.family)}
-                      className="font-medium underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {invoice.billingAccount.family.name}
-                    </Link>
+                    {data.readOnly ? (
+                      <span className="font-medium">{invoice.billingAccount.family.name}</span>
+                    ) : (
+                      <Link
+                        href={familyProfileHref(invoice.billingAccount.family)}
+                        className="font-medium underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {invoice.billingAccount.family.name}
+                      </Link>
+                    )}
                     <div className="text-xs text-muted-foreground">{invoice.billingAccount.family.billingEmail ?? "No billing email"}</div>
                     {invoice.billingAccount.family.accountCategory === "past" ? (
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <Badge variant="outline" className="border-amber-500/40 text-amber-800 dark:text-amber-200">
                           Past family — historical account
                         </Badge>
-                        {invoice.billingAccount.family.currentFamilyMatch ? (
+                        {invoice.billingAccount.family.currentFamilyMatch && !data.readOnly ? (
                           <Link
                             href={billingFamilyHref(invoice.billingAccount.family.currentFamilyMatch)}
                             className="text-xs font-medium text-primary underline underline-offset-4"
@@ -5520,15 +5545,17 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                     )}
                   </TableCell>
                   <TableCell>{invoice._count.items}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-2">
-                      <Link href={familyProfileHref(invoice.billingAccount.family)} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                        <ArrowRight data-icon="inline-start" />
-                        Family
-                      </Link>
-                      <InvoiceStoredPaymentButton invoice={invoice} />
-                    </div>
-                  </TableCell>
+                  {!data.readOnly ? (
+                    <TableCell>
+                      <div className="flex flex-wrap gap-2">
+                        <Link href={familyProfileHref(invoice.billingAccount.family)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                          <ArrowRight data-icon="inline-start" />
+                          Family
+                        </Link>
+                        <InvoiceStoredPaymentButton invoice={invoice} />
+                      </div>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               ))}
             </TableBody>
@@ -5545,6 +5572,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         families={ledgerFamilyOptions}
         schools={data.receiptSchools}
         initialFamilyId={data.initialSelection?.familyId}
+        readOnly={data.readOnly}
       />
     </div>
   );

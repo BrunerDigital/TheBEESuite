@@ -10,8 +10,10 @@ type AuditInput = {
   metadata?: Prisma.InputJsonObject;
 };
 
-export async function writeAuditLog(user: CurrentUser, input: AuditInput) {
-  await prisma.auditLog.create({
+type AuditClient = Pick<Prisma.TransactionClient, "auditLog" | "center">;
+
+export async function writeAuditLog(user: CurrentUser, input: AuditInput, client: AuditClient = prisma) {
+  await client.auditLog.create({
     data: {
       tenantId: user.tenantId,
       centerId: input.centerId || null,
@@ -23,7 +25,7 @@ export async function writeAuditLog(user: CurrentUser, input: AuditInput) {
     },
   });
   if (input.centerId && input.action.startsWith("billing.")) {
-    await prisma.center.update({ where: { id: input.centerId }, data: { updatedAt: new Date() } });
+    await client.center.update({ where: { id: input.centerId }, data: { updatedAt: new Date() } });
   }
 }
 

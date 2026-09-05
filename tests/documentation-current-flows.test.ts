@@ -24,7 +24,7 @@ const currentGuides = [
 test("current guides carry an approved revision and exclude superseded workflow copy", () => {
   for (const path of currentGuides) {
     const content = readFileSync(path, "utf8");
-    assert.match(content, /(?:August (?:11|24)|September 2), 2026/, path);
+    assert.match(content, /(?:August (?:11|24)|September (?:2|3)), 2026/, path);
     assert.doesNotMatch(content, /creates? (?:a |the )?Friday invoice/i, path);
     assert.doesNotMatch(content, /bank payment is the preferred payment method/i, path);
     assert.doesNotMatch(content, /create your password.*setup link/i, path);
@@ -72,7 +72,9 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
   assert.match(resources, /A blank field is not proof that none exists/);
   assert.match(resources, /keep agency responsibility separate from the parent's family balance/);
   assert.match(resources, /id: "agency-payment-reconciliation"/);
-  assert.match(resources, /Record remittance on an approved or partially paid claim/);
+  assert.match(resources, /Before exact-school activation, choose Record remittance/);
+  assert.match(resources, /Only after release and exact-school activation, use Prepare deposit batch or Prepare remittance/);
+  assert.match(resources, /Before activation, reverse an incorrect direct remittance/);
   assert.match(resources, /object-contain/);
   assert.match(resources, /Tap a screen to open the full view/);
   assert.doesNotMatch(resources, /Section link/);
@@ -91,11 +93,25 @@ test("agency payment SOP has a stable public route and evidence-first reconcilia
   assert.match(workspace, /Open SOP/);
   assert.match(guide, /Agency Payment And Reconciliation SOP/);
   assert.match(guide, /Do not use a Stripe payout or a bank deposit by itself as remittance proof/);
-  assert.match(guide, /Review complete - save/);
-  assert.match(guide, /parent-visible family responsibility stays unchanged/);
+  assert.match(guide, /different billing administrator or accounting reviewer/);
+  assert.match(guide, /unchanged parent-visible responsibility/);
+  assert.match(guide, /dedicated agency ledger/);
+  assert.match(guide, /A preview build does not prove compatibility with an unmigrated production database/);
+  assert.match(guide, /continue the baseline direct/);
+  assert.match(guide, /Before activation: baseline Record remittance/);
+  assert.match(guide, /Enter the exact amount, agency paid date, payment method, and unique ACH, check, or portal reference/);
+  assert.match(guide, /choose Save remittance once/);
+  assert.match(guide, /Refresh and verify the claim paid amount and status, the recorded remittance and reference/);
+  assert.match(guide, /Reverse remittance and a specific reason/);
+  assert.match(guide, /After release and exact-school activation: expanded reconciliation/);
   assert.match(sop, /claim-by-claim allocation/);
-  assert.match(sop, /Do not post a second manual family payment/);
-  assert.match(sop, /Reverse an incorrect remittance/);
+  assert.match(sop, /Do not add a duplicate remittance or family payment/);
+  assert.match(sop, /Export claims, deposits, ledger activity, and reconciliation/);
+  assert.match(sop, /Reverse the whole deposit batch/);
+  assert.match(sop, /Baseline direct `Record remittance` remains available/);
+  assert.match(sop, /two distinct authorized, active users/);
+  assert.match(sop, /Close preflight never reconstructs/);
+  assert.match(sop, /Teachers, parents\/guardians, and authorized pickups have no agency-financial mutation access/);
 });
 
 test("director clean-start guide has a stable public route with steps, FAQs, and stop conditions", () => {
@@ -226,7 +242,7 @@ test("role SOPs cover the current August UI and workflow baseline", () => {
   assert.match(billing, /Void invoice/i);
   assert.match(billing, /school absorbs Stripe processing costs/i);
   assert.match(billing, /agency-payment-reconciliation/);
-  assert.match(billing, /Do not use the family cash\/check payment action for agency money/);
+  assert.match(billing, /never guess an allocation or use the family cash\/check action/);
   assert.match(parent, /current password is preserved/i);
   assert.match(teacher, /https:\/\/thebeesuite\.io\/teachers/);
   assert.match(executive, /school filter/);

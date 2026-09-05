@@ -115,6 +115,22 @@ type AgencyPeriodExpectedAggregateRow = {
   missingLedgerEventCount: bigint;
 };
 
+type AgencyReconciliationExportAggregateRow = {
+  agencyLedgerAccountId: string;
+  mappingCategory: string;
+  glCodeSnapshot: string | null;
+  costCenterCodeSnapshot: string | null;
+  snapshotStatus: string;
+  approvedCents: bigint;
+  remittedCents: bigint;
+  unappliedCents: bigint;
+  adjustmentCents: bigint;
+  ledgerBalanceCents: bigint;
+  openBatchExceptionCount: bigint;
+  missingImmutableEventCount: bigint;
+  unsupportedLedgerEntryCount: bigint;
+};
+
 type RecoveredAgencyLedgerEventRow = {
   agencyLedgerAccountId: string;
 };
@@ -869,13 +885,13 @@ async function recoverMissingAgencyLedgerCutoverEvents(
           AND expected."batchExternalReference" = expected."externalReference"
           AND NULLIF(BTRIM(expected."externalReference"), '') IS NOT NULL
           AND NULLIF(BTRIM(expected."enteredById"), '') IS NOT NULL
-          AND NULLIF(BTRIM(expected."cashGlCodeSnapshot"), '') IS NOT NULL
-          AND NULLIF(BTRIM(expected."costCenterCodeSnapshot"), '') IS NOT NULL
           AND expected."expectedEffectiveAt" IS NOT NULL
           AND DATE_TRUNC('day', expected."expectedEffectiveAt") >= DATE_TRUNC('day', expected."paidAt")
           AND (
             (
-              expected."batchReviewedAt" IS NOT NULL
+              NULLIF(BTRIM(expected."cashGlCodeSnapshot"), '') IS NOT NULL
+              AND NULLIF(BTRIM(expected."costCenterCodeSnapshot"), '') IS NOT NULL
+              AND expected."batchReviewedAt" IS NOT NULL
               AND NULLIF(BTRIM(expected."batchReviewedById"), '') IS NOT NULL
               AND expected."batchReviewedById" <> expected."batchEnteredById"
               AND expected."allocationReviewedAt" IS NOT NULL
@@ -911,6 +927,11 @@ async function recoverMissingAgencyLedgerCutoverEvents(
                   AND expected."batchIdempotencyKey" = 'legacy:adoption:' || SUBSTRING(expected."batchId" FROM LENGTH('agency-remittance-batch:') + 1))
               )
               AND expected."allocationRequestedById" = expected."enteredById"
+              -- Migration/adoption rows retain the exact event-time snapshot,
+              -- including NULL when the predecessor receipt did not know a
+              -- mapping. Empty strings are malformed rather than unknown.
+              AND (expected."cashGlCodeSnapshot" IS NULL OR NULLIF(BTRIM(expected."cashGlCodeSnapshot"), '') IS NOT NULL)
+              AND (expected."costCenterCodeSnapshot" IS NULL OR NULLIF(BTRIM(expected."costCenterCodeSnapshot"), '') IS NOT NULL)
               AND expected."allocationFingerprint" = MD5(expected."batchId" || ':' || expected."claimId" || ':' || expected."amountCents"::text)
               AND expected."batchId" IN (expected."expectedLegacyBatchId", expected."expectedLegacyActiveBatchId")
               AND expected."batchFingerprint" = MD5(
@@ -1030,6 +1051,9 @@ async function recoverMissingAgencyLedgerCutoverEvents(
       AND batch."agencyProgramId" = claim."agencyProgramId"
       AND batch."paidAt" = remittance."paidAt"
       AND batch."externalReference" = remittance."externalReference"
+      -- Recovery is allowed only with complete persisted snapshot evidence.
+      -- An intact legacy receipt may honestly retain NULL and pass the exact
+      -- checks below, but a missing unknown snapshot is never synthesized.
       AND NULLIF(BTRIM(batch."cashGlCodeSnapshot"), '') IS NOT NULL
       AND NULLIF(BTRIM(batch."costCenterCodeSnapshot"), '') IS NOT NULL
     WHERE claim."centerId" = ${centerId}
@@ -1170,8 +1194,8 @@ async function recoverMissingAgencyLedgerCutoverEvents(
             AND entry."amountCents" = -expected."amountCents"
             AND entry."effectiveAt" = expected."expectedEffectiveAt"
             AND entry."externalReference" = expected."externalReference"
-            AND entry."glCodeSnapshot" = expected."cashGlCodeSnapshot"
-            AND entry."costCenterCodeSnapshot" = expected."costCenterCodeSnapshot"
+            AND entry."glCodeSnapshot" IS NOT DISTINCT FROM expected."cashGlCodeSnapshot"
+            AND entry."costCenterCodeSnapshot" IS NOT DISTINCT FROM expected."costCenterCodeSnapshot"
             AND entry."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
             AND entry."externalId" = 'remittance:' || expected."remittanceId"
             AND account."centerId" = expected."centerId"
@@ -1943,7 +1967,7 @@ function exportAgencyLedgerCsv(centerIds: string[]) {
 
 async function exportAgencyReconciliationCsv(centerIds: string[]) {
   return agencyCsvSnapshotResponse("agency-reconciliation.csv", async (tx, enqueue) => {
-    await enqueue(csvRow(["School ID", "School", "Agency", "Program", "A/R GL", "Cash GL", "Adjustment GL", "Cost center", "Approved", "Remitted", "Unapplied cash", "Adjustments", "Expected balance", "Ledger balance", "Variance", "Open batch exceptions"]));
+    await enqueue(csvRow(["School ID", "School", "Agency", "Program", "A/R GL", "Cash GL", "Adjustment GL", "Cost center", "Approved", "Remitted", "Unapplied cash", "Adjustments", "Expected balance", "Ledger balance", "Variance", "Open batch exceptions", "Mapping category", "Snapshot GL", "Snapshot cost center", "Mapping basis", "Snapshot status"]));
     let cursorId: string | undefined;
     do {
       const accountRows = await tx.agencyLedgerAccount.findMany({
@@ -1951,58 +1975,329 @@ async function exportAgencyReconciliationCsv(centerIds: string[]) {
         orderBy: [{ centerId: "asc" }, { agencyProgram: { name: "asc" } }, { agencyProgramId: "asc" }, { id: "asc" }],
         take: 250,
         ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
-        include: { center: { select: { id: true, name: true } }, agencyProgram: { select: { id: true, centerId: true, name: true, programName: true, receivableGlCode: true, cashGlCode: true, adjustmentGlCode: true, costCenterCode: true } } },
+        include: { center: { select: { id: true, name: true } }, agencyProgram: { select: { id: true, centerId: true, name: true, programName: true } } },
       });
       const accounts = accountRows.filter((account) => account.center.id === account.centerId && exactAgencyProgramScope(account));
-      const agencyProgramIds = [...new Set(accounts.map((account) => account.agencyProgramId))];
-      if (agencyProgramIds.length) {
-        const [claimAggregates, batchAggregates, adjustmentAggregates, openBatchAggregates] = await Promise.all([
-          agencyReconciliationClaimAggregates(tx, centerIds, new Date(), agencyProgramIds),
-          tx.agencyRemittanceBatch.groupBy({
-            by: ["agencyProgramId"],
-            where: { centerId: { in: centerIds }, agencyProgramId: { in: agencyProgramIds }, status: { in: ACTIVE_REMITTANCE_BATCH_STATUSES }, reviewedAt: { not: null }, reversedAt: null },
-            _sum: { unappliedCents: true },
-          }),
-          tx.agencyLedgerAdjustment.groupBy({
-            by: ["agencyProgramId"],
-            where: { centerId: { in: centerIds }, agencyProgramId: { in: agencyProgramIds }, status: "posted" },
-            _sum: { amountCents: true },
-          }),
-          tx.agencyRemittanceBatch.groupBy({
-            by: ["agencyProgramId"],
-            where: { centerId: { in: centerIds }, agencyProgramId: { in: agencyProgramIds }, status: { in: [...OPEN_REMITTANCE_BATCH_STATUSES] }, reversedAt: null },
-            _count: { _all: true },
-          }),
+      const accountIds = accounts.map((account) => account.id);
+      if (accountIds.length) {
+        // Reconciliation classifications come only from immutable event-time
+        // snapshots. Current AgencyProgram mappings are deliberately absent:
+        // changing a program later must not relabel historical accounting.
+        const snapshotAggregates = await tx.$queryRaw<AgencyReconciliationExportAggregateRow[]>(Prisma.sql`
+          WITH scoped_accounts AS (
+            SELECT account.id AS "agencyLedgerAccountId",
+              account."centerId",
+              account."agencyProgramId",
+              account."balanceCents"::bigint AS "storedBalanceCents"
+            FROM "AgencyLedgerAccount" account
+            WHERE account.id IN (${Prisma.join(accountIds)})
+          ), expected_claims AS (
+            SELECT account."agencyLedgerAccountId",
+              'receivable'::text AS "mappingCategory",
+              CASE WHEN approval."glCodeSnapshot" IS NULL OR BTRIM(approval."glCodeSnapshot") = '' THEN NULL ELSE approval."glCodeSnapshot" END AS "glCodeSnapshot",
+              CASE WHEN approval."costCenterCodeSnapshot" IS NULL OR BTRIM(approval."costCenterCodeSnapshot") = '' THEN NULL ELSE approval."costCenterCodeSnapshot" END AS "costCenterCodeSnapshot",
+              CASE
+                WHEN approval.id IS NULL THEN 'MISSING_IMMUTABLE_EVENT'
+                WHEN approval."glCodeSnapshot" IS NULL OR BTRIM(approval."glCodeSnapshot") = ''
+                  OR approval."costCenterCodeSnapshot" IS NULL OR BTRIM(approval."costCenterCodeSnapshot") = ''
+                THEN 'UNKNOWN_AT_EVENT_TIME'
+                ELSE 'COMPLETE'
+              END::text AS "snapshotStatus",
+              claim."approvedCents"::bigint AS "approvedCents",
+              0::bigint AS "remittedCents",
+              0::bigint AS "unappliedCents",
+              0::bigint AS "adjustmentCents",
+              0::bigint AS "ledgerBalanceCents",
+              0::bigint AS "openBatchExceptionCount",
+              CASE WHEN approval.id IS NULL THEN 1::bigint ELSE 0::bigint END AS "missingImmutableEventCount",
+              0::bigint AS "unsupportedLedgerEntryCount"
+            FROM "SubsidyClaim" claim
+            JOIN scoped_accounts account
+              ON account."centerId" = claim."centerId"
+             AND account."agencyProgramId" = claim."agencyProgramId"
+            LEFT JOIN "AgencyLedgerEntry" approval
+              ON approval."agencyLedgerAccountId" = account."agencyLedgerAccountId"
+             AND approval."claimId" = claim.id
+             AND approval.type = 'claim_approved'
+             AND approval."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+             AND approval."externalId" = 'claim-approved:' || claim.id
+            WHERE claim."approvedCents" > 0
+              AND claim.status IN ('approved', 'partially_paid', 'paid')
+          ), expected_remittances AS (
+            SELECT account."agencyLedgerAccountId",
+              'cash'::text AS "mappingCategory",
+              CASE WHEN receipt."glCodeSnapshot" IS NULL OR BTRIM(receipt."glCodeSnapshot") = '' THEN NULL ELSE receipt."glCodeSnapshot" END AS "glCodeSnapshot",
+              CASE WHEN receipt."costCenterCodeSnapshot" IS NULL OR BTRIM(receipt."costCenterCodeSnapshot") = '' THEN NULL ELSE receipt."costCenterCodeSnapshot" END AS "costCenterCodeSnapshot",
+              CASE
+                WHEN receipt.id IS NULL THEN 'MISSING_IMMUTABLE_EVENT'
+                WHEN receipt."glCodeSnapshot" IS NULL OR BTRIM(receipt."glCodeSnapshot") = ''
+                  OR receipt."costCenterCodeSnapshot" IS NULL OR BTRIM(receipt."costCenterCodeSnapshot") = ''
+                THEN 'UNKNOWN_AT_EVENT_TIME'
+                ELSE 'COMPLETE'
+              END::text AS "snapshotStatus",
+              0::bigint AS "approvedCents",
+              remittance."amountCents"::bigint AS "remittedCents",
+              0::bigint AS "unappliedCents",
+              0::bigint AS "adjustmentCents",
+              0::bigint AS "ledgerBalanceCents",
+              0::bigint AS "openBatchExceptionCount",
+              CASE WHEN receipt.id IS NULL THEN 1::bigint ELSE 0::bigint END AS "missingImmutableEventCount",
+              0::bigint AS "unsupportedLedgerEntryCount"
+            FROM "SubsidyRemittance" remittance
+            JOIN "SubsidyClaim" claim ON claim.id = remittance."claimId"
+            JOIN scoped_accounts account
+              ON account."centerId" = claim."centerId"
+             AND account."agencyProgramId" = claim."agencyProgramId"
+            LEFT JOIN "AgencyLedgerEntry" receipt
+              ON receipt."agencyLedgerAccountId" = account."agencyLedgerAccountId"
+             AND receipt."claimId" = claim.id
+             AND receipt."remittanceId" = remittance.id
+             AND receipt.type = 'remittance_received'
+             AND receipt."sourceSystem" = ${AGENCY_LEDGER_SOURCE_SYSTEM}
+             AND receipt."externalId" = 'remittance:' || remittance.id
+            WHERE remittance."reversedAt" IS NULL
+              AND claim."approvedCents" > 0
+              AND claim.status IN ('approved', 'partially_paid', 'paid')
+          ), expected_unapplied AS (
+            SELECT account."agencyLedgerAccountId",
+              'cash'::text AS "mappingCategory",
+              CASE WHEN batch."cashGlCodeSnapshot" IS NULL OR BTRIM(batch."cashGlCodeSnapshot") = '' THEN NULL ELSE batch."cashGlCodeSnapshot" END AS "glCodeSnapshot",
+              CASE WHEN batch."costCenterCodeSnapshot" IS NULL OR BTRIM(batch."costCenterCodeSnapshot") = '' THEN NULL ELSE batch."costCenterCodeSnapshot" END AS "costCenterCodeSnapshot",
+              CASE WHEN batch."cashGlCodeSnapshot" IS NULL OR BTRIM(batch."cashGlCodeSnapshot") = ''
+                OR batch."costCenterCodeSnapshot" IS NULL OR BTRIM(batch."costCenterCodeSnapshot") = ''
+                THEN 'UNKNOWN_AT_EVENT_TIME' ELSE 'COMPLETE' END::text AS "snapshotStatus",
+              0::bigint AS "approvedCents",
+              0::bigint AS "remittedCents",
+              batch."unappliedCents"::bigint AS "unappliedCents",
+              0::bigint AS "adjustmentCents",
+              0::bigint AS "ledgerBalanceCents",
+              0::bigint AS "openBatchExceptionCount",
+              0::bigint AS "missingImmutableEventCount",
+              0::bigint AS "unsupportedLedgerEntryCount"
+            FROM "AgencyRemittanceBatch" batch
+            JOIN scoped_accounts account
+              ON account."centerId" = batch."centerId"
+             AND account."agencyProgramId" = batch."agencyProgramId"
+            WHERE batch.status IN (${Prisma.join(ACTIVE_REMITTANCE_BATCH_STATUSES)})
+              AND batch."reviewedAt" IS NOT NULL
+              AND batch."reversedAt" IS NULL
+              AND batch."unappliedCents" <> 0
+          ), expected_adjustments AS (
+            SELECT account."agencyLedgerAccountId",
+              'adjustment'::text AS "mappingCategory",
+              CASE WHEN adjustment."glCodeSnapshot" IS NULL OR BTRIM(adjustment."glCodeSnapshot") = '' THEN NULL ELSE adjustment."glCodeSnapshot" END AS "glCodeSnapshot",
+              CASE WHEN adjustment."costCenterCodeSnapshot" IS NULL OR BTRIM(adjustment."costCenterCodeSnapshot") = '' THEN NULL ELSE adjustment."costCenterCodeSnapshot" END AS "costCenterCodeSnapshot",
+              CASE WHEN adjustment."glCodeSnapshot" IS NULL OR BTRIM(adjustment."glCodeSnapshot") = ''
+                OR adjustment."costCenterCodeSnapshot" IS NULL OR BTRIM(adjustment."costCenterCodeSnapshot") = ''
+                THEN 'UNKNOWN_AT_EVENT_TIME' ELSE 'COMPLETE' END::text AS "snapshotStatus",
+              0::bigint AS "approvedCents",
+              0::bigint AS "remittedCents",
+              0::bigint AS "unappliedCents",
+              adjustment."amountCents"::bigint AS "adjustmentCents",
+              0::bigint AS "ledgerBalanceCents",
+              0::bigint AS "openBatchExceptionCount",
+              0::bigint AS "missingImmutableEventCount",
+              0::bigint AS "unsupportedLedgerEntryCount"
+            FROM "AgencyLedgerAdjustment" adjustment
+            JOIN scoped_accounts account
+              ON account."agencyLedgerAccountId" = adjustment."ledgerAccountId"
+             AND account."centerId" = adjustment."centerId"
+             AND account."agencyProgramId" = adjustment."agencyProgramId"
+            WHERE adjustment.status = 'posted'
+          ), open_batches AS (
+            SELECT account."agencyLedgerAccountId",
+              'cash'::text AS "mappingCategory",
+              CASE WHEN batch."cashGlCodeSnapshot" IS NULL OR BTRIM(batch."cashGlCodeSnapshot") = '' THEN NULL ELSE batch."cashGlCodeSnapshot" END AS "glCodeSnapshot",
+              CASE WHEN batch."costCenterCodeSnapshot" IS NULL OR BTRIM(batch."costCenterCodeSnapshot") = '' THEN NULL ELSE batch."costCenterCodeSnapshot" END AS "costCenterCodeSnapshot",
+              CASE WHEN batch."cashGlCodeSnapshot" IS NULL OR BTRIM(batch."cashGlCodeSnapshot") = ''
+                OR batch."costCenterCodeSnapshot" IS NULL OR BTRIM(batch."costCenterCodeSnapshot") = ''
+                THEN 'UNKNOWN_AT_EVENT_TIME' ELSE 'COMPLETE' END::text AS "snapshotStatus",
+              0::bigint AS "approvedCents",
+              0::bigint AS "remittedCents",
+              0::bigint AS "unappliedCents",
+              0::bigint AS "adjustmentCents",
+              0::bigint AS "ledgerBalanceCents",
+              1::bigint AS "openBatchExceptionCount",
+              0::bigint AS "missingImmutableEventCount",
+              0::bigint AS "unsupportedLedgerEntryCount"
+            FROM "AgencyRemittanceBatch" batch
+            JOIN scoped_accounts account
+              ON account."centerId" = batch."centerId"
+             AND account."agencyProgramId" = batch."agencyProgramId"
+            WHERE batch.status IN (${Prisma.join([...OPEN_REMITTANCE_BATCH_STATUSES])})
+              AND batch."reversedAt" IS NULL
+          ), ledger_events AS (
+            SELECT account."agencyLedgerAccountId",
+              CASE
+                WHEN entry.type = 'claim_approved' THEN 'receivable'
+                WHEN entry.type IN ('remittance_received', 'remittance_reversal', 'unapplied_cash', 'unapplied_cash_allocation', 'unapplied_cash_reversal') THEN 'cash'
+                WHEN entry.type LIKE 'adjustment_%' THEN 'adjustment'
+                ELSE 'unsupported'
+              END::text AS "mappingCategory",
+              CASE WHEN entry."glCodeSnapshot" IS NULL OR BTRIM(entry."glCodeSnapshot") = '' THEN NULL ELSE entry."glCodeSnapshot" END AS "glCodeSnapshot",
+              CASE WHEN entry."costCenterCodeSnapshot" IS NULL OR BTRIM(entry."costCenterCodeSnapshot") = '' THEN NULL ELSE entry."costCenterCodeSnapshot" END AS "costCenterCodeSnapshot",
+              CASE
+                WHEN entry.type <> 'claim_approved'
+                  AND entry.type NOT IN ('remittance_received', 'remittance_reversal', 'unapplied_cash', 'unapplied_cash_allocation', 'unapplied_cash_reversal')
+                  AND entry.type NOT LIKE 'adjustment_%'
+                THEN 'UNSUPPORTED_LEDGER_TYPE'
+                WHEN entry."glCodeSnapshot" IS NULL OR BTRIM(entry."glCodeSnapshot") = ''
+                  OR entry."costCenterCodeSnapshot" IS NULL OR BTRIM(entry."costCenterCodeSnapshot") = ''
+                THEN 'UNKNOWN_AT_EVENT_TIME'
+                ELSE 'COMPLETE'
+              END::text AS "snapshotStatus",
+              0::bigint AS "approvedCents",
+              0::bigint AS "remittedCents",
+              0::bigint AS "unappliedCents",
+              0::bigint AS "adjustmentCents",
+              entry."amountCents"::bigint AS "ledgerBalanceCents",
+              0::bigint AS "openBatchExceptionCount",
+              0::bigint AS "missingImmutableEventCount",
+              CASE
+                WHEN entry.type = 'claim_approved'
+                  OR entry.type IN ('remittance_received', 'remittance_reversal', 'unapplied_cash', 'unapplied_cash_allocation', 'unapplied_cash_reversal')
+                  OR entry.type LIKE 'adjustment_%'
+                THEN 0::bigint ELSE 1::bigint
+              END AS "unsupportedLedgerEntryCount"
+            FROM "AgencyLedgerEntry" entry
+            JOIN scoped_accounts account ON account."agencyLedgerAccountId" = entry."agencyLedgerAccountId"
+          ), financial_rows AS (
+            SELECT * FROM expected_claims
+            UNION ALL SELECT * FROM expected_remittances
+            UNION ALL SELECT * FROM expected_unapplied
+            UNION ALL SELECT * FROM expected_adjustments
+            UNION ALL SELECT * FROM open_batches
+            UNION ALL SELECT * FROM ledger_events
+          ), control_differences AS (
+            SELECT account."agencyLedgerAccountId",
+              'account_control_difference'::text AS "mappingCategory",
+              NULL::text AS "glCodeSnapshot",
+              NULL::text AS "costCenterCodeSnapshot",
+              'ACCOUNT_CONTROL_DIFFERENCE'::text AS "snapshotStatus",
+              0::bigint AS "approvedCents",
+              0::bigint AS "remittedCents",
+              0::bigint AS "unappliedCents",
+              0::bigint AS "adjustmentCents",
+              account."storedBalanceCents" - COALESCE(SUM(entry."amountCents"::bigint), 0::bigint) AS "ledgerBalanceCents",
+              0::bigint AS "openBatchExceptionCount",
+              1::bigint AS "missingImmutableEventCount",
+              0::bigint AS "unsupportedLedgerEntryCount"
+            FROM scoped_accounts account
+            LEFT JOIN "AgencyLedgerEntry" entry ON entry."agencyLedgerAccountId" = account."agencyLedgerAccountId"
+            GROUP BY account."agencyLedgerAccountId", account."storedBalanceCents"
+            HAVING account."storedBalanceCents" <> COALESCE(SUM(entry."amountCents"::bigint), 0::bigint)
+          ), no_history AS (
+            SELECT account."agencyLedgerAccountId",
+              'no_history'::text AS "mappingCategory",
+              NULL::text AS "glCodeSnapshot",
+              NULL::text AS "costCenterCodeSnapshot",
+              'NO_FINANCIAL_HISTORY'::text AS "snapshotStatus",
+              0::bigint AS "approvedCents",
+              0::bigint AS "remittedCents",
+              0::bigint AS "unappliedCents",
+              0::bigint AS "adjustmentCents",
+              0::bigint AS "ledgerBalanceCents",
+              0::bigint AS "openBatchExceptionCount",
+              0::bigint AS "missingImmutableEventCount",
+              0::bigint AS "unsupportedLedgerEntryCount"
+            FROM scoped_accounts account
+            WHERE account."storedBalanceCents" = 0
+              AND NOT EXISTS (
+              SELECT 1 FROM financial_rows financial_row
+              WHERE financial_row."agencyLedgerAccountId" = account."agencyLedgerAccountId"
+            )
+          ), all_rows AS (
+            SELECT * FROM financial_rows
+            UNION ALL SELECT * FROM control_differences
+            UNION ALL SELECT * FROM no_history
+          )
+          SELECT "agencyLedgerAccountId",
+            "mappingCategory",
+            "glCodeSnapshot",
+            "costCenterCodeSnapshot",
+            "snapshotStatus",
+            COALESCE(SUM("approvedCents"), 0)::bigint AS "approvedCents",
+            COALESCE(SUM("remittedCents"), 0)::bigint AS "remittedCents",
+            COALESCE(SUM("unappliedCents"), 0)::bigint AS "unappliedCents",
+            COALESCE(SUM("adjustmentCents"), 0)::bigint AS "adjustmentCents",
+            COALESCE(SUM("ledgerBalanceCents"), 0)::bigint AS "ledgerBalanceCents",
+            COALESCE(SUM("openBatchExceptionCount"), 0)::bigint AS "openBatchExceptionCount",
+            COALESCE(SUM("missingImmutableEventCount"), 0)::bigint AS "missingImmutableEventCount",
+            COALESCE(SUM("unsupportedLedgerEntryCount"), 0)::bigint AS "unsupportedLedgerEntryCount"
+          FROM all_rows
+          GROUP BY "agencyLedgerAccountId", "mappingCategory", "glCodeSnapshot", "costCenterCodeSnapshot", "snapshotStatus"
+        `);
+        const categoryOrder = new Map([
+          ["receivable", 0],
+          ["cash", 1],
+          ["adjustment", 2],
+          ["unsupported", 3],
+          ["account_control_difference", 4],
+          ["no_history", 5],
         ]);
-        const claimsByProgram = new Map(claimAggregates.map((row) => [row.agencyProgramId, row]));
-        const unappliedByProgram = new Map(batchAggregates.map((row) => [row.agencyProgramId, row._sum.unappliedCents ?? 0]));
-        const adjustmentsByProgram = new Map(adjustmentAggregates.map((row) => [row.agencyProgramId, row._sum.amountCents ?? 0]));
-        const openBatchesByProgram = new Map(openBatchAggregates.map((row) => [row.agencyProgramId, row._count._all]));
+        const compareSnapshotText = (left: string | null, right: string | null) => {
+          const leftText = left ?? "";
+          const rightText = right ?? "";
+          return leftText === rightText ? 0 : leftText < rightText ? -1 : 1;
+        };
+        const aggregatesByAccount = new Map<string, AgencyReconciliationExportAggregateRow[]>();
+        for (const aggregate of snapshotAggregates) {
+          const rows = aggregatesByAccount.get(aggregate.agencyLedgerAccountId) ?? [];
+          rows.push(aggregate);
+          aggregatesByAccount.set(aggregate.agencyLedgerAccountId, rows);
+        }
         for (const account of accounts) {
-          const claimTotals = claimsByProgram.get(account.agencyProgramId);
-          const approvedCents = Number(claimTotals?.approvedCents ?? 0);
-          const remittedCents = Number(claimTotals?.remittedCents ?? 0);
-          const unappliedCents = unappliedByProgram.get(account.agencyProgramId) ?? 0;
-          const adjustmentCents = adjustmentsByProgram.get(account.agencyProgramId) ?? 0;
-          const expectedBalanceCents = approvedCents - remittedCents - unappliedCents + adjustmentCents;
-          await enqueue(csvRow([
-            account.centerId,
-            account.center.name,
-            account.agencyProgram.name,
-            account.agencyProgram.programName ?? "",
-            account.agencyProgram.receivableGlCode ?? "",
-            account.agencyProgram.cashGlCode ?? "",
-            account.agencyProgram.adjustmentGlCode ?? "",
-            account.agencyProgram.costCenterCode ?? "",
-            approvedCents / 100,
-            remittedCents / 100,
-            unappliedCents / 100,
-            adjustmentCents / 100,
-            expectedBalanceCents / 100,
-            account.balanceCents / 100,
-            (account.balanceCents - expectedBalanceCents) / 100,
-            openBatchesByProgram.get(account.agencyProgramId) ?? 0,
-          ]), 1);
+          const aggregates = (aggregatesByAccount.get(account.id) ?? []).sort((left, right) => {
+            const categoryDifference = (categoryOrder.get(left.mappingCategory) ?? 99) - (categoryOrder.get(right.mappingCategory) ?? 99);
+            if (categoryDifference) return categoryDifference;
+            const glDifference = compareSnapshotText(left.glCodeSnapshot, right.glCodeSnapshot);
+            if (glDifference) return glDifference;
+            const costCenterDifference = compareSnapshotText(left.costCenterCodeSnapshot, right.costCenterCodeSnapshot);
+            if (costCenterDifference) return costCenterDifference;
+            return left.snapshotStatus.localeCompare(right.snapshotStatus);
+          });
+          for (const aggregate of aggregates) {
+            const approvedCents = Number(aggregate.approvedCents);
+            const remittedCents = Number(aggregate.remittedCents);
+            const unappliedCents = Number(aggregate.unappliedCents);
+            const adjustmentCents = Number(aggregate.adjustmentCents);
+            const ledgerBalanceCents = Number(aggregate.ledgerBalanceCents);
+            const expectedBalanceCents = approvedCents - remittedCents - unappliedCents + adjustmentCents;
+            const hasSnapshot = aggregate.mappingCategory !== "no_history" && aggregate.mappingCategory !== "account_control_difference";
+            const absentSnapshotLabel = aggregate.snapshotStatus === "MISSING_IMMUTABLE_EVENT" ? "MISSING_IMMUTABLE_EVENT" : "UNKNOWN_AT_EVENT_TIME";
+            const snapshotGl = hasSnapshot ? aggregate.glCodeSnapshot ?? absentSnapshotLabel : "";
+            const snapshotCostCenter = hasSnapshot ? aggregate.costCenterCodeSnapshot ?? absentSnapshotLabel : "";
+            const mappingBasis = aggregate.mappingCategory === "no_history"
+              ? "no_financial_history"
+              : aggregate.mappingCategory === "account_control_difference"
+                ? "stored_account_balance_control"
+                : aggregate.snapshotStatus === "MISSING_IMMUTABLE_EVENT"
+                  ? "missing_immutable_event"
+                  : "immutable_event_time_snapshot";
+            await enqueue(csvRow([
+              account.centerId,
+              account.center.name,
+              account.agencyProgram.name,
+              account.agencyProgram.programName ?? "",
+              aggregate.mappingCategory === "receivable" ? snapshotGl : "",
+              aggregate.mappingCategory === "cash" ? snapshotGl : "",
+              aggregate.mappingCategory === "adjustment" ? snapshotGl : "",
+              snapshotCostCenter,
+              approvedCents / 100,
+              remittedCents / 100,
+              unappliedCents / 100,
+              adjustmentCents / 100,
+              expectedBalanceCents / 100,
+              ledgerBalanceCents / 100,
+              (ledgerBalanceCents - expectedBalanceCents) / 100,
+              Number(aggregate.openBatchExceptionCount),
+              aggregate.mappingCategory,
+              snapshotGl,
+              snapshotCostCenter,
+              mappingBasis,
+              aggregate.snapshotStatus,
+            ]), 1);
+          }
         }
       }
       cursorId = accountRows.at(-1)?.id;

@@ -53,8 +53,8 @@ test("rehearsal audit can fail closed on the captured production-derived post-mi
   assert.match(rehearsalAudit, /RLS enabled\/not-forced state with no direct-client policies/);
   assert.match(rehearsalAudit, /20260903190000_agency_receivable_ledger/);
   assert.match(rehearsalAudit, /20260903210000_agency_reconciliation_controls/);
-  assert.match(rehearsalAudit, /20260904230802/);
-  assert.match(rehearsalAudit, /20260904230805/);
+  assert.match(rehearsalAudit, /20260905002924/);
+  assert.match(rehearsalAudit, /20260905002935/);
   assert.match(rehearsalAudit, /statementsSha256/);
   assert.match(rehearsalAudit, /candidateSupabaseMigrationHistory\.length !== EXPECTED_SUPABASE_MIGRATIONS\.length/);
   assert.match(rehearsalAudit, /candidatePrismaMigrationHistory\.length !== 0/);

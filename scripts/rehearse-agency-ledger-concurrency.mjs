@@ -45,7 +45,7 @@ const expectedMigrationSha256 = Object.freeze({
 const expectedInstalledMigrations = Object.freeze([
   {
     key: "agencyReceivableLedger",
-    version: "20260904230802",
+    version: "20260905002924",
     name: "20260903190000_agency_receivable_ledger",
     statementCount: 1,
     statementOctets: 31_631,
@@ -53,7 +53,7 @@ const expectedInstalledMigrations = Object.freeze([
   },
   {
     key: "agencyReconciliationControls",
-    version: "20260904230805",
+    version: "20260905002935",
     name: "20260903210000_agency_reconciliation_controls",
     statementCount: 1,
     statementOctets: 253_662,

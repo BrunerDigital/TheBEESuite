@@ -34,13 +34,13 @@ const EXPECTED_PRODUCTION_DERIVED_BASELINE = Object.freeze({
 
 const EXPECTED_SUPABASE_MIGRATIONS = Object.freeze([
   {
-    version: "20260904230802",
+    version: "20260905002924",
     name: "20260903190000_agency_receivable_ledger",
     statementsSha256: "ef3d32acb21cca1e11d08db5098c850bca79b1bea89382a2c60e27454d59c0c5",
     statementOctets: BigInt(31_631),
   },
   {
-    version: "20260904230805",
+    version: "20260905002935",
     name: "20260903210000_agency_reconciliation_controls",
     statementsSha256: "5576f0ae9f743e45a713151dd7a87809d3596c33bc75b29b4e9ef4b9f3a99bd8",
     statementOctets: BigInt(253_662),
@@ -284,7 +284,7 @@ async function main() {
             encode(digest(convert_to(array_to_string(statements, E'\\n'), 'UTF8'), 'sha256'), 'hex') AS "statementsSha256",
             COALESCE((SELECT SUM(octet_length(statement)) FROM unnest(statements) AS statement), 0)::bigint AS "statementOctets"
           FROM supabase_migrations.schema_migrations
-          WHERE version IN ('20260903190000', '20260903210000', '20260904230802', '20260904230805')
+          WHERE version IN ('20260903190000', '20260903210000', '20260905002924', '20260905002935')
              OR name IN ('20260903190000_agency_receivable_ledger', '20260903210000_agency_reconciliation_controls')
           ORDER BY version, name
         `;

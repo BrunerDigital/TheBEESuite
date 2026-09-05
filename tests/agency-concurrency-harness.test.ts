@@ -7,12 +7,12 @@ const harnessPath = new URL("../scripts/rehearse-agency-ledger-concurrency.mjs",
 test("concurrency harness binds the installed Supabase schema before its first durable write", async () => {
   const harness = await readFile(harnessPath, "utf8");
 
-  assert.match(harness, /version: "20260904230802"/);
+  assert.match(harness, /version: "20260905002924"/);
   assert.match(harness, /name: "20260903190000_agency_receivable_ledger"/);
   assert.match(harness, /statementCount: 1/);
   assert.match(harness, /statementOctets: 31_631/);
   assert.match(harness, /statementsSha256: "ef3d32acb21cca1e11d08db5098c850bca79b1bea89382a2c60e27454d59c0c5"/);
-  assert.match(harness, /version: "20260904230805"/);
+  assert.match(harness, /version: "20260905002935"/);
   assert.match(harness, /name: "20260903210000_agency_reconciliation_controls"/);
   assert.match(harness, /statementOctets: 253_662/);
   assert.match(harness, /statementsSha256: "5576f0ae9f743e45a713151dd7a87809d3596c33bc75b29b4e9ef4b9f3a99bd8"/);

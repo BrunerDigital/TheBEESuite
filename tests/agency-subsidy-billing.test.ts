@@ -549,9 +549,9 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.doesNotMatch(route, /agencyAccountingPeriod\.findMany\(\{[\s\S]{0,240}take: 36/);
   assert.match(route, /action === "reopenAccountingPeriod"[\s\S]*laterClosedPeriod[\s\S]*Reopen the later closed period/);
   assert.match(route, /agencyAccountingPeriod\.updateMany\([\s\S]*AGENCY_WRITE_TRANSACTION_OPTIONS/);
-  assert.match(route, /status: \{ in: ACTIVE_REMITTANCE_BATCH_STATUSES \}[\s\S]{0,120}reversedAt: null/);
-  assert.match(route, /agencyRemittanceBatch\.groupBy\(\{[\s\S]*reviewedAt: \{ not: null \}[\s\S]*_sum: \{ unappliedCents: true \}/);
-  assert.match(route, /openBatchesByProgram\.get\(account\.agencyProgramId\) \?\? 0/);
+  assert.match(route, /batch\.status IN \(\$\{Prisma\.join\(ACTIVE_REMITTANCE_BATCH_STATUSES\)\}\)[\s\S]{0,160}batch\."reviewedAt" IS NOT NULL[\s\S]{0,120}batch\."reversedAt" IS NULL/);
+  assert.match(route, /open_batches AS \([\s\S]*batch\.status IN \(\$\{Prisma\.join\(\[\.\.\.OPEN_REMITTANCE_BATCH_STATUSES\]\)\}\)[\s\S]*batch\."reversedAt" IS NULL/);
+  assert.match(route, /COALESCE\(SUM\("openBatchExceptionCount"\), 0\)::bigint AS "openBatchExceptionCount"/);
   assert.match(route, /async function agencyReconciliationClaimAggregates[\s\S]*WITH claim_balances AS[\s\S]*LEFT JOIN "SubsidyRemittance"[\s\S]*GROUP BY "agencyProgramId"/);
   assert.match(route, /agencyReconciliationClaimAggregates\(tx, centerIds, snapshotAsOf\)[\s\S]*tx\.subsidyClaim\.findMany\(\{[\s\S]*status: \{ in: \["approved", "partially_paid"\] \}/);
   assert.doesNotMatch(route, /const \[programs,[^\n]*reconciliationClaims/);

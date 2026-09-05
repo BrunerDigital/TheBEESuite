@@ -98,7 +98,7 @@ const CSV_HEADERS = Object.freeze({
   claims: ["School ID", "School", "Claim", "Agency", "Family", "Child", "Service start", "Service end", "Status", "Claimed", "Approved", "Paid", "Missing documents"],
   deposits: ["School ID", "School", "Agency", "Program", "Paid date", "Deposit reference", "Method", "Cash GL", "Cost center", "Deposit total", "Allocated", "Unapplied", "Batch status", "Evidence", "Evidence reference", "Follow-up owner", "Follow-up due", "Claim", "Claim allocation", "Allocation status"],
   ledger: ["School ID", "School", "Date", "Agency", "Program", "Type", "GL code", "Cost center", "Claim", "Family", "Child", "Reference", "Charge", "Payment / credit", "Net", "Balance"],
-  reconciliation: ["School ID", "School", "Agency", "Program", "A/R GL", "Cash GL", "Adjustment GL", "Cost center", "Approved", "Remitted", "Unapplied cash", "Adjustments", "Expected balance", "Ledger balance", "Variance", "Open batch exceptions"],
+  reconciliation: ["School ID", "School", "Agency", "Program", "A/R GL", "Cash GL", "Adjustment GL", "Cost center", "Approved", "Remitted", "Unapplied cash", "Adjustments", "Expected balance", "Ledger balance", "Variance", "Open batch exceptions", "Mapping category", "Snapshot GL", "Snapshot cost center", "Mapping basis", "Snapshot status"],
 });
 const ROLLBACK = new Error("Intentional rollback after agency workflow rehearsal");
 const REHEARSAL_DATE_ANCHOR = new Date();
@@ -1177,19 +1177,26 @@ async function validateWorkflowExports(tx, ids, exportContents) {
   assert.equal(ledgerTypeCounts.adjustment_write_off, 1);
   assert.equal(ledgerTypeCounts.adjustment_reversal, 1);
 
-  assert.equal(parsed.reconciliation.length, 2);
-  const reconciliation = parsed.reconciliation[1];
-  assert.deepEqual(reconciliation.slice(0, 8), [
-    ids.center,
-    "Rollback-only rehearsal school",
-    "Rehearsal Agency",
-    "",
-    "1200-AR",
-    "1000-CASH",
-    "6900-ADJ",
-    "REHEARSAL-CENTER",
+  const reconciliationRows = parsed.reconciliation.slice(1);
+  assert.equal(reconciliationRows.length, 3);
+  assert.deepEqual(reconciliationRows.map((row) => row[16]), ["receivable", "cash", "adjustment"]);
+  assert.ok(reconciliationRows.every((row) => row[0] === ids.center));
+  assert.ok(reconciliationRows.every((row) => row[1] === "Rollback-only rehearsal school"));
+  assert.ok(reconciliationRows.every((row) => row[2] === "Rehearsal Agency"));
+  assert.ok(reconciliationRows.every((row) => row[3] === ""));
+  assert.deepEqual(reconciliationRows.map((row) => row.slice(4, 8)), [
+    ["1200-AR", "", "", "REHEARSAL-CENTER"],
+    ["", "1000-CASH", "", "REHEARSAL-CENTER"],
+    ["", "", "6900-ADJ", "REHEARSAL-CENTER"],
   ]);
-  const reconciliationValues = reconciliation.slice(8).map(numericCell);
+  assert.deepEqual(reconciliationRows.map((row) => row.slice(17, 21)), [
+    ["1200-AR", "REHEARSAL-CENTER", "immutable_event_time_snapshot", "COMPLETE"],
+    ["1000-CASH", "REHEARSAL-CENTER", "immutable_event_time_snapshot", "COMPLETE"],
+    ["6900-ADJ", "REHEARSAL-CENTER", "immutable_event_time_snapshot", "COMPLETE"],
+  ]);
+  const reconciliationValues = Array.from({ length: 8 }, (_value, offset) => (
+    reconciliationRows.reduce((total, row) => total + numericCell(row[offset + 8]), 0)
+  ));
   assert.deepEqual(reconciliationValues, [400, 120, 0, 0, 280, 280, 0, 0]);
 
   return {
@@ -1215,7 +1222,8 @@ async function validateWorkflowExports(tx, ids, exportContents) {
       sha256: createHash("sha256").update(exportContents.ledger).digest("hex"),
     },
     reconciliation: {
-      rowCount: 1,
+      rowCount: reconciliationRows.length,
+      immutableMappingCategories: reconciliationRows.map((row) => row[16]),
       approvedCents: 40_000,
       remittedCents: 12_000,
       unappliedCashCents: 0,
@@ -2231,6 +2239,13 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
   await tx.$executeRawUnsafe('ALTER TABLE "Center" ENABLE TRIGGER "Center_agency_reconciliation_activation_readiness_guard"');
   await flushDeferredConstraints();
 
+  // Capture a real pre-activation receipt while the predecessor application
+  // has no cash/cost-center mapping evidence. Later configuration must make
+  // activation possible without rewriting this honest unknown history.
+  await tx.agencyProgram.update({
+    where: { id: ids.secondaryProgram },
+    data: { cashGlCode: null, costCenterCode: null },
+  });
   const adoptionReference = `POST-MIGRATION-DIRECT-${ids.run}`;
   const directRemittancePaidAt = utcDay(0);
   const [secondaryFamilyBillingAccount] = await tx.$queryRaw`
@@ -2267,6 +2282,8 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
       receipt."remittanceBatchId" AS "receiptBatchId",
       receipt."amountCents" AS "receiptAmountCents",
       receipt."effectiveAt" AS "receiptEffectiveAt",
+      receipt."glCodeSnapshot" AS "receiptGlCodeSnapshot",
+      receipt."costCenterCodeSnapshot" AS "receiptCostCenterCodeSnapshot",
       receipt.metadata AS "receiptMetadata"
     FROM "SubsidyRemittance" remittance
     LEFT JOIN "AgencyRemittanceAllocation" allocation ON allocation."remittanceId" = remittance.id
@@ -2283,6 +2300,8 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
     receiptBatchId: null,
     receiptAmountCents: -1_000,
     receiptEffectiveAt: directRemittancePaidAt.toISOString(),
+    receiptGlCodeSnapshot: null,
+    receiptCostCenterCodeSnapshot: null,
     receiptMetadata: {
       claimNumber: `SECOND-CLAIM-${ids.run}`,
       paymentMethod: "ach",
@@ -2341,7 +2360,8 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
   `;
   await flushBaselineCompatibilityProjection({ claim: true, remittance: true });
   const compatibilityReversalRows = await tx.$queryRaw`
-    SELECT entry.id, entry.type, entry."amountCents", entry."effectiveAt", entry.metadata,
+    SELECT entry.id, entry.type, entry."amountCents", entry."effectiveAt",
+      entry."glCodeSnapshot", entry."costCenterCodeSnapshot", entry.metadata,
       remittance."reversedAt" AS "sourceReversedAt",
       account."balanceCents" AS "accountBalanceCents"
     FROM "AgencyLedgerEntry" entry
@@ -2356,6 +2376,8 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
       type: "remittance_received",
       amountCents: -500,
       effectiveAt: compatibilityReversedPaidAt.toISOString(),
+      glCodeSnapshot: null,
+      costCenterCodeSnapshot: null,
       sourceReversedAt: compatibilityReversedAt.toISOString(),
       metadata: {
         claimNumber: `SECOND-CLAIM-${ids.run}`,
@@ -2369,6 +2391,8 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
       type: "remittance_reversal",
       amountCents: 500,
       effectiveAt: compatibilityReversedPaidAt.toISOString(),
+      glCodeSnapshot: null,
+      costCenterCodeSnapshot: null,
       sourceReversedAt: compatibilityReversedAt.toISOString(),
       metadata: {
         claimNumber: `SECOND-CLAIM-${ids.run}`,
@@ -2381,6 +2405,10 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
     },
   ]);
 
+  await tx.agencyProgram.update({
+    where: { id: ids.secondaryProgram },
+    data: { cashGlCode: "1000-CASH-SECOND", costCenterCode: "REHEARSAL-SECOND" },
+  });
   const activationAt = utcDay(0);
   await tx.$executeRaw`
     UPDATE "Center"
@@ -2404,12 +2432,16 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
         remittance."externalReference", remittance."enteredById",
         batch.id AS "batchId", batch."centerId", batch."agencyProgramId", batch."totalCents",
         batch."allocatedCents", batch."unappliedCents", batch.status AS "batchStatus",
+        batch."cashGlCodeSnapshot" AS "batchCashGlCodeSnapshot",
+        batch."costCenterCodeSnapshot" AS "batchCostCenterCodeSnapshot",
         batch."idempotencyKey" AS "batchIdempotencyKey", batch."reviewedAt" AS "batchReviewedAt",
         allocation.id AS "allocationId", allocation."remittanceId" AS "allocationRemittanceId",
         allocation."amountCents" AS "allocationAmountCents", allocation.status AS "allocationStatus",
         allocation."idempotencyKey" AS "allocationIdempotencyKey", allocation."reviewedAt" AS "allocationReviewedAt",
         receipt.id AS "receiptLedgerEntryId", receipt."remittanceBatchId" AS "receiptBatchId",
-        receipt."amountCents" AS "receiptAmountCents", receipt."effectiveAt" AS "receiptEffectiveAt"
+        receipt."amountCents" AS "receiptAmountCents", receipt."effectiveAt" AS "receiptEffectiveAt",
+        receipt."glCodeSnapshot" AS "receiptGlCodeSnapshot",
+        receipt."costCenterCodeSnapshot" AS "receiptCostCenterCodeSnapshot"
       FROM "SubsidyRemittance" remittance
       JOIN "AgencyRemittanceAllocation" allocation ON allocation."remittanceId" = remittance.id
       JOIN "AgencyRemittanceBatch" batch ON batch.id = allocation."batchId"
@@ -2432,6 +2464,8 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
   assert.equal(firstAdoption.allocatedCents, 1000);
   assert.equal(firstAdoption.unappliedCents, 0);
   assert.equal(firstAdoption.batchStatus, "reconciled");
+  assert.equal(firstAdoption.batchCashGlCodeSnapshot, null);
+  assert.equal(firstAdoption.batchCostCenterCodeSnapshot, null);
   assert.match(firstAdoption.batchIdempotencyKey, /^legacy:adoption:/);
   assert.equal(firstAdoption.batchReviewedAt, null);
   assert.equal(firstAdoption.allocationId, `agency-remittance-allocation:${ids.directBaselineRemittance}`);
@@ -2442,6 +2476,8 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
   assert.equal(firstAdoption.allocationReviewedAt, null);
   assert.equal(firstAdoption.receiptBatchId, expectedBatchId);
   assert.equal(firstAdoption.receiptAmountCents, -1000);
+  assert.equal(firstAdoption.receiptGlCodeSnapshot, null);
+  assert.equal(firstAdoption.receiptCostCenterCodeSnapshot, null);
   assert.equal(new Date(firstAdoption.receiptEffectiveAt).toISOString().slice(0, 10), dayInput(0));
 
   const adoptionCountsBeforeReplay = await tx.$queryRaw`
@@ -2507,6 +2543,34 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
   assert.equal(sameDayLegacyEntries.reduce((sum, entry) => sum + entry.amountCents, 0), 0);
   assert.equal(sameDayLegacyEntries.every((entry) => entry.effectiveAt.toISOString().slice(0, 10) === dayInput(-1)), true);
 
+  // Honest unknown history is closable only while its exact immutable receipt
+  // survives. Prove the route will not synthesize a deleted NULL-snapshot row.
+  await flushDeferredConstraints();
+  await tx.$executeRawUnsafe("SAVEPOINT missing_unknown_legacy_receipt");
+  let missingUnknownReceiptBlocked = false;
+  try {
+    await tx.$executeRawUnsafe('ALTER TABLE "AgencyLedgerEntry" DISABLE TRIGGER "AgencyLedgerEntry_immutable_history_guard"');
+    await tx.agencyLedgerEntry.delete({ where: { id: ids.directBaselineReceiptLedgerEntry } });
+    const missingReceiptClose = await postAs(
+      currentUser("BRAND_ADMIN", ids, [ids.secondaryCenter]),
+      {
+        action: "closeAccountingPeriod",
+        centerId: ids.secondaryCenter,
+        name: "Missing unknown legacy receipt must fail",
+        startDate: dayInput(0),
+        endDate: dayInput(0),
+        reason: "Verify unknown event-time mappings cannot be reconstructed after receipt loss",
+      },
+      409,
+    );
+    assert.match(missingReceiptClose.error, /controlled-batch receipt after recovery/i);
+    missingUnknownReceiptBlocked = true;
+  } finally {
+    await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT missing_unknown_legacy_receipt");
+    await tx.$executeRawUnsafe("RELEASE SAVEPOINT missing_unknown_legacy_receipt");
+    await flushDeferredConstraints();
+  }
+
   return {
     markerPolicy: "The exact database marker is rechecked in the mutating transaction before its first write.",
     rejectedDirectSqlWrites: rejectedWrites,
@@ -2546,6 +2610,9 @@ async function runDirectSqlInvariantRehearsal(tx, ids) {
       sourceCreatedByDirectSqlAfterSchemaMigration: true,
       everyColumnOfRemittanceBatchAllocationAndReceiptComparedOnRetry: true,
       exactRowsPreservedOnTransactionScopedActivationRetry: true,
+      nullEventTimeSnapshotsPreservedAcrossLaterMappingAndActivation: true,
+      actualCloseRouteAcceptedIntactUnknownSnapshotHistory: true,
+      missingUnknownSnapshotReceiptBlockedWithoutSynthesis: missingUnknownReceiptBlocked,
       retryMethod: "Inside the outer rollback transaction only, the two Center activation triggers are transactionally disabled while activation flags are reset, immediately re-enabled, and then the same activation is retried with the already-adopted rows present. PostgreSQL holds the ALTER TABLE lock until rollback, preventing another session from observing the temporary trigger state.",
       firstAdoption,
       secondAdoption,

@@ -30,8 +30,8 @@ test("literal replay harness pins exact LF migration mirrors", async () => {
   assert.equal(sha256(secondPrisma), "5576f0ae9f743e45a713151dd7a87809d3596c33bc75b29b4e9ef4b9f3a99bd8");
   assert.match(harness, /ef3d32acb21cca1e11d08db5098c850bca79b1bea89382a2c60e27454d59c0c5/);
   assert.match(harness, /5576f0ae9f743e45a713151dd7a87809d3596c33bc75b29b4e9ef4b9f3a99bd8/);
-  assert.match(harness, /expectedHistoryVersion: "20260904230802"/);
-  assert.match(harness, /expectedHistoryVersion: "20260904230805"/);
+  assert.match(harness, /expectedHistoryVersion: "20260905002924"/);
+  assert.match(harness, /expectedHistoryVersion: "20260905002935"/);
   assert.match(harness, /expectedHistoryName: "20260903190000_agency_receivable_ledger"/);
   assert.match(harness, /expectedHistoryName: "20260903210000_agency_reconciliation_controls"/);
   assert.match(harness, /installed statement hash does not match the frozen migration/);

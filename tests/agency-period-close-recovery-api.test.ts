@@ -64,3 +64,37 @@ test("period close source contains no approval, direct-receipt, adjustment, or r
   assert.match(recovery, /agency-close:remittance-reversal-evidence/);
   assert.match(recovery, /agency-close:adjustment-evidence/);
 });
+
+test("period close preserves exact legacy unknown snapshots without weakening controlled recovery", () => {
+  const route = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+  const recovery = route.slice(
+    route.indexOf("async function recoverMissingAgencyLedgerCutoverEvents"),
+    route.indexOf("type AgencyPostingClaim"),
+  );
+  const precheck = recovery.slice(
+    recovery.indexOf("agency-close:controlled-receipt-precheck"),
+    recovery.indexOf("agency-close:controlled-receipt-recovery"),
+  );
+  const insert = recovery.slice(
+    recovery.indexOf("agency-close:controlled-receipt-recovery"),
+    recovery.indexOf("agency-close:controlled-receipt-postcheck"),
+  );
+  const postcheck = recovery.slice(
+    recovery.indexOf("agency-close:controlled-receipt-postcheck"),
+    recovery.indexOf("agency-close:remittance-reversal-evidence"),
+  );
+
+  assert.match(precheck, /NULLIF\(BTRIM\(expected\."cashGlCodeSnapshot"\), ''\) IS NOT NULL[\s\S]*expected\."batchReviewedAt" IS NOT NULL/);
+  assert.match(precheck, /legacy-allocation:adoption:[\s\S]*expected\."cashGlCodeSnapshot" IS NULL OR NULLIF\(BTRIM\(expected\."cashGlCodeSnapshot"\), ''\) IS NOT NULL/);
+  assert.match(precheck, /legacy-allocation:adoption:[\s\S]*expected\."costCenterCodeSnapshot" IS NULL OR NULLIF\(BTRIM\(expected\."costCenterCodeSnapshot"\), ''\) IS NOT NULL/);
+  assert.match(precheck, /entry\."glCodeSnapshot" IS NOT DISTINCT FROM expected\."cashGlCodeSnapshot"/);
+  assert.match(precheck, /entry\."costCenterCodeSnapshot" IS NOT DISTINCT FROM expected\."costCenterCodeSnapshot"/);
+
+  // A missing receipt with unknown event-time mappings remains unrecoverable.
+  assert.match(insert, /NULLIF\(BTRIM\(batch\."cashGlCodeSnapshot"\), ''\) IS NOT NULL/);
+  assert.match(insert, /NULLIF\(BTRIM\(batch\."costCenterCodeSnapshot"\), ''\) IS NOT NULL/);
+  assert.match(postcheck, /entry\."glCodeSnapshot" IS NOT DISTINCT FROM expected\."cashGlCodeSnapshot"/);
+  assert.match(postcheck, /entry\."costCenterCodeSnapshot" IS NOT DISTINCT FROM expected\."costCenterCodeSnapshot"/);
+  assert.doesNotMatch(postcheck, /entry\."glCodeSnapshot" = expected\."cashGlCodeSnapshot"/);
+  assert.doesNotMatch(postcheck, /entry\."costCenterCodeSnapshot" = expected\."costCenterCodeSnapshot"/);
+});

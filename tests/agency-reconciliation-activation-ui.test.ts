@@ -9,6 +9,8 @@ import { effectiveCenterIdsForWorkspace, resolveWorkspaceState } from "../src/li
 const workspaceSource = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
 const controlsSource = readFileSync("src/components/agency-reconciliation-controls.tsx", "utf8");
 const routeSource = readFileSync("src/app/api/billing/agency-claims/route.ts", "utf8");
+const activeRemittanceReferenceMigration = readFileSync("prisma/migrations/20260824173000_active_agency_remittance_reference/migration.sql", "utf8");
+const activeRemittanceReferenceMirror = readFileSync("supabase/migrations/20260824173000_active_agency_remittance_reference.sql", "utf8");
 
 const roleExpectations = [
   { role: UserRole.PLATFORM_OWNER, canPrepare: true, canReview: true, canSelectAll: true },
@@ -91,6 +93,15 @@ test("inactive schools keep direct remittance while reviewed posting actions req
   assert.doesNotMatch(directRemittanceBlock, /const reference = clean\(body\.externalReference\)/);
   assert.match(directRemittanceBlock, /if \(center\.agencyReconciliationEnabled\) throw new AgencyWorkflowError\("This school uses reviewed deposit batches\. Prepare the remittance for independent review instead of posting it directly\."/);
   assert.doesNotMatch(directRemittanceBlock, /requireAgencyReconciliationEnabled/);
+});
+
+test("baseline remittance retries normalize historical references and preserve corrected replacements", () => {
+  const directRemittanceBlock = routeActionBlock('if (action === "recordRemittance")');
+  assert.match(directRemittanceBlock, /current\.remittances\.some\(\(remittance\) =>\s*!remittance\.reversedAt && normalizeAgencyPaymentReference\(remittance\.externalReference\) === reference/);
+  assert.match(directRemittanceBlock, /if \(matchingActiveReference\) throw new AgencyWorkflowError\("That remittance reference is already recorded\. Refresh before trying again\."/);
+  assert.match(directRemittanceBlock, /if \(prismaConflict\(error\)\) return NextResponse\.json\(\{ ok: false, error: "That remittance reference is already recorded or the claim changed\. Refresh before trying again\." \}, \{ status: 409 \}\)/);
+  assert.equal(activeRemittanceReferenceMigration, activeRemittanceReferenceMirror);
+  assert.match(activeRemittanceReferenceMigration, /CREATE UNIQUE INDEX IF NOT EXISTS "SubsidyRemittance_claimId_externalReference_active_key"[\s\S]*ON "SubsidyRemittance"\("claimId", "externalReference"\)[\s\S]*WHERE "reversedAt" IS NULL/);
 });
 
 test("new reconciliation selectors and posting controls exclude setup-required agencies", () => {

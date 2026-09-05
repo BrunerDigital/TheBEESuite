@@ -4426,6 +4426,10 @@ async function postHandler(request: NextRequest) {
         if (!center) throw new AgencyWorkflowError("School not found.", 404);
         if (center.agencyReconciliationEnabled) throw new AgencyWorkflowError("This school uses reviewed deposit batches. Prepare the remittance for independent review instead of posting it directly.", 409);
         if (!new Set(["approved", "partially_paid"]).has(current.status)) throw new AgencyWorkflowError("Record an agency approval before posting a remittance.", 409);
+        const matchingActiveReference = current.remittances.some((remittance) =>
+          !remittance.reversedAt && normalizeAgencyPaymentReference(remittance.externalReference) === reference,
+        );
+        if (matchingActiveReference) throw new AgencyWorkflowError("That remittance reference is already recorded. Refresh before trying again.", 409);
         const payable = current.approvedCents ?? current.claimedCents;
         const paidBeforeCents = activeRemittanceTotalCents(current.remittances);
         if (paidBeforeCents + amountCents > payable) throw new AgencyWorkflowError("The remittance amount cannot exceed the remaining approved claim.");

@@ -4405,7 +4405,10 @@ async function postHandler(request: NextRequest) {
 
   if (action === "recordRemittance") {
     const amountCents = cents(body.amountDollars);
-    const reference = clean(body.externalReference);
+    // Normalize the baseline reference exactly like the controlled-batch path.
+    // The active (claim, reference) database key can then reject retries that
+    // differ only by case or whitespace after an ambiguous response.
+    const reference = normalizeAgencyPaymentReference(body.externalReference);
     const paidAt = dateValue(body.paidAt);
     const paymentMethod = clean(body.paymentMethod) || "ach";
     if (!reference || !paidAt || amountCents <= 0 || amountCents > POSTGRES_INT_MAX_CENTS) return NextResponse.json({ ok: false, error: "A unique reference, paid date, and positive remittance amount within the supported accounting range are required." }, { status: 400 });

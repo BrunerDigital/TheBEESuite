@@ -87,6 +87,8 @@ test("inactive schools keep direct remittance while reviewed posting actions req
   }
 
   const directRemittanceBlock = routeActionBlock('if (action === "recordRemittance")');
+  assert.match(directRemittanceBlock, /const reference = normalizeAgencyPaymentReference\(body\.externalReference\)/);
+  assert.doesNotMatch(directRemittanceBlock, /const reference = clean\(body\.externalReference\)/);
   assert.match(directRemittanceBlock, /if \(center\.agencyReconciliationEnabled\) throw new AgencyWorkflowError\("This school uses reviewed deposit batches\. Prepare the remittance for independent review instead of posting it directly\."/);
   assert.doesNotMatch(directRemittanceBlock, /requireAgencyReconciliationEnabled/);
 });

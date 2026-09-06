@@ -146,7 +146,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
   }
 
   return (
-    <div className="auth-halo-shell grid min-h-screen bg-slate-950 p-4 text-white xl:grid-cols-[1fr_0.86fr]" data-portal={portal}>
+    <main className="auth-halo-shell grid min-h-screen bg-slate-950 p-4 text-white xl:grid-cols-[1fr_0.86fr]" data-portal={portal}>
       <section className="auth-halo-story hidden min-h-[calc(100vh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 xl:flex">
         <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
@@ -274,6 +274,6 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
           </CardContent>
         </Card>
       </section>
-    </div>
+    </main>
   );
 }

@@ -27,6 +27,10 @@ const replacements = [
     "const urlParts = url.parse(requestDetails.endpoint);",
     "const urlParts = new URL(requestDetails.endpoint);",
   ],
+  [
+    "httpsOptions.hostname = urlParts.hostname;",
+    "httpsOptions.hostname = urlParts.hostname.replace(/^\\[|\\]$/g, '');",
+  ],
   ["httpsOptions.port = urlParts.port;", "httpsOptions.port = urlParts.port || undefined;"],
   ["httpsOptions.path = urlParts.path;", "httpsOptions.path = urlParts.pathname + urlParts.search;"],
 ];

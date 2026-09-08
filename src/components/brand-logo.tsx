@@ -62,6 +62,7 @@ export function BrandLogo({
   imageClassName,
   textClassName,
   priority = false,
+  prefetch,
 }: {
   branding?: WorkspaceBranding;
   href?: string;
@@ -71,6 +72,7 @@ export function BrandLogo({
   imageClassName?: string;
   textClassName?: string;
   priority?: boolean;
+  prefetch?: boolean;
 }) {
   const isKidCity = branding.kind === "kid-city-usa";
   const isMissHoneys = branding.kind === "miss-honeys-learning-center";
@@ -111,7 +113,12 @@ export function BrandLogo({
   if (!href) return logo;
 
   return (
-    <Link href={href} className={cn("flex min-w-0 items-center gap-3", className)} aria-label={`${branding.name} home`}>
+    <Link
+      href={href}
+      prefetch={prefetch}
+      className={cn("flex min-w-0 items-center gap-3", className)}
+      aria-label={`${branding.name} home`}
+    >
       {content}
     </Link>
   );

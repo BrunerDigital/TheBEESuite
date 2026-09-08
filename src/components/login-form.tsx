@@ -146,9 +146,9 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
   }
 
   return (
-    <div className="auth-halo-shell grid min-h-screen bg-slate-950 p-4 text-white xl:grid-cols-[1fr_0.86fr]" data-portal={portal}>
+    <main className="auth-halo-shell grid min-h-screen bg-slate-950 p-4 text-white xl:grid-cols-[1fr_0.86fr]" data-portal={portal}>
       <section className="auth-halo-story hidden min-h-[calc(100vh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 xl:flex">
-        <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
+        <BrandLogo href="/" size="md" compact={parentSetupFlow} priority prefetch={false} />
         <div className="max-w-xl">
           <div className="text-5xl font-semibold leading-tight tracking-normal" aria-hidden="true">
             {copy.heroTitle}
@@ -173,7 +173,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
       <section className="grid place-items-center px-0 py-6 sm:px-6 xl:px-10">
         <Card className="auth-halo-card w-full max-w-xl rounded-2xl border-white/10 bg-white text-slate-950 shadow-2xl shadow-black/30">
           <CardHeader className="text-center">
-            <Link href="/" className="mx-auto block w-fit xl:hidden" aria-label="The BEE Suite home">
+            <Link href="/" prefetch={false} className="mx-auto block w-fit xl:hidden" aria-label="The BEE Suite home">
               <BrandIcon className="size-14 rounded-2xl" priority />
             </Link>
             <h1 className="mt-4 text-balance text-3xl font-semibold">{copy.cardTitle}</h1>
@@ -229,6 +229,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                   <Label htmlFor="password">Password</Label>
                   <Link
                     href={`/forgot-password?next=${encodeURIComponent(next)}`}
+                    prefetch={false}
                     className="inline-flex min-h-11 items-center text-xs font-semibold text-slate-600 hover:text-slate-950 hover:underline"
                   >
                     Forgot password?
@@ -259,13 +260,13 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
               <div className="mt-5 grid gap-3">
                 <div className="rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-600">
                   Parents and guardians use the email and password from their school invitation.{" "}
-                  <Link href="/parents" className="inline-flex items-center font-semibold text-slate-950 hover:underline">
+                  <Link href="/parents" prefetch={false} className="inline-flex items-center font-semibold text-slate-950 hover:underline">
                     Open parent portal login <ArrowRight className="ml-1 size-3.5" />
                   </Link>
                 </div>
                 <div className="rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-600">
                   New to The BEE Suite?{" "}
-                  <Link href="/onboarding" className="inline-flex items-center font-semibold text-slate-950 hover:underline">
+                  <Link href="/onboarding" prefetch={false} className="inline-flex items-center font-semibold text-slate-950 hover:underline">
                     Start onboarding <ArrowRight className="ml-1 size-3.5" />
                   </Link>
                 </div>
@@ -274,6 +275,6 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
           </CardContent>
         </Card>
       </section>
-    </div>
+    </main>
   );
 }

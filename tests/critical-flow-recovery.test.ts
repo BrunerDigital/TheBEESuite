@@ -125,3 +125,19 @@ test("critical public forms retain accessible labels, announcements, focus rings
   assert.match(sources, /min-h-11/);
   assert.match(sources, /aria-describedby=/);
 });
+
+test("the shared sign-in shell exposes a main landmark", () => {
+  const login = readFileSync("src/components/login-form.tsx", "utf8");
+
+  assert.match(login, /<main className="auth-halo-shell/);
+  assert.match(login, /<h1 className=/);
+  assert.doesNotMatch(login, /<div className="auth-halo-shell/);
+});
+
+test("the shared sign-in shell avoids preloading unrelated routes", () => {
+  const login = readFileSync("src/components/login-form.tsx", "utf8");
+
+  assert.match(login, /href=\{`\/forgot-password[^`]+`\}[\s\S]*?prefetch=\{false\}/);
+  assert.match(login, /href="\/parents" prefetch=\{false\}/);
+  assert.match(login, /href="\/onboarding" prefetch=\{false\}/);
+});

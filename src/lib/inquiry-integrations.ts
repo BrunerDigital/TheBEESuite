@@ -8,6 +8,7 @@ import { sendEmail } from "@/lib/integrations";
 
 export type InquiryIntegrationResult = {
   ok: boolean;
+  id?: string;
   skipped?: boolean;
   error?: string;
   mode?: "google_sheets_api" | "webhook";
@@ -156,6 +157,7 @@ export async function sendInquiryNotificationEmail(
 
   return {
     ok: email.ok,
+    id: email.id,
     skipped: !email.configured,
     error: email.error,
     recipients: recipients.length,

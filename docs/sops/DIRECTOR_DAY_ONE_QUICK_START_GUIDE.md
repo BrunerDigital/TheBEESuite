@@ -186,6 +186,7 @@ Saving a rate does not assign it to a child.
 
 - `Create Invoice Now` creates one due-now invoice. It does not charge the card and does not replace the recurring assignment. Use it only when one exact week is confirmed missing.
 - `Create Invoice` under `Family charge` creates a one-time invoice. It does not change future tuition.
+- `One-time fee / credit` posts one late fee, vacation credit, or other approved balance adjustment. Review the projected balance, add the service week or reason, and confirm the normal recurring tuition remains unchanged.
 - `Edit invoice` changes a specific open invoice. It does not change the child assignment.
 - `Batch tuition` creates many invoices. Never use it for a period already covered by recurring tuition.
 - `Charge Selected Method` is a deliberate one-time charge. It is not the same as enabling autopay.

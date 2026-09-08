@@ -2,7 +2,7 @@ import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:chil
 import { existsSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { chromium, request as playwrightRequest } from "playwright";
+import { chromium, request as playwrightRequest, type Page } from "playwright";
 
 const require = createRequire(import.meta.url);
 const nextBin = require.resolve("next/dist/bin/next");
@@ -35,6 +35,19 @@ const apiChecks = [
   { name: "Generic hosted embed", path: "/bee-suite-inquiry-form.js", expected: /Start an inquiry|api\/inquiries/ },
   { name: "Public Kid City locations", path: "/api/public/kidcity-locations", expected: /locations/ },
 ];
+
+const responsivePublicRoutes: SmokeRoute[] = [
+  { name: "parent app entry", path: "/parents", expectedText: /parent|guardian/i },
+  { name: "teacher app entry", path: "/teachers", expectedText: /teacher/i },
+  { name: "privacy", path: "/privacy", expectedText: /privacy/i },
+  { name: "support", path: "/support", expectedText: /support/i },
+];
+
+const responsiveViewports = [
+  { name: "iPhone", width: 390, height: 844 },
+  { name: "tablet", width: 768, height: 1024 },
+  { name: "desktop", width: 1440, height: 900 },
+] as const;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -71,6 +84,19 @@ function unexpectedPageErrors(errors: string[], localServer: boolean) {
     }
     return true;
   });
+}
+
+async function navigateForSmoke(page: Page, requestedUrl: string) {
+  try {
+    return await page.goto(requestedUrl, { waitUntil: "domcontentloaded" });
+  } catch (error) {
+    // Chromium can report ERR_ABORTED when Next.js immediately replaces a
+    // protected route with its sign-in destination. The final rendered page
+    // is still the contract under test, so wait for it and validate below.
+    if (!(error instanceof Error) || !/net::ERR_ABORTED/i.test(error.message)) throw error;
+    await page.waitForLoadState("domcontentloaded", { timeout: 5_000 }).catch(() => undefined);
+    return null;
+  }
 }
 
 function startLocalServer(port: number) {
@@ -173,7 +199,7 @@ async function run() {
 
     for (const route of smokeRoutes) {
       const requestedUrl = `${baseUrl}${route.path}`;
-      const response = await page.goto(requestedUrl, { waitUntil: "domcontentloaded" });
+      const response = await navigateForSmoke(page, requestedUrl);
       const status = response?.status() ?? 0;
       if (status >= 500) throw new Error(`${route.name} returned ${status}.`);
       let bodyText = await page.locator("body").innerText();
@@ -183,6 +209,30 @@ async function run() {
       }
       if (route.expectedText && !route.expectedText.test(bodyText)) {
         throw new Error(`${route.name} did not render expected text.`);
+      }
+    }
+
+    for (const viewport of responsiveViewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      for (const route of responsivePublicRoutes) {
+        const requestedUrl = `${baseUrl}${route.path}`;
+        const response = await navigateForSmoke(page, requestedUrl);
+        const status = response?.status() ?? 0;
+        if (status >= 500) throw new Error(`${route.name} returned ${status} at ${viewport.name} size.`);
+        const bodyText = await page.locator("body").innerText();
+        if (route.expectedText && !route.expectedText.test(bodyText)) {
+          throw new Error(`${route.name} did not render expected text at ${viewport.name} size.`);
+        }
+        const dimensions = await page.evaluate(() => ({
+          clientWidth: document.documentElement.clientWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+        }));
+        if (dimensions.scrollWidth > dimensions.clientWidth + 2) {
+          throw new Error(
+            `${route.name} overflowed horizontally at ${viewport.name} size ` +
+              `(${dimensions.scrollWidth}px content in ${dimensions.clientWidth}px viewport).`,
+          );
+        }
       }
     }
 

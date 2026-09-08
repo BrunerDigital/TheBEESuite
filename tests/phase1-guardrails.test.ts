@@ -849,7 +849,8 @@ test("parent portal invite copy explains the app login, kiosk PIN, ACH, and fami
   assert.match(text, /Email: taylor@example\.com/);
   assert.match(text, /Password from your school invitation: BusyBees/);
   assert.match(text, /can keep this password or choose a private password anytime/);
-  assert.match(text, /last 4 digits of your phone number/);
+  assert.match(text, /private 4 digit kiosk PIN/);
+  assert.doesNotMatch(text, /last 4 digits of your phone number/);
   assert.match(text, /Complete these steps in order/);
   assert.match(text, /Stop and contact the school before continuing if anything is wrong/);
   assert.match(text, /billing or payment setup only if your school separately tells you/);

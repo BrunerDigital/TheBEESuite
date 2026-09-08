@@ -75,6 +75,7 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
   assert.match(resources, /Record remittance on an approved or partially paid claim/);
   assert.match(resources, /object-contain/);
   assert.match(resources, /Tap a screen to open the full view/);
+  assert.doesNotMatch(resources, /text-slate-500">Step/);
   assert.doesNotMatch(resources, /Section link/);
   assert.doesNotMatch(resources, /Captured July 27, 2026/);
   assert.doesNotMatch(resources, /warning banners and developer controls excluded/);

@@ -47,7 +47,7 @@ Navigation: `People` -> `Families & Communication` -> `Families`.
 4. Leave `Prior balance owed at cutover` blank or `0` unless the family already owes a verified pre-BEE-Suite balance.
 5. Enter the address and any restricted custody note from the approved school record.
 6. Under `Primary parent / guardian`, enter the guardian's name, personal email, phone, relationship, preferred contact method, and employer if used.
-7. Enter a four-digit kiosk PIN only if the approved PIN is known. Otherwise, the system uses the last four phone digits when possible.
+7. Enter a private four-digit kiosk PIN only if the approved PIN is known. Otherwise, leave it unset so the guardian chooses one during secure parent setup.
 8. Under `Student / child profile`, enter the child's full name, preferred name, date of birth, age group, enrollment status, start date, and classroom.
 9. Mark photo/video and field-trip permission only when the signed permission has been verified.
 10. Add schedule, family, nap, feeding/dietary, potty, and developmental notes as applicable.

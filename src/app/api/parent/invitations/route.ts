@@ -412,10 +412,6 @@ async function POSTHandler(request: NextRequest) {
     const defaultPinData = !guardian.checkInPinHash
       ? defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: user.id })
       : null;
-    if (!guardian.checkInPinHash && !defaultPinData) {
-      return NextResponse.json({ ok: false, error: "Add a phone number with at least 4 digits before sending the parent app invite." }, { status: 400 });
-    }
-
     const preparedWithoutInvite = record(record(guardian.customFields).parentPortal).preparedWithoutInvite === true;
     const provisioned = await ensureParentPortalLoginForGuardian({
       guardianId: guardian.id,

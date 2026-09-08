@@ -2543,10 +2543,11 @@ function ParentPortalWorkspaceView({
                       <time className="mt-2 block text-xs text-muted-foreground">{formatTime(item.createdAt)}</time>
                     </div>
                     <a
-                      href={imageSrc || undefined}
-                      target="_blank"
+                      href={imageSrc && !previewMode ? imageSrc : undefined}
+                      target={imageSrc && !previewMode ? "_blank" : undefined}
                       rel="noreferrer"
-                      aria-label={imageSrc ? `Open full-size photo of ${item.child.fullName}` : undefined}
+                      aria-label={imageSrc && !previewMode ? `Open full-size photo of ${item.child.fullName}` : undefined}
+                      aria-disabled={previewMode || !imageSrc ? true : undefined}
                       className="relative aspect-video overflow-hidden rounded-xl border bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {imageSrc ? (
@@ -2563,7 +2564,7 @@ function ParentPortalWorkspaceView({
                       )}
                       {imageSrc ? (
                         <span className="absolute inset-x-2 bottom-2 rounded-lg bg-black/70 px-2 py-1 text-center text-xs font-semibold text-white">
-                          Open full-size photo
+                          {previewMode ? "Photo preview" : "Open full-size photo"}
                         </span>
                       ) : null}
                     </a>

@@ -77,6 +77,12 @@ test("record-level parent actions recheck the signed-in guardian link", () => {
   }
 });
 
+test("parent document submission rejects non-parent roles before record lookup", () => {
+  const route = readFileSync("src/app/api/parent/documents/[id]/submit/route.ts", "utf8");
+  assert.match(route, /if \(!isParentGuardian\(user\)\)[\s\S]*status: 403/);
+  assert.doesNotMatch(route, /canAccessAllCenters/);
+});
+
 test("password and payment routes fail closed around identity and provider readiness", () => {
   const passwordRoute = readFileSync(
     "src/app/api/profile/password/route.ts",

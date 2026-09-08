@@ -227,5 +227,6 @@ test("parent updates expose the full attendance window and openable photos", () 
   assert.match(page, /dailyReports=\{parentDailyReports\}/);
   assert.match(workspace, /Check-in: \{report\.checkInAt/);
   assert.match(workspace, /Check-out: \{report\.checkOutAt/);
-  assert.match(workspace, /href=\{imageSrc \|\| undefined\}[\s\S]*Open full-size photo/);
+  assert.match(workspace, /href=\{imageSrc && !previewMode \? imageSrc : undefined\}/);
+  assert.match(workspace, /\{previewMode \? "Photo preview" : "Open full-size photo"\}/);
 });

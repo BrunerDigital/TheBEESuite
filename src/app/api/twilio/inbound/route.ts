@@ -120,9 +120,24 @@ async function POSTHandler(request: NextRequest) {
   const fromKey = phoneMatchKey(from);
   if (!fromKey || !body) return twimlResponse();
 
+  const signatureTenantCenterIds = signatureMatch.tenantId
+    ? (await prisma.center.findMany({
+        where: { organization: { tenantId: signatureMatch.tenantId } },
+        select: { id: true },
+      })).map((center) => center.id)
+    : [];
+
   const candidates = await prisma.guardian.findMany({
     where: {
       phone: { contains: fromKey.slice(-4) },
+      ...(signatureMatch.tenantId
+        ? {
+            OR: [
+              { family: { centerId: { in: signatureTenantCenterIds.length ? signatureTenantCenterIds : ["__no_authorized_center__"] } } },
+              { user: { tenantId: signatureMatch.tenantId } },
+            ],
+          }
+        : {}),
     },
     take: 50,
     include: {

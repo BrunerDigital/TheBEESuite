@@ -558,12 +558,10 @@ async function POSTHandler(request: NextRequest) {
     }
 
     const requestedCenterIds = broadcastSegment.centerIds;
-    const scopedCenterIds = canAccessAllCenters(user)
-      ? requestedCenterIds
-      : requestedCenterIds.length
-        ? requestedCenterIds.filter((centerId) => messageCenterIds.includes(centerId))
-        : messageCenterIds;
-    if (!canAccessAllCenters(user) && requestedCenterIds.some((centerId) => !messageCenterIds.includes(centerId))) {
+    const scopedCenterIds = requestedCenterIds.length
+      ? requestedCenterIds.filter((centerId) => messageCenterIds.includes(centerId))
+      : messageCenterIds;
+    if (requestedCenterIds.some((centerId) => !messageCenterIds.includes(centerId))) {
       return NextResponse.json({ ok: false, error: "One or more selected centers are outside your access scope." }, { status: 403 });
     }
 
@@ -576,7 +574,7 @@ async function POSTHandler(request: NextRequest) {
         return NextResponse.json({ ok: false, error: "One or more selected classrooms are unavailable." }, { status: 400 });
       }
       const inaccessibleClassroom = selectedClassrooms.find((classroom) =>
-        !canAccessAllCenters(user) && !messageCenterIds.includes(classroom.centerId),
+        !messageCenterIds.includes(classroom.centerId),
       );
       if (inaccessibleClassroom) {
         return NextResponse.json({ ok: false, error: "One or more selected classrooms are outside your access scope." }, { status: 403 });
@@ -584,7 +582,7 @@ async function POSTHandler(request: NextRequest) {
     }
 
     const familyWhere: Prisma.FamilyWhereInput = {
-      ...(scopedCenterIds.length ? { centerId: { in: scopedCenterIds } } : {}),
+      centerId: { in: scopedCenterIds.length ? scopedCenterIds : ["__no_authorized_center__"] },
       children: {
         some: broadcastSegment.classroomIds.length
           ? { AND: [currentlyEnrolledChildWhere(), { classroomId: { in: broadcastSegment.classroomIds } }] }
@@ -854,7 +852,7 @@ async function POSTHandler(request: NextRequest) {
     if (!family) return NextResponse.json({ ok: false, error: "Family not found." }, { status: 404 });
 
     const isFamilyGuardian = family.guardians.some((guardian) => guardian.userId === user.id);
-    const hasCenterAccess = canAccessAllCenters(user) || Boolean(family.centerId && messageCenterIds.includes(family.centerId));
+    const hasCenterAccess = Boolean(family.centerId && messageCenterIds.includes(family.centerId));
     let hasClassroomAccess = false;
     if (!senderCanManageOperations && senderCanManageClassroom && !isFamilyGuardian) {
       const staffProfile = await prisma.staffProfile.findUnique({

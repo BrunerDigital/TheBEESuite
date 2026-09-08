@@ -79,6 +79,13 @@ test("Twilio inbound retries reserve a durable receipt before app side effects",
   assert.ok(transaction >= 0 && receipt > transaction && message > receipt);
 });
 
+test("Twilio tenant credentials constrain inbound guardian matching to that tenant", async () => {
+  const source = await readFile(new URL("../src/app/api/twilio/inbound/route.ts", import.meta.url), "utf8");
+  assert.match(source, /signatureMatch\.tenantId[\s\S]*organization: \{ tenantId: signatureMatch\.tenantId \}/);
+  assert.match(source, /family: \{ centerId: \{ in: signatureTenantCenterIds/);
+  assert.match(source, /user: \{ tenantId: signatureMatch\.tenantId \}/);
+});
+
 test("Twilio SMS consent keywords require exact opt-in or opt-out commands", () => {
   assert.equal(twilioSmsConsentAction("STOP"), "opt_out");
   assert.equal(twilioSmsConsentAction(" stop. "), "opt_out");

@@ -5,6 +5,7 @@ import test from "node:test";
 const previewSource = readFileSync("src/app/device-preview/page.tsx", "utf8");
 const proxySource = readFileSync("src/proxy.ts", "utf8");
 const appShellSource = readFileSync("src/components/app-shell.tsx", "utf8");
+const parentPortalSource = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
 const workflowSource = readFileSync("src/components/automation-workflow-builder.tsx", "utf8");
 const kioskSource = readFileSync("src/components/kiosk-check-in.tsx", "utf8");
 
@@ -50,6 +51,8 @@ test("preview shell navigation and data hooks remain inside the inert preview", 
   assert.match(appShellSource, /if \(previewMode \|\| !searchUserEmail \|\| query\.length < 2\)/);
   assert.match(appShellSource, /\[previewMode, searchQuery, searchUserEmail\]/);
   assert.match(appShellSource, /<ScopeContextLink currentUser=\{currentUser\} mobile previewMode=\{previewMode\} previewHrefBase=\{previewHrefBase\}/);
+  assert.match(parentPortalSource, /href=\{imageSrc && !previewMode \? imageSrc : undefined\}/);
+  assert.match(parentPortalSource, /\{previewMode \? "Photo preview" : "Open full-size photo"\}/);
 });
 
 test("shell navigation uses the earlier full sidebar breakpoint and equal mobile tabs", () => {

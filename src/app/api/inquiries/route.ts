@@ -503,6 +503,22 @@ async function POSTHandler(request: NextRequest) {
       return json({ ok: false, errors }, 400, origin);
     }
 
+    const turnstileFingerprintInput = {
+      centerId: [payload.centerId, payload.locationId, payload.publicLocationId].join("|"),
+      parentName: payload.parentName,
+      email: payload.email,
+      phone: payload.phone,
+      program: payload.program,
+    };
+    const botCheck = await verifyTurnstileToken({
+      token: payload.turnstileToken,
+      remoteIp: ip,
+      idempotencyKey: inquiryTurnstileIdempotencyKey(turnstileFingerprintInput, payload.turnstileToken),
+    });
+    if (!botCheck.ok) {
+      return json({ ok: false, error: botCheck.error }, 403, origin);
+    }
+
     const center = await getIntakeCenter({
       locationId: payload.locationId,
       publicLocationId: payload.publicLocationId,
@@ -510,22 +526,10 @@ async function POSTHandler(request: NextRequest) {
       strictLocationRouting: isKidCityInquiry(payload),
       brandName: payload.brandName,
     });
-    const fingerprintInput = {
+    const externalId = inquirySubmissionIdempotencyKey({
+      ...turnstileFingerprintInput,
       centerId: center.id,
-      parentName: payload.parentName,
-      email: payload.email,
-      phone: payload.phone,
-      program: payload.program,
-    };
-    const externalId = inquirySubmissionIdempotencyKey(fingerprintInput);
-    const botCheck = await verifyTurnstileToken({
-      token: payload.turnstileToken,
-      remoteIp: ip,
-      idempotencyKey: inquiryTurnstileIdempotencyKey(fingerprintInput, payload.turnstileToken),
     });
-    if (!botCheck.ok) {
-      return json({ ok: false, error: botCheck.error }, 403, origin);
-    }
 
     const locationRecipients = await getLocationNotificationEmails(center.id, center.email);
     const [parentFirstName, ...parentLastNameParts] = payload.parentName.split(/\s+/);
@@ -712,6 +716,7 @@ async function POSTHandler(request: NextRequest) {
       const updated = await prisma.integrationDelivery.updateMany({
         where: { id: row.id, status: "pending", attempts: claim.attempts },
         data: {
+          ...(result.id ? { providerMessageId: result.id } : {}),
           status: state.status,
           lastResult: result as Prisma.InputJsonObject,
           lastError: result.error ?? null,

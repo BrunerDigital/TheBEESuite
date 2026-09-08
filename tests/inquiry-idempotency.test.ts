@@ -47,7 +47,9 @@ test("the intake route claims each external delivery once and keeps unfinished w
   assert.match(source, /superseded:/);
   assert.match(source, /duplicateSuppressed:\s*true/);
   assert.match(source, /idempotency_key: idempotencyKey/);
+  assert.ok(source.indexOf("const botCheck") < source.indexOf("const center = await getIntakeCenter"));
   assert.match(source, /integrationDelivery\.createMany/);
   assert.match(source, /claimIntegrationDeliveryForRetry/);
   assert.match(source, /inquiry:\$\{lead\.id\}:sendgrid/);
+  assert.match(source, /providerMessageId: result\.id/);
 });

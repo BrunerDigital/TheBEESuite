@@ -24,7 +24,7 @@ const currentGuides = [
 test("current guides carry an approved revision and exclude superseded workflow copy", () => {
   for (const path of currentGuides) {
     const content = readFileSync(path, "utf8");
-    assert.match(content, /(?:August (?:11|24)|September (?:2|3)), 2026/, path);
+    assert.match(content, /(?:August (?:11|24)|September (?:2|3|8)), 2026/, path);
     assert.doesNotMatch(content, /creates? (?:a |the )?Friday invoice/i, path);
     assert.doesNotMatch(content, /bank payment is the preferred payment method/i, path);
     assert.doesNotMatch(content, /create your password.*setup link/i, path);
@@ -232,7 +232,7 @@ test("role SOPs cover the current August UI and workflow baseline", () => {
   const inviteUi = readFileSync("src/components/parent-portal-invite-button.tsx", "utf8");
 
   for (const [name, content] of Object.entries({ director, billing, parent, teacher, executive, manual })) {
-    assert.match(content, /(?:August (?:11|24)|September 2), 2026/, name);
+    assert.match(content, /(?:August (?:11|24)|September (?:2|8)), 2026/, name);
   }
 
   assert.match(director, /Add Family, Parent \+ Child/);

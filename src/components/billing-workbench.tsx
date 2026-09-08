@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, ChevronDown, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Save, Search, Send } from "lucide-react";
+import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, ChevronDown, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, PlusCircle, ReceiptText, RotateCcw, Rows3, Save, Search, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { useSchoolTimeZoneResolver } from "@/components/school-time-zone-context";
 import { formatZonedDateTime, unambiguousZonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
@@ -31,6 +31,12 @@ import {
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { StripeTerminalPayment } from "@/components/stripe-terminal-payment";
 import { TUITION_CREDIT_CATEGORIES, type TuitionCreditCategory } from "@/lib/tuition-credits";
+import {
+  ONE_TIME_BILLING_ADJUSTMENT_OPTIONS,
+  oneTimeBillingAdjustmentNeedsNote,
+  oneTimeBillingAdjustmentOption,
+  type OneTimeBillingAdjustmentReason,
+} from "@/lib/one-time-billing-adjustments";
 import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
 
 export type BillingWorkbenchFamily = {
@@ -178,6 +184,10 @@ function todayDate() {
 
 function currentLocalDateTime(timeZone: string) {
   return zonedDateTimeLocalValue(new Date(), timeZone);
+}
+
+function currentLocalDate(timeZone: string) {
+  return currentLocalDateTime(timeZone).slice(0, 10);
 }
 
 function manualPaymentTimestamp(value: string, timeZone: string) {
@@ -389,7 +399,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [batchTarget, setBatchTarget] = useState("child");
   const [ageGroup, setAgeGroup] = useState("all");
   const [enrollmentStatus, setEnrollmentStatus] = useState("enrolled");
-  const [adjustmentType, setAdjustmentType] = useState("credit");
+  const [adjustmentReason, setAdjustmentReason] = useState<OneTimeBillingAdjustmentReason>("vacation_credit");
+  const [adjustmentAmountDollars, setAdjustmentAmountDollars] = useState("");
+  const [adjustmentEffectiveDate, setAdjustmentEffectiveDate] = useState(() => currentLocalDate(timeZone));
+  const [adjustmentNote, setAdjustmentNote] = useState("");
   const [checkAmountDollars, setCheckAmountDollars] = useState("");
   const [checkNumber, setCheckNumber] = useState("");
   const [checkPaidAt, setCheckPaidAt] = useState(() => currentLocalDateTime(timeZone));
@@ -558,6 +571,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     [families, locationTuitionPlans, planAgeGroup, selectedCenter],
   );
   const familyBalanceCents = selectedFamily?.billingAccount?.balanceCents ?? 0;
+  const selectedAdjustmentOption = oneTimeBillingAdjustmentOption(adjustmentReason) ?? ONE_TIME_BILLING_ADJUSTMENT_OPTIONS[0];
+  const adjustmentAmountCents = dollarsToCents(adjustmentAmountDollars);
+  const projectedAdjustmentBalanceCents = familyBalanceCents
+    + (selectedAdjustmentOption.adjustmentType === "credit" ? -adjustmentAmountCents : adjustmentAmountCents);
   const openInvoices = selectedBillingAccount?.openInvoices ?? [];
   const refundablePayments = (selectedBillingAccount?.recentPayments ?? []).filter((payment) => payment.refundableCents > 0 && payment.stripePaymentIntentId);
   const canApproveRefunds = ["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER"].includes(currentRole);
@@ -891,6 +908,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setRefundAmountDollars("");
     setInvoiceEditorId("");
     setInvoiceEditDraft(null);
+    setAdjustmentAmountDollars("");
+    setAdjustmentEffectiveDate(localNow.slice(0, 10));
+    setAdjustmentNote("");
     applyFamilyTuitionContext(nextFamily, nextPlans);
   }
 
@@ -903,6 +923,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setRefundAmountDollars("");
     setInvoiceEditorId("");
     setInvoiceEditDraft(null);
+    setAdjustmentAmountDollars("");
+    setAdjustmentEffectiveDate(currentLocalDate(timeZone));
+    setAdjustmentNote("");
     applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
   }
 
@@ -968,6 +991,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         appliedInvoiceIds?: string[];
         warning?: string | null;
         pendingApproval?: boolean;
+        adjustmentDescription?: string;
+        balanceAfterCents?: number;
       } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Billing action could not be completed.");
@@ -1020,8 +1045,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         return;
       }
       if (payload.mode === "adjustment") {
-        setStatusMessage("Ledger adjustment posted to the selected family account.");
-        setAmountDollars("");
+        const updatedBalance = typeof json?.balanceAfterCents === "number"
+          ? ` New family balance: ${money(json.balanceAfterCents)}.`
+          : "";
+        setStatusMessage(`${json?.adjustmentDescription || selectedAdjustmentOption.defaultDescription} posted once.${updatedBalance} Recurring tuition was not changed.`);
+        setAdjustmentAmountDollars("");
+        setAdjustmentEffectiveDate(currentLocalDate(timeZone));
+        setAdjustmentNote("");
         router.refresh();
         return;
       }
@@ -1155,13 +1185,24 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitAdjustment() {
     if (!selectedFamily) return setErrorMessage("Choose a family before posting an adjustment.");
-    if (!confirmBillingAction(`post a ${adjustmentType} adjustment`)) return;
+    if (adjustmentAmountCents <= 0) return setErrorMessage("Enter a one-time fee or credit amount greater than zero.");
+    if (!adjustmentEffectiveDate) return setErrorMessage("Choose the date this one-time fee or credit applies to.");
+    if (oneTimeBillingAdjustmentNeedsNote(adjustmentReason) && !adjustmentNote.trim()) {
+      return setErrorMessage("Add a statement note that explains this one-time adjustment.");
+    }
+    const balanceEffect = selectedAdjustmentOption.adjustmentType === "credit" ? "lower" : "increase";
+    const confirmed = window.confirm(
+      `Post a ${money(adjustmentAmountCents)} ${selectedAdjustmentOption.label.toLowerCase()} dated ${adjustmentEffectiveDate} to ${selectedFamily.name}? This will ${balanceEffect} the current family balance once and will not change saved recurring tuition or future weekly invoices.`,
+    );
+    if (!confirmed) return;
     submit({
       mode: "adjustment",
       familyId: selectedFamily.id,
-      adjustmentType,
-      amountDollars,
-      description,
+      adjustmentReason,
+      adjustmentType: selectedAdjustmentOption.adjustmentType,
+      amountCents: adjustmentAmountCents,
+      adjustmentEffectiveDate,
+      adjustmentNote: adjustmentNote.trim(),
     });
   }
 
@@ -2038,7 +2079,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           value={billingAction}
           onValueChange={(value) => {
             setBillingAction(value);
-            if (["edit", "batch", "weekly-recovery", "payroll", "refund", "agency", "adjustment"].includes(value)) {
+            if (["edit", "batch", "weekly-recovery", "payroll", "refund", "agency"].includes(value)) {
               setMoreBillingActionsExpanded(true);
             }
           }}
@@ -2061,12 +2102,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 More billing tasks
                 <ChevronDown className={`size-4 transition-transform ${moreBillingActionsExpanded ? "rotate-180" : ""}`} aria-hidden="true" />
               </Button>
-              <p className="mt-1 max-w-md text-xs text-muted-foreground">Invoice corrections, batch work, payroll deductions, refunds, agency claims, and adjustments</p>
+              <p className="mt-1 max-w-md text-xs text-muted-foreground">Invoice corrections, batch work, payroll deductions, refunds, and agency claims</p>
             </div>
           </div>
           <TabsList id="billing-action-tabs" className="flex flex-wrap justify-start gap-1 group-data-horizontal/tabs:h-auto" aria-label="Billing tasks">
             <TabsTrigger value="recurring" className="h-10 min-h-10"><CalendarClock data-icon="inline-start" />Child tuition</TabsTrigger>
             <TabsTrigger value="single" className="h-10 min-h-10"><ReceiptText data-icon="inline-start" />Family charge</TabsTrigger>
+            <TabsTrigger value="adjustment" className="h-10 min-h-10"><MinusCircle data-icon="inline-start" />One-time fee / credit</TabsTrigger>
             <TabsTrigger value="check" className="h-10 min-h-10"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
             <TabsTrigger value="cash" className="h-10 min-h-10"><Banknote data-icon="inline-start" />Cash payment</TabsTrigger>
             <TabsTrigger value="edit" className={`h-10 min-h-10 ${!moreBillingActionsExpanded && billingAction !== "edit" ? "hidden" : ""}`}><FilePenLine data-icon="inline-start" />Edit invoice</TabsTrigger>
@@ -2075,7 +2117,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <TabsTrigger value="payroll" className={`h-10 min-h-10 ${!moreBillingActionsExpanded && billingAction !== "payroll" ? "hidden" : ""}`}><Banknote data-icon="inline-start" />Payroll deduction</TabsTrigger>
             <TabsTrigger value="refund" className={`h-10 min-h-10 ${!moreBillingActionsExpanded && billingAction !== "refund" ? "hidden" : ""}`}><RotateCcw data-icon="inline-start" />Refund</TabsTrigger>
             <TabsTrigger value="agency" className={`h-10 min-h-10 ${!moreBillingActionsExpanded && billingAction !== "agency" ? "hidden" : ""}`}><BadgeDollarSign data-icon="inline-start" />Agency claims</TabsTrigger>
-            <TabsTrigger value="adjustment" className={`h-10 min-h-10 ${!moreBillingActionsExpanded && billingAction !== "adjustment" ? "hidden" : ""}`}><MinusCircle data-icon="inline-start" />Credit / adjustment</TabsTrigger>
           </TabsList>
 
           <TabsContent value="single" className="space-y-4 rounded-lg border bg-background/35 p-4">
@@ -2752,26 +2793,90 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </TabsContent>
 
           <TabsContent value="adjustment" className="space-y-4 rounded-lg border bg-background/35 p-4">
+            <div>
+              <div className="text-sm font-medium">Post one fee or credit without changing weekly tuition</div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Use this for a single approved late fee, vacation credit, or other balance adjustment. It posts once to the family ledger and leaves the child&apos;s saved recurring tuition and future weekly invoices unchanged.
+              </p>
+            </div>
+            <Alert className="border-primary/25 bg-primary/5">
+              <CheckCircle2 className="size-4" />
+              <AlertTitle>One-time ledger entry</AlertTitle>
+              <AlertDescription>
+                A credit lowers the family balance. A fee or debit increases it. This action does not create or edit an invoice, submit a payment, or turn autopay on.
+              </AlertDescription>
+            </Alert>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
-                <Label htmlFor="billing-adjustment-type">Adjustment</Label>
-                <Select value={adjustmentType} onValueChange={(value) => value && setAdjustmentType(value)}>
-                  <SelectTrigger id="billing-adjustment-type"><SelectValue /></SelectTrigger>
+                <Label htmlFor="billing-adjustment-reason">One-time action</Label>
+                <Select
+                  value={adjustmentReason}
+                  onValueChange={(value) => {
+                    const option = oneTimeBillingAdjustmentOption(value);
+                    if (option) {
+                      setAdjustmentReason(option.id);
+                      setAdjustmentNote("");
+                    }
+                  }}
+                >
+                  <SelectTrigger id="billing-adjustment-reason"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="credit">Add family credit</SelectItem>
-                    <SelectItem value="debit">Add balance debit</SelectItem>
+                    {ONE_TIME_BILLING_ADJUSTMENT_OPTIONS.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="billing-adjustment-amount">Amount</Label>
-                <Input id="billing-adjustment-amount" inputMode="decimal" value={amountDollars} onChange={(event) => setAmountDollars(event.target.value)} placeholder="125.00" />
+                <Input
+                  id="billing-adjustment-amount"
+                  inputMode="decimal"
+                  value={adjustmentAmountDollars}
+                  onChange={(event) => setAdjustmentAmountDollars(event.target.value)}
+                  placeholder="25.00"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="billing-adjustment-effective-date">Applies to date</Label>
+                <Input
+                  id="billing-adjustment-effective-date"
+                  type="date"
+                  value={adjustmentEffectiveDate}
+                  onChange={(event) => setAdjustmentEffectiveDate(event.target.value)}
+                />
+                <p className="text-xs leading-5 text-muted-foreground">The balance changes when you post; this date identifies the service or policy date in the ledger.</p>
               </div>
             </div>
-            <DescriptionField id="billing-adjustment-description" value={description} setValue={setDescription} />
-            <Button disabled={isPending || !selectedFamily || !amountDollars} onClick={submitAdjustment}>
-              <MinusCircle data-icon="inline-start" />
-              Post Adjustment
+            <div className="space-y-1">
+              <Label htmlFor="billing-adjustment-note">
+                Statement note {oneTimeBillingAdjustmentNeedsNote(adjustmentReason) ? "(required)" : "(optional)"}
+              </Label>
+              <Textarea
+                id="billing-adjustment-note"
+                value={adjustmentNote}
+                onChange={(event) => setAdjustmentNote(event.target.value)}
+                placeholder={adjustmentReason === "vacation_credit" ? "Week of September 14" : adjustmentReason === "late_fee" ? "September 8 late-payment policy" : "Explain the approved reason"}
+              />
+              <p className="text-xs leading-5 text-muted-foreground">Shown in the family ledger. Include the service week or policy reason; do not enter sensitive child information.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <SummaryMetric label="Current balance" value={money(familyBalanceCents)} detail={selectedFamily?.name ?? "Choose a family"} />
+              <SummaryMetric
+                label={selectedAdjustmentOption.adjustmentType === "credit" ? "One-time credit" : "One-time fee"}
+                value={`${selectedAdjustmentOption.adjustmentType === "credit" ? "−" : "+"}${money(adjustmentAmountCents)}`}
+                detail={`${selectedAdjustmentOption.label} · ${adjustmentEffectiveDate || "Choose date"}`}
+              />
+              <SummaryMetric label="Projected balance" value={money(projectedAdjustmentBalanceCents)} detail="Recurring tuition unchanged" />
+            </div>
+            <Button
+              disabled={isPending || !selectedFamily || adjustmentAmountCents <= 0 || !adjustmentEffectiveDate || (oneTimeBillingAdjustmentNeedsNote(adjustmentReason) && !adjustmentNote.trim())}
+              onClick={submitAdjustment}
+            >
+              {selectedAdjustmentOption.adjustmentType === "credit"
+                ? <MinusCircle data-icon="inline-start" />
+                : <PlusCircle data-icon="inline-start" />}
+              {selectedAdjustmentOption.buttonLabel}
             </Button>
           </TabsContent>
         </Tabs>

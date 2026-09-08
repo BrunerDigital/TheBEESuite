@@ -17,6 +17,13 @@ import { prisma } from "@/lib/prisma";
 import { issueFamilyRefund, validateFamilyRefundAvailability } from "@/lib/family-refunds";
 import { refundSubmissionMode } from "@/lib/refund-approval";
 import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
+import {
+  oneTimeBillingAdjustmentDescription,
+  oneTimeBillingAdjustmentEffectiveAt,
+  oneTimeBillingAdjustmentNeedsNote,
+  oneTimeBillingAdjustmentOption,
+  normalizeOneTimeBillingAdjustmentEffectiveDate,
+} from "@/lib/one-time-billing-adjustments";
 import { invoiceLedgerBalanceCents, invoiceVoidBlocker } from "@/lib/invoice-void";
 import {
   invoiceResponsibilityReviewExempt,
@@ -421,9 +428,29 @@ async function createLedgerAdjustment(user: CurrentBillingUser, body: Record<str
   const amountCents = amountCentsFromBody(body);
   if (amountCents <= 0) return NextResponse.json({ ok: false, error: "Adjustment amount is required." }, { status: 400 });
 
-  const adjustmentType = clean(body.adjustmentType).toLowerCase() === "debit" ? "debit" : "credit";
+  const requestedAdjustmentReason = clean(body.adjustmentReason);
+  const adjustmentOption = requestedAdjustmentReason ? oneTimeBillingAdjustmentOption(requestedAdjustmentReason) : null;
+  if (requestedAdjustmentReason && !adjustmentOption) {
+    return NextResponse.json({ ok: false, error: "Choose a supported one-time fee or credit." }, { status: 400 });
+  }
+  const adjustmentNote = clean(body.adjustmentNote);
+  if (adjustmentOption && oneTimeBillingAdjustmentNeedsNote(adjustmentOption.id) && !adjustmentNote) {
+    return NextResponse.json({ ok: false, error: "A statement note is required for an other fee or credit." }, { status: 400 });
+  }
+  const adjustmentType = adjustmentOption?.adjustmentType
+    ?? (clean(body.adjustmentType).toLowerCase() === "debit" ? "debit" : "credit");
+  const adjustmentEffectiveDate = normalizeOneTimeBillingAdjustmentEffectiveDate(body.adjustmentEffectiveDate);
+  if (adjustmentOption && !adjustmentEffectiveDate) {
+    return NextResponse.json({ ok: false, error: "Choose a valid date for this one-time fee or credit." }, { status: 400 });
+  }
+  const effectiveAt = adjustmentEffectiveDate
+    ? oneTimeBillingAdjustmentEffectiveAt(adjustmentEffectiveDate)
+    : new Date();
   const ledgerAmountCents = adjustmentType === "credit" ? -amountCents : amountCents;
-  const description = clean(body.description) || (adjustmentType === "credit" ? "Account credit" : "Manual billing adjustment");
+  const description = adjustmentOption
+    ? oneTimeBillingAdjustmentDescription(adjustmentOption.id, adjustmentNote)
+    : clean(body.description) || (adjustmentType === "credit" ? "Account credit" : "Manual billing adjustment");
+  const adjustmentReason = adjustmentOption?.id ?? "manual";
 
   const entry = await prisma.$transaction(async (tx) => {
     const account = await tx.billingAccount.upsert({
@@ -442,11 +469,15 @@ async function createLedgerAdjustment(user: CurrentBillingUser, body: Record<str
         description,
         amountCents: ledgerAmountCents,
         balanceAfterCents: updatedAccount.balanceCents,
+        effectiveAt,
         sourceSystem: "bee_suite_manual",
         externalId: `manual:${randomUUID()}`,
         metadata: {
           enteredBy: user.email,
           adjustmentType,
+          adjustmentReason,
+          adjustmentEffectiveDate,
+          adjustmentNote: adjustmentNote || null,
           familyId: familyAccess.family.id,
         },
       },
@@ -462,10 +493,19 @@ async function createLedgerAdjustment(user: CurrentBillingUser, body: Record<str
       familyId: familyAccess.family.id,
       amountCents: ledgerAmountCents,
       adjustmentType,
+      adjustmentReason,
+      adjustmentEffectiveDate,
     },
   });
 
-  return NextResponse.json({ ok: true, entry });
+  return NextResponse.json({
+    ok: true,
+    entry,
+    adjustmentType,
+    adjustmentReason,
+    adjustmentDescription: description,
+    balanceAfterCents: entry.balanceAfterCents,
+  });
 }
 
 async function createAgencyPayment(user: CurrentBillingUser, body: Record<string, unknown>) {

@@ -90,6 +90,13 @@ export function RegistrationShareCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <Alert className="border-sky-500/25 bg-sky-500/5">
+          <Mail className="size-4" />
+          <AlertTitle>Registration form, not parent app access</AlertTitle>
+          <AlertDescription>
+            Send this while the family still needs to complete its enrollment packet. If the enrolled family is already saved and only needs app access, open Families &amp; Communication, choose the family, and use Parent Portal Access instead.
+          </AlertDescription>
+        </Alert>
         {result?.ok ? (
           <Alert className="border-emerald-500/30 bg-emerald-500/10" aria-live="polite">
             <CheckCircle2 className="size-4" />

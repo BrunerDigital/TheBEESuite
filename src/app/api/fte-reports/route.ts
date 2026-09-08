@@ -52,6 +52,7 @@ const FTE_SHEET_HEADERS = [
   "Status",
   "Submitted By",
   "Notes",
+  "Agency Billed Outside BEE Suite",
 ];
 
 function clean(value: unknown) {
@@ -166,6 +167,7 @@ function reportCsvRow(report: Prisma.FteReportGetPayload<{ include: typeof repor
     report.status,
     report.submittedBy?.email ?? "",
     report.notes ?? "",
+    metadataNumber(metadata.externalAgencyBillAmount) ?? "",
   ];
 }
 
@@ -282,6 +284,7 @@ async function GETHandler(request: NextRequest) {
         accountReceivableAmount: metadataNumber(metadata.accountReceivableAmount),
         selfPayerBillAmount: metadataNumber(metadata.selfPayerBillAmount),
         subsidyBillAmount: metadataNumber(metadata.subsidyBillAmount),
+        externalAgencyBillAmount: metadataNumber(metadata.externalAgencyBillAmount),
         totalBilledAmount: metadataNumber(metadata.totalBilledAmount),
         enrolledCount: report.enrolledCount,
         fullTimeCount: report.fullTimeCount,
@@ -435,10 +438,11 @@ async function POSTHandler(request: NextRequest) {
   const accountReceivableAmount = nullableFloatValue(body.accountReceivableAmount);
   const selfPayerBillAmount = nullableFloatValue(body.selfPayerBillAmount);
   const subsidyBillAmount = nullableFloatValue(body.subsidyBillAmount);
-  const totalBilledAmount = nullableFloatValue(body.totalBilledAmount) ??
-    (selfPayerBillAmount !== null || subsidyBillAmount !== null
-      ? roundAmount((selfPayerBillAmount ?? 0) + (subsidyBillAmount ?? 0))
-      : null);
+  const externalAgencyBillAmount = nullableFloatValue(body.externalAgencyBillAmount);
+  const hasBillingComponents = selfPayerBillAmount !== null || subsidyBillAmount !== null || externalAgencyBillAmount !== null;
+  const totalBilledAmount = hasBillingComponents
+    ? roundAmount((selfPayerBillAmount ?? 0) + (subsidyBillAmount ?? 0) + (externalAgencyBillAmount ?? 0))
+    : nullableFloatValue(body.totalBilledAmount);
   const licenseCapacity = nullableIntValue(body.licenseCapacity) ?? center.licensedCapacity ?? null;
   const occupancyPercent = nullableFloatValue(body.occupancyPercent) ?? percent(intValue(body.enrolledCount), licenseCapacity);
   const payrollAmount = nullableFloatValue(body.payrollAmount);
@@ -510,6 +514,7 @@ async function POSTHandler(request: NextRequest) {
       accountReceivableAmount,
       selfPayerBillAmount,
       subsidyBillAmount,
+      externalAgencyBillAmount,
       totalBilledAmount,
       licenseCapacity,
       occupancyPercent,
@@ -570,6 +575,7 @@ async function POSTHandler(request: NextRequest) {
     report.status,
     report.submittedBy?.email ?? user.email,
     report.notes ?? "",
+    externalAgencyBillAmount ?? "",
   ], center.organization.tenantId);
 
   const executiveUsers = await prisma.user.findMany({
@@ -609,6 +615,7 @@ async function POSTHandler(request: NextRequest) {
       accountReceivableAmount,
       selfPayerBillAmount,
       subsidyBillAmount,
+      externalAgencyBillAmount,
       totalBilledAmount,
       payrollAmount,
       payrollPercent,
@@ -634,6 +641,7 @@ async function POSTHandler(request: NextRequest) {
       accountReceivableAmount,
       selfPayerBillAmount,
       subsidyBillAmount,
+      externalAgencyBillAmount,
       totalBilledAmount,
       enrolledCount: report.enrolledCount,
       fullTimeCount: report.fullTimeCount,

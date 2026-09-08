@@ -7,6 +7,7 @@ export type FteImportRow = {
   accountReceivableAmount: number | null;
   selfPayerBillAmount: number | null;
   subsidyBillAmount: number | null;
+  externalAgencyBillAmount: number | null;
   totalBilledAmount: number | null;
   enrolledCount: number;
   fullTimeCount: number;
@@ -148,6 +149,12 @@ export function parseFteImportCsv(text: string): ParseResult {
         "amount of subsidy bill",
         "subsidy bill",
         "subsidy billed",
+      ])),
+      externalAgencyBillAmount: asOptionalNumber(field(row, [
+        "agency billed outside bee suite",
+        "external agency bill",
+        "external agency billed",
+        "upk ccap billed",
       ])),
       totalBilledAmount: asOptionalNumber(field(row, [
         "total amount billed",

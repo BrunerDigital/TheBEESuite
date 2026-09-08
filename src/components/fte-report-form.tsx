@@ -40,6 +40,7 @@ export type FteReportRow = {
   accountReceivableAmount?: number | null;
   selfPayerBillAmount?: number | null;
   subsidyBillAmount?: number | null;
+  externalAgencyBillAmount?: number | null;
   totalBilledAmount?: number | null;
   enrolledCount: number;
   fullTimeCount: number;
@@ -124,6 +125,7 @@ type FormState = {
   accountReceivableAmount: string;
   selfPayerBillAmount: string;
   subsidyBillAmount: string;
+  externalAgencyBillAmount: string;
   totalBilledAmount: string;
   enrolledCount: string;
   fullTimeCount: string;
@@ -183,7 +185,8 @@ function emptyForm(centerId = "", prefill?: FteReportPrefill, center?: FteReport
     accountReceivableAmount: asOptionalInput(prefill?.accountReceivableAmount),
     selfPayerBillAmount: asOptionalInput(prefill?.selfPayerBillAmount),
     subsidyBillAmount: asOptionalInput(prefill?.subsidyBillAmount),
-    totalBilledAmount: asOptionalInput(prefill?.totalBilledAmount),
+    externalAgencyBillAmount: "",
+    totalBilledAmount: "",
     enrolledCount: prefill ? asInput(prefill.enrolledCount) : "",
     fullTimeCount: prefill?.fullTimeCount === null || prefill?.fullTimeCount === undefined ? "" : asInput(prefill.fullTimeCount),
     partTimeCount: prefill?.partTimeCount === null || prefill?.partTimeCount === undefined ? "" : asInput(prefill.partTimeCount),
@@ -278,8 +281,10 @@ export function FteReportForm({
   const calculatedTotalBilled = useMemo(() => {
     const selfPayer = Number(form.selfPayerBillAmount || 0);
     const subsidy = Number(form.subsidyBillAmount || 0);
-    return Number.isFinite(selfPayer + subsidy) && (selfPayer || subsidy) ? roundedNumber(selfPayer + subsidy) : 0;
-  }, [form.selfPayerBillAmount, form.subsidyBillAmount]);
+    const externalAgency = Number(form.externalAgencyBillAmount || 0);
+    const total = selfPayer + subsidy + externalAgency;
+    return Number.isFinite(total) && (selfPayer || subsidy || externalAgency) ? roundedNumber(total) : 0;
+  }, [form.externalAgencyBillAmount, form.selfPayerBillAmount, form.subsidyBillAmount]);
   const ageGroupCount = useMemo(() => ageGroupTotal({
     infants: Number(form.infants || 0),
     toddlers: Number(form.toddlers || 0),
@@ -378,6 +383,9 @@ export function FteReportForm({
   function editReport(report: FteReportRow) {
     setStatusMessage("");
     setErrorMessage("");
+    const hasBillingBreakdown = report.selfPayerBillAmount !== null && report.selfPayerBillAmount !== undefined
+      || report.subsidyBillAmount !== null && report.subsidyBillAmount !== undefined
+      || report.externalAgencyBillAmount !== null && report.externalAgencyBillAmount !== undefined;
     setForm({
       id: report.id,
       centerId: report.centerId,
@@ -387,7 +395,8 @@ export function FteReportForm({
       accountReceivableAmount: asOptionalInput(report.accountReceivableAmount),
       selfPayerBillAmount: asOptionalInput(report.selfPayerBillAmount),
       subsidyBillAmount: asOptionalInput(report.subsidyBillAmount),
-      totalBilledAmount: asOptionalInput(report.totalBilledAmount),
+      externalAgencyBillAmount: asOptionalInput(report.externalAgencyBillAmount),
+      totalBilledAmount: hasBillingBreakdown ? "" : asOptionalInput(report.totalBilledAmount),
       enrolledCount: asInput(report.enrolledCount),
       fullTimeCount: asInput(report.fullTimeCount),
       partTimeCount: asInput(report.partTimeCount),
@@ -726,6 +735,37 @@ export function FteReportForm({
           </div>
         </div>
 
+        <section className="rounded-xl border bg-background/50 p-4" aria-labelledby={`${fieldIdPrefix}-weekly-billing-heading`}>
+          <div className="mb-3">
+            <h3 id={`${fieldIdPrefix}-weekly-billing-heading`} className="text-sm font-semibold">Weekly Billing</h3>
+            <p className="text-xs text-muted-foreground">
+              BEE Suite billing is prefilled automatically. Add UPK, CCAP, or other agency billing submitted outside BEE Suite; it is included in the calculated total.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-1">
+              <Label htmlFor={`${fieldIdPrefix}-self-payer-billed`}>BEE Suite self-payer billed</Label>
+              <Input id={`${fieldIdPrefix}-self-payer-billed`} name="selfPayerBillAmount" value={form.selfPayerBillAmount} onChange={(event) => setField("selfPayerBillAmount", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" autoComplete="off" placeholder="0.00" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`${fieldIdPrefix}-subsidy-billed`}>BEE Suite agency billed</Label>
+              <Input id={`${fieldIdPrefix}-subsidy-billed`} name="subsidyBillAmount" value={form.subsidyBillAmount} onChange={(event) => setField("subsidyBillAmount", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" autoComplete="off" placeholder="0.00" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`${fieldIdPrefix}-external-agency-billed`}>Agency billed outside BEE Suite</Label>
+              <Input id={`${fieldIdPrefix}-external-agency-billed`} name="externalAgencyBillAmount" value={form.externalAgencyBillAmount} onChange={(event) => setField("externalAgencyBillAmount", event.target.value)} type="number" inputMode="decimal" min="0" step="0.01" autoComplete="off" placeholder="0.00" />
+              <p className="text-xs text-muted-foreground">Enter the UPK, CCAP, or other agency amount submitted for this week.</p>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm font-medium">Total billed</div>
+              <output className="block h-9 rounded-md border bg-muted/40 px-3 py-2 text-sm tabular-nums" aria-live="polite">
+                {formatMoney(calculatedTotalBilled || 0)}
+              </output>
+              <p className="text-xs text-muted-foreground">Calculated from all 3 billing amounts.</p>
+            </div>
+          </div>
+        </section>
+
         <CollapsiblePanel
           id={`fte-${mode}-legacy-fields`}
           title="Advanced financial and legacy fields"
@@ -743,24 +783,6 @@ export function FteReportForm({
             <div className="space-y-1">
               <Label htmlFor={`${fieldIdPrefix}-accounts-receivable`}>Past-due current-family AR</Label>
               <Input id={`${fieldIdPrefix}-accounts-receivable`} value={form.accountReceivableAmount} onChange={(event) => setField("accountReceivableAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldIdPrefix}-self-payer-billed`}>Self-payer billed</Label>
-              <Input id={`${fieldIdPrefix}-self-payer-billed`} value={form.selfPayerBillAmount} onChange={(event) => setField("selfPayerBillAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldIdPrefix}-subsidy-billed`}>Subsidy billed</Label>
-              <Input id={`${fieldIdPrefix}-subsidy-billed`} value={form.subsidyBillAmount} onChange={(event) => setField("subsidyBillAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldIdPrefix}-total-billed`}>Total billed</Label>
-              <Input
-                id={`${fieldIdPrefix}-total-billed`}
-                value={form.totalBilledAmount}
-                onChange={(event) => setField("totalBilledAmount", event.target.value)}
-                inputMode="decimal"
-                placeholder={calculatedTotalBilled ? `Calculated ${calculatedTotalBilled}` : "0.00"}
-              />
             </div>
             <div className="space-y-1">
               <Label htmlFor={`${fieldIdPrefix}-license-capacity`}>License capacity</Label>

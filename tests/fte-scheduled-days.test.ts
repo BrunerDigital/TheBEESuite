@@ -104,11 +104,16 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   const bulkRoute = readFileSync("src/app/api/fte-reports/bulk/route.ts", "utf8");
   const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const explorer = readFileSync("src/components/fte-report-explorer.tsx", "utf8");
+  const sheets = readFileSync("src/lib/google-sheets.ts", "utf8");
 
   assert.match(form, /2 days\/week/);
   assert.match(form, /4 days\/week/);
   assert.match(form, /four = 0\.8/);
   assert.match(form, /Past-due current-family AR/);
+  assert.match(form, /Agency billed outside BEE Suite/);
+  assert.match(form, /UPK, CCAP, or other agency billing submitted outside BEE Suite/);
+  assert.match(form, /selfPayer \+ subsidy \+ externalAgency/);
+  assert.match(form, /hasBillingBreakdown \? "" : asOptionalInput\(report\.totalBilledAmount\)/);
   assert.match(form, /Past-due AR must be verified/);
   assert.match(form, /Missing weekly day counts:/);
   assert.match(form, /Refresh live school data/);
@@ -135,6 +140,11 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(route, /twoDayCount: useScheduledDayBreakdown \? scheduledDayCounts\.twoDayCount : null/);
   assert.match(route, /scheduledChildrenCount !== enrolledCount/);
   assert.match(route, /accountReceivableReviewRequired === true && !accountReceivableValueProvided/);
+  assert.match(route, /externalAgencyBillAmount = nullableFloatValue\(body\.externalAgencyBillAmount\)/);
+  assert.match(route, /selfPayerBillAmount \?\? 0\) \+ \(subsidyBillAmount \?\? 0\) \+ \(externalAgencyBillAmount \?\? 0/);
+  assert.ok(route.indexOf('"Agency Billed Outside BEE Suite"') > route.indexOf('"Notes"'));
+  assert.match(sheets, /const canExtendHeaders = firstRow\.length < headers\.length/);
+  assert.match(sheets, /firstRow\.every\(\(value, index\) => String\(value \?\? ""\) === headers\[index\]\)/);
   assert.match(bulkRoute, /select: \{ id: true, sourceMetadata: true \}/);
   assert.match(bulkRoute, /sourceMetadata: \{\s*\.\.\.existingMetadata,/);
   assert.match(bulkRoute, /preservesScheduledDayBreakdown\s*\?\s*calculateScheduledDaysFte\(existingScheduledDayCounts\)/);
@@ -143,6 +153,7 @@ test("FTE entry UI and API preserve legacy exports while saving the day breakdow
   assert.match(explorer, /twoDayCount: inputOptionalNumber\(report\.twoDayCount\)/);
   assert.match(explorer, /label="2 days\/week"/);
   assert.match(explorer, /label="5 days\/week"/);
+  assert.match(explorer, /label="Agency billed outside BEE Suite"/);
   assert.match(explorer, /next\.fteCount = ""/);
   assert.match(page, /aging\.oneToThirtyCents \+ aging\.thirtyOneToSixtyCents \+ aging\.sixtyOnePlusCents/);
   assert.match(page, /past-due receivables/);

@@ -367,7 +367,11 @@ async function ensureHeaders(
   const firstRow = current.values?.[0] ?? [];
   const hasHeaderContent = firstRow.some((value) => String(value || "").trim());
 
-  if (hasHeaderContent) return;
+  if (hasHeaderContent) {
+    const canExtendHeaders = firstRow.length < headers.length
+      && firstRow.every((value, index) => String(value ?? "") === headers[index]);
+    if (!canExtendHeaders) return;
+  }
 
   await googleFetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(

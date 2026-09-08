@@ -5,7 +5,6 @@ import {
   ONE_TIME_BILLING_ADJUSTMENT_OPTIONS,
   normalizeOneTimeBillingAdjustmentEffectiveDate,
   oneTimeBillingAdjustmentDescription,
-  oneTimeBillingAdjustmentEffectiveAt,
   oneTimeBillingAdjustmentNeedsNote,
   oneTimeBillingAdjustmentOption,
 } from "../src/lib/one-time-billing-adjustments";
@@ -24,11 +23,11 @@ test("named one-time billing actions control the ledger direction", () => {
   assert.equal(oneTimeBillingAdjustmentOption("unknown"), null);
 });
 
-test("one-time adjustment descriptions retain the named action and service note", () => {
+test("one-time adjustment descriptions retain the named action, service date, and note", () => {
   assert.equal(oneTimeBillingAdjustmentDescription("vacation_credit"), "One-time vacation credit");
   assert.equal(
-    oneTimeBillingAdjustmentDescription("vacation_credit", "  Week of September 14  "),
-    "One-time vacation credit - Week of September 14",
+    oneTimeBillingAdjustmentDescription("vacation_credit", "2026-09-08", "  Week of September 14  "),
+    "One-time vacation credit - applies to 2026-09-08 - Week of September 14",
   );
   assert.equal(oneTimeBillingAdjustmentNeedsNote("late_fee"), false);
   assert.equal(oneTimeBillingAdjustmentNeedsNote("other_credit"), true);
@@ -36,7 +35,6 @@ test("one-time adjustment descriptions retain the named action and service note"
   assert.equal(normalizeOneTimeBillingAdjustmentEffectiveDate("2026-09-08"), "2026-09-08");
   assert.equal(normalizeOneTimeBillingAdjustmentEffectiveDate("2026-02-30"), null);
   assert.equal(normalizeOneTimeBillingAdjustmentEffectiveDate("09/08/2026"), null);
-  assert.equal(oneTimeBillingAdjustmentEffectiveAt("2026-09-08").toISOString(), "2026-09-08T12:00:00.000Z");
 });
 
 test("director workflow makes one-time fees and credits a common guarded task", () => {
@@ -50,7 +48,8 @@ test("director workflow makes one-time fees and credits a common guarded task", 
   assert.match(workbench, /adjustmentReason,[\s\S]*adjustmentType: selectedAdjustmentOption\.adjustmentType/);
   assert.match(route, /oneTimeBillingAdjustmentOption\(requestedAdjustmentReason\)/);
   assert.match(route, /adjustmentReason,/);
-  assert.match(route, /effectiveAt,/);
+  assert.match(route, /effectiveAt: new Date\(\),/);
+  assert.match(route, /adjustmentEffectiveDate,/);
   assert.match(route, /balanceAfterCents: entry\.balanceAfterCents/);
 });
 

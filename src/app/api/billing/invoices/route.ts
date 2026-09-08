@@ -19,7 +19,6 @@ import { refundSubmissionMode } from "@/lib/refund-approval";
 import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
 import {
   oneTimeBillingAdjustmentDescription,
-  oneTimeBillingAdjustmentEffectiveAt,
   oneTimeBillingAdjustmentNeedsNote,
   oneTimeBillingAdjustmentOption,
   normalizeOneTimeBillingAdjustmentEffectiveDate,
@@ -443,12 +442,9 @@ async function createLedgerAdjustment(user: CurrentBillingUser, body: Record<str
   if (adjustmentOption && !adjustmentEffectiveDate) {
     return NextResponse.json({ ok: false, error: "Choose a valid date for this one-time fee or credit." }, { status: 400 });
   }
-  const effectiveAt = adjustmentEffectiveDate
-    ? oneTimeBillingAdjustmentEffectiveAt(adjustmentEffectiveDate)
-    : new Date();
   const ledgerAmountCents = adjustmentType === "credit" ? -amountCents : amountCents;
   const description = adjustmentOption
-    ? oneTimeBillingAdjustmentDescription(adjustmentOption.id, adjustmentNote)
+    ? oneTimeBillingAdjustmentDescription(adjustmentOption.id, adjustmentEffectiveDate, adjustmentNote)
     : clean(body.description) || (adjustmentType === "credit" ? "Account credit" : "Manual billing adjustment");
   const adjustmentReason = adjustmentOption?.id ?? "manual";
 
@@ -469,7 +465,7 @@ async function createLedgerAdjustment(user: CurrentBillingUser, body: Record<str
         description,
         amountCents: ledgerAmountCents,
         balanceAfterCents: updatedAccount.balanceCents,
-        effectiveAt,
+        effectiveAt: new Date(),
         sourceSystem: "bee_suite_manual",
         externalId: `manual:${randomUUID()}`,
         metadata: {

@@ -36,11 +36,18 @@ export function oneTimeBillingAdjustmentOption(value: unknown) {
   return ONE_TIME_BILLING_ADJUSTMENT_OPTIONS.find((option) => option.id === value) ?? null;
 }
 
-export function oneTimeBillingAdjustmentDescription(reason: OneTimeBillingAdjustmentReason, note?: string | null) {
+export function oneTimeBillingAdjustmentDescription(
+  reason: OneTimeBillingAdjustmentReason,
+  effectiveDate?: string | null,
+  note?: string | null,
+) {
   const option = oneTimeBillingAdjustmentOption(reason);
   if (!option) return "";
+  const cleanEffectiveDate = normalizeOneTimeBillingAdjustmentEffectiveDate(effectiveDate);
   const cleanNote = typeof note === "string" ? note.trim() : "";
-  return cleanNote ? `${option.defaultDescription} - ${cleanNote}` : option.defaultDescription;
+  return [option.defaultDescription, cleanEffectiveDate ? `applies to ${cleanEffectiveDate}` : "", cleanNote]
+    .filter(Boolean)
+    .join(" - ");
 }
 
 export function oneTimeBillingAdjustmentNeedsNote(reason: OneTimeBillingAdjustmentReason) {
@@ -57,8 +64,4 @@ export function normalizeOneTimeBillingAdjustmentEffectiveDate(value: unknown) {
     || date.getUTCDate() !== day
   ) return null;
   return value;
-}
-
-export function oneTimeBillingAdjustmentEffectiveAt(value: string) {
-  return new Date(`${value}T12:00:00.000Z`);
 }

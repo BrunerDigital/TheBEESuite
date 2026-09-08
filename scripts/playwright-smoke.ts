@@ -87,6 +87,7 @@ function unexpectedPageErrors(errors: string[], localServer: boolean) {
 }
 
 async function navigateForSmoke(page: Page, requestedUrl: string) {
+  const previousUrl = page.url();
   try {
     return await page.goto(requestedUrl, { waitUntil: "domcontentloaded" });
   } catch (error) {
@@ -94,9 +95,23 @@ async function navigateForSmoke(page: Page, requestedUrl: string) {
     // protected route with its sign-in destination. The final rendered page
     // is still the contract under test, so wait for it and validate below.
     if (!(error instanceof Error) || !/net::ERR_ABORTED/i.test(error.message)) throw error;
-    await page.waitForLoadState("domcontentloaded", { timeout: 5_000 }).catch(() => undefined);
+    await page.waitForURL((url) => url.href !== previousUrl, { timeout: 5_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 5_000 });
     return null;
   }
+}
+
+async function waitForExpectedBody(page: Page, expected: RegExp, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  let bodyText = "";
+  do {
+    bodyText = await page.locator("body").innerText().catch(() => "");
+    expected.lastIndex = 0;
+    if (expected.test(bodyText)) return bodyText;
+    await page.waitForTimeout(100);
+  } while (Date.now() < deadline);
+
+  return bodyText;
 }
 
 function startLocalServer(port: number) {
@@ -198,30 +213,34 @@ async function run() {
     });
 
     for (const route of smokeRoutes) {
+      await page.goto("about:blank");
       const requestedUrl = `${baseUrl}${route.path}`;
       const response = await navigateForSmoke(page, requestedUrl);
       const status = response?.status() ?? 0;
       if (status >= 500) throw new Error(`${route.name} returned ${status}.`);
-      let bodyText = await page.locator("body").innerText();
+      const bodyText = route.expectedText
+        ? await waitForExpectedBody(page, route.expectedText)
+        : await page.locator("body").innerText();
       if (route.expectedText && !route.expectedText.test(bodyText)) {
-        await page.waitForURL((url) => url.href !== requestedUrl, { timeout: 3_000 }).catch(() => undefined);
-        bodyText = await page.locator("body").innerText();
-      }
-      if (route.expectedText && !route.expectedText.test(bodyText)) {
-        throw new Error(`${route.name} did not render expected text.`);
+        throw new Error(`${route.name} did not render expected text at ${page.url()}.`);
       }
     }
 
     for (const viewport of responsiveViewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       for (const route of responsivePublicRoutes) {
+        await page.goto("about:blank");
         const requestedUrl = `${baseUrl}${route.path}`;
         const response = await navigateForSmoke(page, requestedUrl);
         const status = response?.status() ?? 0;
         if (status >= 500) throw new Error(`${route.name} returned ${status} at ${viewport.name} size.`);
-        const bodyText = await page.locator("body").innerText();
+        const bodyText = route.expectedText
+          ? await waitForExpectedBody(page, route.expectedText)
+          : await page.locator("body").innerText();
         if (route.expectedText && !route.expectedText.test(bodyText)) {
-          throw new Error(`${route.name} did not render expected text at ${viewport.name} size.`);
+          throw new Error(
+            `${route.name} did not render expected text at ${viewport.name} size (${page.url()}).`,
+          );
         }
         const dimensions = await page.evaluate(() => ({
           clientWidth: document.documentElement.clientWidth,

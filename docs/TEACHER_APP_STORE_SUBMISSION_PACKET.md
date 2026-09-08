@@ -275,7 +275,7 @@ Mac/Apple evidence still required:
 
 ## Reviewer Account Preparation
 
-The repository includes an idempotent teacher preparation script but it is not run automatically because it creates a production authentication identity and access grant. After exact authorization, set a temporary password outside Git/chat and run:
+The repository includes an idempotent teacher preparation script but it is not run automatically because it creates the production Auth identity/password, Prisma application user with the Teacher role, classroom-bound Staff profile, and school access grant. Obtain exact authorization covering every one of those changes, then set a temporary password outside Git/chat and run:
 
 ```text
 APP_REVIEW_TEACHER_PASSWORD=<stored outside Git> npm run app-review:teacher:ensure

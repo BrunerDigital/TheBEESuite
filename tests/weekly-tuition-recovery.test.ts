@@ -11,7 +11,8 @@ test("directors can preview and run scoped weekly tuition recovery invoices only
   assert.match(route, /canManageBilling\(user\)/);
   assert.match(route, /canAccessCenter\(user, centerId\)/);
   assert.match(route, /family: \{ is: \{ centerId: center\.id \} \}/);
-  assert.match(route, /path: \["childName"\], equals: entry\.child\.fullName/);
+  assert.match(route, /clean\(fields\.childName\) === entry\.child\.fullName/);
+  assert.match(route, /activeCandidateChildIds\.has\(candidateChildId\)/);
   assert.match(route, /cadence !== "weekly"/);
   assert.match(route, /previewCenterId !== center\.id/);
   assert.match(route, /previewDueChildren !== dueChildren\.length/);

@@ -31,7 +31,6 @@ const FTE_SHEET_HEADERS = [
   "Accounts Receivable",
   "Amount of Self-Payer Bill",
   "Amount of Subsidy Bill",
-  "Agency Billed Outside BEE Suite",
   "Total Amount Billed",
   "Total FTE's (FTE)",
   "Total currently enrolled",
@@ -53,6 +52,7 @@ const FTE_SHEET_HEADERS = [
   "Status",
   "Submitted By",
   "Notes",
+  "Agency Billed Outside BEE Suite",
 ];
 
 function clean(value: unknown) {
@@ -146,7 +146,6 @@ function reportCsvRow(report: Prisma.FteReportGetPayload<{ include: typeof repor
     metadataNumber(metadata.accountReceivableAmount) ?? "",
     metadataNumber(metadata.selfPayerBillAmount) ?? "",
     metadataNumber(metadata.subsidyBillAmount) ?? "",
-    metadataNumber(metadata.externalAgencyBillAmount) ?? "",
     metadataNumber(metadata.totalBilledAmount) ?? "",
     report.fteCount,
     report.enrolledCount,
@@ -168,6 +167,7 @@ function reportCsvRow(report: Prisma.FteReportGetPayload<{ include: typeof repor
     report.status,
     report.submittedBy?.email ?? "",
     report.notes ?? "",
+    metadataNumber(metadata.externalAgencyBillAmount) ?? "",
   ];
 }
 
@@ -554,7 +554,6 @@ async function POSTHandler(request: NextRequest) {
     accountReceivableAmount ?? "",
     selfPayerBillAmount ?? "",
     subsidyBillAmount ?? "",
-    externalAgencyBillAmount ?? "",
     totalBilledAmount ?? "",
     report.fteCount,
     report.enrolledCount,
@@ -576,6 +575,7 @@ async function POSTHandler(request: NextRequest) {
     report.status,
     report.submittedBy?.email ?? user.email,
     report.notes ?? "",
+    externalAgencyBillAmount ?? "",
   ], center.organization.tenantId);
 
   const executiveUsers = await prisma.user.findMany({

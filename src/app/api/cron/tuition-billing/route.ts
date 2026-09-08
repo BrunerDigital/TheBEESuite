@@ -171,7 +171,7 @@ async function GETHandler(request: NextRequest) {
         const grossTuitionCents = (amountCents + tuitionAdditionalChargesTotalCents) * invoiceWeekCount;
 
         const invoice = await prisma.$transaction(async (tx) => {
-          const equivalentInvoice = await tx.invoice.findFirst({
+          const candidateInvoices = await tx.invoice.findMany({
             where: {
               status: { not: PaymentStatus.VOID },
               billingAccount: { familyId: entry.child.familyId },
@@ -185,17 +185,32 @@ async function GETHandler(request: NextRequest) {
                 },
                 { customFields: { path: ["billingPeriod"], equals: entry.billingPeriod } },
                 { customFields: { path: ["coverageStartsPeriod"], equals: entry.billingPeriod } },
-                {
-                  OR: [
-                    { customFields: { path: ["childId"], equals: entry.child.id } },
-                    { customFields: { path: ["childName"], equals: entry.child.fullName } },
-                  ],
-                },
                 { customFields: { path: ["chargeSource"], equals: "tuitionPlan" } },
               ],
             },
-            select: { id: true, number: true, totalCents: true },
+            select: { id: true, number: true, totalCents: true, customFields: true },
           });
+          const candidateChildIds = Array.from(new Set(candidateInvoices.flatMap((candidate) => {
+            const childId = clean(jsonObject(candidate.customFields).childId);
+            return childId && childId !== entry.child.id ? [childId] : [];
+          })));
+          const activeCandidateChildren = candidateChildIds.length
+            ? await tx.child.findMany({
+                where: { id: { in: candidateChildIds }, ...currentlyEnrolledChildWhere() },
+                select: { id: true },
+              })
+            : [];
+          const activeCandidateChildIds = new Set(activeCandidateChildren.map((child) => child.id));
+          const equivalentCandidate = candidateInvoices.find((candidate) => {
+            const fields = jsonObject(candidate.customFields);
+            const candidateChildId = clean(fields.childId);
+            if (candidateChildId === entry.child.id) return true;
+            return clean(fields.childName) === entry.child.fullName
+              && (!candidateChildId || !activeCandidateChildIds.has(candidateChildId));
+          });
+          const equivalentInvoice = equivalentCandidate
+            ? { id: equivalentCandidate.id, number: equivalentCandidate.number, totalCents: equivalentCandidate.totalCents }
+            : null;
           if (equivalentInvoice) {
             return { invoice: equivalentInvoice, created: false as const, totalCents: 0 };
           }

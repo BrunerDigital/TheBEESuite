@@ -383,6 +383,9 @@ export function FteReportForm({
   function editReport(report: FteReportRow) {
     setStatusMessage("");
     setErrorMessage("");
+    const hasBillingBreakdown = report.selfPayerBillAmount !== null && report.selfPayerBillAmount !== undefined
+      || report.subsidyBillAmount !== null && report.subsidyBillAmount !== undefined
+      || report.externalAgencyBillAmount !== null && report.externalAgencyBillAmount !== undefined;
     setForm({
       id: report.id,
       centerId: report.centerId,
@@ -393,7 +396,7 @@ export function FteReportForm({
       selfPayerBillAmount: asOptionalInput(report.selfPayerBillAmount),
       subsidyBillAmount: asOptionalInput(report.subsidyBillAmount),
       externalAgencyBillAmount: asOptionalInput(report.externalAgencyBillAmount),
-      totalBilledAmount: "",
+      totalBilledAmount: hasBillingBreakdown ? "" : asOptionalInput(report.totalBilledAmount),
       enrolledCount: asInput(report.enrolledCount),
       fullTimeCount: asInput(report.fullTimeCount),
       partTimeCount: asInput(report.partTimeCount),
@@ -460,7 +463,7 @@ export function FteReportForm({
             : form.partTimeCount,
           status: mode === "executive" ? form.status : undefined,
           fteCount: form.fteCount || (hasScheduledDayBreakdown ? calculatedFte : ""),
-          totalBilledAmount: calculatedTotalBilled || "",
+          totalBilledAmount: form.totalBilledAmount || calculatedTotalBilled || "",
           licenseCapacity: form.licenseCapacity || selectedPrefill?.licensedCapacity || selectedCenter?.licensedCapacity || "",
           occupancyPercent: form.occupancyPercent || calculatedOccupancyPercent || "",
           payrollPercent: form.payrollPercent || calculatedPayrollPercent || "",

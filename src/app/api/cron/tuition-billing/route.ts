@@ -185,7 +185,12 @@ async function GETHandler(request: NextRequest) {
                 },
                 { customFields: { path: ["billingPeriod"], equals: entry.billingPeriod } },
                 { customFields: { path: ["coverageStartsPeriod"], equals: entry.billingPeriod } },
-                { customFields: { path: ["childId"], equals: entry.child.id } },
+                {
+                  OR: [
+                    { customFields: { path: ["childId"], equals: entry.child.id } },
+                    { customFields: { path: ["childName"], equals: entry.child.fullName } },
+                  ],
+                },
                 { customFields: { path: ["chargeSource"], equals: "tuitionPlan" } },
               ],
             },

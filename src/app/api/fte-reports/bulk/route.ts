@@ -148,10 +148,12 @@ async function POSTHandler(request: NextRequest) {
       : calculateFteCount(fullTimeCount, partTimeCount);
     const fteCount = preservesScheduledDayBreakdown ? calculatedFte : row.fteCount ?? calculatedFte;
     const ageGroupCount = ageGroupTotal(row);
-    const totalBilledAmount = row.totalBilledAmount ??
-      (row.selfPayerBillAmount !== null || row.subsidyBillAmount !== null
-        ? roundAmount((row.selfPayerBillAmount ?? 0) + (row.subsidyBillAmount ?? 0))
-        : null);
+    const hasBillingComponents = row.selfPayerBillAmount !== null
+      || row.subsidyBillAmount !== null
+      || row.externalAgencyBillAmount !== null;
+    const totalBilledAmount = hasBillingComponents
+      ? roundAmount((row.selfPayerBillAmount ?? 0) + (row.subsidyBillAmount ?? 0) + (row.externalAgencyBillAmount ?? 0))
+      : row.totalBilledAmount;
     const occupancyPercent = row.occupancyPercent ?? percent(row.enrolledCount, row.licenseCapacity);
     const payrollPercent = row.payrollPercent ?? percent(row.payrollAmount, totalBilledAmount);
     const data = {
@@ -185,6 +187,7 @@ async function POSTHandler(request: NextRequest) {
         accountReceivableAmount: row.accountReceivableAmount,
         selfPayerBillAmount: row.selfPayerBillAmount,
         subsidyBillAmount: row.subsidyBillAmount,
+        externalAgencyBillAmount: row.externalAgencyBillAmount,
         totalBilledAmount,
         licenseCapacity: row.licenseCapacity,
         occupancyPercent,

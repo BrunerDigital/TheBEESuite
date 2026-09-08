@@ -578,6 +578,7 @@ function serializeFteReport(report: {
     accountReceivableAmount: numberField(metadata.accountReceivableAmount),
     selfPayerBillAmount: numberField(metadata.selfPayerBillAmount),
     subsidyBillAmount: numberField(metadata.subsidyBillAmount),
+    externalAgencyBillAmount: numberField(metadata.externalAgencyBillAmount),
     totalBilledAmount: numberField(metadata.totalBilledAmount),
     enrolledCount: report.enrolledCount,
     fullTimeCount: report.fullTimeCount,
@@ -3940,7 +3941,25 @@ async function renderLivePage(
                 },
               },
               payments: {
-                where: { provider: { in: ["stripe", "stripe_terminal"] }, status: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] } },
+                where: {
+                  provider: { in: ["stripe", "stripe_terminal"] },
+                  OR: [
+                    { status: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] } },
+                    {
+                      status: PaymentStatus.DRAFT,
+                      OR: [
+                        { customFields: { path: ["status"], equals: "autopay_pending" } },
+                        { customFields: { path: ["status"], equals: "autopay_processing" } },
+                        { customFields: { path: ["status"], equals: "autopay_succeeded_pending_webhook" } },
+                        { customFields: { path: ["status"], equals: "autopay_submission_unknown" } },
+                        { customFields: { path: ["status"], equals: "stored_method_pending" } },
+                        { customFields: { path: ["status"], equals: "stored_method_processing" } },
+                        { customFields: { path: ["status"], equals: "stored_method_succeeded_pending_webhook" } },
+                        { customFields: { path: ["status"], equals: "stored_method_submission_unknown" } },
+                      ],
+                    },
+                  ],
+                },
                 orderBy: [{ paidAt: "desc" }, { id: "desc" }],
                 take: 20,
                 select: {
@@ -4201,6 +4220,10 @@ async function renderLivePage(
                       status: invoice.status,
                       dueDate: invoice.dueDate,
                       totalCents: invoice.totalCents,
+                      hasPendingPayment: family.billingAccount?.payments.some((payment) => {
+                        const fields = recordFromJson(payment.customFields);
+                        return fields.invoiceId === invoice.id && isActiveStripeAutopayPayment(payment);
+                      }) ?? false,
                       items: invoice.items.map((item) => ({
                         id: item.id,
                         description: item.description,
@@ -4211,11 +4234,12 @@ async function renderLivePage(
                     recentPayments: family.billingAccount.payments.map((payment) => {
                       const fields = recordFromJson(payment.customFields);
                       const refundedCents = Math.max(0, Number(fields.stripeAmountRefundedCents) || 0);
+                      const isRefundableStatus = payment.status === PaymentStatus.PAID || payment.status === PaymentStatus.REFUNDED;
                       return {
                         id: payment.id,
                         amountCents: payment.amountCents,
                         refundedCents,
-                        refundableCents: Math.max(0, payment.amountCents - refundedCents),
+                        refundableCents: isRefundableStatus ? Math.max(0, payment.amountCents - refundedCents) : 0,
                         status: payment.status,
                         provider: payment.provider,
                         paidAt: payment.paidAt,

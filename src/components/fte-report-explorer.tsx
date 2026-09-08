@@ -43,6 +43,7 @@ type InlineCorrectionState = {
   accountReceivableAmount: string;
   selfPayerBillAmount: string;
   subsidyBillAmount: string;
+  externalAgencyBillAmount: string;
   totalBilledAmount: string;
   enrolledCount: string;
   fullTimeCount: string;
@@ -124,6 +125,7 @@ function correctionFromReport(report: FteReportRow): InlineCorrectionState {
     accountReceivableAmount: inputOptionalNumber(report.accountReceivableAmount),
     selfPayerBillAmount: inputOptionalNumber(report.selfPayerBillAmount),
     subsidyBillAmount: inputOptionalNumber(report.subsidyBillAmount),
+    externalAgencyBillAmount: inputOptionalNumber(report.externalAgencyBillAmount),
     totalBilledAmount: inputOptionalNumber(report.totalBilledAmount),
     enrolledCount: inputNumber(report.enrolledCount),
     fullTimeCount: inputNumber(report.fullTimeCount),
@@ -801,6 +803,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
                               <InlineNumberField label="Current-family accounts receivable" value={correction.accountReceivableAmount} onChange={(value) => setCorrectionField("accountReceivableAmount", value)} />
                               <InlineNumberField label="Self-payer billed" value={correction.selfPayerBillAmount} onChange={(value) => setCorrectionField("selfPayerBillAmount", value)} />
                               <InlineNumberField label="Subsidy billed" value={correction.subsidyBillAmount} onChange={(value) => setCorrectionField("subsidyBillAmount", value)} />
+                              <InlineNumberField label="Agency billed outside BEE Suite" value={correction.externalAgencyBillAmount} onChange={(value) => setCorrectionField("externalAgencyBillAmount", value)} />
                               <InlineNumberField label="Total billed" value={correction.totalBilledAmount} onChange={(value) => setCorrectionField("totalBilledAmount", value)} />
                               <InlineNumberField label="License capacity" value={correction.licenseCapacity} onChange={(value) => setCorrectionField("licenseCapacity", value)} />
                               <InlineNumberField label="Occupancy %" value={correction.occupancyPercent} onChange={(value) => setCorrectionField("occupancyPercent", value)} />

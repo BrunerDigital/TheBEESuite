@@ -69,6 +69,7 @@ export type BillingWorkbenchFamily = {
       status: string;
       dueDate: Date | string;
       totalCents: number;
+      hasPendingPayment?: boolean;
       items?: Array<{
         id: string;
         description: string;
@@ -566,6 +567,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const selectedPaymentInvoice = selectedPaymentInvoiceId
     ? openInvoices.find((invoice) => invoice.id === selectedPaymentInvoiceId) ?? null
     : null;
+  const selectedInvoiceHasPendingPayment = selectedPaymentInvoice?.hasPendingPayment === true;
   const effectiveInvoiceEditorId = invoiceEditorId && openInvoices.some((invoice) => invoice.id === invoiceEditorId)
     ? invoiceEditorId
     : openInvoices[0]?.id ?? "";
@@ -640,6 +642,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     }
     if (method === "autopay" && !effectivePaymentTarget.startsWith("invoice:")) {
       return setErrorMessage("Choose an open invoice before running autopay.");
+    }
+    if (method === "autopay" && selectedInvoiceHasPendingPayment) {
+      return setErrorMessage("This invoice already has a pending payment. Wait for it to finish before trying autopay again.");
     }
     if (directorPaymentAmountCents <= 0) {
       return setErrorMessage("Enter or choose a payment amount greater than zero.");
@@ -1814,12 +1819,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <div className="mt-3 flex flex-wrap gap-2">
               {effectivePaymentTarget.startsWith("invoice:") && !selectedFamilyIsPast ? (
                 <Button
-                  disabled={isPending || selectedAutopayStatus !== "enabled" || !selectedBillingAccount || directorPaymentAmountCents <= 0}
+                  disabled={isPending || selectedAutopayStatus !== "enabled" || !selectedBillingAccount || directorPaymentAmountCents <= 0 || selectedInvoiceHasPendingPayment}
                   onClick={() => openPaymentReview("autopay")}
                   variant="outline"
                 >
                   <Play data-icon="inline-start" />
-                  Process invoice with autopay
+                  {selectedInvoiceHasPendingPayment ? "Autopay payment pending" : "Process invoice with autopay"}
                 </Button>
               ) : null}
               {selectedCenter?.hardwareTerminalConfigured && selectedFamily && selectedBillingAccount ? (

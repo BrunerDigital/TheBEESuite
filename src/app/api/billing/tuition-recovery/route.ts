@@ -171,7 +171,12 @@ async function POSTHandler(request: NextRequest) {
               billingAccount: { familyId: entry.child.familyId },
               AND: [
                 { customFields: { path: ["billingPeriod"], equals: entry.billingPeriod } },
-                { customFields: { path: ["childId"], equals: entry.child.id } },
+                {
+                  OR: [
+                    { customFields: { path: ["childId"], equals: entry.child.id } },
+                    { customFields: { path: ["childName"], equals: entry.child.fullName } },
+                  ],
+                },
                 { customFields: { path: ["chargeSource"], equals: "tuitionPlan" } },
               ],
             },

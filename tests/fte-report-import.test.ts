@@ -19,6 +19,7 @@ test("FTE import parser preserves legacy report billing, payroll, and movement c
     accountReceivableAmount: 240.55,
     selfPayerBillAmount: 3859.4,
     subsidyBillAmount: 4377.47,
+    externalAgencyBillAmount: null,
     totalBilledAmount: 8236.87,
     enrolledCount: 30,
     fullTimeCount: 0,

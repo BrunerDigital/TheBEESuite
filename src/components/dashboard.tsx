@@ -58,6 +58,7 @@ import { dataReadinessCenterEnabled } from "@/lib/honeyglass";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
 const documentNavigationPrimaryActions = new Set([
+  "/analytics",
   "/billing-invoices",
   "/classroom-dashboard",
   "/multi-location-dashboard",

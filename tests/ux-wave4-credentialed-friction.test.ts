@@ -65,9 +65,13 @@ test("credential and write preflights reject unmarked identities and non-heartbe
   assert.match(workflows, /metricsPass\(secondaryMetrics, viewport\)/);
   assert.match(workflows, /viewport\.id !== "mobile" \|\| metrics\.undersizedInteractiveCount === 0/);
   assert.match(workflows, /page\.locator\("main a\[href\]"\)/);
+  assert.match(workflows, /argument\("--roles", ""\)/);
+  assert.match(workflows, /href: "\/parent-portal\?view=home", expectedHref: "\/parent-portal"/);
+  assert.match(workflows, /request\.resourceType\(\) !== "document"/);
 
   const dashboard = await readSource("src/components/dashboard.tsx");
   assert.match(dashboard, /documentNavigationPrimaryActions = new Set\(\[/);
+  assert.match(dashboard, /"\/analytics"/);
   assert.match(dashboard, /"\/billing-invoices"/);
   assert.match(dashboard, /"\/classroom-dashboard"/);
   assert.match(dashboard, /"\/multi-location-dashboard"/);

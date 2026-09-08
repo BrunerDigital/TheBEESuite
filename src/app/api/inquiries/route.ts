@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { EnrollmentStage, UserRole } from "@prisma/client";
+import { EnrollmentStage, Prisma, UserRole } from "@prisma/client";
 import {
   forwardInquiryToGoogleSheets,
   sendInquiryNotificationEmail,
 } from "@/lib/inquiry-integrations";
 import { resolveInquiryLocationNotificationEmails } from "@/lib/inquiry-notifications";
 import { normalizeInquiryProgram } from "@/lib/inquiry-programs";
+import {
+  INQUIRY_DEDUPE_WINDOW_MS,
+  inquirySubmissionIdempotencyKey,
+} from "@/lib/inquiry-idempotency";
 import { inquiryCorsHeaders, isAllowedInquiryOrigin } from "@/lib/inquiry-origins";
 import { recordIntegrationDeliveryAttempt } from "@/lib/integration-deliveries";
 import { selectPreferredInquiryCenter } from "@/lib/inquiry-routing";
@@ -509,9 +513,17 @@ async function POSTHandler(request: NextRequest) {
     });
     const locationRecipients = await getLocationNotificationEmails(center.id, center.email);
     const [parentFirstName, ...parentLastNameParts] = payload.parentName.split(/\s+/);
-    const lead = await prisma.lead.create({
+    const externalId = inquirySubmissionIdempotencyKey({
+      centerId: center.id,
+      parentName: payload.parentName,
+      email: payload.email,
+      phone: payload.phone,
+      program: payload.program,
+    });
+    const leadCreateArgs = {
       data: {
         centerId: center.id,
+        externalId,
         familyName: payload.parentName,
         parentFirstName,
         parentLastName: parentLastNameParts.join(" ") || null,
@@ -552,12 +564,7 @@ async function POSTHandler(request: NextRequest) {
           brandName: payload.brandName,
         },
         tasks: {
-          create: [
-            {
-              title: `Follow up with ${payload.parentName}`,
-              status: "open",
-            },
-          ],
+          create: [{ title: `Follow up with ${payload.parentName}`, status: "open" }],
         },
         notes: {
           create: [
@@ -567,12 +574,57 @@ async function POSTHandler(request: NextRequest) {
           ],
         },
       },
-      select: {
-        id: true,
-        score: true,
-        stage: true,
-      },
-    });
+      select: { id: true, score: true, stage: true },
+    } satisfies Prisma.LeadCreateArgs;
+    let duplicateSuppressed = false;
+    let lead;
+
+    try {
+      lead = await prisma.lead.create(leadCreateArgs);
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
+
+      const cutoff = new Date(Date.now() - INQUIRY_DEDUPE_WINDOW_MS);
+      const existingLead = await prisma.lead.findUnique({
+        where: { centerId_externalId: { centerId: center.id, externalId } },
+        select: { id: true, score: true, stage: true, createdAt: true },
+      });
+      if (!existingLead) throw error;
+
+      if (existingLead.createdAt >= cutoff) {
+        lead = existingLead;
+        duplicateSuppressed = true;
+      } else {
+        const result = await prisma.$transaction(async (tx) => {
+          const released = await tx.lead.updateMany({
+            where: {
+              id: existingLead.id,
+              centerId: center.id,
+              externalId,
+              createdAt: { lt: cutoff },
+            },
+            data: { externalId: `${externalId}:superseded:${existingLead.id}` },
+          });
+
+          if (released.count === 1) {
+            return { lead: await tx.lead.create(leadCreateArgs), duplicateSuppressed: false };
+          }
+
+          const currentLead = await tx.lead.findUnique({
+            where: { centerId_externalId: { centerId: center.id, externalId } },
+            select: { id: true, score: true, stage: true },
+          });
+          if (!currentLead) throw error;
+          return { lead: currentLead, duplicateSuppressed: true };
+        });
+        lead = result.lead;
+        duplicateSuppressed = result.duplicateSuppressed;
+      }
+    }
+
+    if (duplicateSuppressed) {
+      return json({ ok: true, leadId: lead.id, duplicateSuppressed: true }, 200, origin);
+    }
 
     const integrationPayload = {
       ...payload,
@@ -625,6 +677,7 @@ async function POSTHandler(request: NextRequest) {
       {
         ok: true,
         leadId: lead.id,
+        duplicateSuppressed: false,
         integrations: {
           googleSheets,
           email,

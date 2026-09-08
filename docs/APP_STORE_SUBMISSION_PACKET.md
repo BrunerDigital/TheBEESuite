@@ -17,7 +17,7 @@ Current repository status:
 - There is still no uploadable `.ipa` in this repository because the final archive must be built and signed from Xcode on macOS.
 - The committed parent icon and launch assets are role-specific, reproducible with `npm run mobile:assets:generate`, and verified at 1024 x 1024 / 2732 x 2732 without alpha. The App Store export is `output/app-store/ios/app-icon-1024-no-alpha.png`.
 - The native configuration is HTTPS-only, has WebView inspection and link previews disabled, has no broad navigation allowlist, and includes no unused push, Associated Domains, Face ID, microphone, location, contacts, tracking, or iPad capability.
-- Historical evidence says `app-review-parent@thebeesuite.io` was linked to fake demo data in July. Treat that as stale until the exact release-candidate login and data isolation are reverified immediately before upload.
+- A read-only production query on September 8 confirmed that `app-review-parent@thebeesuite.io` has one active application user, one active Parent grant, one confirmed Auth identity, and one fake-review Guardian marker. Password validity and the reviewer-visible fake-data boundary remain unverified and must be tested from the signed release candidate before upload.
 
 Repository verification completed on Windows on September 8, 2026:
 
@@ -209,7 +209,7 @@ The route has been added in the app. This must stay public, reachable without lo
 
 ## App Review Information
 
-Create a dedicated fake-data review account before submission.
+Use the dedicated fake-data review identity below. It exists in production, but its password and displayed fake-data isolation have not been validated against the exact release candidate.
 
 ```text
 Demo account email: app-review-parent@thebeesuite.io
@@ -218,6 +218,8 @@ Demo school: Kid City USA - Demo
 Demo family: Rivera Family
 Demo child records: Fake child records only
 ```
+
+If the password is unavailable or must be rotated, obtain exact authorization for the production identity change, set `APP_REVIEW_PARENT_PASSWORD` outside Git/chat, and run `npm run app-review:parent:ensure`. Re-query the role/grant and verify the exact fake family boundary before copying credentials into App Store Connect. Rotate or disable the account after review.
 
 Suggested App Review notes:
 

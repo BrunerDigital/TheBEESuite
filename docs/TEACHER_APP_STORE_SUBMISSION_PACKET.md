@@ -16,6 +16,7 @@ Current repository status:
 - The committed teacher icon and launch assets are visually distinct from Parent, reproducible with `npm run mobile:assets:generate`, and checked for no-alpha App Store requirements.
 - The native configuration is HTTPS-only, disables WebView inspection/link previews, contains no broad navigation allowlist, and intentionally omits push, Associated Domains, Face ID, microphone, location, contacts, tracking, financial privacy categories, and iPad support.
 - Windows Capacitor sync completed on September 8, 2026; the shared `App` scheme is archive-enabled. Final Xcode/device/archive evidence still requires macOS.
+- A read-only production query on September 8 confirmed that the planned Teacher review identity does not yet exist as an application user, active grant, Auth identity, or fake-review Staff marker. Its preparation remains a separately authorized identity/access action.
 
 Do not submit until these blockers are resolved:
 
@@ -142,7 +143,7 @@ https://thebeesuite.io/privacy
 
 ## App Review Information
 
-Create a dedicated fake-data review account before submission.
+Create the dedicated fake-data review identity below only after exact authorization. It does not currently exist in production.
 
 ```text
 Demo account email: app-review-teacher@thebeesuite.io
@@ -274,7 +275,7 @@ Mac/Apple evidence still required:
 
 ## Reviewer Account Preparation
 
-The repository includes an idempotent teacher preparation script but it is not run automatically because it changes a real authentication identity. After exact authorization, set a temporary password outside Git and run:
+The repository includes an idempotent teacher preparation script but it is not run automatically because it creates a production authentication identity and access grant. After exact authorization, set a temporary password outside Git/chat and run:
 
 ```text
 APP_REVIEW_TEACHER_PASSWORD=<stored outside Git> npm run app-review:teacher:ensure

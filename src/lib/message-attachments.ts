@@ -74,7 +74,14 @@ export async function signMessageAttachmentsFromMetadata(metadata: unknown): Pro
   return Promise.all(
     attachments.map(async (attachment) => {
       try {
-        return { ...attachment, downloadUrl: await createMessageAttachmentSignedUrl(attachment.storageKey) };
+        return {
+          ...attachment,
+          downloadUrl: await createMessageAttachmentSignedUrl(
+            attachment.storageKey,
+            undefined,
+            attachment.bucket,
+          ),
+        };
       } catch {
         return { ...attachment, downloadUrl: attachment.url.startsWith("http") ? attachment.url : null };
       }

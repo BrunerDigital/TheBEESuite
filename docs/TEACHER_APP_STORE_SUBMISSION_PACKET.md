@@ -1,6 +1,6 @@
 # App Store Submission Packet - BEE Suite Teacher Portal
 
-Last updated: July 28, 2026
+Last updated: September 8, 2026
 
 This packet is for the iOS App Store submission whose purpose is to make the classroom teacher portal easier for staff to access on mobile devices.
 
@@ -13,11 +13,13 @@ Current repository status:
 - A dedicated Capacitor iOS project exists at `ios-teacher/App/App.xcodeproj`.
 - The parent iOS app remains in `ios/App/App.xcodeproj`; do not reuse its bundle ID for this submission.
 - There is still no uploadable `.ipa` in this repository because the final archive must be built and signed from Xcode on macOS.
-- App icon and splash assets are present in the teacher iOS asset catalog and are checked for no-alpha App Store requirements.
+- The committed teacher icon and launch assets are visually distinct from Parent, reproducible with `npm run mobile:assets:generate`, and checked for no-alpha App Store requirements.
+- The native configuration is HTTPS-only, disables WebView inspection/link previews, contains no broad navigation allowlist, and intentionally omits push, Associated Domains, Face ID, microphone, location, contacts, tracking, financial privacy categories, and iPad support.
+- Windows Capacitor sync completed on September 8, 2026; the shared `App` scheme is archive-enabled. Final Xcode/device/archive evidence still requires macOS.
 
 Do not submit until these blockers are resolved:
 
-- Native iOS wrapper is opened on macOS, assigned to the correct Apple Developer team, tested on iPhone, and archived successfully in Xcode.
+- Native iOS wrapper is opened in Xcode 26 or later on macOS, assigned to the correct Apple Developer team, tested on a physical iPhone, and archived successfully using the iOS 26 SDK or later.
 - Apple Developer Program account and Team ID are confirmed.
 - Public privacy policy URL and support URL are live and counsel/owner-approved.
 - App Review demo credentials are created, copied into App Store Connect, and rotated after review.
@@ -204,6 +206,89 @@ Use final TestFlight/native build and fake data only.
 
 Accepted iPhone screenshot strategy:
 
-- Preferred: 6.9 inch portrait screenshots.
-- Fallback: 6.5 inch portrait screenshots.
+- Preferred 6.9-inch portrait dimensions: 1260 x 2736, 1290 x 2796, or 1320 x 2868 pixels.
+- Accepted 6.5-inch fallback dimensions: 1284 x 2778 or 1242 x 2688 pixels. Apple uses this set only when a 6.9-inch set is not supplied.
+- Upload one to ten PNG or JPEG screenshots without alpha, all captured from the final native build with fake data.
 - Do not enable iPad for v1 unless iPad screenshots are prepared.
+
+Exact-size synthetic drafts are under `output/app-store/ios-teacher/screenshots-draft/` with provenance in `output/app-store/screenshot-drafts-manifest.json`. They are 1290 x 2796 RGB/no-alpha planning assets generated from `/device-preview`; they are not native App Store evidence. Replace them with matching screenshots from the signed Release/TestFlight build before submission.
+
+## Age Rating And Audience
+
+- Do not select Made for Kids. The app is an invitation-only workplace tool for adult childcare staff, not an app marketed to children.
+- Complete Apple’s current age-rating questionnaire in App Store Connect; do not hardcode an expected rating before Apple calculates it.
+- Answer user-generated-content and messaging questions truthfully. Teacher and family messages are private, authenticated, school-scoped, screened before posting, reportable in-product, and subject to administrator access removal.
+- Declare sensitive childcare, incident, allergy, medical, custody, and safety context where the questionnaire or privacy inventory asks about it.
+- If the final EULA sets a higher minimum age than Apple calculates, use Apple’s higher-rating override.
+
+## Account Deletion And Sign-In
+
+- Parent accounts can initiate deletion from in-app settings. The teacher app does not provide self-service account creation; a school administrator provisions and removes staff access.
+- App Review notes should state that teacher access removal is controlled by the employing school and that support is publicly available. Counsel/owner must confirm whether any teacher-specific deletion path is legally required beyond staff access removal and privacy requests.
+- Sign in with Apple is not applicable to v1 because the app uses school-issued email/password authentication and offers no third-party or social login. Reassess if any social login is added.
+
+## Payments And In-App Purchase
+
+- The teacher app sells no digital content, subscriptions, features, or services and exposes no teacher checkout flow.
+- Mark in-app purchases as not used for this target. Do not add parent tuition language to the teacher listing.
+- If any digital teacher feature is sold later, obtain a new App Review/IAP analysis before shipping it.
+
+## Guideline 4.2 And App Completeness
+
+Highest review risk is Guideline 4.2. The committed production `server.url` is necessary for the current server-rendered architecture, so this remains a remote Capacitor/WKWebView product rather than a bundled offline client.
+
+Mitigations already present are role-specific launch/offline UI, native-safe PWA/push suppression, camera/photo purpose strings tied to working classroom workflows, iPhone safe-area and touch behavior, authenticated roster/attendance/daily-report/media/incident value, and a dedicated Teacher identity and visual treatment. Static repository checks do not prove acceptance. Confirm every core flow from TestFlight on a physical iPhone, keep production available throughout review, and describe the operational classroom value accurately. Do not add unused entitlements or superficial native features.
+
+## Export Compliance
+
+- The target uses HTTPS/TLS and standard Apple/platform encryption; no custom cryptographic product was found.
+- `ITSAppUsesNonExemptEncryption` is `false` in the committed plist.
+- Answer App Store Connect from the final archive and final SDK inventory. The Account Holder must confirm the exemption answer and any required U.S. export documentation.
+
+## Build, Archive, And TestFlight Gate
+
+Repository preparation:
+
+```text
+npm ci
+npm run db:generate
+npm run lint
+npm run typecheck
+npm test
+npm run mobile:assets:generate
+npm run ios:teacher:sync
+npm run mobile:store:check
+```
+
+Mac/Apple evidence still required:
+
+1. Use Node.js 22 or later, Xcode 26 or later, and the iOS 26 SDK or later.
+2. Select the Apple Team for `com.brunerdigital.thebeesuite.teacher` without sharing credentials or signing material.
+3. Confirm a build number unused for version 1.0, resolve packages, and build the shared `App` scheme in Release.
+4. Run the simulator and physical-device matrix in `docs/MOBILE_APP_PHYSICAL_DEVICE_EVIDENCE_PACKET.md`.
+5. Archive and run Validate App; record the archive UUID and validation output.
+6. Generate the privacy report and reconcile it against the privacy manifest and App Privacy answers.
+7. Upload only after exact publishing approval. Wait for processing, resolve every warning, and install the processed TestFlight build on a physical iPhone.
+8. Capture accepted-size native screenshots, verify the fake review account, and attach the exact build to the version.
+9. App Review submission remains a separate explicit publishing action.
+
+## Reviewer Account Preparation
+
+The repository includes an idempotent teacher preparation script but it is not run automatically because it changes a real authentication identity. After exact authorization, set a temporary password outside Git and run:
+
+```text
+APP_REVIEW_TEACHER_PASSWORD=<stored outside Git> npm run app-review:teacher:ensure
+```
+
+Verify the login, Teacher role, demo tenant, demo school, assigned fake classroom, and absence of real child/staff data before copying credentials to App Store Connect. Rotate or disable the account after review.
+
+## Current Official Apple Sources
+
+- App Review Guidelines: https://developer.apple.com/app-store/review/guidelines/
+- Screenshot specifications: https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications
+- App privacy: https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy/
+- Age ratings: https://developer.apple.com/help/app-store-connect/manage-app-information/set-an-app-age-rating/
+- Account deletion: https://developer.apple.com/support/offering-account-deletion-in-your-app/
+- Upload requirements: https://developer.apple.com/news/upcoming-requirements/
+- Upload builds: https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds/
+- TestFlight: https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview

@@ -99,6 +99,7 @@ async function POSTHandler(request: NextRequest) {
   let targetLabel = "{{guardian.firstName}}";
   let recipientCount = 0;
   let targetCenterId: string | null = null;
+  let targetCenterIds: string[] = [];
 
   if (targetMode === "broadcast") {
     if (!senderCanManageOperations || senderIsParent) {
@@ -128,6 +129,7 @@ async function POSTHandler(request: NextRequest) {
     });
     recipientCount = candidates.filter((family) => familyMatchesBroadcastSegment(family, segment)).length;
     targetCenterId = scopedCenterIds.length === 1 ? scopedCenterIds[0] : null;
+    targetCenterIds = scopedCenterIds;
     targetLabel = "{{guardian.firstName}}";
   } else {
     if (!familyId) {
@@ -173,7 +175,17 @@ async function POSTHandler(request: NextRequest) {
     targetLabel = firstName(family.guardians[0]?.fullName) || "there";
     recipientCount = 1;
     targetCenterId = family.centerId;
+    targetCenterIds = family.centerId ? [family.centerId] : [];
   }
+
+  const targetTenants = targetCenterIds.length
+    ? await prisma.center.findMany({
+        where: { id: { in: targetCenterIds } },
+        select: { organization: { select: { tenantId: true } } },
+      })
+    : [];
+  const targetTenantIds = Array.from(new Set(targetTenants.map((center) => center.organization.tenantId)));
+  const tenantIds = targetTenantIds.length ? targetTenantIds : [user.tenantId];
 
   const suggestions = buildSuggestions({
     targetLabel,
@@ -186,8 +198,11 @@ async function POSTHandler(request: NextRequest) {
     data: {
       type: "message_composer_reply",
       promptContext: {
+        tenantId: tenantIds.length === 1 ? tenantIds[0] : null,
+        tenantIds,
         targetMode,
         centerId: targetCenterId,
+        centerIds: targetCenterIds,
         familyId,
         purpose,
         segment,

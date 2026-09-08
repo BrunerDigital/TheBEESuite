@@ -14,6 +14,7 @@ import {
   twimlResponse,
   validateTwilioSignatureAgainstConfiguredTokens,
 } from "@/lib/twilio-messaging";
+import { resolveTwilioInboundGuardian } from "@/lib/twilio-inbound-scope";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -142,23 +143,37 @@ async function POSTHandler(request: NextRequest) {
     take: 50,
     include: {
       user: { select: { id: true, tenantId: true } },
-      family: { select: { id: true, name: true, centerId: true } },
-    },
-  });
-  const guardian = candidates.find((candidate) => phoneMatchKey(candidate.phone) === fromKey);
-  if (!guardian) return twimlResponse();
-
-  const center = guardian.family.centerId
-    ? await prisma.center.findUnique({
-        where: { id: guardian.family.centerId },
+      family: {
         select: {
           id: true,
-          organization: { select: { tenantId: true } },
+          name: true,
+          centerId: true,
         },
+      },
+    },
+  });
+  const candidateCenterIds = Array.from(new Set(candidates.map((candidate) => candidate.family.centerId).filter((value): value is string => Boolean(value))));
+  const candidateCenters = candidateCenterIds.length
+    ? await prisma.center.findMany({
+        where: { id: { in: candidateCenterIds } },
+        select: { id: true, organization: { select: { tenantId: true } } },
       })
-    : null;
-  const tenantId = center?.organization.tenantId ?? guardian.user?.tenantId;
-  if (!tenantId) return twimlResponse();
+    : [];
+  const tenantByCenterId = new Map(candidateCenters.map((center) => [center.id, center.organization.tenantId]));
+  const resolvedGuardian = resolveTwilioInboundGuardian({
+    candidates: candidates.map((candidate) => ({
+      ...candidate,
+      family: {
+        ...candidate.family,
+        tenantId: candidate.family.centerId ? tenantByCenterId.get(candidate.family.centerId) ?? null : null,
+      },
+    })),
+    fromPhoneKey: fromKey,
+    signatureTenantId: signatureMatch.tenantId,
+  });
+  if (!resolvedGuardian) return twimlResponse();
+  const guardian = resolvedGuardian.candidate;
+  const tenantId = resolvedGuardian.tenantId;
 
   const consentAction = twilioSmsConsentAction(body);
   let createdMessageId: string | null = null;

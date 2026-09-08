@@ -237,14 +237,14 @@ export function AssetHubWorkspace({
                     <Upload aria-hidden="true" className="mx-auto mb-2 text-amber-600 dark:text-amber-400" />
                     <div className="font-medium">Choose files</div>
                     <div className="text-xs text-muted-foreground">
-                      Images, video, audio, PDFs, Office files, archives, and
-                      more
+                      Images, video, audio, PDFs, Office files, and ZIP archives
                     </div>
                   </div>
                   <input
                     id={`${uploadFieldId}-files`}
                     className="sr-only"
                     type="file"
+                    accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.mov,.webm,.mp3,.wav,.m4a,.ogg,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.key,.numbers,.zip"
                     multiple
                     onChange={(event) =>
                       setFiles(Array.from(event.target.files || []))

@@ -1,6 +1,6 @@
 # Teacher iOS Build Runbook
 
-Last updated: July 28, 2026
+Last updated: September 8, 2026
 
 This runbook covers the native iOS shell for the teacher-facing App Store submission: BEE Suite Teacher Portal.
 
@@ -21,10 +21,10 @@ This runbook covers the native iOS shell for the teacher-facing App Store submis
 
 ## Prerequisites
 
-- macOS with a current supported Xcode installation.
+- macOS with Xcode 26 or later and the iOS 26 SDK or later. Apple has required this upload toolchain since April 28, 2026.
 - Apple Developer Program access for the BrunerDigital team or the final legal developer account.
 - The Apple Team ID that owns `com.brunerdigital.thebeesuite.teacher`.
-- Node.js and npm installed on the Mac.
+- Node.js 22 or later and npm installed on the Mac.
 - Production routes live:
   - `https://thebeesuite.io/teachers`
   - `https://thebeesuite.io/teacher-portal`
@@ -35,6 +35,7 @@ This runbook covers the native iOS shell for the teacher-facing App Store submis
 
 ```bash
 npm ci
+npm run mobile:assets:generate
 npm run mobile:store:check
 npm run ios:teacher:sync
 npm run ios:teacher:open
@@ -52,7 +53,7 @@ In Xcode:
 8. Set the run destination to `Any iOS Device (arm64)` and select Release configuration.
 9. Use **Product > Archive**.
 10. In Organizer, select the archive and run **Validate App**. Resolve every signing, entitlement, icon, privacy, or bundle error.
-11. Use **Distribute App > App Store Connect > Upload**. Keep symbol upload enabled unless the release owner documents otherwise.
+11. Stop for exact upload approval. Only after approval, use **Distribute App > App Store Connect > Upload** and keep symbol upload enabled unless the release owner documents otherwise.
 12. Record the archive UUID, version, build, Git commit, signing team, upload time, and processing result.
 
 ## Privacy Report And TestFlight
@@ -74,6 +75,14 @@ Demo account password: <temporary review password; do not commit>
 Demo school: Kid City USA - Demo
 Demo classroom: fake classroom records only
 ```
+
+Creating or rotating this login changes an external identity and requires exact approval. After approval, set `APP_REVIEW_TEACHER_PASSWORD` outside Git and run:
+
+```bash
+npm run app-review:teacher:ensure
+```
+
+The command fails closed unless it finds a classroom-assigned `bee_suite_demo` teacher source. Re-query the resulting login, tenant, school, classroom, and fake-data boundary before entering credentials in App Store Connect.
 
 Minimum reviewer-visible flows:
 

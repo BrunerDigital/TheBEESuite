@@ -51,6 +51,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ParentKioskCredentialPanel } from "@/components/parent-kiosk-credential-panel";
+import { MessageReportButton } from "@/components/message-report-button";
 import { CollapsiblePanel } from "@/components/workspace-preferences";
 import {
   Select,
@@ -378,6 +379,7 @@ type Props = {
     createdAt: string | Date;
     sender?: { name: string; role?: string } | null;
     isFromFamily?: boolean;
+    canReport?: boolean;
     attachments?: MessageAttachmentView[];
   }>;
   documents: Array<{
@@ -3929,16 +3931,20 @@ function ParentPortalWorkspaceView({
                             })}
                           </div>
                         ) : null}
-                        {!isFromFamily ? (
-                          <Button
-                            className="mt-2 -ml-2"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => startMessageReply(item)}
-                          >
-                            <Reply data-icon="inline-start" />
-                            Reply
-                          </Button>
+                        {!isFromFamily || item.canReport ? (
+                          <div className="mt-2 -ml-2 flex flex-wrap items-center gap-1">
+                            {!isFromFamily ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => startMessageReply(item)}
+                              >
+                                <Reply data-icon="inline-start" />
+                                Reply
+                              </Button>
+                            ) : null}
+                            {item.canReport ? <MessageReportButton messageId={item.id} /> : null}
+                          </div>
                         ) : null}
                       </article>
                     </li>

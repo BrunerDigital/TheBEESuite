@@ -363,7 +363,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     const params = new URLSearchParams();
     params.set("batchId", batchId);
     if (batchId === "latest") params.set("centerId", centerId);
-    window.location.href = `/api/imports/procare?${params.toString()}`;
+    const link = document.createElement("a");
+    link.href = `/api/imports/procare?${params.toString()}`;
+    link.rel = "noreferrer";
+    link.click();
   }
 
   function downloadReconciliation(batchId: string) {

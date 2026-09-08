@@ -1,6 +1,6 @@
 # App Store Submission Packet - BEE Suite Parent Portal
 
-Last updated: July 28, 2026
+Last updated: September 8, 2026
 
 This packet is for the first iOS App Store submission whose purpose is to make the parent portal easier for parents and guardians to access.
 
@@ -10,28 +10,28 @@ Current repository status:
 
 - The product is a Next.js web app with PWA metadata and an install launcher at `https://thebeesuite.io/app`.
 - The parent App Store entry and login surface is `https://thebeesuite.io/parents`.
-- Role-specific web entry points now exist for `/parents`, `/teachers`, `/directors`, and `/executives`, each with its own manifest metadata.
+- The intended v1 native submission set is Parent and Teacher. Director and executive experiences remain responsive web workspaces; no additional thin-wrapper apps are planned for v1.
 - Public support and privacy routes now exist at `https://thebeesuite.io/support` and `https://thebeesuite.io/privacy`.
 - A Capacitor iOS project now exists at `ios/App/App.xcodeproj` for the parent app.
 - A separate teacher iOS submission path now exists at `ios-teacher/App/App.xcodeproj` with bundle ID `com.brunerdigital.thebeesuite.teacher`; use `docs/TEACHER_APP_STORE_SUBMISSION_PACKET.md` for that app.
 - There is still no uploadable `.ipa` in this repository because the final archive must be built and signed from Xcode on macOS.
-- The existing 1024 icon has an alpha channel, so a no-alpha App Store export was generated at `output/app-store/ios/app-icon-1024-no-alpha.png`.
-- The fake App Review parent account `app-review-parent@thebeesuite.io` was created, linked to seeded demo family data, and verified through the live login API on July 7, 2026.
+- The committed parent icon and launch assets are role-specific, reproducible with `npm run mobile:assets:generate`, and verified at 1024 x 1024 / 2732 x 2732 without alpha. The App Store export is `output/app-store/ios/app-icon-1024-no-alpha.png`.
+- The native configuration is HTTPS-only, has WebView inspection and link previews disabled, has no broad navigation allowlist, and includes no unused push, Associated Domains, Face ID, microphone, location, contacts, tracking, or iPad capability.
+- Historical evidence says `app-review-parent@thebeesuite.io` was linked to fake demo data in July. Treat that as stale until the exact release-candidate login and data isolation are reverified immediately before upload.
 
-Repository verification completed after the parent-app split:
+Repository verification completed on Windows on September 8, 2026:
 
-- `npm test -- tests/phase1-guardrails.test.ts tests/parent-portal-invite-links.test.ts`
+- Clean `npm ci` (zero reported package vulnerabilities)
+- `npm run db:generate`
+- Full `npm test` passed at the September 8 release gate; use the release report for the exact final count rather than copying a stale total here.
 - `npm run typecheck`
 - `npm run lint`
-- `npm run build`
-- `npm audit --omit=dev`
-- `npx cap ls ios`
-- Live login API check for `app-review-parent@thebeesuite.io` returned `ok: true` and `nextPath: /parent-portal`.
-- Authenticated live fetch of `https://thebeesuite.io/parent-portal` returned `200`.
+- Parent and teacher Capacitor sync completed with portable Swift package paths.
+- `npm run mobile:store:check` is the canonical repository/native evidence command. Re-run it on the final commit and again on the Mac.
 
 Do not submit until these blockers are resolved:
 
-- Native iOS wrapper is opened on macOS, assigned to the correct Apple Developer team, tested on iPhone, and archived successfully in Xcode.
+- Native iOS wrapper is opened in Xcode 26 or later on macOS, assigned to the correct Apple Developer team, tested on a physical iPhone, and archived successfully using the iOS 26 SDK or later.
 - Apple Developer Program account and Team ID are confirmed.
 - Public privacy policy URL and support URL are live and counsel/owner-approved.
 - App Review demo credentials are copied into App Store Connect and rotated after review.
@@ -59,14 +59,14 @@ Use these unless there is already an Apple Developer identifier reserved for thi
 | Target devices for first release | iPhone only |
 | Minimum deployment target | iOS 16.0 or newer |
 
-Role-specific app identities are reserved in code so submissions do not reuse the parent app metadata:
+The two intended v1 app identities are separate so submissions do not reuse metadata:
 
 | Role app | Bundle ID | SKU | Web launch |
 | --- | --- | --- | --- |
 | Parent | `com.brunerdigital.thebeesuite.parent` | `BEE-SUITE-PARENT-IOS` | `https://thebeesuite.io/parents` |
 | Teacher | `com.brunerdigital.thebeesuite.teacher` | `BEE-SUITE-TEACHER-IOS` | `https://thebeesuite.io/teachers` |
-| Director | `com.brunerdigital.thebeesuite.director` | `BEE-SUITE-DIRECTOR-IOS` | `https://thebeesuite.io/directors` |
-| Executive | `com.brunerdigital.thebeesuite.executive` | `BEE-SUITE-EXECUTIVE-IOS` | `https://thebeesuite.io/executives` |
+
+Director and executive role URLs are web entry points, not evidence that separate native apps exist or should be submitted.
 
 Notes:
 
@@ -96,22 +96,19 @@ ios/App/App.xcodeproj
 ios/App/App/Info.plist
 ```
 
-Suggested capabilities:
+Implemented v1 native behavior:
 
-- WKWebView or Capacitor shell pointed at the production parent portal.
-- Native loading, offline, and session-expired screens.
-- Native bottom navigation or toolbar for Portal, Messages, Billing, Documents, and Settings.
-- Face ID / Touch ID app lock for reopening the app.
-- Native photo/document picker for message/document uploads.
-- Push notifications for school messages, daily reports, documents, incidents, and billing reminders when APNs server support is ready.
-- Associated domains if Universal Links are added later.
+- Capacitor WKWebView launches the production parent portal over HTTPS.
+- Branded local launch and recoverable offline states respect iPhone safe areas and 44-point touch targets.
+- Browser-native camera/photo/file pickers are available only from user-initiated upload controls.
+- The full authenticated parent workflow provides the app's utility: child/day context, private school messaging, media, documents/signatures, incident acknowledgements, billing history and tuition checkout handoff, preferences, account deletion requests, and support.
 
-Suggested bundle capabilities:
+Bundle capability decisions:
 
-- Associated Domains: optional for v1, recommended later.
+- Associated Domains: deliberately absent for v1.
 - Push Notifications: only enable if APNs is implemented and tested.
 - Sign in with Apple: not required if the app only uses email/password login and does not offer third-party social login.
-- Apple Pay: not required for v1. Stripe checkout for tuition and physical/service payments can remain external/traditional payment handling.
+- Apple Pay: not required for v1. Stripe checkout is for childcare tuition, fees, goods, and services consumed outside the app, so Apple Guideline 3.1.3(e) requires a payment method other than IAP.
 
 Suggested `Info.plist` purpose strings:
 
@@ -283,13 +280,15 @@ Highest risk: Guideline 4.2 Minimum Functionality.
 
 Apple says apps should include features, content, and UI that elevate them beyond a repackaged website, and apps should not primarily be web clippings or collections of links. A simple WKWebView pointed at the website is risky.
 
-Reduce that risk before submission by including:
+Current mitigations that must remain intact:
 
-- Native app navigation, launch, and offline states.
-- Native privacy/security affordances such as Face ID app lock.
-- Native file/photo upload flow.
-- Push notification support if ready.
+- Role-specific launch and offline states, iPhone safe-area handling, and mobile touch targets.
+- Working parent workflows for private messages, documents, photo/file selection, incidents, billing, and account-deletion initiation.
+- Message safety screening plus in-product reporting of received content for authorized review.
+- No unused Face ID, push, Associated Domains, tracking, microphone, location, contacts, or iPad declarations in v1.
 - A review note explaining this is a secure account-based parent portal with operational school workflows, not marketing content.
+
+The committed `server.url` is intentional because the product is server-rendered, but it means the app remains a remote WKWebView shell. Static checks cannot eliminate Guideline 4.2 risk; the final TestFlight build must feel complete on a physical iPhone and the review notes must describe its account-based childcare value accurately. Do not add superficial permissions or unfinished native features to address this risk.
 
 Second risk: App Completeness.
 
@@ -315,17 +314,17 @@ Verified:
 - PNG
 - No alpha channel
 
-Source icon:
+Release icon:
 
 ```text
-public/brand/the-bee-suite/app-icon-yellow.png
+output/app-store/ios/app-icon-1024-no-alpha.png
 ```
 
-The source icon is 1024 x 1024 but has an alpha channel, so do not use it directly as the App Store marketing icon unless it is exported without alpha.
+The release icon is a deterministic, no-alpha 1024 x 1024 export generated from the existing BEE Suite brand source by `npm run mobile:assets:generate`.
 
 ### Screenshots
 
-Current screenshots in `screenshots/` are useful references but are not App Store-ready sizes.
+Exact-size synthetic drafts are under `output/app-store/ios/screenshots-draft/` with provenance in `output/app-store/screenshot-drafts-manifest.json`. They are 1290 x 2796 RGB/no-alpha planning assets generated from `/device-preview`; they are not native App Store evidence. Replace them with matching screenshots from the signed Release/TestFlight build before submission.
 
 Recommended first-release screenshots:
 

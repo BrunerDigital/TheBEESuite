@@ -6,6 +6,7 @@ import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { canRequestAccountDeletion } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 import { withApiLogging } from "@/lib/request-response-logging";
 
 export const runtime = "nodejs";
@@ -15,6 +16,7 @@ const openDeletionStatuses = [
   "verified",
   "school_review",
   "approved",
+  "executing",
   "partially_completed",
 ];
 
@@ -25,16 +27,6 @@ function clean(value: unknown, maxLength = 2000) {
 
 function bool(value: unknown) {
   return value === true || value === "true" || value === "1" || value === "on";
-}
-
-function sameOrigin(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  if (!origin) return true;
-  try {
-    return new URL(origin).host === request.nextUrl.host;
-  } catch {
-    return false;
-  }
 }
 
 function deletionDueDate() {
@@ -68,7 +60,7 @@ function summarizeRequest(request: {
 }
 
 async function POSTHandler(request: NextRequest) {
-  if (!sameOrigin(request)) {
+  if (!hasTrustedMutationOrigin(request)) {
     return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 });
   }
 
@@ -100,8 +92,8 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Guardian profile is required." }, { status: 400 });
   }
 
-  const guardian = await prisma.guardian.findUnique({
-    where: { id: guardianId },
+  const guardian = await prisma.guardian.findFirst({
+    where: { id: guardianId, userId: user.id },
     include: {
       family: {
         select: {
@@ -116,9 +108,16 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Guardian profile not found." }, { status: 404 });
   }
 
+  const familyCenter = guardian.family.centerId
+    ? await prisma.center.findFirst({
+        where: { id: guardian.family.centerId, organization: { tenantId: user.tenantId } },
+        select: { id: true },
+      })
+    : null;
+
   const access = canRequestAccountDeletion({
     isParentGuardian: isParentGuardian(user),
-    isLinkedGuardian: guardian.userId === user.id,
+    isLinkedGuardian: guardian.userId === user.id && Boolean(familyCenter),
     retentionNoticeAccepted,
   });
   if (!access.ok) {

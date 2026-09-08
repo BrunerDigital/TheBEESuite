@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-08T22:13:23.584Z",
+  "source": "/device-preview synthetic data",
+  "nonNativeDraft": true,
+  "finalCaptureRequired": "Replace with matching screenshots from the signed TestFlight build before App Review.",
+  "dimensions": {
+    "width": 1290,
+    "height": 2796
+  },
+  "captures": [
+    {
+      "app": "parent",
+      "name": "01-family-home.png",
+      "path": "/device-preview?view=parent&screen=home",
+      "caption": "Your family day at a glance",
+      "outputPath": "output/app-store/ios/screenshots-draft/01-family-home.png",
+      "width": 1290,
+      "height": 2796,
+      "hasAlpha": false
+    },
+    {
+      "app": "parent",
+      "name": "02-daily-updates.png",
+      "path": "/device-preview?view=parent&screen=updates",
+      "caption": "Daily reports, meals, naps, and activities",
+      "outputPath": "output/app-store/ios/screenshots-draft/02-daily-updates.png",
+      "width": 1290,
+      "height": 2796,
+      "hasAlpha": false
+    },
+    {
+      "app": "parent",
+      "name": "03-messages.png",
+      "path": "/device-preview?view=parent&screen=messages",
+      "caption": "Private communication with your school",
+      "resetSelector": "ol[aria-label^=\"Messages with\"]",
+      "outputPath": "output/app-store/ios/screenshots-draft/03-messages.png",
+      "width": 1290,
+      "height": 2796,
+      "hasAlpha": false
+    },
+    {
+      "app": "parent",
+      "name": "04-payments.png",
+      "path": "/device-preview?view=parent&screen=payments",
+      "caption": "Tuition and payment history in one place",
+      "outputPath": "output/app-store/ios/screenshots-draft/04-payments.png",
+      "width": 1290,
+      "height": 2796,
+      "hasAlpha": false
+    },
+    {
+      "app": "parent",
+      "name": "05-documents.png",
+      "path": "/device-preview?view=parent&screen=family&section=documents",
+      "caption": "Family documents and acknowledgements",
+      "outputPath": "output/app-store/ios/screenshots-draft/05-documents.png",
+      "width": 1290,
+      "height": 2796,
+      "hasAlpha": false
+    },
+    {
+      "app": "teacher",
+      "name": "01-classroom-today.png",
+      "path": "/device-preview?view=teacher&screen=home",
+      "caption": "The classroom day at a glance",
+      "outputPath": "output/app-store/ios-teacher/screenshots-draft/01-classroom-today.png",
+      "width": 1290,
+      "height": 2796,
+      "hasAlpha": false
+    },
+    {
+      "app": "teacher",
+      "name": "02-roster.png",
+      "path": "/device-preview?view=teacher&screen=roster",
+      "caption": "A current classroom roster",
+      "outputPath": "output/app-store/ios-teacher/screenshots-draft/02-roster.png",
+      "width": 1290,
+      "height": 2796,
+      "hasAlpha": false
+    },
+    {
+      "app": "teacher",
+      "name": "03-quick-log.png",
+      "path": "/device-preview?view=teacher&screen=quick-log",
+      "caption": "Meals, naps, activities, photos, and notes",
+      "outputPath": "output/app-store/ios-teacher/screenshots-draft/03-quick-log.png",
+      "width": 1290,
+      "height": 2796,
+      "hasAlpha": false
+    }
+  ]
+}

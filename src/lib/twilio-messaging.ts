@@ -85,6 +85,37 @@ export function validateTwilioSignature({
   return expectedBuffer.length === actualBuffer.length && timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
+export function twilioSignatureTokenCandidates(input: {
+  platformToken?: string | null;
+  tenantTokens: ReadonlyArray<{ tenantId: string; value: string }>;
+}) {
+  const scopesByToken = new Map<string, Set<string | null>>();
+  for (const credential of input.tenantTokens) {
+    const token = clean(credential.value);
+    if (!token) continue;
+    const scopes = scopesByToken.get(token) ?? new Set<string | null>();
+    scopes.add(credential.tenantId);
+    scopesByToken.set(token, scopes);
+  }
+  const platformToken = clean(input.platformToken);
+  if (platformToken) {
+    const scopes = scopesByToken.get(platformToken) ?? new Set<string | null>();
+    scopes.add(null);
+    scopesByToken.set(platformToken, scopes);
+  }
+
+  return [...scopesByToken].map(([token, scopes]) => {
+    const tenantScopes = [...scopes].filter((tenantId): tenantId is string => Boolean(tenantId));
+    return {
+      token,
+      // A token reused across tenant records or at platform scope identifies
+      // the Twilio account, not one BEE tenant. Keep it shared so downstream
+      // guardian resolution must prove one unambiguous tenant itself.
+      tenantId: scopes.has(null) || tenantScopes.length !== 1 ? null : tenantScopes[0],
+    };
+  });
+}
+
 export async function validateTwilioSignatureAgainstConfiguredTokens({
   signature,
   url,
@@ -94,14 +125,9 @@ export async function validateTwilioSignatureAgainstConfiguredTokens({
   url: string;
   params: Record<string, string>;
 }) {
-  const tokens: Array<{ tenantId: string | null; token: string }> = [];
   const platformToken = clean(process.env.TWILIO_AUTH_TOKEN);
-  if (platformToken) tokens.push({ tenantId: null, token: platformToken });
-
   const tenantTokens = await getTenantIntegrationCredentialEntries("twilio", "TWILIO_AUTH_TOKEN").catch(() => []);
-  for (const credential of tenantTokens) {
-    tokens.push({ tenantId: credential.tenantId, token: credential.value });
-  }
+  const tokens = twilioSignatureTokenCandidates({ platformToken, tenantTokens });
 
   for (const item of tokens) {
     if (validateTwilioSignature({ authToken: item.token, signature, url, params })) {
@@ -121,6 +147,10 @@ export function twilioDeliveryStatus(value: unknown): TwilioDeliveryStatus {
 
 export function twilioBlockedCurrentStatuses() {
   return ["delivered", "failed"];
+}
+
+export function twilioDeliveryTenantScope(tenantId: string | null) {
+  return tenantId ? { tenantId } : {};
 }
 
 export function twilioStateTransition(currentStatus: string, nextStatus: TwilioDeliveryStatus) {

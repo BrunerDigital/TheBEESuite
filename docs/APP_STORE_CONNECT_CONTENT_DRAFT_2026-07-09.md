@@ -1,7 +1,7 @@
 # App Store Connect Content Draft - BEE Suite Parent Portal
 
-Draft date: July 9, 2026  
-Status: Draft for Product, Legal, QA, and Release Manager review before App Store Connect entry.
+Verified draft date: September 8, 2026
+Status: Technically reconciled draft. Product/legal approval and App Store Connect entry remain human publishing gates.
 
 ## App Information
 
@@ -146,9 +146,10 @@ Use final TestFlight/native build and fake data only.
 
 Accepted iPhone screenshot strategy:
 
-- Preferred: 6.9 inch portrait screenshots.
+- Preferred: 6.9 inch portrait screenshots at one accepted size (`1260 x 2736`, `1290 x 2796`, or `1320 x 2868`).
 - Fallback: 6.5 inch portrait screenshots.
 - Do not enable iPad for v1 unless iPad screenshots are prepared.
+- Use `output/app-store/ios/screenshots-draft/` only as an exact-size composition/caption reference. The manifest marks the images as synthetic browser drafts; replace them with matching 1290 x 2796 captures from the signed Release/TestFlight build.
 
 ## Preview Video Storyboard
 
@@ -168,7 +169,7 @@ Length target: 25-30 seconds.
 
 Prepare:
 
-- App Store icon: `output/app-store/ios/app-icon-1024-no-alpha.png`
+- App Store icon: `output/app-store/ios/app-icon-1024-no-alpha.png` (generated September 8, 2026; 1024 x 1024; no alpha)
 - Website App Store badge section.
 - Parent launch email.
 - Director launch handout.

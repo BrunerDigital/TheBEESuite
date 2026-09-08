@@ -44,6 +44,7 @@ import {
   reserveStripeWebhookDelivery,
   stripeWebhookDedupeKey,
 } from "@/lib/stripe-webhook-receipts";
+import { isStripeWebhookTransientDatabaseError, retryStripeWebhookTransaction } from "@/lib/stripe-webhook-retry";
 import { matchStripeWebhookSecret } from "@/lib/stripe-webhook-readiness";
 import {
   applySucceededStripeFamilyBalancePayment,
@@ -293,6 +294,20 @@ async function recordStripeWebhookEvent(
   if (result.count !== 1) throw new Error("Stripe webhook receipt was not reserved before processing.");
 }
 
+function runStripeWebhookTransaction<T>(callback: (tx: Prisma.TransactionClient) => Promise<T>) {
+  return retryStripeWebhookTransaction(() => prisma.$transaction(callback));
+}
+
+async function lockStripeWebhookPayment(tx: Prisma.TransactionClient, paymentId: string) {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT id
+    FROM public."Payment"
+    WHERE id = ${paymentId}
+    FOR UPDATE
+  `);
+  return rows.length === 1;
+}
+
 async function reserveStripeWebhookEvent(event: StripeWebhookEvent) {
   return reserveStripeWebhookDelivery({
     insert: async () => {
@@ -309,10 +324,17 @@ async function reserveStripeWebhookEvent(event: StripeWebhookEvent) {
         },
       });
     },
-    eventExists: async () => Boolean(await prisma.stripeWebhookEvent.findUnique({
+    existingReceipt: async () => prisma.stripeWebhookEvent.findUnique({
       where: { eventId: event.id },
-      select: { id: true },
-    })),
+      select: { status: true },
+    }),
+    reclaimRetryable: async () => {
+      const reclaimed = await prisma.stripeWebhookEvent.updateMany({
+        where: { eventId: event.id, status: "retryable" },
+        data: { status: "received", error: null, processedAt: null },
+      });
+      return reclaimed.count === 1;
+    },
   });
 }
 
@@ -459,6 +481,17 @@ async function finalizeUnfinishedStripeWebhookReceipt(event: StripeWebhookEvent,
   });
 }
 
+async function markStripeWebhookReceiptRetryable(event: StripeWebhookEvent) {
+  await prisma.stripeWebhookEvent.update({
+    where: { eventId: event.id },
+    data: {
+      status: "retryable",
+      error: "transient_database_conflict",
+      processedAt: null,
+    },
+  });
+}
+
 async function handleTerminalStoreCheckoutEvent(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted) {
   const metadata = jsonObject(session.metadata) as StripeMetadata;
   const tenantId = clean(metadata.tenantId);
@@ -477,7 +510,7 @@ async function handleTerminalStoreCheckoutEvent(event: StripeWebhookEvent, sessi
         : "terminal_store.checkout.updated";
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event, action.endsWith(".pending") ? "pending" : "processed");
       await tx.auditLog.create({
         data: {
@@ -735,8 +768,12 @@ async function handleFamilyBalancePaymentSucceeded(
   let billingAccountId = clean(input.metadata.billingAccountId);
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
+      if (!await lockStripeWebhookPayment(tx, input.paymentId)) {
+        ignoredReason = "payment_not_found";
+        return;
+      }
       const scopedPayment = event.type.startsWith("payment_intent.")
         ? input.paymentIntent
           ? await findScopedPaymentIntentPayment(tx, {
@@ -1017,7 +1054,7 @@ async function handleConnectedAccountEvent(event: StripeWebhookEvent, matchedTen
   const tenantId = matchedTenantId || matchedCenters[0]?.organization.tenantId || null;
   const retrieved = await retrieveStripeConnectedAccount(accountId, { tenantId });
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       for (const center of matchedCenters) {
         const existingFields = jsonObject(center.customFields);
@@ -1116,7 +1153,7 @@ async function handlePayoutCreated(
   }
 
   const dedupeKey = `stripe-payout-created:${event.id}:${center.id}`;
-  const delivery = await prisma.$transaction(async (tx) => {
+  const delivery = await runStripeWebhookTransaction(async (tx) => {
     const pendingDelivery = await tx.integrationDelivery.create({
       data: {
         tenantId,
@@ -1193,7 +1230,7 @@ async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeC
       return NextResponse.json({ ok: false, error: "Missing billing account metadata." }, { status: 400 });
     }
     try {
-      const outcome = await prisma.$transaction(async (tx) => {
+      const outcome = await runStripeWebhookTransaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event);
         const account = await tx.billingAccount.findUnique({
           where: { id: billingAccountId },
@@ -1231,8 +1268,9 @@ async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeC
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
+      if (!await lockStripeWebhookPayment(tx, paymentId)) return;
       const payment = await tx.payment.findUnique({ where: { id: paymentId }, select: { status: true, customFields: true } });
       if (!payment || payment.status !== PaymentStatus.DRAFT) return;
       await tx.payment.update({
@@ -1372,7 +1410,7 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
   let paymentMethodDetails = paymentMethodLookup?.ok ? paymentMethodLookup.paymentMethod : null;
   let reconciledTerminalEventType: string | null = null;
 
-  const applySetupCompletion = () => prisma.$transaction(async (tx) => {
+  const applySetupCompletion = () => runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       if (!await lockPaymentMethodBillingAccount(tx, billingAccountId)) return "missing" as const;
       const billingAccount = await tx.billingAccount.findUnique({
@@ -1650,7 +1688,7 @@ async function handlePaymentMethodSetupIntentSucceeded(event: StripeWebhookEvent
   const paymentMethodDetails = paymentMethodLookup.paymentMethod;
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       if (!await lockPaymentMethodBillingAccount(tx, billingAccountId)) return;
       const billingAccount = await tx.billingAccount.findUnique({
@@ -1763,7 +1801,7 @@ async function handlePaymentMethodSetupIntentFailed(event: StripeWebhookEvent, s
   const setupCanceled = event.type === "setup_intent.canceled";
   const terminalSetupStatus = setupCanceled ? "canceled" : "setup_failed";
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       if (!await lockPaymentMethodBillingAccount(tx, billingAccountId)) return;
       const billingAccount = await tx.billingAccount.findUnique({
@@ -1874,7 +1912,7 @@ async function handleSchoolSoftwarePaymentMethodCompleted(event: StripeWebhookEv
   const fields = jsonObject(center.customFields);
   if (clean(fields.stripeSoftwareSetupSessionId) !== session.id) {
     try {
-      await prisma.$transaction((tx) => recordStripeWebhookEvent(tx, event));
+      await runStripeWebhookTransaction((tx) => recordStripeWebhookEvent(tx, event));
     } catch (error) {
       if (!isDuplicateWebhookEvent(error)) throw error;
     }
@@ -1936,7 +1974,7 @@ async function handleSchoolSoftwarePaymentMethodCompleted(event: StripeWebhookEv
     subscription = created.subscription;
   }
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       await tx.center.update({
         where: { id: centerId },
@@ -1986,8 +2024,9 @@ async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, sessi
 
   if (event.type === "checkout.session.async_payment_failed") {
     try {
-      await prisma.$transaction(async (tx) => {
+      await runStripeWebhookTransaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event);
+        if (!await lockStripeWebhookPayment(tx, paymentId)) return;
         const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
         const currentFields = jsonObject(currentPayment?.customFields);
         const failure = achFailurePresentation({
@@ -2032,8 +2071,9 @@ async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, sessi
 
   if (event.type === "checkout.session.completed" && session.payment_status !== "paid") {
     try {
-      await prisma.$transaction(async (tx) => {
+      await runStripeWebhookTransaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event, "pending");
+        if (!await lockStripeWebhookPayment(tx, paymentId)) return;
         const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { status: true, customFields: true } });
         if (!currentPayment || currentPayment.status !== PaymentStatus.DRAFT) return;
         const currentFields = jsonObject(currentPayment?.customFields);
@@ -2105,8 +2145,12 @@ async function handlePaymentIntentProcessing(
   let applied = false;
   let ignoredReason: string | null = null;
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event, "pending");
+      if (!await lockStripeWebhookPayment(tx, paymentId)) {
+        ignoredReason = "payment_not_found";
+        return;
+      }
       const scopedPayment = await findScopedPaymentIntentPayment(tx, {
         event,
         metadata,
@@ -2228,8 +2272,9 @@ async function handlePaymentIntentFailed(
   let verifiedInvoiceId: string | null = null;
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
+      if (!await lockStripeWebhookPayment(tx, paymentId)) return;
       const scopedPayment = await findScopedPaymentIntentPayment(tx, {
         event,
         metadata,
@@ -2405,8 +2450,12 @@ async function handlePaymentIntentSucceeded(
   let ignoredReason: string | null = null;
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
+      if (!await lockStripeWebhookPayment(tx, paymentId)) {
+        ignoredReason = "payment_not_found";
+        return;
+      }
       const scopedPayment = await findScopedPaymentIntentPayment(tx, {
         event,
         metadata,
@@ -2658,9 +2707,14 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
   let affectedBillingAccountId: string | null = null;
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
-      const payment = await findPaymentForStripeObject(tx, charge);
+      const paymentCandidate = await findPaymentForStripeObject(tx, charge);
+      if (!paymentCandidate || !await lockStripeWebhookPayment(tx, paymentCandidate.id)) return;
+      const payment = await tx.payment.findUnique({
+        where: { id: paymentCandidate.id },
+        include: { billingAccount: true },
+      });
       if (!payment) return;
       affectedBillingAccountId = payment.billingAccountId;
 
@@ -2737,9 +2791,14 @@ async function handleDisputeLifecycle(event: StripeWebhookEvent, dispute: Stripe
   let affectedBillingAccountId: string | null = null;
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
-      const payment = await findPaymentForStripeObject(tx, dispute);
+      const paymentCandidate = await findPaymentForStripeObject(tx, dispute);
+      if (!paymentCandidate || !await lockStripeWebhookPayment(tx, paymentCandidate.id)) return;
+      const payment = await tx.payment.findUnique({
+        where: { id: paymentCandidate.id },
+        include: { billingAccount: true },
+      });
       if (!payment) return;
       affectedBillingAccountId = payment.billingAccountId;
       const currentFields = jsonObject(payment.customFields);
@@ -2993,7 +3052,7 @@ async function dispatchAuthenticatedEvent(
       patch.stripeSoftwareLatestInvoiceAt = new Date().toISOString();
       patch.stripeSoftwarePaymentStatus = event.type === "invoice.paid" ? "current" : event.type === "invoice.payment_action_required" ? "action_required" : "past_due";
     }
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       await tx.center.update({ where: { id: center.id }, data: { customFields: { ...fields, ...patch } as Prisma.InputJsonObject } });
     });
@@ -3061,8 +3120,9 @@ async function dispatchAuthenticatedEvent(
 
   if (event.type === "checkout.session.async_payment_failed") {
     try {
-      await prisma.$transaction(async (tx) => {
+      await runStripeWebhookTransaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event);
+        if (!await lockStripeWebhookPayment(tx, paymentId)) return;
         const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
         const currentFields = jsonObject(currentPayment?.customFields);
         const failure = achFailurePresentation({
@@ -3104,8 +3164,9 @@ async function dispatchAuthenticatedEvent(
 
   if (event.type === "checkout.session.completed" && session.payment_status !== "paid") {
     try {
-      await prisma.$transaction(async (tx) => {
+      await runStripeWebhookTransaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event, "pending");
+        if (!await lockStripeWebhookPayment(tx, paymentId)) return;
         const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { status: true, customFields: true } });
         if (!currentPayment || currentPayment.status !== PaymentStatus.DRAFT) return;
         const currentFields = jsonObject(currentPayment?.customFields);
@@ -3150,18 +3211,35 @@ async function dispatchAuthenticatedEvent(
   let applied = false;
   let ignoredReason: string | null = null;
   try {
-    await prisma.$transaction(async (tx) => {
+    await runStripeWebhookTransaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
+      if (!await lockStripeWebhookPayment(tx, paymentId)) {
+        ignoredReason = "payment_not_found";
+        return;
+      }
       const currentPayment = await tx.payment.findUnique({
         where: { id: paymentId },
         select: { status: true, billingAccountId: true, amountCents: true, customFields: true },
       });
+      if (!currentPayment) {
+        ignoredReason = "payment_not_found";
+        return;
+      }
+      const currentFields = jsonObject(currentPayment.customFields);
+      if (
+        currentPayment.status === PaymentStatus.PAID
+        && clean(session.payment_intent)
+        && clean(currentFields.stripePaymentIntentId) === clean(session.payment_intent)
+      ) {
+        ignoredReason = "payment_already_applied";
+        return;
+      }
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
         select: { status: true, billingAccountId: true, totalCents: true, customFields: true },
       });
-      if (!currentPayment || !invoice) {
-        ignoredReason = currentPayment ? "invoice_not_found" : "payment_not_found";
+      if (!invoice) {
+        ignoredReason = "invoice_not_found";
         return;
       }
 
@@ -3181,7 +3259,7 @@ async function dispatchAuthenticatedEvent(
             status: currentPayment.status === PaymentStatus.PAID ? PaymentStatus.PAID : PaymentStatus.VOID,
             externalIdPlaceholder: session.id,
             customFields: {
-              ...jsonObject(currentPayment.customFields),
+              ...currentFields,
               stripeCheckoutSessionId: session.id,
               stripePaymentIntentId: session.payment_intent || null,
               stripeEventId: event.id,
@@ -3231,7 +3309,7 @@ async function dispatchAuthenticatedEvent(
           paidAt,
           externalIdPlaceholder: session.id,
           customFields: {
-            ...jsonObject(currentPayment?.customFields),
+            ...currentFields,
             stripeCheckoutSessionId: session.id,
             stripePaymentIntentId: session.payment_intent || null,
             stripeEventId: event.id,
@@ -3360,6 +3438,17 @@ async function POSTHandler(request: NextRequest) {
     return response;
   } catch (error) {
     logOperationalError("stripe_webhook.processing_failed_after_receipt", error, { eventId: event.id, eventType: event.type });
+    if (isStripeWebhookTransientDatabaseError(error)) {
+      try {
+        await markStripeWebhookReceiptRetryable(event);
+      } catch (receiptError) {
+        logOperationalError("stripe_webhook.receipt_status_update_failed", receiptError, { eventId: event.id, eventType: event.type });
+      }
+      return NextResponse.json(
+        { ok: false, error: "Webhook processing encountered a temporary database conflict." },
+        { status: 503, headers: { "Retry-After": "2" } },
+      );
+    }
     try {
       await finalizeStripeWebhookReceipt(event, "manual_review", "processing_failed_after_durable_receipt");
     } catch (receiptError) {

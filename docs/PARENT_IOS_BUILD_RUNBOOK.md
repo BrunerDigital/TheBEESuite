@@ -1,6 +1,6 @@
 # Parent iOS Build Runbook
 
-Last updated: July 20, 2026
+Last updated: September 8, 2026
 
 This runbook covers the native iOS shell for the first App Store submission: BEE Suite Parent Portal.
 
@@ -21,10 +21,10 @@ This runbook covers the native iOS shell for the first App Store submission: BEE
 
 ## Prerequisites
 
-- macOS with Xcode installed.
+- macOS with Xcode 26 or later and the iOS 26 SDK or later. Apple has required this upload toolchain since April 28, 2026.
 - Apple Developer Program access for the BrunerDigital team or the final legal developer account.
 - The Apple Team ID that owns `com.brunerdigital.thebeesuite.parent`.
-- Node.js and npm installed on the Mac.
+- Node.js 22 or later and npm installed on the Mac.
 - Production routes live:
   - `https://thebeesuite.io/parents`
   - `https://thebeesuite.io/parent-portal`
@@ -35,6 +35,7 @@ This runbook covers the native iOS shell for the first App Store submission: BEE
 
 ```bash
 npm ci
+npm run mobile:assets:generate
 npm run mobile:store:check
 npm run ios:parent:sync
 npm run ios:parent:open
@@ -52,7 +53,7 @@ In Xcode:
 8. Set the run destination to `Any iOS Device (arm64)` and select Release configuration.
 9. Use **Product > Archive**.
 10. In Organizer, select the archive and run **Validate App**. Resolve every signing, entitlement, icon, privacy, or bundle error.
-11. Use **Distribute App > App Store Connect > Upload**. Keep symbol upload enabled unless the release owner documents otherwise.
+11. Stop for exact upload approval. Only after approval, use **Distribute App > App Store Connect > Upload** and keep symbol upload enabled unless the release owner documents otherwise.
 12. Record the archive UUID, version, build, Git commit, signing team, upload time, and processing result.
 
 ## Privacy Report And TestFlight
@@ -94,7 +95,7 @@ Minimum reviewer-visible flows:
 ## Notes
 
 - The iOS project is a Capacitor shell pointed at the production parent route. To reduce App Review Guideline 4.2 risk, keep the native launch/offline states, iPhone-only configuration, camera/photo purpose strings, and clear review notes in the submission packet.
-- If `npm run ios:parent:sync` is run on Windows, verify `ios/App/CapApp-SPM/Package.swift` keeps forward slashes in the local `@capacitor/app` path before opening the project on macOS.
+- The Capacitor wrapper normalizes generated Swift package paths after sync so Windows and macOS produce a portable local `@capacitor/app` dependency path.
 - Do not enable Push Notifications in Xcode until APNs server support is implemented and tested.
 - Do not enable Associated Domains or publish an AASA file until the Apple Team ID and exact path allowlist are approved. HTTPS browser fallback remains the supported v1 behavior.
 - Do not enable iPad support for the first release unless iPad screenshots and tablet QA are ready.

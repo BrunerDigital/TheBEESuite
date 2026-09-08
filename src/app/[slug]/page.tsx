@@ -64,7 +64,11 @@ import {
 } from "@/lib/accounts-receivable";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
+import { aiSuggestionWhereForViewer, tenantIdsFromAiPromptContext } from "@/lib/ai-suggestion-scope";
+import { canViewPlatformPaymentTelemetry, stripeWebhookErrorWhereForViewer, stripeWebhookWhereForViewer } from "@/lib/platform-telemetry-scope";
+import { announcementWhereForViewer } from "@/lib/announcement-scope";
 import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, messageCenterIdsForUser, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
+import { accountDeletionFingerprint } from "@/lib/account-deletion-policy";
 import {
   canManageExecutiveMarketingPortfolio,
   marketingAccountIdFromConfig,
@@ -2387,6 +2391,7 @@ async function renderLivePage(
         take: 20,
         select: {
           id: true,
+          senderId: true,
           subject: true,
           body: true,
           channel: true,
@@ -2482,6 +2487,7 @@ async function renderLivePage(
           ? { ...message.sender, name: userViewText(message.sender.name) }
           : null,
         isFromFamily: message.sender?.role === UserRole.PARENT_GUARDIAN || message.sender?.role === UserRole.AUTHORIZED_PICKUP,
+        canReport: Boolean(message.senderId && message.senderId !== user.id),
         attachments: await signMessageAttachmentsFromMetadata(message.metadata),
       }))),
     ]);
@@ -2629,6 +2635,7 @@ async function renderLivePage(
                 "verified",
                 "school_review",
                 "approved",
+                "executing",
                 "partially_completed",
               ],
             },
@@ -3360,6 +3367,7 @@ async function renderLivePage(
         : null,
       attachments: await signMessageAttachmentsFromMetadata(message.metadata),
       replyHref: messageReplyHref(message),
+      canReport: Boolean(message.senderId && message.senderId !== user.id),
     })));
     const demoMode = showDemoFallbackData && messages.length === 0;
     const visibleMessages = demoMode ? executiveParentMessageDemoRows : signedMessages;
@@ -3415,6 +3423,7 @@ async function renderLivePage(
         isFromFamily: boolean;
         attachments?: Awaited<ReturnType<typeof signMessageAttachmentsFromMetadata>>;
         replyHref?: string | null;
+        canReport?: boolean;
       }>;
     };
     const projectedThreads: MessageThread[] = [];
@@ -3457,6 +3466,7 @@ async function renderLivePage(
         isFromFamily: message.sender?.role === UserRole.PARENT_GUARDIAN || message.sender?.role === UserRole.AUTHORIZED_PICKUP,
         attachments: message.attachments,
         replyHref: message.replyHref,
+        canReport: "canReport" in message && message.canReport === true,
       });
     }
     const threads = projectedThreads
@@ -3533,9 +3543,11 @@ async function renderLivePage(
   }
 
   if (slug === "announcements") {
-    const announcementWhere: Prisma.AnnouncementWhereInput = allCenters
-      ? {}
-      : { OR: [{ centerId: scopedCenterIds }, { centerId: null }] };
+    const announcementWhere = announcementWhereForViewer({
+      role: user.role,
+      allCenters,
+      centerIds: visibleCenterIds,
+    });
     const [announcements, total, draft, scheduled, sent] = await Promise.all([
       prisma.announcement.findMany({
         where: announcementWhere,
@@ -4719,13 +4731,24 @@ async function renderLivePage(
     const [summaries, suggestions, aiLeads, aiFamilies, unreadMessages, openInvoices, overdueInvoices, pendingIncidents, upcomingTours, aiCheckLogs, aiStaff, classroomCapacity, openComplianceTasks, overdueInvoiceTotal] = await Promise.all([
       prisma.aiSummary.findMany({
         where: aiSummaryWhereForViewer({
+          tenantId: user.tenantId,
+          isPlatformOwner: user.role === UserRole.PLATFORM_OWNER,
           hasTenantWideAccess: tenantWide,
           visibleCenterIds,
         }),
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
-      prisma.aiSuggestion.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
+      prisma.aiSuggestion.findMany({
+        where: aiSuggestionWhereForViewer({
+          tenantId: user.tenantId,
+          isPlatformOwner: user.role === UserRole.PLATFORM_OWNER,
+          hasTenantWideAccess: tenantWide,
+          visibleCenterIds,
+        }),
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      }),
       prisma.lead.findMany({
         where: leadWhere,
         orderBy: [{ score: "desc" }, { createdAt: "desc" }],
@@ -4797,6 +4820,9 @@ async function renderLivePage(
     const visibleFamilyIds = new Set(aiFamilies.map((family) => family.id));
     const visibleSuggestions = suggestions.filter((suggestion) => {
       const context = jsonRecord(suggestion.promptContext);
+      const referencedTenantIds = tenantIdsFromAiPromptContext(suggestion.promptContext);
+      if (!referencedTenantIds.length) return false;
+      if (user.role !== UserRole.PLATFORM_OWNER && referencedTenantIds.some((tenantId) => tenantId !== user.tenantId)) return false;
       const segment = jsonRecord(context.segment);
       const referencedCenterIds = [
         typeof context.centerId === "string" ? context.centerId : "",
@@ -5488,6 +5514,7 @@ async function renderLivePage(
   }
 
   if (slug === "developer-dashboard") {
+    const canViewGlobalPaymentTelemetry = canViewPlatformPaymentTelemetry(user.role);
     const auditWhere: Prisma.AuditLogWhereInput = {
       tenantId: user.tenantId,
       ...(tenantWide ? {} : { centerId: scopedCenterIds }),
@@ -5524,14 +5551,7 @@ async function renderLivePage(
       prisma.auditLog.count({ where: { ...auditWhere, action: { startsWith: "operations." } } }),
       prisma.integrationDelivery.count({ where: deliveryWhere }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "failed" } }),
-      prisma.stripeWebhookEvent.count({
-        where: {
-          OR: [
-            { error: { not: null } },
-            { status: { in: ["failed", "error"] } },
-          ],
-        },
-      }),
+      prisma.stripeWebhookEvent.count({ where: stripeWebhookErrorWhereForViewer(user.role) }),
       prisma.procareImportBatch.count({ where: importWhere }),
       prisma.integration.findMany({
         where: { tenantId: user.tenantId },
@@ -5556,6 +5576,7 @@ async function renderLivePage(
         },
       }),
       prisma.stripeWebhookEvent.findMany({
+        where: stripeWebhookWhereForViewer(user.role),
         orderBy: { createdAt: "desc" },
         take: 25,
         select: {
@@ -5624,6 +5645,30 @@ async function renderLivePage(
       prisma.webPushDelivery.count({ where: { responseStatus: { in: [400, 404, 410] }, lastAttemptAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, subscription: { tenantId: user.tenantId } } }),
     ]);
 
+    const privacyDeletionRequests = user.role === UserRole.PLATFORM_OWNER
+      ? await prisma.dataDeletionRequest.findMany({
+          where: {
+            status: { in: ["pending_verification", "verified", "school_review", "approved", "executing", "partially_completed"] },
+          },
+          orderBy: [{ dueAt: "asc" }, { createdAt: "asc" }],
+          take: 50,
+          select: {
+            id: true,
+            tenantId: true,
+            userId: true,
+            status: true,
+            createdAt: true,
+            dueAt: true,
+            retentionNoticeAccepted: true,
+            tenant: { select: { name: true } },
+            center: { select: { name: true, crmLocationId: true } },
+            family: { select: { name: true } },
+            guardian: { select: { fullName: true, email: true } },
+            user: { select: { email: true, role: true, isActive: true } },
+          },
+        })
+      : [];
+
     const softwareSubscriptions = await Promise.all(softwareCenters.filter(isSchoolSoftwareBillingCenter).map(async (school) => {
       const fields = jsonRecord(school.customFields);
       const activeUsers = await countCenterBillableUsers(prisma, school.id);
@@ -5656,6 +5701,12 @@ async function renderLivePage(
       <DeveloperDashboardPage
         data={{
           canManageOperations: canManageOperations(user),
+          canViewGlobalPaymentTelemetry,
+          canManagePrivacyRequests: user.role === UserRole.PLATFORM_OWNER,
+          privacyDeletionRequests: privacyDeletionRequests.map((request) => ({
+            ...request,
+            fingerprint: accountDeletionFingerprint(request),
+          })),
           centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
           stats: {
             auditEvents,

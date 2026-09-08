@@ -14,14 +14,17 @@ export function isStripeWebhookReceiptUniqueConflict(error: unknown) {
 
 export async function reserveStripeWebhookDelivery(input: {
   insert: () => Promise<void>;
-  eventExists: () => Promise<boolean>;
+  existingReceipt: () => Promise<{ status: string } | null>;
+  reclaimRetryable: () => Promise<boolean>;
 }) {
   try {
     await input.insert();
     return "received" as const;
   } catch (error) {
     if (!isStripeWebhookReceiptUniqueConflict(error)) throw error;
-    if (!await input.eventExists()) throw error;
+    const existing = await input.existingReceipt();
+    if (!existing) throw error;
+    if (existing.status === "retryable" && await input.reclaimRetryable()) return "received" as const;
     return "duplicate" as const;
   }
 }

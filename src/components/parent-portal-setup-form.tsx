@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useNativeAppRuntime } from "@/lib/native-app-runtime";
 
 type SetupGuardian = {
   id: string;
@@ -99,6 +100,7 @@ const portalPreviews = [
 
 export function ParentPortalSetupForm({ guardians }: Props) {
   const router = useRouter();
+  const isNative = useNativeAppRuntime();
   const [selectedGuardianId, setSelectedGuardianId] = useState(guardians[0]?.id ?? "");
   const selectedGuardian = useMemo(
     () => guardians.find((guardian) => guardian.id === selectedGuardianId) ?? guardians[0] ?? null,
@@ -251,7 +253,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
             </div>
           </section>
 
-          <section className="rounded-lg border bg-card p-4">
+          {!isNative ? <section className="rounded-lg border bg-card p-4">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <Smartphone className="size-4 text-primary" />
               Add to Your Home Screen
@@ -268,7 +270,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
                 </li>
               ))}
             </ol>
-          </section>
+          </section> : null}
 
           <section className="rounded-lg border bg-card p-4">
             <h2 className="flex items-center gap-2 text-sm font-semibold">

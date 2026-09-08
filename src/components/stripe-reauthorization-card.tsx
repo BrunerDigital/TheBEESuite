@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowUpRight, CheckCircle2, LoaderCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -23,6 +24,7 @@ export function StripeReauthorizationCard({
   returning,
   returnToCorporatePortfolio = false,
 }: Props) {
+  const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
   const [authorized, setAuthorized] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -37,7 +39,7 @@ export function StripeReauthorizationCard({
       if (!response.ok || !json.ok) throw new Error(json.error || "The new Stripe account could not be checked.");
       setStatus(json.status);
       if (returnToCorporatePortfolio && (json.status === "ready_for_cutover" || json.status === "cutover_complete")) {
-        window.location.assign(CORPORATE_PORTFOLIO_PATH);
+        router.push(CORPORATE_PORTFOLIO_PATH);
         return;
       }
       setMessage(json.status === "ready_for_cutover"
@@ -114,7 +116,7 @@ export function StripeReauthorizationCard({
         )}
         {!complete ? <Button type="button" size="lg" variant="outline" disabled={busy} onClick={() => void syncStatus()}>Check saved progress</Button> : null}
         {returnToCorporatePortfolio && !busy ? (
-          <Button type="button" size="lg" variant="outline" onClick={() => window.location.assign(CORPORATE_PORTFOLIO_PATH)}>
+          <Button type="button" size="lg" variant="outline" onClick={() => router.push(CORPORATE_PORTFOLIO_PATH)}>
             Corporate school progress
           </Button>
         ) : null}

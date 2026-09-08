@@ -14,6 +14,7 @@ import {
 import { sanitizeCredentialInput, upsertTenantIntegrationCredentials } from "@/lib/integration-credentials";
 import { integrationScopeForUser } from "@/lib/integration-scope";
 import { isManagerAssignedMarketingConnection } from "@/lib/executive-marketing";
+import { trustedGoogleAppsScriptWebhookUrl } from "@/lib/google-apps-script-webhook";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -64,6 +65,15 @@ async function POSTHandler(request: NextRequest) {
 
   const action = actionValue(body?.action);
   const credentialInput = sanitizeCredentialInput(provider, body?.credentials);
+  if (
+    credentialInput.GOOGLE_SHEETS_WEBHOOK_URL
+    && !trustedGoogleAppsScriptWebhookUrl(credentialInput.GOOGLE_SHEETS_WEBHOOK_URL)
+  ) {
+    return NextResponse.json({
+      ok: false,
+      error: "Google Sheets webhooks must use an HTTPS Apps Script deployment URL ending in /exec.",
+    }, { status: 400 });
+  }
   const [existingCredentials, existing] = await Promise.all([
     prisma.integrationCredential.findMany({
       where: { tenantId: user.tenantId, provider, scopeKey: scope.scopeKey },

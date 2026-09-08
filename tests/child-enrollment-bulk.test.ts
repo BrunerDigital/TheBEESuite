@@ -88,8 +88,12 @@ test("ProCare closeouts atomically disable future tuition for existing children"
 });
 
 test("existing children with a missing DOB can be withdrawn without changing the placeholder DOB", () => {
-  assert.match(familyEditor, /\(!selectedChild && !dateOfBirth\)/);
-  assert.match(operationsRoute, /existingChild\?\.dateOfBirth \?\? new Date/);
+  assert.match(
+    familyEditor,
+    /childNotBornYet \? !expectedDueDate : \(!dateOfBirth && \(!selectedChild \|\| selectedChildBirth\.birthStatus === "expected"\)\)/,
+  );
+  assert.match(operationsRoute, /parsedDateOfBirth \?\? existingChild\?\.dateOfBirth \?\? null/);
+  assert.match(operationsRoute, /Date of birth is required unless the child is marked not born yet/);
   assert.match(operationsRoute, /classroomId: isCurrentlyEnrolledStatus\(enrollmentStatus\) \? classroomId : null/);
 });
 

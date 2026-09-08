@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PaymentStatus, UserRole } from "@prisma/client";
+import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
@@ -8,8 +8,14 @@ import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { hasConflictingGuardianFamilyLinks } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
 import { familyNameFromGuardian } from "@/lib/registration-packet";
-import { enrollmentClassroomValidationError } from "@/lib/enrollment-status";
+import { enrollmentClassroomValidationError, isEnrollmentPipelineStatus } from "@/lib/enrollment-status";
 import { activeClassroomWhere } from "@/lib/classroom-status";
+import {
+  childBirthCustomFields,
+  expectedChildPlaceholderDate,
+  normalizeCalendarDateValue,
+  normalizeChildBirthStatus,
+} from "@/lib/expected-child-birth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -59,7 +65,11 @@ async function POSTHandler(request: NextRequest) {
   const checkInPin = normalizePin(body.checkInPin);
   const childName = clean(body.childName);
   const preferredName = clean(body.preferredName);
-  const dateOfBirth = parseDate(body.dateOfBirth);
+  const requestedBirthStatus = clean(body.birthStatus);
+  const birthStatus = normalizeChildBirthStatus(requestedBirthStatus) ?? "born";
+  const normalizedDateOfBirth = normalizeCalendarDateValue(body.dateOfBirth);
+  const dateOfBirth = normalizedDateOfBirth ? new Date(`${normalizedDateOfBirth}T12:00:00.000Z`) : null;
+  const expectedDueDate = normalizeCalendarDateValue(body.expectedDueDate);
   const ageGroup = clean(body.ageGroup) || "Preschool";
   const enrollmentStatus = clean(body.enrollmentStatus) || "enrolled";
   const startDate = parseDate(body.startDate);
@@ -76,7 +86,10 @@ async function POSTHandler(request: NextRequest) {
   if (!guardianName) errors.guardianName = "Primary guardian name is required.";
   if (!guardianEmail && !guardianPhone) errors.guardianEmail = "Parent email or phone is required.";
   if (!childName) errors.childName = "Child name is required.";
-  if (!dateOfBirth) errors.dateOfBirth = "Child date of birth is required.";
+  if (requestedBirthStatus && !normalizeChildBirthStatus(requestedBirthStatus)) errors.birthStatus = "Birth status must be born or expected.";
+  if (birthStatus === "expected" && !expectedDueDate) errors.expectedDueDate = "Expected due date is required for a child who is not born yet.";
+  if (birthStatus === "expected" && !isEnrollmentPipelineStatus(enrollmentStatus)) errors.enrollmentStatus = "A child who is not born yet must stay pending, waitlisted, or tour scheduled.";
+  if (birthStatus === "born" && !dateOfBirth) errors.dateOfBirth = "Child date of birth is required unless the child is marked not born yet.";
   if (startingBalanceCents < 0) errors.startingBalanceDollars = "Opening balance cannot be negative. Post a verified credit through the family ledger instead.";
   if (clean(body.checkInPin) && !checkInPin) errors.checkInPin = "Check-in PIN must be exactly 4 digits.";
   if (Object.keys(errors).length) {
@@ -259,15 +272,20 @@ async function POSTHandler(request: NextRequest) {
         familyId: family.id,
         fullName: childName,
       },
-      select: { id: true },
+      select: { id: true, customFields: true },
     });
+
+    const childCustomFields = childBirthCustomFields(existingChild?.customFields, birthStatus === "expected"
+      ? { birthStatus, expectedDueDate }
+      : { birthStatus, actualDateOfBirthProvided: true });
+    const childDateOfBirth = birthStatus === "expected" ? expectedChildPlaceholderDate() : dateOfBirth!;
 
     const childData = {
       familyId: family.id,
-      classroomId: classroomId || null,
+      classroomId: birthStatus === "expected" ? null : classroomId || null,
       fullName: childName,
       preferredName: preferredName || null,
-      dateOfBirth: dateOfBirth!,
+      dateOfBirth: childDateOfBirth,
       ageGroup,
       enrollmentStatus,
       startDate,
@@ -278,6 +296,9 @@ async function POSTHandler(request: NextRequest) {
       feedingNotes: feedingNotes || null,
       pottyNotes: pottyNotes || null,
       developmentalNotes: developmentalNotes || null,
+      customFields: Object.keys(childCustomFields).length
+        ? childCustomFields as Prisma.InputJsonObject
+        : Prisma.DbNull,
     };
 
     const child = existingChild
@@ -352,6 +373,7 @@ async function POSTHandler(request: NextRequest) {
       invoiceId: result.invoiceId,
       mode: result.mode,
       pinSet: result.pinWasSet,
+      expectedBirth: birthStatus === "expected",
     },
   });
   if (result.invoiceId) {

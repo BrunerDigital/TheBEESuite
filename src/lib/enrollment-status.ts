@@ -62,6 +62,10 @@ export function isCurrentlyEnrolledStatus(value: string | null | undefined) {
   return currentlyEnrolledStatusSet.has(normalizedEnrollmentStatus(value));
 }
 
+export function isEnrollmentPipelineStatus(value: string | null | undefined) {
+  return enrollmentPipelineStatusSet.has(normalizedEnrollmentStatus(value));
+}
+
 export function isClosedEnrollmentStatus(value: string | null | undefined) {
   return closedEnrollmentStatusSet.has(normalizedEnrollmentStatus(value));
 }
@@ -77,6 +81,10 @@ export function enrollmentLifecycleCategory(value: string | null | undefined): E
 
 export function currentlyEnrolledStatusValues() {
   return [...CURRENTLY_ENROLLED_STATUSES];
+}
+
+export function enrollmentPipelineStatusValues() {
+  return [...ENROLLMENT_PIPELINE_STATUSES];
 }
 
 export function closedEnrollmentStatusValues() {
@@ -106,6 +114,10 @@ export function currentlyEnrolledChildWhere(): Prisma.ChildWhereInput {
     enrollmentStatus: { in: currentlyEnrolledStatusValues() },
     classroomId: { not: null },
   };
+}
+
+export function prospectiveEnrollmentChildWhere(): Prisma.ChildWhereInput {
+  return { enrollmentStatus: { in: enrollmentPipelineStatusValues() } };
 }
 
 export function closedEnrollmentChildWhere(): Prisma.ChildWhereInput {

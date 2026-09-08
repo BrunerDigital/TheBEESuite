@@ -29,8 +29,10 @@ import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import {
   enrollmentClassroomValidationError,
   isCurrentlyEnrolledStatus,
+  isEnrollmentPipelineStatus,
 } from "@/lib/enrollment-status";
 import { childScheduleClassification, scheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
+import { childBirthFormState, suggestedExpectedDueDate } from "@/lib/expected-child-birth";
 
 type ClassroomOption = { id: string; name: string; ageGroup: string };
 type CenterOption = { id: string; name: string; classrooms: ClassroomOption[] };
@@ -454,6 +456,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     () => pickInitialChild(selectedFamily, initialChildId, searchQuery),
     [initialChildId, searchQuery, selectedFamily],
   );
+  const initialChildBirth = childBirthFormState(initialChild);
 
   const [familyCenterId, setFamilyCenterId] = useState(selectedFamily?.centerId ?? centers[0]?.id ?? "");
   const [familyName, setFamilyName] = useState(selectedFamily?.name ?? "");
@@ -497,7 +500,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     : null;
   const [childName, setChildName] = useState(initialChild?.fullName ?? "");
   const [preferredName, setPreferredName] = useState(initialChild?.preferredName ?? "");
-  const [dateOfBirth, setDateOfBirth] = useState(toDateInput(initialChild?.dateOfBirth));
+  const [childNotBornYet, setChildNotBornYet] = useState(initialChildBirth.birthStatus === "expected");
+  const [dateOfBirth, setDateOfBirth] = useState(initialChildBirth.dateOfBirth);
+  const [expectedDueDate, setExpectedDueDate] = useState(initialChildBirth.expectedDueDate);
   const [ageGroup, setAgeGroup] = useState(initialChild?.ageGroup ?? defaultAgeGroupOptions[0]);
   const [enrollmentStatus, setEnrollmentStatus] = useState(initialChild?.enrollmentStatus ?? "enrolled");
   const [startDate, setStartDate] = useState(toDateInput(initialChild?.startDate));
@@ -554,6 +559,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     enrollmentStatus,
     classroomId: classroomId === "none" ? null : classroomId,
   });
+  const selectedChildBirth = childBirthFormState(selectedChild);
 
   const selectedCenter = centers.find((center) => center.id === familyCenterId);
   const classroomOptions = selectedCenter?.classrooms ?? [];
@@ -697,11 +703,14 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
   }
 
   function loadChild(child: ChildRecord | null) {
+    const birth = childBirthFormState(child);
     setPostSaveBillingHref(null);
     setSelectedChildId(child?.id ?? "");
     setChildName(child?.fullName ?? "");
     setPreferredName(child?.preferredName ?? "");
-    setDateOfBirth(toDateInput(child?.dateOfBirth));
+    setChildNotBornYet(birth.birthStatus === "expected");
+    setDateOfBirth(birth.dateOfBirth);
+    setExpectedDueDate(birth.expectedDueDate);
     setAgeGroup(child?.ageGroup ?? availableAgeGroups[0] ?? defaultAgeGroupOptions[0]);
     setEnrollmentStatus(child?.enrollmentStatus ?? "enrolled");
     setStartDate(toDateInput(child?.startDate));
@@ -718,6 +727,15 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     loadMedicalNote(child?.medicalNotes[0] ?? null);
     loadDocument(child?.documents[0] ?? null, child);
     setDuplicateChildId("");
+  }
+
+  function handleChildNotBornYetChange(checked: boolean) {
+    setChildNotBornYet(checked);
+    if (!checked) return;
+    setExpectedDueDate((current) => suggestedExpectedDueDate(current, dateOfBirth));
+    setDateOfBirth("");
+    setClassroomId("none");
+    if (!isEnrollmentPipelineStatus(enrollmentStatus)) setEnrollmentStatus("pending");
   }
 
   function loadFamily(familyId: string) {
@@ -1814,9 +1832,41 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               <Label htmlFor="family-editor-child-preferred-name">Preferred name</Label>
               <Input id="family-editor-child-preferred-name" value={preferredName} onChange={(event) => setPreferredName(event.target.value)} />
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="family-editor-child-date-of-birth">Date of birth</Label>
-              <Input id="family-editor-child-date-of-birth" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} type="date" />
+            <div className="space-y-2">
+              <label htmlFor="family-editor-child-not-born-yet" className="flex min-h-11 cursor-pointer touch-manipulation items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+                <input
+                  id="family-editor-child-not-born-yet"
+                  className="size-5 shrink-0"
+                  type="checkbox"
+                  checked={childNotBornYet}
+                  onChange={(event) => handleChildNotBornYetChange(event.target.checked)}
+                />
+                Child not born yet
+              </label>
+              <Label htmlFor={childNotBornYet ? "family-editor-child-expected-due-date" : "family-editor-child-date-of-birth"}>
+                {childNotBornYet ? "Expected due date" : "Date of birth"}
+              </Label>
+              {childNotBornYet ? (
+                <Input
+                  id="family-editor-child-expected-due-date"
+                  aria-describedby="family-editor-child-birth-help"
+                  value={expectedDueDate}
+                  onChange={(event) => setExpectedDueDate(event.target.value)}
+                  type="date"
+                />
+              ) : (
+                <Input
+                  id="family-editor-child-date-of-birth"
+                  value={dateOfBirth}
+                  onChange={(event) => setDateOfBirth(event.target.value)}
+                  type="date"
+                />
+              )}
+              {childNotBornYet ? (
+                <p id="family-editor-child-birth-help" className="text-xs text-muted-foreground">
+                  Expected children stay pending or waitlisted. Use family notes for any other details.
+                </p>
+              ) : null}
             </div>
             <div className="space-y-1">
               <Label htmlFor="family-editor-child-age-group">Age group</Label>
@@ -1835,7 +1885,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 <SelectTrigger id="family-editor-child-enrollment-status"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {enrollmentStatuses.map((status) => (
-                    <SelectItem key={status} value={status}>{status.replaceAll("_", " ")}</SelectItem>
+                    <SelectItem key={status} value={status} disabled={childNotBornYet && !isEnrollmentPipelineStatus(status)}>{status.replaceAll("_", " ")}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1846,7 +1896,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             </div>
             <div className="space-y-1">
               <Label htmlFor="family-editor-child-classroom">Classroom</Label>
-              <Select value={classroomId} onValueChange={(value) => value && setClassroomId(value)}>
+              <Select value={classroomId} onValueChange={(value) => value && setClassroomId(value)} disabled={childNotBornYet}>
                 <SelectTrigger
                   id="family-editor-child-classroom"
                   aria-invalid={Boolean(childEnrollmentClassroomError)}
@@ -1922,14 +1972,16 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             </div>
           </div>
           <Button
-            disabled={isPending || !selectedFamily || !childName.trim() || (!selectedChild && !dateOfBirth) || Boolean(childEnrollmentClassroomError)}
+            disabled={isPending || !selectedFamily || !childName.trim() || (childNotBornYet ? !expectedDueDate : (!dateOfBirth && (!selectedChild || selectedChildBirth.birthStatus === "expected"))) || Boolean(childEnrollmentClassroomError)}
             onClick={() => postRecord({
               entity: "child",
               id: selectedChild?.id,
               familyId: selectedFamily?.id,
               name: childName,
               preferredName,
+              birthStatus: childNotBornYet ? "expected" : "born",
               dateOfBirth,
+              expectedDueDate: childNotBornYet ? expectedDueDate : undefined,
               ageGroup,
               enrollmentStatus,
               startDate,

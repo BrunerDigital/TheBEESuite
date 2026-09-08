@@ -46,7 +46,7 @@ const workflows: Record<(typeof SYNTHETIC_ROLE_QA_ACCOUNTS)[number]["key"], read
     { id: "documents", href: "/parent-portal?view=family&section=documents" },
   ],
   pickup: [
-    { id: "pickup-access", href: "/parent-portal?view=home" },
+    { id: "pickup-access", href: "/parent-portal?view=home", expectedHref: "/parent-portal" },
     { id: "pickup-home", href: "/parent-portal" },
   ],
   auditor: [
@@ -81,7 +81,19 @@ const includePlatformOwner = process.argv.includes("--include-platform-owner");
 if (includePlatformOwner && process.env.ALLOW_SYNTHETIC_PLATFORM_OWNER_QA !== "true") {
   throw new Error("Set ALLOW_SYNTHETIC_PLATFORM_OWNER_QA=true with --include-platform-owner; this role can access every tenant.");
 }
-const targetAccounts = SYNTHETIC_ROLE_QA_ACCOUNTS.filter((account) => account.key !== "platform" || includePlatformOwner);
+const requestedRoles = new Set(
+  argument("--roles", "")
+    .split(",")
+    .map((role) => role.trim())
+    .filter(Boolean),
+);
+const targetAccounts = SYNTHETIC_ROLE_QA_ACCOUNTS.filter((account) =>
+  (account.key !== "platform" || includePlatformOwner)
+  && (requestedRoles.size === 0 || requestedRoles.has(account.key)),
+);
+if (requestedRoles.size > 0 && targetAccounts.length !== requestedRoles.size) {
+  throw new Error("--roles contains an unknown or unavailable synthetic QA role.");
+}
 
 function safePath(value: string) {
   const url = new URL(value, baseUrl);
@@ -244,18 +256,23 @@ async function pageMetrics(page: Page) {
 
 async function keyboardProbe(page: Page) {
   await page.locator("body").press("Home").catch(() => undefined);
-  for (let index = 0; index < 8; index += 1) await page.keyboard.press("Tab");
-  return page.evaluate(() => {
-    const element = document.activeElement as HTMLElement | null;
-    if (!element || element === document.body) return { focused: false, name: "", visibleIndicator: false };
-    const style = getComputedStyle(element);
-    const name = element.getAttribute("aria-label") || element.textContent || element.getAttribute("name") || element.id || element.tagName;
-    return {
-      focused: true,
-      name: name.trim().replace(/\\s+/g, " ").slice(0, 100),
-      visibleIndicator: style.outlineStyle !== "none" || style.boxShadow !== "none",
-    };
-  });
+  let last = { focused: false, name: "", visibleIndicator: false };
+  for (let index = 0; index < 8; index += 1) {
+    await page.keyboard.press("Tab");
+    last = await page.evaluate(() => {
+      const element = document.activeElement as HTMLElement | null;
+      if (!element || element === document.body) return { focused: false, name: "", visibleIndicator: false };
+      const style = getComputedStyle(element);
+      const name = element.getAttribute("aria-label") || element.textContent || element.getAttribute("name") || element.id || element.tagName;
+      return {
+        focused: true,
+        name: name.trim().replace(/\\s+/g, " ").slice(0, 100),
+        visibleIndicator: style.outlineStyle !== "none" || style.boxShadow !== "none",
+      };
+    });
+    if (last.focused && last.visibleIndicator) return last;
+  }
+  return last;
 }
 
 async function disclosureProbe(page: Page) {
@@ -312,6 +329,7 @@ async function main() {
   await mkdir(outputDirectory, { recursive: true });
   const browser = await chromium.launch();
   const results: Array<Record<string, unknown>> = [];
+  const requestFailures: string[] = [];
 
   try {
     for (const account of targetAccounts) {
@@ -335,6 +353,12 @@ async function main() {
         const problem = requestProblem(request);
         if (problem) unsafeRequests.push(problem);
       });
+      page.on("requestfailed", (request) => {
+        if (request.resourceType() !== "document") return;
+        const url = new URL(request.url());
+        if (url.origin !== new URL(baseUrl).origin) return;
+        requestFailures.push(`${request.method().toUpperCase()} ${url.pathname}: ${request.failure()?.errorText ?? "unknown failure"}`);
+      });
 
       await visit(page, account.loginPath);
       await page.locator("#email").fill(account.email);
@@ -351,27 +375,31 @@ async function main() {
         const status = await visit(page, account.landingPath);
         const metrics = await pageMetrics(page);
         const keyboard = await keyboardProbe(page);
+        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
         const disclosure = await disclosureProbe(page);
+        const landingActual = safePath(page.url());
         const screenshot = resolve(outputDirectory, account.key, viewport.id, "landing.png");
         await mkdir(dirname(screenshot), { recursive: true });
         await page.screenshot({ path: screenshot, fullPage: true });
 
         const primary = workflows[account.key][0];
+        const primaryExpected = primary.expectedHref ?? primary.href;
         const click = await clickWorkflowLink(page, primary.href);
         const clickedPath = safePath(page.url());
         const primaryMetrics = await pageMetrics(page);
-        if (click.clicked) {
+        const historyRequired = click.clicked && !matchesWorkflow(landingActual, primaryExpected);
+        if (historyRequired) {
           await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => null);
           await page.locator("h1").first().waitFor({ state: "visible", timeout: 45_000 }).catch(() => undefined);
           await page.waitForTimeout(300);
         }
-        const back = click.clicked ? safePath(page.url()) : null;
-        if (click.clicked) {
+        const back = historyRequired ? safePath(page.url()) : landingActual;
+        if (historyRequired) {
           await page.goForward({ waitUntil: "domcontentloaded" }).catch(() => null);
           await page.locator("h1").first().waitFor({ state: "visible", timeout: 45_000 }).catch(() => undefined);
           await page.waitForTimeout(300);
         }
-        const forward = click.clicked ? safePath(page.url()) : null;
+        const forward = historyRequired ? safePath(page.url()) : clickedPath;
         const primaryScreenshot = resolve(outputDirectory, account.key, viewport.id, `${primary.id}.png`);
         await mkdir(dirname(primaryScreenshot), { recursive: true });
         await page.screenshot({ path: primaryScreenshot, fullPage: true });
@@ -392,10 +420,10 @@ async function main() {
           && keyboard.visibleIndicator
           && (!disclosure.available || disclosure.toggled)
           && click.clicked
-          && matchesWorkflow(clickedPath, primary.href)
+          && matchesWorkflow(clickedPath, primaryExpected)
           && metricsPass(primaryMetrics, viewport)
           && Boolean(back && matchesWorkflow(back, account.landingPath))
-          && Boolean(forward && matchesWorkflow(forward, primary.href))
+          && Boolean(forward && matchesWorkflow(forward, primaryExpected))
           && matchesWorkflow(secondaryActual, secondary.expectedHref ?? secondary.href)
           && metricsPass(secondaryMetrics, viewport);
 
@@ -429,6 +457,7 @@ async function main() {
     results,
     writeAudit: { allowed: ["POST /api/auth/login", "POST /api/device-sessions (session heartbeat)"], unexpectedWrites },
     httpErrors,
+    requestFailures,
     consoleErrors,
     pageErrors,
     platformOwnerIncluded: includePlatformOwner,
@@ -436,6 +465,7 @@ async function main() {
       && results.every((result) => result.passed)
       && unexpectedWrites.length === 0
       && httpErrors.length === 0
+      && requestFailures.length === 0
       && consoleErrors.length === 0
       && pageErrors.length === 0,
   };
@@ -458,6 +488,7 @@ async function main() {
     })),
     unexpectedWrites,
     httpErrors,
+    requestFailures,
     consoleErrors,
     pageErrors,
   }, null, 2));

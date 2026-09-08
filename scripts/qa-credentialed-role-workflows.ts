@@ -13,11 +13,23 @@ const viewports: readonly Viewport[] = [
 ];
 
 const workflows: Record<(typeof SYNTHETIC_ROLE_QA_ACCOUNTS)[number]["key"], readonly Workflow[]> = {
+  platform: [
+    { id: "schools", href: "/multi-location-dashboard" },
+    { id: "reporting", href: "/analytics" },
+  ],
   executive: [
     { id: "schools", href: "/multi-location-dashboard" },
     { id: "reporting", href: "/analytics" },
   ],
+  regional: [
+    { id: "schools", href: "/multi-location-dashboard" },
+    { id: "reporting", href: "/analytics" },
+  ],
   director: [
+    { id: "classrooms", href: "/classroom-dashboard" },
+    { id: "enrollment", href: "/crm-leads" },
+  ],
+  assistant: [
     { id: "classrooms", href: "/classroom-dashboard" },
     { id: "enrollment", href: "/crm-leads" },
   ],
@@ -32,6 +44,14 @@ const workflows: Record<(typeof SYNTHETIC_ROLE_QA_ACCOUNTS)[number]["key"], read
   parent: [
     { id: "updates", href: "/parent-portal?view=updates" },
     { id: "documents", href: "/parent-portal?view=family&section=documents" },
+  ],
+  pickup: [
+    { id: "pickup-access", href: "/parent-portal?view=home" },
+    { id: "pickup-home", href: "/parent-portal" },
+  ],
+  auditor: [
+    { id: "reporting", href: "/analytics" },
+    { id: "audit", href: "/audit-logs" },
   ],
 };
 
@@ -57,6 +77,11 @@ const baseUrl = cleanBaseUrl(argument("--base-url", "https://thebeesuite.io"));
 const outputDirectory = resolve(argument("--output-dir", `output/playwright/credentialed-role-${Date.now()}`));
 const password = process.env.SYNTHETIC_ROLE_QA_PASSWORD?.trim() || process.env.DEMO_PASSWORD?.trim() || "";
 if (!password) throw new Error("SYNTHETIC_ROLE_QA_PASSWORD (or DEMO_PASSWORD) is required.");
+const includePlatformOwner = process.argv.includes("--include-platform-owner");
+if (includePlatformOwner && process.env.ALLOW_SYNTHETIC_PLATFORM_OWNER_QA !== "true") {
+  throw new Error("Set ALLOW_SYNTHETIC_PLATFORM_OWNER_QA=true with --include-platform-owner; this role can access every tenant.");
+}
+const targetAccounts = SYNTHETIC_ROLE_QA_ACCOUNTS.filter((account) => account.key !== "platform" || includePlatformOwner);
 
 function safePath(value: string) {
   const url = new URL(value, baseUrl);
@@ -289,7 +314,7 @@ async function main() {
   const results: Array<Record<string, unknown>> = [];
 
   try {
-    for (const account of SYNTHETIC_ROLE_QA_ACCOUNTS) {
+    for (const account of targetAccounts) {
       const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce", colorScheme: "light" });
       if (["127.0.0.1", "localhost"].includes(new URL(baseUrl).hostname)) {
         await context.route("**/_vercel/**/script.js", (route) => route.fulfill({ status: 204, contentType: "application/javascript" }));
@@ -406,7 +431,8 @@ async function main() {
     httpErrors,
     consoleErrors,
     pageErrors,
-    passed: results.length === SYNTHETIC_ROLE_QA_ACCOUNTS.length * viewports.length
+    platformOwnerIncluded: includePlatformOwner,
+    passed: results.length === targetAccounts.length * viewports.length
       && results.every((result) => result.passed)
       && unexpectedWrites.length === 0
       && httpErrors.length === 0

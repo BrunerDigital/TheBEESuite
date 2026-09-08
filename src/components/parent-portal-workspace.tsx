@@ -1935,7 +1935,7 @@ function ParentPortalWorkspaceView({
           aria-label="Family sections"
           className="-mt-2 border-b border-border/80"
         >
-          <div id="parent-family-section-nav" className="flex snap-x gap-2 overflow-x-auto pb-2 sm:min-w-max sm:gap-6 sm:pb-0">
+          <div id="parent-family-section-nav" className="flex max-w-full snap-x gap-2 overflow-x-auto pb-2 sm:gap-6 sm:pb-0 md:grid md:grid-cols-3 md:overflow-visible xl:grid-cols-6">
             {(
               [
                 ["children", "Children"],
@@ -1956,7 +1956,7 @@ function ParentPortalWorkspaceView({
                 aria-current={
                   activeFamilySection === section ? "page" : undefined
                 }
-                className={`relative flex min-h-11 shrink-0 snap-start items-center rounded-full border px-4 py-2 text-sm font-medium leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-1 ${activeFamilySection === section ? "border-primary/40 bg-primary/10 text-foreground sm:border-primary sm:bg-transparent" : "border-border/70 bg-card/70 text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground sm:border-transparent sm:bg-transparent sm:hover:bg-transparent"}`}
+                className={`relative flex min-h-11 shrink-0 snap-start items-center rounded-full border px-4 py-2 text-sm font-medium leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-1 md:min-w-0 md:justify-center md:text-center ${activeFamilySection === section ? "border-primary/40 bg-primary/10 text-foreground sm:border-primary sm:bg-transparent" : "border-border/70 bg-card/70 text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground sm:border-transparent sm:bg-transparent sm:hover:bg-transparent"}`}
               >
                 {label}
               </ParentPortalDocumentLink>

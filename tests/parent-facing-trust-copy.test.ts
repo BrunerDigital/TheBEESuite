@@ -54,10 +54,11 @@ test("parent sign-in, recovery, and setup forms expose real labels and recovery 
   assert.match(parentSetup, /aria-pressed=\{guardian\.id === selectedGuardian\.id\}/);
 });
 
-test("linked family help stays family-specific and points to current Parent Portal locations", () => {
-  assert.match(support, /const familyFaqs = processFaqs\.filter/);
-  assert.match(support, /\{familyFaqs\.map/);
-  assert.doesNotMatch(support, /\{processFaqs\.map/);
+test("support keeps family help specific while also serving school and company roles", () => {
+  assert.match(support, /const supportFaqGroups = \[/);
+  assert.match(support, /audience === "Parents" \|\| audience === "Everyone"/);
+  assert.match(support, /audience === "Schools" \|\| audience === "Everyone"/);
+  assert.match(support, /\{group\.faqs\.map/);
   assert.doesNotMatch(support, /App Store access|SOPs and guides|Profile Settings|FTE/i);
   assert.match(support, /Family → Profile &amp; Security/);
   assert.match(support, /flex w-full flex-wrap items-center gap-2/);

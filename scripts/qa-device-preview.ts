@@ -124,6 +124,7 @@ async function pageMetrics(page: Page) {
       .filter((href) => {
         if (!href || href.startsWith("#")) return false;
         const url = new URL(href, window.location.href);
+        if (url.origin === window.location.origin && url.pathname.startsWith("/brand/")) return false;
         return url.origin !== window.location.origin || url.pathname !== "/device-preview";
       });
     const undersized = interactive.filter((element) => {

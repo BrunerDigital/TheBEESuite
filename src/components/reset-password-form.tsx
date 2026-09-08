@@ -135,7 +135,7 @@ export function ResetPasswordForm() {
   }
 
   return (
-    <div className="grid min-h-screen bg-slate-950 p-4 text-white lg:grid-cols-[1fr_0.86fr]">
+    <main className="grid min-h-screen bg-slate-950 p-4 text-white lg:grid-cols-[1fr_0.86fr]">
       <section className="hidden min-h-[calc(100vh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 lg:flex">
         <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
@@ -269,6 +269,6 @@ export function ResetPasswordForm() {
           </CardContent>
         </Card>
       </section>
-    </div>
+    </main>
   );
 }

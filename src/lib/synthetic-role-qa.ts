@@ -6,16 +6,25 @@ export const SYNTHETIC_ROLE_QA_TENANT_SLUG = "bee-suite-isolated-demo";
 export const SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID = "demo-center-little-harbor";
 
 export type SyntheticRoleQaAccount = {
-  key: "executive" | "director" | "billing" | "teacher" | "parent";
+  key: "platform" | "executive" | "regional" | "director" | "assistant" | "billing" | "teacher" | "parent" | "pickup" | "auditor";
   email: string;
   name: string;
   role: UserRole;
-  scope: "brand" | "center" | "family";
+  scope: "platform" | "brand" | "center" | "family" | "pickup";
   loginPath: "/executives" | "/directors" | "/teachers" | "/parents";
   landingPath: "/dashboard" | "/teacher-portal" | "/parent-portal";
 };
 
 export const SYNTHETIC_ROLE_QA_ACCOUNTS: readonly SyntheticRoleQaAccount[] = [
+  {
+    key: "platform",
+    email: "ux-qa-platform@synthetic.thebeesuite.io",
+    name: "Synthetic QA Platform Owner",
+    role: UserRole.PLATFORM_OWNER,
+    scope: "platform",
+    loginPath: "/executives",
+    landingPath: "/dashboard",
+  },
   {
     key: "executive",
     email: "ux-qa-executive@synthetic.thebeesuite.io",
@@ -26,10 +35,28 @@ export const SYNTHETIC_ROLE_QA_ACCOUNTS: readonly SyntheticRoleQaAccount[] = [
     landingPath: "/dashboard",
   },
   {
+    key: "regional",
+    email: "ux-qa-regional@synthetic.thebeesuite.io",
+    name: "Synthetic QA Regional Manager",
+    role: UserRole.REGIONAL_MANAGER,
+    scope: "brand",
+    loginPath: "/executives",
+    landingPath: "/dashboard",
+  },
+  {
     key: "director",
     email: "ux-qa-director@synthetic.thebeesuite.io",
     name: "Synthetic QA Director",
     role: UserRole.CENTER_DIRECTOR,
+    scope: "center",
+    loginPath: "/directors",
+    landingPath: "/dashboard",
+  },
+  {
+    key: "assistant",
+    email: "ux-qa-assistant@synthetic.thebeesuite.io",
+    name: "Synthetic QA Assistant Director",
+    role: UserRole.ASSISTANT_DIRECTOR,
     scope: "center",
     loginPath: "/directors",
     landingPath: "/dashboard",
@@ -60,6 +87,24 @@ export const SYNTHETIC_ROLE_QA_ACCOUNTS: readonly SyntheticRoleQaAccount[] = [
     scope: "family",
     loginPath: "/parents",
     landingPath: "/parent-portal",
+  },
+  {
+    key: "pickup",
+    email: "ux-qa-pickup@synthetic.thebeesuite.io",
+    name: "Synthetic QA Authorized Pickup",
+    role: UserRole.AUTHORIZED_PICKUP,
+    scope: "pickup",
+    loginPath: "/parents",
+    landingPath: "/parent-portal",
+  },
+  {
+    key: "auditor",
+    email: "ux-qa-auditor@synthetic.thebeesuite.io",
+    name: "Synthetic QA Read Only Auditor",
+    role: UserRole.READ_ONLY_AUDITOR,
+    scope: "brand",
+    loginPath: "/executives",
+    landingPath: "/dashboard",
   },
 ] as const;
 

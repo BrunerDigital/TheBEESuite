@@ -35,6 +35,7 @@ function InvalidLink({ message }: { message: string }) {
     <main className="min-h-dvh bg-[#090b10] px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[calc(2rem+env(safe-area-inset-top))] text-white sm:pb-[calc(2rem+env(safe-area-inset-bottom))]">
       <div className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-2xl flex-col justify-center gap-5 sm:min-h-[calc(100dvh-4rem)]">
         <BrandLogo size="md" priority />
+        <h1 className="text-balance text-3xl font-semibold tracking-tight">Payment setup link unavailable</h1>
         <Alert variant="destructive" className="bg-red-950/40">
           <AlertCircle className="size-4" />
           <AlertTitle>Payment setup link unavailable</AlertTitle>

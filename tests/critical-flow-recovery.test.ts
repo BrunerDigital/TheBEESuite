@@ -138,6 +138,6 @@ test("the shared sign-in shell avoids preloading unrelated routes", () => {
   const login = readFileSync("src/components/login-form.tsx", "utf8");
 
   assert.match(login, /href=\{`\/forgot-password[^`]+`\}[\s\S]*?prefetch=\{false\}/);
-  assert.match(login, /href="\/parents" prefetch=\{false\}/);
+  assert.match(login, /rolePortalLinks\.map[\s\S]*?href=\{item\.href\}[\s\S]*?prefetch=\{false\}/);
   assert.match(login, /href="\/onboarding" prefetch=\{false\}/);
 });

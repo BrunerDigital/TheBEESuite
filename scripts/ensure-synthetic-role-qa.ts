@@ -20,6 +20,8 @@ import {
 
 const apply = process.argv.includes("--apply");
 const verifyAuth = process.argv.includes("--verify-auth") || apply;
+const includePlatformOwner = process.argv.includes("--include-platform-owner");
+const targetAccounts = SYNTHETIC_ROLE_QA_ACCOUNTS.filter((account) => account.key !== "platform" || includePlatformOwner);
 
 function fail(message: string): never {
   throw new Error(message);
@@ -100,6 +102,7 @@ async function preflightExistingAccount(account: SyntheticRoleQaAccount, input: 
       },
       staffProfile: { select: { centerId: true, classroomId: true, sourceSystem: true, externalId: true, customFields: true } },
       guardians: { select: { familyId: true, sourceSystem: true, customFields: true } },
+      authorizedPickup: { select: { familyId: true, sourceSystem: true, externalId: true, customFields: true } },
     },
   });
   if (!user) return { exists: false, safe: true };
@@ -135,7 +138,16 @@ async function preflightExistingAccount(account: SyntheticRoleQaAccount, input: 
   if (!guardianLinksSafe) {
     fail(`Existing ${account.key} account has an unexpected guardian linkage.`);
   }
-  const expectedStaffProfile = account.key === "director" || account.key === "teacher";
+  const pickupLinkSafe = account.scope === "pickup"
+    ? user.authorizedPickup?.familyId === input.familyId
+      && user.authorizedPickup.sourceSystem === SYNTHETIC_ROLE_QA_SOURCE
+      && user.authorizedPickup.externalId === "synthetic-role-qa-pickup"
+      && hasSyntheticRoleQaMarker(user.authorizedPickup.customFields)
+    : !user.authorizedPickup;
+  if (!pickupLinkSafe) {
+    fail(`Existing ${account.key} account has an unexpected authorized-pickup linkage.`);
+  }
+  const expectedStaffProfile = ["director", "assistant", "teacher"].includes(account.key);
   const staffProfileSafe = expectedStaffProfile
     ? !user.staffProfile || (
       user.staffProfile.centerId === input.centerId
@@ -264,13 +276,13 @@ async function ensureDatabaseAccount(account: SyntheticRoleQaAccount, scope: Awa
       });
     }
 
-    if (account.key === "director" || account.key === "teacher") {
+    if (["director", "assistant", "teacher"].includes(account.key)) {
       await db.staffProfile.upsert({
         where: { userId: user.id },
         update: {
           centerId: scope.center.id,
           classroomId: account.key === "teacher" ? scope.classroom.id : null,
-          title: account.key === "teacher" ? "Synthetic QA Teacher" : "Synthetic QA Director",
+          title: account.key === "teacher" ? "Synthetic QA Teacher" : account.key === "assistant" ? "Synthetic QA Assistant Director" : "Synthetic QA Director",
           phone: null,
           backgroundCheckStatus: "synthetic_qa",
           sourceSystem: SYNTHETIC_ROLE_QA_SOURCE,
@@ -281,7 +293,7 @@ async function ensureDatabaseAccount(account: SyntheticRoleQaAccount, scope: Awa
           userId: user.id,
           centerId: scope.center.id,
           classroomId: account.key === "teacher" ? scope.classroom.id : null,
-          title: account.key === "teacher" ? "Synthetic QA Teacher" : "Synthetic QA Director",
+          title: account.key === "teacher" ? "Synthetic QA Teacher" : account.key === "assistant" ? "Synthetic QA Assistant Director" : "Synthetic QA Director",
           phone: null,
           backgroundCheckStatus: "synthetic_qa",
           sourceSystem: SYNTHETIC_ROLE_QA_SOURCE,
@@ -313,6 +325,26 @@ async function ensureDatabaseAccount(account: SyntheticRoleQaAccount, scope: Awa
       else await db.guardian.create({ data });
     }
 
+    if (account.scope === "pickup") {
+      const existingPickup = await db.authorizedPickup.findUnique({
+        where: { userId: user.id },
+        select: { id: true, customFields: true },
+      });
+      const data = {
+        familyId: scope.family.id,
+        userId: user.id,
+        fullName: account.name,
+        phone: null,
+        relation: "Synthetic QA authorized pickup",
+        verificationNotes: "Synthetic credentialed UX QA only",
+        sourceSystem: SYNTHETIC_ROLE_QA_SOURCE,
+        externalId: "synthetic-role-qa-pickup",
+        customFields: syntheticRoleQaMarker(jsonObject(existingPickup?.customFields)) as Prisma.InputJsonValue,
+      };
+      if (existingPickup) await db.authorizedPickup.update({ where: { id: existingPickup.id }, data });
+      else await db.authorizedPickup.create({ data });
+    }
+
     await db.user.update({
       where: { id: user.id },
       data: { isActive: true, mustResetPassword: false },
@@ -332,6 +364,7 @@ async function verifyDatabaseAccount(account: SyntheticRoleQaAccount, scope: Awa
       accessGrants: { where: { isActive: true }, select: { scopeType: true, brandId: true, organizationId: true, centerId: true, role: true } },
       staffProfile: { select: { centerId: true, classroomId: true, sourceSystem: true } },
       guardians: { select: { familyId: true, sourceSystem: true, customFields: true } },
+      authorizedPickup: { select: { familyId: true, sourceSystem: true, externalId: true, customFields: true } },
     },
   });
   const base = Boolean(user
@@ -354,18 +387,27 @@ async function verifyDatabaseAccount(account: SyntheticRoleQaAccount, scope: Awa
         && !user.accessGrants[0].brandId
         && user.accessGrants[0].organizationId === scope.organization.id
         && user.accessGrants[0].centerId === scope.center.id)
-      : Boolean(user?.accessGrants.length === 0
-        && user.guardians.length === 1
-        && user.guardians[0].familyId === scope.family.id
-        && user.guardians[0].sourceSystem === SYNTHETIC_ROLE_QA_SOURCE
-        && hasSyntheticRoleQaMarker(user.guardians[0].customFields));
-  const assignmentOk = account.key === "director"
+      : account.scope === "family"
+        ? Boolean(user?.accessGrants.length === 0
+          && user.guardians.length === 1
+          && user.guardians[0].familyId === scope.family.id
+          && user.guardians[0].sourceSystem === SYNTHETIC_ROLE_QA_SOURCE
+          && hasSyntheticRoleQaMarker(user.guardians[0].customFields))
+        : account.scope === "pickup"
+          ? Boolean(user?.accessGrants.length === 0
+            && user.authorizedPickup?.familyId === scope.family.id
+            && user.authorizedPickup.sourceSystem === SYNTHETIC_ROLE_QA_SOURCE
+            && user.authorizedPickup.externalId === "synthetic-role-qa-pickup"
+            && hasSyntheticRoleQaMarker(user.authorizedPickup.customFields))
+          : Boolean(user?.accessGrants.length === 0);
+  const assignmentOk = account.key === "director" || account.key === "assistant"
     ? user?.staffProfile?.centerId === scope.center.id && !user.staffProfile.classroomId && user.staffProfile.sourceSystem === SYNTHETIC_ROLE_QA_SOURCE
     : account.key === "teacher"
       ? user?.staffProfile?.centerId === scope.center.id && user.staffProfile.classroomId === scope.classroom.id && user.staffProfile.sourceSystem === SYNTHETIC_ROLE_QA_SOURCE
       : !user?.staffProfile;
   const guardianLinksOk = account.scope === "family" ? true : user?.guardians.length === 0;
-  return base && scopeOk && assignmentOk && guardianLinksOk;
+  const pickupLinkOk = account.scope === "pickup" ? true : !user?.authorizedPickup;
+  return base && scopeOk && assignmentOk && guardianLinksOk && pickupLinkOk;
 }
 
 async function main() {
@@ -377,9 +419,12 @@ async function main() {
     fail("SYNTHETIC_ROLE_QA_PASSWORD (or DEMO_PASSWORD) is required for apply or authentication verification.");
   }
 
+  if (includePlatformOwner && process.env.ALLOW_SYNTHETIC_PLATFORM_OWNER_QA !== "true") {
+    fail("Set ALLOW_SYNTHETIC_PLATFORM_OWNER_QA=true with --include-platform-owner; this role can access every tenant.");
+  }
   const scope = await loadDemoScope();
   const preflight = [];
-  for (const account of SYNTHETIC_ROLE_QA_ACCOUNTS) {
+  for (const account of targetAccounts) {
     const database = await preflightExistingAccount(account, {
       tenantId: scope.tenant.id,
       brandId: scope.brand.id,
@@ -393,7 +438,7 @@ async function main() {
   }
 
   if (apply) {
-    for (const account of SYNTHETIC_ROLE_QA_ACCOUNTS) {
+    for (const account of targetAccounts) {
       await deactivateExistingDatabaseAccount(account, scope.tenant.id);
       await upsertSupabaseAuthUserWithPassword({
         email: account.email,
@@ -410,7 +455,7 @@ async function main() {
   }
 
   const results = [];
-  for (const account of SYNTHETIC_ROLE_QA_ACCOUNTS) {
+  for (const account of targetAccounts) {
     const database = await verifyDatabaseAccount(account, scope);
     const authentication = verifyAuth ? await verifySupabasePassword(account.email, password) : null;
     results.push({
@@ -429,6 +474,7 @@ async function main() {
       centerSource: scope.center.sourceSystem,
       familySource: scope.family.sourceSystem,
       emailNamespace: "synthetic.thebeesuite.io",
+      platformOwnerIncluded: includePlatformOwner,
       customerDataTouched: false,
     },
     target: {

@@ -8,9 +8,10 @@ This is the current release-candidate truth record. `Verified in production` mea
 
 - Protected product PR: [#325](https://github.com/BrunerDigital/TheBEESuite/pull/325), merged September 8, 2026 at `7bed3daeb796a5daa38f7e50882b95f031446adf`.
 - Protected post-release verification PR: [#326](https://github.com/BrunerDigital/TheBEESuite/pull/326), merged September 8, 2026 at `2933808eb58bc7e8846b3bfd5f58a3f29c15b11b`. It pins patched development-only `js-yaml` 4.3.2 and makes redirect-aware, multi-viewport production smoke verification deterministic.
-- Current exact production deployment: `dpl_8s3XE1JUB8EecHPvFeomeCAUP9wz`, Ready and promoted, built from `2933808eb58bc7e8846b3bfd5f58a3f29c15b11b`.
+- Protected prospective-family billing PR: [#328](https://github.com/BrunerDigital/TheBEESuite/pull/328), merged September 8, 2026 at `c982a9a1946c057b6de7abdf3fbe866a4066313d`. It adds expected-child/due-date handling and permits guarded one-time prospective-family charges without widening recurring tuition or receivable scope.
+- Current exact product deployment: `dpl_9grc6vWVVKnwZqDpcixNvGmkMmD8`, Ready and promoted, built from `c982a9a1946c057b6de7abdf3fbe866a4066313d`.
 - Canonical aliases: `https://thebeesuite.io`, `https://www.thebeesuite.io`, and `https://the-bee-suite-beta.vercel.app` resolve to the promoted deployment; `www` redirects to the canonical apex.
-- Production build gate passed lint, typecheck, 1,804 tests (1,799 passed and 5 intentionally skipped), Next.js 16.3.4 compilation, and generation of all 166 static pages.
+- Production build gate passed lint, typecheck, all 1,817 tests with no failures or skips, Next.js 16.3.4 compilation, and generation of all 166 static pages.
 - `GET https://thebeesuite.io/api/health` returned HTTP 200 with `ok: true` and `database: connected` after the deployment.
 - Public production routes `/`, `/parents`, `/teachers`, `/privacy`, `/terms`, `/eula`, `/support`, `/resources`, and `/registration` returned HTTP 200.
 - Production Playwright smoke passed the public/protected route checks, inquiry embed/API and CORS checks, and Parent/Teacher/Privacy/Support rendering without horizontal overflow at 390 x 844, 768 x 1024, and 1440 x 900.

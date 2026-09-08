@@ -13,6 +13,7 @@ test("teacher App Review preparation is explicit, demo-scoped, and fail-closed",
   assert.match(script, /APP_REVIEW_TEACHER_CLASSROOM_ID/);
   assert.match(script, /APP_REVIEW_TEACHER_SOURCE_STAFF_ID/);
   assert.match(script, /APP_REVIEW_TEACHER_TARGET_FINGERPRINT/);
+  assert.match(script, /--confirm-teacher-app-review-account/);
   assert.match(script, /password\.length < 12/);
   assert.match(script, /sourceSystem: DEMO_SOURCE/);
   assert.match(script, /role: UserRole\.TEACHER/);
@@ -20,10 +21,18 @@ test("teacher App Review preparation is explicit, demo-scoped, and fail-closed",
   assert.match(script, /process\.argv\.includes\("--preflight"\)/);
   assert.match(script, /findUnique\(\{\s*where: \{ id: target\.sourceStaffProfileId \}/);
   assert.match(script, /assertAppReviewTargetFingerprint/);
+  assert.match(script, /teacherTargetFingerprint\(\{\s*email,/);
   assert.ok(
     script.indexOf("assertAppReviewTargetFingerprint({") < script.indexOf("await upsertSupabaseAuthUserWithPassword({"),
     "the exact target fingerprint must be checked before the Auth identity can change",
   );
+  assert.ok(
+    script.indexOf("await upsertSupabaseAuthUserWithPassword({") < script.indexOf("await prisma.$transaction(async (tx)"),
+    "Auth must be established before the atomic local access transaction",
+  );
+  assert.match(script, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(script, /mergeCustomFields\(currentUser\?\.customFields/);
+  assert.match(script, /mergeCustomFields\(currentUser\?\.staffProfile\?\.customFields/);
   assert.match(script, /active grant outside the exact authorized target/);
   assert.match(script, /Multiple Teacher App Review Staff markers exist/);
   assert.match(script, /upsertSupabaseAuthUserWithPassword/);

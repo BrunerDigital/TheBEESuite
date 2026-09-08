@@ -11,12 +11,21 @@ test("parent App Review preparation requires an exact preflighted target", async
   assert.match(script, /APP_REVIEW_PARENT_FAMILY_ID/);
   assert.match(script, /APP_REVIEW_PARENT_FAMILY_EXTERNAL_ID/);
   assert.match(script, /APP_REVIEW_PARENT_TARGET_FINGERPRINT/);
+  assert.match(script, /--confirm-parent-app-review-account/);
   assert.match(script, /findUnique\(\{\s*where: \{ id: target\.familyId \}/);
   assert.match(script, /assertAppReviewTargetFingerprint/);
+  assert.match(script, /parentTargetFingerprint\(\{\s*email,/);
   assert.ok(
     script.indexOf("assertAppReviewTargetFingerprint({") < script.indexOf("await upsertSupabaseAuthUserWithPassword({"),
     "the exact target fingerprint must be checked before the Auth identity can change",
   );
+  assert.ok(
+    script.indexOf("await upsertSupabaseAuthUserWithPassword({") < script.indexOf("await prisma.$transaction(async (tx)"),
+    "Auth must be established before the atomic local access transaction",
+  );
+  assert.match(script, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(script, /mergeCustomFields\(currentUser\?\.customFields/);
+  assert.match(script, /mergeCustomFields\(currentGuardian\?\.customFields/);
   assert.doesNotMatch(script, /where: familyExternalId\s*\?/);
   assert.match(script, /active grant outside the exact authorized target/);
   assert.match(script, /Multiple Parent App Review Guardian markers exist/);

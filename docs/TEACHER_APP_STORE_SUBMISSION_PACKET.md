@@ -285,7 +285,7 @@ npm run app-review:teacher:ensure -- --preflight
 
 Select only a proven fake-demo target. Set `APP_REVIEW_TEACHER_TENANT_ID`, `APP_REVIEW_TEACHER_CENTER_ID`, `APP_REVIEW_TEACHER_CLASSROOM_ID`, and `APP_REVIEW_TEACHER_SOURCE_STAFF_ID` outside Git/chat, then run the same `--preflight` command again. Record its exact target and fresh `targetFingerprint`; do not authorize or run a mutation from the unfiltered candidate list alone.
 
-Obtain exact authorization covering every listed production change and that preflighted target. Only then set `APP_REVIEW_TEACHER_TARGET_FINGERPRINT` and `APP_REVIEW_TEACHER_PASSWORD` outside Git/chat and run `npm run app-review:teacher:ensure`.
+The fingerprint also binds the exact review email. Obtain exact authorization covering that email, every listed production change, and the preflighted target. Only then set `APP_REVIEW_TEACHER_TARGET_FINGERPRINT` and `APP_REVIEW_TEACHER_PASSWORD` outside Git/chat and run `npm run app-review:teacher:ensure -- --confirm-teacher-app-review-account`.
 
 Verify the login, Teacher role, demo tenant, demo school, assigned fake classroom, and absence of real child/staff data before copying credentials to App Store Connect. Rotate or disable the account after review.
 

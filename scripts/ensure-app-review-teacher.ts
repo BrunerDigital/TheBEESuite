@@ -1,5 +1,5 @@
 import "./load-env";
-import { UserRole, type Prisma } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import {
   assertAppReviewTargetFingerprint,
   buildAppReviewTargetFingerprint,
@@ -10,6 +10,7 @@ import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 const DEMO_SOURCE = "bee_suite_demo";
 const APP_REVIEW_SOURCE = "bee_suite_app_review";
 const APP_REVIEW_STAFF_EXTERNAL_ID = "app-review-teacher-primary";
+const CONFIRM_FLAG = "--confirm-teacher-app-review-account";
 const TARGET_ENVIRONMENT_VARIABLES = [
   "APP_REVIEW_TEACHER_TENANT_ID",
   "APP_REVIEW_TEACHER_CENTER_ID",
@@ -19,6 +20,17 @@ const TARGET_ENVIRONMENT_VARIABLES = [
 
 function normalizedEmail(value: string) {
   return value.trim().toLowerCase();
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function mergeCustomFields(value: unknown, patch: Prisma.InputJsonObject) {
+  return {
+    ...(asRecord(value) as Prisma.InputJsonObject),
+    ...patch,
+  } as Prisma.InputJsonObject;
 }
 
 function readTargetInput() {
@@ -32,6 +44,7 @@ function readTargetInput() {
 }
 
 function teacherTargetFingerprint(input: {
+  email: string;
   tenantId: string;
   organizationId: string;
   centerId: string;
@@ -42,7 +55,7 @@ function teacherTargetFingerprint(input: {
   return buildAppReviewTargetFingerprint("teacher", input);
 }
 
-async function listTeacherTargets() {
+async function listTeacherTargets(email: string) {
   const profiles = await prisma.staffProfile.findMany({
     where: { sourceSystem: DEMO_SOURCE, classroomId: { not: null }, user: { role: UserRole.TEACHER } },
     orderBy: [{ centerId: "asc" }, { classroomId: "asc" }, { id: "asc" }],
@@ -56,6 +69,7 @@ async function listTeacherTargets() {
   return profiles.flatMap((profile) => {
     if (!profile.classroom) return [];
     const target = {
+      email,
       tenantId: profile.center.organization.tenantId,
       organizationId: profile.center.organizationId,
       centerId: profile.center.id,
@@ -72,8 +86,11 @@ async function listTeacherTargets() {
   });
 }
 
-async function ensureTeacherGrant(input: { userId: string; tenantId: string; organizationId: string; centerId: string }) {
-  const existing = await prisma.userAccessGrant.findMany({
+async function ensureTeacherGrant(
+  db: Prisma.TransactionClient,
+  input: { userId: string; tenantId: string; organizationId: string; centerId: string },
+) {
+  const existing = await db.userAccessGrant.findMany({
     where: { userId: input.userId, tenantId: input.tenantId, role: UserRole.TEACHER, scopeType: "CENTER", centerId: input.centerId },
     select: { id: true },
     take: 2,
@@ -87,11 +104,13 @@ async function ensureTeacherGrant(input: { userId: string; tenantId: string; org
     role: UserRole.TEACHER,
     scopeType: "CENTER",
     isActive: true,
+    startsAt: null,
+    endsAt: null,
     permissions: { appReview: true, seededBy: "scripts/ensure-app-review-teacher.ts" },
   } satisfies Prisma.UserAccessGrantUncheckedUpdateInput;
   return existing[0]
-    ? prisma.userAccessGrant.update({ where: { id: existing[0].id }, data, select: { id: true } })
-    : prisma.userAccessGrant.create({ data: { userId: input.userId, tenantId: input.tenantId, ...data } as Prisma.UserAccessGrantUncheckedCreateInput, select: { id: true } });
+    ? db.userAccessGrant.update({ where: { id: existing[0].id }, data, select: { id: true } })
+    : db.userAccessGrant.create({ data: { userId: input.userId, tenantId: input.tenantId, ...data } as Prisma.UserAccessGrantUncheckedCreateInput, select: { id: true } });
 }
 
 async function main() {
@@ -107,7 +126,7 @@ async function main() {
       ok: true,
       mode: "preflight-list",
       mutatesProduction: false,
-      candidates: await listTeacherTargets(),
+      candidates: await listTeacherTargets(email),
     }, null, 2));
     return;
   }
@@ -136,12 +155,14 @@ async function main() {
   ) {
     throw new Error("The exact Teacher App Review source profile is missing or no longer matches the fake-demo tenant, center, classroom, and role.");
   }
+  const sourceClassroom = sourceProfile.classroom;
 
   const expectedFingerprint = teacherTargetFingerprint({
+    email,
     tenantId: sourceProfile.center.organization.tenantId,
     organizationId: sourceProfile.center.organizationId,
     centerId: sourceProfile.center.id,
-    classroomId: sourceProfile.classroom.id,
+    classroomId: sourceClassroom.id,
     sourceStaffProfileId: sourceProfile.id,
     sourceUserId: sourceProfile.user.id,
   });
@@ -152,12 +173,13 @@ async function main() {
       mode: "preflight-target",
       mutatesProduction: false,
       target: {
+        email,
         tenantId: sourceProfile.center.organization.tenantId,
         organizationId: sourceProfile.center.organizationId,
         centerId: sourceProfile.center.id,
         centerName: sourceProfile.center.name,
-        classroomId: sourceProfile.classroom.id,
-        classroomName: sourceProfile.classroom.name,
+        classroomId: sourceClassroom.id,
+        classroomName: sourceClassroom.name,
         sourceStaffProfileId: sourceProfile.id,
         sourceUserId: sourceProfile.user.id,
         targetFingerprint: expectedFingerprint,
@@ -174,6 +196,9 @@ async function main() {
 
   if (password.length < 12) {
     throw new Error("Set APP_REVIEW_TEACHER_PASSWORD to a temporary review password with at least 12 characters.");
+  }
+  if (!process.argv.includes(CONFIRM_FLAG)) {
+    throw new Error(`Provisioning requires ${CONFIRM_FLAG} after exact approval of the preflighted target and mutations.`);
   }
 
   const existingUser = await prisma.user.findUnique({
@@ -248,67 +273,160 @@ async function main() {
     updateExistingPassword: true,
   });
 
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: {
-      tenantId: sourceProfile.center.organization.tenantId,
-      organizationId: sourceProfile.center.organizationId,
-      name: "App Review Teacher",
-      role: UserRole.TEACHER,
-      isActive: true,
-      mustResetPassword: false,
-      sessionVersion: { increment: 1 },
-      customFields: { appReview: true, seededBy: "scripts/ensure-app-review-teacher.ts" },
-    },
-    create: {
-      tenantId: sourceProfile.center.organization.tenantId,
-      organizationId: sourceProfile.center.organizationId,
-      email,
-      name: "App Review Teacher",
-      role: UserRole.TEACHER,
-      isActive: true,
-      mustResetPassword: false,
-      customFields: { appReview: true, seededBy: "scripts/ensure-app-review-teacher.ts" },
-    },
-    select: { id: true },
-  });
+  await prisma.$transaction(async (tx) => {
+    const currentSourceProfile = await tx.staffProfile.findUnique({
+      where: { id: target.sourceStaffProfileId },
+      include: {
+        user: { select: { id: true, role: true } },
+        center: { select: { id: true, organizationId: true, organization: { select: { tenantId: true } } } },
+        classroom: { select: { id: true } },
+      },
+    });
+    if (
+      !currentSourceProfile?.classroom ||
+      currentSourceProfile.sourceSystem !== DEMO_SOURCE ||
+      currentSourceProfile.user.role !== UserRole.TEACHER ||
+      currentSourceProfile.user.id !== sourceProfile.user.id ||
+      currentSourceProfile.centerId !== target.centerId ||
+      currentSourceProfile.classroom.id !== target.classroomId ||
+      currentSourceProfile.center.organization.tenantId !== target.tenantId ||
+      currentSourceProfile.center.organizationId !== sourceProfile.center.organizationId
+    ) {
+      throw new Error("The exact Teacher App Review target changed after preflight; run preflight again before provisioning.");
+    }
 
-  await prisma.staffProfile.upsert({
-    where: { userId: user.id },
-    update: {
-      centerId: sourceProfile.centerId,
-      classroomId: sourceProfile.classroom.id,
-      title: "App Review Teacher",
-      phone: "(555) 010-0425",
-      sourceSystem: APP_REVIEW_SOURCE,
-      externalId: APP_REVIEW_STAFF_EXTERNAL_ID,
-      customFields: { appReview: true, seededBy: "scripts/ensure-app-review-teacher.ts" },
-    },
-    create: {
+    const currentUser = await tx.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        tenantId: true,
+        role: true,
+        customFields: true,
+        staffProfile: { select: { sourceSystem: true, externalId: true, customFields: true } },
+      },
+    });
+    if (currentUser && currentUser.tenantId !== target.tenantId) {
+      throw new Error("The existing review email belongs to a different tenant.");
+    }
+    if (currentUser && currentUser.role !== UserRole.TEACHER) {
+      throw new Error("The existing review email is not a teacher account.");
+    }
+    if (currentUser?.staffProfile && (
+      currentUser.staffProfile.sourceSystem !== APP_REVIEW_SOURCE ||
+      currentUser.staffProfile.externalId !== APP_REVIEW_STAFF_EXTERNAL_ID
+    )) {
+      throw new Error("The existing review email is linked to a non-review Staff profile.");
+    }
+    if (currentUser) {
+      const [activeGrants, matchingGrantCount] = await Promise.all([
+        tx.userAccessGrant.findMany({
+          where: { userId: currentUser.id, isActive: true },
+          select: { tenantId: true, organizationId: true, centerId: true, role: true, scopeType: true },
+        }),
+        tx.userAccessGrant.count({
+          where: {
+            userId: currentUser.id,
+            tenantId: target.tenantId,
+            role: UserRole.TEACHER,
+            scopeType: "CENTER",
+            centerId: target.centerId,
+          },
+        }),
+      ]);
+      if (matchingGrantCount > 1) {
+        throw new Error("Multiple matching Teacher App Review grants exist; resolve the duplicate grants before provisioning.");
+      }
+      if (activeGrants.some((grant) =>
+        grant.tenantId !== target.tenantId ||
+        grant.organizationId !== sourceProfile.center.organizationId ||
+        grant.centerId !== target.centerId ||
+        grant.role !== UserRole.TEACHER ||
+        grant.scopeType !== "CENTER"
+      )) {
+        throw new Error("The existing Teacher App Review user has an active grant outside the exact authorized target.");
+      }
+    }
+
+    const currentReviewProfiles = await tx.staffProfile.findMany({
+      where: { sourceSystem: APP_REVIEW_SOURCE, externalId: APP_REVIEW_STAFF_EXTERNAL_ID },
+      select: { userId: true },
+      take: 2,
+    });
+    if (currentReviewProfiles.length > 1) {
+      throw new Error("Multiple Teacher App Review Staff markers exist; resolve the ambiguity before provisioning.");
+    }
+    if (currentReviewProfiles[0] && currentReviewProfiles[0].userId !== currentUser?.id) {
+      throw new Error("The App Review teacher marker is linked to a different user.");
+    }
+
+    const user = await tx.user.upsert({
+      where: { email },
+      update: {
+        tenantId: target.tenantId,
+        organizationId: sourceProfile.center.organizationId,
+        name: "App Review Teacher",
+        role: UserRole.TEACHER,
+        isActive: true,
+        mustResetPassword: false,
+        sessionVersion: { increment: 1 },
+        customFields: mergeCustomFields(currentUser?.customFields, {
+          appReview: true,
+          seededBy: "scripts/ensure-app-review-teacher.ts",
+        }),
+      },
+      create: {
+        tenantId: target.tenantId,
+        organizationId: sourceProfile.center.organizationId,
+        email,
+        name: "App Review Teacher",
+        role: UserRole.TEACHER,
+        isActive: true,
+        mustResetPassword: false,
+        customFields: { appReview: true, seededBy: "scripts/ensure-app-review-teacher.ts" },
+      },
+      select: { id: true },
+    });
+
+    await tx.staffProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        centerId: sourceProfile.centerId,
+        classroomId: sourceClassroom.id,
+        title: "App Review Teacher",
+        phone: "(555) 010-0425",
+        sourceSystem: APP_REVIEW_SOURCE,
+        externalId: APP_REVIEW_STAFF_EXTERNAL_ID,
+        customFields: mergeCustomFields(currentUser?.staffProfile?.customFields, {
+          appReview: true,
+          seededBy: "scripts/ensure-app-review-teacher.ts",
+        }),
+      },
+      create: {
+        userId: user.id,
+        centerId: sourceProfile.centerId,
+        classroomId: sourceClassroom.id,
+        title: "App Review Teacher",
+        phone: "(555) 010-0425",
+        backgroundCheckStatus: "review_demo_only",
+        sourceSystem: APP_REVIEW_SOURCE,
+        externalId: APP_REVIEW_STAFF_EXTERNAL_ID,
+        customFields: { appReview: true, seededBy: "scripts/ensure-app-review-teacher.ts" },
+      },
+    });
+    await ensureTeacherGrant(tx, {
       userId: user.id,
+      tenantId: target.tenantId,
+      organizationId: sourceProfile.center.organizationId,
       centerId: sourceProfile.centerId,
-      classroomId: sourceProfile.classroom.id,
-      title: "App Review Teacher",
-      phone: "(555) 010-0425",
-      backgroundCheckStatus: "review_demo_only",
-      sourceSystem: APP_REVIEW_SOURCE,
-      externalId: APP_REVIEW_STAFF_EXTERNAL_ID,
-      customFields: { appReview: true, seededBy: "scripts/ensure-app-review-teacher.ts" },
-    },
-  });
-  await ensureTeacherGrant({
-    userId: user.id,
-    tenantId: sourceProfile.center.organization.tenantId,
-    organizationId: sourceProfile.center.organizationId,
-    centerId: sourceProfile.centerId,
-  });
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   console.log(JSON.stringify({
     ok: true,
     email,
     loginUrl: "https://thebeesuite.io/teachers",
     center: sourceProfile.center.name,
-    classroom: sourceProfile.classroom.name,
+    classroom: sourceClassroom.name,
     dataScope: "bee_suite_demo",
   }, null, 2));
 }

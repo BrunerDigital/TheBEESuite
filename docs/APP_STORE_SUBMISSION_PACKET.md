@@ -227,7 +227,7 @@ npm run app-review:parent:ensure -- --preflight
 
 Select only a proven fake-demo target. Set `APP_REVIEW_PARENT_TENANT_ID`, `APP_REVIEW_PARENT_CENTER_ID`, `APP_REVIEW_PARENT_FAMILY_ID`, and `APP_REVIEW_PARENT_FAMILY_EXTERNAL_ID` outside Git/chat, then run the same `--preflight` command again. Record its exact target and fresh `targetFingerprint`; do not authorize or run a mutation from the unfiltered candidate list alone.
 
-The mutation may upsert the application/Auth identity and Guardian, reassign the Guardian to that exact fake demo family, create or reactivate the school access grant, and rotate the password. Obtain exact authorization covering all four production changes and the preflighted target. Only then set `APP_REVIEW_PARENT_TARGET_FINGERPRINT` and `APP_REVIEW_PARENT_PASSWORD` outside Git/chat and run `npm run app-review:parent:ensure`. Re-query the role/grant and verify the exact fake family boundary before copying credentials into App Store Connect. Rotate or disable the account after review.
+The fingerprint also binds the exact review email. The mutation may upsert the application/Auth identity and Guardian, reassign the Guardian to that exact fake demo family, create or reactivate the school access grant, and rotate the password. Obtain exact authorization covering the email, all four production changes, and the preflighted target. Only then set `APP_REVIEW_PARENT_TARGET_FINGERPRINT` and `APP_REVIEW_PARENT_PASSWORD` outside Git/chat and run `npm run app-review:parent:ensure -- --confirm-parent-app-review-account`. Re-query the role/grant and verify the exact fake family boundary before copying credentials into App Store Connect. Rotate or disable the account after review.
 
 Suggested App Review notes:
 

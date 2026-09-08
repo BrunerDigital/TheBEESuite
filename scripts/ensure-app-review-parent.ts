@@ -1,5 +1,5 @@
 import "./load-env";
-import { UserRole, type Prisma } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import {
   assertAppReviewTargetFingerprint,
   buildAppReviewTargetFingerprint,
@@ -11,6 +11,7 @@ import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 const DEMO_SOURCE = "bee_suite_demo";
 const APP_REVIEW_SOURCE = "bee_suite_app_review";
 const APP_REVIEW_GUARDIAN_EXTERNAL_ID = "app-review-parent-primary";
+const CONFIRM_FLAG = "--confirm-parent-app-review-account";
 const TARGET_ENVIRONMENT_VARIABLES = [
   "APP_REVIEW_PARENT_TENANT_ID",
   "APP_REVIEW_PARENT_CENTER_ID",
@@ -44,6 +45,7 @@ function readTargetInput() {
 }
 
 function parentTargetFingerprint(input: {
+  email: string;
   tenantId: string;
   organizationId: string;
   centerId: string;
@@ -53,7 +55,7 @@ function parentTargetFingerprint(input: {
   return buildAppReviewTargetFingerprint("parent", input);
 }
 
-async function listParentTargets() {
+async function listParentTargets(email: string) {
   const families = await prisma.family.findMany({
     where: { sourceSystem: DEMO_SOURCE, centerId: { not: null } },
     orderBy: [{ centerId: "asc" }, { id: "asc" }],
@@ -76,6 +78,7 @@ async function listParentTargets() {
     const center = centersById.get(family.centerId);
     if (!center) return [];
     const target = {
+      email,
       tenantId: center.organization.tenantId,
       organizationId: center.organizationId,
       centerId: center.id,
@@ -91,13 +94,13 @@ async function listParentTargets() {
   });
 }
 
-async function ensureAccessGrant(input: {
+async function ensureAccessGrant(db: Prisma.TransactionClient, input: {
   userId: string;
   tenantId: string;
   organizationId: string;
   centerId: string;
 }) {
-  const existing = await prisma.userAccessGrant.findMany({
+  const existing = await db.userAccessGrant.findMany({
     where: {
       userId: input.userId,
       tenantId: input.tenantId,
@@ -119,6 +122,8 @@ async function ensureAccessGrant(input: {
     role: UserRole.PARENT_GUARDIAN,
     scopeType: "CENTER",
     isActive: true,
+    startsAt: null,
+    endsAt: null,
     permissions: {
       appReview: true,
       seededBy: "scripts/ensure-app-review-parent.ts",
@@ -126,14 +131,14 @@ async function ensureAccessGrant(input: {
   } satisfies Prisma.UserAccessGrantUncheckedUpdateInput;
 
   if (existing[0]) {
-    return prisma.userAccessGrant.update({
+    return db.userAccessGrant.update({
       where: { id: existing[0].id },
       data,
       select: { id: true },
     });
   }
 
-  return prisma.userAccessGrant.create({
+  return db.userAccessGrant.create({
     data: {
       userId: input.userId,
       tenantId: input.tenantId,
@@ -156,7 +161,7 @@ async function main() {
       ok: true,
       mode: "preflight-list",
       mutatesProduction: false,
-      candidates: await listParentTargets(),
+      candidates: await listParentTargets(email),
     }, null, 2));
     return;
   }
@@ -201,6 +206,7 @@ async function main() {
   }
 
   const expectedFingerprint = parentTargetFingerprint({
+    email,
     tenantId: center.organization.tenantId,
     organizationId: center.organizationId,
     centerId: center.id,
@@ -214,6 +220,7 @@ async function main() {
       mode: "preflight-target",
       mutatesProduction: false,
       target: {
+        email,
         tenantId: center.organization.tenantId,
         organizationId: center.organizationId,
         centerId: center.id,
@@ -235,6 +242,9 @@ async function main() {
 
   if (password.length < 12) {
     throw new Error("Set APP_REVIEW_PARENT_PASSWORD to a temporary review password with at least 12 characters.");
+  }
+  if (!process.argv.includes(CONFIRM_FLAG)) {
+    throw new Error(`Provisioning requires ${CONFIRM_FLAG} after exact approval of the preflighted target and mutations.`);
   }
 
   const existingUser = await prisma.user.findUnique({
@@ -296,44 +306,6 @@ async function main() {
     throw new Error("The Parent App Review Guardian marker is linked to a different application user.");
   }
 
-  const guardianFields = mergeCustomFields(existingGuardian?.customFields, {
-    appReview: true,
-    seededBy: "scripts/ensure-app-review-parent.ts",
-  });
-
-  const guardian = existingGuardian
-    ? await prisma.guardian.update({
-        where: { id: existingGuardian.id },
-        data: {
-          familyId: family.id,
-          fullName: "App Review Parent",
-          email,
-          phone: "(555) 010-0424",
-          employer: "App Review",
-          relation: "Parent / Guardian",
-          preferredCommunication: "Email + portal notification",
-          isBillingContact: true,
-          customFields: guardianFields,
-        },
-        select: { id: true, customFields: true },
-      })
-    : await prisma.guardian.create({
-        data: {
-          familyId: family.id,
-          fullName: "App Review Parent",
-          email,
-          phone: "(555) 010-0424",
-          employer: "App Review",
-          relation: "Parent / Guardian",
-          preferredCommunication: "Email + portal notification",
-          isBillingContact: true,
-          sourceSystem: APP_REVIEW_SOURCE,
-          externalId: APP_REVIEW_GUARDIAN_EXTERNAL_ID,
-          customFields: guardianFields,
-        },
-        select: { id: true, customFields: true },
-      });
-
   await upsertSupabaseAuthUserWithPassword({
     email,
     name: "App Review Parent",
@@ -343,54 +315,165 @@ async function main() {
     updateExistingPassword: true,
   });
 
-  const userFields = mergeCustomFields(undefined, {
-    appReview: true,
-    seededBy: "scripts/ensure-app-review-parent.ts",
-  });
+  const provisioned = await prisma.$transaction(async (tx) => {
+    const currentFamily = await tx.family.findUnique({
+      where: { id: target.familyId },
+      select: { sourceSystem: true, externalId: true, centerId: true },
+    });
+    const currentCenter = await tx.center.findUnique({
+      where: { id: target.centerId },
+      select: { organizationId: true, organization: { select: { tenantId: true } } },
+    });
+    if (
+      !currentFamily?.centerId ||
+      currentFamily.sourceSystem !== DEMO_SOURCE ||
+      currentFamily.externalId !== target.familyExternalId ||
+      currentFamily.centerId !== target.centerId ||
+      !currentCenter ||
+      currentCenter.organization.tenantId !== target.tenantId ||
+      currentCenter.organizationId !== center.organizationId
+    ) {
+      throw new Error("The exact Parent App Review target changed after preflight; run preflight again before provisioning.");
+    }
 
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: {
-      organizationId: center.organizationId,
-      name: "App Review Parent",
-      role: UserRole.PARENT_GUARDIAN,
-      isActive: true,
-      mustResetPassword: false,
-      sessionVersion: { increment: 1 },
-      customFields: userFields,
-    },
-    create: {
-      tenantId: center.organization.tenantId,
-      organizationId: center.organizationId,
-      email,
-      name: "App Review Parent",
-      role: UserRole.PARENT_GUARDIAN,
-      isActive: true,
-      mustResetPassword: false,
-      customFields: userFields,
-    },
-    select: { id: true },
-  });
+    const currentUser = await tx.user.findUnique({
+      where: { email },
+      select: { id: true, tenantId: true, role: true, customFields: true },
+    });
+    if (currentUser && currentUser.tenantId !== target.tenantId) {
+      throw new Error(`Existing user ${email} belongs to a different tenant.`);
+    }
+    if (currentUser && currentUser.role !== UserRole.PARENT_GUARDIAN) {
+      throw new Error(`Existing user ${email} is ${currentUser.role}, not PARENT_GUARDIAN.`);
+    }
+    if (currentUser) {
+      const [activeGrants, matchingGrantCount] = await Promise.all([
+        tx.userAccessGrant.findMany({
+          where: { userId: currentUser.id, isActive: true },
+          select: { tenantId: true, organizationId: true, centerId: true, role: true, scopeType: true },
+        }),
+        tx.userAccessGrant.count({
+          where: {
+            userId: currentUser.id,
+            tenantId: target.tenantId,
+            role: UserRole.PARENT_GUARDIAN,
+            scopeType: "CENTER",
+            centerId: target.centerId,
+          },
+        }),
+      ]);
+      if (matchingGrantCount > 1) {
+        throw new Error("Multiple matching Parent App Review grants exist; resolve the duplicate grants before provisioning.");
+      }
+      if (activeGrants.some((grant) =>
+        grant.tenantId !== target.tenantId ||
+        grant.organizationId !== center.organizationId ||
+        grant.centerId !== target.centerId ||
+        grant.role !== UserRole.PARENT_GUARDIAN ||
+        grant.scopeType !== "CENTER"
+      )) {
+        throw new Error("The existing Parent App Review user has an active grant outside the exact authorized target.");
+      }
+    }
 
-  await prisma.guardian.update({
-    where: { id: guardian.id },
-    data: {
+    const currentGuardians = await tx.guardian.findMany({
+      where: { sourceSystem: APP_REVIEW_SOURCE, externalId: APP_REVIEW_GUARDIAN_EXTERNAL_ID },
+      select: { id: true, userId: true, customFields: true },
+      take: 2,
+    });
+    if (currentGuardians.length > 1) {
+      throw new Error("Multiple Parent App Review Guardian markers exist; resolve the ambiguity before provisioning.");
+    }
+    const currentGuardian = currentGuardians[0];
+    if (currentGuardian?.userId && currentGuardian.userId !== currentUser?.id) {
+      throw new Error("The Parent App Review Guardian marker is linked to a different application user.");
+    }
+
+    const userFields = mergeCustomFields(currentUser?.customFields, {
+      appReview: true,
+      seededBy: "scripts/ensure-app-review-parent.ts",
+    });
+    const user = await tx.user.upsert({
+      where: { email },
+      update: {
+        organizationId: center.organizationId,
+        name: "App Review Parent",
+        role: UserRole.PARENT_GUARDIAN,
+        isActive: true,
+        mustResetPassword: false,
+        sessionVersion: { increment: 1 },
+        customFields: userFields,
+      },
+      create: {
+        tenantId: target.tenantId,
+        organizationId: center.organizationId,
+        email,
+        name: "App Review Parent",
+        role: UserRole.PARENT_GUARDIAN,
+        isActive: true,
+        mustResetPassword: false,
+        customFields: userFields,
+      },
+      select: { id: true },
+    });
+
+    const guardianFields = mergeCustomFields(currentGuardian?.customFields, {
+      appReview: true,
+      seededBy: "scripts/ensure-app-review-parent.ts",
+    });
+    const guardian = currentGuardian
+      ? await tx.guardian.update({
+          where: { id: currentGuardian.id },
+          data: {
+            familyId: family.id,
+            fullName: "App Review Parent",
+            email,
+            phone: "(555) 010-0424",
+            employer: "App Review",
+            relation: "Parent / Guardian",
+            preferredCommunication: "Email + portal notification",
+            isBillingContact: true,
+            customFields: guardianFields,
+          },
+          select: { id: true, customFields: true },
+        })
+      : await tx.guardian.create({
+          data: {
+            familyId: family.id,
+            fullName: "App Review Parent",
+            email,
+            phone: "(555) 010-0424",
+            employer: "App Review",
+            relation: "Parent / Guardian",
+            preferredCommunication: "Email + portal notification",
+            isBillingContact: true,
+            sourceSystem: APP_REVIEW_SOURCE,
+            externalId: APP_REVIEW_GUARDIAN_EXTERNAL_ID,
+            customFields: guardianFields,
+          },
+          select: { id: true, customFields: true },
+        });
+
+    await tx.guardian.update({
+      where: { id: guardian.id },
+      data: {
+        userId: user.id,
+        customFields: parentPortalLinkedFields({
+          customFields: guardian.customFields,
+          loginEmail: email,
+          linkedBy: APP_REVIEW_SOURCE,
+          linkedReason: APP_REVIEW_SOURCE,
+        }),
+      },
+    });
+    const grant = await ensureAccessGrant(tx, {
       userId: user.id,
-      customFields: parentPortalLinkedFields({
-        customFields: guardian.customFields,
-        loginEmail: email,
-        linkedBy: APP_REVIEW_SOURCE,
-        linkedReason: APP_REVIEW_SOURCE,
-      }),
-    },
-  });
-
-  const grant = await ensureAccessGrant({
-    userId: user.id,
-    tenantId: center.organization.tenantId,
-    organizationId: center.organizationId,
-    centerId: center.id,
-  });
+      tenantId: target.tenantId,
+      organizationId: center.organizationId,
+      centerId: center.id,
+    });
+    return { userId: user.id, guardianId: guardian.id, accessGrantId: grant.id };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   console.log(JSON.stringify({
     ok: true,
@@ -399,9 +482,9 @@ async function main() {
     center: center.name,
     family: family.name,
     children: family.children.map((child) => child.fullName),
-    userId: user.id,
-    guardianId: guardian.id,
-    accessGrantId: grant.id,
+    userId: provisioned.userId,
+    guardianId: provisioned.guardianId,
+    accessGrantId: provisioned.accessGrantId,
   }, null, 2));
 }
 

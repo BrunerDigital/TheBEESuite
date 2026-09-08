@@ -80,7 +80,7 @@ test("past families cannot receive payment-method setup links", () => {
 
 test("director billing finds past payable accounts but keeps them payment-only", () => {
   assert.match(page, /workbenchFamilyWhere[\s\S]*currentOrOutstandingFamilyWhere\(\)/);
-  assert.match(page, /accountCategory: family\.children\.length \? "current" as const : "past" as const/);
+  assert.match(page, /accountCategory: billingFamilyAccountCategory\(family\.children\)/);
   assert.match(billingWorkbench, /Past family payment access/);
   assert.match(billingWorkbench, /effectivePaymentTarget\.startsWith\("invoice:"\) && !selectedFamilyIsPast/);
   assert.match(billingWorkbench, /disabled=\{isPending \|\| !selectedBillingAccount \|\| directorPaymentAmountCents <= 0\}[\s\S]*Digital Terminal/);

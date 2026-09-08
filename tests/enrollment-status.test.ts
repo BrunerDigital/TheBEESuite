@@ -5,13 +5,16 @@ import {
   closedEnrollmentStatusValues,
   currentlyEnrolledChildWhere,
   currentlyEnrolledStatusValues,
+  enrollmentPipelineStatusValues,
   enrollmentLifecycleCategory,
   enrollmentClassroomValidationError,
   hasAssignedClassroom,
   isCurrentlyEnrolledChildRecord,
   isCurrentlyEnrolledStatus,
+  isEnrollmentPipelineStatus,
   needsEnrollmentSetup,
   normalizedEnrollmentStatus,
+  prospectiveEnrollmentChildWhere,
   summarizeEnrollmentLifecycleCounts,
 } from "../src/lib/enrollment-status";
 
@@ -28,7 +31,18 @@ test("enrollment status helper treats only current records as enrolled", () => {
 
 test("enrollment status helper returns Prisma-safe status values", () => {
   assert.deepEqual(currentlyEnrolledStatusValues(), ["enrolled", "active", "current"]);
+  assert.deepEqual(enrollmentPipelineStatusValues(), ["pending", "waitlisted", "tour_scheduled"]);
   assert.equal(normalizedEnrollmentStatus("Not Enrolled"), "not_enrolled");
+});
+
+test("prospective enrollment helper recognizes only pipeline statuses", () => {
+  assert.equal(isEnrollmentPipelineStatus("pending"), true);
+  assert.equal(isEnrollmentPipelineStatus("Waitlisted"), true);
+  assert.equal(isEnrollmentPipelineStatus("tour scheduled"), true);
+  assert.equal(isEnrollmentPipelineStatus("enrolled"), false);
+  assert.deepEqual(prospectiveEnrollmentChildWhere(), {
+    enrollmentStatus: { in: ["pending", "waitlisted", "tour_scheduled"] },
+  });
 });
 
 test("current enrollment requires a classroom assignment", () => {

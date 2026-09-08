@@ -38,12 +38,19 @@ import {
   type OneTimeBillingAdjustmentReason,
 } from "@/lib/one-time-billing-adjustments";
 import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
+import { isCurrentlyEnrolledChildRecord, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
+import {
+  childTuitionEligibilityError,
+  singleInvoiceFamilyEligibilityError,
+  type BillingFamilyAccountCategory,
+  type SingleInvoiceChargeSource,
+} from "@/lib/prospective-family-billing";
 
 export type BillingWorkbenchFamily = {
   id: string;
   centerId: string | null;
   name: string;
-  accountCategory?: "current" | "past";
+  accountCategory?: BillingFamilyAccountCategory;
   billingEmail: string | null;
   updatedAt?: Date | string | null;
   guardians: Array<{
@@ -355,6 +362,13 @@ function pickInitialBillingFamily(families: BillingWorkbenchFamily[], initialFam
   return families[0] ?? null;
 }
 
+function preferredTuitionChild(family: BillingWorkbenchFamily | null | undefined, preferredChildId?: string) {
+  return family?.children.find((child) => child.id === preferredChildId)
+    ?? family?.children.find(isCurrentlyEnrolledChildRecord)
+    ?? family?.children[0]
+    ?? null;
+}
+
 function familyProfileHref(family: BillingWorkbenchFamily | null | undefined) {
   if (!family) return "/family-detail";
   return `/family-detail?familyId=${encodeURIComponent(family.id)}#family-editor`;
@@ -377,22 +391,21 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     ? initialCenterId
     : initialFamily?.centerId ?? centers[0]?.id ?? "";
   const initialLocationTuitionPlans = tuitionPlans.filter((plan) => plan.centerId === initialCenter);
-  const initialAssignmentChild = initialFamily?.children.find((child) => child.id === initialChildId)
-    ?? initialFamily?.children[0]
-    ?? null;
+  const initialAssignmentChild = preferredTuitionChild(initialFamily, initialChildId);
   const initialAssignment = initialAssignmentChild?.tuitionAssignment ?? null;
   const initialAssignedPlan = initialLocationTuitionPlans.find((plan) => plan.id === initialAssignment?.tuitionPlanId) ?? null;
+  const initialFamilyIsProspective = initialFamily?.accountCategory === "prospective";
   const [centerId, setCenterId] = useState(initialCenter);
   const resolveSchoolTimeZone = useSchoolTimeZoneResolver();
   const timeZone = resolveSchoolTimeZone(centerId);
   const [familyId, setFamilyId] = useState(initialFamily?.id ?? "");
-  const [chargeSource, setChargeSource] = useState("tuitionPlan");
+  const [chargeSource, setChargeSource] = useState<SingleInvoiceChargeSource>(initialFamilyIsProspective ? "custom" : "tuitionPlan");
   const [tuitionPlanId, setTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
   const uniformShirtProduct = products.find((product) => product.type === STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE) ?? null;
   const [productId, setProductId] = useState(uniformShirtProduct?.id ?? products[0]?.id ?? "");
   const [productQuantity, setProductQuantity] = useState("1");
   const [childId, setChildId] = useState("none");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(initialFamilyIsProspective ? "Enrollment fee" : "");
   const [amountDollars, setAmountDollars] = useState("");
   const [dueDate, setDueDate] = useState(todayDate());
   const [billingPeriod, setBillingPeriod] = useState(currentBillingPeriod());
@@ -451,7 +464,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [planCadence, setPlanCadence] = useState(tuitionBillingCadence(initialAssignedPlan?.cadence));
   const [planAmountDollars, setPlanAmountDollars] = useState(initialAssignedPlan ? String(initialAssignedPlan.amountCents / 100) : "");
   const [planFundingType, setPlanFundingType] = useState<TuitionFundingType>(initialAssignedPlan?.amountCents === 0 ? "voucher" : "family");
-  const [billingAction, setBillingAction] = useState("recurring");
+  const [billingAction, setBillingAction] = useState(initialFamilyIsProspective ? "single" : "recurring");
   const [moreBillingActionsExpanded, setMoreBillingActionsExpanded] = useState(false);
 
   useEffect(() => {
@@ -482,6 +495,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     : filteredFamilies[0]?.id ?? "";
   const selectedFamily = filteredFamilies.find((family) => family.id === effectiveFamilyId) ?? null;
   const selectedFamilyIsPast = selectedFamily?.accountCategory === "past";
+  const selectedFamilyIsProspective = selectedFamily?.accountCategory === "prospective";
   const selectedCenter = centers.find((center) => center.id === centerId) ?? centers[0] ?? null;
   const selectedCenterClassrooms = selectedCenter?.classrooms ?? [];
   const selectedCheckoutReadiness = selectedCenter?.checkoutReadiness ?? null;
@@ -490,19 +504,28 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     ? products.filter((product) => !isUniformShirtProduct(product))
     : products;
   const firstSelectedProductId = selectedProducts[0]?.id ?? "";
-  const effectiveChargeSource = chargeSource === "product" && selectedProducts.length === 0 ? "tuitionPlan" : chargeSource;
+  const effectiveChargeSource: SingleInvoiceChargeSource = selectedFamilyIsProspective && chargeSource === "tuitionPlan"
+    ? "custom"
+    : chargeSource === "product" && selectedProducts.length === 0
+      ? selectedFamilyIsProspective ? "custom" : "tuitionPlan"
+      : chargeSource;
   const effectiveProductId = selectedProducts.find((product) => product.id === productId)?.id ?? firstSelectedProductId;
   const selectedProduct = selectedProducts.find((product) => product.id === effectiveProductId) ?? null;
+  const effectiveBatchEnrollmentStatus = effectiveChargeSource === "tuitionPlan"
+    && enrollmentStatus !== "all"
+    && !isCurrentlyEnrolledStatus(enrollmentStatus)
+      ? "enrolled"
+      : enrollmentStatus;
   const selectedChildren = selectedFamily?.children ?? [];
-  const effectiveAssignmentChildId = assignmentChildId && selectedChildren.some((child) => child.id === assignmentChildId)
-    ? assignmentChildId
-    : selectedChildren[0]?.id ?? "";
+  const effectiveAssignmentChildId = preferredTuitionChild(selectedFamily, assignmentChildId)?.id ?? "";
   const selectedAssignmentChild = selectedChildren.find((child) => child.id === effectiveAssignmentChildId) ?? null;
+  const selectedAssignmentChildIsCurrent = Boolean(selectedAssignmentChild && isCurrentlyEnrolledChildRecord(selectedAssignmentChild));
   const selectedAssignment = selectedAssignmentChild?.tuitionAssignment ?? null;
   const effectiveAssignmentCadence = assignmentCadence;
   const effectiveRateCadence = tuitionRateCadence(effectiveAssignmentCadence);
   const activeWeeklyTuitionAssignments = selectedChildren.filter(
-    (child) => child.tuitionAssignment?.enabled
+    (child) => isCurrentlyEnrolledChildRecord(child)
+      && child.tuitionAssignment?.enabled
       && typeof child.tuitionAssignment.amountCents === "number"
       && child.tuitionAssignment.amountCents >= 0
       && tuitionRateCadence(child.tuitionAssignment.cadence) === effectiveRateCadence,
@@ -912,6 +935,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setAdjustmentEffectiveDate(localNow.slice(0, 10));
     setAdjustmentNote("");
     applyFamilyTuitionContext(nextFamily, nextPlans);
+    applyProspectiveBillingContext(nextFamily);
   }
 
   function handleFamilyChange(value: string | null) {
@@ -927,6 +951,16 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setAdjustmentEffectiveDate(currentLocalDate(timeZone));
     setAdjustmentNote("");
     applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
+    applyProspectiveBillingContext(nextFamily);
+  }
+
+  function applyProspectiveBillingContext(family: BillingWorkbenchFamily | null) {
+    if (family?.accountCategory !== "prospective") return;
+    setBillingAction("single");
+    setChargeSource("custom");
+    setDescription("Enrollment fee");
+    setAmountDollars("");
+    setChildId("none");
   }
 
   function handleTuitionPlanChange(value: string | null) {
@@ -941,9 +975,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     availablePlans: BillingWorkbenchTuitionPlan[],
     preferredChildId?: string,
   ) {
-    const child = family?.children.find((item) => item.id === preferredChildId)
-      ?? family?.children[0]
-      ?? null;
+    const child = preferredTuitionChild(family, preferredChildId);
     const assignment = child?.tuitionAssignment ?? null;
     const assignedPlan = availablePlans.find((plan) => plan.id === assignment?.tuitionPlanId) ?? null;
 
@@ -1064,7 +1096,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitSingle() {
     if (!selectedFamily) return setErrorMessage("Choose a family before creating an invoice.");
-    const childName = selectedChildren.find((child) => child.id === childId)?.fullName;
+    const accountCategory = selectedFamily.accountCategory ?? "current";
+    const familyEligibilityError = singleInvoiceFamilyEligibilityError(accountCategory, effectiveChargeSource);
+    if (familyEligibilityError) return setErrorMessage(familyEligibilityError);
+    const invoiceChild = selectedChildren.find((child) => child.id === childId);
+    if (effectiveChargeSource === "tuitionPlan" && invoiceChild) {
+      const childEligibilityError = childTuitionEligibilityError(invoiceChild);
+      if (childEligibilityError) return setErrorMessage(childEligibilityError);
+    }
+    const childName = invoiceChild?.fullName;
     if (!confirmBillingAction("create an invoice", childName)) return;
     submit({
       mode: "single",
@@ -1080,6 +1120,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (!selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId) {
       return setErrorMessage("Choose a family, child, and tuition plan before creating the tuition invoice.");
     }
+    const childEligibilityError = childTuitionEligibilityError(selectedAssignmentChild);
+    if (childEligibilityError) return setErrorMessage(childEligibilityError);
     const confirmed = window.confirm(
       `Create one due-now tuition invoice for ${selectedAssignmentChild.fullName}? This does not submit a payment immediately. If family autopay is enabled, the open invoice can be collected by the next autopay run.`,
     );
@@ -1098,7 +1140,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitBatch() {
     const confirmed = window.confirm(
-      `Create batch invoices for ${selectedCenter ? centerLabel(selectedCenter) : "the selected school"} (${ageGroup === "all" ? "all age groups" : ageGroup}, ${enrollmentStatus})? This does not submit payments immediately. Do not continue if recurring tuition already covers this billing period; due invoices may be collected later by autopay.`,
+      `Create batch invoices for ${selectedCenter ? centerLabel(selectedCenter) : "the selected school"} (${ageGroup === "all" ? "all age groups" : ageGroup}, ${effectiveBatchEnrollmentStatus})? This does not submit payments immediately. Do not continue if recurring tuition already covers this billing period; due invoices may be collected later by autopay.`,
     );
     if (!confirmed) return;
     submit({
@@ -1108,7 +1150,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       billingPeriod,
       batchTarget,
       ageGroup,
-      enrollmentStatus,
+      enrollmentStatus: effectiveBatchEnrollmentStatus,
       ...chargePayload(),
     });
   }
@@ -1430,6 +1472,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitAssignment() {
     if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving tuition.");
+    if (assignmentEnabled === "true") {
+      const childEligibilityError = childTuitionEligibilityError(selectedAssignmentChild);
+      if (childEligibilityError) return setErrorMessage(childEligibilityError);
+    }
     if (!assignmentIsVoucherFunded && assignmentEnabled === "true" && effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents) {
       return setErrorMessage("Credits must be less than the gross recurring tuition rate.");
     }
@@ -1568,9 +1614,26 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function showChildTuitionSetup() {
+    if (selectedFamilyIsProspective || selectedFamilyIsPast) {
+      setErrorMessage("Recurring tuition is available after a child has a current enrollment and assigned classroom.");
+      return;
+    }
     setBillingAction("recurring");
     requestAnimationFrame(() => {
       document.getElementById("child-tuition-setup")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function prepareEnrollmentFee() {
+    setErrorMessage("");
+    setStatusMessage("");
+    setChargeSource("custom");
+    setDescription("Enrollment fee");
+    setAmountDollars("");
+    setChildId("none");
+    setBillingAction("single");
+    requestAnimationFrame(() => {
+      document.getElementById("billing-actions")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -1606,7 +1669,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <ContextBadge label="Saved method" value={selectedPaymentMethod?.paymentMethodLabel ?? "None"} />
               {selectedFamilyIsPast
                 ? <ContextBadge label="Account" value="Past family" variant="outline" />
-                : <ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />}
+                : selectedFamilyIsProspective
+                  ? <ContextBadge label="Account" value="Pending / waitlisted" variant="outline" />
+                  : <ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />}
             </div>
           </div>
         ) : null}
@@ -1679,7 +1744,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           initials={initialsFromName(selectedFamily?.name)}
           status={selectedFamilyIsPast
             ? <ContextBadge label="Account" value="Past family" variant="outline" />
-            : <ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />}
+            : selectedFamilyIsProspective
+              ? <ContextBadge label="Account" value="Pending / waitlisted" variant="outline" />
+              : <ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />}
           actions={
             selectedFamily ? (
               <Link href={selectedFamilyProfileHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
@@ -1715,6 +1782,21 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </AlertDescription>
           </Alert>
         ) : null}
+        {selectedFamilyIsProspective ? (
+          <Alert className="border-amber-500/30 bg-amber-500/10">
+            <CalendarClock className="size-4" />
+            <AlertTitle>Prospective family billing</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>
+                This family is pending or waitlisted. Create a one-time enrollment or deposit fee without changing enrollment. Recurring tuition stays unavailable until a child is current and assigned to a classroom.
+              </p>
+              <Button type="button" size="sm" onClick={prepareEnrollmentFee}>
+                <ReceiptText data-icon="inline-start" />
+                Prepare Enrollment Fee
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <div className="space-y-1">
@@ -1735,7 +1817,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <SelectContent>
                 {filteredFamilies.map((family) => (
                   <SelectItem key={family.id} value={family.id}>
-                    {family.name}{family.accountCategory === "past" ? " · Past family" : ""}{family.billingEmail ? ` · ${family.billingEmail}` : ""}
+                    {family.name}{family.accountCategory === "prospective" ? " · Pending / waitlisted" : family.accountCategory === "past" ? " · Past family" : ""}{family.billingEmail ? ` · ${family.billingEmail}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1974,6 +2056,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </div>
         </div>
 
+        {!selectedFamilyIsProspective ? <>
         <div className="rounded-lg border bg-background/35 p-4">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -2068,11 +2151,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               Choose one child at a time. Their saved rates stay visible separately and combine with other rates using the same cadence.
             </p>
           </div>
-          <Button type="button" variant="outline" onClick={showChildTuitionSetup}>
+          <Button type="button" variant="outline" disabled={selectedFamilyIsProspective || selectedFamilyIsPast} onClick={showChildTuitionSetup}>
             <CalendarClock data-icon="inline-start" />
             Open child tuition
           </Button>
         </div>
+        </> : null}
 
         <Tabs
           id="billing-actions"
@@ -2106,7 +2190,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
           </div>
           <TabsList id="billing-action-tabs" className="flex flex-wrap justify-start gap-1 group-data-horizontal/tabs:h-auto" aria-label="Billing tasks">
-            <TabsTrigger value="recurring" className="h-10 min-h-10"><CalendarClock data-icon="inline-start" />Child tuition</TabsTrigger>
+            <TabsTrigger value="recurring" disabled={selectedFamilyIsProspective || selectedFamilyIsPast} className="h-10 min-h-10"><CalendarClock data-icon="inline-start" />Child tuition</TabsTrigger>
             <TabsTrigger value="single" className="h-10 min-h-10"><ReceiptText data-icon="inline-start" />Family charge</TabsTrigger>
             <TabsTrigger value="adjustment" className="h-10 min-h-10"><MinusCircle data-icon="inline-start" />One-time fee / credit</TabsTrigger>
             <TabsTrigger value="check" className="h-10 min-h-10"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
@@ -2136,6 +2220,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               setAmountDollars={setAmountDollars}
               selectedPlan={selectedPlan}
               selectedProduct={selectedProduct}
+              allowTuitionPlan={!selectedFamilyIsProspective}
+              customAmountPlaceholder={selectedFamilyIsProspective ? "Enter approved amount" : "250.00"}
             />
             <div className="grid gap-3 md:grid-cols-4">
               <div className="space-y-1">
@@ -2249,6 +2335,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               setAmountDollars={setAmountDollars}
               selectedPlan={selectedPlan}
               selectedProduct={selectedProduct}
+              allowTuitionPlan
+              customAmountPlaceholder="250.00"
             />
             <div className="grid gap-3 md:grid-cols-5">
               <div className="space-y-1">
@@ -2275,13 +2363,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </div>
               <div className="space-y-1">
                 <Label htmlFor="billing-batch-status">Status</Label>
-                <Select value={enrollmentStatus} onValueChange={(value) => value && setEnrollmentStatus(value)}>
+                <Select value={effectiveBatchEnrollmentStatus} onValueChange={(value) => value && setEnrollmentStatus(value)}>
                   <SelectTrigger id="billing-batch-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="enrolled">Enrolled</SelectItem>
-                    <SelectItem value="waitlisted">Waitlisted</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="waitlisted" disabled={effectiveChargeSource === "tuitionPlan"}>Waitlisted</SelectItem>
+                    <SelectItem value="pending" disabled={effectiveChargeSource === "tuitionPlan"}>Pending</SelectItem>
+                    <SelectItem value="all">{effectiveChargeSource === "tuitionPlan" ? "All current statuses" : "All statuses"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2350,6 +2438,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 Select a child, choose that child’s rate, and save. Repeat for each sibling; the family ledger receives the combined total while each child keeps an individual rate.
               </p>
             </div>
+            {selectedAssignmentChild && !selectedAssignmentChildIsCurrent ? (
+              <Alert className="border-amber-500/30 bg-amber-500/10">
+                <CalendarClock className="size-4" />
+                <AlertTitle>Recurring tuition is not active yet</AlertTitle>
+                <AlertDescription>
+                  Keep this child pending or waitlisted. After enrollment is current and a classroom is assigned, recurring tuition can be saved here. Use Family charge for an enrollment fee.
+                </AlertDescription>
+              </Alert>
+            ) : null}
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {selectedChildren.map((child) => {
                 const classroom = selectedCenterClassrooms.find((item) => item.id === child.classroomId);
@@ -2621,13 +2718,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
-                disabled={isPending || !selectedFamily || !selectedAssignmentChild || (assignmentEnabled === "true" && (!effectiveAssignmentPlanId || (!assignmentIsVoucherFunded && effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents)))}
+                disabled={isPending || !selectedFamily || !selectedAssignmentChild || (assignmentEnabled === "true" && (!selectedAssignmentChildIsCurrent || !effectiveAssignmentPlanId || (!assignmentIsVoucherFunded && effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents + effectiveAssignmentAdditionalChargesTotalCents)))}
                 onClick={submitAssignment}
               >
                 <CalendarClock data-icon="inline-start" />
                 Save Tuition Assignment
               </Button>
-              <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId || assignmentIsVoucherFunded || effectiveAssignmentCadence !== "weekly"} onClick={submitAssignmentChargeNow} variant="outline">
+              <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild || !selectedAssignmentChildIsCurrent || !effectiveAssignmentPlanId || assignmentIsVoucherFunded || effectiveAssignmentCadence !== "weekly"} onClick={submitAssignmentChargeNow} variant="outline">
                 <ReceiptText data-icon="inline-start" />
                 {effectiveAssignmentCadence === "weekly" ? "Create Invoice Now" : "First Invoice Scheduled"}
               </Button>
@@ -2902,10 +2999,12 @@ function ChargeFields({
   setAmountDollars,
   selectedPlan,
   selectedProduct,
+  allowTuitionPlan,
+  customAmountPlaceholder,
 }: {
   idPrefix: string;
-  chargeSource: string;
-  setChargeSource: (value: string) => void;
+  chargeSource: SingleInvoiceChargeSource;
+  setChargeSource: (value: SingleInvoiceChargeSource) => void;
   tuitionPlanId: string;
   setTuitionPlanId: (value: string) => void;
   productId: string;
@@ -2918,6 +3017,8 @@ function ChargeFields({
   setAmountDollars: (value: string) => void;
   selectedPlan: BillingWorkbenchTuitionPlan | null;
   selectedProduct: BillingWorkbenchProduct | null;
+  allowTuitionPlan: boolean;
+  customAmountPlaceholder: string;
 }) {
   const uniformProduct = selectedProduct?.type === STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE ? selectedProduct : null;
   const uniformQuantity = Math.max(1, Number.parseInt(productQuantity, 10) || 1);
@@ -2928,14 +3029,17 @@ function ChargeFields({
     <div className="grid gap-3 md:grid-cols-3">
       <div className="space-y-1">
         <Label htmlFor={`${idPrefix}-type`}>Charge type</Label>
-        <Select value={chargeSource} onValueChange={(value) => value && setChargeSource(value)}>
+        <Select value={chargeSource} onValueChange={(value) => {
+          if (value === "tuitionPlan" || value === "product" || value === "custom") setChargeSource(value);
+        }}>
           <SelectTrigger id={`${idPrefix}-type`}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="tuitionPlan">Tuition plan</SelectItem>
+            <SelectItem value="tuitionPlan" disabled={!allowTuitionPlan}>Tuition plan</SelectItem>
             {products.length ? <SelectItem value="product">Uniform shirt / product</SelectItem> : null}
             <SelectItem value="custom">Custom charge</SelectItem>
           </SelectContent>
         </Select>
+        {!allowTuitionPlan ? <p className="text-xs text-muted-foreground">Pending and waitlisted families can receive one-time fees, not recurring tuition.</p> : null}
       </div>
       {chargeSource === "tuitionPlan" ? (
         <div className="space-y-1">
@@ -2983,7 +3087,7 @@ function ChargeFields({
       {chargeSource === "custom" ? (
         <div className="space-y-1">
           <Label htmlFor={`${idPrefix}-custom-amount`}>Custom amount</Label>
-          <Input id={`${idPrefix}-custom-amount`} inputMode="decimal" value={amountDollars} onChange={(event) => setAmountDollars(event.target.value)} placeholder="250.00" />
+          <Input id={`${idPrefix}-custom-amount`} inputMode="decimal" value={amountDollars} onChange={(event) => setAmountDollars(event.target.value)} placeholder={customAmountPlaceholder} />
         </div>
       ) : null}
     </div>

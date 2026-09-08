@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { CollapsibleCard } from "@/components/workspace-preferences";
-import { enrollmentClassroomValidationError } from "@/lib/enrollment-status";
+import { enrollmentClassroomValidationError, isEnrollmentPipelineStatus } from "@/lib/enrollment-status";
+import { suggestedExpectedDueDate } from "@/lib/expected-child-birth";
 
 type CenterOption = {
   id: string;
@@ -63,7 +64,9 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
   const [checkInPin, setCheckInPin] = useState("");
   const [childName, setChildName] = useState("");
   const [preferredName, setPreferredName] = useState("");
+  const [childNotBornYet, setChildNotBornYet] = useState(false);
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [expectedDueDate, setExpectedDueDate] = useState("");
   const [ageGroup, setAgeGroup] = useState("Preschool");
   const [enrollmentStatus, setEnrollmentStatus] = useState("enrolled");
   const [startDate, setStartDate] = useState("");
@@ -92,7 +95,9 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
   function resetStudentFields() {
     setChildName("");
     setPreferredName("");
+    setChildNotBornYet(false);
     setDateOfBirth("");
+    setExpectedDueDate("");
     setAgeGroup("Preschool");
     setEnrollmentStatus("enrolled");
     setStartDate("");
@@ -129,7 +134,9 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
           checkInPin,
           childName,
           preferredName,
+          birthStatus: childNotBornYet ? "expected" : "born",
           dateOfBirth,
+          expectedDueDate: childNotBornYet ? expectedDueDate : undefined,
           ageGroup,
           enrollmentStatus,
           startDate,
@@ -160,6 +167,16 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
 
   function errorFor(name: string) {
     return fieldErrors[name] ? <p id={controlId(`${name}-error`)} className="text-xs text-destructive">{fieldErrors[name]}</p> : null;
+  }
+
+  function handleChildNotBornYetChange(checked: boolean) {
+    setChildNotBornYet(checked);
+    if (!checked) return;
+    setExpectedDueDate((current) => suggestedExpectedDueDate(current, dateOfBirth));
+    setDateOfBirth("");
+    setClassroomId("none");
+    setAgeGroup("Infant");
+    if (!isEnrollmentPipelineStatus(enrollmentStatus)) setEnrollmentStatus("pending");
   }
 
   function accessibilityFor(name: string, descriptions: string[] = []) {
@@ -304,10 +321,37 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
               <Input id={controlId("child-preferred-name")} value={preferredName} onChange={(event) => setPreferredName(event.target.value)} placeholder="Optional" {...accessibilityFor("preferredName")} />
               {errorFor("preferredName")}
             </div>
-            <div className="space-y-1">
-              <Label htmlFor={controlId("child-date-of-birth")}>Date of birth</Label>
-              <Input id={controlId("child-date-of-birth")} value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} type="date" {...accessibilityFor("dateOfBirth")} />
-              {errorFor("dateOfBirth")}
+            <div className="space-y-2">
+              <label htmlFor={controlId("child-not-born-yet")} className="flex min-h-11 cursor-pointer touch-manipulation items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+                <input
+                  id={controlId("child-not-born-yet")}
+                  className="size-5 shrink-0"
+                  type="checkbox"
+                  checked={childNotBornYet}
+                  onChange={(event) => handleChildNotBornYetChange(event.target.checked)}
+                />
+                Child not born yet
+              </label>
+              <Label htmlFor={controlId(childNotBornYet ? "child-expected-due-date" : "child-date-of-birth")}>
+                {childNotBornYet ? "Expected due date" : "Date of birth"}
+              </Label>
+              {childNotBornYet ? (
+                <Input
+                  id={controlId("child-expected-due-date")}
+                  value={expectedDueDate}
+                  onChange={(event) => setExpectedDueDate(event.target.value)}
+                  type="date"
+                  {...accessibilityFor("expectedDueDate", [controlId("child-birth-help")])}
+                />
+              ) : (
+                <Input id={controlId("child-date-of-birth")} value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} type="date" {...accessibilityFor("dateOfBirth")} />
+              )}
+              {childNotBornYet ? (
+                <p id={controlId("child-birth-help")} className="text-xs text-muted-foreground">
+                  Expected children stay pending or waitlisted with no classroom. Use family notes for any other details.
+                </p>
+              ) : null}
+              {errorFor(childNotBornYet ? "expectedDueDate" : "dateOfBirth")}
             </div>
             <div className="space-y-1">
               <Label htmlFor={controlId("child-age-group")}>Age group</Label>
@@ -327,7 +371,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
                 <SelectTrigger id={controlId("enrollment-status")} {...accessibilityFor("enrollmentStatus")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {enrollmentStatuses.map((status) => (
-                    <SelectItem key={status} value={status}>{status.replaceAll("_", " ")}</SelectItem>
+                    <SelectItem key={status} value={status} disabled={childNotBornYet && !isEnrollmentPipelineStatus(status)}>{status.replaceAll("_", " ")}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -340,7 +384,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
             </div>
             <div className="space-y-1 md:col-span-2">
               <Label htmlFor={controlId("classroom")}>Classroom</Label>
-              <Select value={classroomId} onValueChange={(value) => value && setClassroomId(value)}>
+              <Select value={classroomId} onValueChange={(value) => value && setClassroomId(value)} disabled={childNotBornYet}>
                 <SelectTrigger
                   id={controlId("classroom")}
                   aria-describedby={[
@@ -404,7 +448,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
           </div>
         </section>
 
-        <Button disabled={isPending || !centers.length || Boolean(enrollmentClassroomError)} onClick={submit}>
+        <Button disabled={isPending || !centers.length || (childNotBornYet ? !expectedDueDate : !dateOfBirth) || Boolean(enrollmentClassroomError)} onClick={submit}>
           <UserPlus data-icon="inline-start" />
           Save Family, Parent + Child
         </Button>

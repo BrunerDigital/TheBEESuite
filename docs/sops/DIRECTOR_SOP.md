@@ -75,6 +75,25 @@ Invitations are authorized from the records currently stored in The BEE Suite. A
 - Withdrawn and historical families are excluded from active balance summaries but remain available for past-record review.
 - The school absorbs Stripe processing costs; no processing fee is added to the parent's payment total.
 
+### Record A Child Who Is Not Born Yet
+
+1. While using `Add Family, Parent + Child`, or after opening a saved family in `Families & Communication` -> `Families`, go to the child details.
+2. Add a child or open the expected child's existing record.
+3. Select `Child not born yet` and enter the `Expected due date`.
+4. Keep the child `pending` or `waitlisted`. Enter the planned start date when known and leave the classroom unassigned.
+5. Save and verify that the expected due date remains visible. Use the existing family notes for any additional non-medical follow-up; do not type a due date into the date-of-birth field.
+6. After birth, clear `Child not born yet`, enter the actual date of birth, and save. Enrollment and classroom assignment remain separate decisions.
+
+### Create An Enrollment Fee For A Pending Family
+
+1. Open `Billing & Payments` -> `Billing & invoices` and choose the exact school.
+2. Select the family labeled `Pending / waitlisted`. Do not mark the child enrolled merely to make the family appear in Billing.
+3. Select `Prepare Enrollment Fee`. Confirm `Family charge` and `Custom charge` are selected.
+4. Enter the approved amount, due date, billing period, and a clear `Enrollment fee` or deposit description.
+5. Select `Create Invoice`, confirm the exact family, and verify the invoice appears once on the ledger.
+
+This creates one invoice and does not enroll the child, assign a classroom, schedule recurring tuition, enable autopay, or submit a payment. Recurring tuition becomes available only after a child is current and assigned to a classroom.
+
 ### Add One Late Fee Or Vacation Credit
 
 Do not change the child's saved tuition rate or recurring credits for a one-week exception.

@@ -14,6 +14,7 @@ import {
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
 import { normalizeTuitionAdditionalCharges, normalizeTuitionCredits, totalTuitionAdditionalChargesCents, totalTuitionCreditsCents } from "@/lib/tuition-credits";
+import { childTuitionEligibilityError } from "@/lib/prospective-family-billing";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -36,6 +37,8 @@ async function assertChildAccess(user: CurrentBillingUser, familyId: string, chi
       id: true,
       familyId: true,
       fullName: true,
+      enrollmentStatus: true,
+      classroomId: true,
       customFields: true,
       family: { select: { centerId: true, name: true } },
     },
@@ -105,6 +108,11 @@ async function POSTHandler(request: NextRequest) {
       metadata: { familyId, childId },
     });
     return NextResponse.json({ ok: true, assignment: updated.customFields });
+  }
+
+  const childEligibilityError = childTuitionEligibilityError(access.child);
+  if (childEligibilityError) {
+    return NextResponse.json({ ok: false, error: childEligibilityError }, { status: 409 });
   }
 
   if (!tuitionPlanId) {

@@ -10,14 +10,15 @@ import { EndOfDayClosingBoard } from "@/components/end-of-day-closing-board";
 import { FamilyRelationshipMapPreview } from "@/components/family-relationship-map-preview";
 import { WorkspaceSectionDirectory } from "@/components/workspace-section-directory";
 import { CollapsibleCard } from "@/components/workspace-preferences";
-import type { EditableFamilyRecord } from "@/components/family-record-editor";
+import { FamilyRecordEditor, type EditableFamilyRecord } from "@/components/family-record-editor";
+import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DataReadinessWorkspaceData } from "@/lib/data-readiness";
 import { dataReadinessViewFilters } from "@/lib/data-readiness-context";
 
-type PreviewView = "family" | "terminal" | "closing" | "inbox" | "migration-director" | "migration-executive" | "declutter" | "billing-declutter" | "staff-declutter";
+type PreviewView = "family" | "expected-child" | "expected-intake" | "terminal" | "closing" | "inbox" | "migration-director" | "migration-executive" | "declutter" | "billing-declutter" | "prospective-billing" | "staff-declutter";
 
 const family: EditableFamilyRecord = {
   id: "preview-family",
@@ -68,6 +69,64 @@ const terminalFamily = {
     recentPayments: [],
   },
   children: family.children.map((child) => ({ id: child.id, fullName: child.fullName, ageGroup: child.ageGroup, enrollmentStatus: child.enrollmentStatus, classroomId: child.classroomId ?? null, startDate: child.startDate ?? null, careScheduleType: "full_time" as const, scheduledDaysPerWeek: 5 as const, tuitionAssignment: child.tuitionAssignment ? { ...child.tuitionAssignment, grossAmountCents: child.tuitionAssignment.amountCents, additionalCharges: [], additionalChargesTotalCents: 0, credits: [], creditsTotalCents: 0, netAmountCents: child.tuitionAssignment.amountCents } : null })),
+};
+
+const expectedFamily: EditableFamilyRecord = {
+  ...family,
+  id: "preview-expected-family",
+  name: "Morgan Family",
+  billingEmail: "morgan.family@example.com",
+  guardians: [{ id: "preview-expected-guardian", fullName: "Taylor Morgan", email: "morgan.family@example.com", phone: "317-555-0191", relation: "Parent", userId: null }],
+  children: [{
+    id: "preview-expected-child",
+    fullName: "Baby Morgan",
+    preferredName: "Baby",
+    dateOfBirth: "1900-01-01T12:00:00.000Z",
+    ageGroup: "Infant",
+    enrollmentStatus: "pending",
+    startDate: "2027-06-01T12:00:00.000Z",
+    classroomId: null,
+    customFields: { birthStatus: "expected", expectedDueDate: "2027-03-15", dateOfBirthMissing: true },
+    photoVideoPermission: false,
+    fieldTripPermission: false,
+    allergies: [],
+    medicalNotes: [],
+    documents: [],
+    tuitionAssignment: null,
+  }],
+  billingAccount: {
+    ...family.billingAccount!,
+    id: "preview-expected-billing-account",
+    balanceCents: 0,
+    paymentMethodManagement: { ...family.billingAccount!.paymentMethodManagement, hasStripeCustomer: false, stripeCustomerId: null },
+  },
+};
+
+const prospectiveBillingFamily = {
+  id: expectedFamily.id,
+  centerId: expectedFamily.centerId,
+  name: expectedFamily.name,
+  accountCategory: "prospective" as const,
+  billingEmail: expectedFamily.billingEmail,
+  guardians: expectedFamily.guardians.map((guardian) => ({ id: guardian.id, fullName: guardian.fullName, email: guardian.email, userId: guardian.userId ?? null })),
+  billingAccount: {
+    id: "preview-expected-billing-account",
+    balanceCents: 0,
+    autopayPlaceholder: false,
+    openInvoices: [],
+    recentPayments: [],
+  },
+  children: expectedFamily.children.map((child) => ({
+    id: child.id,
+    fullName: child.fullName,
+    ageGroup: child.ageGroup,
+    enrollmentStatus: child.enrollmentStatus,
+    classroomId: null,
+    startDate: child.startDate ?? null,
+    careScheduleType: "unknown" as const,
+    scheduledDaysPerWeek: null,
+    tuitionAssignment: null,
+  })),
 };
 
 const terminalCenter = {
@@ -125,7 +184,7 @@ const migrationPreviewData: DataReadinessWorkspaceData = {
 export default async function UiPreviewPage({ searchParams }: { searchParams: Promise<{ view?: string; theme?: string; chrome?: string }> }) {
   if (process.env.NODE_ENV !== "development") notFound();
   const params = await searchParams;
-  const view: PreviewView = ["terminal", "closing", "inbox", "migration-director", "migration-executive", "declutter", "billing-declutter", "staff-declutter"].includes(params.view ?? "") ? params.view as PreviewView : "family";
+  const view: PreviewView = ["expected-child", "expected-intake", "terminal", "closing", "inbox", "migration-director", "migration-executive", "declutter", "billing-declutter", "prospective-billing", "staff-declutter"].includes(params.view ?? "") ? params.view as PreviewView : "family";
   const dark = params.theme === "dark";
   const showChrome = params.chrome !== "0";
   const nextTheme = dark ? "light" : "dark";
@@ -137,7 +196,7 @@ export default async function UiPreviewPage({ searchParams }: { searchParams: Pr
           <div className="mx-auto flex max-w-[96rem] flex-wrap items-center justify-between gap-3">
             <div><Badge>Honeyglass UI Preview</Badge><span className="ml-3 text-sm text-muted-foreground">Synthetic data only</span></div>
             <nav className="flex flex-wrap gap-2" aria-label="Preview screens">
-              {(["family", "terminal", "closing", "inbox", "migration-director", "migration-executive", "declutter", "billing-declutter", "staff-declutter"] as const).map((item) => <Link key={item} href={`/ui-preview?view=${item}&theme=${dark ? "dark" : "light"}`} className={buttonVariants({ variant: view === item ? "default" : "outline", size: "sm" })}>{item}</Link>)}
+              {(["family", "expected-child", "expected-intake", "terminal", "closing", "inbox", "migration-director", "migration-executive", "declutter", "billing-declutter", "prospective-billing", "staff-declutter"] as const).map((item) => <Link key={item} href={`/ui-preview?view=${item}&theme=${dark ? "dark" : "light"}`} className={buttonVariants({ variant: view === item ? "default" : "outline", size: "sm" })}>{item}</Link>)}
               <Link href={`/ui-preview?view=${view}&theme=${nextTheme}`} className={buttonVariants({ variant: "outline", size: "sm" })}>{dark ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}{dark ? "Light" : "Dark"}</Link>
             </nav>
           </div>
@@ -145,6 +204,20 @@ export default async function UiPreviewPage({ searchParams }: { searchParams: Pr
       ) : null}
       <main className="mx-auto max-w-[96rem] p-3 sm:p-5 lg:p-7">
         {view === "family" ? <FamilyRelationshipMapPreview family={family} /> : null}
+        {view === "expected-child" ? (
+          <FamilyRecordEditor
+            families={[expectedFamily]}
+            centers={[{ id: "preview-center", name: "Sunshine Academy", classrooms: [{ id: "preview-infants", name: "Busy Bees", ageGroup: "Infant" }] }]}
+            ageGroups={["Infant", "Toddlers", "Pre-K"]}
+            initialFamilyId={expectedFamily.id}
+            initialChildId="preview-expected-child"
+          />
+        ) : null}
+        {view === "expected-intake" ? (
+          <FamilyStudentIntakeForm
+            centers={[{ id: "preview-center", name: "Sunshine Academy", classrooms: [{ id: "preview-infants", name: "Busy Bees", ageGroup: "Infant" }] }]}
+          />
+        ) : null}
         {view === "terminal" ? <DirectorPaymentTerminalWorkspace families={[terminalFamily]} centers={[terminalCenter]} initialFamilyId={family.id} previewMode /> : null}
         {view === "closing" ? <EndOfDayClosingBoard data={closingData} /> : null}
         {view === "inbox" ? <DirectorReviewInbox items={inboxItems} /> : null}
@@ -202,6 +275,24 @@ export default async function UiPreviewPage({ searchParams }: { searchParams: Pr
               currentRole="CENTER_DIRECTOR"
               initialCenterId={terminalCenter.id}
               initialFamilyId={terminalFamily.id}
+            />
+          </div>
+        ) : null}
+        {view === "prospective-billing" ? (
+          <div className="space-y-5">
+            <header className="rounded-2xl border bg-card p-5">
+              <Badge>Director workspace</Badge>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight">Prospective family billing</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Synthetic pending-family data for verifying one-time enrollment fee preparation without activating tuition.</p>
+            </header>
+            <BillingWorkbench
+              families={[prospectiveBillingFamily]}
+              centers={[terminalCenter]}
+              products={[{ id: "preview-registration", name: "Registration fee", type: "registration_fee", amountCents: 15000 }]}
+              tuitionPlans={[{ id: "preview-plan", centerId: terminalCenter.id, name: "Infant Weekly", ageGroup: "Infant", cadence: "weekly", amountCents: 32500 }]}
+              currentRole="CENTER_DIRECTOR"
+              initialCenterId={terminalCenter.id}
+              initialFamilyId={prospectiveBillingFamily.id}
             />
           </div>
         ) : null}

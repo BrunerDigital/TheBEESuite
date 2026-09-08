@@ -48,8 +48,16 @@ import {
   isClosedEnrollmentStatus,
   isCurrentlyEnrolledChildRecord,
   isCurrentlyEnrolledStatus,
+  isEnrollmentPipelineStatus,
 } from "@/lib/enrollment-status";
 import { canSaveTuitionPlanAmount, normalizeBillingCadence, tuitionPlanRecordChanged } from "@/lib/billing-workflows";
+import {
+  childBirthCustomFields,
+  childBirthFormState,
+  expectedChildPlaceholderDate,
+  normalizeCalendarDateValue,
+  normalizeChildBirthStatus,
+} from "@/lib/expected-child-birth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 import { normalizeScheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
@@ -1089,7 +1097,7 @@ async function POSTHandler(request: NextRequest) {
       const scheduledDays = normalizeScheduledDaysPerWeek(requestedScheduleDays);
       const preserveLegacyPartTime = clean(requestedScheduleDays) === "legacy_part_time";
       const legacyCareScheduleType = clean(body.careScheduleType || body.fteScheduleType || body.fullTimePartTime).toLowerCase().replace(/[^a-z0-9]+/g, "_");
-      const nextCustomFields = { ...existingCustomFields };
+      let nextCustomFields = { ...existingCustomFields };
       if (scheduleDaysProvided) {
         if (scheduledDays) {
           const careScheduleType = scheduledDays === 5 ? "full_time" : "part_time";
@@ -1114,11 +1122,51 @@ async function POSTHandler(request: NextRequest) {
         nextCustomFields.careScheduleType = legacyCareScheduleType;
         nextCustomFields.fteScheduleType = legacyCareScheduleType;
       }
-      const baseCustomFields = Object.keys(nextCustomFields).length
-        ? nextCustomFields as Prisma.InputJsonObject
-        : undefined;
       const enrollmentStatus = clean(body.enrollmentStatus) || clean(body.status) || "enrolled";
-      const customFields = baseCustomFields;
+      const requestedBirthStatusText = clean(body.birthStatus);
+      const birthStatus = normalizeChildBirthStatus(requestedBirthStatusText);
+      if (requestedBirthStatusText && !birthStatus) {
+        return NextResponse.json({ ok: false, error: "Birth status must be born or expected." }, { status: 400 });
+      }
+      const dateOfBirthInput = body.dateOfBirth || body.expiresAt;
+      const dateOfBirthProvided = Boolean(clean(dateOfBirthInput));
+      const parsedDateOfBirth = parseDate(dateOfBirthInput);
+      if (dateOfBirthProvided && !parsedDateOfBirth) {
+        return NextResponse.json({ ok: false, error: "Date of birth must be a valid date." }, { status: 400 });
+      }
+      let childDateOfBirth = parsedDateOfBirth ?? existingChild?.dateOfBirth ?? null;
+      if (birthStatus === "expected") {
+        const expectedDueDate = normalizeCalendarDateValue(body.expectedDueDate);
+        if (!expectedDueDate) {
+          return NextResponse.json({ ok: false, error: "Expected due date is required for a child who is not born yet." }, { status: 400 });
+        }
+        if (!isEnrollmentPipelineStatus(enrollmentStatus)) {
+          return NextResponse.json(
+            { ok: false, error: "A child who is not born yet must stay pending, waitlisted, or tour scheduled." },
+            { status: 400 },
+          );
+        }
+        childDateOfBirth = expectedChildPlaceholderDate();
+        nextCustomFields = childBirthCustomFields(nextCustomFields, { birthStatus, expectedDueDate });
+        auditMetadata.expectedBirth = true;
+      } else if (birthStatus === "born") {
+        const existingBirth = childBirthFormState(existingChild);
+        if (existingBirth.birthStatus === "expected" && !dateOfBirthProvided) {
+          return NextResponse.json({ ok: false, error: "Enter the child's date of birth before marking them born." }, { status: 400 });
+        }
+        nextCustomFields = childBirthCustomFields(nextCustomFields, {
+          birthStatus,
+          actualDateOfBirthProvided: dateOfBirthProvided,
+        });
+      }
+      if (!childDateOfBirth) {
+        return NextResponse.json({ ok: false, error: "Date of birth is required unless the child is marked not born yet." }, { status: 400 });
+      }
+      const customFields = Object.keys(nextCustomFields).length
+        ? nextCustomFields as Prisma.InputJsonObject
+        : birthStatus === "born" && existingChild
+          ? Prisma.DbNull
+          : undefined;
       const scheduleNotes = clean(body.schedule);
       const nextSchedule = { ...jsonObject(existingChild?.schedule) };
       if ("schedule" in body) {
@@ -1144,7 +1192,7 @@ async function POSTHandler(request: NextRequest) {
         classroomId: isCurrentlyEnrolledStatus(enrollmentStatus) ? classroomId : null,
         fullName: clean(body.name),
         preferredName: clean(body.preferredName) || null,
-        dateOfBirth: parseDate(body.dateOfBirth || body.expiresAt) ?? existingChild?.dateOfBirth ?? new Date("2021-01-01T12:00:00.000Z"),
+        dateOfBirth: childDateOfBirth,
         ageGroup: clean(body.ageGroup) || clean(body.type) || "Preschool",
         enrollmentStatus,
         startDate: parseDate(body.startDate),

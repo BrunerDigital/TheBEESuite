@@ -23,6 +23,7 @@ import {
   type EnrollmentLifecycleCounts,
 } from "@/lib/enrollment-status";
 import { familiesForCompleteRecordEditing } from "@/lib/family-profile-visibility";
+import { childBirthFormState } from "@/lib/expected-child-birth";
 
 type IntakeCenter = { id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> };
 
@@ -43,6 +44,7 @@ export type ChildProfileVisibilityRecord = {
   fullName: string;
   preferredName: string | null;
   dateOfBirth: Date | string;
+  customFields?: unknown;
   ageGroup: string;
   enrollmentStatus: string;
   startDate: Date | string | null;
@@ -65,6 +67,14 @@ function formatDate(value: Date | string | null | undefined) {
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(value));
+}
+
+function childBirthLabel(child: Pick<ChildProfileVisibilityRecord, "dateOfBirth" | "customFields" | "enrollmentStatus">) {
+  const birth = childBirthFormState(child);
+  if (birth.birthStatus === "expected") {
+    return birth.expectedDueDate ? `Expected ${formatDate(`${birth.expectedDueDate}T12:00:00.000Z`)}` : "Expected child · due date not set";
+  }
+  return `DOB ${formatDate(child.dateOfBirth)}`;
 }
 
 function money(cents: number) {
@@ -811,7 +821,7 @@ export function ChildProfilesEnrollmentPanel({
                 <TableRow key={child.id}>
                   <TableCell>
                     <div className="font-medium">{child.fullName}</div>
-                    <div className="text-xs text-muted-foreground">{child.ageGroup} · DOB {formatDate(child.dateOfBirth)}</div>
+                    <div className="text-xs text-muted-foreground">{child.ageGroup} · {childBirthLabel(child)}</div>
                   </TableCell>
                   <TableCell>
                     <ChildProfilePhotoControl childId={child.id} childName={child.fullName} initialUrl={child.profilePhotoUrl} />

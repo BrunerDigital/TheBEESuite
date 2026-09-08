@@ -13,6 +13,7 @@ import {
   type RecordsExportSection,
 } from "@/lib/records-export-package";
 import { canAccessModule } from "@/lib/rbac";
+import { childBirthFormState } from "@/lib/expected-child-birth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -358,25 +359,30 @@ async function GETHandler(request: NextRequest) {
     {
       id: "children",
       title: "Children",
-      description: "Child profile, classroom assignment, permissions, and enrollment status.",
+      description: "Child profile, birth or expected-birth details, classroom assignment, permissions, and enrollment status.",
       filename: "04-children.csv",
-      headers: ["center", "family", "child", "preferredName", "dateOfBirth", "ageGroup", "classroom", "enrollmentStatus", "startDate", "photoVideoPermission", "fieldTripPermission", "sourceSystem", "externalId"],
+      headers: ["center", "family", "child", "preferredName", "birthStatus", "dateOfBirth", "expectedDueDate", "ageGroup", "classroom", "enrollmentStatus", "startDate", "photoVideoPermission", "fieldTripPermission", "sourceSystem", "externalId"],
       rows: families.flatMap((family) =>
-        family.children.map((child) => [
-          centerLabelById.get(family.centerId ?? "") ?? "Unassigned",
-          family.name,
-          child.fullName,
-          child.preferredName ?? "",
-          dateOnly(child.dateOfBirth),
-          child.ageGroup,
-          child.classroom?.name ?? "",
-          child.enrollmentStatus,
-          dateOnly(child.startDate),
-          yesNo(child.photoVideoPermission),
-          yesNo(child.fieldTripPermission),
-          child.sourceSystem ?? "",
-          child.externalId ?? "",
-        ]),
+        family.children.map((child) => {
+          const birth = childBirthFormState(child);
+          return [
+            centerLabelById.get(family.centerId ?? "") ?? "Unassigned",
+            family.name,
+            child.fullName,
+            child.preferredName ?? "",
+            birth.birthStatus,
+            birth.dateOfBirth,
+            birth.expectedDueDate,
+            child.ageGroup,
+            child.classroom?.name ?? "",
+            child.enrollmentStatus,
+            dateOnly(child.startDate),
+            yesNo(child.photoVideoPermission),
+            yesNo(child.fieldTripPermission),
+            child.sourceSystem ?? "",
+            child.externalId ?? "",
+          ];
+        }),
       ),
     },
     {

@@ -77,6 +77,16 @@ Do not create a second household for a sibling.
 8. Wait for the saved confirmation, then reselect the family and verify both children are listed.
 9. Set up tuition separately for the new child. Sibling tuition is stored as one assignment per child and then added into the family weekly total.
 
+### If the child is not born yet
+
+1. In `Add Family, Parent + Child` or the saved child profile, select `Child not born yet`.
+2. Enter the `Expected due date`, keep the status `pending` or `waitlisted`, and enter the planned start date if known.
+3. Save the child. Do not enter an estimated date in `Date of birth` and do not mark the child enrolled to create a fee.
+4. To invoice an approved enrollment fee, open `Billing & invoices`, choose the family labeled `Pending / waitlisted`, select `Prepare Enrollment Fee`, then enter and confirm the exact amount and due date.
+5. After birth, return to the child profile, clear `Child not born yet`, and enter the actual date of birth.
+
+The enrollment fee is one invoice only. It does not schedule tuition, enroll the child, enable autopay, or submit a payment.
+
 ## 4. Finish the Family's Safety and Contact Record
 
 Creating the family is only the first pass. Complete the remaining sections before staff rely on the record.

@@ -85,10 +85,12 @@ import {
   closedEnrollmentChildWhere,
   currentlyEnrolledChildWhere,
   currentlyEnrolledStatusValues,
+  prospectiveEnrollmentChildWhere,
   isCurrentlyEnrolledChildRecord,
   isCurrentlyEnrolledStatus,
   summarizeEnrollmentLifecycleCounts,
 } from "@/lib/enrollment-status";
+import { billingFamilyAccountCategory } from "@/lib/prospective-family-billing";
 import { SCHOOL_DASHBOARD_LIST_LIMIT } from "@/lib/dashboard-query-limits";
 import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { invoiceBelongsToFteWeek } from "@/lib/fte-billing-period";
@@ -3802,7 +3804,12 @@ async function renderLivePage(
     const workbenchFamilyWhere: Prisma.FamilyWhereInput = {
       AND: [
         { centerId: scopedCenterIds },
-        currentOrOutstandingFamilyWhere(),
+        {
+          OR: [
+            currentOrOutstandingFamilyWhere(),
+            { children: { some: prospectiveEnrollmentChildWhere() } },
+          ],
+        },
       ],
     };
     const [
@@ -3987,7 +3994,12 @@ async function renderLivePage(
             },
           },
           children: {
-            where: currentlyEnrolledChildWhere(),
+            where: {
+              OR: [
+                currentlyEnrolledChildWhere(),
+                prospectiveEnrollmentChildWhere(),
+              ],
+            },
             orderBy: { fullName: "asc" },
             select: {
               id: true,
@@ -4206,7 +4218,7 @@ async function renderLivePage(
             currentRole: user.role,
             families: billingFamilies.map((family) => ({
               ...family,
-              accountCategory: family.children.length ? "current" as const : "past" as const,
+              accountCategory: billingFamilyAccountCategory(family.children),
               billingAccount: family.billingAccount
                 ? {
                     id: family.billingAccount.id,

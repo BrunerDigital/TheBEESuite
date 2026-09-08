@@ -36,6 +36,12 @@ import {
   parentVisibleBillingBalanceCents,
 } from "@/lib/parent-billing-visibility";
 import { applyFamilyBalancePaymentToOpenInvoices } from "@/lib/stripe-payment-application";
+import { currentlyEnrolledChildWhere, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
+import {
+  billingFamilyAccountCategory,
+  childTuitionEligibilityError,
+  singleInvoiceFamilyEligibilityError,
+} from "@/lib/prospective-family-billing";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -100,7 +106,7 @@ async function assertFamilyAccess(user: CurrentBillingUser, familyId: string) {
       id: true,
       centerId: true,
       name: true,
-      children: { select: { id: true, fullName: true, ageGroup: true, enrollmentStatus: true, customFields: true } },
+      children: { select: { id: true, fullName: true, ageGroup: true, enrollmentStatus: true, classroomId: true, customFields: true } },
     },
   });
   if (!family) return { ok: false as const, status: 404, error: "Family not found." };
@@ -190,6 +196,17 @@ async function createSingleInvoice(user: CurrentBillingUser, body: Record<string
   }
 
   const charge = chargeResult.charge;
+  const accountCategory = billingFamilyAccountCategory(familyAccess.family.children);
+  const familyEligibilityError = singleInvoiceFamilyEligibilityError(accountCategory, charge.chargeSource);
+  if (familyEligibilityError) {
+    return NextResponse.json({ ok: false, error: familyEligibilityError }, { status: 409 });
+  }
+  if (charge.chargeSource === "tuitionPlan" && child) {
+    const childEligibilityError = childTuitionEligibilityError(child);
+    if (childEligibilityError) {
+      return NextResponse.json({ ok: false, error: childEligibilityError }, { status: 409 });
+    }
+  }
   const dedupeKey = billingDedupeKey({
     familyId: familyAccess.family.id,
     chargeSource: charge.chargeSource,
@@ -266,6 +283,7 @@ async function createSingleInvoice(user: CurrentBillingUser, body: Record<string
       billingPeriod,
       chargeSource: charge.chargeSource,
       sourceId: charge.sourceId,
+      accountCategory,
     },
   });
 
@@ -292,9 +310,18 @@ async function createBatchInvoices(user: CurrentBillingUser, body: Record<string
   const batchTarget = normalizeBatchTarget(body.batchTarget);
   const enrollmentStatus = clean(body.enrollmentStatus) || "enrolled";
   const ageGroup = clean(body.ageGroup) || charge.ageGroup || "";
+  if (charge.chargeSource === "tuitionPlan" && !isAll(enrollmentStatus) && !isCurrentlyEnrolledStatus(enrollmentStatus)) {
+    return NextResponse.json(
+      { ok: false, error: "Tuition batches are limited to current enrollments with assigned classrooms. Use a product or custom charge for prospective-family fees." },
+      { status: 409 },
+    );
+  }
   const childWhere: Prisma.ChildWhereInput = {
     family: { is: { centerId: centerAccess.center.id } },
-    ...(isAll(enrollmentStatus) ? {} : { enrollmentStatus }),
+    ...(charge.chargeSource === "tuitionPlan"
+      ? currentlyEnrolledChildWhere()
+      : isAll(enrollmentStatus) ? {} : { enrollmentStatus }),
+    ...(charge.chargeSource === "tuitionPlan" && !isAll(enrollmentStatus) ? { enrollmentStatus } : {}),
     ...(isAll(ageGroup) ? {} : { ageGroup }),
   };
 

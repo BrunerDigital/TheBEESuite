@@ -496,7 +496,14 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   assert.doesNotMatch(periodCloseReconciliation, /\.findMany\(/);
   assert.match(route, /const approvedAt = decision === "approved" \? new Date\(\) : null;\s+if \(approvedAt\) await assertAgencyPeriodOpen\(tx, current\.centerId, approvedAt\);[\s\S]*ensureAgencyClaimReceivable/);
   assert.match(route, /const effectiveAt = claim\.approvedAt \?\? claim\.createdAt;[\s\S]*?updatedAt changes after payments[\s\S]*?await assertAgencyPeriodOpen\(tx, claim\.centerId, effectiveAt\)|updatedAt changes after payments[\s\S]*?const effectiveAt = claim\.approvedAt \?\? claim\.createdAt;[\s\S]*?await assertAgencyPeriodOpen\(tx, claim\.centerId, effectiveAt\)/);
-  assert.match(route, /agencyLedgerRunningBalances\(entries, finalBalanceCents - entryTotalCents\)/);
+  const legacyBalanceRecalculation = route.slice(
+    route.indexOf("async function recalculateLegacyFamilyLedgerBalances"),
+    route.indexOf("async function applyLegacyFamilyLedgerSettlement"),
+  );
+  assert.match(legacyBalanceRecalculation, /SUM\("amountCents"::bigint\) OVER \(\)/);
+  assert.match(legacyBalanceRecalculation, /ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW/);
+  assert.match(legacyBalanceRecalculation, /UPDATE "LedgerEntry" AS ledger_entry[\s\S]*IS DISTINCT FROM balances\."balanceAfterCents"/);
+  assert.doesNotMatch(legacyBalanceRecalculation, /ledgerEntry\.findMany|ledgerEntry\.update|for \(/);
   assert.match(route, /"receivedBeforeEnd"[\s\S]*"reversalBeforeEnd"[\s\S]*"missingLedgerEventCount"/);
   assert.match(route, /CASE WHEN "receivedBeforeEnd"[\s\S]*CASE WHEN "reversalBeforeEnd"/);
   assert.match(route, /WITH scoped_adjustments AS[\s\S]*"adjustmentBeforeEnd"[\s\S]*"reversalBeforeEnd"[\s\S]*applicable_adjustments/);

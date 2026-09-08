@@ -32,7 +32,6 @@ import {
   agencyAllocationFingerprint,
   agencyBatchFingerprint,
   agencyBatchStatus,
-  agencyLedgerRunningBalances,
   agencyRemittanceReferenceKey,
   agencyReversalEffectiveAt,
   agencyUtcCalendarRange,
@@ -1360,18 +1359,49 @@ type AgencyPostingClaim = AgencyLedgerClaimInput & {
 };
 
 async function recalculateLegacyFamilyLedgerBalances(tx: Prisma.TransactionClient, billingAccountId: string, finalBalanceCents: number) {
-  const entries = await tx.ledgerEntry.findMany({
-    where: { billingAccountId },
-    orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-    select: { id: true, amountCents: true, balanceAfterCents: true },
-  });
-  const entryTotalCents = entries.reduce((total, candidate) => total + candidate.amountCents, 0);
-  const runningBalances = agencyLedgerRunningBalances(entries, finalBalanceCents - entryTotalCents);
-  const existingBalanceById = new Map(entries.map((candidate) => [candidate.id, candidate.balanceAfterCents]));
-  for (const running of runningBalances) {
-    if (existingBalanceById.get(running.id) === running.balanceAfterCents) continue;
-    await tx.ledgerEntry.update({ where: { id: running.id }, data: { balanceAfterCents: running.balanceAfterCents } });
+  const [bounds] = await tx.$queryRaw<Array<{ minimumBalanceCents: bigint | null; maximumBalanceCents: bigint | null }>>`
+    WITH running AS (
+      SELECT
+        SUM("amountCents"::bigint) OVER () AS "entryTotalCents",
+        SUM("amountCents"::bigint) OVER (
+          ORDER BY "effectiveAt" ASC, "createdAt" ASC, id ASC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS "runningCents"
+      FROM "LedgerEntry"
+      WHERE "billingAccountId" = ${billingAccountId}
+    ), balances AS (
+      SELECT ${finalBalanceCents}::bigint - "entryTotalCents" + "runningCents" AS "balanceCents"
+      FROM running
+    )
+    SELECT MIN("balanceCents") AS "minimumBalanceCents", MAX("balanceCents") AS "maximumBalanceCents"
+    FROM balances
+  `;
+  if (
+    (bounds?.minimumBalanceCents !== null && bounds?.minimumBalanceCents !== undefined && bounds.minimumBalanceCents < BigInt(-POSTGRES_INT_MAX_CENTS - 1))
+    || (bounds?.maximumBalanceCents !== null && bounds?.maximumBalanceCents !== undefined && bounds.maximumBalanceCents > BigInt(POSTGRES_INT_MAX_CENTS))
+  ) {
+    throw new AgencyWorkflowError("This posting would exceed the supported family-ledger balance range. No financial entry was committed.", 409);
   }
+  await tx.$executeRaw`
+    WITH running AS (
+      SELECT id,
+        SUM("amountCents"::bigint) OVER () AS "entryTotalCents",
+        SUM("amountCents"::bigint) OVER (
+          ORDER BY "effectiveAt" ASC, "createdAt" ASC, id ASC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS "runningCents"
+      FROM "LedgerEntry"
+      WHERE "billingAccountId" = ${billingAccountId}
+    ), balances AS (
+      SELECT id, (${finalBalanceCents}::bigint - "entryTotalCents" + "runningCents")::integer AS "balanceAfterCents"
+      FROM running
+    )
+    UPDATE "LedgerEntry" AS ledger_entry
+    SET "balanceAfterCents" = balances."balanceAfterCents"
+    FROM balances
+    WHERE ledger_entry.id = balances.id
+      AND ledger_entry."balanceAfterCents" IS DISTINCT FROM balances."balanceAfterCents"
+  `;
 }
 
 async function applyLegacyFamilyLedgerSettlement(tx: Prisma.TransactionClient, input: {

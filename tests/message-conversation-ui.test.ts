@@ -95,11 +95,15 @@ test("director send and suggestion APIs enforce the same primary-school scope as
   assert.match(auth, /function messageCenterIdsForUser[\s\S]*?UserRole\.CENTER_DIRECTOR[\s\S]*?UserRole\.ASSISTANT_DIRECTOR[\s\S]*?\[user\.primaryCenterId\]/);
   assert.match(sendRoute, /const messageCenterIds = messageCenterIdsForUser\(user\)/);
   assert.match(sendRoute, /family\.centerId && messageCenterIds\.includes\(family\.centerId\)/);
+  assert.doesNotMatch(sendRoute, /const hasCenterAccess = canAccessAllCenters\(user\)/);
   assert.match(sendRoute, /children: \{ some: currentlyEnrolledChildWhere\(\) \}/);
   assert.match(sendRoute, /requestedCenterIds\.some\(\(centerId\) => !messageCenterIds\.includes\(centerId\)\)/);
+  assert.match(sendRoute, /centerId: \{ in: scopedCenterIds\.length \? scopedCenterIds : \["__no_authorized_center__"\] \}/);
   assert.match(suggestionsRoute, /const messageCenterIds = messageCenterIdsForUser\(user\)/);
   assert.match(suggestionsRoute, /family\.centerId && messageCenterIds\.includes\(family\.centerId\)/);
+  assert.doesNotMatch(suggestionsRoute, /const hasCenterAccess = canAccessAllCenters\(user\)/);
   assert.match(suggestionsRoute, /children: \{ some: currentlyEnrolledChildWhere\(\) \}/);
+  assert.match(suggestionsRoute, /centerId: \{ in: scopedCenterIds\.length \? scopedCenterIds : \["__no_authorized_center__"\] \}/);
 });
 
 test("parent portal presents messaging as one responsive school conversation", () => {

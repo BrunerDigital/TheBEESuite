@@ -68,10 +68,6 @@ function normalizedName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function digits(value: string | null | undefined) {
-  return clean(value).replace(/\D/g, "");
-}
-
 function number(value: unknown) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -243,9 +239,6 @@ export function evaluateParentInvitationReadiness(
   }
   if (!guardianEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guardianEmail)) {
     blockers.push("The guardian needs a valid email address.");
-  }
-  if (digits(input.guardian.phone).length < 4) {
-    blockers.push("The guardian needs a phone number with at least four digits for the initial kiosk PIN.");
   }
   if (!input.family.children.length) {
     blockers.push("The family has no linked child records.");

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, UserRole } from "@prisma/client";
-import { canAccessAllCenters, getCurrentUser, isParentGuardian } from "@/lib/auth";
+import { getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { canSubmitDocumentForReview } from "@/lib/portal-guardrails";
@@ -28,6 +28,9 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (!isParentGuardian(user)) {
+    return NextResponse.json({ ok: false, error: "Parent or guardian access is required." }, { status: 403 });
   }
 
   const { id } = await context.params;
@@ -78,16 +81,15 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
 
   const centerId = family.centerId ?? document.child?.classroom?.centerId ?? null;
   const isLinkedGuardian = family.guardians.some((guardian) => guardian.userId === user.id);
-  const hasCenterAccess = canAccessAllCenters(user) || Boolean(centerId && user.centerIds.includes(centerId));
   const guard = canSubmitDocumentForReview({
     status: document.status,
     isLinkedGuardian,
-    hasCenterAccess,
+    hasCenterAccess: false,
   });
   if (!guard.ok) {
     return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
   }
-  if (isParentGuardian(user) && !isLinkedGuardian) {
+  if (!isLinkedGuardian) {
     return NextResponse.json({ ok: false, error: "You do not have access to this document." }, { status: 403 });
   }
 

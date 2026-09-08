@@ -435,7 +435,7 @@ function VisualFlow({ guide }: { guide: ResourceGuide }) {
             <div className="grid size-10 place-items-center rounded-lg bg-amber-300 text-slate-950">
               <item.icon className="size-5" />
             </div>
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Step {index + 1}</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Step {index + 1}</div>
           </div>
           <div className="mt-4 text-base font-semibold text-white">{item.label}</div>
           <p className="mt-1 text-sm leading-6 text-slate-300">{item.detail}</p>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian, messageCenterIdsForUser } from "@/lib/auth";
+import { canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian, messageCenterIdsForUser } from "@/lib/auth";
 import {
   broadcastSegmentSummary,
   familyMatchesBroadcastSegment,
@@ -104,17 +104,15 @@ async function POSTHandler(request: NextRequest) {
     if (!senderCanManageOperations || senderIsParent) {
       return NextResponse.json({ ok: false, error: "Broadcast suggestions require school operations access." }, { status: 403 });
     }
-    if (!canAccessAllCenters(user) && segment.centerIds.some((centerId) => !messageCenterIds.includes(centerId))) {
+    if (segment.centerIds.some((centerId) => !messageCenterIds.includes(centerId))) {
       return NextResponse.json({ ok: false, error: "One or more selected centers are outside your access scope." }, { status: 403 });
     }
-    const scopedCenterIds = canAccessAllCenters(user)
-      ? segment.centerIds
-      : segment.centerIds.length
-        ? segment.centerIds.filter((centerId) => messageCenterIds.includes(centerId))
-        : messageCenterIds;
+    const scopedCenterIds = segment.centerIds.length
+      ? segment.centerIds.filter((centerId) => messageCenterIds.includes(centerId))
+      : messageCenterIds;
     const candidates = await prisma.family.findMany({
       where: {
-        ...(scopedCenterIds.length ? { centerId: { in: scopedCenterIds } } : {}),
+        centerId: { in: scopedCenterIds.length ? scopedCenterIds : ["__no_authorized_center__"] },
         children: {
           some: segment.classroomIds.length
             ? { AND: [currentlyEnrolledChildWhere(), { classroomId: { in: segment.classroomIds } }] }
@@ -147,7 +145,7 @@ async function POSTHandler(request: NextRequest) {
     }
 
     const isFamilyGuardian = family.guardians.some((guardian) => guardian.userId === user.id);
-    const hasCenterAccess = canAccessAllCenters(user) || Boolean(family.centerId && messageCenterIds.includes(family.centerId));
+    const hasCenterAccess = Boolean(family.centerId && messageCenterIds.includes(family.centerId));
     let hasClassroomAccess = false;
     if (!senderCanManageOperations && senderCanManageClassroom && !isFamilyGuardian) {
       const staffProfile = await prisma.staffProfile.findUnique({

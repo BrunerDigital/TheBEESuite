@@ -280,7 +280,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
             </div>
             <div className="space-y-1">
               <Label htmlFor={controlId("check-in-pin")}>4 digit kiosk PIN</Label>
-              <Input id={controlId("check-in-pin")} name="checkInPin" value={checkInPin} onInput={(event) => setCheckInPin(event.currentTarget.value.replace(/\D/g, "").slice(0, 4))} placeholder="Defaults to last 4 of phone" inputMode="numeric" autoComplete="off" {...accessibilityFor("checkInPin")} />
+              <Input id={controlId("check-in-pin")} name="checkInPin" value={checkInPin} onInput={(event) => setCheckInPin(event.currentTarget.value.replace(/\D/g, "").slice(0, 4))} placeholder="Choose a private 4 digit PIN" inputMode="numeric" autoComplete="off" {...accessibilityFor("checkInPin")} />
               {errorFor("checkInPin")}
             </div>
             <div className="space-y-1 md:col-span-2">

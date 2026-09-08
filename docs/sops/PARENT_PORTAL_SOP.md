@@ -33,7 +33,7 @@ The BEE Suite parent portal gives families one place to view child updates, mess
 1. Open the secure invitation from the school or go to `https://thebeesuite.io/parents`.
 2. Sign in with the exact personal guardian email stored by the school. A new account uses the password from the invitation; an existing account keeps its current password.
 3. On the setup screen, confirm the displayed school, family, guardian name, phone, and linked children before continuing.
-4. Confirm or change the 4 digit kiosk PIN. When the school did not set one, the initial PIN is based on the last four digits of the guardian phone.
+4. Choose or confirm a private 4 digit kiosk PIN that only authorized adults know.
 5. Select `Finish setup and open portal`.
 6. Use the portal sections provided for the family: overview, children, daily reports, activities, photos/media, messages, documents/forms, incidents, billing/payment methods, and settings. A section appears only when the role and school configuration allow it.
 

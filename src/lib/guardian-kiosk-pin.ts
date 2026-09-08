@@ -1,8 +1,6 @@
-import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
-
-export function defaultGuardianPinFromPhone(phone: unknown) {
-  const digits = typeof phone === "string" ? phone.replace(/\D/g, "") : "";
-  return normalizePin(digits.slice(-4));
+export function defaultGuardianPinFromPhone(_phone: unknown) {
+  void _phone;
+  return "";
 }
 
 export function defaultGuardianPinUpdate({
@@ -16,12 +14,9 @@ export function defaultGuardianPinUpdate({
   setById: string;
   now?: Date;
 }) {
-  const pin = defaultGuardianPinFromPhone(phone);
-  if (!pin) return null;
-
-  return {
-    checkInPinHash: hashGuardianPin(guardianId, pin),
-    checkInPinSetAt: now,
-    checkInPinSetById: setById,
-  };
+  void guardianId;
+  void phone;
+  void setById;
+  void now;
+  return null;
 }

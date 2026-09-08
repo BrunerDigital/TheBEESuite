@@ -41,8 +41,11 @@ function kioskRequest(path: string, body: Record<string, unknown>) {
 }
 
 function mockRateLimit(t: TestContext) {
+  const resetAt = new Date(Date.now() + 60_000);
+  mockPrismaMethod(t, prisma.rateLimitBucket, "updateMany", async () => ({ count: 1 }));
+  mockPrismaMethod(t, prisma.rateLimitBucket, "findUniqueOrThrow", async () => ({ count: 1, resetAt }));
   mockPrismaMethod(t, prisma.rateLimitBucket, "findUnique", async () => null);
-  mockPrismaMethod(t, prisma.rateLimitBucket, "upsert", async () => ({}));
+  mockPrismaMethod(t, prisma.rateLimitBucket, "create", async () => ({}));
 }
 
 function selectedChildWhere(args: unknown[]) {

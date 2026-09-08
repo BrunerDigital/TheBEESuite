@@ -4,23 +4,37 @@ Status date: September 8, 2026 (America/New_York)
 
 This is the current release-candidate truth record. `Verified in production` means the named behavior was exercised against the canonical deployment; a public HTTP 200 is not treated as authenticated workflow evidence. `iOS verified` means execution in Xcode Simulator or on a physical device, not a browser-sized preview.
 
+## Verified release evidence
+
+- Protected product PR: [#325](https://github.com/BrunerDigital/TheBEESuite/pull/325), merged September 8, 2026 at `7bed3daeb796a5daa38f7e50882b95f031446adf`.
+- Exact production deployment: `dpl_HJkcNCX25ZiN6nJY1v2FbHfEGTfZ`, Ready, built from `7bed3daeb796a5daa38f7e50882b95f031446adf`.
+- Canonical aliases: `https://thebeesuite.io`, `https://www.thebeesuite.io`, and `https://the-bee-suite-beta.vercel.app` resolve to that deployment; `www` redirects to the canonical apex.
+- Production build gate passed lint, typecheck, 1,804 tests (1,799 passed and 5 intentionally skipped), Next.js 16.3.4 compilation, and generation of all 166 static pages.
+- `GET https://thebeesuite.io/api/health` returned HTTP 200 with `ok: true` and `database: connected` after the deployment.
+- Public production routes `/`, `/parents`, `/teachers`, `/privacy`, `/terms`, `/eula`, `/support`, `/resources`, and `/registration` returned HTTP 200.
+- Production Playwright smoke passed the public/protected route checks, inquiry embed/API and CORS checks, and Parent/Teacher/Privacy/Support rendering without horizontal overflow at 390 x 844, 768 x 1024, and 1440 x 900.
+- Unauthenticated changed-route probes failed closed: message reporting, Asset Hub signed-upload/finalize, AI command, and privacy review returned 401; forged Twilio inbound/status callbacks returned 403. No live mutation or message was performed.
+- Vercel error-level and HTTP 500 runtime-log queries returned no entries in the post-deployment window. The full Vercel build log ends `Deployment completed` and `Ready`.
+- Post-release verification PR [#326](https://github.com/BrunerDigital/TheBEESuite/pull/326) pins the patched development-only `js-yaml` 4.3.2 dependency and makes redirect-aware, multi-viewport production smoke checking deterministic. Its release candidate reports zero known npm vulnerabilities.
+- No approved synthetic production credentials or saved authenticated BEE Suite browser session were available. Accordingly, authenticated production workflows are not claimed as verified; automated authorization/isolation coverage and fail-closed production boundary probes are the available evidence.
+
 ## Product release candidate
 
 | Area | Built/configured | Locally tested | Verified in production | iOS verified | External gate or remaining evidence |
 | --- | --- | --- | --- | --- | --- |
-| Public site, inquiry, legal, privacy, support | Yes | Responsive/smoke checks | Current public routes healthy; release-candidate recheck required after deployment | Not applicable | None after deployment verification |
-| Authentication, invitations, recovery, session boundaries | Yes | Automated authorization and route coverage | Safe authenticated release-candidate verification required | Simulator/device required for continuity and password-manager behavior | Do not mutate real identities or send invitations |
-| Parent portal, profiles, reports, media, documents, incidents | Yes | Automated tests plus synthetic responsive UI | Safe authenticated release-candidate verification required | Simulator/device required | Final fake reviewer account validation on production |
-| Teacher classroom, roster, attendance, activities, media, notes | Yes | Automated tests plus synthetic responsive UI | Safe authenticated release-candidate verification required | Simulator/device required | Final fake reviewer account validation on production |
-| Messaging and announcements | Tenant/current-family scoped; unsafe content screening and report workflow added | Focused regression tests pass | Safe authenticated release-candidate verification required | Simulator/device required | No real bulk sends during verification |
+| Public site, inquiry, legal, privacy, support | Yes | Responsive/smoke checks | Verified on canonical production across public routes, CORS checks, and three viewport classes | Not applicable | None |
+| Authentication, invitations, recovery, session boundaries | Yes | Automated authorization and route coverage | Protected routes fail closed; authenticated UI not exercised because no approved synthetic session was available | Simulator/device required for continuity and password-manager behavior | Do not mutate real identities or send invitations |
+| Parent portal, profiles, reports, media, documents, incidents | Yes | Automated tests plus synthetic responsive UI | Public entry verified; authenticated workflow not exercised | Simulator/device required | Validate the prepared fake reviewer account without committing or sharing its password |
+| Teacher classroom, roster, attendance, activities, media, notes | Yes | Automated tests plus synthetic responsive UI | Public entry verified; authenticated workflow not exercised | Simulator/device required | Validate the prepared fake reviewer account without committing or sharing its password |
+| Messaging and announcements | Tenant/current-family scoped; unsafe content screening and report workflow added | Focused regression tests pass | Unauthenticated report boundary returned 401; no real send performed | Simulator/device required | Authenticated fake-data verification; no real bulk sends |
 | Billing, Checkout, connected-account boundaries, webhooks | Retry/idempotency and global telemetry controls hardened | Focused Stripe regressions pass | Read-only provider and production-log verification required | External Checkout return requires device test | No charges, refunds, payouts, or account changes |
 | Operations, reporting, FTE, executive and multi-location scope | Yes; platform telemetry isolated | Focused authorization tests pass | Release-candidate verification required | Not a v1 native target | One production function repair requires separately authorized migration |
-| Asset Hub and file storage | Private storage, content binding, size/type/quota checks | Focused upload regressions pass | Safe upload verification with synthetic fixture required | Picker/upload interruption requires device test | Supabase policies/config remain read-only unless separately approved |
-| Twilio/SMS callbacks | Tenant-scoped credential and guardian attribution | Focused inbound/status tests pass | Read-only log/config verification required | Not applicable | No real SMS sends |
+| Asset Hub and file storage | Private storage, content binding, size/type/quota checks | Focused upload regressions pass | Unauthenticated signed-upload/finalize boundaries returned 401; no live object created | Picker/upload interruption requires device test | Authenticated synthetic upload; Supabase policy/config changes remain separately gated |
+| Twilio/SMS callbacks | Tenant-scoped credential and guardian attribution | Focused inbound/status tests pass | Forged production inbound/status callbacks returned 403 | Not applicable | No real SMS sends |
 | AI summaries and suggestions | Tenant/center scope enforced | Focused regressions pass | Safe authenticated release-candidate verification required | Not applicable | Provider availability is operational, not a store gate |
-| Account deletion | Parent request plus platform-owner review/execution workflow; provider-first and recoverable | Focused policy/concurrency/recovery tests pass | Safe non-destructive UI verification required | Simulator/device request-path test required | Never execute against a real account during QA |
+| Account deletion | Parent request plus platform-owner review/execution workflow; provider-first and recoverable | Focused policy/concurrency/recovery tests pass | Unauthenticated review boundary returned 401; no account changed | Simulator/device request-path test required | Authenticated fake-account rehearsal; never execute against a real account during QA |
 | ProCare import/cutover | Existing guarded tooling retained | Existing full suite covers import paths | No cutover performed | Not applicable | Cutover, backfill, and archival remain separate business gates |
-| Observability, health, recovery | Health, deployment checks, audit history and runbooks present | Ops readiness checks | Deployment Ready, aliases, health, logs required after merge | Not applicable | Production backup/restore drills are operational evidence, not an App Review requirement |
+| Observability, health, recovery | Health, deployment checks, audit history and runbooks present | Ops readiness checks | Exact commit/deployment Ready, aliases and database health verified; post-release error/500 log queries empty | Not applicable | Production backup/restore drills are operational evidence, not an App Review requirement |
 
 ## Native target truth
 

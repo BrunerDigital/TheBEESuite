@@ -36,10 +36,10 @@ const loginCopy: Record<LoginPortal, {
   helpText: string;
 }> = {
   general: {
-    heroTitle: "Choose your sign-in page",
-    heroBody: "Directors, teachers, and parents each have a sign-in page for their daily work. Choose the one that matches your account.",
+    heroTitle: "One suite, a clear workspace for every role",
+    heroBody: "Choose the sign-in page that matches the work you do. Your role and assigned locations determine what opens after sign-in.",
     heroFooter: "After sign-in, your account opens only the information and tools assigned to you.",
-    heroItems: ["Directors", "Teachers", "Parents"],
+    heroItems: ["Company & regional", "School & billing", "Classroom & family"],
     cardTitle: "Sign in to The BEE Suite",
     cardDescription: "Use the sign-in link your school or organization gave you. If you are not sure which page to use, you can sign in here.",
     emailLabel: "Email or username",
@@ -96,6 +96,13 @@ const loginCopy: Record<LoginPortal, {
     helpText: "Executive users land in the corporate workspace after sign-in. School-only users are routed back to their own portal.",
   },
 };
+
+const rolePortalLinks = [
+  { href: "/executives", title: "Company and regional", roles: "Platform owners, brand admins, regional managers, and read-only auditors" },
+  { href: "/directors", title: "School leadership and billing", roles: "Directors, assistant directors, and billing administrators" },
+  { href: "/teachers", title: "Teachers", roles: "Classroom staff and daily care workflows" },
+  { href: "/parents", title: "Families and pickup", roles: "Parents, guardians, and authorized pickup users" },
+] as const;
 
 export function LoginForm({ portal: portalInput = "general", defaultNextPath }: LoginFormProps = {}) {
   const router = useRouter();
@@ -182,6 +189,24 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {portal === "general" ? (
+              <nav aria-label="Choose a role-specific sign-in page" className="mb-5 grid gap-2 sm:grid-cols-2">
+                {rolePortalLinks.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    prefetch={false}
+                    className="group flex min-h-20 items-start justify-between gap-3 rounded-lg border bg-slate-50 p-3 text-left transition-colors hover:border-amber-400 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-950">{item.title}</span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-600">{item.roles}</span>
+                    </span>
+                    <ArrowRight className="mt-0.5 size-4 shrink-0 text-slate-500 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  </Link>
+                ))}
+              </nav>
+            ) : null}
             <form className="flex flex-col gap-4" onSubmit={submit} aria-busy={isPending} aria-describedby="login-description">
               {resetStatus === "complete" ? (
                 <Alert role="status" className="border-emerald-500/30 bg-emerald-500/10">
@@ -259,10 +284,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
             ) : (
               <div className="mt-5 grid gap-3">
                 <div className="rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                  Parents and guardians use the email and password from their school invitation.{" "}
-                  <Link href="/parents" prefetch={false} className="inline-flex items-center font-semibold text-slate-950 hover:underline">
-                    Open parent portal login <ArrowRight className="ml-1 size-3.5" />
-                  </Link>
+                  Not sure which role you have? Use the sign-in link in your invitation or ask your school or company administrator. Support can also help route you without changing your access.
                 </div>
                 <div className="rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-600">
                   New to The BEE Suite?{" "}

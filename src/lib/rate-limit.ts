@@ -53,39 +53,61 @@ export function retryAfterSeconds(resetAt: number) {
 export async function checkPersistentRateLimit(options: RateLimitOptions): Promise<RateLimitResult> {
   const now = Date.now();
   const resetAt = now + options.windowMs;
+  const nowDate = new Date(now);
 
   try {
     const { prisma } = await import("@/lib/prisma");
-    const current = await prisma.rateLimitBucket.findUnique({
-      where: { key: options.key },
-      select: { key: true, count: true, resetAt: true },
-    });
-
-    if (!current || current.resetAt.getTime() <= now) {
-      await prisma.rateLimitBucket.upsert({
-        where: { key: options.key },
-        update: { count: 1, resetAt: new Date(resetAt) },
-        create: { key: options.key, count: 1, resetAt: new Date(resetAt) },
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const incremented = await prisma.rateLimitBucket.updateMany({
+        where: {
+          key: options.key,
+          resetAt: { gt: nowDate },
+          count: { lt: options.limit },
+        },
+        data: { count: { increment: 1 } },
       });
-      return { ok: true, remaining: Math.max(options.limit - 1, 0), resetAt };
+      if (incremented.count === 1) {
+        const updated = await prisma.rateLimitBucket.findUniqueOrThrow({
+          where: { key: options.key },
+          select: { count: true, resetAt: true },
+        });
+        return {
+          ok: true,
+          remaining: Math.max(options.limit - updated.count, 0),
+          resetAt: updated.resetAt.getTime(),
+        };
+      }
+
+      const current = await prisma.rateLimitBucket.findUnique({
+        where: { key: options.key },
+        select: { count: true, resetAt: true },
+      });
+      if (current && current.resetAt.getTime() > now) {
+        return { ok: false, remaining: 0, resetAt: current.resetAt.getTime() };
+      }
+
+      if (current) {
+        const reset = await prisma.rateLimitBucket.updateMany({
+          where: { key: options.key, resetAt: { lte: nowDate } },
+          data: { count: 1, resetAt: new Date(resetAt) },
+        });
+        if (reset.count === 1) {
+          return { ok: true, remaining: Math.max(options.limit - 1, 0), resetAt };
+        }
+        continue;
+      }
+
+      try {
+        await prisma.rateLimitBucket.create({
+          data: { key: options.key, count: 1, resetAt: new Date(resetAt) },
+        });
+        return { ok: true, remaining: Math.max(options.limit - 1, 0), resetAt };
+      } catch (error) {
+        if (!error || typeof error !== "object" || !("code" in error) || error.code !== "P2002") throw error;
+      }
     }
 
-    const currentResetAt = current.resetAt.getTime();
-    if (current.count >= options.limit) {
-      return { ok: false, remaining: 0, resetAt: currentResetAt };
-    }
-
-    const updated = await prisma.rateLimitBucket.update({
-      where: { key: options.key },
-      data: { count: { increment: 1 } },
-      select: { count: true, resetAt: true },
-    });
-
-    return {
-      ok: true,
-      remaining: Math.max(options.limit - updated.count, 0),
-      resetAt: updated.resetAt.getTime(),
-    };
+    return { ok: false, remaining: 0, resetAt };
   } catch {
     return checkRateLimit(options);
   }

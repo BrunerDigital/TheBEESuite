@@ -170,7 +170,7 @@ test("conflicting guardian identities sharing an email are blocked", () => {
   assert.match(result.blockers.join(" "), /conflicting identities/);
 });
 
-test("missing child and phone block before account or email changes", () => {
+test("missing child blocks while a guardian can choose a private PIN during setup", () => {
   const input = readyInput();
   input.guardian.phone = "12";
   input.guardian.externalId = null;
@@ -178,7 +178,7 @@ test("missing child and phone block before account or email changes", () => {
 
   const result = evaluateParentInvitationReadiness(input);
   assert.equal(result.ok, false);
-  assert.match(result.blockers.join(" "), /phone number/);
+  assert.doesNotMatch(result.blockers.join(" "), /phone number/);
   assert.match(result.blockers.join(" "), /no linked child/);
 });
 

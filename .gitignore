@@ -60,6 +60,7 @@ sendgrid.env
 skills-lock.json
 
 # Generated local AI/tool skill exports
+/.firecrawl/
 /.adal/
 /.aider-desk/
 /.augment/

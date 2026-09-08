@@ -105,7 +105,7 @@ export function buildParentPortalInvitationText({
       ? "   You can keep this password or choose a private password anytime from Parent Portal settings."
       : null,
     "3. Confirm that your name, phone number, children, and school are correct. Stop and contact the school before continuing if anything is wrong.",
-    "4. Confirm or change your 4 digit kiosk PIN. The initial PIN is the last 4 digits of your phone number.",
+    "4. Choose or confirm a private 4 digit kiosk PIN that only authorized adults know.",
     "5. Add the parent portal to your phone's home screen:",
     "   iPhone or iPad: open the portal in Safari, tap Share, then tap Add to Home Screen.",
     "   Android: open the portal in Chrome, tap the menu, then tap Add to Home screen or Install app.",
@@ -180,7 +180,7 @@ export function buildParentPortalInvitationHtml({
                 <ol style="padding-left:22px;font-size:15px;line-height:1.65">
                   <li>Sign in with the email shown above.</li>
                   <li>Confirm your name, phone number, children, and school. Stop and contact the school if anything is wrong.</li>
-                  <li>Confirm or change your 4 digit kiosk PIN. The initial PIN is the last 4 digits of your phone number.</li>
+                  <li>Choose or confirm a private 4 digit kiosk PIN that only authorized adults know.</li>
                   <li>Finish setup and open the Parent Portal.</li>
                   <li><strong>Add the Parent Portal to your home screen:</strong> on iPhone or iPad, open it in Safari, tap Share, then Add to Home Screen. On Android, open it in Chrome, tap the menu, then Add to Home screen or Install app.</li>
                   ${paymentStep}

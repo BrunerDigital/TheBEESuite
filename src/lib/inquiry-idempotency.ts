@@ -10,7 +10,7 @@ function phoneDigits(value: string) {
 
 export const INQUIRY_DEDUPE_WINDOW_MS = 15 * 60 * 1000;
 
-export function inquirySubmissionIdempotencyKey({
+function inquiryFingerprint({
   centerId,
   parentName,
   email,
@@ -23,10 +23,22 @@ export function inquirySubmissionIdempotencyKey({
   phone: string;
   program: string;
 }) {
-  const fingerprint = createHash("sha256")
+  return createHash("sha256")
     .update([centerId, clean(parentName), clean(email), phoneDigits(phone), clean(program)].join("|"))
-    .digest("hex")
-    .slice(0, 32);
+    .digest("hex");
+}
+
+type InquiryFingerprintInput = Parameters<typeof inquiryFingerprint>[0];
+
+export function inquirySubmissionIdempotencyKey(input: InquiryFingerprintInput) {
+  const fingerprint = inquiryFingerprint(input).slice(0, 32);
 
   return `website-inquiry:${fingerprint}`;
+}
+
+export function inquiryTurnstileIdempotencyKey(input: InquiryFingerprintInput, token: string) {
+  const hex = createHash("sha256")
+    .update(`${inquiryFingerprint(input)}|${token.trim()}`)
+    .digest("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }

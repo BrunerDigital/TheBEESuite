@@ -9,9 +9,13 @@ import { normalizeInquiryProgram } from "@/lib/inquiry-programs";
 import {
   INQUIRY_DEDUPE_WINDOW_MS,
   inquirySubmissionIdempotencyKey,
+  inquiryTurnstileIdempotencyKey,
 } from "@/lib/inquiry-idempotency";
 import { inquiryCorsHeaders, isAllowedInquiryOrigin } from "@/lib/inquiry-origins";
-import { recordIntegrationDeliveryAttempt } from "@/lib/integration-deliveries";
+import {
+  claimIntegrationDeliveryForRetry,
+  computeIntegrationDeliveryState,
+} from "@/lib/integration-deliveries";
 import { selectPreferredInquiryCenter } from "@/lib/inquiry-routing";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
@@ -418,9 +422,11 @@ async function getLocationNotificationEmails(centerId: string, centerEmail?: str
 async function verifyTurnstileToken({
   token,
   remoteIp,
+  idempotencyKey,
 }: {
   token: string;
   remoteIp: string;
+  idempotencyKey: string;
 }) {
   const secret = process.env.INQUIRY_TURNSTILE_SECRET_KEY;
   if (!secret) return { ok: true, skipped: true };
@@ -430,6 +436,7 @@ async function verifyTurnstileToken({
     const body = new URLSearchParams({
       secret,
       response: token,
+      idempotency_key: idempotencyKey,
     });
     if (remoteIp) body.set("remoteip", remoteIp);
 
@@ -496,14 +503,6 @@ async function POSTHandler(request: NextRequest) {
       return json({ ok: false, errors }, 400, origin);
     }
 
-    const botCheck = await verifyTurnstileToken({
-      token: payload.turnstileToken,
-      remoteIp: ip,
-    });
-    if (!botCheck.ok) {
-      return json({ ok: false, error: botCheck.error }, 403, origin);
-    }
-
     const center = await getIntakeCenter({
       locationId: payload.locationId,
       publicLocationId: payload.publicLocationId,
@@ -511,15 +510,25 @@ async function POSTHandler(request: NextRequest) {
       strictLocationRouting: isKidCityInquiry(payload),
       brandName: payload.brandName,
     });
-    const locationRecipients = await getLocationNotificationEmails(center.id, center.email);
-    const [parentFirstName, ...parentLastNameParts] = payload.parentName.split(/\s+/);
-    const externalId = inquirySubmissionIdempotencyKey({
+    const fingerprintInput = {
       centerId: center.id,
       parentName: payload.parentName,
       email: payload.email,
       phone: payload.phone,
       program: payload.program,
+    };
+    const externalId = inquirySubmissionIdempotencyKey(fingerprintInput);
+    const botCheck = await verifyTurnstileToken({
+      token: payload.turnstileToken,
+      remoteIp: ip,
+      idempotencyKey: inquiryTurnstileIdempotencyKey(fingerprintInput, payload.turnstileToken),
     });
+    if (!botCheck.ok) {
+      return json({ ok: false, error: botCheck.error }, 403, origin);
+    }
+
+    const locationRecipients = await getLocationNotificationEmails(center.id, center.email);
+    const [parentFirstName, ...parentLastNameParts] = payload.parentName.split(/\s+/);
     const leadCreateArgs = {
       data: {
         centerId: center.id,
@@ -622,10 +631,6 @@ async function POSTHandler(request: NextRequest) {
       }
     }
 
-    if (duplicateSuppressed) {
-      return json({ ok: true, leadId: lead.id, duplicateSuppressed: true }, 200, origin);
-    }
-
     const integrationPayload = {
       ...payload,
       centerId: center.id,
@@ -639,45 +644,91 @@ async function POSTHandler(request: NextRequest) {
       submittedAt: new Date().toISOString(),
     };
 
-    const [googleSheets, email] = await Promise.all([
-      forwardInquiryToGoogleSheets(integrationPayload),
-      sendInquiryNotificationEmail(integrationPayload, locationRecipients),
-    ]);
-
-    await Promise.all([
-      recordIntegrationDeliveryAttempt({
-        tenantId: center.tenantId,
-        centerId: center.id,
-        leadId: lead.id,
+    const deliveryDefinitions = [
+      {
+        dedupeKey: `inquiry:${lead.id}:google_sheets`,
         provider: "google_sheets",
         purpose: "inquiry_backup",
         payload: integrationPayload,
-        result: googleSheets,
-      }),
-      recordIntegrationDeliveryAttempt({
+        send: () => forwardInquiryToGoogleSheets(integrationPayload),
+      },
+      {
+        dedupeKey: `inquiry:${lead.id}:sendgrid`,
+        provider: "sendgrid",
+        purpose: "inquiry_notification",
+        payload: { ...integrationPayload, locationRecipients },
+        send: () => sendInquiryNotificationEmail(integrationPayload, locationRecipients),
+      },
+    ] as const;
+
+    await prisma.integrationDelivery.createMany({
+      data: deliveryDefinitions.map((delivery) => ({
         tenantId: center.tenantId,
         centerId: center.id,
         leadId: lead.id,
-        provider: "sendgrid",
-        purpose: "inquiry_notification",
-        payload: {
-          ...integrationPayload,
-          locationRecipients,
-        },
-        result: email,
-      }),
-    ]).catch((error) => {
-      logOperationalError("inquiries.integration_delivery_logging_failed", error, {
-        centerId: center.id,
-        leadId: lead.id,
-      });
+        dedupeKey: delivery.dedupeKey,
+        provider: delivery.provider,
+        purpose: delivery.purpose,
+        status: "pending",
+        attempts: 0,
+        maxAttempts: 5,
+        payload: delivery.payload as Prisma.InputJsonObject,
+      })),
+      skipDuplicates: true,
     });
+
+    const deliveryRows = await prisma.integrationDelivery.findMany({
+      where: { dedupeKey: { in: deliveryDefinitions.map((delivery) => delivery.dedupeKey) } },
+      select: { id: true, dedupeKey: true, status: true, attempts: true, maxAttempts: true },
+    });
+
+    const integrationResults = await Promise.all(deliveryDefinitions.map(async (delivery) => {
+      const row = deliveryRows.find((candidate) => candidate.dedupeKey === delivery.dedupeKey);
+      if (!row) throw new Error(`Inquiry delivery reservation ${delivery.dedupeKey} was not found.`);
+      if (row.status !== "pending") return { ok: true, skipped: true };
+
+      const claim = await claimIntegrationDeliveryForRetry({ id: row.id, attempts: row.attempts });
+      if (!claim.claimed) return { ok: true, skipped: true };
+
+      let result;
+      try {
+        result = await delivery.send();
+      } catch (error) {
+        result = {
+          ok: false,
+          error: error instanceof Error ? error.message : "Inquiry integration failed before returning a result.",
+        };
+      }
+      const state = computeIntegrationDeliveryState({
+        result,
+        attempts: claim.attempts,
+        maxAttempts: row.maxAttempts,
+      });
+      if (delivery.provider === "sendgrid" && result.ok && !result.skipped) {
+        state.status = "accepted";
+        state.deliveredAt = null;
+      }
+
+      const updated = await prisma.integrationDelivery.updateMany({
+        where: { id: row.id, status: "pending", attempts: claim.attempts },
+        data: {
+          status: state.status,
+          lastResult: result as Prisma.InputJsonObject,
+          lastError: result.error ?? null,
+          nextAttemptAt: state.nextAttemptAt,
+          deliveredAt: state.deliveredAt,
+        },
+      });
+      if (updated.count !== 1) throw new Error(`Inquiry delivery ${row.id} changed after its claim.`);
+      return result;
+    }));
+    const [googleSheets, email] = integrationResults;
 
     return json(
       {
         ok: true,
         leadId: lead.id,
-        duplicateSuppressed: false,
+        duplicateSuppressed,
         integrations: {
           googleSheets,
           email,

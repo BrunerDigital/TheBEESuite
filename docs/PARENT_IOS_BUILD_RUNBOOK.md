@@ -75,11 +75,13 @@ Demo account password: <temporary review password; do not commit>
 Demo school: Kid City USA - Demo
 ```
 
-If the password is lost or needs to be rotated, set `APP_REVIEW_PARENT_PASSWORD` and run:
+If the password is lost or needs to be rotated, run the read-only candidate listing first:
 
 ```bash
-npm run app-review:parent:ensure
+npm run app-review:parent:ensure -- --preflight
 ```
+
+Select the exact fake-demo target, set `APP_REVIEW_PARENT_TENANT_ID`, `APP_REVIEW_PARENT_CENTER_ID`, `APP_REVIEW_PARENT_FAMILY_ID`, and `APP_REVIEW_PARENT_FAMILY_EXTERNAL_ID`, and repeat `--preflight` to obtain the current fingerprint. After exact authorization for the identity, Guardian/family assignment, access grant, and password changes, set that value as `APP_REVIEW_PARENT_TARGET_FINGERPRINT`, set `APP_REVIEW_PARENT_PASSWORD` outside Git/chat, and run `npm run app-review:parent:ensure`.
 
 Minimum reviewer-visible flows:
 

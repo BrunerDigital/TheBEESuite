@@ -1,5 +1,9 @@
 import "./load-env";
 import { UserRole, type Prisma } from "@prisma/client";
+import {
+  assertAppReviewTargetFingerprint,
+  buildAppReviewTargetFingerprint,
+} from "@/lib/app-review-targeting";
 import { parentPortalLinkedFields } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
 import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
@@ -7,6 +11,12 @@ import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 const DEMO_SOURCE = "bee_suite_demo";
 const APP_REVIEW_SOURCE = "bee_suite_app_review";
 const APP_REVIEW_GUARDIAN_EXTERNAL_ID = "app-review-parent-primary";
+const TARGET_ENVIRONMENT_VARIABLES = [
+  "APP_REVIEW_PARENT_TENANT_ID",
+  "APP_REVIEW_PARENT_CENTER_ID",
+  "APP_REVIEW_PARENT_FAMILY_ID",
+  "APP_REVIEW_PARENT_FAMILY_EXTERNAL_ID",
+] as const;
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
@@ -23,13 +33,71 @@ function mergeCustomFields(value: unknown, patch: Prisma.InputJsonObject) {
   } as Prisma.InputJsonObject;
 }
 
+function readTargetInput() {
+  return {
+    tenantId: process.env.APP_REVIEW_PARENT_TENANT_ID?.trim() || "",
+    centerId: process.env.APP_REVIEW_PARENT_CENTER_ID?.trim() || "",
+    familyId: process.env.APP_REVIEW_PARENT_FAMILY_ID?.trim() || "",
+    familyExternalId: process.env.APP_REVIEW_PARENT_FAMILY_EXTERNAL_ID?.trim() || "",
+    fingerprint: process.env.APP_REVIEW_PARENT_TARGET_FINGERPRINT?.trim() || "",
+  };
+}
+
+function parentTargetFingerprint(input: {
+  tenantId: string;
+  organizationId: string;
+  centerId: string;
+  familyId: string;
+  familyExternalId: string;
+}) {
+  return buildAppReviewTargetFingerprint("parent", input);
+}
+
+async function listParentTargets() {
+  const families = await prisma.family.findMany({
+    where: { sourceSystem: DEMO_SOURCE, centerId: { not: null } },
+    orderBy: [{ centerId: "asc" }, { id: "asc" }],
+    select: { id: true, name: true, centerId: true, externalId: true },
+  });
+  const centerIds = [...new Set(families.flatMap((family) => family.centerId ? [family.centerId] : []))];
+  const centers = await prisma.center.findMany({
+    where: { id: { in: centerIds } },
+    select: {
+      id: true,
+      name: true,
+      organizationId: true,
+      organization: { select: { tenantId: true } },
+    },
+  });
+  const centersById = new Map(centers.map((center) => [center.id, center] as const));
+
+  return families.flatMap((family) => {
+    if (!family.centerId || !family.externalId) return [];
+    const center = centersById.get(family.centerId);
+    if (!center) return [];
+    const target = {
+      tenantId: center.organization.tenantId,
+      organizationId: center.organizationId,
+      centerId: center.id,
+      familyId: family.id,
+      familyExternalId: family.externalId,
+    };
+    return [{
+      ...target,
+      centerName: center.name,
+      familyName: family.name,
+      targetFingerprint: parentTargetFingerprint(target),
+    }];
+  });
+}
+
 async function ensureAccessGrant(input: {
   userId: string;
   tenantId: string;
   organizationId: string;
   centerId: string;
 }) {
-  const existing = await prisma.userAccessGrant.findFirst({
+  const existing = await prisma.userAccessGrant.findMany({
     where: {
       userId: input.userId,
       tenantId: input.tenantId,
@@ -38,7 +106,12 @@ async function ensureAccessGrant(input: {
       centerId: input.centerId,
     },
     select: { id: true },
+    take: 2,
   });
+
+  if (existing.length > 1) {
+    throw new Error("Multiple matching Parent App Review grants exist; resolve the duplicate grants before provisioning.");
+  }
 
   const data = {
     organizationId: input.organizationId,
@@ -52,9 +125,9 @@ async function ensureAccessGrant(input: {
     },
   } satisfies Prisma.UserAccessGrantUncheckedUpdateInput;
 
-  if (existing) {
+  if (existing[0]) {
     return prisma.userAccessGrant.update({
-      where: { id: existing.id },
+      where: { id: existing[0].id },
       data,
       select: { id: true },
     });
@@ -73,17 +146,29 @@ async function ensureAccessGrant(input: {
 async function main() {
   const email = normalizeEmail(process.env.APP_REVIEW_PARENT_EMAIL || "app-review-parent@thebeesuite.io");
   const password = process.env.APP_REVIEW_PARENT_PASSWORD?.trim() || "";
-  const familyExternalId = process.env.APP_REVIEW_PARENT_FAMILY_EXTERNAL_ID?.trim() || "";
+  const target = readTargetInput();
+  const preflight = process.argv.includes("--preflight");
+  const suppliedTargetFieldCount = [target.tenantId, target.centerId, target.familyId, target.familyExternalId]
+    .filter(Boolean).length;
 
-  if (password.length < 12) {
-    throw new Error("Set APP_REVIEW_PARENT_PASSWORD to a temporary review password with at least 12 characters.");
+  if (preflight && suppliedTargetFieldCount === 0) {
+    console.log(JSON.stringify({
+      ok: true,
+      mode: "preflight-list",
+      mutatesProduction: false,
+      candidates: await listParentTargets(),
+    }, null, 2));
+    return;
   }
 
-  const family = await prisma.family.findFirst({
-    where: familyExternalId
-      ? { sourceSystem: DEMO_SOURCE, externalId: familyExternalId }
-      : { sourceSystem: DEMO_SOURCE, centerId: { not: null } },
-    orderBy: { createdAt: "asc" },
+  if (suppliedTargetFieldCount !== TARGET_ENVIRONMENT_VARIABLES.length) {
+    throw new Error(
+      `Set all exact Parent target identifiers (${TARGET_ENVIRONMENT_VARIABLES.join(", ")}). Run npm run app-review:parent:ensure -- --preflight without target variables to list fake-demo candidates.`,
+    );
+  }
+
+  const family = await prisma.family.findUnique({
+    where: { id: target.familyId },
     include: {
       children: {
         select: { id: true, fullName: true, enrollmentStatus: true },
@@ -92,8 +177,13 @@ async function main() {
     },
   });
 
-  if (!family?.centerId) {
-    throw new Error("No seeded demo family with a center was found. Run DEMO_PASSWORD='<password>' npm run demo:seed first.");
+  if (
+    !family?.centerId ||
+    family.sourceSystem !== DEMO_SOURCE ||
+    family.externalId !== target.familyExternalId ||
+    family.centerId !== target.centerId
+  ) {
+    throw new Error("The exact Parent App Review family target is missing or no longer matches the fake-demo source, center, or external ID.");
   }
 
   const center = await prisma.center.findUnique({
@@ -106,8 +196,45 @@ async function main() {
     },
   });
 
-  if (!center) {
-    throw new Error(`Demo center ${family.centerId} was not found.`);
+  if (!center || center.id !== target.centerId || center.organization.tenantId !== target.tenantId) {
+    throw new Error("The exact Parent App Review center no longer matches the authorized tenant and center identifiers.");
+  }
+
+  const expectedFingerprint = parentTargetFingerprint({
+    tenantId: center.organization.tenantId,
+    organizationId: center.organizationId,
+    centerId: center.id,
+    familyId: family.id,
+    familyExternalId: family.externalId,
+  });
+
+  if (preflight) {
+    console.log(JSON.stringify({
+      ok: true,
+      mode: "preflight-target",
+      mutatesProduction: false,
+      target: {
+        tenantId: center.organization.tenantId,
+        organizationId: center.organizationId,
+        centerId: center.id,
+        centerName: center.name,
+        familyId: family.id,
+        familyExternalId: family.externalId,
+        familyName: family.name,
+        targetFingerprint: expectedFingerprint,
+      },
+    }, null, 2));
+    return;
+  }
+
+  assertAppReviewTargetFingerprint({
+    expected: expectedFingerprint,
+    provided: target.fingerprint,
+    environmentVariable: "APP_REVIEW_PARENT_TARGET_FINGERPRINT",
+  });
+
+  if (password.length < 12) {
+    throw new Error("Set APP_REVIEW_PARENT_PASSWORD to a temporary review password with at least 12 characters.");
   }
 
   const existingUser = await prisma.user.findUnique({
@@ -122,13 +249,52 @@ async function main() {
     throw new Error(`Existing user ${email} is ${existingUser.role}, not PARENT_GUARDIAN.`);
   }
 
-  const existingGuardian = await prisma.guardian.findFirst({
+  if (existingUser) {
+    const [activeGrants, matchingGrantCount] = await Promise.all([
+      prisma.userAccessGrant.findMany({
+        where: { userId: existingUser.id, isActive: true },
+        select: { tenantId: true, organizationId: true, centerId: true, role: true, scopeType: true },
+      }),
+      prisma.userAccessGrant.count({
+        where: {
+          userId: existingUser.id,
+          tenantId: target.tenantId,
+          role: UserRole.PARENT_GUARDIAN,
+          scopeType: "CENTER",
+          centerId: target.centerId,
+        },
+      }),
+    ]);
+    if (matchingGrantCount > 1) {
+      throw new Error("Multiple matching Parent App Review grants exist; resolve the duplicate grants before provisioning.");
+    }
+    if (activeGrants.some((grant) =>
+      grant.tenantId !== target.tenantId ||
+      grant.organizationId !== center.organizationId ||
+      grant.centerId !== target.centerId ||
+      grant.role !== UserRole.PARENT_GUARDIAN ||
+      grant.scopeType !== "CENTER"
+    )) {
+      throw new Error("The existing Parent App Review user has an active grant outside the exact authorized target.");
+    }
+  }
+
+  const existingGuardians = await prisma.guardian.findMany({
     where: {
       sourceSystem: APP_REVIEW_SOURCE,
       externalId: APP_REVIEW_GUARDIAN_EXTERNAL_ID,
     },
-    select: { id: true, customFields: true },
+    select: { id: true, userId: true, customFields: true },
+    take: 2,
   });
+
+  if (existingGuardians.length > 1) {
+    throw new Error("Multiple Parent App Review Guardian markers exist; resolve the ambiguity before provisioning.");
+  }
+  const existingGuardian = existingGuardians[0];
+  if (existingGuardian?.userId && existingGuardian.userId !== existingUser?.id) {
+    throw new Error("The Parent App Review Guardian marker is linked to a different application user.");
+  }
 
   const guardianFields = mergeCustomFields(existingGuardian?.customFields, {
     appReview: true,

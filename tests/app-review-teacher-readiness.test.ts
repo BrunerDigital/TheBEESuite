@@ -8,10 +8,24 @@ test("teacher App Review preparation is explicit, demo-scoped, and fail-closed",
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
   assert.match(script, /APP_REVIEW_TEACHER_PASSWORD/);
+  assert.match(script, /APP_REVIEW_TEACHER_TENANT_ID/);
+  assert.match(script, /APP_REVIEW_TEACHER_CENTER_ID/);
+  assert.match(script, /APP_REVIEW_TEACHER_CLASSROOM_ID/);
+  assert.match(script, /APP_REVIEW_TEACHER_SOURCE_STAFF_ID/);
+  assert.match(script, /APP_REVIEW_TEACHER_TARGET_FINGERPRINT/);
   assert.match(script, /password\.length < 12/);
   assert.match(script, /sourceSystem: DEMO_SOURCE/);
   assert.match(script, /role: UserRole\.TEACHER/);
   assert.match(script, /classroomId: \{ not: null \}/);
+  assert.match(script, /process\.argv\.includes\("--preflight"\)/);
+  assert.match(script, /findUnique\(\{\s*where: \{ id: target\.sourceStaffProfileId \}/);
+  assert.match(script, /assertAppReviewTargetFingerprint/);
+  assert.ok(
+    script.indexOf("assertAppReviewTargetFingerprint({") < script.indexOf("await upsertSupabaseAuthUserWithPassword({"),
+    "the exact target fingerprint must be checked before the Auth identity can change",
+  );
+  assert.match(script, /active grant outside the exact authorized target/);
+  assert.match(script, /Multiple Teacher App Review Staff markers exist/);
   assert.match(script, /upsertSupabaseAuthUserWithPassword/);
   assert.doesNotMatch(script, /console\.log\(JSON\.stringify\(\{[\s\S]{0,500}password/);
   assert.match(packageJson, /"app-review:teacher:ensure"/);

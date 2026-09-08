@@ -76,11 +76,13 @@ Demo school: Kid City USA - Demo
 Demo classroom: fake classroom records only
 ```
 
-Creating or rotating this login changes an external identity and requires exact approval. After approval, set `APP_REVIEW_TEACHER_PASSWORD` outside Git and run:
+Creating or rotating this login changes an external identity, application role, Staff/classroom assignment, and school grant. First list fake-demo candidates read-only:
 
 ```bash
-npm run app-review:teacher:ensure
+npm run app-review:teacher:ensure -- --preflight
 ```
+
+Select the exact fake-demo target, set `APP_REVIEW_TEACHER_TENANT_ID`, `APP_REVIEW_TEACHER_CENTER_ID`, `APP_REVIEW_TEACHER_CLASSROOM_ID`, and `APP_REVIEW_TEACHER_SOURCE_STAFF_ID`, and repeat `--preflight` to obtain the current fingerprint. After exact authorization covering every listed mutation and target, set that value as `APP_REVIEW_TEACHER_TARGET_FINGERPRINT`, set `APP_REVIEW_TEACHER_PASSWORD` outside Git/chat, and run `npm run app-review:teacher:ensure`.
 
 The command fails closed unless it finds a classroom-assigned `bee_suite_demo` teacher source. Re-query the resulting login, tenant, school, classroom, and fake-data boundary before entering credentials in App Store Connect.
 

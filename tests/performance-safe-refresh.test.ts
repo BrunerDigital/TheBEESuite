@@ -41,7 +41,7 @@ test("session heartbeats preserve sign-out handling and refresh live billing onl
   assert.match(billingVersion, /user\.centerIds\.length/);
   assert.match(billingVersion, /"Cache-Control": "private, no-store"/);
   assert.match(audit, /input\.action\.startsWith\("billing\."\)/);
-  assert.match(audit, /prisma\.center\.update\(\{ where: \{ id: input\.centerId \}, data: \{ updatedAt: new Date\(\) \} \}\)/);
+  assert.match(audit, /client\.center\.update\(\{ where: \{ id: input\.centerId \}, data: \{ updatedAt: new Date\(\) \} \}\)/);
   assert.match(dunning, /billingActivityCenterIds\.add\(center\.id\)/);
   assert.match(dunning, /prisma\.center\.updateMany/);
   assert.match(dunning, /data: \{ updatedAt: new Date\(\) \}/);

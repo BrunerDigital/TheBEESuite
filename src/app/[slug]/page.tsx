@@ -4157,6 +4157,7 @@ async function renderLivePage(
     return (
       <BillingInvoicesPage
         data={{
+          readOnly: !canManageBilling(user),
           invoiceStatus,
           receiptSchools: centers.map((center) => ({
             id: center.id,

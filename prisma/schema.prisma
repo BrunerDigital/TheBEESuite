@@ -123,60 +123,69 @@ model Organization {
 }
 
 model Center {
-  id               String   @id @default(cuid())
-  organizationId   String
-  ownerGroupId     String?
-  name             String
-  crmLocationId    String?
-  locationId       String?
-  address          String?
-  city             String?
-  state            String?
-  postalCode       String?
-  phone            String?
-  email            String?
-  status           String   @default("active")
-  sourceSystem     String?
-  externalId       String?
-  customFields     Json?
-  licensedCapacity Int
-  timezone         String   @default("America/New_York")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                                   String    @id @default(cuid())
+  organizationId                       String
+  ownerGroupId                         String?
+  name                                 String
+  crmLocationId                        String?
+  locationId                           String?
+  address                              String?
+  city                                 String?
+  state                                String?
+  postalCode                           String?
+  phone                                String?
+  email                                String?
+  status                               String    @default("active")
+  sourceSystem                         String?
+  externalId                           String?
+  customFields                         Json?
+  licensedCapacity                     Int
+  timezone                             String    @default("America/New_York")
+  agencyReconciliationEnabled          Boolean   @default(false)
+  agencyReconciliationActivatedAt      DateTime?
+  agencyReconciliationActivatedById    String?
+  agencyReconciliationActivationReason String?
+  createdAt                            DateTime  @default(now())
+  updatedAt                            DateTime  @updatedAt
 
-  organization             Organization              @relation(fields: [organizationId], references: [id])
-  ownerGroup               OwnerGroup?               @relation(fields: [ownerGroupId], references: [id])
-  classrooms               Classroom[]
-  leads                    Lead[]
-  tours                    Tour[]
-  staff                    StaffProfile[]
-  schedules                StaffSchedule[]
-  announcements            Announcement[]
-  auditLogs                AuditLog[]
-  checkLogs                CheckInOutLog[]
-  childLiveLocations       ChildLiveLocation[]
-  childLocationTransitions ChildLocationTransition[]
-  procareImports           ProcareImportBatch[]
-  fteReports               FteReport[]
-  accessGrants             UserAccessGrant[]
-  brandAssets              BrandAsset[]
-  customizations           BrandCustomization[]
-  integrations             Integration[]
-  integrationCredentials   IntegrationCredential[]
-  integrationDeliveries    IntegrationDelivery[]
-  messageTemplates         MessageTemplate[]
-  calendarEvents           CalendarEvent[]
-  reviews                  Review[]
-  surveys                  Survey[]
-  surveyResponses          SurveyResponse[]
-  emergencyDrillLogs       EmergencyDrillLog[]
-  complianceTasks          ComplianceTask[]
-  dataDeletionRequests     DataDeletionRequest[]
-  tuitionPlans             TuitionPlan[]
-  refundRequests           RefundRequest[]
-  agencyPrograms           AgencyProgram[]
-  subsidyAuthorizations    SubsidyAuthorization[]
-  subsidyClaims            SubsidyClaim[]
+  organization                 Organization                  @relation(fields: [organizationId], references: [id])
+  ownerGroup                   OwnerGroup?                   @relation(fields: [ownerGroupId], references: [id])
+  classrooms                   Classroom[]
+  leads                        Lead[]
+  tours                        Tour[]
+  staff                        StaffProfile[]
+  schedules                    StaffSchedule[]
+  announcements                Announcement[]
+  auditLogs                    AuditLog[]
+  checkLogs                    CheckInOutLog[]
+  childLiveLocations           ChildLiveLocation[]
+  childLocationTransitions     ChildLocationTransition[]
+  procareImports               ProcareImportBatch[]
+  fteReports                   FteReport[]
+  accessGrants                 UserAccessGrant[]
+  brandAssets                  BrandAsset[]
+  customizations               BrandCustomization[]
+  integrations                 Integration[]
+  integrationCredentials       IntegrationCredential[]
+  integrationDeliveries        IntegrationDelivery[]
+  messageTemplates             MessageTemplate[]
+  calendarEvents               CalendarEvent[]
+  reviews                      Review[]
+  surveys                      Survey[]
+  surveyResponses              SurveyResponse[]
+  emergencyDrillLogs           EmergencyDrillLog[]
+  complianceTasks              ComplianceTask[]
+  dataDeletionRequests         DataDeletionRequest[]
+  tuitionPlans                 TuitionPlan[]
+  refundRequests               RefundRequest[]
+  agencyPrograms               AgencyProgram[]
+  agencyLedgerAccounts         AgencyLedgerAccount[]
+  agencyRemittanceBatches      AgencyRemittanceBatch[]
+  agencyAccountingPeriods      AgencyAccountingPeriod[]
+  agencyAccountingPeriodEvents AgencyAccountingPeriodEvent[]
+  agencyLedgerAdjustments      AgencyLedgerAdjustment[]
+  subsidyAuthorizations        SubsidyAuthorization[]
+  subsidyClaims                SubsidyClaim[]
 
   @@index([crmLocationId])
   @@index([locationId])
@@ -1239,15 +1248,22 @@ model AgencyProgram {
   portalUrl           String?
   remittanceEmail     String?
   paymentInstructions String?
+  receivableGlCode    String?
+  cashGlCode          String?
+  adjustmentGlCode    String?
+  costCenterCode      String?
   requirements        Json?
   status              String   @default("setup_required")
   customFields        Json?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  center         Center                 @relation(fields: [centerId], references: [id])
-  authorizations SubsidyAuthorization[]
-  claims         SubsidyClaim[]
+  center            Center                   @relation(fields: [centerId], references: [id])
+  authorizations    SubsidyAuthorization[]
+  claims            SubsidyClaim[]
+  ledgerAccounts    AgencyLedgerAccount[]
+  remittanceBatches AgencyRemittanceBatch[]
+  ledgerAdjustments AgencyLedgerAdjustment[]
 
   @@unique([centerId, name, programName])
   @@index([centerId, status])
@@ -1306,12 +1322,15 @@ model SubsidyClaim {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  center        Center                 @relation(fields: [centerId], references: [id])
-  agencyProgram AgencyProgram          @relation(fields: [agencyProgramId], references: [id])
-  authorization SubsidyAuthorization?  @relation(fields: [authorizationId], references: [id])
-  lines         SubsidyClaimLine[]
-  documents     SubsidyClaimDocument[]
-  remittances   SubsidyRemittance[]
+  center                Center                       @relation(fields: [centerId], references: [id])
+  agencyProgram         AgencyProgram                @relation(fields: [agencyProgramId], references: [id])
+  authorization         SubsidyAuthorization?        @relation(fields: [authorizationId], references: [id])
+  lines                 SubsidyClaimLine[]
+  documents             SubsidyClaimDocument[]
+  remittances           SubsidyRemittance[]
+  remittanceAllocations AgencyRemittanceAllocation[]
+  ledgerEntries         AgencyLedgerEntry[]
+  ledgerAdjustments     AgencyLedgerAdjustment[]
 
   @@index([centerId, status, dueDate])
   @@index([agencyProgramId, servicePeriodStart, servicePeriodEnd])
@@ -1356,7 +1375,7 @@ model SubsidyClaimDocument {
 }
 
 model SubsidyRemittance {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   claimId           String
   amountCents       Int
   paidAt            DateTime
@@ -1367,13 +1386,224 @@ model SubsidyRemittance {
   reversedAt        DateTime?
   reversedById      String?
   reversalReason    String?
-  createdAt         DateTime @default(now())
+  createdAt         DateTime  @default(now())
 
-  claim SubsidyClaim @relation(fields: [claimId], references: [id])
+  claim         SubsidyClaim                @relation(fields: [claimId], references: [id])
+  allocation    AgencyRemittanceAllocation?
+  ledgerEntries AgencyLedgerEntry[]
 
   @@index([claimId, externalReference])
   @@index([claimId, paidAt])
   @@index([claimId, reversedAt])
+}
+
+model AgencyLedgerAccount {
+  id              String   @id @default(cuid())
+  centerId        String
+  agencyProgramId String
+  balanceCents    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  center        Center                   @relation(fields: [centerId], references: [id])
+  agencyProgram AgencyProgram            @relation(fields: [agencyProgramId], references: [id])
+  entries       AgencyLedgerEntry[]
+  adjustments   AgencyLedgerAdjustment[]
+
+  @@unique([centerId, agencyProgramId])
+  @@index([centerId, balanceCents])
+  @@index([agencyProgramId])
+}
+
+model AgencyLedgerEntry {
+  id                     String   @id @default(cuid())
+  agencyLedgerAccountId  String
+  claimId                String?
+  remittanceId           String?
+  remittanceBatchId      String?
+  adjustmentId           String?
+  type                   String
+  description            String
+  amountCents            Int
+  balanceAfterCents      Int
+  effectiveAt            DateTime
+  externalReference      String?
+  glCodeSnapshot         String?
+  costCenterCodeSnapshot String?
+  sourceSystem           String?
+  externalId             String?
+  metadata               Json?
+  createdAt              DateTime @default(now())
+
+  agencyLedgerAccount AgencyLedgerAccount     @relation(fields: [agencyLedgerAccountId], references: [id])
+  claim               SubsidyClaim?           @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  remittance          SubsidyRemittance?      @relation(fields: [remittanceId], references: [id], onDelete: Restrict)
+  remittanceBatch     AgencyRemittanceBatch?  @relation(fields: [remittanceBatchId], references: [id], onDelete: Restrict)
+  adjustment          AgencyLedgerAdjustment? @relation(fields: [adjustmentId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceSystem, externalId])
+  @@index([agencyLedgerAccountId, effectiveAt, createdAt, id])
+  @@index([claimId])
+  @@index([remittanceId])
+  @@index([remittanceBatchId])
+  @@index([adjustmentId])
+}
+
+model AgencyRemittanceBatch {
+  id                        String    @id @default(cuid())
+  centerId                  String
+  agencyProgramId           String
+  externalReference         String
+  referenceKey              String
+  paidAt                    DateTime
+  paymentMethod             String
+  cashGlCodeSnapshot        String?
+  costCenterCodeSnapshot    String?
+  totalCents                Int
+  allocatedCents            Int       @default(0)
+  unappliedCents            Int       @default(0)
+  status                    String    @default("pending_review")
+  notes                     String?
+  evidenceName              String?
+  evidenceReference         String?
+  evidenceStorageKey        String?
+  idempotencyKey            String    @unique
+  reconciliationFingerprint String
+  enteredById               String
+  reviewedById              String?
+  reviewedAt                DateTime?
+  reviewNotes               String?
+  followUpOwnerId           String?
+  followUpDueAt             DateTime?
+  reversedAt                DateTime?
+  reversedById              String?
+  reversalReason            String?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  center        Center                       @relation(fields: [centerId], references: [id])
+  agencyProgram AgencyProgram                @relation(fields: [agencyProgramId], references: [id])
+  allocations   AgencyRemittanceAllocation[]
+  ledgerEntries AgencyLedgerEntry[]
+  adjustments   AgencyLedgerAdjustment[]
+
+  @@index([centerId, agencyProgramId, referenceKey])
+  @@index([centerId, status, paidAt])
+  @@index([centerId, followUpDueAt])
+  @@index([agencyProgramId, paidAt])
+}
+
+model AgencyRemittanceAllocation {
+  id             String    @id @default(cuid())
+  batchId        String
+  claimId        String
+  remittanceId   String?   @unique
+  amountCents    Int
+  status         String    @default("pending_review")
+  notes          String?
+  fingerprint    String
+  idempotencyKey String    @unique
+  requestedById  String
+  reviewedById   String?
+  reviewedAt     DateTime?
+  reviewNotes    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  batch      AgencyRemittanceBatch @relation(fields: [batchId], references: [id])
+  claim      SubsidyClaim          @relation(fields: [claimId], references: [id])
+  remittance SubsidyRemittance?    @relation(fields: [remittanceId], references: [id], onDelete: Restrict)
+
+  @@index([batchId, status])
+  @@index([claimId, status])
+}
+
+model AgencyLedgerAdjustment {
+  id                     String    @id @default(cuid())
+  centerId               String
+  agencyProgramId        String
+  ledgerAccountId        String
+  claimId                String?
+  batchId                String?
+  type                   String
+  amountCents            Int
+  effectiveAt            DateTime
+  status                 String    @default("pending_review")
+  reason                 String
+  evidenceName           String?
+  evidenceReference      String?
+  glCodeSnapshot         String?
+  costCenterCodeSnapshot String?
+  fingerprint            String
+  idempotencyKey         String    @unique
+  requestedById          String
+  reviewedById           String?
+  reviewedAt             DateTime?
+  reviewNotes            String?
+  followUpOwnerId        String?
+  followUpDueAt          DateTime?
+  reversedAt             DateTime?
+  reversedById           String?
+  reversalReason         String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  center        Center                 @relation(fields: [centerId], references: [id])
+  agencyProgram AgencyProgram          @relation(fields: [agencyProgramId], references: [id])
+  ledgerAccount AgencyLedgerAccount    @relation(fields: [ledgerAccountId], references: [id])
+  claim         SubsidyClaim?          @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  batch         AgencyRemittanceBatch? @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  ledgerEntries AgencyLedgerEntry[]
+
+  @@index([centerId, status, effectiveAt])
+  @@index([ledgerAccountId, status])
+  @@index([claimId])
+  @@index([batchId])
+  @@index([centerId, followUpDueAt])
+  @@index([agencyProgramId])
+}
+
+model AgencyAccountingPeriod {
+  id           String    @id @default(cuid())
+  centerId     String
+  name         String
+  startDate    DateTime
+  endDate      DateTime
+  status       String    @default("open")
+  closedAt     DateTime?
+  closedById   String?
+  closeReason  String?
+  reopenedAt   DateTime?
+  reopenedById String?
+  reopenReason String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  center Center                        @relation(fields: [centerId], references: [id])
+  events AgencyAccountingPeriodEvent[]
+
+  @@unique([centerId, startDate, endDate])
+  @@index([centerId, status, startDate, endDate])
+}
+
+model AgencyAccountingPeriodEvent {
+  id         String   @id @default(cuid())
+  centerId   String
+  periodId   String
+  sequence   Int
+  action     String
+  occurredAt DateTime
+  actorId    String
+  reason     String
+  evidence   Json?
+  createdAt  DateTime @default(now())
+
+  center Center                 @relation(fields: [centerId], references: [id])
+  period AgencyAccountingPeriod @relation(fields: [periodId], references: [id])
+
+  @@unique([periodId, sequence])
+  @@index([periodId, occurredAt, id])
+  @@index([centerId, occurredAt, id])
 }
 
 model Invoice {

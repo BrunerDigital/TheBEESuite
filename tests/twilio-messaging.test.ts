@@ -7,7 +7,9 @@ import {
   isTwilioWebhookReceiptUniqueConflict,
   phoneMatchKey,
   twilioBlockedCurrentStatuses,
+  twilioDeliveryTenantScope,
   twilioDeliveryStatus,
+  twilioSignatureTokenCandidates,
   twilioStateTransition,
   twilioSmsConsentAction,
   uniqueSmsRecipients,
@@ -69,6 +71,36 @@ test("Twilio status callbacks cannot regress or replace terminal outcomes", () =
   assert.equal(twilioStateTransition("failed", "delivered"), null);
 });
 
+test("tenant Twilio credentials bind delivery callbacks to the matching tenant", () => {
+  assert.deepEqual(twilioDeliveryTenantScope("tenant-a"), { tenantId: "tenant-a" });
+  assert.deepEqual(twilioDeliveryTenantScope(null), {});
+});
+
+test("Twilio tokens reused across tenants or platform scope stay shared", () => {
+  assert.deepEqual(
+    twilioSignatureTokenCandidates({
+      tenantTokens: [{ tenantId: "tenant-a", value: "tenant-only" }],
+    }),
+    [{ tenantId: "tenant-a", token: "tenant-only" }],
+  );
+  assert.deepEqual(
+    twilioSignatureTokenCandidates({
+      tenantTokens: [
+        { tenantId: "tenant-a", value: "shared-token" },
+        { tenantId: "tenant-b", value: "shared-token" },
+      ],
+    }),
+    [{ tenantId: null, token: "shared-token" }],
+  );
+  assert.deepEqual(
+    twilioSignatureTokenCandidates({
+      platformToken: "shared-token",
+      tenantTokens: [{ tenantId: "tenant-a", value: "shared-token" }],
+    }),
+    [{ tenantId: null, token: "shared-token" }],
+  );
+});
+
 test("Twilio inbound retries reserve a durable receipt before app side effects", async () => {
   assert.equal(isTwilioWebhookReceiptUniqueConflict({ code: "P2002", meta: { target: ["provider", "providerMessageId"] } }), true);
   assert.equal(isTwilioWebhookReceiptUniqueConflict({ code: "P2002", meta: { target: ["externalId"] } }), false);
@@ -84,6 +116,12 @@ test("Twilio tenant credentials constrain inbound guardian matching to that tena
   assert.match(source, /signatureMatch\.tenantId[\s\S]*organization: \{ tenantId: signatureMatch\.tenantId \}/);
   assert.match(source, /family: \{ centerId: \{ in: signatureTenantCenterIds/);
   assert.match(source, /user: \{ tenantId: signatureMatch\.tenantId \}/);
+  assert.match(source, /resolveTwilioInboundGuardian\([\s\S]*signatureTenantId: signatureMatch\.tenantId/);
+});
+
+test("Twilio status route applies the verified tenant boundary before mutation", async () => {
+  const source = await readFile(new URL("../src/app/api/twilio/status/route.ts", import.meta.url), "utf8");
+  assert.match(source, /\.\.\.twilioDeliveryTenantScope\(signatureMatch\.tenantId\)/);
 });
 
 test("Twilio SMS consent keywords require exact opt-in or opt-out commands", () => {

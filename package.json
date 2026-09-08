@@ -3,11 +3,14 @@
   "version": "0.1.0",
   "author": "BrunerDigital",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "overrides": {
     "deepmerge-ts": "8.0.1",
     "esbuild": "^0.28.1",
     "postcss": "^8.5.18",
-    "sharp": "^0.35.3"
+    "sharp": "$sharp"
   },
   "scripts": {
     "dev": "next dev",
@@ -41,6 +44,8 @@
     "procare:preflight-location": "tsx scripts/prepare-procare-location-workflow.ts",
     "procare:confirm-source-of-truth": "tsx scripts/confirm-bee-suite-migration-source-of-truth.ts",
     "mobile:store:check": "node scripts/mobile-store-readiness-check.mjs",
+    "mobile:assets:generate": "node scripts/generate-ios-brand-assets.mjs",
+    "mobile:screenshots:draft": "node scripts/capture-app-store-screenshot-drafts.mjs",
     "ops:check": "node scripts/deployment-ops-check.mjs",
     "ios:parent:add": "node scripts/run-capacitor-app.mjs parent add ios",
     "ios:parent:sync": "node scripts/run-capacitor-app.mjs parent sync ios",
@@ -94,6 +99,7 @@
     "users:set-management-profile-photos": "tsx -r tsconfig-paths/register scripts/set-management-profile-photos.ts",
     "kidcity:seed-communications-kit": "tsx -r tsconfig-paths/register scripts/seed-kidcity-communications-kit.ts",
     "app-review:parent:ensure": "tsx -r tsconfig-paths/register scripts/ensure-app-review-parent.ts",
+    "app-review:teacher:ensure": "tsx -r tsconfig-paths/register scripts/ensure-app-review-teacher.ts",
     "tenant:backfill-access": "tsx -r tsconfig-paths/register scripts/backfill-tenant-access-branding.ts",
     "pilot:check": "tsx -r tsconfig-paths/register scripts/pilot-readiness-check.ts",
     "supabase:setup-storage": "tsx -r tsconfig-paths/register scripts/setup-supabase-storage.ts",
@@ -137,7 +143,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
-    "next": "16.2.12",
+    "next": "16.3.4",
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -156,9 +162,10 @@
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
     "eslint": "^9",
-    "eslint-config-next": "16.2.12",
+    "eslint-config-next": "16.3.4",
     "playwright": "^1.59.1",
     "prisma": "^6.19.3",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.21.0",

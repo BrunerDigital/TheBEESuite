@@ -12,6 +12,7 @@ import {
   validateSignatureCapture,
 } from "@/lib/signature-capture";
 import { contentTypeForDocumentFile, uploadDocumentBuffer } from "@/lib/supabase-storage";
+import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -25,6 +26,9 @@ function clean(value: unknown) {
 }
 
 async function POSTHandler(request: NextRequest, context: RouteContext) {
+  if (!hasTrustedMutationOrigin(request)) {
+    return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });

@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { canAcknowledgeIncident } from "@/lib/portal-guardrails";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -11,7 +12,10 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-async function POSTHandler(_request: Request, context: RouteContext) {
+async function POSTHandler(request: NextRequest, context: RouteContext) {
+  if (!hasTrustedMutationOrigin(request)) {
+    return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });

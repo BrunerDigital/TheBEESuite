@@ -4,6 +4,7 @@ import {
   type GoogleSheetValue,
 } from "@/lib/google-sheets";
 import { credentialEnvValue, getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
+import { postJsonToGoogleAppsScriptWebhook } from "@/lib/google-apps-script-webhook";
 import { sendEmail } from "@/lib/integrations";
 
 export type InquiryIntegrationResult = {
@@ -91,10 +92,9 @@ export async function forwardInquiryToGoogleSheets(
   if (!url) return { ok: true, skipped: true };
 
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    const response = await postJsonToGoogleAppsScriptWebhook({
+      url,
+      payload,
       signal: AbortSignal.timeout(8000),
     });
 
@@ -103,11 +103,11 @@ export async function forwardInquiryToGoogleSheets(
     }
 
     return { ok: true, mode: "webhook" };
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       mode: "webhook",
-      error: error instanceof Error ? error.message : "Google Sheets webhook failed.",
+      error: "Google Sheets webhook failed securely.",
     };
   }
 }

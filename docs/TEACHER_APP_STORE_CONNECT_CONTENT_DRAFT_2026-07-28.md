@@ -1,7 +1,7 @@
 # App Store Connect Content Draft - BEE Suite Teacher Portal
 
-Draft date: July 28, 2026  
-Status: Draft for Product, Legal, QA, and Release Manager review before App Store Connect entry.
+Verified draft date: September 8, 2026
+Status: Technically reconciled draft. Product/legal approval and App Store Connect entry remain human publishing gates.
 
 ## App Information
 
@@ -128,6 +128,8 @@ Use final TestFlight/native build and fake data only.
 | 6 | Incident | `Document incidents for school follow-up.` |
 | 7 | Profile/readiness | `Confirm staff profile and classroom setup details.` |
 
+Accepted iPhone portrait sizes for the final native set are 1260 x 2736, 1290 x 2796, or 1320 x 2868 pixels for 6.9-inch displays. If no 6.9-inch set is supplied, Apple accepts 1284 x 2778 or 1242 x 2688 for the required 6.5-inch fallback. Upload one to ten no-alpha PNG/JPEG images from the processed native build using fake data. Exact-size synthetic composition drafts are under `output/app-store/ios-teacher/screenshots-draft/`; their manifest explicitly marks them as non-native drafts. Replace them with matching signed Release/TestFlight captures before submission.
+
 ## Privacy Nutrition Label Worksheet
 
 Final answers must be reconciled with production vendors and SDKs.
@@ -169,3 +171,42 @@ Expected posture:
 - No custom cryptography was found in the audit.
 - Complete App Store Connect encryption questions based on the final build.
 - If eligible for exemption, `ITSAppUsesNonExemptEncryption=false` is present in Info.plist.
+
+## Age Rating Draft
+
+- Made for Kids: No.
+- Audience: authorized adult childcare staff.
+- Complete the current App Store Connect questionnaire, including messaging/user-generated content and sensitive childcare context, and use Apple’s calculated rating.
+- Do not assert 4+ or another final rating in metadata before the questionnaire is completed.
+
+## Account And Login Answers
+
+- Account creation: no self-service teacher registration; access is issued by the school.
+- Account/access removal: school administrators can deactivate teacher access; public privacy/support channels remain available. Owner/counsel must confirm the final employee-record retention response.
+- Sign in with Apple: not applicable while email/password is the only login and no third-party/social login is offered.
+- Reviewer credentials: required because the app is account-based. Create the exact fake-data account only after approval with `npm run app-review:teacher:ensure`; never put its password in Git.
+
+## Payments And IAP
+
+- In-app purchases: none.
+- Digital content/features sold in app: none.
+- Parent tuition or school billing is outside this Teacher target and must not appear in its listing or screenshots.
+
+## Guideline 4.2 And Completeness Note
+
+The app uses an intentional production `server.url` for the server-rendered teacher workspace, so Apple may scrutinize it as a remote WebView shell. The final TestFlight build must demonstrate working classroom roster, attendance, daily-report, media, incident, profile, native launch/offline, safe-area, and camera/photo flows. Repository checks alone are not acceptance evidence.
+
+## Human Completion Fields
+
+Before selecting a build for review, record:
+
+- Apple Team and legal seller name.
+- Unique version/build selected.
+- Archive validation result and archive UUID.
+- Privacy report reconciliation.
+- Processed TestFlight build and physical-iPhone smoke result.
+- Final accepted-size screenshot set.
+- Working fake-data reviewer credentials and review contact.
+- App Privacy publication, age-rating result, export-compliance answer, and owner/counsel approval.
+
+Actual upload, TestFlight distribution, and App Review submission are separate publishing actions requiring exact approval.

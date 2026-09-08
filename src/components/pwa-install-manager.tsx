@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Download, ListChecks, Share2, ShieldAlert, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { isNativeAppRuntime, useNativeAppRuntime } from "@/lib/native-app-runtime";
 import { securePublicAppUrlForPath } from "@/lib/public-app-url";
 
 type BeforeInstallPromptEvent = Event & {
@@ -185,6 +186,7 @@ function writeDismissed(key: string, value: boolean) {
 
 export function PwaInstallManager() {
   const pathname = usePathname();
+  const isNative = useNativeAppRuntime();
   const installContext = installContextFromPathname(pathname);
   const storageKey = installContext ? dismissedKey(installContext) : "";
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -198,6 +200,7 @@ export function PwaInstallManager() {
   const [showManualSteps, setShowManualSteps] = useState(false);
 
   useEffect(() => {
+    if (isNativeAppRuntime()) return;
     if (!("serviceWorker" in navigator)) return;
     if (window.location.protocol !== "https:" && window.location.hostname !== "localhost") return;
     const reloadKey = "bee-suite-pwa-controllerchange-reload";
@@ -228,6 +231,7 @@ export function PwaInstallManager() {
   }, []);
 
   useEffect(() => {
+    if (isNativeAppRuntime()) return;
     const syncBrowserState = window.setTimeout(() => {
       const secureInstallState = readSecureInstallState();
       setDeviceKind(readDeviceKind());
@@ -300,7 +304,7 @@ export function PwaInstallManager() {
     setIsDismissed(true);
   }
 
-  if (!isReady || !installContext || isStandalone) return null;
+  if (isNative || !isReady || !installContext || isStandalone) return null;
 
   if (!isSecureOrigin) {
     return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowUpRight, CheckCircle2, LoaderCircle, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -37,6 +38,7 @@ export function CorporateStripeVerificationCard({
   returning,
   autoStart,
 }: Props) {
+  const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -146,7 +148,7 @@ export function CorporateStripeVerificationCard({
         )}
         {!complete ? <Button type="button" size="lg" variant="outline" disabled={busy} onClick={() => void syncStatus()}>Check Stripe status</Button> : null}
         {!busy ? (
-          <Button type="button" size="lg" variant="outline" onClick={() => window.location.assign("/stripe-reauthorization/corporate")}>
+          <Button type="button" size="lg" variant="outline" onClick={() => router.push("/stripe-reauthorization/corporate")}>
             Corporate school progress
           </Button>
         ) : null}

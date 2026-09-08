@@ -11,6 +11,7 @@ import {
   reserveStripeWebhookDelivery,
   stripeWebhookDedupeKey,
 } from "../src/lib/stripe-webhook-receipts";
+import { isStripeWebhookTransientDatabaseError, retryStripeWebhookTransaction } from "../src/lib/stripe-webhook-retry";
 
 function stripeSignature(payload: string, secret: string, timestamp: number) {
   return createHmac("sha256", secret).update(`${timestamp}.${payload}`).digest("hex");
@@ -147,7 +148,8 @@ test("concurrent deliveries reserve exactly one durable receipt", async () => {
       stored = true;
       inserts += 1;
     },
-    eventExists: async () => stored,
+    existingReceipt: async () => stored ? { status: "received" } : null,
+    reclaimRetryable: async () => false,
   });
 
   const results = await Promise.all(Array.from({ length: 12 }, reserve));
@@ -161,8 +163,81 @@ test("unrelated unique conflicts are never mislabeled as webhook duplicates", as
   assert.equal(isStripeWebhookReceiptUniqueConflict({ code: "P2002", meta: { target: ["externalId"] } }), false);
   await assert.rejects(() => reserveStripeWebhookDelivery({
     insert: async () => { throw { code: "P2002", meta: { target: ["externalId"] } }; },
-    eventExists: async () => true,
+    existingReceipt: async () => ({ status: "received" }),
+    reclaimRetryable: async () => false,
   }));
+});
+
+test("only explicitly retryable receipts can be atomically reclaimed", async () => {
+  let status = "retryable";
+  let reclaimed = 0;
+  const reserve = () => reserveStripeWebhookDelivery({
+    insert: async () => { throw { code: "P2002", meta: { target: ["eventId"] } }; },
+    existingReceipt: async () => ({ status }),
+    reclaimRetryable: async () => {
+      if (status !== "retryable") return false;
+      status = "received";
+      reclaimed += 1;
+      return true;
+    },
+  });
+  const results = await Promise.all(Array.from({ length: 8 }, reserve));
+  assert.equal(reclaimed, 1);
+  assert.equal(results.filter((result) => result === "received").length, 1);
+  assert.equal(results.filter((result) => result === "duplicate").length, 7);
+
+  const manualReview = await reserveStripeWebhookDelivery({
+    insert: async () => { throw { code: "P2002", meta: { target: ["eventId"] } }; },
+    existingReceipt: async () => ({ status: "manual_review" }),
+    reclaimRetryable: async () => { throw new Error("manual review must not be reclaimed"); },
+  });
+  assert.equal(manualReview, "duplicate");
+});
+
+test("webhook transactions retry only transient database conflicts with a hard cap", async () => {
+  assert.equal(isStripeWebhookTransientDatabaseError({ code: "P2034" }), true);
+  assert.equal(isStripeWebhookTransientDatabaseError({ message: "database error: 40P01 deadlock detected" }), true);
+  assert.equal(isStripeWebhookTransientDatabaseError({ cause: { code: "40001" } }), true);
+  assert.equal(isStripeWebhookTransientDatabaseError({ code: "P2022" }), false);
+
+  let attempts = 0;
+  const delays: number[] = [];
+  const result = await retryStripeWebhookTransaction(async () => {
+    attempts += 1;
+    if (attempts < 3) throw { code: "P2034" };
+    return "processed";
+  }, {
+    maxAttempts: 3,
+    baseDelayMs: 5,
+    sleep: async (delay) => { delays.push(delay); },
+  });
+  assert.equal(result, "processed");
+  assert.equal(attempts, 3);
+  assert.deepEqual(delays, [5, 10]);
+
+  attempts = 0;
+  await assert.rejects(() => retryStripeWebhookTransaction(async () => {
+    attempts += 1;
+    throw { code: "P2022" };
+  }, { sleep: async () => undefined }));
+  assert.equal(attempts, 1);
+});
+
+test("payment event transactions establish a Payment-before-Invoice lock order", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /SELECT id[\s\S]*FROM public\."Payment"[\s\S]*FOR UPDATE/);
+  assert.ok((route.match(/lockStripeWebhookPayment\(tx,/g) || []).length >= 11);
+  const checkout = route.slice(route.lastIndexOf('if (event.type === "checkout.session.completed" && session.payment_status !== "paid")'));
+  assert.ok(checkout.indexOf("lockStripeWebhookPayment(tx, paymentId)") < checkout.indexOf("tx.invoice.findUnique"));
+  assert.ok(checkout.indexOf("payment_already_applied") < checkout.indexOf("checkoutApplicationGuard"));
+  assert.match(route, /retryStripeWebhookTransaction\(\(\) => prisma\.\$transaction\(callback\)\)/);
+});
+
+test("exhausted transient conflicts remain provider-retryable instead of being stranded", async () => {
+  const route = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  assert.match(route, /status: "retryable"[\s\S]*error: "transient_database_conflict"[\s\S]*processedAt: null/);
+  assert.match(route, /isStripeWebhookTransientDatabaseError\(error\)[\s\S]*markStripeWebhookReceiptRetryable\(event\)[\s\S]*status: 503/);
+  assert.match(route, /where: \{ eventId: event\.id, status: "retryable" \}/);
 });
 
 test("supported reconciliation matrix includes payment, invoice, subscription, dispute, and Accounts v2 events", () => {

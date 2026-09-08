@@ -124,6 +124,7 @@ async function POSTHandler(request: NextRequest) {
           id: true,
           name: true,
           crmLocationId: true,
+          organization: { select: { tenantId: true } },
         },
       },
     },
@@ -180,8 +181,10 @@ async function POSTHandler(request: NextRequest) {
     data: {
       type: "mr_bee_lead_follow_up",
       promptContext: {
+        tenantId: lead.center.organization.tenantId,
         leadId: lead.id,
         centerId: lead.centerId,
+        centerIds: [lead.centerId],
         purpose,
         contextPrompt: contextPrompt || null,
         leadStage: lead.stage,

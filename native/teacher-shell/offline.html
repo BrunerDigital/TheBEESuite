@@ -3,22 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#05070a" />
+    <meta name="theme-color" content="#151515" />
     <title>Connection Required</title>
     <style>
       :root {
         color-scheme: dark;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #05070a;
+        background: #151515;
         color: #ffffff;
       }
 
+      * { box-sizing: border-box; }
+
       body {
         display: grid;
-        min-height: 100vh;
+        min-height: 100dvh;
         margin: 0;
         place-items: center;
-        padding: 24px;
+        padding: calc(28px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
       }
 
       main {
@@ -38,6 +40,8 @@
         line-height: 1.55;
       }
 
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
       a {
         display: inline-flex;
         min-height: 44px;
@@ -50,13 +54,21 @@
         padding: 0 18px;
         text-decoration: none;
       }
+
+      a.secondary { border: 1px solid #475569; background: transparent; color: #ffffff; }
+      a:focus-visible { outline: 3px solid #ffffff; outline-offset: 4px; }
     </style>
   </head>
   <body>
     <main>
-      <h1>Connection Required</h1>
+      <div role="status" aria-live="polite">
+      <h1>You're offline</h1>
       <p>BEE Suite needs an internet connection to load classroom rosters, attendance, daily reports, media, and incident workflows.</p>
-      <a href="https://thebeesuite.io/teachers">Try again</a>
+      </div>
+      <div class="actions">
+        <a href="https://thebeesuite.io/teachers">Try again</a>
+        <a class="secondary" href="https://thebeesuite.io/support">Get support</a>
+      </div>
     </main>
   </body>
 </html>

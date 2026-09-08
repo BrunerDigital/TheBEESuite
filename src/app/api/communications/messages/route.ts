@@ -13,6 +13,7 @@ import {
   uniqueMessageNotificationUsers,
 } from "@/lib/message-notification-recipients";
 import { appendInAppMessageReplyInstructions, buildAbsoluteMessageReplyUrl } from "@/lib/message-reply-routing";
+import { messageContentSafetyMetadata, screenMessageContent } from "@/lib/message-content-safety";
 import { canonicalizeSystemMessageTemplate, defaultMessageTemplates, renderMessageTemplate } from "@/lib/message-templates";
 import {
   broadcastSegmentIsEmpty,
@@ -32,6 +33,7 @@ import { prisma } from "@/lib/prisma";
 import { contentTypeForDocumentFile, uploadMessageAttachmentBuffer } from "@/lib/supabase-storage";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
 import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
+import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -359,6 +361,9 @@ function buildTemplateContext({
 }
 
 async function POSTHandler(request: NextRequest) {
+  if (!hasTrustedMutationOrigin(request)) {
+    return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -392,6 +397,17 @@ async function POSTHandler(request: NextRequest) {
   }
   if (!message) {
     message = "Attached file(s)";
+  }
+  if (subject.length > 200 || message.length > 5000) {
+    return NextResponse.json({ ok: false, error: "Keep the subject under 200 characters and the message under 5,000 characters." }, { status: 400 });
+  }
+  const initialContentSafety = screenMessageContent(subject, message);
+  if (!initialContentSafety.allowed) {
+    return NextResponse.json({
+      ok: false,
+      error: "This message could not be posted because it contains unsafe content. Revise it or contact the school directly for urgent safety help.",
+      category: initialContentSafety.category,
+    }, { status: 422 });
   }
 
   if (targetMode === "staff") {
@@ -495,6 +511,7 @@ async function POSTHandler(request: NextRequest) {
             senderRole: user.role,
             recipientRole: recipient.role,
           },
+          contentSafety: messageContentSafetyMetadata(initialContentSafety),
         }, attachments),
       },
     });
@@ -617,20 +634,6 @@ async function POSTHandler(request: NextRequest) {
       select: { id: true, name: true, email: true, phone: true },
     });
     const centerById = new Map(centerRows.map((center) => [center.id, center]));
-    let broadcastAttachments: StoredMessageAttachment[] = [];
-    try {
-      broadcastAttachments = await uploadMessageAttachments({
-        files: input.files,
-        user,
-        centerId: user.primaryCenterId,
-        threadKey: "broadcast",
-      });
-    } catch {
-      return NextResponse.json(
-        { ok: false, error: "We couldn't upload the attachment. The message was not sent. Try again." },
-        { status: 502 },
-      );
-    }
 
     let selectedTemplate: { name?: string | null; subject: string; body: string; category: string } | null = null;
     if (templateId && !templateId.startsWith("default-")) {
@@ -655,6 +658,28 @@ async function POSTHandler(request: NextRequest) {
       });
       subject = submittedTemplate.subject;
       message = submittedTemplate.body;
+    }
+    const broadcastContentSafety = screenMessageContent(subject, message);
+    if (!broadcastContentSafety.allowed) {
+      return NextResponse.json({
+        ok: false,
+        error: "This message could not be posted because it contains unsafe content. Revise it before sending.",
+        category: broadcastContentSafety.category,
+      }, { status: 422 });
+    }
+    let broadcastAttachments: StoredMessageAttachment[] = [];
+    try {
+      broadcastAttachments = await uploadMessageAttachments({
+        files: input.files,
+        user,
+        centerId: user.primaryCenterId,
+        threadKey: "broadcast",
+      });
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: "We couldn't upload the attachment. The message was not sent. Try again." },
+        { status: 502 },
+      );
     }
 
     if (assignedToId) {
@@ -733,6 +758,7 @@ async function POSTHandler(request: NextRequest) {
               summary: broadcastSegmentSummary(broadcastSegment),
               recipientCount: targetFamilies.length,
             },
+            contentSafety: messageContentSafetyMetadata(broadcastContentSafety),
           }, broadcastAttachments),
         },
       });
@@ -923,6 +949,14 @@ async function POSTHandler(request: NextRequest) {
   });
   subject = renderMessageTemplate(subject, templateContext);
   message = renderMessageTemplate(message, templateContext);
+  const renderedContentSafety = screenMessageContent(subject, message);
+  if (!renderedContentSafety.allowed) {
+    return NextResponse.json({
+      ok: false,
+      error: "This message could not be posted because it contains unsafe content. Revise it or contact the school directly for urgent safety help.",
+      category: renderedContentSafety.category,
+    }, { status: 422 });
+  }
 
   const currentFamilyClassroomIds = family?.children
     .filter((child) => ["enrolled", "active", "current"].includes((child.enrollmentStatus ?? "").toLowerCase()))
@@ -1012,6 +1046,7 @@ async function POSTHandler(request: NextRequest) {
           push: sendPushCopy,
         },
         templateId,
+        contentSafety: messageContentSafetyMetadata(renderedContentSafety),
       }, attachments),
     },
   });

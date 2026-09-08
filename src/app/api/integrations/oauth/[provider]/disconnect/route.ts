@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { integrationScopeForUser } from "@/lib/integration-scope";
 import { isMarketingIntegrationProvider, normalizeIntegrationProvider } from "@/lib/integration-setup";
 import { prisma } from "@/lib/prisma";
+import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,9 +19,12 @@ const allowedRoles = new Set<UserRole>([
 ]);
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ provider: string }> },
 ) {
+  if (!hasTrustedMutationOrigin(request)) {
+    return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!allowedRoles.has(user.role)) {

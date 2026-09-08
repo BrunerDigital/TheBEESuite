@@ -3,10 +3,10 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { cleanSupabaseUrl } from "@/lib/supabase-auth";
 
 export const CHILD_MEDIA_BUCKET = process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
-export const DOCUMENT_BUCKET = process.env.SUPABASE_DOCUMENT_BUCKET || process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
+export const ASSET_HUB_BUCKET = process.env.SUPABASE_ASSET_HUB_BUCKET || "corporate-assets";
+export const DOCUMENT_BUCKET = process.env.SUPABASE_DOCUMENT_BUCKET || ASSET_HUB_BUCKET;
 export const MESSAGE_ATTACHMENT_BUCKET = process.env.SUPABASE_MESSAGE_ATTACHMENT_BUCKET || DOCUMENT_BUCKET;
 export const PROFILE_PHOTO_BUCKET = process.env.SUPABASE_PROFILE_PHOTO_BUCKET || process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
-export const ASSET_HUB_BUCKET = process.env.SUPABASE_ASSET_HUB_BUCKET || "corporate-assets";
 export const CHILD_MEDIA_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_CHILD_MEDIA_SIGNED_URL_SECONDS || 60 * 60 * 2);
 export const DOCUMENT_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_DOCUMENT_SIGNED_URL_SECONDS || 60 * 60);
 export const MESSAGE_ATTACHMENT_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_MESSAGE_ATTACHMENT_SIGNED_URL_SECONDS || 60 * 60 * 2);
@@ -40,16 +40,29 @@ export function getSupabaseStorageClient(): StorageClient {
   });
 }
 
+export async function requireAssetHubBucket() {
+  const client = getSupabaseStorageClient();
+  const { data, error } = await client.storage.getBucket(ASSET_HUB_BUCKET);
+  if (error || !data || data.public) {
+    throw new Error("The private Asset Hub storage bucket is not configured.");
+  }
+}
+
+// Operator-only setup/import scripts may create the bucket explicitly. Runtime
+// upload routes use requireAssetHubBucket so a request can never change provider
+// configuration implicitly.
 export async function ensureAssetHubBucket() {
   const client = getSupabaseStorageClient();
-  const { data } = await client.storage.getBucket(ASSET_HUB_BUCKET);
+  const { data, error } = await client.storage.getBucket(ASSET_HUB_BUCKET);
+  if (data?.public) throw new Error("The Asset Hub storage bucket must be private.");
   if (data) return;
-  const { error } = await client.storage.createBucket(ASSET_HUB_BUCKET, { public: false });
-  if (error && !/already exists/i.test(error.message)) throw new Error(error.message);
+  if (error && !/not found/i.test(error.message)) throw new Error(error.message);
+  const { error: createError } = await client.storage.createBucket(ASSET_HUB_BUCKET, { public: false });
+  if (createError && !/already exists/i.test(createError.message)) throw new Error(createError.message);
 }
 
 export async function createAssetHubUploadUrl(storageKey: string) {
-  await ensureAssetHubBucket();
+  await requireAssetHubBucket();
   const client = getSupabaseStorageClient();
   const { data, error } = await client.storage.from(ASSET_HUB_BUCKET).createSignedUploadUrl(storageKey);
   if (error || !data?.token) throw new Error(error?.message || "Could not prepare the asset upload.");
@@ -65,6 +78,19 @@ export async function createAssetHubSignedUrl(storageKey: string, downloadName?:
   );
   if (error || !data?.signedUrl) throw new Error(error?.message || "Could not create a secure asset link.");
   return data.signedUrl;
+}
+
+export async function getAssetHubObjectInfo(storageKey: string) {
+  const { data, error } = await getSupabaseStorageClient().storage.from(ASSET_HUB_BUCKET).info(storageKey);
+  if (error || !data) throw new Error(error?.message || "Could not verify the uploaded asset.");
+  return {
+    size: typeof data.size === "number" ? data.size : null,
+    contentType: typeof data.contentType === "string"
+      ? data.contentType
+      : typeof data.metadata?.mimetype === "string"
+        ? data.metadata.mimetype
+        : null,
+  };
 }
 
 export async function deleteAssetHubObject(storageKey: string) {
@@ -106,6 +132,70 @@ function assertDocumentContentType(contentType: string) {
   ]);
   if (!allowed.has(contentType)) {
     throw new Error("Document must be a PDF, Word document, image, or text file.");
+  }
+}
+
+const extensionsByContentType: Record<string, ReadonlySet<string>> = {
+  "application/pdf": new Set(["pdf"]),
+  "application/msword": new Set(["doc"]),
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": new Set(["docx"]),
+  "image/jpeg": new Set(["jpg", "jpeg"]),
+  "image/png": new Set(["png"]),
+  "image/webp": new Set(["webp"]),
+  "text/plain": new Set(["txt"]),
+};
+
+function fileExtension(originalName?: string) {
+  const normalized = originalName?.trim().toLowerCase() || "";
+  const separator = normalized.lastIndexOf(".");
+  if (separator <= 0 || separator === normalized.length - 1) return null;
+  return normalized.slice(separator + 1);
+}
+
+function startsWithBytes(bytes: Buffer, signature: readonly number[]) {
+  return signature.every((value, index) => bytes[index] === value);
+}
+
+function hasExpectedSignature(bytes: Buffer, contentType: string) {
+  if (!bytes.byteLength) return false;
+  if (contentType === "application/pdf") return bytes.subarray(0, 5).toString("ascii") === "%PDF-";
+  if (contentType === "application/msword") return startsWithBytes(bytes, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+  if (contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    return startsWithBytes(bytes, [0x50, 0x4b, 0x03, 0x04]);
+  }
+  if (contentType === "image/jpeg") return startsWithBytes(bytes, [0xff, 0xd8, 0xff]);
+  if (contentType === "image/png") return startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (contentType === "image/webp") {
+    return bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+  }
+  if (contentType === "text/plain") {
+    if (bytes.includes(0)) return false;
+    try {
+      new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, Math.min(bytes.byteLength, 64 * 1024)));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+export function validateStoredUpload(input: {
+  bytes: Buffer;
+  contentType: string;
+  originalName?: string;
+  allowedContentTypes: readonly string[];
+  maxBytes: number;
+  sizeError: string;
+  typeError: string;
+}) {
+  if (!input.allowedContentTypes.includes(input.contentType)) throw new Error(input.typeError);
+  if (input.bytes.byteLength > input.maxBytes) throw new Error(input.sizeError);
+
+  const extension = fileExtension(input.originalName);
+  const expectedExtensions = extensionsByContentType[input.contentType];
+  if ((extension && !expectedExtensions?.has(extension)) || !hasExpectedSignature(input.bytes, input.contentType)) {
+    throw new Error("The file contents do not match the selected file type.");
   }
 }
 
@@ -190,10 +280,15 @@ export async function uploadProfilePhotoBuffer({
   tenantId: string;
   userId: string;
 }) {
-  if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
-    throw new Error("Profile photo must be a JPG, PNG, or WebP image.");
-  }
-  if (bytes.byteLength > PROFILE_PHOTO_MAX_BYTES) throw new Error("Profile photo must be 5MB or smaller.");
+  validateStoredUpload({
+    bytes,
+    contentType,
+    originalName,
+    allowedContentTypes: ["image/jpeg", "image/png", "image/webp"],
+    maxBytes: PROFILE_PHOTO_MAX_BYTES,
+    sizeError: "Profile photo must be 5MB or smaller.",
+    typeError: "Profile photo must be a JPG, PNG, or WebP image.",
+  });
 
   const client = getSupabaseStorageClient();
   const storageKey = buildProfilePhotoPath({ tenantId, userId, originalName, contentType });
@@ -237,8 +332,15 @@ export async function uploadChildMediaBuffer({
   classroomId?: string | null;
   childId: string;
 }) {
-  if (!contentType.startsWith("image/")) throw new Error("Only image uploads are supported.");
-  if (bytes.byteLength > CHILD_MEDIA_MAX_BYTES) throw new Error("Photo must be 8MB or smaller.");
+  validateStoredUpload({
+    bytes,
+    contentType,
+    originalName,
+    allowedContentTypes: ["image/jpeg", "image/png", "image/webp"],
+    maxBytes: CHILD_MEDIA_MAX_BYTES,
+    sizeError: "Photo must be 8MB or smaller.",
+    typeError: "Photo must be a JPG, PNG, or WebP image.",
+  });
 
   const client = getSupabaseStorageClient();
   const storageKey = buildChildMediaPath({ tenantId, centerId, classroomId, childId, originalName, contentType });
@@ -337,7 +439,15 @@ export async function uploadDocumentBuffer({
   documentId: string;
 }) {
   assertDocumentContentType(contentType);
-  if (bytes.byteLength > DOCUMENT_MAX_BYTES) throw new Error("Document must be 20MB or smaller.");
+  validateStoredUpload({
+    bytes,
+    contentType,
+    originalName,
+    allowedContentTypes: Object.keys(extensionsByContentType),
+    maxBytes: DOCUMENT_MAX_BYTES,
+    sizeError: "Document must be 20MB or smaller.",
+    typeError: "Document must be a PDF, Word document, image, or text file.",
+  });
 
   const client = getSupabaseStorageClient();
   const storageKey = buildDocumentPath({ tenantId, centerId, familyId, childId, documentId, originalName, contentType });
@@ -359,9 +469,11 @@ export async function uploadDocumentBuffer({
 
 export async function createDocumentSignedUrl(storageKey: string, expiresIn = DOCUMENT_SIGNED_URL_SECONDS) {
   const client = getSupabaseStorageClient();
-  const { data, error } = await client.storage.from(DOCUMENT_BUCKET).createSignedUrl(storageKey, expiresIn);
-  if (error || !data?.signedUrl) throw new Error(error?.message || "Could not create signed document URL.");
-  return data.signedUrl;
+  for (const bucket of [...new Set([DOCUMENT_BUCKET, CHILD_MEDIA_BUCKET])]) {
+    const { data, error } = await client.storage.from(bucket).createSignedUrl(storageKey, expiresIn);
+    if (!error && data?.signedUrl) return data.signedUrl;
+  }
+  throw new Error("Could not create signed document URL.");
 }
 
 export function buildMessageAttachmentPath({
@@ -417,7 +529,15 @@ export async function uploadMessageAttachmentBuffer({
   uploadedById: string;
 }) {
   assertDocumentContentType(contentType);
-  if (bytes.byteLength > MESSAGE_ATTACHMENT_MAX_BYTES) throw new Error("Attachment must be 20MB or smaller.");
+  validateStoredUpload({
+    bytes,
+    contentType,
+    originalName,
+    allowedContentTypes: Object.keys(extensionsByContentType),
+    maxBytes: MESSAGE_ATTACHMENT_MAX_BYTES,
+    sizeError: "Attachment must be 20MB or smaller.",
+    typeError: "Attachment must be a PDF, Word document, image, or text file.",
+  });
 
   const client = getSupabaseStorageClient();
   const storageKey = buildMessageAttachmentPath({
@@ -445,11 +565,17 @@ export async function uploadMessageAttachmentBuffer({
   };
 }
 
-export async function createMessageAttachmentSignedUrl(storageKey: string, expiresIn = MESSAGE_ATTACHMENT_SIGNED_URL_SECONDS) {
+export async function createMessageAttachmentSignedUrl(
+  storageKey: string,
+  expiresIn = MESSAGE_ATTACHMENT_SIGNED_URL_SECONDS,
+  storedBucket?: string,
+) {
   const client = getSupabaseStorageClient();
-  const { data, error } = await client.storage.from(MESSAGE_ATTACHMENT_BUCKET).createSignedUrl(storageKey, expiresIn);
-  if (error || !data?.signedUrl) throw new Error(error?.message || "Could not create signed attachment URL.");
-  return data.signedUrl;
+  for (const bucket of [...new Set([storedBucket, MESSAGE_ATTACHMENT_BUCKET, CHILD_MEDIA_BUCKET].filter(Boolean) as string[])]) {
+    const { data, error } = await client.storage.from(bucket).createSignedUrl(storageKey, expiresIn);
+    if (!error && data?.signedUrl) return data.signedUrl;
+  }
+  throw new Error("Could not create signed attachment URL.");
 }
 
 export async function signDocumentRecords<T extends { storageKey?: string | null }>(records: T[]) {

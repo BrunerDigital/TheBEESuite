@@ -3,6 +3,7 @@ import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { AI_COMMAND_GUARDRAIL_NOTE, buildAiOperationsSummary } from "@/lib/ai-command";
+import { tenantIdsFromAiPromptContext } from "@/lib/ai-suggestion-scope";
 import {
   AI_COMMAND_MODEL,
   AI_COMMAND_MAX_BULK_RECORDS,
@@ -97,17 +98,32 @@ async function resolveSuggestionAccess(
   promptContext: Prisma.JsonValue | null,
 ) {
   const context = asRecord(promptContext);
+  const tenantIds = tenantIdsFromAiPromptContext(promptContext);
+  if (!tenantIds.length) return false;
+  if (user.role !== UserRole.PLATFORM_OWNER && tenantIds.some((tenantId) => tenantId !== user.tenantId)) return false;
   const centerIds = new Set(centerIdsFromPromptContext(promptContext));
   const familyId = clean(context.familyId);
   const leadId = clean(context.leadId);
 
   if (familyId) {
-    const family = await prisma.family.findUnique({ where: { id: familyId }, select: { centerId: true } });
+    const family = await prisma.family.findFirst({
+      where: {
+        id: familyId,
+        ...(user.role === UserRole.PLATFORM_OWNER ? {} : { centerId: { in: user.centerIds } }),
+      },
+      select: { centerId: true },
+    });
     if (family?.centerId) centerIds.add(family.centerId);
   }
 
   if (leadId) {
-    const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { centerId: true } });
+    const lead = await prisma.lead.findFirst({
+      where: {
+        id: leadId,
+        ...(user.role === UserRole.PLATFORM_OWNER ? {} : { centerId: { in: user.centerIds } }),
+      },
+      select: { centerId: true },
+    });
     if (lead?.centerId) centerIds.add(lead.centerId);
   }
 
@@ -123,7 +139,17 @@ async function generateOperationsSummary(
   const visibleCenters = await prisma.center.findMany({
     where: centerWhereForUser(user),
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
+    select: {
+      id: true,
+      name: true,
+      crmLocationId: true,
+      city: true,
+      state: true,
+      postalCode: true,
+      timezone: true,
+      customFields: true,
+      organization: { select: { tenantId: true } },
+    },
   });
 
   let selectedCenters = visibleCenters;
@@ -143,8 +169,16 @@ async function generateOperationsSummary(
   const now = new Date();
   const serviceDay = centerServiceDayWindow(now, selectedCenters.length === 1 ? selectedCenters[0] : null);
   const scopeLabel = selectedCenters.length === 1 ? centerLabel(selectedCenters[0]) : `${selectedCenters.length.toLocaleString()} visible schools`;
-  const scope = selectedCenters.length === 1 ? "center" : "center_group";
-  const scopeId = selectedCenters.length === 1 ? selectedCenters[0].id : null;
+  const scope = selectedCenters.length === 1
+    ? "center"
+    : user.role === UserRole.PLATFORM_OWNER
+      ? "platform"
+      : "tenant";
+  const scopeId = selectedCenters.length === 1
+    ? selectedCenters[0].id
+    : user.role === UserRole.PLATFORM_OWNER
+      ? null
+      : user.tenantId;
   const currentFamilyWhere: Prisma.FamilyWhereInput = {
     centerId: selectedCenterFilter,
     children: { some: currentlyEnrolledChildWhere() },
@@ -245,7 +279,9 @@ async function generateOperationsSummary(
   });
 
   await writeAuditLog(user, {
-    centerId: scopeId,
+    // Tenant and platform summary identifiers are not Center primary keys.
+    // Keep the audit row center-scoped only for an exact-school summary.
+    centerId: selectedCenters.length === 1 ? selectedCenters[0].id : null,
     action: "ai_command.summary.generated",
     resource: "AiSummary",
     resourceId: summary.id,
@@ -774,7 +810,16 @@ async function runAiDataCommand(
       status: "pending_review",
       guardrailNote: AI_COMMAND_MUTATION_BOUNDARY,
       suggestion: JSON.stringify(plan),
-      promptContext: { centerId: selectedCenterId, createdByUserId: user.id, operationId, command, calls: plannedCalls, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() },
+      promptContext: {
+        tenantId: user.tenantId,
+        centerId: selectedCenterId,
+        centerIds: [selectedCenterId],
+        createdByUserId: user.id,
+        operationId,
+        command,
+        calls: plannedCalls,
+        expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+      },
     },
   });
   await writeAuditLog(user, { centerId: selectedCenterId, action: "ai_command.change_plan.created", resource: "AiSuggestion", resourceId: proposal.id, metadata: { operationId, actionCount: plannedCalls.length, targetCount: totalTargets } });

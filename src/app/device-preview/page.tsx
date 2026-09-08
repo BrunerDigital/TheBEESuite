@@ -159,6 +159,7 @@ function ParentPreview({ screen, familySection }: { screen: string | undefined; 
       messages={executiveParentPortalDemo.messages.map((message, index) => ({
         ...message,
         isFromFamily: index % 2 === 1,
+        canReport: index % 2 === 0,
         sender: { name: index % 2 === 1 ? "Jordan Rivera" : "Ms. Morgan" },
       }))}
       previewMode
@@ -167,7 +168,58 @@ function ParentPreview({ screen, familySection }: { screen: string | undefined; 
   );
 }
 
-function TeacherPreview() {
+function TeacherPreview({ screen }: { screen?: string }) {
+  const activeScreen = screen === "roster" || screen === "quick-log" ? screen : "home";
+  const roster = [
+    ["Ava Rivera", "Present", "Daily report started"],
+    ["Mason Brooks", "Present", "Lunch recorded"],
+    ["Noah Williams", "Present", "Nap pending"],
+    ["Lily Chen", "Checked out", "Report shared"],
+    ["Emma Davis", "Present", "Photo approved"],
+  ];
+
+  if (activeScreen === "roster") {
+    return (
+      <div className="flex min-w-0 flex-col gap-5">
+        <section className="overflow-hidden rounded-2xl border bg-card p-5 sm:p-7">
+          <Badge className="mb-4">Butterflies classroom</Badge>
+          <h1 className="text-pretty text-3xl font-semibold tracking-tight">Classroom roster</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Current classroom status and daily-report progress</p>
+        </section>
+        <Card id="teacher-roster" className="min-w-0 overflow-hidden">
+          <CardHeader><CardTitle as="h2">Children today</CardTitle><CardDescription>Five safe preview records · four currently present</CardDescription></CardHeader>
+          <CardContent className="grid gap-2">
+            {roster.map(([name, status, detail]) => (
+              <div key={name} className="flex min-h-16 items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+                <div className="min-w-0"><div className="truncate font-medium">{name}</div><div className="mt-1 truncate text-xs text-muted-foreground">{detail}</div></div>
+                <Badge variant={status === "Present" ? "secondary" : "outline"}>{status}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (activeScreen === "quick-log") {
+    return (
+      <div className="flex min-w-0 flex-col gap-5">
+        <section className="overflow-hidden rounded-2xl border bg-card p-5 sm:p-7">
+          <Badge className="mb-4">Butterflies classroom</Badge>
+          <h1 className="text-pretty text-3xl font-semibold tracking-tight">Quick log</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Record routine care and classroom moments with fewer taps</p>
+        </section>
+        <Card id="teacher-quick-log" className="min-w-0 overflow-hidden">
+          <CardHeader><CardTitle as="h2">What would you like to record?</CardTitle><CardDescription>Applies only to the children you select</CardDescription></CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3">
+            {["Meal", "Nap", "Diaper", "Activity", "Photo", "Teacher note"].map((label) => <div key={label} className="grid min-h-24 place-items-center rounded-xl border bg-muted/30 p-4 text-center text-sm font-semibold">{label}</div>)}
+          </CardContent>
+        </Card>
+        <Card><CardHeader><CardTitle as="h2">Report progress</CardTitle><CardDescription>Two reports still need a final review</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-2"><Badge variant="secondary">12 ready</Badge><Badge variant="outline">2 in progress</Badge></CardContent></Card>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-w-0 flex-col gap-5">
       <section className="overflow-hidden rounded-2xl border bg-card p-5 sm:p-7">
@@ -176,7 +228,7 @@ function TeacherPreview() {
         <p className="mt-2 text-sm text-muted-foreground">Fourteen children present · two daily reports need review</p>
       </section>
       <div className="grid min-w-0 gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <Card id="teacher-roster" className="scroll-mt-36 min-w-0 overflow-hidden"><CardHeader><CardTitle as="h2">Roster</CardTitle><CardDescription>Children currently in your classroom</CardDescription></CardHeader><CardContent className="grid gap-2">{['Ava Rivera', 'Mason Brooks', 'Noah Williams', 'Lily Chen'].map((name) => <div key={name} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm"><span className="truncate font-medium">{name}</span><Badge variant="outline">Present</Badge></div>)}</CardContent></Card>
+        <Card id="teacher-roster" className="scroll-mt-36 min-w-0 overflow-hidden"><CardHeader><CardTitle as="h2">Roster</CardTitle><CardDescription>Children currently in your classroom</CardDescription></CardHeader><CardContent className="grid gap-2">{roster.slice(0, 4).map(([name, status]) => <div key={name} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm"><span className="truncate font-medium">{name}</span><Badge variant="outline">{status}</Badge></div>)}</CardContent></Card>
         <Card id="teacher-quick-log" className="scroll-mt-36 min-w-0 overflow-hidden"><CardHeader><CardTitle as="h2">Quick log</CardTitle><CardDescription>Record the classroom day with fewer taps</CardDescription></CardHeader><CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">{['Meal', 'Nap', 'Diaper', 'Activity', 'Photo', 'Note'].map((label) => <div key={label} className="rounded-lg border p-4 text-center text-sm font-semibold">{label}</div>)}</CardContent></Card>
       </div>
     </div>
@@ -291,7 +343,7 @@ function ShellPreview({ role, screen, familySection }: { role: Exclude<PreviewRo
     return <AppShell previewMode previewHrefBase="/device-preview?view=parent" currentUser={{ name: "Jordan Rivera", email: "parent@example.com", role: "PARENT_GUARDIAN", timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "family", label: "Rivera Family", detail: "Sunshine Academy", href: "/parent-portal" } }}><ParentPreview screen={screen} familySection={familySection} /></AppShell>;
   }
   if (role === "teacher") {
-    return <AppShell previewMode previewHrefBase="/device-preview?view=teacher" currentUser={{ name: "Morgan Lee", email: "morgan@example.com", role: "TEACHER", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "classroom", label: "Butterflies", detail: "Sunshine Academy · Teacher", href: "/teacher-portal" } }}><TeacherPreview /></AppShell>;
+    return <AppShell previewMode previewHrefBase="/device-preview?view=teacher" currentUser={{ name: "Morgan Lee", email: "morgan@example.com", role: "TEACHER", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "classroom", label: "Butterflies", detail: "Sunshine Academy · Teacher", href: "/teacher-portal" } }}><TeacherPreview screen={screen} /></AppShell>;
   }
   if (role === "pickup") {
     return <AppShell previewMode previewHrefBase="/device-preview?view=pickup" currentUser={{ name: "Taylor Rivera", email: "pickup@example.com", role: "AUTHORIZED_PICKUP", timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "family", label: "Rivera Family", detail: "Authorized pickup access", href: "/parent-portal" } }}><PickupPreview /></AppShell>;

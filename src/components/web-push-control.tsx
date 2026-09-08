@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { BellRing, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { isNativeAppRuntime, useNativeAppRuntime } from "@/lib/native-app-runtime";
 
 type PushState =
   | "loading"
@@ -10,6 +11,7 @@ type PushState =
   | "enabled"
   | "disabled"
   | "blocked"
+  | "native"
   | "needs_install"
   | "unconfigured"
   | "unsupported"
@@ -76,11 +78,17 @@ async function removeSubscription(subscription: PushSubscription) {
 }
 
 export function WebPushControl() {
+  const isNative = useNativeAppRuntime();
   const [state, setState] = useState<PushState>("loading");
   const [configuration, setConfiguration] = useState<PushConfiguration | null>(null);
   const [detail, setDetail] = useState("Checking this device…");
 
   const inspect = useCallback(async () => {
+    if (isNativeAppRuntime()) {
+      setState("native");
+      setDetail("Native push alerts are not included in this version. New messages and updates remain available inside The BEE Suite.");
+      return;
+    }
     setState("loading");
     setDetail("Checking this device…");
 
@@ -97,7 +105,7 @@ export function WebPushControl() {
       }
       if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
         setState("unsupported");
-        setDetail("This browser cannot show device alerts. You can still see updates inside the Parent Portal.");
+        setDetail("This browser cannot show device alerts. You can still see updates inside The BEE Suite.");
         return;
       }
       if (!json.configured || !json.publicKey) {
@@ -135,6 +143,7 @@ export function WebPushControl() {
   }, []);
 
   useEffect(() => {
+    if (isNativeAppRuntime()) return;
     const task = window.setTimeout(() => void inspect(), 0);
     return () => window.clearTimeout(task);
   }, [inspect]);
@@ -187,21 +196,27 @@ export function WebPushControl() {
     }
   }
 
-  const working = state === "loading" || state === "working";
-  const actionable = ["enabled", "disabled", "error"].includes(state);
-  const label = state === "enabled"
+  const effectiveState: PushState = isNative ? "native" : state;
+  const effectiveDetail = isNative
+    ? "Native push alerts are not included in this version. New messages and updates remain available inside The BEE Suite."
+    : detail;
+  const working = effectiveState === "loading" || effectiveState === "working";
+  const actionable = ["enabled", "disabled", "error"].includes(effectiveState);
+  const label = effectiveState === "native"
+    ? "In-App Updates Available"
+    : effectiveState === "enabled"
     ? "Turn Off Device Alerts"
-    : state === "error"
+      : effectiveState === "error"
       ? "Check Alerts Again"
-      : state === "disabled"
+      : effectiveState === "disabled"
         ? "Enable Device Alerts"
-        : state === "needs_install"
+        : effectiveState === "needs_install"
           ? "Add to Home Screen First"
-          : state === "blocked"
+          : effectiveState === "blocked"
             ? "Allow Alerts in Device Settings"
-            : state === "unconfigured"
+            : effectiveState === "unconfigured"
               ? "Alerts Unavailable"
-              : state === "unsupported"
+              : effectiveState === "unsupported"
                 ? "Alerts Unavailable"
                 : "Checking Alerts…";
 
@@ -211,13 +226,13 @@ export function WebPushControl() {
         <BellRing className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <div className="text-xs font-semibold">Device alerts</div>
-          <p className="mt-1 text-xs leading-4 text-muted-foreground">{detail}</p>
+          <p className="mt-1 text-xs leading-4 text-muted-foreground">{effectiveDetail}</p>
           {actionable ? (
             <Button
               className="mt-2 min-h-11 w-full"
               size="sm"
-              variant={state === "enabled" ? "outline" : "default"}
-              onClick={state === "enabled" ? disable : state === "error" ? inspect : enable}
+              variant={effectiveState === "enabled" ? "outline" : "default"}
+              onClick={effectiveState === "enabled" ? disable : effectiveState === "error" ? inspect : enable}
               type="button"
             >
               {label}

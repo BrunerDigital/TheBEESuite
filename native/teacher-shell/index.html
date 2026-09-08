@@ -3,22 +3,25 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#05070a" />
+    <meta name="theme-color" content="#151515" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>BEE Suite Teacher Portal</title>
     <style>
       :root {
         color-scheme: dark;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #05070a;
+        background: #151515;
         color: #ffffff;
       }
 
+      * { box-sizing: border-box; }
+
       body {
         display: grid;
-        min-height: 100vh;
+        min-height: 100dvh;
         margin: 0;
         place-items: center;
-        padding: 24px;
+        padding: calc(28px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
       }
 
       main {
@@ -29,6 +32,28 @@
         margin: 0 0 12px;
         font-size: 28px;
         line-height: 1.1;
+      }
+
+      .mark {
+        display: grid;
+        width: 72px;
+        height: 72px;
+        margin-bottom: 28px;
+        place-items: center;
+        border: 2px solid #ffcf40;
+        border-radius: 20px;
+        color: #ffcf40;
+        font-size: 34px;
+        font-weight: 900;
+      }
+
+      .role {
+        margin-bottom: 12px;
+        color: #ffcf40;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
       }
 
       p {
@@ -50,12 +75,16 @@
         padding: 0 18px;
         text-decoration: none;
       }
+
+      a:focus-visible { outline: 3px solid #ffffff; outline-offset: 4px; }
     </style>
   </head>
   <body>
     <main>
-      <h1>BEE Suite Teacher Portal</h1>
-      <p>Connecting to the secure classroom workspace.</p>
+      <div class="mark" aria-hidden="true">B</div>
+      <div class="role">Teacher Portal</div>
+      <h1>Welcome to BEE Suite</h1>
+      <p>Connecting you to your secure classroom workspace.</p>
       <a href="https://thebeesuite.io/teachers">Open teacher portal</a>
     </main>
   </body>

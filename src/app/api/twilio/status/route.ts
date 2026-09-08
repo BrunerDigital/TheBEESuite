@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   parseTwilioWebhookParams,
   twilioBlockedCurrentStatuses,
+  twilioDeliveryTenantScope,
   twilioDeliveryStatus,
   twilioWebhookUrl,
   validateTwilioSignatureAgainstConfiguredTokens,
@@ -41,6 +42,7 @@ async function POSTHandler(request: NextRequest) {
     where: {
       provider: "twilio",
       providerMessageId: messageSid,
+      ...twilioDeliveryTenantScope(signatureMatch.tenantId),
       status: { notIn: twilioBlockedCurrentStatuses() },
     },
     data: {

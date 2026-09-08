@@ -111,6 +111,7 @@ import {
 } from "@/components/enrollment-visibility-panels";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { PaymentAutopayActions } from "@/components/payment-autopay-actions";
+import { PrivacyDeletionQueue, type PrivacyDeletionQueueRow } from "@/components/privacy-deletion-queue";
 import { NotificationReadAction } from "@/components/notification-read-actions";
 import {
   MessageReplyPanel,
@@ -125,6 +126,7 @@ import {
   MessageConversationInbox,
   type MessageConversationThread,
 } from "@/components/message-conversation-inbox";
+import { MessageReportButton } from "@/components/message-report-button";
 import {
   NotificationPreferencesPanel,
   type NotificationPreferenceRow,
@@ -1039,6 +1041,9 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
 
 export type DeveloperDashboardPageData = {
   canManageOperations: boolean;
+  canViewGlobalPaymentTelemetry: boolean;
+  canManagePrivacyRequests: boolean;
+  privacyDeletionRequests: PrivacyDeletionQueueRow[];
   centers: Array<{ id: string; name: string; city?: string | null; state?: string | null; postalCode?: string | null; timezone?: string | null; customFields?: unknown }>;
   stats: {
     auditEvents: number;
@@ -1274,6 +1279,8 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
         <CardContent className="flex flex-wrap items-center gap-3"><Badge variant="outline">{data.stats.activeUsers} active</Badge><Badge variant="outline">{data.stats.inactiveUsers} inactive</Badge><Link className={buttonVariants()} href="/agency-admin#existing-user-accounts">Open user access control <ArrowRight /></Link></CardContent>
       </Card>
 
+      {data.canManagePrivacyRequests ? <PrivacyDeletionQueue rows={data.privacyDeletionRequests} /> : null}
+
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -1380,7 +1387,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
           </CardContent>
         </Card>
 
-        <Card className="glass-panel">
+        {data.canViewGlobalPaymentTelemetry ? <Card className="glass-panel">
           <CardHeader>
             <CardTitle as="h2">Recent payment events</CardTitle>
             <CardDescription>Recent payment updates and any processing errors</CardDescription>
@@ -1417,7 +1424,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
               </TableBody>
             </Table>
           </CardContent>
-        </Card>
+        </Card> : null}
       </div>
 
       <Card className="glass-panel">
@@ -2396,6 +2403,7 @@ export type MessagesPageData = {
     assignedTo?: { name: string; email: string } | null;
     attachments?: MessageAttachmentView[];
     replyHref?: string | null;
+    canReport?: boolean;
   }>;
   threads: MessageConversationThread[];
   stats: {
@@ -2556,6 +2564,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
                         <div className="mt-1 text-sm font-medium">{message.subject ?? "Untitled message"}</div>
                         <div className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{message.body}</div>
                         <MessageAttachmentLinks attachments={message.attachments} />
+                        {message.canReport ? <MessageReportButton messageId={message.id} /> : null}
                       </div>
                     ))}
                   </div>

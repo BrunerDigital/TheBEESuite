@@ -4,6 +4,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { CheckCheck, FileText, Image as ImageIcon, Inbox, MessageCircle, Search, ShieldCheck, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MessageReportButton } from "@/components/message-report-button";
 import {
   MessageReplyPanel,
   type MessageFamilyOption,
@@ -38,6 +39,7 @@ export type MessageConversationThread = {
     isFromFamily: boolean;
     attachments?: MessageAttachmentView[];
     replyHref?: string | null;
+    canReport?: boolean;
   }>;
 };
 
@@ -278,6 +280,7 @@ export function MessageConversationInbox({
                         {message.subject ? <div className="mb-1 text-sm font-semibold">{message.subject}</div> : null}
                         <p className="whitespace-pre-wrap break-words text-sm leading-5">{message.body}</p>
                         <MessageAttachments attachments={message.attachments} />
+                        {message.canReport ? <MessageReportButton messageId={message.id} inverse={!message.isFromFamily} /> : null}
                         {!message.isFromFamily ? (
                           <div className="mt-2 flex items-center justify-end gap-1 text-[0.65rem] text-white/60">
                             <CheckCheck className="size-3" aria-hidden="true" />

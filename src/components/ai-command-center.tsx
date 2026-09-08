@@ -130,6 +130,8 @@ function aiDisplayLabel(value: string, fallback = "Status unavailable") {
     archived: "Archived",
     center: "One school",
     center_group: "Selected schools",
+    tenant: "All tenant schools",
+    platform: "All platform schools",
     message_broadcast_draft: "School message draft",
     message_family_reply_draft: "Family reply draft",
     mr_bee_lead_follow_up: "Enrollment follow-up",

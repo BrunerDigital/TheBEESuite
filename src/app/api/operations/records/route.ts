@@ -53,6 +53,8 @@ import { canSaveTuitionPlanAmount, normalizeBillingCadence, tuitionPlanRecordCha
 
 import { withApiLogging } from "@/lib/request-response-logging";
 import { normalizeScheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
+import { canWriteCenterlessAnnouncement } from "@/lib/announcement-scope";
+import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -327,6 +329,9 @@ async function assertFamilyAccess(user: Awaited<ReturnType<typeof getCurrentUser
 }
 
 async function POSTHandler(request: NextRequest) {
+  if (!hasTrustedMutationOrigin(request)) {
+    return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -1924,12 +1929,18 @@ async function POSTHandler(request: NextRequest) {
     });
   } else if (entity === "announcement") {
     const requestedCenterId = clean(body.centerId) || null;
+    if (!requestedCenterId && !canWriteCenterlessAnnouncement(user.role)) {
+      return NextResponse.json({ ok: false, error: "Choose a school for this announcement." }, { status: 403 });
+    }
     if (requestedCenterId && !canAccessCenter(user, requestedCenterId)) {
       return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
     }
     centerId = requestedCenterId;
     if (id) {
       const existing = await prisma.announcement.findUnique({ where: { id }, select: { centerId: true } });
+      if (existing && !existing.centerId && !canWriteCenterlessAnnouncement(user.role)) {
+        return NextResponse.json({ ok: false, error: "You do not have access to this platform announcement." }, { status: 403 });
+      }
       const guard = scopedUpdateGuard({ entity: "Announcement", expectedScopeId: requestedCenterId, actualScopeId: existing?.centerId, scopeLabel: "center" });
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
@@ -2287,6 +2298,9 @@ async function POSTHandler(request: NextRequest) {
 }
 
 async function DELETEHandler(request: NextRequest) {
+  if (!hasTrustedMutationOrigin(request)) {
+    return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });

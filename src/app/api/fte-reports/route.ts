@@ -16,6 +16,7 @@ import {
 } from "@/lib/fte-report-guardrails";
 import { appendRowToGoogleSheet, spreadsheetIdFromUrl, type GoogleSheetValue } from "@/lib/google-sheets";
 import { credentialEnvValue, getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
+import { postJsonToGoogleAppsScriptWebhook } from "@/lib/google-apps-script-webhook";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -201,20 +202,19 @@ async function forwardToFteSheet(row: GoogleSheetValue[], tenantId: string | nul
   if (!webhookUrl) return { ok: true, skipped: true };
 
   try {
-    const response = await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(Object.fromEntries(FTE_SHEET_HEADERS.map((header, index) => [header, row[index] ?? ""]))),
+    const response = await postJsonToGoogleAppsScriptWebhook({
+      url: webhookUrl,
+      payload: Object.fromEntries(FTE_SHEET_HEADERS.map((header, index) => [header, row[index] ?? ""])),
       signal: AbortSignal.timeout(8000),
     });
     return response.ok
       ? { ok: true, mode: "webhook" as const }
       : { ok: false, mode: "webhook" as const, error: `FTE webhook returned ${response.status}.` };
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       mode: "webhook" as const,
-      error: error instanceof Error ? error.message : "FTE webhook failed.",
+      error: "FTE webhook failed securely.",
     };
   }
 }

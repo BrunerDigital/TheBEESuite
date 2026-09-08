@@ -10,6 +10,7 @@ const apps = {
     webDir: "native/parent-shell",
     appStartPath: "/parents",
     iosPath: "ios",
+    backgroundColor: "#05070a",
   },
   teacher: {
     appId: "com.brunerdigital.thebeesuite.teacher",
@@ -17,6 +18,7 @@ const apps = {
     webDir: "native/teacher-shell",
     appStartPath: "/teachers",
     iosPath: "ios-teacher",
+    backgroundColor: "#151515",
   },
 } as const satisfies Record<string, {
   appId: string;
@@ -24,6 +26,7 @@ const apps = {
   webDir: string;
   appStartPath: string;
   iosPath: string;
+  backgroundColor: string;
 }>;
 
 const app = apps[nativeApp];
@@ -34,11 +37,15 @@ const config: CapacitorConfig = {
   webDir: app.webDir,
   ios: {
     path: app.iosPath,
+    backgroundColor: app.backgroundColor,
+    contentInset: "automatic",
+    allowsLinkPreview: false,
+    preferredContentMode: "mobile",
+    webContentsDebuggingEnabled: false,
   },
   server: {
     url: `https://${productionHost}`,
     appStartPath: app.appStartPath,
-    allowNavigation: [productionHost, `*.${productionHost}`],
     cleartext: false,
     errorPath: "offline.html",
   },

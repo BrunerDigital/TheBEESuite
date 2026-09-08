@@ -349,6 +349,22 @@ export async function supabaseAuthUserExistsByEmail(email: string) {
   return Boolean(user);
 }
 
+export async function deleteSupabaseAuthUserByEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!isSupabaseAuthCompatibleEmail(normalizedEmail)) {
+    return { ok: false as const, error: "Target login email is not valid." };
+  }
+  try {
+    const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedEmail);
+    if (!user) return { ok: true as const, deleted: false, alreadyMissing: true };
+    const { error } = await supabase.auth.admin.deleteUser(user.id);
+    if (error) return { ok: false as const, error: "Supabase Auth did not delete the target login." };
+    return { ok: true as const, deleted: true, alreadyMissing: false };
+  } catch {
+    return { ok: false as const, error: "Supabase Auth could not be reached to delete the target login." };
+  }
+}
+
 export async function updateSupabaseAuthUserEmailByCurrentEmail({
   currentEmail,
   newEmail,

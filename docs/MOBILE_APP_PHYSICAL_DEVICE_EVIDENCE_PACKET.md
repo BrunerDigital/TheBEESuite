@@ -1,5 +1,7 @@
 # Mobile App Physical-Device Evidence Packet
 
+Last updated: September 8, 2026
+
 Use one copy per release candidate, platform, and role app. Use fake review data only. Attach screenshots/log exports separately; do not place passwords, signing keys, provisioning profiles, service-account files, device tokens, or private child/family data in this packet.
 
 ## Release identity
@@ -24,7 +26,7 @@ Use one copy per release candidate, platform, and role app. Use fake review data
 - [ ] Clean dependency install and native sync completed from the recorded commit.
 - [ ] Store-distributed build installed; this is not a debug install.
 - [ ] App ID, version, build, display name, icon, launch screen, and supported devices match the release record.
-- [ ] Apple: archive validation passed and Xcode privacy report attached.
+- [ ] Apple: archive was built with Xcode 26 or later and the iOS 26 SDK or later, archive validation passed, and the Xcode privacy report is attached.
 - [ ] Android: signed AAB accepted by Play Console and App bundle explorer details attached.
 - [ ] Final Apple App Privacy / Google Data safety answers match the exact binary and production vendors.
 - [ ] No unapproved permission prompt, push entitlement, deep-link claim, or tracking behavior appeared.

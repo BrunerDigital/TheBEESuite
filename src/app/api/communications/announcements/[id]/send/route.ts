@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, uniqueEmails } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
+import { hasTrustedMutationOrigin } from "@/lib/request-origin";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -24,7 +25,10 @@ async function visibleCenterIds(user: NonNullable<Awaited<ReturnType<typeof getC
   return centers.map((center) => center.id);
 }
 
-async function POSTHandler(_request: NextRequest, context: RouteContext) {
+async function POSTHandler(request: NextRequest, context: RouteContext) {
+  if (!hasTrustedMutationOrigin(request)) {
+    return NextResponse.json({ ok: false, error: "Request origin is not allowed." }, { status: 403 });
+  }
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canManageOperations(user)) {
@@ -47,6 +51,9 @@ async function POSTHandler(_request: NextRequest, context: RouteContext) {
     },
   });
   if (!announcement) return NextResponse.json({ ok: false, error: "Announcement not found." }, { status: 404 });
+  if (!announcement.centerId) {
+    return NextResponse.json({ ok: false, error: "Choose one school before sending an announcement email." }, { status: 400 });
+  }
   if (announcement.centerId && !canAccessCenter(user, announcement.centerId)) {
     return NextResponse.json({ ok: false, error: "You do not have access to this announcement." }, { status: 403 });
   }

@@ -65,7 +65,7 @@ Director, executive, billing, and support experiences remain responsive web targ
 
 ## App Review account truth
 
-- Parent: the production identity exists and is active with the expected Parent role/grant and fake-review Guardian marker. Password validity, login, and displayed fake-data isolation remain unverified. If the password is unavailable, rotating it through `npm run app-review:parent:ensure` is an external identity change and requires exact authorization.
+- Parent: the production identity exists and is active with the expected Parent role/grant and fake-review Guardian marker. Password validity, login, and displayed fake-data isolation remain unverified. `npm run app-review:parent:ensure` may upsert the application/Auth identity and Guardian, reassign the Guardian to the selected fake demo family, create or reactivate the school access grant, and rotate the password. Running it therefore requires exact authorization for all four production changes, not password-only approval.
 - Teacher: no matching application user, active grant, Auth user, or fake-review Staff marker exists in production. `npm run app-review:teacher:ensure` is ready but creates an external identity and access grant, so it requires exact authorization and a password supplied outside Git/chat.
 - After either authorized preparation action, verify the exact role, tenant, school, family/classroom scope, and absence of real child, family, staff, or financial data before entering credentials in App Store Connect.
 

@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { credentialEnvValue, getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
 import {
   PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION,
@@ -18,6 +19,9 @@ export type IntegrationSendResult = {
   ok: boolean;
   configured: boolean;
   provider: string;
+  skipped?: boolean;
+  effectiveRecipientCount?: number;
+  suppressedRecipientCount?: number;
   id?: string;
   url?: string;
   createdAt?: number | null;
@@ -619,6 +623,11 @@ export function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+export function externalProviderEmail(value: string | null | undefined) {
+  const email = clean(value);
+  return email && isEmail(email) && !appReviewReservedIdentityKind(email) ? email : null;
+}
+
 export function uniqueEmails(values: string[]) {
   const seen = new Set<string>();
   return values
@@ -630,6 +639,20 @@ export function uniqueEmails(values: string[]) {
       seen.add(key);
       return true;
     });
+}
+
+export function externalProviderEmails(values: string[]) {
+  return uniqueEmails(values).filter((email) => externalProviderEmail(email) !== null);
+}
+
+export function externalProviderMetadata(
+  metadata: Record<string, string | null | undefined> | null | undefined,
+) {
+  return Object.fromEntries(
+    Object.entries(metadata ?? {}).filter((entry): entry is [string, string] => (
+      typeof entry[1] === "string" && !appReviewReservedIdentityKind(entry[1])
+    )),
+  );
 }
 
 const transactionalTrackingSettings = {
@@ -665,6 +688,23 @@ export async function sendEmail({
   credentials?: Record<string, string>;
   attachments?: EmailAttachment[];
 }): Promise<IntegrationSendResult> {
+  const requestedRecipients = uniqueEmails(to);
+  const recipients = externalProviderEmails(requestedRecipients);
+  const providerReplyTo = externalProviderEmail(replyTo);
+  const recipientCounts = {
+    effectiveRecipientCount: recipients.length,
+    suppressedRecipientCount: requestedRecipients.length - recipients.length,
+  };
+  if (requestedRecipients.length > 0 && recipients.length === 0) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "sendgrid",
+      skipped: true,
+      ...recipientCounts,
+      error: "Reserved App Review recipients are suppressed.",
+    };
+  }
   const tenantCredentials = credentials ?? await getTenantIntegrationCredentialMap(tenantId, "sendgrid");
   const tenantApiKey = clean(tenantCredentials.SENDGRID_API_KEY);
   const tenantFrom = clean(tenantCredentials.SENDGRID_FROM_EMAIL);
@@ -673,10 +713,15 @@ export async function sendEmail({
   const forcePlatformCredentials = process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS === "true";
   const apiKey = forcePlatformCredentials ? platformApiKey : tenantApiKey || platformApiKey;
   const from = forcePlatformCredentials ? platformFrom : tenantFrom || platformFrom;
-  const recipients = uniqueEmails(to);
 
   if (!apiKey || !from || !recipients.length) {
-    return { ok: false, configured: false, provider: "sendgrid", error: "SendGrid is not configured." };
+    return {
+      ok: false,
+      configured: false,
+      provider: "sendgrid",
+      ...recipientCounts,
+      error: "SendGrid is not configured.",
+    };
   }
 
   function body(fromValue: string) {
@@ -692,7 +737,7 @@ export async function sendEmail({
           : undefined,
       })),
       from: { email: fromValue, name: fromName },
-      reply_to: replyTo && isEmail(replyTo) ? { email: replyTo } : undefined,
+      reply_to: providerReplyTo ? { email: providerReplyTo } : undefined,
       subject,
       categories: categories?.slice(0, 10),
       tracking_settings: disableClickTracking
@@ -744,15 +789,28 @@ export async function sendEmail({
       ok: false,
       configured: true,
       provider: "sendgrid",
+      ...recipientCounts,
       error: error instanceof Error ? error.message : "SendGrid request failed.",
     };
   }
 
   if (!response.ok) {
-    return { ok: false, configured: true, provider: "sendgrid", error: `SendGrid returned ${response.status}.` };
+    return {
+      ok: false,
+      configured: true,
+      provider: "sendgrid",
+      ...recipientCounts,
+      error: `SendGrid returned ${response.status}.`,
+    };
   }
 
-  return { ok: true, configured: true, provider: "sendgrid", id: response.headers.get("x-message-id") ?? undefined };
+  return {
+    ok: true,
+    configured: true,
+    provider: "sendgrid",
+    ...recipientCounts,
+    id: response.headers.get("x-message-id") ?? undefined,
+  };
 }
 
 export async function sendSms({
@@ -874,6 +932,7 @@ export async function createStripeCheckoutSession({
   }
 
   const fallbackPaymentMethodTypes = stripeCheckoutPaymentMethodTypes(paymentMethodCategory);
+  const providerCustomerEmail = externalProviderEmail(customerEmail);
   type CheckoutPaymentMethodMode = "configuration" | "payment_method_types" | "dynamic";
 
   function buildBody(paymentMethodMode: CheckoutPaymentMethodMode) {
@@ -902,8 +961,8 @@ export async function createStripeCheckoutSession({
 
     if (customerId && clean(customerId).startsWith("cus_")) {
       body.set("customer", clean(customerId));
-    } else if (customerEmail && isEmail(customerEmail)) {
-      body.set("customer_email", customerEmail);
+    } else if (providerCustomerEmail) {
+      body.set("customer_email", providerCustomerEmail);
     }
 
     if (paymentMethodMode === "configuration" && paymentMethodConfigurationId) {
@@ -925,7 +984,7 @@ export async function createStripeCheckoutSession({
       body.set("payment_intent_data[description]", paymentDescription);
     }
 
-    Object.entries(metadata).forEach(([key, value]) => {
+    Object.entries(externalProviderMetadata(metadata)).forEach(([key, value]) => {
       body.set(`metadata[${key}]`, value);
       body.set(`payment_intent_data[metadata][${key}]`, value);
     });
@@ -1182,6 +1241,7 @@ export async function createStripeOffSessionPaymentIntent({
   }
 
   const description = `${centerName ? `${centerName} ` : ""}invoice ${invoiceNumber} ${clean(descriptionLabel) || "saved-method payment"}`;
+  const providerCustomerEmail = externalProviderEmail(customerEmail);
   const body = new URLSearchParams({
     amount: String(amountCents),
     currency: "usd",
@@ -1197,8 +1257,8 @@ export async function createStripeOffSessionPaymentIntent({
     body.set("payment_method_types[0]", savedPaymentMethodType);
   }
 
-  if (customerEmail && isEmail(customerEmail)) {
-    body.set("receipt_email", customerEmail);
+  if (providerCustomerEmail) {
+    body.set("receipt_email", providerCustomerEmail);
   }
 
   if (connectedAccountId) {
@@ -1207,11 +1267,11 @@ export async function createStripeOffSessionPaymentIntent({
     }
   }
 
-  Object.entries({
+  Object.entries(externalProviderMetadata({
     ...metadata,
     invoiceAmountCents: String(invoiceAmountCents),
     parentSurchargeAmountCents: String(parentSurchargeAmountCents),
-  }).forEach(([key, value]) => {
+  })).forEach(([key, value]) => {
     body.set(`metadata[${key}]`, value);
   });
 
@@ -1495,6 +1555,7 @@ export async function createStripeTerminalPaymentIntent({
   if (applicationFeeError) {
     return { ok: false, configured: true, provider: "stripe", error: applicationFeeError };
   }
+  const providerCustomerEmail = externalProviderEmail(customerEmail);
   const body = new URLSearchParams({
     amount: String(amountCents),
     currency: "usd",
@@ -1502,11 +1563,11 @@ export async function createStripeTerminalPaymentIntent({
     capture_method: "automatic",
     description: `${centerName ? `${centerName} ` : ""}${invoiceNumber} in-person payment`,
   });
-  if (customerEmail && isEmail(customerEmail)) body.set("receipt_email", customerEmail);
+  if (providerCustomerEmail) body.set("receipt_email", providerCustomerEmail);
   if (connectedAccountId && applicationFeeAmountCents > 0) {
     body.set("application_fee_amount", String(Math.min(applicationFeeAmountCents, amountCents)));
   }
-  Object.entries({ ...metadata, invoiceAmountCents: String(invoiceAmountCents) }).forEach(([key, value]) => {
+  Object.entries(externalProviderMetadata({ ...metadata, invoiceAmountCents: String(invoiceAmountCents) })).forEach(([key, value]) => {
     body.set(`metadata[${key}]`, value);
   });
   const response = await fetch("https://api.stripe.com/v1/payment_intents", {
@@ -1643,9 +1704,10 @@ export async function createStripeCustomer({
   }
 
   const body = new URLSearchParams();
-  if (email && isEmail(email)) body.set("email", email);
+  const providerCustomerEmail = externalProviderEmail(email);
+  if (providerCustomerEmail) body.set("email", providerCustomerEmail);
   if (name) body.set("name", name);
-  Object.entries(metadata ?? {}).forEach(([key, value]) => {
+  Object.entries(externalProviderMetadata(metadata)).forEach(([key, value]) => {
     body.set(`metadata[${key}]`, value);
   });
 
@@ -1742,7 +1804,7 @@ export async function createStripeRefund({
   });
   if (clean(connectedAccountId).startsWith("acct_")) body.set("refund_application_fee", "true");
   body.set("metadata[beeSuiteReason]", clean(reason).slice(0, 500));
-  Object.entries(metadata ?? {}).forEach(([key, value]) => body.set(`metadata[${key}]`, value));
+  Object.entries(externalProviderMetadata(metadata)).forEach(([key, value]) => body.set(`metadata[${key}]`, value));
 
   const response = await fetch("https://api.stripe.com/v1/refunds", {
     method: "POST",
@@ -1977,7 +2039,7 @@ export async function createStripeInvoice({
     currency: "usd",
     description,
   });
-  Object.entries(metadata).forEach(([key, value]) => {
+  Object.entries(externalProviderMetadata(metadata)).forEach(([key, value]) => {
     itemBody.set(`metadata[${key}]`, value);
   });
 
@@ -2008,7 +2070,7 @@ export async function createStripeInvoice({
     description,
     number: invoiceNumber,
   });
-  Object.entries(metadata).forEach(([key, value]) => {
+  Object.entries(externalProviderMetadata(metadata)).forEach(([key, value]) => {
     invoiceBody.set(`metadata[${key}]`, value);
   });
 
@@ -2141,6 +2203,7 @@ export async function createStripeSetupCheckoutSession({
 
   const paymentMethodConfigurationId = getStripePaymentMethodConfigurationId(paymentMethodCategory);
   const fallbackPaymentMethodTypes = stripeSetupPaymentMethodTypes(paymentMethodCategory);
+  const providerCustomerEmail = externalProviderEmail(customerEmail);
 
   type SetupPaymentMethodMode = "configuration" | "payment_method_types" | "dynamic";
 
@@ -2154,8 +2217,8 @@ export async function createStripeSetupCheckoutSession({
     });
     if (customerId) {
       body.set("customer", customerId);
-    } else if (customerEmail && isEmail(customerEmail)) {
-      body.set("customer_email", customerEmail);
+    } else if (providerCustomerEmail) {
+      body.set("customer_email", providerCustomerEmail);
     }
     if (paymentMethodMode === "configuration" && paymentMethodConfigurationId) {
       body.set("payment_method_configuration", paymentMethodConfigurationId);
@@ -2170,7 +2233,7 @@ export async function createStripeSetupCheckoutSession({
     if (setupDescription) {
       body.set("setup_intent_data[description]", setupDescription);
     }
-    Object.entries(metadata).forEach(([key, value]) => {
+    Object.entries(externalProviderMetadata(metadata)).forEach(([key, value]) => {
       body.set(`metadata[${key}]`, value);
       body.set(`setup_intent_data[metadata][${key}]`, value);
     });
@@ -2442,8 +2505,8 @@ export async function createStripeConnectedAccount({
   const registeredName = clean(businessName);
   const accountDisplayName = clean(displayName) || registeredName;
   const statementDescriptor = stripeSchoolStatementDescriptor(accountDisplayName);
-  const contactEmail = email && isEmail(email) ? email : undefined;
-  const publicSupportEmail = supportEmail && isEmail(supportEmail) ? supportEmail : contactEmail;
+  const contactEmail = externalProviderEmail(email) ?? undefined;
+  const publicSupportEmail = externalProviderEmail(supportEmail) ?? contactEmail;
   const contactPhone = clean(phone) || undefined;
   const publicSupportPhone = clean(supportPhone) || contactPhone;
   const businessAddress = address || city || state || postalCode || addressLine2 ? {
@@ -2456,7 +2519,7 @@ export async function createStripeConnectedAccount({
   } : undefined;
   const accountMetadata = metadata
     ? Object.fromEntries(
-        Object.entries(metadata)
+        Object.entries(externalProviderMetadata(metadata))
           .map(([key, value]) => [clean(key).slice(0, 40), clean(value).slice(0, 500)] as const)
           .filter(([key, value]) => key && value),
       )

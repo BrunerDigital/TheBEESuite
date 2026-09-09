@@ -145,6 +145,15 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     customArgs: { campaignId: campaign.id },
     tenantId: user.tenantId,
   });
+  const effectiveRecipientCount = email.effectiveRecipientCount ?? recipients.length;
+  const suppressedRecipientCount = email.suppressedRecipientCount ?? 0;
+  const deliveryStatus = email.skipped
+    ? "skipped"
+    : email.ok
+      ? "accepted"
+      : email.configured
+        ? "failed"
+        : "not_configured";
 
   await recordEmailDeliveryAttempt({
     tenantId: user.tenantId,
@@ -159,6 +168,9 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       campaignId: campaign.id,
       leadCount: leads.length,
       centerCount: centerIds.length,
+      requestedRecipientCount: recipients.length,
+      effectiveRecipientCount,
+      suppressedRecipientCount,
     },
   });
 
@@ -166,9 +178,11 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     const metrics = {
       ...asRecord(campaign.metrics),
       lastSendAt: new Date().toISOString(),
-      lastRecipientCount: recipients.length,
+      lastRecipientCount: effectiveRecipientCount,
+      lastRequestedRecipientCount: recipients.length,
+      lastSuppressedRecipientCount: suppressedRecipientCount,
       lastProviderMessageId: email.id ?? null,
-      lastDeliveryStatus: email.ok ? "delivered" : email.configured ? "failed" : "not_configured",
+      lastDeliveryStatus: deliveryStatus,
       lastError: email.error ?? null,
     };
     await prisma.campaign.update({
@@ -182,7 +196,10 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
         metrics: {
           ...asRecord(campaign.metrics),
           lastAttemptAt: new Date().toISOString(),
-          lastDeliveryStatus: email.configured ? "failed" : "not_configured",
+          lastRecipientCount: effectiveRecipientCount,
+          lastRequestedRecipientCount: recipients.length,
+          lastSuppressedRecipientCount: suppressedRecipientCount,
+          lastDeliveryStatus: deliveryStatus,
           lastError: email.error ?? null,
         },
       },
@@ -195,7 +212,9 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     resource: "Campaign",
     resourceId: campaign.id,
     metadata: {
-      recipientCount: recipients.length,
+      recipientCount: effectiveRecipientCount,
+      requestedRecipientCount: recipients.length,
+      suppressedRecipientCount,
       provider: email.provider,
       providerMessageId: email.id ?? null,
       configured: email.configured,
@@ -206,9 +225,11 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   return NextResponse.json({
     ok: email.ok,
     email,
-    recipientCount: recipients.length,
+    recipientCount: effectiveRecipientCount,
+    requestedRecipientCount: recipients.length,
+    suppressedRecipientCount,
     error: email.ok ? undefined : email.error || "Campaign email could not be queued.",
-  }, { status: email.ok ? 200 : email.configured ? 502 : 503 });
+  }, { status: email.ok ? 200 : email.skipped ? 400 : email.configured ? 502 : 503 });
 }
 
 export const POST = withApiLogging("POST", POSTHandler);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { AI_COMMAND_GUARDRAIL_NOTE, buildAiOperationsSummary } from "@/lib/ai-command";
 import { tenantIdsFromAiPromptContext } from "@/lib/ai-suggestion-scope";
 import {
@@ -569,20 +570,50 @@ async function applyAiProfileChange(
       await enrollmentUpdate;
     }
   } else if (name === "update_family_profile") {
-    const current = await prisma.family.findFirst({ where: { id: recordId, centerId: selectedCenterId } });
+    const current = await prisma.family.findFirst({
+      where: { id: recordId, centerId: selectedCenterId },
+      include: {
+        guardians: {
+          select: { email: true, user: { select: { email: true } } },
+        },
+      },
+    });
     if (!current) throw new Error("Family not found in the selected school.");
+    if (current.guardians.some((guardian) => (
+      (guardian.email && appReviewReservedIdentityKind(guardian.email))
+      || (guardian.user?.email && appReviewReservedIdentityKind(guardian.user.email))
+    ))) {
+      throw new Error("Reserved App Review families can only be changed by the dedicated provisioning workflow.");
+    }
     const values = cleanAiPatch(patch, familyAiFields);
     const data: Prisma.FamilyUpdateInput = {};
     if ("name" in values) data.name = clean(values.name) || current.name;
     if ("address" in values) data.address = nullableString(values.address);
-    if ("billingEmail" in values) data.billingEmail = nullableString(values.billingEmail);
+    if ("billingEmail" in values) {
+      const billingEmail = nullableString(values.billingEmail);
+      if (billingEmail && appReviewReservedIdentityKind(billingEmail)) {
+        throw new Error("Reserved App Review families can only be changed by the dedicated provisioning workflow.");
+      }
+      data.billingEmail = billingEmail;
+    }
     if ("notes" in values) data.notes = nullableString(values.notes);
     if (!Object.keys(data).length) throw new Error("No allowed family fields were provided.");
     await prisma.family.update({ where: { id: current.id }, data });
   } else if (name === "update_guardian_profile") {
-    const current = await prisma.guardian.findFirst({ where: { id: recordId, family: { centerId: selectedCenterId } } });
+    const current = await prisma.guardian.findFirst({
+      where: { id: recordId, family: { centerId: selectedCenterId } },
+      include: { user: { select: { email: true } } },
+    });
     if (!current) throw new Error("Guardian not found in the selected school.");
     const values = cleanAiPatch(patch, guardianAiFields);
+    const requestedEmail = "email" in values ? nullableString(values.email) : null;
+    if (
+      (current.email && appReviewReservedIdentityKind(current.email))
+      || (current.user?.email && appReviewReservedIdentityKind(current.user.email))
+      || (requestedEmail && appReviewReservedIdentityKind(requestedEmail))
+    ) {
+      throw new Error("Reserved App Review families can only be changed by the dedicated provisioning workflow.");
+    }
     const data: Prisma.GuardianUpdateInput = {};
     for (const field of ["email", "phone", "employer", "preferredCommunication"] as const) {
       if (field in values) data[field] = nullableString(values[field]);

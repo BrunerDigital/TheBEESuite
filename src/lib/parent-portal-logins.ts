@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { UserRole } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { DEFAULT_PARENT_INITIAL_PASSWORD, PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
 import { prisma } from "@/lib/prisma";
 import {
@@ -165,6 +166,9 @@ export async function ensureParentPortalLoginForGuardian({
 
   const email = normalizeEmail(guardian.email ?? "");
   if (!isSupabaseAuthCompatibleEmail(email)) return { ok: false, status: 400, reason: "guardian_email_invalid" };
+  if (appReviewReservedIdentityKind(email)) {
+    return { ok: false, status: 409, reason: "reserved_app_review_identity" };
+  }
   const center = guardian.family.centerId
     ? await prisma.center.findUnique({
         where: { id: guardian.family.centerId },
@@ -290,6 +294,9 @@ export async function changeParentPortalLoginEmail({
   if (!isSupabaseAuthCompatibleEmail(normalizedNewEmail)) {
     return { ok: false, status: 400, reason: "guardian_email_invalid" };
   }
+  if (appReviewReservedIdentityKind(normalizedNewEmail)) {
+    return { ok: false, status: 409, reason: "reserved_app_review_identity" };
+  }
   const guardian = await prisma.guardian.findUnique({
     where: { id: guardianId },
     select: {
@@ -327,6 +334,9 @@ export async function changeParentPortalLoginEmail({
   const previousEmail = normalizeEmail(parentUser.email || guardian.email || "");
   if (!isSupabaseAuthCompatibleEmail(previousEmail)) {
     return { ok: false, status: 409, reason: "existing_parent_login_email_invalid" };
+  }
+  if (appReviewReservedIdentityKind(previousEmail)) {
+    return { ok: false, status: 409, reason: "reserved_app_review_identity" };
   }
   if (previousEmail === normalizedNewEmail) {
     return { ok: true, userId: parentUser.id, previousEmail, newEmail: normalizedNewEmail, updatedGuardianIds: [guardian.id] };
@@ -431,9 +441,21 @@ export async function disableParentPortalLoginForGuardian({
 }): Promise<ParentPortalDisableResult> {
   const guardian = await prisma.guardian.findUnique({
     where: { id: guardianId },
-    select: { id: true, userId: true, customFields: true },
+    select: {
+      id: true,
+      email: true,
+      userId: true,
+      customFields: true,
+      user: { select: { email: true } },
+    },
   });
   if (!guardian) return { ok: false, status: 404, reason: "guardian_not_found" };
+  if (
+    (guardian.email && appReviewReservedIdentityKind(guardian.email))
+    || (guardian.user?.email && appReviewReservedIdentityKind(guardian.user.email))
+  ) {
+    return { ok: false, status: 409, reason: "reserved_app_review_identity" };
+  }
 
   const linkedUserId = previousUserId ?? guardian.userId;
   await prisma.guardian.update({

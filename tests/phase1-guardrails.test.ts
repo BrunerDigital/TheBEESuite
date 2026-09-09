@@ -1646,6 +1646,11 @@ test("reserved App Review identities cannot initiate financial provider mutation
     "src/app/api/billing/payment-method-session/route.ts",
     "src/app/api/parent/products/purchase/route.ts",
   ].map((path) => readFileSync(path, "utf8"));
+  const tokenGuardedRoutes = [
+    "src/app/api/billing/payment-method-request/session/route.ts",
+    "src/app/api/billing/payment-method-request/checkout/route.ts",
+  ].map((path) => readFileSync(path, "utf8"));
+  const paymentMethodRequestsRoute = readFileSync("src/app/api/billing/payment-method-requests/route.ts", "utf8");
 
   assert.match(livePage, /paymentsReadOnly=\{verifiedAppReviewKind === "parent"\}/);
   assert.match(parentPortal, /const checkoutBlocked = paymentsReadOnly \|\| !checkoutReadiness\.canAcceptParentPayments/);
@@ -1654,6 +1659,26 @@ test("reserved App Review identities cannot initiate financial provider mutation
     assert.match(route, /appReviewReservedIdentityKind\(user\.email\)/);
     assert.match(route, /App Review demo workspace/);
   }
+  for (const route of tokenGuardedRoutes) {
+    const reservedGuard = route.indexOf("appReviewReservedIdentityKind(payload.email)");
+    const familyGraphGuard = route.indexOf("appReviewFamilyContainsReservedIdentity(family)");
+    assert.ok(
+      reservedGuard >= 0 && reservedGuard < route.indexOf("createStripeCustomer({"),
+      "signed-link payment routes must reject reserved identities before any Stripe customer mutation",
+    );
+    assert.ok(
+      familyGraphGuard >= 0 && familyGraphGuard < route.indexOf("createStripeCustomer({"),
+      "signed-link payment routes must revalidate every current family identity before any Stripe customer mutation",
+    );
+    assert.match(route, /guardians:[\s\S]*user: \{ select: \{ email: true \} \}/);
+    assert.match(route, /App Review demo workspace/);
+  }
+  const paymentMethodRequestGuard = paymentMethodRequestsRoute.indexOf("appReviewReservedIdentityKind");
+  assert.ok(
+    paymentMethodRequestGuard >= 0
+      && paymentMethodRequestGuard < paymentMethodRequestsRoute.indexOf("createPaymentMethodRequestToken({"),
+    "operators must not create payment-method request links for reserved review families",
+  );
 });
 
 test("reserved App Review identities revalidate the complete graph at the shared authentication boundary", () => {
@@ -1763,6 +1788,105 @@ test("reserved App Review account credentials and billing controls remain immuta
     assert.match(route, /appReviewReservedIdentityKind\(user\.email\)/);
     assert.match(route, /App Review/);
   }
+});
+
+test("ordinary operations cannot mutate or directly email reserved App Review identities", () => {
+  const operationsRoute = readFileSync("src/app/api/operations/records/route.ts", "utf8");
+  const parentPortalLogins = readFileSync("src/lib/parent-portal-logins.ts", "utf8");
+  const integrations = readFileSync("src/lib/integrations.ts", "utf8");
+  const guardianPinRoute = readFileSync("src/app/api/guardians/pin/route.ts", "utf8");
+  const kioskCheckRoute = readFileSync("src/app/api/kiosk/check/route.ts", "utf8");
+  const kioskLookupRoute = readFileSync("src/app/api/kiosk/lookup/route.ts", "utf8");
+  const familyIntakeRoute = readFileSync("src/app/api/families/intake/route.ts", "utf8");
+  const registrationReviewRoute = readFileSync("src/app/api/registration/[id]/review/route.ts", "utf8");
+  const aiCommandRoute = readFileSync("src/app/api/ai/command/route.ts", "utf8");
+  const procareRoute = readFileSync("src/app/api/imports/procare/route.ts", "utf8");
+  const deletionReviewRoute = readFileSync("src/app/api/privacy/deletion-requests/[id]/review/route.ts", "utf8");
+  const terminalStore = readFileSync("src/lib/terminal-store.ts", "utf8");
+  const dailyReportEmail = readFileSync("src/lib/daily-report-email.ts", "utf8");
+  const registrationShareRoute = readFileSync("src/app/api/registration/share/route.ts", "utf8");
+  const onboardingRoute = readFileSync("src/app/api/onboarding/route.ts", "utf8");
+  const inquiryIntegrations = readFileSync("src/lib/inquiry-integrations.ts", "utf8");
+  const fteReminderRoute = readFileSync("src/app/api/cron/fte-reminders/route.ts", "utf8");
+  const bulkEmailRoutes = [
+    "src/app/api/communications/announcements/[id]/send/route.ts",
+    "src/app/api/communications/campaigns/[id]/send/route.ts",
+    "src/app/api/cron/campaign-scheduler/route.ts",
+    "src/app/api/reputation/review-requests/route.ts",
+  ].map((path) => readFileSync(path, "utf8"));
+
+  assert.ok(
+    (operationsRoute.match(/reservedAppReviewMutationResponse\(\)/g) ?? []).length >= 8,
+    "guardian/family merges, guardian saves/deletes, and teacher profile/assignment/time-clock/deactivation paths must reject reserved identities",
+  );
+  assert.match(parentPortalLogins, /ensureParentPortalLoginForGuardian[\s\S]*appReviewReservedIdentityKind\(email\)/);
+  assert.match(parentPortalLogins, /changeParentPortalLoginEmail[\s\S]*appReviewReservedIdentityKind\(normalizedNewEmail\)/);
+  assert.match(parentPortalLogins, /disableParentPortalLoginForGuardian[\s\S]*appReviewReservedIdentityKind\(guardian\.email\)/);
+  const sharedRecipientFilter = integrations.indexOf("const recipients = externalProviderEmails(requestedRecipients)");
+  assert.ok(
+    sharedRecipientFilter >= 0
+      && sharedRecipientFilter < integrations.indexOf('fetch("https://api.sendgrid.com/v3/mail/send"'),
+    "the common SendGrid boundary must suppress reserved recipients before provider access",
+  );
+  assert.match(integrations, /const providerReplyTo = externalProviderEmail\(replyTo\)/);
+  assert.match(integrations, /reply_to: providerReplyTo \? \{ email: providerReplyTo \} : undefined/);
+  assert.match(integrations, /skipped: true,[\s\S]*\.\.\.recipientCounts/);
+  assert.ok(
+    (integrations.match(/externalProviderEmail\(customerEmail\)/g) ?? []).length >= 4,
+    "Stripe-managed customer and receipt email fields must use the reserved-identity filter",
+  );
+  assert.match(integrations, /createStripeCustomer[\s\S]*externalProviderEmail\(email\)/);
+  assert.match(
+    integrations,
+    /createStripeCustomer[\s\S]*externalProviderMetadata\(metadata\)[\s\S]*fetch\("https:\/\/api\.stripe\.com\/v1\/customers"/,
+    "Stripe metadata must drop exact reserved App Review identity values before provider access",
+  );
+  assert.match(terminalStore, /externalProviderEmail\(purchaserEmail\)/);
+  for (const route of bulkEmailRoutes) {
+    assert.match(route, /effectiveRecipientCount = email\.effectiveRecipientCount \?\? recipients\.length/);
+    assert.match(route, /suppressedRecipientCount = email\.suppressedRecipientCount \?\? 0/);
+    assert.match(route, /requestedRecipientCount: recipients\.length/);
+  }
+  assert.match(dailyReportEmail, /reason: email\.skipped[\s\S]*recipients: effectiveEmails[\s\S]*requestedRecipients: emails/);
+  assert.match(registrationShareRoute, /emailsQueued: effectiveRecipientCount[\s\S]*suppressedEmailCount: suppressedRecipientCount/);
+  assert.match(registrationShareRoute, /recipients: effectiveRecipients[\s\S]*requestedRecipients: emails/);
+  assert.match(onboardingRoute, /recipients: email\.effectiveRecipientCount[\s\S]*requestedRecipients: recipients\.length[\s\S]*suppressedRecipients/);
+  const onboardingGuard = onboardingRoute.indexOf("appReviewReservedIdentityKind(payload.workEmail)");
+  assert.ok(
+    onboardingGuard >= 0
+      && onboardingGuard < onboardingRoute.indexOf("const workspace = await createTrialWorkspace(payload"),
+    "public onboarding must reject reserved identities before creating any workspace records",
+  );
+  const familyGraphGuard = familyIntakeRoute.indexOf("const existingFamilyGuardians = await tx.guardian.findMany(");
+  assert.ok(
+    familyGraphGuard >= 0 && familyGraphGuard < familyIntakeRoute.indexOf("tx.family.update({"),
+    "family intake must inspect the complete current family identity graph before its first family mutation",
+  );
+  assert.match(familyIntakeRoute, /existingFamilyGuardians[\s\S]*user: \{ select: \{ email: true \} \}/);
+  assert.match(familyIntakeRoute, /appReviewFamilyContainsReservedIdentity\([\s\S]*billingEmail: existingFamily\.billingEmail[\s\S]*guardians: existingFamilyGuardians/);
+  assert.match(inquiryIntegrations, /recipients: email\.effectiveRecipientCount[\s\S]*requestedRecipients: recipients\.length[\s\S]*suppressedRecipients/);
+  assert.match(fteReminderRoute, /emailsAttempted \+= email\.skipped \? 0 : effectiveRecipientCount/);
+  assert.match(fteReminderRoute, /emailsSkipped \+= email\.suppressedRecipientCount/);
+  assert.ok(
+    guardianPinRoute.indexOf("appReviewReservedIdentityKind(guardian.email)")
+      < guardianPinRoute.indexOf("await prisma.guardian.update"),
+    "ordinary kiosk PIN management must reject a reserved guardian before mutation",
+  );
+  for (const route of [kioskCheckRoute, kioskLookupRoute]) {
+    assert.ok((route.match(/APP_REVIEW_RESERVED_EMAILS/g) ?? []).length >= 3);
+    assert.match(route, /NOT:[\s\S]*email:[\s\S]*user:[\s\S]*mode: "insensitive"/);
+  }
+  assert.match(familyIntakeRoute, /ReservedAppReviewIdentityMutationError/);
+  assert.match(familyIntakeRoute, /existingGuardian\.user\?\.email/);
+  assert.match(registrationReviewRoute, /action === "APPROVED"[\s\S]*targetsReservedAppReviewIdentity\([\s\S]*primaryGuardianEmail[\s\S]*secondaryGuardianEmail[\s\S]*billingContactEmail/);
+  assert.match(registrationReviewRoute, /familyMatch\?\.guardians\.some/);
+  assert.match(aiCommandRoute, /update_family_profile[\s\S]*current\.guardians\.some[\s\S]*update_guardian_profile[\s\S]*current\.user\?\.email/);
+  assert.ok((procareRoute.match(/Reserved App Review (?:staff|families)/g) ?? []).length >= 5);
+  assert.ok(
+    deletionReviewRoute.indexOf("appReviewReservedIdentityKind(deletionRequest.user.email)")
+      < deletionReviewRoute.indexOf("prisma.dataDeletionRequest.updateMany"),
+    "reserved review deletion requests must be rejected before execution is claimed",
+  );
 });
 
 test("FTE report guard scopes directors and permits executive corrections", () => {

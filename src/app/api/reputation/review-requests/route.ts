@@ -162,6 +162,15 @@ async function POSTHandler(request: NextRequest) {
     customArgs: { campaignId: campaign.id, workflow: "review_request" },
     tenantId: user.tenantId,
   });
+  const effectiveRecipientCount = email.effectiveRecipientCount ?? recipients.length;
+  const suppressedRecipientCount = email.suppressedRecipientCount ?? 0;
+  const deliveryStatus = email.skipped
+    ? "skipped"
+    : email.ok
+      ? "accepted"
+      : email.configured
+        ? "failed"
+        : "not_configured";
   await recordEmailDeliveryAttempt({
     tenantId: user.tenantId,
     centerId: centerId || null,
@@ -178,6 +187,9 @@ async function POSTHandler(request: NextRequest) {
       familyCount,
       centerCount: centerIds.length,
       reviewUrl: reviewUrl || null,
+      requestedRecipientCount: recipients.length,
+      effectiveRecipientCount,
+      suppressedRecipientCount,
     },
   });
   const updatedCampaign = await prisma.campaign.update({
@@ -189,8 +201,10 @@ async function POSTHandler(request: NextRequest) {
         ...asRecord(campaign.metrics),
         lastAttemptAt: new Date().toISOString(),
         lastSendAt: email.ok ? new Date().toISOString() : null,
-        lastRecipientCount: recipients.length,
-        lastDeliveryStatus: email.ok ? "delivered" : email.configured ? "failed" : "not_configured",
+        lastRecipientCount: effectiveRecipientCount,
+        lastRequestedRecipientCount: recipients.length,
+        lastSuppressedRecipientCount: suppressedRecipientCount,
+        lastDeliveryStatus: deliveryStatus,
         lastProviderMessageId: email.id ?? null,
         lastError: email.error ?? null,
       },
@@ -202,7 +216,9 @@ async function POSTHandler(request: NextRequest) {
     resource: "Campaign",
     resourceId: campaign.id,
     metadata: {
-      recipientCount: recipients.length,
+      recipientCount: effectiveRecipientCount,
+      requestedRecipientCount: recipients.length,
+      suppressedRecipientCount,
       familyCount,
       provider: email.provider,
       configured: email.configured,
@@ -214,9 +230,11 @@ async function POSTHandler(request: NextRequest) {
     ok: email.ok,
     campaign: updatedCampaign,
     email,
-    recipientCount: recipients.length,
+    recipientCount: effectiveRecipientCount,
+    requestedRecipientCount: recipients.length,
+    suppressedRecipientCount,
     error: email.ok ? undefined : email.error || "Review request could not be queued.",
-  }, { status: email.ok ? 201 : email.configured ? 502 : 503 });
+  }, { status: email.ok ? 201 : email.skipped ? 400 : email.configured ? 502 : 503 });
 }
 
 export const POST = withApiLogging("POST", POSTHandler);

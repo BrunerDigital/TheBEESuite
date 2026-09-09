@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { activeClassroomWhere, classroomIsArchived } from "@/lib/classroom-status";
 import { closeEnrollmentAndDisableTuitionSql } from "@/lib/enrollment-closeout";
 import {
@@ -2416,6 +2417,9 @@ async function POSTHandler(request: NextRequest) {
       const employeeExternalId = externalValue(rawData, ["employee id", "staff id", "teacher id", "employee key", "person id"]);
       if (employeeName && !procareChildFullName(rawData) && !procareFamilyName(rawData)) {
         const staffContactEmail = normalizedStaffContactEmail(employeeEmail);
+        if (staffContactEmail && appReviewReservedIdentityKind(staffContactEmail)) {
+          throw new Error("Reserved App Review staff can only be changed by the dedicated provisioning workflow.");
+        }
         const existingStaff = await findExistingImportedStaffProfile({
           centerId: targetCenter.id,
           externalId: employeeExternalId,
@@ -2424,6 +2428,9 @@ async function POSTHandler(request: NextRequest) {
         });
         if (existingStaff && existingStaff.user.tenantId !== targetCenter.tenantId) {
           throw new Error("The matched staff login belongs to a different tenant than the mapped school.");
+        }
+        if (existingStaff && appReviewReservedIdentityKind(existingStaff.user.email)) {
+          throw new Error("Reserved App Review staff can only be changed by the dedicated provisioning workflow.");
         }
         const generatedLogin = existingStaff
           ? undefined
@@ -2571,6 +2578,14 @@ async function POSTHandler(request: NextRequest) {
       const address = value(rawData, ["address", "street address", "home address", "mailing address", "primary address", "payer address"]);
       const childPersonExternalId = externalValue(rawData, ["child person id"]) ?? "";
       const guardianImports = procareGuardianImports(rawData, childPersonExternalId);
+      if (
+        (email && appReviewReservedIdentityKind(email))
+        || guardianImports.some((guardian) => Boolean(
+          guardian.guardianEmail && appReviewReservedIdentityKind(guardian.guardianEmail),
+        ))
+      ) {
+        throw new Error("Reserved App Review families can only be changed by the dedicated provisioning workflow.");
+      }
       const balanceValue = value(rawData, ["balance", "account balance", "ledger balance", "amount due"]);
       const parsedBalance = parseCurrencyCents(balanceValue);
       if (parsedBalance.present && !parsedBalance.valid) {
@@ -2600,13 +2615,25 @@ async function POSTHandler(request: NextRequest) {
         : await prisma.family.findMany({
             where: { centerId: targetCenter.id, OR: fallbackFamilyMatchers },
             take: 2,
-            select: { id: true, customFields: true },
+            select: {
+              id: true,
+              customFields: true,
+              guardians: {
+                select: { email: true, user: { select: { email: true } } },
+              },
+            },
           });
       const externalFamilies = accountExternalId
         ? await prisma.family.findMany({
             where: { centerId: targetCenter.id, sourceSystem: "procare", externalId: accountExternalId },
             take: 2,
-            select: { id: true, customFields: true },
+            select: {
+              id: true,
+              customFields: true,
+              guardians: {
+                select: { email: true, user: { select: { email: true } } },
+              },
+            },
           })
         : [];
       if (externalFamilies.length > 1) {
@@ -2623,6 +2650,12 @@ async function POSTHandler(request: NextRequest) {
       const existing = accountExternalId
         ? externalFamilies[0] ?? null
         : fallbackFamilies[0] ?? null;
+      if (existing?.guardians.some((guardian) => (
+        (guardian.email && appReviewReservedIdentityKind(guardian.email))
+        || (guardian.user?.email && appReviewReservedIdentityKind(guardian.user.email))
+      ))) {
+        throw new Error("Reserved App Review families can only be changed by the dedicated provisioning workflow.");
+      }
       const custodyNotes = value(rawData, ["custody notes", "custody", "legal custody", "court order", "court orders"]);
 
       const family = existing
@@ -2684,6 +2717,7 @@ async function POSTHandler(request: NextRequest) {
           ? await prisma.guardian.findMany({
               where: { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId },
               take: 2,
+              include: { user: { select: { email: true } } },
             })
           : [];
         const fallbackGuardians = externalGuardians.length || !fallbackGuardianMatchers.length
@@ -2691,6 +2725,7 @@ async function POSTHandler(request: NextRequest) {
           : await prisma.guardian.findMany({
               where: { familyId: family.id, OR: fallbackGuardianMatchers },
               take: 2,
+              include: { user: { select: { email: true } } },
             });
         if (externalGuardians.length > 1) {
           throw new Error("Multiple existing guardians use this ProCare Person ID. Resolve the duplicate records before importing.");
@@ -2704,6 +2739,12 @@ async function POSTHandler(request: NextRequest) {
         const existingGuardian = externalId
           ? externalGuardians[0] ?? fallbackGuardians[0] ?? null
           : fallbackGuardians[0] ?? null;
+        if (
+          (existingGuardian?.email && appReviewReservedIdentityKind(existingGuardian.email))
+          || (existingGuardian?.user?.email && appReviewReservedIdentityKind(existingGuardian.user.email))
+        ) {
+          throw new Error("Reserved App Review families can only be changed by the dedicated provisioning workflow.");
+        }
         const guardianMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
         if (!existingGuardian) {
           const createdGuardian = await prisma.guardian.create({

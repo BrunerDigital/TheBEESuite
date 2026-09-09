@@ -84,6 +84,15 @@ test("integration retries atomically claim a due delivery before sending", () =>
   assert.match(retrySource, /status: "claimed_elsewhere"/);
 });
 
+test("email delivery records distinguish attempted and suppressed recipients", () => {
+  const source = readFileSync(new URL("../src/lib/integration-deliveries.ts", import.meta.url), "utf8");
+  const recorder = source.slice(source.indexOf("export async function recordEmailDeliveryAttempt"));
+  assert.match(recorder, /effectiveRecipientCount = result\.effectiveRecipientCount \?\? to\.length/);
+  assert.match(recorder, /suppressedRecipientCount = result\.suppressedRecipientCount \?\? 0/);
+  assert.match(recorder, /recipient:[\s\S]*attempted[\s\S]*suppressed/);
+  assert.match(recorder, /requestedRecipientCount,[\s\S]*effectiveRecipientCount,[\s\S]*suppressedRecipientCount/);
+});
+
 test("stale or out-of-window FTE retries are skipped instead of emailing an old reminder", () => {
   assert.equal(
     staleTimeSensitiveDeliveryReason(

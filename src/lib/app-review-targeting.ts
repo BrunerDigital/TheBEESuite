@@ -20,6 +20,11 @@ export const APP_REVIEW_TEACHER_CONTACT = {
   seededBy: "scripts/ensure-app-review-teacher.ts",
 } as const;
 
+export const APP_REVIEW_RESERVED_EMAILS = [
+  APP_REVIEW_PARENT_CONTACT.email,
+  APP_REVIEW_TEACHER_CONTACT.email,
+] as const;
+
 const appReviewRelatedUserSelect = {
   id: true,
   email: true,
@@ -557,6 +562,22 @@ export function appReviewReservedIdentityKind(email: string): AppReviewTargetKin
   if (normalized === APP_REVIEW_PARENT_CONTACT.email) return "parent";
   if (normalized === APP_REVIEW_TEACHER_CONTACT.email) return "teacher";
   return null;
+}
+
+export function appReviewFamilyContainsReservedIdentity(family: {
+  billingEmail?: string | null;
+  guardians?: ReadonlyArray<{
+    email?: string | null;
+    user?: { email?: string | null } | null;
+  }>;
+}) {
+  return Boolean(
+    (family.billingEmail && appReviewReservedIdentityKind(family.billingEmail))
+    || family.guardians?.some((guardian) => (
+      Boolean(guardian.email && appReviewReservedIdentityKind(guardian.email))
+      || Boolean(guardian.user?.email && appReviewReservedIdentityKind(guardian.user.email))
+    )),
+  );
 }
 
 function isSyntheticStaffUser(

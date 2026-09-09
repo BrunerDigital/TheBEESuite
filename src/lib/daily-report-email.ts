@@ -1,5 +1,5 @@
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
-import { sendEmail } from "@/lib/integrations";
+import { externalProviderEmails, sendEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { resolveDailyReportEmailRecipients, type DailyReportEmailRecipient } from "@/lib/daily-report-email-settings";
 import { dailyReportTimedCareEvents } from "@/lib/daily-report-ordering";
@@ -54,9 +54,11 @@ export type DailyReportEmailReport = {
 
 export type DailyReportEmailSummary = {
   attempted: boolean;
-  reason: "sent" | "provider_failed" | "provider_not_configured" | "no_report" | "no_recipients";
+  reason: "accepted" | "suppressed" | "provider_failed" | "provider_not_configured" | "no_report" | "no_recipients";
   reportId: string | null;
   recipients: string[];
+  requestedRecipients: string[];
+  suppressedRecipientCount: number;
   configured: boolean;
   provider: "sendgrid";
   providerMessageId: string | null;
@@ -174,6 +176,8 @@ function emailSummaryForSkipped(
     reason,
     reportId,
     recipients: recipients.map((recipient) => recipient.email),
+    requestedRecipients: recipients.map((recipient) => recipient.email),
+    suppressedRecipientCount: 0,
     configured: false,
     provider: "sendgrid",
     providerMessageId: null,
@@ -254,6 +258,7 @@ export async function sendCheckoutDailyReportEmail({
   const subject = buildDailyReportEmailSubject(reportForEmail, timeZone);
   const text = buildDailyReportEmailText({ report: reportForEmail, centerName, timeZone });
   const emails = recipients.map((recipient) => recipient.email);
+  const effectiveEmails = externalProviderEmails(emails);
   const email = await sendEmail({
     to: emails,
     subject,
@@ -298,10 +303,18 @@ export async function sendCheckoutDailyReportEmail({
   }
 
   return {
-    attempted: true,
-    reason: email.ok ? "sent" : email.configured ? "provider_failed" : "provider_not_configured",
+    attempted: !email.skipped,
+    reason: email.skipped
+      ? "suppressed"
+      : email.ok
+        ? "accepted"
+        : email.configured
+          ? "provider_failed"
+          : "provider_not_configured",
     reportId: report.id,
-    recipients: emails,
+    recipients: effectiveEmails,
+    requestedRecipients: emails,
+    suppressedRecipientCount: email.suppressedRecipientCount ?? 0,
     configured: email.configured,
     provider: "sendgrid",
     providerMessageId: email.id ?? null,

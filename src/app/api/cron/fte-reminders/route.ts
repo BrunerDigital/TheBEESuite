@@ -328,7 +328,6 @@ async function GETHandler(request: NextRequest) {
           if (emailDedupeKey && existingExternalDeliveryKeys.has(emailDedupeKey)) {
             emailsSkipped += 1;
           } else {
-            emailsAttempted += 1;
             const email = await sendEmail({
               to,
               subject: copy.subject,
@@ -346,7 +345,10 @@ async function GETHandler(request: NextRequest) {
               },
               tenantId: target.tenantId,
             });
-            if (email.ok) emailsSent += 1;
+            const effectiveRecipientCount = email.effectiveRecipientCount ?? to.length;
+            emailsAttempted += email.skipped ? 0 : effectiveRecipientCount;
+            emailsSkipped += email.suppressedRecipientCount ?? (email.skipped ? to.length : 0);
+            if (email.ok && !email.skipped) emailsSent += effectiveRecipientCount;
             await recordEmailDeliveryAttempt({
               tenantId: target.tenantId,
               centerId: target.centerId,

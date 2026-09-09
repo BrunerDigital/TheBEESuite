@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageCrmLeads, getCurrentUser } from "@/lib/auth";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
-import { sendEmail } from "@/lib/integrations";
+import { externalProviderEmails, sendEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import {
@@ -128,6 +128,10 @@ async function POSTHandler(request: NextRequest) {
     },
     tenantId: center.organization.tenantId,
   });
+  const effectiveRecipients = externalProviderEmails(emails);
+  const effectiveRecipientCount = emailResult.effectiveRecipientCount ?? effectiveRecipients.length;
+  const suppressedRecipientCount = emailResult.suppressedRecipientCount ?? 0;
+  const providerAccepted = emailResult.ok && !emailResult.skipped;
 
   await recordEmailDeliveryAttempt({
     tenantId: center.organization.tenantId,
@@ -155,16 +159,18 @@ async function POSTHandler(request: NextRequest) {
         const updatedLead = await tx.lead.update({
           where: { id: lead.id },
           data: {
-            stage: emailResult.ok
+            stage: providerAccepted
               ? stageAfterRegistrationShare(currentLead.stage) as EnrollmentStage
               : currentLead.stage,
             customFields: buildRegistrationLeadCustomFields(currentLead.customFields, {
-              status: emailResult.ok ? "sent" : "failed",
+              status: providerAccepted ? "sent" : "failed",
               attemptedAt: attemptedAt.toISOString(),
-              sentAt: emailResult.ok ? attemptedAt.toISOString() : null,
+              sentAt: providerAccepted ? attemptedAt.toISOString() : null,
               registrationUrl,
               sentByUserId: user.id,
-              recipientCount: emails.length,
+              recipientCount: effectiveRecipientCount,
+              requestedRecipientCount: emails.length,
+              suppressedRecipientCount,
             }) as Prisma.InputJsonObject,
           },
           select: {
@@ -178,8 +184,10 @@ async function POSTHandler(request: NextRequest) {
             leadId: lead.id,
             userId: user.id,
             restricted: true,
-            body: emailResult.ok
+            body: providerAccepted
               ? `School-specific registration form sent to the CRM lead by ${user.name}.`
+              : emailResult.skipped
+                ? `Registration form delivery requested by ${user.name} was suppressed by the App Review safety boundary.`
               : `Registration form delivery was attempted by ${user.name}, but the email provider reported a failure.`,
           },
         });
@@ -194,15 +202,19 @@ async function POSTHandler(request: NextRequest) {
     resourceId: lead?.id ?? center.id,
     metadata: {
       leadId: lead?.id ?? null,
-      recipients: emails,
-      recipientCount: emails.length,
-      delivered: emailResult.ok,
+      recipients: effectiveRecipients,
+      requestedRecipients: emails,
+      recipientCount: effectiveRecipientCount,
+      requestedRecipientCount: emails.length,
+      suppressedRecipientCount,
+      providerAccepted,
+      deliveryStatus: emailResult.skipped ? "skipped" : providerAccepted ? "accepted" : "failed",
       providerConfigured: emailResult.configured,
       registrationUrl,
     },
   });
 
-  if (!emailResult.ok) {
+  if (!providerAccepted) {
     return NextResponse.json(
       {
         ok: false,
@@ -211,13 +223,15 @@ async function POSTHandler(request: NextRequest) {
         lead: crmResult?.lead ?? null,
         note: crmResult?.note ?? null,
       },
-      { status: 502 },
+      { status: emailResult.skipped ? 400 : 502 },
     );
   }
 
   return NextResponse.json({
     ok: true,
-    emailsQueued: emails.length,
+    emailsQueued: effectiveRecipientCount,
+    requestedEmailCount: emails.length,
+    suppressedEmailCount: suppressedRecipientCount,
     registrationUrl,
     lead: crmResult?.lead ?? null,
     note: crmResult?.note ?? null,

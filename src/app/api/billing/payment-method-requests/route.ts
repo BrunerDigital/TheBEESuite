@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
@@ -76,13 +77,32 @@ async function POSTHandler(request: NextRequest) {
       billingAccount: { select: { customFields: true } },
       _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
       guardians: {
-        select: { id: true, fullName: true, email: true, userId: true },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          userId: true,
+          user: { select: { email: true } },
+        },
         orderBy: { fullName: "asc" },
       },
     },
   });
   if (!family) {
     return NextResponse.json({ ok: false, error: "Family not found." }, { status: 404 });
+  }
+  if (
+    requestedEmails.some((email) => Boolean(appReviewReservedIdentityKind(email)))
+    || Boolean(family.billingEmail && appReviewReservedIdentityKind(family.billingEmail))
+    || family.guardians.some((guardian) => Boolean(
+      (guardian.email && appReviewReservedIdentityKind(guardian.email))
+      || (guardian.user?.email && appReviewReservedIdentityKind(guardian.user.email)),
+    ))
+  ) {
+    return NextResponse.json({
+      ok: false,
+      error: "Payment-method requests are disabled for the App Review demo workspace.",
+    }, { status: 409 });
   }
   if (!family.centerId) {
     return NextResponse.json({ ok: false, error: "This family is not linked to a school." }, { status: 400 });

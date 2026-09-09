@@ -5,7 +5,7 @@ import {
 } from "@/lib/google-sheets";
 import { credentialEnvValue, getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
 import { postJsonToGoogleAppsScriptWebhook } from "@/lib/google-apps-script-webhook";
-import { sendEmail } from "@/lib/integrations";
+import { externalProviderEmails, sendEmail } from "@/lib/integrations";
 
 export type InquiryIntegrationResult = {
   ok: boolean;
@@ -17,7 +17,11 @@ export type InquiryIntegrationResult = {
   sheetName?: string;
   updatedRange?: string;
   recipients?: number;
+  requestedRecipients?: number;
+  suppressedRecipients?: number;
   locationRecipients?: number;
+  requestedLocationRecipients?: number;
+  suppressedLocationRecipients?: number;
 };
 
 const GOOGLE_SHEET_COLUMNS = [
@@ -122,8 +126,20 @@ export async function sendInquiryNotificationEmail(
   ]);
 
   if (!recipients.length) {
-    return { ok: true, skipped: true };
+    return {
+      ok: true,
+      skipped: true,
+      recipients: 0,
+      requestedRecipients: 0,
+      suppressedRecipients: 0,
+      locationRecipients: 0,
+      requestedLocationRecipients: 0,
+      suppressedLocationRecipients: 0,
+    };
   }
+
+  const requestedLocationRecipients = uniqueInquiryEmails(locationRecipients);
+  const effectiveLocationRecipients = externalProviderEmails(requestedLocationRecipients);
 
   const brand = String(payload.brandName || "Kid City USA");
   const subject = `New ${brand} Inquiry - ${payload.program} - ${payload.locationId || payload.locationName || payload.centerId}`;
@@ -158,9 +174,13 @@ export async function sendInquiryNotificationEmail(
   return {
     ok: email.ok,
     id: email.id,
-    skipped: !email.configured,
+    skipped: Boolean(email.skipped || !email.configured),
     error: email.error,
-    recipients: recipients.length,
-    locationRecipients: uniqueInquiryEmails(locationRecipients).length,
+    recipients: email.effectiveRecipientCount ?? externalProviderEmails(recipients).length,
+    requestedRecipients: recipients.length,
+    suppressedRecipients: email.suppressedRecipientCount ?? 0,
+    locationRecipients: effectiveLocationRecipients.length,
+    requestedLocationRecipients: requestedLocationRecipients.length,
+    suppressedLocationRecipients: requestedLocationRecipients.length - effectiveLocationRecipients.length,
   };
 }

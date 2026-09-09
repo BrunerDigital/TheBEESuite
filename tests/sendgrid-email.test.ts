@@ -1,6 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sendEmail } from "@/lib/integrations";
+import { APP_REVIEW_PARENT_CONTACT, APP_REVIEW_TEACHER_CONTACT } from "@/lib/app-review-targeting";
+import {
+  externalProviderEmail,
+  externalProviderEmails,
+  externalProviderMetadata,
+  sendEmail,
+} from "@/lib/integrations";
+
+test("external provider email guard rejects reserved App Review identities", () => {
+  assert.equal(externalProviderEmail(APP_REVIEW_PARENT_CONTACT.email.toUpperCase()), null);
+  assert.equal(externalProviderEmail(APP_REVIEW_TEACHER_CONTACT.email), null);
+  assert.equal(externalProviderEmail(" ordinary-parent@example.com "), "ordinary-parent@example.com");
+  assert.equal(externalProviderEmail("not-an-email"), null);
+  assert.deepEqual(
+    externalProviderEmails([
+      APP_REVIEW_PARENT_CONTACT.email,
+      " ordinary-parent@example.com ",
+      APP_REVIEW_TEACHER_CONTACT.email,
+      "ORDINARY-PARENT@example.com",
+    ]),
+    ["ordinary-parent@example.com"],
+  );
+  assert.deepEqual(externalProviderMetadata({
+    familyId: "family-1",
+    recipientEmail: APP_REVIEW_PARENT_CONTACT.email,
+    blank: null,
+  }), { familyId: "family-1" });
+});
 
 test("SendGrid email helper sends private personalizations and captures provider id", async () => {
   const originalFetch = globalThis.fetch;
@@ -44,6 +71,8 @@ test("SendGrid email helper sends private personalizations and captures provider
 
     assert.equal(result.ok, true);
     assert.equal(result.id, "sendgrid-message-123");
+    assert.equal(result.effectiveRecipientCount, 2);
+    assert.equal(result.suppressedRecipientCount, 0);
     const personalizations = capture.payload?.personalizations;
     assert.ok(personalizations);
     assert.equal(personalizations.length, 2);
@@ -63,6 +92,63 @@ test("SendGrid email helper sends private personalizations and captures provider
       type: "application/pdf",
       disposition: "attachment",
     }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.SENDGRID_API_KEY;
+    else process.env.SENDGRID_API_KEY = originalApiKey;
+    if (originalFrom === undefined) delete process.env.SENDGRID_FROM_EMAIL;
+    else process.env.SENDGRID_FROM_EMAIL = originalFrom;
+  }
+});
+
+test("SendGrid common boundary suppresses reserved App Review recipients", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.SENDGRID_API_KEY;
+  const originalFrom = process.env.SENDGRID_FROM_EMAIL;
+  const sentRecipients: string[][] = [];
+  const sentReplyTos: Array<string | null> = [];
+
+  process.env.SENDGRID_API_KEY = "SG.test";
+  process.env.SENDGRID_FROM_EMAIL = "noreply@thebeesuite.io";
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    const payload = JSON.parse(String(init?.body)) as {
+      personalizations: Array<{ to: Array<{ email: string }> }>;
+      reply_to?: { email: string };
+    };
+    sentRecipients.push(payload.personalizations.flatMap((item) => item.to.map((recipient) => recipient.email)));
+    sentReplyTos.push(payload.reply_to?.email ?? null);
+    return new Response(null, { status: 202 });
+  }) as typeof fetch;
+
+  try {
+    const mixed = await sendEmail({
+      to: [APP_REVIEW_PARENT_CONTACT.email, "ordinary-parent@example.com", APP_REVIEW_TEACHER_CONTACT.email],
+      subject: "School update",
+      text: "Please review the portal.",
+      replyTo: APP_REVIEW_PARENT_CONTACT.email,
+    });
+    assert.equal(mixed.ok, true);
+    assert.equal(mixed.effectiveRecipientCount, 1);
+    assert.equal(mixed.suppressedRecipientCount, 2);
+    assert.deepEqual(sentRecipients, [["ordinary-parent@example.com"]]);
+    assert.deepEqual(sentReplyTos, [null]);
+
+    const reservedOnly = await sendEmail({
+      to: [APP_REVIEW_PARENT_CONTACT.email, APP_REVIEW_TEACHER_CONTACT.email],
+      subject: "Review-only update",
+      text: "This must stay inside the portal.",
+    });
+    assert.deepEqual(reservedOnly, {
+      ok: false,
+      configured: true,
+      provider: "sendgrid",
+      skipped: true,
+      effectiveRecipientCount: 0,
+      suppressedRecipientCount: 2,
+      error: "Reserved App Review recipients are suppressed.",
+    });
+    assert.deepEqual(sentRecipients, [["ordinary-parent@example.com"]]);
+    assert.deepEqual(sentReplyTos, [null]);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalApiKey === undefined) delete process.env.SENDGRID_API_KEY;

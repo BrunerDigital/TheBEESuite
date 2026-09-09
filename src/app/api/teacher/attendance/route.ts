@@ -174,6 +174,8 @@ async function POSTHandler(request: NextRequest) {
         reason: "provider_failed",
         reportId: null,
         recipients: [],
+        requestedRecipients: [],
+        suppressedRecipientCount: 0,
         configured: false,
         provider: "sendgrid",
         providerMessageId: null,

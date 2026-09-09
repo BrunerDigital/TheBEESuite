@@ -82,7 +82,7 @@ Creating or rotating this login changes an external identity, application role, 
 npm run app-review:teacher:ensure -- --preflight
 ```
 
-Select the exact fake-demo target, set `APP_REVIEW_TEACHER_TENANT_ID`, `APP_REVIEW_TEACHER_CENTER_ID`, `APP_REVIEW_TEACHER_CLASSROOM_ID`, and `APP_REVIEW_TEACHER_SOURCE_STAFF_ID`, and repeat `--preflight` to obtain the current fingerprint bound to the exact review email. After exact authorization covering that email and every listed mutation and target, set the fingerprint as `APP_REVIEW_TEACHER_TARGET_FINGERPRINT`, set `APP_REVIEW_TEACHER_PASSWORD` outside Git/chat, and run `npm run app-review:teacher:ensure -- --confirm-teacher-app-review-account`.
+Select the exact fake-demo target, set `APP_REVIEW_TEACHER_TENANT_ID`, `APP_REVIEW_TEACHER_CENTER_ID`, `APP_REVIEW_TEACHER_CLASSROOM_ID`, and `APP_REVIEW_TEACHER_SOURCE_STAFF_ID`, and repeat `--preflight` to obtain the current fingerprint bound to the exact review email. After exact authorization covering that email and every listed mutation and target, set the fingerprint as `APP_REVIEW_TEACHER_TARGET_FINGERPRINT`, set `APP_REVIEW_TEACHER_PASSWORD` outside Git/chat, and run `npm run app-review:teacher:ensure -- --confirm-teacher-app-review-account`. The command stages local access inactive and activates it only after Auth and exact-scope revalidation succeed; rerun the fresh preflight after any failure.
 
 The command fails closed unless it finds a classroom-assigned `bee_suite_demo` teacher source. Re-query the resulting login, tenant, school, classroom, and fake-data boundary before entering credentials in App Store Connect.
 

@@ -23,7 +23,7 @@ test("parent App Review preparation requires an exact preflighted target", async
   assert.match(script, /getSupabaseAuthUserMetadataByEmail\(email\)/);
   assert.match(script, /linked to an unmarked or wrong-role Auth identity/);
   assert.ok(
-    script.indexOf("getSupabaseAuthUserMetadataByEmail(email)") < script.indexOf("await upsertSupabaseAuthUserWithPassword({"),
+    script.indexOf("getSupabaseAuthUserMetadataByEmail(email)") < script.indexOf("const staged = await prisma.$transaction(async (tx)"),
     "an existing Auth identity must be verified before its password can change",
   );
   assert.ok(
@@ -31,9 +31,18 @@ test("parent App Review preparation requires an exact preflighted target", async
     "the exact target fingerprint must be checked before the Auth identity can change",
   );
   assert.ok(
-    script.indexOf("await upsertSupabaseAuthUserWithPassword({") < script.indexOf("await prisma.$transaction(async (tx)"),
-    "Auth must be established before the atomic local access transaction",
+    script.indexOf("const staged = await prisma.$transaction(async (tx)") < script.indexOf("await upsertSupabaseAuthUserWithPassword({"),
+    "the exact local scope must be staged inactive before the Auth credential can change",
   );
+  assert.ok(
+    script.indexOf("await upsertSupabaseAuthUserWithPassword({") < script.lastIndexOf("await prisma.$transaction(async (tx)"),
+    "the staged account must be revalidated and activated only after Auth succeeds",
+  );
+  assert.match(script, /Parent App Review activation revalidation failed; the staged account remains inactive/);
+  assert.match(script, /Parent App Review Auth verification failed; the staged account remains inactive/);
+  assert.match(script, /authUserBeforeWrite/);
+  assert.match(script, /authUserAfterWrite/);
+  assert.match(script, /isActive: false/);
   assert.match(script, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
   assert.match(script, /mergeCustomFields\(currentUser\?\.customFields/);
   assert.match(script, /mergeCustomFields\(currentGuardian\?\.customFields/);

@@ -124,7 +124,7 @@ async function listTeacherTargets(email: string) {
 
 async function ensureTeacherGrant(
   db: Prisma.TransactionClient,
-  input: { userId: string; tenantId: string; organizationId: string; centerId: string },
+  input: { userId: string; tenantId: string; organizationId: string; centerId: string; isActive: boolean },
 ) {
   const existing = await db.userAccessGrant.findMany({
     where: { userId: input.userId, tenantId: input.tenantId, role: UserRole.TEACHER, scopeType: "CENTER", centerId: input.centerId },
@@ -139,7 +139,7 @@ async function ensureTeacherGrant(
     centerId: input.centerId,
     role: UserRole.TEACHER,
     scopeType: "CENTER",
-    isActive: true,
+    isActive: input.isActive,
     startsAt: null,
     endsAt: null,
     permissions: { appReview: true, seededBy: SCRIPT_SOURCE },
@@ -337,16 +337,7 @@ async function main() {
     throw new Error("The dedicated Teacher App Review email is linked to an unmarked or wrong-role Auth identity.");
   }
 
-  await upsertSupabaseAuthUserWithPassword({
-    email,
-    name: "App Review Teacher",
-    password,
-    role: UserRole.TEACHER,
-    source: APP_REVIEW_SOURCE,
-    updateExistingPassword: true,
-  });
-
-  await prisma.$transaction(async (tx) => {
+  const staged = await prisma.$transaction(async (tx) => {
     const currentSourceProfile = await tx.staffProfile.findUnique({
       where: { id: target.sourceStaffProfileId },
       include: {
@@ -462,7 +453,7 @@ async function main() {
         organizationId: sourceProfile.center.organizationId,
         name: "App Review Teacher",
         role: UserRole.TEACHER,
-        isActive: true,
+        isActive: false,
         mustResetPassword: false,
         sessionVersion: { increment: 1 },
         customFields: mergeCustomFields(currentUser?.customFields, {
@@ -476,14 +467,14 @@ async function main() {
         email,
         name: "App Review Teacher",
         role: UserRole.TEACHER,
-        isActive: true,
+        isActive: false,
         mustResetPassword: false,
         customFields: { appReview: true, seededBy: SCRIPT_SOURCE },
       },
       select: { id: true },
     });
 
-    await tx.staffProfile.upsert({
+    const reviewProfile = await tx.staffProfile.upsert({
       where: { userId: user.id },
       update: {
         centerId: sourceProfile.centerId,
@@ -508,13 +499,159 @@ async function main() {
         externalId: APP_REVIEW_STAFF_EXTERNAL_ID,
         customFields: { appReview: true, seededBy: SCRIPT_SOURCE },
       },
+      select: { id: true },
     });
-    await ensureTeacherGrant(tx, {
+    const grant = await ensureTeacherGrant(tx, {
       userId: user.id,
       tenantId: target.tenantId,
       organizationId: sourceProfile.center.organizationId,
       centerId: sourceProfile.centerId,
+      isActive: false,
     });
+    return { userId: user.id, staffProfileId: reviewProfile.id, accessGrantId: grant.id };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+  const authUserBeforeWrite = await getSupabaseAuthUserMetadataByEmail(email);
+  if (authUserBeforeWrite && (
+    authUserBeforeWrite.email !== email ||
+    authUserBeforeWrite.userMetadata.source !== APP_REVIEW_SOURCE ||
+    authUserBeforeWrite.appMetadata.bee_suite_role !== UserRole.TEACHER
+  )) {
+    throw new Error("The dedicated Teacher App Review Auth identity changed while local access was staged; the account remains inactive.");
+  }
+
+  await upsertSupabaseAuthUserWithPassword({
+    email,
+    name: "App Review Teacher",
+    password,
+    role: UserRole.TEACHER,
+    source: APP_REVIEW_SOURCE,
+    updateExistingPassword: true,
+  });
+
+  const authUserAfterWrite = await getSupabaseAuthUserMetadataByEmail(email);
+  if (
+    !authUserAfterWrite ||
+    authUserAfterWrite.email !== email ||
+    authUserAfterWrite.userMetadata.source !== APP_REVIEW_SOURCE ||
+    authUserAfterWrite.appMetadata.bee_suite_role !== UserRole.TEACHER
+  ) {
+    throw new Error("Teacher App Review Auth verification failed; the staged account remains inactive.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const [activationUser, activationGrant, activationSourceProfile, activeOtherGrantCount] = await Promise.all([
+      tx.user.findUnique({
+        where: { id: staged.userId },
+        select: {
+          email: true,
+          tenantId: true,
+          organizationId: true,
+          role: true,
+          isActive: true,
+          customFields: true,
+          staffProfile: {
+            select: {
+              id: true,
+              centerId: true,
+              classroomId: true,
+              sourceSystem: true,
+              externalId: true,
+              customFields: true,
+            },
+          },
+        },
+      }),
+      tx.userAccessGrant.findUnique({
+        where: { id: staged.accessGrantId },
+        select: {
+          userId: true,
+          tenantId: true,
+          organizationId: true,
+          centerId: true,
+          role: true,
+          scopeType: true,
+          isActive: true,
+          startsAt: true,
+          endsAt: true,
+        },
+      }),
+      tx.staffProfile.findUnique({
+        where: { id: target.sourceStaffProfileId },
+        include: {
+          user: { select: { id: true, tenantId: true, role: true, isActive: true } },
+          center: {
+            select: {
+              status: true,
+              sourceSystem: true,
+              externalId: true,
+              organizationId: true,
+              organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
+            },
+          },
+          classroom: { select: { id: true, centerId: true, sourceSystem: true } },
+        },
+      }),
+      tx.userAccessGrant.count({
+        where: { userId: staged.userId, isActive: true, id: { not: staged.accessGrantId } },
+      }),
+    ]);
+
+    if (
+      !activationUser ||
+      activationUser.email !== email ||
+      activationUser.tenantId !== target.tenantId ||
+      activationUser.organizationId !== sourceProfile.center.organizationId ||
+      activationUser.role !== UserRole.TEACHER ||
+      activationUser.isActive ||
+      asRecord(activationUser.customFields).appReview !== true ||
+      asRecord(activationUser.customFields).seededBy !== SCRIPT_SOURCE ||
+      !activationUser.staffProfile ||
+      activationUser.staffProfile.id !== staged.staffProfileId ||
+      activationUser.staffProfile.centerId !== target.centerId ||
+      activationUser.staffProfile.classroomId !== target.classroomId ||
+      activationUser.staffProfile.sourceSystem !== APP_REVIEW_SOURCE ||
+      activationUser.staffProfile.externalId !== APP_REVIEW_STAFF_EXTERNAL_ID ||
+      asRecord(activationUser.staffProfile.customFields).appReview !== true ||
+      asRecord(activationUser.staffProfile.customFields).seededBy !== SCRIPT_SOURCE ||
+      !activationGrant ||
+      activationGrant.userId !== staged.userId ||
+      activationGrant.tenantId !== target.tenantId ||
+      activationGrant.organizationId !== sourceProfile.center.organizationId ||
+      activationGrant.centerId !== target.centerId ||
+      activationGrant.role !== UserRole.TEACHER ||
+      activationGrant.scopeType !== "CENTER" ||
+      activationGrant.isActive ||
+      activationGrant.startsAt !== null ||
+      activationGrant.endsAt !== null ||
+      activeOtherGrantCount !== 0 ||
+      !activationSourceProfile?.classroom ||
+      activationSourceProfile.sourceSystem !== DEMO_SOURCE ||
+      !activationSourceProfile.user.isActive ||
+      activationSourceProfile.user.id !== sourceProfile.user.id ||
+      activationSourceProfile.user.tenantId !== target.tenantId ||
+      activationSourceProfile.user.role !== UserRole.TEACHER ||
+      activationSourceProfile.centerId !== target.centerId ||
+      activationSourceProfile.center.sourceSystem !== DEMO_SOURCE ||
+      activationSourceProfile.center.externalId !== SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID ||
+      ["closed", "archived", "inactive"].includes(activationSourceProfile.center.status.toLowerCase()) ||
+      activationSourceProfile.center.organization.tenant.slug !== SYNTHETIC_ROLE_QA_TENANT_SLUG ||
+      activationSourceProfile.center.organization.tenantId !== target.tenantId ||
+      activationSourceProfile.center.organizationId !== sourceProfile.center.organizationId ||
+      activationSourceProfile.classroom.id !== target.classroomId ||
+      activationSourceProfile.classroom.centerId !== target.centerId ||
+      activationSourceProfile.classroom.sourceSystem !== DEMO_SOURCE
+    ) {
+      throw new Error("Teacher App Review activation revalidation failed; the staged account remains inactive.");
+    }
+
+    await Promise.all([
+      tx.user.update({ where: { id: staged.userId }, data: { isActive: true } }),
+      tx.userAccessGrant.update({
+        where: { id: staged.accessGrantId },
+        data: { isActive: true, startsAt: null, endsAt: null },
+      }),
+    ]);
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   console.log(JSON.stringify({

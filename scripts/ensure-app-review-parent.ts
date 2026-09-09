@@ -138,6 +138,7 @@ async function ensureAccessGrant(db: Prisma.TransactionClient, input: {
   tenantId: string;
   organizationId: string;
   centerId: string;
+  isActive: boolean;
 }) {
   const existing = await db.userAccessGrant.findMany({
     where: {
@@ -160,7 +161,7 @@ async function ensureAccessGrant(db: Prisma.TransactionClient, input: {
     centerId: input.centerId,
     role: UserRole.PARENT_GUARDIAN,
     scopeType: "CENTER",
-    isActive: true,
+    isActive: input.isActive,
     startsAt: null,
     endsAt: null,
     permissions: {
@@ -390,16 +391,7 @@ async function main() {
     throw new Error("The dedicated Parent App Review email is linked to an unmarked or wrong-role Auth identity.");
   }
 
-  await upsertSupabaseAuthUserWithPassword({
-    email,
-    name: "App Review Parent",
-    password,
-    role: UserRole.PARENT_GUARDIAN,
-    source: APP_REVIEW_SOURCE,
-    updateExistingPassword: true,
-  });
-
-  const provisioned = await prisma.$transaction(async (tx) => {
+  const staged = await prisma.$transaction(async (tx) => {
     const currentFamily = await tx.family.findUnique({
       where: { id: target.familyId },
       select: {
@@ -516,7 +508,7 @@ async function main() {
         organizationId: center.organizationId,
         name: "App Review Parent",
         role: UserRole.PARENT_GUARDIAN,
-        isActive: true,
+        isActive: false,
         mustResetPassword: false,
         sessionVersion: { increment: 1 },
         customFields: userFields,
@@ -527,7 +519,7 @@ async function main() {
         email,
         name: "App Review Parent",
         role: UserRole.PARENT_GUARDIAN,
-        isActive: true,
+        isActive: false,
         mustResetPassword: false,
         customFields: userFields,
       },
@@ -588,8 +580,146 @@ async function main() {
       tenantId: target.tenantId,
       organizationId: center.organizationId,
       centerId: center.id,
+      isActive: false,
     });
     return { userId: user.id, guardianId: guardian.id, accessGrantId: grant.id };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+  const authUserBeforeWrite = await getSupabaseAuthUserMetadataByEmail(email);
+  if (authUserBeforeWrite && (
+    authUserBeforeWrite.email !== email ||
+    authUserBeforeWrite.userMetadata.source !== APP_REVIEW_SOURCE ||
+    authUserBeforeWrite.appMetadata.bee_suite_role !== UserRole.PARENT_GUARDIAN
+  )) {
+    throw new Error("The dedicated Parent App Review Auth identity changed while local access was staged; the account remains inactive.");
+  }
+
+  await upsertSupabaseAuthUserWithPassword({
+    email,
+    name: "App Review Parent",
+    password,
+    role: UserRole.PARENT_GUARDIAN,
+    source: APP_REVIEW_SOURCE,
+    updateExistingPassword: true,
+  });
+
+  const authUserAfterWrite = await getSupabaseAuthUserMetadataByEmail(email);
+  if (
+    !authUserAfterWrite ||
+    authUserAfterWrite.email !== email ||
+    authUserAfterWrite.userMetadata.source !== APP_REVIEW_SOURCE ||
+    authUserAfterWrite.appMetadata.bee_suite_role !== UserRole.PARENT_GUARDIAN
+  ) {
+    throw new Error("Parent App Review Auth verification failed; the staged account remains inactive.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const [activationUser, activationGuardian, activationGrant, activationFamily, activationCenter, activeOtherGrantCount] = await Promise.all([
+      tx.user.findUnique({
+        where: { id: staged.userId },
+        select: { email: true, tenantId: true, organizationId: true, role: true, isActive: true, customFields: true },
+      }),
+      tx.guardian.findUnique({
+        where: { id: staged.guardianId },
+        select: { userId: true, familyId: true, sourceSystem: true, externalId: true },
+      }),
+      tx.userAccessGrant.findUnique({
+        where: { id: staged.accessGrantId },
+        select: {
+          userId: true,
+          tenantId: true,
+          organizationId: true,
+          centerId: true,
+          role: true,
+          scopeType: true,
+          isActive: true,
+          startsAt: true,
+          endsAt: true,
+        },
+      }),
+      tx.family.findUnique({
+        where: { id: target.familyId },
+        select: {
+          centerId: true,
+          sourceSystem: true,
+          externalId: true,
+          children: {
+            select: {
+              sourceSystem: true,
+              classroom: { select: { centerId: true, sourceSystem: true } },
+            },
+          },
+        },
+      }),
+      tx.center.findUnique({
+        where: { id: target.centerId },
+        select: {
+          status: true,
+          sourceSystem: true,
+          externalId: true,
+          organizationId: true,
+          organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
+        },
+      }),
+      tx.userAccessGrant.count({
+        where: { userId: staged.userId, isActive: true, id: { not: staged.accessGrantId } },
+      }),
+    ]);
+
+    if (
+      !activationUser ||
+      activationUser.email !== email ||
+      activationUser.tenantId !== target.tenantId ||
+      activationUser.organizationId !== center.organizationId ||
+      activationUser.role !== UserRole.PARENT_GUARDIAN ||
+      activationUser.isActive ||
+      asRecord(activationUser.customFields).appReview !== true ||
+      asRecord(activationUser.customFields).seededBy !== SCRIPT_SOURCE ||
+      !activationGuardian ||
+      activationGuardian.userId !== staged.userId ||
+      activationGuardian.familyId !== target.familyId ||
+      activationGuardian.sourceSystem !== APP_REVIEW_SOURCE ||
+      activationGuardian.externalId !== APP_REVIEW_GUARDIAN_EXTERNAL_ID ||
+      !activationGrant ||
+      activationGrant.userId !== staged.userId ||
+      activationGrant.tenantId !== target.tenantId ||
+      activationGrant.organizationId !== center.organizationId ||
+      activationGrant.centerId !== target.centerId ||
+      activationGrant.role !== UserRole.PARENT_GUARDIAN ||
+      activationGrant.scopeType !== "CENTER" ||
+      activationGrant.isActive ||
+      activationGrant.startsAt !== null ||
+      activationGrant.endsAt !== null ||
+      activeOtherGrantCount !== 0 ||
+      !activationFamily ||
+      activationFamily.centerId !== target.centerId ||
+      activationFamily.sourceSystem !== DEMO_SOURCE ||
+      activationFamily.externalId !== target.familyExternalId ||
+      activationFamily.children.length === 0 ||
+      activationFamily.children.some((child) =>
+        child.sourceSystem !== DEMO_SOURCE ||
+        Boolean(child.classroom && (
+          child.classroom.centerId !== target.centerId || child.classroom.sourceSystem !== DEMO_SOURCE
+        ))
+      ) ||
+      !activationCenter ||
+      activationCenter.sourceSystem !== DEMO_SOURCE ||
+      activationCenter.externalId !== SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID ||
+      ["closed", "archived", "inactive"].includes(activationCenter.status.toLowerCase()) ||
+      activationCenter.organization.tenant.slug !== SYNTHETIC_ROLE_QA_TENANT_SLUG ||
+      activationCenter.organization.tenantId !== target.tenantId ||
+      activationCenter.organizationId !== center.organizationId
+    ) {
+      throw new Error("Parent App Review activation revalidation failed; the staged account remains inactive.");
+    }
+
+    await Promise.all([
+      tx.user.update({ where: { id: staged.userId }, data: { isActive: true } }),
+      tx.userAccessGrant.update({
+        where: { id: staged.accessGrantId },
+        data: { isActive: true, startsAt: null, endsAt: null },
+      }),
+    ]);
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   console.log(JSON.stringify({
@@ -599,9 +729,9 @@ async function main() {
     center: center.name,
     family: family.name,
     children: family.children.map((child) => child.fullName),
-    userId: provisioned.userId,
-    guardianId: provisioned.guardianId,
-    accessGrantId: provisioned.accessGrantId,
+    userId: staged.userId,
+    guardianId: staged.guardianId,
+    accessGrantId: staged.accessGrantId,
   }, null, 2));
 }
 

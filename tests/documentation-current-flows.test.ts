@@ -24,7 +24,7 @@ const currentGuides = [
 test("current guides carry an approved revision and exclude superseded workflow copy", () => {
   for (const path of currentGuides) {
     const content = readFileSync(path, "utf8");
-    assert.match(content, /(?:August (?:11|24)|September (?:2|3|8)), 2026/, path);
+    assert.match(content, /(?:August (?:11|24)|September (?:2|3|8|9)), 2026/, path);
     assert.doesNotMatch(content, /creates? (?:a |the )?Friday invoice/i, path);
     assert.doesNotMatch(content, /bank payment is the preferred payment method/i, path);
     assert.doesNotMatch(content, /create your password.*setup link/i, path);

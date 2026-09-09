@@ -27,6 +27,11 @@ const APP_REVIEW_GUARDIAN_EXTERNAL_ID = "app-review-parent-primary";
 const APP_REVIEW_EMAIL = "app-review-parent@thebeesuite.io";
 const SCRIPT_SOURCE = "scripts/ensure-app-review-parent.ts";
 const CONFIRM_FLAG = "--confirm-parent-app-review-account";
+const APP_REVIEW_TRANSACTION_OPTIONS = {
+  isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  maxWait: 10_000,
+  timeout: 60_000,
+} as const;
 const TARGET_ENVIRONMENT_VARIABLES = [
   "APP_REVIEW_PARENT_TENANT_ID",
   "APP_REVIEW_PARENT_CENTER_ID",
@@ -698,7 +703,7 @@ async function main() {
       accessGrantId: grant.id,
       scopeDigest: appReviewScopeDigest({ center: stagedCenter, family: stagedFamily }),
     };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, APP_REVIEW_TRANSACTION_OPTIONS);
 
   const authUserBeforeWrite = await getSupabaseAuthUserMetadataByEmail(email);
   if (authUserBeforeWrite && (
@@ -847,7 +852,7 @@ async function main() {
         data: { isActive: true, startsAt: null, endsAt: null },
       }),
     ]);
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, APP_REVIEW_TRANSACTION_OPTIONS);
 
   console.log(JSON.stringify({
     ok: true,

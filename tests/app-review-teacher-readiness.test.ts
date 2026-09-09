@@ -69,6 +69,13 @@ test("teacher App Review preparation is explicit, demo-scoped, and fail-closed",
   assert.match(script, /authUserAfterWrite/);
   assert.match(script, /isActive: false/);
   assert.match(script, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(script, /maxWait: 10_000/);
+  assert.match(script, /timeout: 60_000/);
+  assert.equal(
+    (script.match(/APP_REVIEW_TRANSACTION_OPTIONS\)/g) ?? []).length,
+    2,
+    "staging and activation must both use the bounded App Review transaction window",
+  );
   assert.match(script, /mergeCustomFields\(removeProfilePhotoCustomFields\(currentUser\?\.customFields\)/);
   assert.match(script, /reviewStaffCustomFields\(currentUser\?\.staffProfile\?\.customFields\)/);
   assert.match(script, /delete fields\.staffKioskPinHash/);

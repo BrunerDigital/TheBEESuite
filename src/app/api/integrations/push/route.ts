@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { UserRole } from "@prisma/client";
 import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { notificationTargetGuard } from "@/lib/notification-guardrails";
@@ -61,6 +62,7 @@ async function POSTHandler(request: NextRequest) {
     actorTenantId: user.tenantId,
     actorCenterIds: user.centerIds,
     actorHasTenantWideAccess: canAccessAllCenters(user),
+    actorCanCreateUntargeted: user.role === UserRole.PLATFORM_OWNER,
     targetTenantId: targetUser?.tenantId,
     targetCenterIds,
   });

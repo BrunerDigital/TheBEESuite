@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
@@ -53,6 +54,10 @@ function reviewAction(value: unknown): ReviewAction | null {
 
 function validEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function targetsReservedAppReviewIdentity(...emails: Array<string | null | undefined>) {
+  return emails.some((email) => Boolean(email && appReviewReservedIdentityKind(email)));
 }
 
 function nullable(value: string) {
@@ -596,6 +601,19 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   if (!packet.centerId || !packet.primaryGuardianName || !packet.primaryGuardianEmail || !packet.childFullName || !childDateOfBirth) {
     return NextResponse.json({ ok: false, error: "Registration packet is missing required family or child fields." }, { status: 400 });
   }
+  if (
+    action === "APPROVED"
+    && targetsReservedAppReviewIdentity(
+      packet.primaryGuardianEmail,
+      packet.secondaryGuardianEmail,
+      packet.billingContactEmail,
+    )
+  ) {
+    return NextResponse.json({
+      ok: false,
+      error: "Reserved App Review families can only be changed by the dedicated provisioning workflow.",
+    }, { status: 409 });
+  }
 
   const center = await prisma.center.findUnique({
     where: { id: packet.centerId },
@@ -626,13 +644,25 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
             name: true,
             guardians: {
               orderBy: { fullName: "asc" },
-              select: { id: true, fullName: true, email: true, customFields: true },
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                customFields: true,
+                user: { select: { email: true } },
+              },
             },
           },
         })
       : null;
     if (!family) {
       return NextResponse.json({ ok: false, error: "Approved registration family was not found." }, { status: 409 });
+    }
+    if (family.guardians.some((guardian) => targetsReservedAppReviewIdentity(guardian.email, guardian.user?.email))) {
+      return NextResponse.json({
+        ok: false,
+        error: "Reserved App Review families can only be changed by the dedicated provisioning workflow.",
+      }, { status: 409 });
     }
 
     const results = [];
@@ -801,8 +831,15 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
           { guardians: { some: { email: packet.primaryGuardianEmail } } },
         ],
       },
-      include: { guardians: true },
+      include: {
+        guardians: {
+          include: { user: { select: { email: true } } },
+        },
+      },
     });
+    if (familyMatch?.guardians.some((guardian) => targetsReservedAppReviewIdentity(guardian.email, guardian.user?.email))) {
+      return { appReviewBlocked: true as const };
+    }
     const family = familyMatch
       ? await tx.family.update({
           where: { id: familyMatch.id },
@@ -1223,6 +1260,13 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       registrationPayment,
     };
   });
+
+  if ("appReviewBlocked" in approval) {
+    return NextResponse.json({
+      ok: false,
+      error: "Reserved App Review families can only be changed by the dedicated provisioning workflow.",
+    }, { status: 409 });
+  }
 
   let parentInvite: {
     ok: boolean;

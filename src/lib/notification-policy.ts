@@ -18,6 +18,16 @@ export function activeNotificationWhere(now: Date = new Date()): Prisma.Notifica
   };
 }
 
+export function visibleNotificationWhere(
+  user: { id: string; role?: string | null },
+  now: Date = new Date(),
+): Prisma.NotificationWhereInput {
+  const recipientWhere: Prisma.NotificationWhereInput = user.role === "PLATFORM_OWNER"
+    ? { OR: [{ userId: user.id }, { userId: null }] }
+    : { userId: user.id };
+  return { AND: [activeNotificationWhere(now), recipientWhere] };
+}
+
 export function notificationDedupeKey(parts: Array<string | number | null | undefined>) {
   const key = parts
     .map((part) => String(part ?? "").trim().toLowerCase().replace(/\s+/g, "-"))

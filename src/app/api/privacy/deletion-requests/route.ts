@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
@@ -68,6 +69,7 @@ async function POSTHandler(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
+  const appReviewKind = appReviewReservedIdentityKind(user.email);
 
   const ip = requestIp(request.headers);
   const rateLimit = await checkPersistentRateLimit({
@@ -171,6 +173,12 @@ async function POSTHandler(request: NextRequest) {
         guardianRelation: guardian.relation,
         submittedFrom: "parent_portal",
         retentionNoticeAcceptedAt: new Date().toISOString(),
+        ...(appReviewKind ? {
+          appReview: true,
+          appReviewKind,
+          demoWorkspace: true,
+          seededBy: "src/app/api/privacy/deletion-requests/route.ts",
+        } : {}),
       } satisfies Prisma.InputJsonObject,
     },
     select: {
@@ -186,7 +194,7 @@ async function POSTHandler(request: NextRequest) {
     },
   });
 
-  const directors = guardian.family.centerId
+  const directors = !appReviewKind && guardian.family.centerId
     ? await getCenterLeadershipUsers({
         centerId: guardian.family.centerId,
         roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
@@ -217,6 +225,7 @@ async function POSTHandler(request: NextRequest) {
         status: deletionRequest.status,
         dueAt: deletionRequest.dueAt?.toISOString() ?? null,
         retentionNoticeAccepted: true,
+        appReviewOutboundSuppressed: Boolean(appReviewKind),
       },
     }),
   ]);

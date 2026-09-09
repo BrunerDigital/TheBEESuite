@@ -93,6 +93,8 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     customArgs: { announcementId: announcement.id, centerId: announcement.centerId },
     tenantId: user.tenantId,
   });
+  const effectiveRecipientCount = email.effectiveRecipientCount ?? recipients.length;
+  const suppressedRecipientCount = email.suppressedRecipientCount ?? 0;
 
   await recordEmailDeliveryAttempt({
     tenantId: user.tenantId,
@@ -107,6 +109,9 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     metadata: {
       announcementId: announcement.id,
       centerCount: centerIds.length,
+      requestedRecipientCount: recipients.length,
+      effectiveRecipientCount,
+      suppressedRecipientCount,
     },
   });
 
@@ -123,7 +128,9 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     resource: "Announcement",
     resourceId: announcement.id,
     metadata: {
-      recipientCount: recipients.length,
+      recipientCount: effectiveRecipientCount,
+      requestedRecipientCount: recipients.length,
+      suppressedRecipientCount,
       centerCount: centerIds.length,
       provider: email.provider,
       providerMessageId: email.id ?? null,
@@ -135,9 +142,11 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   return NextResponse.json({
     ok: email.ok,
     email,
-    recipientCount: recipients.length,
+    recipientCount: effectiveRecipientCount,
+    requestedRecipientCount: recipients.length,
+    suppressedRecipientCount,
     error: email.ok ? undefined : email.error || "Announcement email could not be queued.",
-  }, { status: email.ok ? 200 : email.configured ? 502 : 503 });
+  }, { status: email.ok ? 200 : email.skipped ? 400 : email.configured ? 502 : 503 });
 }
 
 export const POST = withApiLogging("POST", POSTHandler);

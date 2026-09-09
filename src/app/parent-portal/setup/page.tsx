@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ParentPortalSetupForm } from "@/components/parent-portal-setup-form";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { getCurrentUser, isParentGuardian, requiresPasswordResetGate } from "@/lib/auth";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { getParentPortalTenantCenterIds, parentPortalTenantFamilyWhere, selectParentPortalCurrentGuardians } from "@/lib/parent-portal-family-scope";
@@ -18,6 +19,9 @@ export default async function ParentPortalSetupPage() {
   }
   if (!isParentGuardian(user)) {
     redirect("/dashboard");
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    redirect("/parents");
   }
 
   const tenantCenterIds = await getParentPortalTenantCenterIds(user.tenantId);

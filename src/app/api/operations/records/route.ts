@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, canManageStaffCompensation, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { readCenterLocationTimeZone } from "@/lib/attendance-state";
@@ -67,6 +68,17 @@ export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function targetsReservedAppReviewIdentity(...emails: Array<string | null | undefined>) {
+  return emails.some((email) => typeof email === "string" && Boolean(appReviewReservedIdentityKind(email)));
+}
+
+function reservedAppReviewMutationResponse() {
+  return NextResponse.json(
+    { ok: false, error: "Reserved App Review identities require the controlled fingerprinted provisioner." },
+    { status: 409 },
+  );
 }
 
 function optionalBoolean(value: unknown) {
@@ -651,6 +663,13 @@ async function POSTHandler(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Family accounts must belong to the same school before merging." }, { status: 400 });
     }
     centerId = primaryAccess.centerId;
+    const familyGuardians = await prisma.guardian.findMany({
+      where: { familyId: { in: [primaryFamilyId, duplicateFamilyId] } },
+      select: { email: true, user: { select: { email: true } } },
+    });
+    if (familyGuardians.some((guardian) => targetsReservedAppReviewIdentity(guardian.email, guardian.user?.email))) {
+      return reservedAppReviewMutationResponse();
+    }
     const mergedAt = new Date();
     result = await prisma.$transaction(async (tx) => {
       const [primary, duplicate] = await Promise.all([
@@ -753,7 +772,17 @@ async function POSTHandler(request: NextRequest) {
     if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
     centerId = access.centerId;
     const existing = id
-      ? await prisma.guardian.findUnique({ where: { id }, select: { familyId: true, checkInPinHash: true, customFields: true, userId: true, email: true } })
+      ? await prisma.guardian.findUnique({
+          where: { id },
+          select: {
+            familyId: true,
+            checkInPinHash: true,
+            customFields: true,
+            userId: true,
+            email: true,
+            user: { select: { email: true } },
+          },
+        })
       : null;
     if (id) {
       const guard = scopedUpdateGuard({ entity: "Guardian", expectedScopeId: familyId, actualScopeId: existing?.familyId, scopeLabel: "family" });
@@ -791,6 +820,9 @@ async function POSTHandler(request: NextRequest) {
     }
     const existingEmail = clean(existing?.email).toLowerCase();
     const requestedEmail = clean(data.email).toLowerCase();
+    if (targetsReservedAppReviewIdentity(existingEmail, requestedEmail, existing?.user?.email)) {
+      return reservedAppReviewMutationResponse();
+    }
     if (id && existing?.userId && parentPortalLoginEnabled && existingEmail !== requestedEmail) {
       const emailChange = await changeParentPortalLoginEmail({
         guardianId: id,
@@ -907,6 +939,7 @@ async function POSTHandler(request: NextRequest) {
           checkInPinSetAt: true,
           checkInPinSetById: true,
           customFields: true,
+          user: { select: { email: true } },
           family: { select: { centerId: true } },
         },
       }),
@@ -927,12 +960,21 @@ async function POSTHandler(request: NextRequest) {
           checkInPinSetAt: true,
           checkInPinSetById: true,
           customFields: true,
+          user: { select: { email: true } },
           family: { select: { centerId: true } },
         },
       }),
     ]);
     if (!primary || !duplicate) {
       return NextResponse.json({ ok: false, error: "Guardian record not found." }, { status: 404 });
+    }
+    if (targetsReservedAppReviewIdentity(
+      primary.email,
+      primary.user?.email,
+      duplicate.email,
+      duplicate.user?.email,
+    )) {
+      return reservedAppReviewMutationResponse();
     }
     if (primary.userId && duplicate.userId && primary.userId !== duplicate.userId) {
       return NextResponse.json(
@@ -1568,6 +1610,9 @@ async function POSTHandler(request: NextRequest) {
         return NextResponse.json({ ok: false, error: "Teacher profile belongs to a different tenant." }, { status: 403 });
       }
     }
+    if (targetsReservedAppReviewIdentity(submittedEmail, existingProfileForEdit?.user.email)) {
+      return reservedAppReviewMutationResponse();
+    }
     if (clean(body.classroomId)) {
       const classroom = await prisma.classroom.findFirst({
         where: activeClassroomWhere({ id: clean(body.classroomId) }),
@@ -1701,12 +1746,13 @@ async function POSTHandler(request: NextRequest) {
     if (!staffId) return NextResponse.json({ ok: false, error: "Teacher profile ID is required." }, { status: 400 });
     const staff = await prisma.staffProfile.findUnique({
       where: { id: staffId },
-      select: { id: true, centerId: true, user: { select: { id: true, isActive: true, role: true } } },
+      select: { id: true, centerId: true, user: { select: { id: true, email: true, isActive: true, role: true } } },
     });
     if (!staff) return NextResponse.json({ ok: false, error: "Teacher profile not found." }, { status: 404 });
     if (!canAccessCenter(user, staff.centerId)) {
       return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
     }
+    if (targetsReservedAppReviewIdentity(staff.user.email)) return reservedAppReviewMutationResponse();
     if (!staff.user.isActive || staff.user.role !== UserRole.TEACHER) {
       return NextResponse.json({ ok: false, error: "Only active teacher profiles can be assigned to classrooms." }, { status: 400 });
     }
@@ -1741,13 +1787,14 @@ async function POSTHandler(request: NextRequest) {
         centerId: true,
         customFields: true,
         center: { select: { city: true, state: true, postalCode: true, timezone: true, customFields: true } },
-        user: { select: { name: true, isActive: true, role: true } },
+        user: { select: { name: true, email: true, isActive: true, role: true } },
       },
     });
     if (!staff) return NextResponse.json({ ok: false, error: "Teacher profile not found." }, { status: 404 });
     if (!canAccessCenter(user, staff.centerId)) {
       return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
     }
+    if (targetsReservedAppReviewIdentity(staff.user.email)) return reservedAppReviewMutationResponse();
     if (staff.user.role !== UserRole.TEACHER) {
       return NextResponse.json({ ok: false, error: "Only teacher profiles can use staff time clock actions." }, { status: 400 });
     }
@@ -2373,6 +2420,7 @@ async function DELETEHandler(request: NextRequest) {
         userId: true,
         fullName: true,
         email: true,
+        user: { select: { email: true } },
         family: {
           select: {
             guardians: { select: { userId: true } },
@@ -2383,6 +2431,9 @@ async function DELETEHandler(request: NextRequest) {
     if (!guardian) return NextResponse.json({ ok: false, error: "Parent/guardian not found." }, { status: 404 });
     const access = await assertFamilyAccess(user, guardian.familyId);
     if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+    if (targetsReservedAppReviewIdentity(guardian.email, guardian.user?.email)) {
+      return reservedAppReviewMutationResponse();
+    }
 
     const relatedUserIds = Array.from(
       new Set([
@@ -2700,12 +2751,13 @@ async function DELETEHandler(request: NextRequest) {
   if (entity === "staff") {
     const staff = await prisma.staffProfile.findUnique({
       where: { id },
-      select: { id: true, centerId: true, userId: true, classroomId: true },
+      select: { id: true, centerId: true, userId: true, classroomId: true, user: { select: { email: true } } },
     });
     if (!staff) return NextResponse.json({ ok: false, error: "Teacher profile not found." }, { status: 404 });
     if (!canAccessCenter(user, staff.centerId)) {
       return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
     }
+    if (targetsReservedAppReviewIdentity(staff.user.email)) return reservedAppReviewMutationResponse();
 
     const deactivatedAt = new Date();
     const result = await prisma.$transaction(async (tx) => {

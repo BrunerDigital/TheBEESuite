@@ -96,14 +96,17 @@ test("subscription, logout, dispatcher, and service worker keep device delivery 
   assert.match(subscriptionRoute, /userId: user\.id/);
   assert.match(subscriptionRoute, /deviceSessionId: user\.deviceSessionId/);
   assert.match(subscriptionRoute, /subscription_rebound/);
+  assert.match(subscriptionRoute, /appReviewReservedIdentityKind\(user\.email\)/);
   assert.match(logoutRoute, /device_session_logout/);
   assert.match(logoutRoute, /webPushSubscription\.updateMany/);
   assert.match(dispatcher, /subscription\.tenantId !== user\.tenantId/);
   assert.match(dispatcher, /preference\.tenantId === user\.tenantId/);
   assert.match(dispatcher, /push_preference_disabled/);
+  assert.match(dispatcher, /app_review_delivery_disabled/);
   assert.match(dispatcher, /webPushBody\(preferenceType\)/);
   assert.doesNotMatch(dispatcher, /body:\s*notification\.body/);
   assert.match(integrationRoute, /Boolean\(targetUserId && webPush\.configured\)/);
+  assert.match(integrationRoute, /actorCanCreateUntargeted: user\.role === UserRole\.PLATFORM_OWNER/);
   assert.match(integrationRoute, /deliveryMode: webPushEligible \? "web_push_and_in_app" : "in_app_only"/);
   assert.match(serviceWorker, /addEventListener\("push"/);
   assert.match(serviceWorker, /showNotification/);

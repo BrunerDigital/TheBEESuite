@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import {
@@ -17,6 +18,12 @@ async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json(
+      { ok: false, error: "Profile-photo changes are disabled for the shared App Review account." },
+      { status: 403 },
+    );
   }
 
   if (!isSupabaseStorageConfigured()) {

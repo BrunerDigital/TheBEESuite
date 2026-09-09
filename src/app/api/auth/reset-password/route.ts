@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { prisma } from "@/lib/prisma";
-import { updateSupabasePassword, verifySupabaseRecoveryTokenHash } from "@/lib/supabase-auth";
+import {
+  getSupabaseAuthEmailForAccessToken,
+  updateSupabasePassword,
+  verifySupabaseRecoveryTokenHash,
+} from "@/lib/supabase-auth";
 import {
   claimParentPortalSetupToken,
   completeParentPortalSetupToken,
@@ -59,6 +64,22 @@ async function POSTHandler(request: NextRequest) {
       verifiedEmail = verified.email;
     }
 
+    const recoveryIdentity = await getSupabaseAuthEmailForAccessToken(resetAccessToken);
+    if (!recoveryIdentity.ok || (verifiedEmail && recoveryIdentity.email !== verifiedEmail)) {
+      if (claimedSetupTokenId) await releaseParentPortalSetupToken(claimedSetupTokenId);
+      return NextResponse.json(
+        { ok: false, error: "Password reset link is invalid or expired. Request a fresh reset link." },
+        { status: 400 },
+      );
+    }
+    if (appReviewReservedIdentityKind(recoveryIdentity.email)) {
+      if (claimedSetupTokenId) await releaseParentPortalSetupToken(claimedSetupTokenId);
+      return NextResponse.json(
+        { ok: false, error: "Shared App Review credentials can be changed only through the controlled review-account process." },
+        { status: 403 },
+      );
+    }
+
     const response = await updateSupabasePassword(resetAccessToken, password);
     if (!response.ok) {
       if (claimedSetupTokenId) await releaseParentPortalSetupToken(claimedSetupTokenId);
@@ -69,8 +90,7 @@ async function POSTHandler(request: NextRequest) {
       );
     }
     passwordUpdated = true;
-    const payload = (await response.json().catch(() => null)) as { email?: string; user?: { email?: string } } | null;
-    const email = verifiedEmail || (payload?.email ?? payload?.user?.email ?? "").toLowerCase();
+    const email = recoveryIdentity.email;
     if (email) {
       const users = await prisma.user.findMany({
         where: { email },

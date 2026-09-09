@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type User } from "@supabase/supabase-js";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import {
   buildParentLoginSetupUrl,
   PARENT_PORTAL_SETUP_PATH,
@@ -213,6 +214,9 @@ export function buildPasswordResetTokenUrl({
 }
 
 export async function requestSupabasePasswordReset(email: string, redirectTo: string) {
+  if (appReviewReservedIdentityKind(email)) {
+    return new Response(null, { status: 403, statusText: "Reserved App Review identity" });
+  }
   const { url, key } = getSupabaseAuthConfig("anon");
   return fetch(`${url}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
     method: "POST",
@@ -233,6 +237,13 @@ export async function generateSupabasePasswordRecoveryLink({
   email: string;
   redirectTo?: string | null;
 }) {
+  if (appReviewReservedIdentityKind(email)) {
+    return {
+      ok: false as const,
+      error: "Shared App Review credentials cannot use account recovery.",
+      status: 403,
+    };
+  }
   const { url, key } = getSupabaseAuthConfig("service");
   const timedFetch: typeof fetch = (input, init) => {
     const timeoutSignal = AbortSignal.timeout(10_000);
@@ -291,6 +302,26 @@ export async function verifySupabaseRecoveryTokenHash(tokenHash: string) {
   };
 }
 
+export async function getSupabaseAuthEmailForAccessToken(accessToken: string) {
+  const { url, key } = getSupabaseAuthConfig("anon");
+  const response = await fetch(`${url}/auth/v1/user`, {
+    method: "GET",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${accessToken}`,
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) return { ok: false as const, status: response.status };
+
+  const payload = (await response.json().catch(() => null)) as { email?: unknown } | null;
+  const email = typeof payload?.email === "string" ? payload.email.trim().toLowerCase() : "";
+  if (!isSupabaseAuthCompatibleEmail(email)) {
+    return { ok: false as const, status: response.status };
+  }
+  return { ok: true as const, email };
+}
+
 export async function ensureSupabaseAuthUser({
   email,
   name,
@@ -298,6 +329,13 @@ export async function ensureSupabaseAuthUser({
   email: string;
   name?: string;
 }) {
+  if (appReviewReservedIdentityKind(email)) {
+    return {
+      ok: false as const,
+      created: false,
+      error: "Reserved App Review identities require the controlled fingerprinted provisioner.",
+    };
+  }
   const { url, key } = getSupabaseAuthConfig("service");
   const password = randomUUID() + randomUUID();
   const response = await fetch(`${url}/auth/v1/admin/users`, {
@@ -354,6 +392,9 @@ export async function deleteSupabaseAuthUserByEmail(email: string) {
   if (!isSupabaseAuthCompatibleEmail(normalizedEmail)) {
     return { ok: false as const, error: "Target login email is not valid." };
   }
+  if (appReviewReservedIdentityKind(normalizedEmail)) {
+    return { ok: false as const, error: "Reserved App Review identities cannot be deleted through account workflows." };
+  }
   try {
     const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedEmail);
     if (!user) return { ok: true as const, deleted: false, alreadyMissing: true };
@@ -378,6 +419,9 @@ export async function updateSupabaseAuthUserEmailByCurrentEmail({
   const normalizedNewEmail = newEmail.trim().toLowerCase();
   if (!isSupabaseAuthCompatibleEmail(normalizedCurrentEmail) || !isSupabaseAuthCompatibleEmail(normalizedNewEmail)) {
     return { ok: false as const, error: "A valid current and new parent login email is required." };
+  }
+  if (appReviewReservedIdentityKind(normalizedCurrentEmail) || appReviewReservedIdentityKind(normalizedNewEmail)) {
+    return { ok: false as const, error: "Reserved App Review identities cannot be changed through parent account workflows." };
   }
   const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedCurrentEmail);
   if (!user) return { ok: false as const, error: "The existing parent login was not found in Supabase Auth." };
@@ -416,6 +460,7 @@ export async function upsertSupabaseAuthUserWithPassword({
   role,
   source = "bee_suite_executive_admin",
   updateExistingPassword = true,
+  allowReservedAppReview = false,
 }: {
   email: string;
   name?: string;
@@ -423,8 +468,12 @@ export async function upsertSupabaseAuthUserWithPassword({
   role?: string;
   source?: string;
   updateExistingPassword?: boolean;
+  allowReservedAppReview?: boolean;
 }) {
   const normalizedEmail = email.toLowerCase();
+  if (appReviewReservedIdentityKind(normalizedEmail) && !allowReservedAppReview) {
+    throw new Error("Reserved App Review identities require the controlled fingerprinted provisioner.");
+  }
   const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedEmail);
   const metadata = {
     name,
@@ -473,6 +522,12 @@ export async function updateSupabaseAuthUserPasswordByEmail({
   metadataSource?: "forced_password_reset" | "profile_password_change" | "parent_setup_transition" | "password_change";
 }) {
   const normalizedEmail = email.toLowerCase();
+  if (appReviewReservedIdentityKind(normalizedEmail)) {
+    return {
+      ok: false as const,
+      error: "Shared App Review credentials can be changed only through the controlled review-account process.",
+    };
+  }
   const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedEmail);
   if (!user) {
     return {

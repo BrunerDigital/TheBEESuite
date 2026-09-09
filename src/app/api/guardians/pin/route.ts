@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { createGuardianQrToken, hashGuardianPin, normalizePin } from "@/lib/kiosk";
@@ -33,11 +34,21 @@ async function POSTHandler(request: NextRequest) {
     where: { id: guardianId },
     include: {
       family: { select: { id: true, name: true, centerId: true } },
+      user: { select: { email: true } },
     },
   });
 
   if (!guardian) {
     return NextResponse.json({ ok: false, error: "Guardian not found." }, { status: 404 });
+  }
+  if (
+    (guardian.email && appReviewReservedIdentityKind(guardian.email))
+    || (guardian.user?.email && appReviewReservedIdentityKind(guardian.user.email))
+  ) {
+    return NextResponse.json({
+      ok: false,
+      error: "Reserved App Review kiosk credentials can only be managed by the dedicated provisioning workflow.",
+    }, { status: 409 });
   }
   const accessGuard = centerScopedAccessGuard({
     centerId: guardian.family.centerId,

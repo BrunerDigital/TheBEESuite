@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { canAccessAllCenters, canAccessCenter, canManageChildInClassroom, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
@@ -20,6 +21,7 @@ async function POSTHandler(request: NextRequest) {
   if (!canManageClassroomTasks(user)) {
     return NextResponse.json({ ok: false, error: "Incident creation is not allowed for this role." }, { status: 403 });
   }
+  const appReviewKind = appReviewReservedIdentityKind(user.email);
 
   const body = await request.json();
   const parsedIncident = normalizeTeacherIncidentPayload(body);
@@ -81,7 +83,7 @@ async function POSTHandler(request: NextRequest) {
     },
   });
 
-  const directors = centerId
+  const directors = !appReviewKind && centerId
     ? await getCenterLeadershipUsers({
         centerId,
         roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
@@ -111,6 +113,7 @@ async function POSTHandler(request: NextRequest) {
       childId: incidentInput.childId,
       parentNotified: incident.parentNotified,
       requiresReview: true,
+      appReviewOutboundSuppressed: Boolean(appReviewKind),
       custodyWarning: hasCustodyWarning(child.family),
     },
   });

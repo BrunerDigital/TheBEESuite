@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import {
+  appReviewFamilyContainsReservedIdentity,
+  appReviewReservedIdentityKind,
+} from "@/lib/app-review-targeting";
+import {
   activeStripeCheckoutPaymentMessage,
   activeStripeCheckoutPaymentSummary,
   isActiveStripeCheckoutPayment,
@@ -86,6 +90,12 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const payload = validation.payload;
+  if (appReviewReservedIdentityKind(payload.email)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Payments are disabled in the App Review demo workspace.",
+    }, { status: 403 });
+  }
   const requestedPaymentMethodCategory = paymentMethodCategory(body.paymentMethodCategory);
   const bankAccountVerificationMethod = requestedPaymentMethodCategory === "link_bank" ? "automatic" : null;
   const invoiceId = clean(body.invoiceId);
@@ -99,7 +109,13 @@ async function POSTHandler(request: NextRequest) {
       billingEmail: true,
       customFields: true,
       guardians: {
-        select: { id: true, fullName: true, email: true, userId: true },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          userId: true,
+          user: { select: { email: true } },
+        },
       },
       children: { select: { id: true, customFields: true } },
       billingAccount: {
@@ -124,6 +140,12 @@ async function POSTHandler(request: NextRequest) {
   });
   if (!family || family.centerId !== payload.centerId) {
     return NextResponse.json({ ok: false, error: "Payment link could not be matched to this family." }, { status: 404 });
+  }
+  if (appReviewFamilyContainsReservedIdentity(family)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Payments are disabled in the App Review demo workspace.",
+    }, { status: 403 });
   }
 
   const allowedEmails = new Set(paymentMethodRequestRecipientOptions({

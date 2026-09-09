@@ -99,6 +99,8 @@ export function buildRegistrationLeadCustomFields(
     registrationUrl: string;
     sentByUserId: string;
     recipientCount: number;
+    requestedRecipientCount?: number;
+    suppressedRecipientCount?: number;
   },
 ): Record<string, unknown> {
   return {
@@ -110,6 +112,8 @@ export function buildRegistrationLeadCustomFields(
       registrationUrl: input.registrationUrl,
       sentByUserId: input.sentByUserId,
       recipientCount: input.recipientCount,
+      requestedRecipientCount: input.requestedRecipientCount ?? input.recipientCount,
+      suppressedRecipientCount: input.suppressedRecipientCount ?? 0,
     },
   };
 }

@@ -918,6 +918,10 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
   const searchParams = useSearchParams();
   const displayName = removeDemoMarkersFromUserView(currentUser.name);
   const displayEmail = removeDemoMarkersFromUserView(currentUser.email);
+  const appReviewAccount = [
+    "app-review-parent@thebeesuite.io",
+    "app-review-teacher@thebeesuite.io",
+  ].includes(currentUser.email.trim().toLowerCase());
   const parentFacing = isParentFacingUser(currentUser);
   const parentGuardian = currentUser.role === "PARENT_GUARDIAN";
   if (previewMode && !parentFacing) {
@@ -963,7 +967,18 @@ function AccountMenu({ currentUser, onLogout, previewMode = false, previewHrefBa
         ) : (
           <>
             <div className="p-2">
-              <ProfilePhotoUploader name={displayName} email={displayEmail} profilePhotoUrl={currentUser.profilePhotoUrl} />
+              {appReviewAccount ? (
+                <div className="flex min-w-0 items-center gap-3 p-2">
+                  <UserAvatar name={displayName} src={currentUser.profilePhotoUrl} size="md" className="border shadow-none" />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">{displayName}</div>
+                    <div className="truncate text-xs text-muted-foreground">{displayEmail}</div>
+                    <div className="mt-1 text-[0.65rem] text-muted-foreground">Shared App Review profile is read-only</div>
+                  </div>
+                </div>
+              ) : (
+                <ProfilePhotoUploader name={displayName} email={displayEmail} profilePhotoUrl={currentUser.profilePhotoUrl} />
+              )}
             </div>
             <div className="px-3 pb-2">
               <span className="mt-1 block text-[0.65rem] font-normal text-muted-foreground">{roleLabel(currentUser.role)}</span>

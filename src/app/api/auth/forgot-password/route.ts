@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomInt } from "node:crypto";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
@@ -87,7 +88,7 @@ async function POSTHandler(request: NextRequest) {
       logOperationalError("auth.forgot_password.user_lookup_unavailable", error);
       return privacySafeResponse(requestStartedAt);
     }
-    if (!user?.isActive) {
+    if (!user?.isActive || appReviewReservedIdentityKind(email)) {
       return privacySafeResponse(requestStartedAt);
     }
 

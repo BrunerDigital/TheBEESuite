@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
+import { AppReviewScopeBlocked } from "@/components/app-review-scope-blocked";
 import { ConsolidatedWorkspaceNav } from "@/components/consolidated-workspace-nav";
 import {
   AgencyAdminPage,
@@ -69,6 +70,17 @@ import { canViewPlatformPaymentTelemetry, stripeWebhookErrorWhereForViewer, stri
 import { announcementWhereForViewer } from "@/lib/announcement-scope";
 import { canAccessAllCenters, canManageBilling, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, getLeadScopeWhere, messageCenterIdsForUser, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import { accountDeletionFingerprint } from "@/lib/account-deletion-policy";
+import {
+  APP_REVIEW_TEACHER_CONTACT,
+  appReviewCenterScopeSelect,
+  appReviewCenterScopeViolation,
+  appReviewClassroomRosterSelect,
+  appReviewClassroomScopeViolation,
+  appReviewFamilyScopeSelect,
+  appReviewFamilyScopeViolation,
+  appReviewIdentityKind,
+  appReviewReservedIdentityKind,
+} from "@/lib/app-review-targeting";
 import {
   canManageExecutiveMarketingPortfolio,
   marketingAccountIdFromConfig,
@@ -170,7 +182,7 @@ import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections, type Sch
 import { roleLabel } from "@/lib/notification-preferences";
 import { resolveClassroomRatioRule } from "@/lib/classroom-ratios";
 import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
-import { activeNotificationWhere } from "@/lib/notification-policy";
+import { activeNotificationWhere, visibleNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import {
   canPreservePendingAutopayConsentForPaymentMethodMigration,
@@ -934,6 +946,9 @@ async function renderLivePage(
   const centers = await getVisibleCenters(user);
   const visibleCenterIds = centers.map((center) => center.id);
   const scopedCenterIds = visibleCenterIdFilter(visibleCenterIds);
+  const teacherAssignedClassroomId = user.role === UserRole.TEACHER
+    ? user.assignedClassroomId ?? "__no_assigned_teacher_classroom__"
+    : null;
   const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds, status: { notIn: ["closed", "merged"] } };
   const today = new Date();
   const thirtyDays = new Date(today);
@@ -947,7 +962,9 @@ async function renderLivePage(
   const notificationPreferenceUserWhere: Prisma.UserWhereInput = {
     tenantId: user.tenantId,
     isActive: true,
-    ...(allCenters
+    ...(user.role === UserRole.TEACHER
+      ? { id: user.id }
+      : allCenters
       ? {}
       : {
           OR: [
@@ -962,6 +979,61 @@ async function renderLivePage(
     where: { id: user.id },
     select: { customFields: true },
   });
+  const reservedAppReviewKind = appReviewReservedIdentityKind(user.email);
+  const verifiedAppReviewKind = setupChecklistUser
+    ? appReviewIdentityKind({
+        email: user.email,
+        role: user.role,
+        customFields: setupChecklistUser.customFields,
+      })
+    : null;
+
+  if (reservedAppReviewKind === "teacher") {
+    const reviewClassroomId = user.assignedClassroomId;
+    const [reviewClassroom, reviewCenter, activeReviewGrants] = await Promise.all([
+      reviewClassroomId
+        ? prisma.classroom.findUnique({ where: { id: reviewClassroomId }, select: appReviewClassroomRosterSelect })
+        : Promise.resolve(null),
+      user.primaryCenterId
+        ? prisma.center.findUnique({ where: { id: user.primaryCenterId }, select: appReviewCenterScopeSelect })
+        : Promise.resolve(null),
+      prisma.userAccessGrant.findMany({
+        where: { userId: user.id, isActive: true },
+        select: {
+          tenantId: true,
+          organizationId: true,
+          centerId: true,
+          role: true,
+          scopeType: true,
+          startsAt: true,
+          endsAt: true,
+        },
+        take: 2,
+      }),
+    ]);
+    const reviewStaff = reviewClassroom?.staff.find((staff) => staff.userId === user.id) ?? null;
+    const teacherReviewScopeInvalid = verifiedAppReviewKind !== "teacher"
+      || visibleCenterIds.length !== 1
+      || !reviewCenter
+      || !reviewClassroom
+      || reviewClassroom.centerId !== reviewCenter.id
+      || appReviewCenterScopeViolation({ center: reviewCenter, tenantId: user.tenantId })
+      || appReviewClassroomScopeViolation({ classroom: reviewClassroom, centerId: reviewCenter.id, tenantId: user.tenantId })
+      || !reviewStaff
+      || reviewStaff.sourceSystem !== APP_REVIEW_TEACHER_CONTACT.sourceSystem
+      || reviewStaff.externalId !== APP_REVIEW_TEACHER_CONTACT.externalId
+      || jsonRecord(reviewStaff.customFields).appReview !== true
+      || jsonRecord(reviewStaff.customFields).seededBy !== APP_REVIEW_TEACHER_CONTACT.seededBy
+      || activeReviewGrants.length !== 1
+      || activeReviewGrants[0].tenantId !== user.tenantId
+      || activeReviewGrants[0].organizationId !== reviewCenter.organizationId
+      || activeReviewGrants[0].centerId !== reviewCenter.id
+      || activeReviewGrants[0].role !== UserRole.TEACHER
+      || activeReviewGrants[0].scopeType !== "CENTER"
+      || activeReviewGrants[0].startsAt !== null
+      || activeReviewGrants[0].endsAt !== null;
+    if (teacherReviewScopeInvalid) return <AppReviewScopeBlocked portal="Teacher" />;
+  }
 
   if (slug === "school-setup") {
     const selectedCenter = centers.find((center) => center.id === user.primaryCenterId) ?? centers[0] ?? null;
@@ -2150,6 +2222,49 @@ async function renderLivePage(
     const selectedParentFamilyId = requestedParentFamilyId && linkedParentFamilies.some((item) => item.id === requestedParentFamilyId)
       ? requestedParentFamilyId
       : linkedParentFamilies.find((item) => item.children.length > 0)?.id ?? linkedParentFamilies[0]?.id ?? null;
+    if (reservedAppReviewKind === "parent") {
+      const reviewFamilyCenterId = linkedParentFamilies[0]?.centerId ?? null;
+      const [reviewFamily, reviewCenter, reviewGuardianCount, activeReviewGrants] = await Promise.all([
+        selectedParentFamilyId
+          ? prisma.family.findUnique({ where: { id: selectedParentFamilyId }, select: appReviewFamilyScopeSelect })
+          : Promise.resolve(null),
+        reviewFamilyCenterId
+          ? prisma.center.findUnique({ where: { id: reviewFamilyCenterId }, select: appReviewCenterScopeSelect })
+          : Promise.resolve(null),
+        prisma.guardian.count({ where: { userId: user.id } }),
+        prisma.userAccessGrant.findMany({
+          where: { userId: user.id, isActive: true },
+          select: {
+            tenantId: true,
+            organizationId: true,
+            centerId: true,
+            role: true,
+            scopeType: true,
+            startsAt: true,
+            endsAt: true,
+          },
+          take: 2,
+        }),
+      ]);
+      const parentReviewScopeInvalid = verifiedAppReviewKind !== "parent"
+        || linkedParentFamilies.length !== 1
+        || reviewGuardianCount !== 1
+        || !reviewFamily
+        || !reviewCenter
+        || reviewFamily.id !== linkedParentFamilies[0]?.id
+        || reviewFamily.centerId !== reviewCenter.id
+        || appReviewCenterScopeViolation({ center: reviewCenter, tenantId: user.tenantId })
+        || appReviewFamilyScopeViolation({ family: reviewFamily, centerId: reviewCenter.id, tenantId: user.tenantId })
+        || activeReviewGrants.length !== 1
+        || activeReviewGrants[0].tenantId !== user.tenantId
+        || activeReviewGrants[0].organizationId !== reviewCenter.organizationId
+        || activeReviewGrants[0].centerId !== reviewCenter.id
+        || activeReviewGrants[0].role !== UserRole.PARENT_GUARDIAN
+        || activeReviewGrants[0].scopeType !== "CENTER"
+        || activeReviewGrants[0].startsAt !== null
+        || activeReviewGrants[0].endsAt !== null;
+      if (parentReviewScopeInvalid) return <AppReviewScopeBlocked portal="Parent" />;
+    }
     const parentFamilyScope = user.role === UserRole.PARENT_GUARDIAN
       ? requestedParentFamilyScope ?? await getParentPortalPaymentFamilyScope(user.id, user.tenantId, selectedParentFamilyId)
       : null;
@@ -2415,13 +2530,15 @@ async function renderLivePage(
         select: { id: true, url: true, storageKey: true, caption: true, createdAt: true, child: { select: { fullName: true } } },
       }),
       prisma.announcement.findMany({
-        where: {
-          OR: [
-            { centerId: resolvedParentCenterId ?? "__none__" },
-            { centerId: null },
-          ],
-          status: { in: ["active", "sent", "published"] },
-        },
+        where: verifiedAppReviewKind === "parent"
+          ? { id: "__no_app_review_announcements__" }
+          : {
+              OR: [
+                { centerId: resolvedParentCenterId ?? "__none__" },
+                { centerId: null },
+              ],
+              status: { in: ["active", "sent", "published"] },
+            },
         orderBy: [{ sendAt: "desc" }, { id: "desc" }],
         take: 8,
         select: { id: true, title: true, body: true, sendAt: true },
@@ -2461,15 +2578,17 @@ async function renderLivePage(
         select: { childId: true, type: true, occurredAt: true },
       }),
       prisma.user.findMany({
-        where: {
-          tenantId: user.tenantId,
-          role: UserRole.TEACHER,
-          isActive: true,
-          staffProfile: {
-            centerId: resolvedParentCenterId ?? "__none__",
-            classroomId: { in: parentClassroomIds.length ? parentClassroomIds : ["__none__"] },
-          },
-        },
+        where: verifiedAppReviewKind === "parent"
+          ? { id: "__no_app_review_teacher_directory__" }
+          : {
+              tenantId: user.tenantId,
+              role: UserRole.TEACHER,
+              isActive: true,
+              staffProfile: {
+                centerId: resolvedParentCenterId ?? "__none__",
+                classroomId: { in: parentClassroomIds.length ? parentClassroomIds : ["__none__"] },
+              },
+            },
         orderBy: { name: "asc" },
         select: { id: true, name: true, staffProfile: { select: { classroom: { select: { name: true } } } } },
       }),
@@ -2829,14 +2948,39 @@ async function renderLivePage(
         pendingPayment: pendingPaymentByInvoiceId.get(invoice.id) ?? null,
       };
     });
-    const stripeConfigured = Boolean(await getStripeSecretKey({ tenantId: user.tenantId }));
-    const stripeWebhookConfigured = Boolean(await getStripeWebhookSecret({ tenantId: user.tenantId }));
-    const parentCheckoutReadiness = stripeCheckoutReadiness({
+    const stripeConfigured = verifiedAppReviewKind === "parent"
+      ? false
+      : Boolean(await getStripeSecretKey({ tenantId: user.tenantId }));
+    const stripeWebhookConfigured = verifiedAppReviewKind === "parent"
+      ? false
+      : Boolean(await getStripeWebhookSecret({ tenantId: user.tenantId }));
+    const configuredParentCheckoutReadiness = stripeCheckoutReadiness({
       customFields: familyCenter?.customFields,
       stripeConfigured,
       webhookConfigured: stripeWebhookConfigured || process.env.STRIPE_REQUIRE_WEBHOOK_FOR_CHECKOUT === "false",
       allowPlatformOnlyPayments: process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true",
     });
+    const parentCheckoutReadiness = verifiedAppReviewKind === "parent"
+      ? {
+          ...configuredParentCheckoutReadiness,
+          accountId: null,
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          detailsSubmitted: false,
+          requirementFields: [],
+          pendingVerificationFields: [],
+          merchantCapabilityStatus: null,
+          merchantPayoutCapabilityStatus: null,
+          status: "not_started" as const,
+          label: "Demo payments disabled",
+          canAcceptParentPayments: false,
+          lastSyncedAt: null,
+          blockingReason: "Payments are disabled in the App Review demo workspace.",
+          stripeConfigured: false,
+          webhookConfigured: false,
+          allowPlatformOnlyPayments: false,
+        }
+      : configuredParentCheckoutReadiness;
     const parentCenterFields = jsonRecord(familyCenter?.customFields);
     const parentStripeMigration = readStripeConnectMigration(parentCenterFields);
     const parentBillingAccountFields = jsonRecord(billingAccount?.customFields);
@@ -2918,6 +3062,8 @@ async function renderLivePage(
         } : null}
         invoices={parentInvoices}
         checkoutReadiness={parentCheckoutReadiness}
+        paymentsReadOnly={verifiedAppReviewKind === "parent"}
+        appReviewMode={verifiedAppReviewKind === "parent"}
         paymentTransitionActive={paymentTransitionActive}
         paymentMethodReauthorizationRequired={paymentMethodReauthorizationRequired}
         paymentMethodReauthorizationPreservesAutopay={paymentMethodReauthorizationPreservesAutopay}
@@ -2982,16 +3128,12 @@ async function renderLivePage(
       : null;
     const teacherServiceDay = centerServiceDayWindow(today, teacherCenter);
     const teacherChildScopeWhere: Prisma.ChildWhereInput = staffProfile?.classroomId
-        ? { classroomId: staffProfile.classroomId }
-        : staffProfile?.centerId
-          ? { classroom: { is: { centerId: staffProfile.centerId } } }
-          : { classroom: { is: { centerId: scopedCenterIds } } };
+      ? { classroomId: staffProfile.classroomId }
+      : { id: "__no_assigned_teacher_classroom__" };
     const childWhereForTeacher: Prisma.ChildWhereInput = { AND: [teacherChildScopeWhere, currentlyEnrolledChildWhere()] };
     const classroomWhereForTeacher: Prisma.ClassroomWhereInput = staffProfile?.classroomId
-        ? { id: staffProfile.classroomId }
-        : staffProfile?.centerId
-          ? { centerId: staffProfile.centerId }
-          : { centerId: scopedCenterIds };
+      ? { id: staffProfile.classroomId }
+      : { id: "__no_assigned_teacher_classroom__" };
     const children = await prisma.child.findMany({
       where: childWhereForTeacher,
       orderBy: [{ classroom: { name: "asc" } }, { fullName: "asc" }],
@@ -3103,6 +3245,7 @@ async function renderLivePage(
       <TeacherMobileWorkspace
         roster={roster}
         teacherName={userViewText(user.name)}
+        appReviewMode={verifiedAppReviewKind === "teacher"}
         teacherProfile={{
           name: userViewText(user.name),
           loginEmail: user.email,
@@ -3122,7 +3265,7 @@ async function renderLivePage(
             name: classroom.name,
             ageGroup: classroom.ageGroup,
           }))}
-        kioskAccess={staffProfile?.centerId ? {
+        kioskAccess={verifiedAppReviewKind !== "teacher" && staffProfile?.centerId ? {
           centerId: staffProfile.centerId,
           centerName: teacherCenter ? formatCenterName(teacherCenter) : "Assigned school",
           kioskPath: kioskPathForCenter(staffProfile.centerId, "staff"),
@@ -3173,20 +3316,27 @@ async function renderLivePage(
           select: { classroomId: true },
         })
       : null;
+    const messageNotificationPreferenceUserWhere: Prisma.UserWhereInput = teacherMessageScope
+      ? { id: user.id, tenantId: user.tenantId, isActive: true }
+      : notificationPreferenceUserWhere;
     const familyScopeWhere: Prisma.FamilyWhereInput = teacherMessageScope
       ? teacherStaffProfile?.classroomId
         ? { children: { some: { AND: [{ classroomId: teacherStaffProfile.classroomId }, currentlyEnrolledChildWhere()] } } }
         : { id: "__no_teacher_classroom__" }
       : { ...visibleFamilyWhere(messageCenterIds), children: { some: currentlyEnrolledChildWhere() } };
-    const messageWhere = buildVisibleMessageWhere({
-      userId: user.id,
-      familyScopeWhere,
-      allCenters,
-      teacherMessageScope,
-      tenantId: user.tenantId,
-      nonFamilyCenterIds: allCenters ? undefined : messageCenterIds,
-    });
-    const classroomWhere = visibleClassroomWhere(messageCenterIds);
+    const messageWhere: Prisma.MessageWhereInput = verifiedAppReviewKind === "teacher"
+      ? { family: { is: familyScopeWhere } }
+      : buildVisibleMessageWhere({
+          userId: user.id,
+          familyScopeWhere,
+          allCenters,
+          teacherMessageScope,
+          tenantId: user.tenantId,
+          nonFamilyCenterIds: allCenters ? undefined : messageCenterIds,
+        });
+    const classroomWhere: Prisma.ClassroomWhereInput = teacherMessageScope
+      ? { id: teacherAssignedClassroomId ?? "__no_assigned_teacher_classroom__" }
+      : visibleClassroomWhere(messageCenterIds);
     const [messages, families, templates, staffUsers, classrooms, notificationPreferenceUsers, total, unread, priority, aiReview] = await Promise.all([
       prisma.message.findMany({
         where: messageWhere,
@@ -3244,28 +3394,32 @@ async function renderLivePage(
         },
       }),
       prisma.messageTemplate.findMany({
-        where: {
-          tenantId: user.tenantId,
-          isActive: true,
-          ...visibleOrGlobalCenterWhere(messageCenterIds),
-        },
+        where: verifiedAppReviewKind === "teacher"
+          ? { id: "__no_persisted_app_review_templates__" }
+          : {
+              tenantId: user.tenantId,
+              isActive: true,
+              ...visibleOrGlobalCenterWhere(messageCenterIds),
+            },
         orderBy: [{ centerId: "asc" }, { category: "asc" }, { name: "asc" }],
         take: 100,
       }),
       prisma.user.findMany({
-        where: {
-          tenantId: user.tenantId,
-          isActive: true,
-          role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN, UserRole.TEACHER] },
-          ...(allCenters
-            ? {}
-            : {
-                OR: [
-                  { staffProfile: { centerId: messageScopedCenterIds } },
-                  { accessGrants: { some: { isActive: true, centerId: messageScopedCenterIds } } },
-                ],
-              }),
-        },
+        where: verifiedAppReviewKind === "teacher"
+          ? { id: user.id, tenantId: user.tenantId, isActive: true }
+          : {
+              tenantId: user.tenantId,
+              isActive: true,
+              role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN, UserRole.TEACHER] },
+              ...(allCenters
+                ? {}
+                : {
+                    OR: [
+                      { staffProfile: { centerId: messageScopedCenterIds } },
+                      { accessGrants: { some: { isActive: true, centerId: messageScopedCenterIds } } },
+                    ],
+                  }),
+            },
         orderBy: { name: "asc" },
         take: 250,
         select: { id: true, name: true, email: true, role: true },
@@ -3283,7 +3437,7 @@ async function renderLivePage(
         },
       }),
       prisma.user.findMany({
-        where: notificationPreferenceUserWhere,
+        where: messageNotificationPreferenceUserWhere,
         orderBy: [{ role: "asc" }, { name: "asc" }],
         take: 500,
         select: { id: true, name: true, email: true, role: true },
@@ -5130,37 +5284,43 @@ async function renderLivePage(
 
   if (slug === "notifications") {
     const now = new Date();
+    const canViewEnrollmentNotifications = canAccessModule(user, "crm-leads");
+    const canViewIncidentNotifications = canAccessModule(user, "incident-reports");
+    const notificationIncidentWhere: Prisma.IncidentReportWhereInput = user.role === UserRole.TEACHER
+      ? {
+          adminReviewStatus: "pending",
+          OR: [
+            { classroomId: teacherAssignedClassroomId },
+            { child: { classroomId: teacherAssignedClassroomId } },
+          ],
+        }
+      : {
+          classroom: { centerId: scopedCenterIds },
+          adminReviewStatus: "pending",
+        };
     const [notifications, openTasks, highIntentLeads, pendingIncidents, notificationPreferenceUsers] = await Promise.all([
       prisma.notification.findMany({
-        where: {
-          AND: [
-            activeNotificationWhere(now),
-            { OR: [{ userId: null }, { userId: user.id }] },
-          ],
-        },
+        where: verifiedAppReviewKind === "teacher"
+          ? { id: "__no_persisted_app_review_notifications__" }
+          : visibleNotificationWhere(user, now),
         orderBy: { createdAt: "desc" },
         take: 40,
       }),
-      prisma.task.count({
+      canViewEnrollmentNotifications ? prisma.task.count({
         where: {
           status: "open",
           lead: leadWhere,
         },
-      }),
-      prisma.lead.count({
+      }) : Promise.resolve(0),
+      canViewEnrollmentNotifications ? prisma.lead.count({
         where: {
           ...leadWhere,
           score: { gte: 75 },
         },
-      }),
-      prisma.incidentReport.count({
-        where: {
-          classroom: {
-            centerId: scopedCenterIds,
-          },
-          adminReviewStatus: "pending",
-        },
-      }),
+      }) : Promise.resolve(0),
+      canViewIncidentNotifications
+        ? prisma.incidentReport.count({ where: notificationIncidentWhere })
+        : Promise.resolve(0),
       prisma.user.findMany({
         where: notificationPreferenceUserWhere,
         orderBy: [{ role: "asc" }, { name: "asc" }],
@@ -6005,7 +6165,11 @@ async function renderLivePage(
   }
 
   if (slug === "classroom-dashboard") {
-    const classroomWhere: Prisma.ClassroomWhereInput = activeClassroomWhere({ centerId: scopedCenterIds });
+    const classroomWhere: Prisma.ClassroomWhereInput = activeClassroomWhere(
+      user.role === UserRole.TEACHER
+        ? { id: teacherAssignedClassroomId ?? "__no_assigned_teacher_classroom__" }
+        : { centerId: scopedCenterIds },
+    );
     const liveChildWhere: Prisma.ChildWhereInput = {
       AND: [
         currentlyEnrolledChildWhere(),
@@ -6030,7 +6194,9 @@ async function renderLivePage(
         },
       }),
       prisma.staffProfile.findMany({
-        where: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER, isActive: true } },
+        where: user.role === UserRole.TEACHER
+          ? { classroomId: teacherAssignedClassroomId, user: { role: UserRole.TEACHER, isActive: true } }
+          : { centerId: scopedCenterIds, user: { role: UserRole.TEACHER, isActive: true } },
         orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { user: { name: "asc" } }],
         take: 250,
         select: {
@@ -6157,8 +6323,12 @@ async function renderLivePage(
     const attendanceDay = attendanceCenter
       ? centerServiceDayWindow(today, attendanceCenter)
       : { start: startOfDay, end: endOfDay };
-    const attendanceWhere = visibleAttendanceWhere(visibleCenterIds);
-    const attendanceClassroomWhere = visibleClassroomWhere(visibleCenterIds);
+    const attendanceWhere: Prisma.AttendanceRecordWhereInput = user.role === UserRole.TEACHER
+      ? { child: { classroomId: teacherAssignedClassroomId } }
+      : visibleAttendanceWhere(visibleCenterIds);
+    const attendanceClassroomWhere: Prisma.ClassroomWhereInput = user.role === UserRole.TEACHER
+      ? { id: teacherAssignedClassroomId ?? "__no_assigned_teacher_classroom__" }
+      : visibleClassroomWhere(visibleCenterIds);
     const attendanceLiveChildWhere: Prisma.ChildWhereInput = {
       AND: [
         currentlyEnrolledChildWhere(),
@@ -6167,7 +6337,9 @@ async function renderLivePage(
     };
     const checkLogWhere: Prisma.CheckInOutLogWhereInput = {
       occurredAt: { gte: attendanceDay.start, lt: attendanceDay.end },
-      ...visibleCheckLogWhere(visibleCenterIds),
+      ...(user.role === UserRole.TEACHER
+        ? { child: { classroomId: teacherAssignedClassroomId } }
+        : visibleCheckLogWhere(visibleCenterIds)),
     };
     const [records, total, present, absent, checkLogs, classrooms, liveChildren] = await Promise.all([
       prisma.attendanceRecord.findMany({
@@ -6329,12 +6501,14 @@ async function renderLivePage(
   }
 
   if (slug === "daily-reports") {
-    const dailyReportWhere: Prisma.DailyReportWhereInput = {
-      OR: [
-        { classroom: { is: { centerId: scopedCenterIds } } },
-        { child: { family: { is: { centerId: scopedCenterIds } } } },
-      ],
-    };
+    const dailyReportWhere: Prisma.DailyReportWhereInput = user.role === UserRole.TEACHER
+      ? { child: { classroomId: teacherAssignedClassroomId } }
+      : {
+          OR: [
+            { classroom: { is: { centerId: scopedCenterIds } } },
+            { child: { family: { is: { centerId: scopedCenterIds } } } },
+          ],
+        };
     const [reports, total, sent, needsSupplies] = await Promise.all([
       prisma.dailyReport.findMany({
         where: dailyReportWhere,
@@ -6452,7 +6626,9 @@ async function renderLivePage(
   }
 
   if (slug === "incident-reports") {
-    const incidentWhere = visibleIncidentWhere(visibleCenterIds);
+    const incidentWhere: Prisma.IncidentReportWhereInput = user.role === UserRole.TEACHER
+      ? { child: { classroomId: teacherAssignedClassroomId } }
+      : visibleIncidentWhere(visibleCenterIds);
     const [incidents, total, pending, parentNotified, acknowledged] = await Promise.all([
       prisma.incidentReport.findMany({
         where: incidentWhere,

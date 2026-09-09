@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
@@ -38,6 +39,12 @@ async function POSTHandler(request: NextRequest) {
   }
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parent accounts can finish parent portal setup." }, { status: 403 });
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json(
+      { ok: false, error: "Profile and check-in PIN setup are disabled for the shared App Review account." },
+      { status: 403 },
+    );
   }
   const limited = await checkPersistentRateLimit({
     key: `parent-portal-setup:${user.id}:${requestIp(request.headers)}`,

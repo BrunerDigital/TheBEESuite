@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus } from "@prisma/client";
+import { APP_REVIEW_RESERVED_EMAILS } from "@/lib/app-review-targeting";
 import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
@@ -19,6 +20,10 @@ async function findGuardianByPin(centerId: string, pin: string) {
     where: {
       checkInPinHash: { not: null },
       family: { centerId },
+      NOT: [
+        { email: { in: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } },
+        { user: { is: { email: { in: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } } } },
+      ],
     },
     include: {
       family: {
@@ -64,6 +69,10 @@ async function findGuardianByQrToken(centerId: string, qrToken: string) {
       id: parsed.guardianId,
       checkInPinHash: { not: null },
       family: { centerId },
+      NOT: [
+        { email: { in: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } },
+        { user: { is: { email: { in: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } } } },
+      ],
     },
     include: {
       family: {

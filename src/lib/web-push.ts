@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import * as webpush from "web-push";
 import { activeNotificationWhere } from "@/lib/notification-policy";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { resolveNotificationPreferenceChannels } from "@/lib/notification-preferences";
 import { prisma } from "@/lib/prisma";
 import { logOperationalError } from "@/lib/request-response-logging";
@@ -147,6 +148,7 @@ async function loadCandidates(limit: number, now: Date) {
           user: {
             select: {
               id: true,
+              email: true,
               tenantId: true,
               role: true,
               isActive: true,
@@ -237,6 +239,10 @@ async function dispatchCandidate(
   if (!user || !notification.userId || !user.isActive) {
     await skipDelivery(candidate.id, "inactive_or_missing_user", now);
     return "skipped" as const;
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    await cancelSubscriptionDeliveries(subscription.id, "app_review_delivery_disabled", now);
+    return "cancelled" as const;
   }
   if (
     !subscription.isActive ||

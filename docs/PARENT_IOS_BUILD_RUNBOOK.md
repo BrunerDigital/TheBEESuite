@@ -75,11 +75,13 @@ Demo account password: <temporary review password; do not commit>
 Demo school: Kid City USA - Demo
 ```
 
-If the password is lost or needs to be rotated, set `APP_REVIEW_PARENT_PASSWORD` and run:
+If the password is lost or needs to be rotated, run the read-only candidate listing first:
 
 ```bash
-npm run app-review:parent:ensure
+npm run app-review:parent:ensure -- --preflight
 ```
+
+The September 8 read-only run found 11 eligible fake-family candidates; Murphy Family is the recommended coverage target. Select the exact fake-demo target, set `APP_REVIEW_PARENT_TENANT_ID`, `APP_REVIEW_PARENT_CENTER_ID`, `APP_REVIEW_PARENT_FAMILY_ID`, and `APP_REVIEW_PARENT_FAMILY_EXTERNAL_ID`, and repeat `--preflight` to obtain the current fingerprint bound to the exact review email, synthetic center, and complete reviewer-visible family graph. After exact authorization for that email and the identity, Guardian/family assignment, access grant, password change, stale-session revocation, and stale-push-subscription deactivation, set the fingerprint as `APP_REVIEW_PARENT_TARGET_FINGERPRINT`, set `APP_REVIEW_PARENT_PASSWORD` outside Git/chat, and run `npm run app-review:parent:ensure -- --confirm-parent-app-review-account`. The command stages local access inactive and activates it only after Auth and exact-scope revalidation succeed; rerun the fresh preflight after any failure. The reserved account displays no data if its markers, sole family link, sole grant, center, or reachable fake-data graph later drift. During review, uploads stay in dedicated demo storage, messages remain portal-only, and real email/SMS/push, payments, password, profile-photo, parent-setup, pickup-PIN, and tuition-cycle changes are disabled.
 
 Minimum reviewer-visible flows:
 

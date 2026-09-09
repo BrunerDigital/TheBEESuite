@@ -74,6 +74,16 @@ test("CRM registration delivery advances only early stages and records lead invi
     attemptedAt: "2026-07-27T12:00:00.000Z",
     registrationUrl: "https://thebeesuite.io/registration?centerId=school-1",
   });
+  assert.deepEqual((fields.registrationInvitation as Record<string, unknown>), {
+    status: "sent",
+    attemptedAt: "2026-07-27T12:00:00.000Z",
+    sentAt: "2026-07-27T12:00:00.000Z",
+    registrationUrl: "https://thebeesuite.io/registration?centerId=school-1",
+    sentByUserId: "director-1",
+    recipientCount: 1,
+    requestedRecipientCount: 1,
+    suppressedRecipientCount: 0,
+  });
 });
 
 test("AI lead suggestions offer the school-specific registration form when appropriate", () => {

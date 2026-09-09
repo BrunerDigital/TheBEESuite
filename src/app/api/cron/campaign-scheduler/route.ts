@@ -206,6 +206,15 @@ async function GETHandler(request: NextRequest) {
       customArgs: { campaignId: campaign.id },
       tenantId,
     });
+    const effectiveRecipientCount = email.effectiveRecipientCount ?? recipients.length;
+    const suppressedRecipientCount = email.suppressedRecipientCount ?? 0;
+    const deliveryStatus = email.skipped
+      ? "skipped"
+      : email.ok
+        ? "accepted"
+        : email.configured
+          ? "failed"
+          : "not_configured";
     await recordEmailDeliveryAttempt({
       tenantId,
       centerId: recipientScope.centerIds.length === 1 ? recipientScope.centerIds[0] : null,
@@ -223,6 +232,9 @@ async function GETHandler(request: NextRequest) {
         familyCount: recipientScope.familyCount,
         leadCount: recipientScope.leadCount,
         centerCount: recipientScope.centerIds.length,
+        requestedRecipientCount: recipients.length,
+        effectiveRecipientCount,
+        suppressedRecipientCount,
       },
     });
     await prisma.campaign.update({
@@ -235,13 +247,15 @@ async function GETHandler(request: NextRequest) {
           ...asRecord(campaign.metrics),
           lastAttemptAt: now.toISOString(),
           lastSendAt: email.ok ? now.toISOString() : null,
-          lastRecipientCount: recipients.length,
+          lastRecipientCount: effectiveRecipientCount,
+          lastRequestedRecipientCount: recipients.length,
+          lastSuppressedRecipientCount: suppressedRecipientCount,
           lastRecipientWorkflow: recipientScope.workflow,
           lastCenterCount: recipientScope.centerIds.length,
           lastFamilyCount: recipientScope.familyCount,
           lastLeadCount: recipientScope.leadCount,
           lastProviderMessageId: email.id ?? null,
-          lastDeliveryStatus: email.ok ? "delivered" : email.configured ? "failed" : "not_configured",
+          lastDeliveryStatus: deliveryStatus,
           lastError: email.error ?? null,
         },
       },
@@ -252,7 +266,9 @@ async function GETHandler(request: NextRequest) {
       resource: "Campaign",
       resourceId: campaign.id,
       metadata: {
-        recipientCount: recipients.length,
+        recipientCount: effectiveRecipientCount,
+        requestedRecipientCount: recipients.length,
+        suppressedRecipientCount,
         familyCount: recipientScope.familyCount,
         leadCount: recipientScope.leadCount,
         centerCount: recipientScope.centerIds.length,
@@ -262,7 +278,14 @@ async function GETHandler(request: NextRequest) {
         error: email.error ?? null,
       },
     });
-    results.push({ campaignId: campaign.id, sent: email.ok, recipientCount: recipients.length, error: email.error ?? null });
+    results.push({
+      campaignId: campaign.id,
+      sent: email.ok,
+      recipientCount: effectiveRecipientCount,
+      requestedRecipientCount: recipients.length,
+      suppressedRecipientCount,
+      error: email.error ?? null,
+    });
   }
 
   return NextResponse.json({ ok: true, scanned: dueCampaigns.length, results });

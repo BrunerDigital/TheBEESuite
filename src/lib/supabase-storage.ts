@@ -219,6 +219,7 @@ export function buildChildMediaPath({
   childId,
   originalName,
   contentType,
+  appReviewDemo = false,
 }: {
   tenantId: string;
   centerId?: string | null;
@@ -226,11 +227,16 @@ export function buildChildMediaPath({
   childId: string;
   originalName?: string;
   contentType: string;
+  appReviewDemo?: boolean;
 }) {
+  const ext = extensionFor(contentType, originalName);
+  if (appReviewDemo) {
+    return ["demo-media", safePathPart(childId), "app-review", `${randomUUID()}.${ext}`].join("/");
+  }
+
   const now = new Date();
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const ext = extensionFor(contentType, originalName);
   return [
     safePathPart(tenantId),
     safePathPart(centerId || "center"),
@@ -323,6 +329,7 @@ export async function uploadChildMediaBuffer({
   centerId,
   classroomId,
   childId,
+  appReviewDemo = false,
 }: {
   bytes: Buffer;
   contentType: string;
@@ -331,6 +338,7 @@ export async function uploadChildMediaBuffer({
   centerId?: string | null;
   classroomId?: string | null;
   childId: string;
+  appReviewDemo?: boolean;
 }) {
   validateStoredUpload({
     bytes,
@@ -343,7 +351,15 @@ export async function uploadChildMediaBuffer({
   });
 
   const client = getSupabaseStorageClient();
-  const storageKey = buildChildMediaPath({ tenantId, centerId, classroomId, childId, originalName, contentType });
+  const storageKey = buildChildMediaPath({
+    tenantId,
+    centerId,
+    classroomId,
+    childId,
+    originalName,
+    contentType,
+    appReviewDemo,
+  });
   const { error: uploadError } = await client.storage.from(CHILD_MEDIA_BUCKET).upload(storageKey, bytes, {
     cacheControl: "3600",
     contentType,
@@ -393,6 +409,7 @@ export function buildDocumentPath({
   documentId,
   originalName,
   contentType,
+  appReviewDemo = false,
 }: {
   tenantId: string;
   centerId?: string | null;
@@ -401,11 +418,22 @@ export function buildDocumentPath({
   documentId: string;
   originalName?: string;
   contentType: string;
+  appReviewDemo?: boolean;
 }) {
+  const ext = extensionFor(contentType, originalName);
+  if (appReviewDemo) {
+    return [
+      "demo-docs",
+      safePathPart(childId || familyId),
+      "app-review",
+      safePathPart(documentId),
+      `${randomUUID()}.${ext}`,
+    ].join("/");
+  }
+
   const now = new Date();
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const ext = extensionFor(contentType, originalName);
   return [
     "documents",
     safePathPart(tenantId),
@@ -428,6 +456,7 @@ export async function uploadDocumentBuffer({
   familyId,
   childId,
   documentId,
+  appReviewDemo = false,
 }: {
   bytes: Buffer;
   contentType: string;
@@ -437,6 +466,7 @@ export async function uploadDocumentBuffer({
   familyId: string;
   childId?: string | null;
   documentId: string;
+  appReviewDemo?: boolean;
 }) {
   assertDocumentContentType(contentType);
   validateStoredUpload({
@@ -450,7 +480,16 @@ export async function uploadDocumentBuffer({
   });
 
   const client = getSupabaseStorageClient();
-  const storageKey = buildDocumentPath({ tenantId, centerId, familyId, childId, documentId, originalName, contentType });
+  const storageKey = buildDocumentPath({
+    tenantId,
+    centerId,
+    familyId,
+    childId,
+    documentId,
+    originalName,
+    contentType,
+    appReviewDemo,
+  });
   const { error: uploadError } = await client.storage.from(DOCUMENT_BUCKET).upload(storageKey, bytes, {
     cacheControl: "3600",
     contentType,
@@ -484,6 +523,7 @@ export function buildMessageAttachmentPath({
   uploadedById,
   originalName,
   contentType,
+  appReviewDemo = false,
 }: {
   tenantId: string;
   centerId?: string | null;
@@ -492,11 +532,21 @@ export function buildMessageAttachmentPath({
   uploadedById: string;
   originalName?: string;
   contentType: string;
+  appReviewDemo?: boolean;
 }) {
+  const ext = extensionFor(contentType, originalName);
+  if (appReviewDemo) {
+    return [
+      "demo-messages",
+      safePathPart(familyId || threadKey || "internal"),
+      safePathPart(uploadedById),
+      `${randomUUID()}.${ext}`,
+    ].join("/");
+  }
+
   const now = new Date();
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const ext = extensionFor(contentType, originalName);
   return [
     "message-attachments",
     safePathPart(tenantId),
@@ -518,6 +568,7 @@ export async function uploadMessageAttachmentBuffer({
   familyId,
   threadKey,
   uploadedById,
+  appReviewDemo = false,
 }: {
   bytes: Buffer;
   contentType: string;
@@ -527,6 +578,7 @@ export async function uploadMessageAttachmentBuffer({
   familyId?: string | null;
   threadKey?: string | null;
   uploadedById: string;
+  appReviewDemo?: boolean;
 }) {
   assertDocumentContentType(contentType);
   validateStoredUpload({
@@ -548,6 +600,7 @@ export async function uploadMessageAttachmentBuffer({
     uploadedById,
     originalName,
     contentType,
+    appReviewDemo,
   });
   const { error: uploadError } = await client.storage.from(MESSAGE_ATTACHMENT_BUCKET).upload(storageKey, bytes, {
     cacheControl: "3600",

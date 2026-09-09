@@ -1,6 +1,8 @@
 import { UserRole } from "@prisma/client";
 import {
   addStripeCheckoutBrandingParams,
+  externalProviderEmail,
+  externalProviderMetadata,
   getStripeSecretKey,
   type IntegrationSendResult,
 } from "@/lib/integrations";
@@ -40,10 +42,6 @@ const terminalStoreRoles = new Set<UserRole>([
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function isEmail(value: string | null | undefined) {
-  return Boolean(value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
 }
 
 export function terminalStorePriceCents(stripeBasePriceCents: number) {
@@ -233,7 +231,8 @@ export async function createTerminalStoreCheckoutSession({
     afterSubmitMessage: "You will return to The BEE Suite after your equipment order is submitted.",
   });
 
-  if (isEmail(purchaserEmail)) body.set("customer_email", purchaserEmail!);
+  const providerPurchaserEmail = externalProviderEmail(purchaserEmail);
+  if (providerPurchaserEmail) body.set("customer_email", providerPurchaserEmail);
 
   totals.items.forEach((row, index) => {
     body.set(`line_items[${index}][quantity]`, String(row.quantity));
@@ -251,7 +250,7 @@ export async function createTerminalStoreCheckoutSession({
   const sessionMetadata = {
     ...metadata,
     source: "terminal_store",
-    purchaserEmail: isEmail(purchaserEmail) ? purchaserEmail! : "",
+    purchaserEmail: providerPurchaserEmail ?? "",
     purchaserName: clean(purchaserName),
     itemSummary: compactItems.slice(0, 500),
     itemCount: String(totals.items.reduce((sum, row) => sum + row.quantity, 0)),
@@ -259,7 +258,7 @@ export async function createTerminalStoreCheckoutSession({
     stripeBaseSubtotalCents: String(totals.stripeBaseSubtotalCents),
     beeSuiteMarkupCents: String(totals.markupCents),
   };
-  Object.entries(sessionMetadata).forEach(([key, value]) => {
+  Object.entries(externalProviderMetadata(sessionMetadata)).forEach(([key, value]) => {
     body.set(`metadata[${key}]`, value);
     body.set(`payment_intent_data[metadata][${key}]`, value);
     body.set(`invoice_creation[invoice_data][metadata][${key}]`, value);

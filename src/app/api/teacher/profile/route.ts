@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, getCurrentUser } from "@/lib/auth";
 import { activeClassroomWhere } from "@/lib/classroom-status";
@@ -21,6 +22,12 @@ async function POSTHandler(request: NextRequest) {
   }
   if (user.role !== UserRole.TEACHER) {
     return NextResponse.json({ ok: false, error: "Only teacher accounts can complete teacher profile setup." }, { status: 403 });
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json(
+      { ok: false, error: "Profile and staff kiosk-code changes are disabled for the shared App Review account." },
+      { status: 403 },
+    );
   }
 
   const existingProfile = await prisma.staffProfile.findUnique({
@@ -50,7 +57,9 @@ async function POSTHandler(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const normalized = normalizeTeacherProfileSetupPayload(body, {
-    allowedClassroomIds: classrooms.map((classroom) => classroom.id),
+    allowedClassroomIds: existingProfile?.classroomId
+      ? [existingProfile.classroomId]
+      : classrooms.map((classroom) => classroom.id),
   });
   if (!normalized.ok) {
     return NextResponse.json({ ok: false, error: normalized.error }, { status: 400 });

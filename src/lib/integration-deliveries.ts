@@ -377,6 +377,9 @@ export async function recordEmailDeliveryAttempt({
   const deliveryResult: IntegrationAttemptResult = result.configured
     ? result
     : { ...result, skipped: true };
+  const effectiveRecipientCount = result.effectiveRecipientCount ?? to.length;
+  const suppressedRecipientCount = result.suppressedRecipientCount ?? 0;
+  const requestedRecipientCount = effectiveRecipientCount + suppressedRecipientCount;
   const attempts = deliveryResult.skipped ? 0 : 1;
   const state = computeIntegrationDeliveryState({
     result: deliveryResult,
@@ -401,7 +404,12 @@ export async function recordEmailDeliveryAttempt({
       providerMessageId: result.id ?? null,
       purpose,
       direction: "outbound",
-      recipient: `${to.length} recipient${to.length === 1 ? "" : "s"}`,
+      recipient: [
+        `${effectiveRecipientCount} recipient${effectiveRecipientCount === 1 ? "" : "s"} attempted`,
+        suppressedRecipientCount
+          ? `${suppressedRecipientCount} suppressed`
+          : null,
+      ].filter(Boolean).join("; "),
       status: state.status,
       attempts,
       maxAttempts,
@@ -417,6 +425,9 @@ export async function recordEmailDeliveryAttempt({
         messageId: messageId ?? null,
         tenantId,
         dedupeKey: dedupeKey ?? null,
+        requestedRecipientCount,
+        effectiveRecipientCount,
+        suppressedRecipientCount,
         ...metadata,
       } as Prisma.InputJsonObject,
       lastResult: deliveryResult as Prisma.InputJsonObject,

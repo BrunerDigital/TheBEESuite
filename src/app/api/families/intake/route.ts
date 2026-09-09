@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
+import {
+  appReviewFamilyContainsReservedIdentity,
+  appReviewReservedIdentityKind,
+} from "@/lib/app-review-targeting";
 import { canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
@@ -39,6 +43,8 @@ function dollarsToCents(value: unknown) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.round(number * 100) : 0;
 }
+
+class ReservedAppReviewIdentityMutationError extends Error {}
 
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
@@ -94,6 +100,12 @@ async function POSTHandler(request: NextRequest) {
   if (clean(body.checkInPin) && !checkInPin) errors.checkInPin = "Check-in PIN must be exactly 4 digits.";
   if (Object.keys(errors).length) {
     return NextResponse.json({ ok: false, error: "Please fix the highlighted fields.", errors }, { status: 400 });
+  }
+  if (guardianEmail && appReviewReservedIdentityKind(guardianEmail)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Reserved App Review families can only be changed by the dedicated provisioning workflow.",
+    }, { status: 409 });
   }
 
   const center = await prisma.center.findUnique({
@@ -155,7 +167,7 @@ async function POSTHandler(request: NextRequest) {
             ...(existingParentUser ? [{ guardians: { some: { userId: existingParentUser.id } } }] : []),
           ],
         },
-        select: { id: true, name: true },
+        select: { id: true, name: true, billingEmail: true },
         orderBy: { id: "asc" },
         take: 2,
       })
@@ -190,6 +202,22 @@ async function POSTHandler(request: NextRequest) {
   const result = await prisma.$transaction(async (tx) => {
     const existingFamily = existingFamilyMatch;
 
+    if (existingFamily) {
+      const existingFamilyGuardians = await tx.guardian.findMany({
+        where: { familyId: existingFamily.id },
+        select: {
+          email: true,
+          user: { select: { email: true } },
+        },
+      });
+      if (appReviewFamilyContainsReservedIdentity({
+        billingEmail: existingFamily.billingEmail,
+        guardians: existingFamilyGuardians,
+      })) {
+        throw new ReservedAppReviewIdentityMutationError();
+      }
+    }
+
     const family = existingFamily
       ? await tx.family.update({
           where: { id: existingFamily.id },
@@ -220,7 +248,18 @@ async function POSTHandler(request: NextRequest) {
           { fullName: guardianName },
         ].filter(Boolean) as Array<{ email?: string; fullName?: string }>,
       },
+      include: { user: { select: { email: true } } },
     });
+
+    if (
+      existingGuardian
+      && (
+        (existingGuardian.email && appReviewReservedIdentityKind(existingGuardian.email))
+        || (existingGuardian.user?.email && appReviewReservedIdentityKind(existingGuardian.user.email))
+      )
+    ) {
+      throw new ReservedAppReviewIdentityMutationError();
+    }
 
     const guardianData = {
       fullName: guardianName,
@@ -357,7 +396,17 @@ async function POSTHandler(request: NextRequest) {
       mode: existingFamily ? "updated_existing_family" : "created_family",
       pinWasSet,
     };
+  }).catch((error: unknown) => {
+    if (error instanceof ReservedAppReviewIdentityMutationError) return null;
+    throw error;
   });
+
+  if (!result) {
+    return NextResponse.json({
+      ok: false,
+      error: "Reserved App Review families can only be changed by the dedicated provisioning workflow.",
+    }, { status: 409 });
+  }
 
   await writeAuditLog(user, {
     centerId: center.id,

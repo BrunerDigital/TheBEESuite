@@ -7,6 +7,7 @@ import {
   accountDeletionFingerprint,
   canExecuteAccountDeletion,
 } from "@/lib/account-deletion-policy";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
@@ -54,6 +55,12 @@ async function PATCHHandler(request: NextRequest, context: { params: Promise<{ i
     },
   });
   if (!deletionRequest) return NextResponse.json({ ok: false, error: "Deletion request not found." }, { status: 404 });
+  if (deletionRequest.user?.email && appReviewReservedIdentityKind(deletionRequest.user.email)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Reserved App Review accounts can only be reset by the dedicated provisioning workflow.",
+    }, { status: 409 });
+  }
   const fingerprint = accountDeletionFingerprint(deletionRequest);
 
   if (action === "approve") {

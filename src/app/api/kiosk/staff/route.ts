@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { APP_REVIEW_PARENT_CONTACT, APP_REVIEW_TEACHER_CONTACT } from "@/lib/app-review-targeting";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { readCenterTimeZone } from "@/lib/attendance-state";
 import { normalizePin } from "@/lib/kiosk";
@@ -74,6 +75,7 @@ async function POSTHandler(request: NextRequest) {
       centerId,
       user: {
         isActive: true,
+        email: { notIn: [APP_REVIEW_PARENT_CONTACT.email, APP_REVIEW_TEACHER_CONTACT.email] },
       },
     },
     include: {

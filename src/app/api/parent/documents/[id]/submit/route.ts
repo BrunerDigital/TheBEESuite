@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, UserRole } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
@@ -36,6 +37,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Parent or guardian access is required." }, { status: 403 });
   }
+  const appReviewKind = appReviewReservedIdentityKind(user.email);
 
   const { id } = await context.params;
   const contentType = request.headers.get("content-type") || "";
@@ -146,6 +148,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
         familyId: family.id,
         childId: document.childId,
         documentId: document.id,
+        appReviewDemo: Boolean(appReviewKind),
       });
       nextStorageKey = upload.storageKey;
       signatureEvidence = { signerName: signatureGuard.signerName, signedAt, evidenceHash };
@@ -171,6 +174,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
         familyId: family.id,
         childId: document.childId,
         documentId: document.id,
+        appReviewDemo: Boolean(appReviewKind),
       });
       nextStorageKey = upload.storageKey;
     } catch {
@@ -212,7 +216,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     return nextDocument;
   });
 
-  const directors = centerId
+  const directors = !appReviewKind && centerId
     ? await getCenterLeadershipUsers({
         centerId,
         roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
@@ -249,6 +253,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       signedAt: signatureEvidence?.signedAt.toISOString(),
       uploadedFile: Boolean(uploadedFileName),
       storageProvider: signatureEvidence || uploadedFileName ? "supabase" : "unchanged",
+      appReviewOutboundSuppressed: Boolean(appReviewKind),
     },
   });
 

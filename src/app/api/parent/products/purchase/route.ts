@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, isParentGuardian } from "@/lib/auth";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { writeAuditLog } from "@/lib/audit";
 import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
 import { normalizeBillingPeriod } from "@/lib/billing-workflows";
@@ -27,6 +28,9 @@ async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json({ ok: false, error: "Purchases are disabled in the App Review demo workspace." }, { status: 403 });
   }
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parent accounts can purchase parent portal products." }, { status: 403 });

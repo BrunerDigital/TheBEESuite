@@ -52,6 +52,7 @@ type Props = {
   kioskAccess?: TeacherKioskAccess | null;
   classroomRatios?: ClassroomRatioSnapshot[];
   teacherChecklistCompletedIds?: string[];
+  appReviewMode?: boolean;
 };
 
 type TeacherProfileSetup = {
@@ -249,6 +250,7 @@ export function TeacherMobileWorkspace({
   kioskAccess = null,
   classroomRatios = [],
   teacherChecklistCompletedIds = [],
+  appReviewMode = false,
 }: Props) {
   const timeZone = useSchoolTimeZone(teacherProfile?.centerId);
   const router = useRouter();
@@ -317,7 +319,7 @@ export function TeacherMobileWorkspace({
     teacherProfile?.centerId &&
     profileTitle.trim() &&
     profileClassroomId !== "none" &&
-    hasStaffKioskCode,
+    (appReviewMode || hasStaffKioskCode),
   );
 
   const showStatus = useCallback((next: string) => {
@@ -524,6 +526,10 @@ export function TeacherMobileWorkspace({
 
   function saveTeacherProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (appReviewMode) {
+      showError("Profile and staff kiosk-code changes are disabled for the shared App Review account.");
+      return;
+    }
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       showError("Reconnect this tablet before saving teacher profile setup.");
       return;
@@ -869,16 +875,26 @@ export function TeacherMobileWorkspace({
       className="mx-auto flex w-full max-w-5xl flex-col gap-5 [&_button]:min-h-10"
       aria-busy={isPending}
     >
-      <SetupChecklistPanel
-        checklistKey="teacher_profile"
-        title="Teacher profile setup checklist"
-        description="Confirm your account, classroom, roster, staff kiosk code, and classroom tablet."
-        tasks={teacherProfileChecklistTasks}
-        initialCompletedIds={teacherChecklistCompletedIds}
-        graphicHref="/brand/the-bee-suite/explainers/current/teacher-daily-flow.png"
-        compact
-        defaultCollapsed
-      />
+      {appReviewMode ? (
+        <Alert>
+          <ShieldAlert aria-hidden="true" />
+          <AlertTitle>Shared review profile is protected</AlertTitle>
+          <AlertDescription>
+            The reviewer can use the assigned synthetic classroom tools, but cannot change the shared profile, create a staff kiosk code, or clock time.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <SetupChecklistPanel
+          checklistKey="teacher_profile"
+          title="Teacher profile setup checklist"
+          description="Confirm your account, classroom, roster, staff kiosk code, and classroom tablet."
+          tasks={teacherProfileChecklistTasks}
+          initialCompletedIds={teacherChecklistCompletedIds}
+          graphicHref="/brand/the-bee-suite/explainers/current/teacher-daily-flow.png"
+          compact
+          defaultCollapsed
+        />
+      )}
 
       <section className="rounded-xl border bg-card p-5">
         <Badge className="mb-3">
@@ -909,13 +925,15 @@ export function TeacherMobileWorkspace({
       <CollapsibleCard
         id="teacher-profile-setup"
         title="My profile"
-        description="Review your contact information, classroom assignment, and staff kiosk code."
+        description={appReviewMode
+          ? "Review the protected account and assigned synthetic classroom."
+          : "Review your contact information, classroom assignment, and staff kiosk code."}
         collapsedSummary={`${profileReady ? "Ready" : "Needs setup"} · ${teacherProfile?.centerName ?? "School not assigned"}`}
         headerActions={(
           <div className="flex flex-wrap gap-2">
             <Badge variant={profileReady ? "default" : "outline"}>{profileReady ? "Ready" : "Needs setup"}</Badge>
-            <Badge variant={hasStaffKioskCode ? "default" : "destructive"}>
-              {hasStaffKioskCode ? "Staff code ready" : "Staff code missing"}
+            <Badge variant={appReviewMode || hasStaffKioskCode ? "default" : "destructive"}>
+              {appReviewMode ? "Staff code disabled" : hasStaffKioskCode ? "Staff code ready" : "Staff code missing"}
             </Badge>
           </div>
         )}
@@ -929,6 +947,15 @@ export function TeacherMobileWorkspace({
               <div className="truncate text-muted-foreground">{teacherProfile?.centerName ?? "School not assigned"}</div>
             </div>
           </div>
+          {appReviewMode ? (
+            <Alert>
+              <ShieldAlert aria-hidden="true" />
+              <AlertTitle>Profile settings are read-only</AlertTitle>
+              <AlertDescription>
+                The App Review login, name, classroom assignment, profile photo, and staff kiosk state are fixed so the shared credential stays safe and reusable.
+              </AlertDescription>
+            </Alert>
+          ) : (
           <form className="grid gap-4" onSubmit={saveTeacherProfile}>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
@@ -1031,6 +1058,7 @@ export function TeacherMobileWorkspace({
               Save profile
             </Button>
           </form>
+          )}
       </CollapsibleCard>
 
       {selectedCustodyWarning ? (

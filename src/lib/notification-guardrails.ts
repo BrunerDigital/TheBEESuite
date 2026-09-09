@@ -4,15 +4,16 @@ export function notificationTargetGuard(input: {
   actorTenantId: string;
   actorCenterIds: string[];
   actorHasTenantWideAccess: boolean;
+  actorCanCreateUntargeted: boolean;
   targetTenantId?: string | null;
   targetCenterIds?: string[];
 }) {
   if (!input.targetUserId) {
-    if (input.actorHasTenantWideAccess) return { ok: true as const };
+    if (input.actorCanCreateUntargeted) return { ok: true as const };
     return {
       ok: false as const,
       status: 403,
-      error: "Choose a specific user before queuing a notification from a center-scoped account.",
+      error: "Choose a specific user before queuing a notification from this account.",
     };
   }
 

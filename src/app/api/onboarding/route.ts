@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
-import { sendEmail } from "@/lib/integrations";
+import { externalProviderEmails, sendEmail } from "@/lib/integrations";
 import {
   normalizeSchoolOnboardingSetup,
   schoolOnboardingSetupSections,
@@ -157,7 +158,13 @@ async function sendOnboardingEmail(
   const recipients = getNotificationRecipients();
 
   if (!recipients.length) {
-    return { ok: true, skipped: true, recipients: 0 };
+    return {
+      ok: true,
+      skipped: true,
+      recipients: 0,
+      requestedRecipients: 0,
+      suppressedRecipients: 0,
+    };
   }
 
   const lines = [
@@ -220,8 +227,10 @@ async function sendOnboardingEmail(
 
   return {
     ok: email.ok,
-    skipped: !email.configured,
-    recipients: recipients.length,
+    skipped: Boolean(email.skipped || !email.configured),
+    recipients: email.effectiveRecipientCount ?? externalProviderEmails(recipients).length,
+    requestedRecipients: recipients.length,
+    suppressedRecipients: email.suppressedRecipientCount ?? 0,
     error: email.error,
   };
 }
@@ -626,6 +635,13 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, errors }, { status: 400 });
   }
 
+  if (appReviewReservedIdentityKind(payload.workEmail)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Reserved App Review identities can only be prepared by the dedicated fingerprinted provisioner.",
+    }, { status: 409 });
+  }
+
   const workspace = await createTrialWorkspace(payload, request.url);
 
   const email = await sendOnboardingEmail(payload, workspace.notificationId, {
@@ -633,12 +649,18 @@ async function POSTHandler(request: NextRequest) {
     centerId: workspace.centerId,
     loginUrl: workspace.loginUrl,
     status: workspace.status,
-  }).catch((error) => ({
-    ok: false,
-    skipped: false,
-    recipients: getNotificationRecipients().length,
-    error: error instanceof Error ? error.message : "Onboarding notification email failed.",
-  }));
+  }).catch((error) => {
+    const requestedRecipients = getNotificationRecipients();
+    const effectiveRecipients = externalProviderEmails(requestedRecipients);
+    return {
+      ok: false,
+      skipped: false,
+      recipients: effectiveRecipients.length,
+      requestedRecipients: requestedRecipients.length,
+      suppressedRecipients: requestedRecipients.length - effectiveRecipients.length,
+      error: error instanceof Error ? error.message : "Onboarding notification email failed.",
+    };
+  });
 
   return NextResponse.json({
     ok: true,

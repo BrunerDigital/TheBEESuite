@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { provisionalAchCreditCents } from "@/lib/ach-payment-lifecycle";
 import { canAccessCenter, canManageBilling, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import {
@@ -161,6 +162,9 @@ async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json({ ok: false, error: "Payments are disabled in the App Review demo workspace." }, { status: 403 });
   }
   const userCanManageBilling = canManageBilling(user);
   const userIsParentGuardian = isParentGuardian(user);

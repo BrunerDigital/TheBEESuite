@@ -36,8 +36,8 @@ test("AI bulk targets are deduplicated and bounded", () => {
 
 test("AI route rechecks selected-school ownership before every record mutation", async () => {
   const route = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/app/api/ai/command/route.ts", import.meta.url), "utf8"));
-  assert.match(route, /family\.findFirst\(\{ where: \{ id: recordId, centerId: selectedCenterId \}/);
-  assert.match(route, /guardian\.findFirst\(\{ where: \{ id: recordId, family: \{ centerId: selectedCenterId \} \}/);
+  assert.match(route, /family\.findFirst\(\{[\s\S]*?where: \{ id: recordId, centerId: selectedCenterId \}/);
+  assert.match(route, /guardian\.findFirst\(\{[\s\S]*?where: \{ id: recordId, family: \{ centerId: selectedCenterId \} \}/);
   assert.match(route, /child\.findFirst\(\{ where: \{ id: recordId, family: \{ centerId: selectedCenterId \} \}/);
   assert.match(route, /billingAccount: \{ family: \{ centerId: selectedCenterId \} \}/);
   assert.match(route, /classroom\.findFirst\(\{[\s\S]*where: activeClassroomWhere\(\{ id: change\.value\.classroomId, centerId: selectedCenterId \}\)/);

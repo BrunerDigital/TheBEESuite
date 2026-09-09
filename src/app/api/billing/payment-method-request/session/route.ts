@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import {
+  appReviewFamilyContainsReservedIdentity,
+  appReviewReservedIdentityKind,
+} from "@/lib/app-review-targeting";
+import {
   createStripeCustomer,
   createStripeSetupCheckoutSession,
   expireStripeCheckoutSession,
@@ -85,6 +89,12 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const payload = validation.payload;
+  if (appReviewReservedIdentityKind(payload.email)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Payment-method changes are disabled in the App Review demo workspace.",
+    }, { status: 403 });
+  }
   const family = await prisma.family.findUnique({
     where: { id: payload.familyId },
     select: {
@@ -93,12 +103,24 @@ async function POSTHandler(request: NextRequest) {
       name: true,
       billingEmail: true,
       guardians: {
-        select: { id: true, fullName: true, email: true, userId: true },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          userId: true,
+          user: { select: { email: true } },
+        },
       },
     },
   });
   if (!family || family.centerId !== payload.centerId) {
     return NextResponse.json({ ok: false, error: "Payment setup link could not be matched to this family." }, { status: 404 });
+  }
+  if (appReviewFamilyContainsReservedIdentity(family)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Payment-method changes are disabled in the App Review demo workspace.",
+    }, { status: 403 });
   }
 
   const center = await prisma.center.findUnique({

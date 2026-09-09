@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { centerServiceDayWindow, normalizeCheckAction, validateNextCheckAction } from "@/lib/attendance-state";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { canAccessAllCenters, canAccessCenter, canManageChildInClassroom, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
@@ -25,6 +27,7 @@ async function POSTHandler(request: NextRequest) {
   if (!canManageClassroomTasks(user)) {
     return NextResponse.json({ ok: false, error: "Attendance updates are not allowed for this role." }, { status: 403 });
   }
+  const appReviewKind = appReviewReservedIdentityKind(user.email);
 
   const body = await request.json();
   const childId = clean(body.childId);
@@ -109,6 +112,16 @@ async function POSTHandler(request: NextRequest) {
       status,
       absenceReason: absenceReason || null,
       clientActionId,
+      ...(appReviewKind ? {
+        sourceSystem: "bee_suite_demo",
+        externalId: `app-review-attendance-${randomUUID()}`,
+        metadata: {
+          appReview: true,
+          appReviewKind,
+          demoWorkspace: true,
+          seededBy: "src/app/api/teacher/attendance/route.ts",
+        },
+      } : {}),
     },
   });
 
@@ -123,16 +136,26 @@ async function POSTHandler(request: NextRequest) {
           pickupName: pickupName || null,
           signaturePlaceholder: Boolean(body.signaturePlaceholder),
           verificationStatus: clean(body.verificationStatus) || "staff_verified",
+          ...(appReviewKind ? {
+            sourceSystem: "bee_suite_demo",
+            externalId: `app-review-check-log-${randomUUID()}`,
+          } : {}),
           metadata: {
             timeZone,
             serviceDay: serviceDay.start.toISOString(),
+            ...(appReviewKind ? {
+              appReview: true,
+              appReviewKind,
+              demoWorkspace: true,
+              seededBy: "src/app/api/teacher/attendance/route.ts",
+            } : {}),
           },
         },
       })
     : null;
 
   let dailyReportEmail = null;
-  if (logType === "check_out") {
+  if (logType === "check_out" && !appReviewKind) {
     try {
       dailyReportEmail = await sendCheckoutDailyReportEmail({
         childId,
@@ -151,6 +174,8 @@ async function POSTHandler(request: NextRequest) {
         reason: "provider_failed",
         reportId: null,
         recipients: [],
+        requestedRecipients: [],
+        suppressedRecipientCount: 0,
         configured: false,
         provider: "sendgrid",
         providerMessageId: null,

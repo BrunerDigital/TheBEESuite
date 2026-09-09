@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { APP_REVIEW_RESERVED_EMAILS } from "@/lib/app-review-targeting";
 import { centerServiceDayWindow, isLatePickup, latestLogMap, normalizeCheckAction, readLatePickupCutoff, validateNextCheckAction, validateSelectedChildren } from "@/lib/attendance-state";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { writeSystemAuditLog } from "@/lib/audit";
@@ -19,6 +20,10 @@ async function findGuardianByPin(centerId: string, pin: string, childIds: string
     where: {
       checkInPinHash: { not: null },
       family: { centerId },
+      NOT: [
+        { email: { in: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } },
+        { user: { is: { email: { in: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } } } },
+      ],
     },
     include: {
       family: {
@@ -50,6 +55,10 @@ async function findGuardianByQrToken(centerId: string, qrToken: string, childIds
       id: parsed.guardianId,
       checkInPinHash: { not: null },
       family: { centerId },
+      NOT: [
+        { email: { in: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } },
+        { user: { is: { email: { in: [...APP_REVIEW_RESERVED_EMAILS], mode: "insensitive" } } } },
+      ],
     },
     include: {
       family: {
@@ -255,6 +264,8 @@ async function POSTHandler(request: NextRequest) {
               reason: "provider_failed" as const,
               reportId: null,
               recipients: [],
+              requestedRecipients: [],
+              suppressedRecipientCount: 0,
               configured: false,
               provider: "sendgrid" as const,
               providerMessageId: null,

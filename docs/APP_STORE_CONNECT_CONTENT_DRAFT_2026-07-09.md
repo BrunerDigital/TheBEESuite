@@ -128,7 +128,7 @@ Users can initiate account deletion in the app from Parent Portal > Settings > P
 If any production school feature is unavailable in the demo account, use the sample records already attached to the demo family.
 ```
 
-Use the account deletion paragraph after the updated build and database migration are deployed and verified.
+The in-app account-deletion route and production request table are already present. Use the account-deletion paragraph after the final App Review build is deployed and the flow is rehearsed with the approved fake review account; the separately held agency-scope repair migration is unrelated to account deletion.
 
 ## Screenshot Plan
 

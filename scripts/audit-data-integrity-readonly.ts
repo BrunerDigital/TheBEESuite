@@ -315,12 +315,12 @@ async function main() {
               FROM "BillingAccount" ba
               WHERE ba."familyId" = f."id" AND ba."balanceCents" <> 0
             ) THEN 'nonzero_balance_present'
-            WHEN f."externalId" LIKE 'merged:%'
-              OR COALESCE(f."customFields", '{}'::jsonb) ? 'mergedIntoFamilyId'
+            WHEN LOWER(TRIM(COALESCE(f."externalId", ''))) LIKE 'merged:%'
+              OR NULLIF(TRIM(COALESCE(f."customFields"->>'mergedIntoFamilyId', '')), '') IS NOT NULL
               THEN 'merged_archive'
-            WHEN f."externalId" LIKE 'archived:%'
-              OR COALESCE(f."customFields", '{}'::jsonb) ? 'archivedAt'
-              OR COALESCE(f."customFields", '{}'::jsonb) ? 'archivedReason'
+            WHEN LOWER(TRIM(COALESCE(f."externalId", ''))) LIKE 'archived:%'
+              OR NULLIF(TRIM(COALESCE(f."customFields"->>'archivedAt', '')), '') IS NOT NULL
+              OR NULLIF(TRIM(COALESCE(f."customFields"->>'archivedReason', '')), '') IS NOT NULL
               THEN 'archived'
             WHEN EXISTS (SELECT 1 FROM "Child" ch WHERE ch."familyId" = f."id")
               THEN 'historical_child_present'

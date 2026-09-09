@@ -65,3 +65,16 @@ test("deployment ops check rejects a changed or simultaneously deployable held m
   assert.match(result.failures.join("\n"), /cannot be both deployable and held/);
   assert.match(result.failures.join("\n"), /differs from its Prisma mirror/);
 });
+
+test("deployment ops check rejects duplicate keys entirely within held migrations", () => {
+  const root = fixture();
+  mkdirSync(join(root, "prisma/migrations/20260721000000_held"), { recursive: true });
+  mkdirSync(join(root, "supabase/held-migrations"), { recursive: true });
+  writeFileSync(join(root, "prisma/migrations/20260721000000_held/migration.sql"), "SELECT 2;");
+  writeFileSync(join(root, "supabase/held-migrations/20260721000000_held.sql"), "SELECT 2;");
+  writeFileSync(join(root, "supabase/held-migrations/20260722000000_held.sql"), "SELECT 2;");
+
+  const result = inspectDeploymentOps(root);
+  assert.equal(result.ok, false);
+  assert.match(result.failures.join("\n"), /duplicate held Supabase migration keys: held/);
+});

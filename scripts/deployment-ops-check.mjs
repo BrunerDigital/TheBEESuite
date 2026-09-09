@@ -53,8 +53,13 @@ export function inspectDeploymentOps(root = workspaceRoot) {
         .filter((entry) => entry.isFile() && entry.name.endsWith(".sql"))
         .map((entry) => entry.name)
     : [];
+  const heldMigrationKeys = heldSupabaseMigrations.map(migrationKey);
+  const duplicateHeldMigrationKeys = heldMigrationKeys.filter((key, index) => heldMigrationKeys.indexOf(key) !== index);
+  if (duplicateHeldMigrationKeys.length) {
+    failures.push(`duplicate held Supabase migration keys: ${[...new Set(duplicateHeldMigrationKeys)].join(", ")}`);
+  }
   const supabaseMigrationKeys = new Set(supabaseMigrations.map(migrationKey));
-  const heldSupabaseMigrationKeys = new Set(heldSupabaseMigrations.map(migrationKey));
+  const heldSupabaseMigrationKeys = new Set(heldMigrationKeys);
   const mirroredMigrationKeys = new Set([...supabaseMigrationKeys, ...heldSupabaseMigrationKeys]);
   const missingSupabaseMirrors = migrations.filter((migration) => !mirroredMigrationKeys.has(migrationKey(migration)));
   if (missingSupabaseMirrors.length) {

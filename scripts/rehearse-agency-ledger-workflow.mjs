@@ -117,12 +117,12 @@ async function verifyExactLocalMigrationBytes() {
     {
       name: "agencyReceivableLedger",
       prisma: new URL("../prisma/migrations/20260903190000_agency_receivable_ledger/migration.sql", import.meta.url),
-      supabase: new URL("../supabase/migrations/20260903190000_agency_receivable_ledger.sql", import.meta.url),
+      supabase: new URL("../supabase/migrations/20260908161144_agency_receivable_ledger.sql", import.meta.url),
     },
     {
       name: "agencyReconciliationControls",
       prisma: new URL("../prisma/migrations/20260903210000_agency_reconciliation_controls/migration.sql", import.meta.url),
-      supabase: new URL("../supabase/migrations/20260903210000_agency_reconciliation_controls.sql", import.meta.url),
+      supabase: new URL("../supabase/migrations/20260908161154_agency_reconciliation_controls.sql", import.meta.url),
     },
   ];
   const result = {};

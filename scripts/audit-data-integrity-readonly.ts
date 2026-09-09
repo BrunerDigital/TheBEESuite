@@ -301,7 +301,7 @@ async function main() {
               SELECT 1
               FROM "Child" ch
               WHERE ch."familyId" = f."id"
-                AND LOWER(REGEXP_REPLACE(TRIM(COALESCE(ch."enrollmentStatus", '')), '[^a-z0-9]+', '_', 'g'))
+                AND REGEXP_REPLACE(LOWER(TRIM(COALESCE(ch."enrollmentStatus", ''))), '[^a-z0-9]+', '_', 'g')
                   NOT IN (${closedEnrollmentStatuses})
             ) THEN 'nonclosed_child_present'
             WHEN EXISTS (

@@ -4,9 +4,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const firstPrismaPath = new URL("../prisma/migrations/20260903190000_agency_receivable_ledger/migration.sql", import.meta.url);
-const firstSupabasePath = new URL("../supabase/migrations/20260903190000_agency_receivable_ledger.sql", import.meta.url);
+const firstSupabasePath = new URL("../supabase/migrations/20260908161144_agency_receivable_ledger.sql", import.meta.url);
 const secondPrismaPath = new URL("../prisma/migrations/20260903210000_agency_reconciliation_controls/migration.sql", import.meta.url);
-const secondSupabasePath = new URL("../supabase/migrations/20260903210000_agency_reconciliation_controls.sql", import.meta.url);
+const secondSupabasePath = new URL("../supabase/migrations/20260908161154_agency_reconciliation_controls.sql", import.meta.url);
 const harnessPath = new URL("../scripts/rehearse-agency-ledger-literal-replay.mjs", import.meta.url);
 
 function sha256(value: Buffer) {

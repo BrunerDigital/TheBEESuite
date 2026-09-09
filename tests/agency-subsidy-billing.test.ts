@@ -30,15 +30,15 @@ test("agency requirements are normalized and deduplicated", () => {
 
 test("agency remittance corrections replay safely in both migration ledgers", () => {
   const migrationNames = [
-    "20260824150000_agency_remittance_corrections",
-    "20260824173000_active_agency_remittance_reference",
-    "20260903190000_agency_receivable_ledger",
-    "20260903210000_agency_reconciliation_controls",
+    { prisma: "20260824150000_agency_remittance_corrections", supabase: "20260824150000_agency_remittance_corrections" },
+    { prisma: "20260824173000_active_agency_remittance_reference", supabase: "20260824173000_active_agency_remittance_reference" },
+    { prisma: "20260903190000_agency_receivable_ledger", supabase: "20260908161144_agency_receivable_ledger" },
+    { prisma: "20260903210000_agency_reconciliation_controls", supabase: "20260908161154_agency_reconciliation_controls" },
   ];
 
   for (const migrationName of migrationNames) {
-    const prismaMigration = readFileSync(`prisma/migrations/${migrationName}/migration.sql`, "utf8");
-    const supabaseMigration = readFileSync(`supabase/migrations/${migrationName}.sql`, "utf8");
+    const prismaMigration = readFileSync(`prisma/migrations/${migrationName.prisma}/migration.sql`, "utf8");
+    const supabaseMigration = readFileSync(`supabase/migrations/${migrationName.supabase}.sql`, "utf8");
     assert.equal(supabaseMigration, prismaMigration);
     assert.doesNotMatch(prismaMigration, /\b(?:ADD COLUMN|CREATE (?:UNIQUE )?INDEX|DROP INDEX)\s+"/);
     assert.match(prismaMigration, /IF (?:NOT )?EXISTS/);
@@ -420,7 +420,7 @@ test("agency reconciliation controls cover deposit batches, exceptions, period c
   const workspace = readFileSync("src/components/agency-subsidy-workspace.tsx", "utf8");
   const retryKeys = readFileSync("src/lib/agency-retry-key.ts", "utf8");
   const prismaMigration = readFileSync("prisma/migrations/20260903210000_agency_reconciliation_controls/migration.sql", "utf8");
-  const supabaseMigration = readFileSync("supabase/migrations/20260903210000_agency_reconciliation_controls.sql", "utf8");
+  const supabaseMigration = readFileSync("supabase/migrations/20260908161154_agency_reconciliation_controls.sql", "utf8");
 
   assert.equal(prismaMigration, supabaseMigration);
   assert.match(schema, /model AgencyRemittanceBatch \{[\s\S]*@@index\(\[centerId, agencyProgramId, referenceKey\]\)/);

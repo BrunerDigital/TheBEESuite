@@ -128,7 +128,7 @@ const EXPECTED_MIGRATIONS = Object.freeze([
     expectedHistoryStatementsSha256: "ef3d32acb21cca1e11d08db5098c850bca79b1bea89382a2c60e27454d59c0c5",
     expectedSha256: "ef3d32acb21cca1e11d08db5098c850bca79b1bea89382a2c60e27454d59c0c5",
     prismaRelativePath: "prisma/migrations/20260903190000_agency_receivable_ledger/migration.sql",
-    supabaseRelativePath: "supabase/migrations/20260903190000_agency_receivable_ledger.sql",
+    supabaseRelativePath: "supabase/migrations/20260908161144_agency_receivable_ledger.sql",
   },
   {
     key: "agencyReconciliationControls",
@@ -141,7 +141,7 @@ const EXPECTED_MIGRATIONS = Object.freeze([
     expectedHistoryStatementsSha256: "5576f0ae9f743e45a713151dd7a87809d3596c33bc75b29b4e9ef4b9f3a99bd8",
     expectedSha256: "5576f0ae9f743e45a713151dd7a87809d3596c33bc75b29b4e9ef4b9f3a99bd8",
     prismaRelativePath: "prisma/migrations/20260903210000_agency_reconciliation_controls/migration.sql",
-    supabaseRelativePath: "supabase/migrations/20260903210000_agency_reconciliation_controls.sql",
+    supabaseRelativePath: "supabase/migrations/20260908161154_agency_reconciliation_controls.sql",
   },
 ]);
 const GLOBAL_LOGICAL_DIGEST_TABLES = Object.freeze([

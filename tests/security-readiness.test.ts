@@ -31,7 +31,7 @@ test("the live security audit accepts only hardened non-public definer functions
   const audit = await readFile("scripts/audit-supabase-security.ts", "utf8");
   assert.match(audit, /search_path=pg_catalog, pg_temp/);
   assert.match(audit, /has_function_privilege\('public', p\.oid, 'EXECUTE'\)/);
-  assert.match(audit, /EXPECTED_PUBLIC_TABLE_COUNT \?\? "97"/);
+  assert.match(audit, /EXPECTED_PUBLIC_TABLE_COUNT \?\? "104"/);
 });
 
 test("parent setup tokens remain server-only in both migration ledgers", async () => {

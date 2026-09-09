@@ -198,6 +198,22 @@ export function needsCurrentClassroomAssignment(child: { enrollmentStatus: strin
   return isCurrentlyEnrolledStatus(child.enrollmentStatus) && !child.classroomId;
 }
 
+function jsonRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+export function isArchivedCenterlessFamily(family: { externalId: string | null; customFields: unknown }) {
+  const externalId = family.externalId?.trim().toLowerCase() ?? "";
+  const customFields = jsonRecord(family.customFields);
+  return externalId.startsWith("merged:")
+    || externalId.startsWith("archived:")
+    || Boolean(customFields.mergedIntoFamilyId)
+    || Boolean(customFields.archivedAt)
+    || Boolean(customFields.archivedReason);
+}
+
 export function buildModuleGates(input: {
   setupGaps: string[];
   operationalActivationGaps?: string[];
@@ -441,13 +457,20 @@ async function main() {
     prisma.child.count({ where: { family: { centerId: { in: liveCenterIds } } } }),
     prisma.guardian.count({ where: { family: { centerId: { in: liveCenterIds } } } }),
     prisma.guardian.count({ where: { checkInPinHash: { not: null }, family: { centerId: { in: liveCenterIds } } } }),
-    args.schools.length ? Promise.resolve(0) : prisma.family.count({ where: { centerId: null } }),
+    args.schools.length
+      ? Promise.resolve([])
+      : prisma.family.findMany({
+          where: { centerId: null },
+          select: { externalId: true, customFields: true },
+        }),
     prisma.center.count({ where: { id: { in: activeLiveCenterIds }, classrooms: { none: {} } } }),
     prisma.center.count({ where: { id: { in: activeLiveCenterIds }, staff: { none: {} } } }),
     prisma.invoice.count({ where: { status: "OPEN", billingAccount: { family: { centerId: { in: liveCenterIds } } } } }),
     prisma.incidentReport.count({ where: { adminReviewStatus: "pending", child: { family: { centerId: { in: liveCenterIds } } } } }),
     prisma.childMedia.count({ where: { status: "permission_review", sharedWithParents: false, child: { family: { centerId: { in: liveCenterIds } } } } }),
   ]);
+  const archivedCenterlessFamilies = centerlessFamilies.filter(isArchivedCenterlessFamily).length;
+  const operationalCenterlessFamilies = centerlessFamilies.length - archivedCenterlessFamilies;
 
   const childClassroomPairs = await prisma.child.findMany({
     where: { classroomId: { not: null }, family: { centerId: { in: liveCenterIds } } },
@@ -712,7 +735,11 @@ async function main() {
     check(childCount > 0 ? "pass" : "warn", "Children", `${childCount} child record(s).`),
     check(guardianCount > 0 ? "pass" : "warn", "Guardians", `${guardianCount} guardian record(s).`),
     check(guardiansWithPins > 0 ? "pass" : "warn", "Guardian kiosk PINs", `${guardiansWithPins} guardian(s) have kiosk PINs.`),
-    check(centerlessFamilies === 0 ? "pass" : "fail", "Centerless families", `${centerlessFamilies} family record(s) are missing a center.`),
+    check(
+      operationalCenterlessFamilies === 0 ? "pass" : "fail",
+      "Centerless families",
+      `${operationalCenterlessFamilies} operational family record(s) are missing a center; ${archivedCenterlessFamilies} archived/merged record(s) remain centerless by design.`,
+    ),
     check(childClassroomMismatches.length === 0 ? "pass" : "fail", "Child/classroom center consistency", `${childClassroomMismatches.length} child record(s) are linked to a classroom from another center.`),
     check(activeCentersWithoutClassrooms === 0 ? "pass" : "warn", "Classroom setup", `${activeCentersWithoutClassrooms} active center(s) have no classrooms.`),
     check(activeCentersWithoutStaff === 0 ? "pass" : "warn", "Staff setup", `${activeCentersWithoutStaff} active center(s) have no staff/teacher profiles.`),

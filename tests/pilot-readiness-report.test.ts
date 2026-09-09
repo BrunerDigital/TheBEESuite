@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildModuleGates, needsCurrentClassroomAssignment, parsePilotReadinessArgs, readinessStatus, selectSchoolIds } from "../scripts/pilot-readiness-check";
+import { buildModuleGates, isArchivedCenterlessFamily, needsCurrentClassroomAssignment, parsePilotReadinessArgs, readinessStatus, selectSchoolIds } from "../scripts/pilot-readiness-check";
 
 test("pilot readiness args enable machine-readable rollout reports", () => {
   assert.deepEqual(parsePilotReadinessArgs([]), {
@@ -36,6 +36,15 @@ test("classroom readiness applies only to currently enrolled children", () => {
   assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "waitlisted", classroomId: null }), false);
   assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "withdrawn", classroomId: null }), false);
   assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "enrolled", classroomId: "room-1" }), false);
+});
+
+test("centerless archived and merged families preserve history without blocking readiness", () => {
+  assert.equal(isArchivedCenterlessFamily({ externalId: "merged:123", customFields: null }), true);
+  assert.equal(isArchivedCenterlessFamily({ externalId: "ARCHIVED:456", customFields: null }), true);
+  assert.equal(isArchivedCenterlessFamily({ externalId: "123", customFields: { mergedIntoFamilyId: "family-2" } }), true);
+  assert.equal(isArchivedCenterlessFamily({ externalId: null, customFields: { archivedReason: "duplicate" } }), true);
+  assert.equal(isArchivedCenterlessFamily({ externalId: "123", customFields: {} }), false);
+  assert.equal(isArchivedCenterlessFamily({ externalId: null, customFields: null }), false);
 });
 
 test("pilot readiness args support exact school selection and separate module gates", () => {

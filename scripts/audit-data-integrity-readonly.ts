@@ -295,6 +295,23 @@ async function main() {
         SELECT
           COALESCE(f."sourceSystem", 'manual') AS source_system,
           CASE
+            WHEN EXISTS (
+              SELECT 1
+              FROM "Child" ch
+              WHERE ch."familyId" = f."id"
+                AND LOWER(COALESCE(ch."enrollmentStatus", '')) IN ('active', 'enrolled', 'enrolling')
+            ) THEN 'current_child_present'
+            WHEN EXISTS (
+              SELECT 1
+              FROM "BillingAccount" ba
+              JOIN "Invoice" i ON i."billingAccountId" = ba."id"
+              WHERE ba."familyId" = f."id" AND i."status" = 'OPEN'
+            ) THEN 'open_invoice_present'
+            WHEN EXISTS (
+              SELECT 1
+              FROM "BillingAccount" ba
+              WHERE ba."familyId" = f."id" AND ba."balanceCents" <> 0
+            ) THEN 'nonzero_balance_present'
             WHEN f."externalId" LIKE 'merged:%'
               OR COALESCE(f."customFields", '{}'::jsonb) ? 'mergedIntoFamilyId'
               THEN 'merged_archive'
@@ -302,12 +319,6 @@ async function main() {
               OR COALESCE(f."customFields", '{}'::jsonb) ? 'archivedAt'
               OR COALESCE(f."customFields", '{}'::jsonb) ? 'archivedReason'
               THEN 'archived'
-            WHEN EXISTS (
-              SELECT 1
-              FROM "Child" ch
-              WHERE ch."familyId" = f."id"
-                AND LOWER(COALESCE(ch."enrollmentStatus", '')) IN ('active', 'enrolled', 'enrolling')
-            ) THEN 'current_child_present'
             WHEN EXISTS (SELECT 1 FROM "Child" ch WHERE ch."familyId" = f."id")
               THEN 'historical_child_present'
             ELSE 'no_children'

@@ -39,12 +39,31 @@ test("classroom readiness applies only to currently enrolled children", () => {
 });
 
 test("centerless archived and merged families preserve history without blocking readiness", () => {
-  assert.equal(isArchivedCenterlessFamily({ externalId: "merged:123", customFields: null }), true);
-  assert.equal(isArchivedCenterlessFamily({ externalId: "ARCHIVED:456", customFields: null }), true);
-  assert.equal(isArchivedCenterlessFamily({ externalId: "123", customFields: { mergedIntoFamilyId: "family-2" } }), true);
-  assert.equal(isArchivedCenterlessFamily({ externalId: null, customFields: { archivedReason: "duplicate" } }), true);
-  assert.equal(isArchivedCenterlessFamily({ externalId: "123", customFields: {} }), false);
-  assert.equal(isArchivedCenterlessFamily({ externalId: null, customFields: null }), false);
+  const inactive = { children: [], billingAccount: null };
+  assert.equal(isArchivedCenterlessFamily({ externalId: "merged:123", customFields: null, ...inactive }), true);
+  assert.equal(isArchivedCenterlessFamily({ externalId: "ARCHIVED:456", customFields: null, ...inactive }), true);
+  assert.equal(isArchivedCenterlessFamily({ externalId: "123", customFields: { mergedIntoFamilyId: "family-2" }, ...inactive }), true);
+  assert.equal(isArchivedCenterlessFamily({ externalId: null, customFields: { archivedReason: "duplicate" }, ...inactive }), true);
+  assert.equal(isArchivedCenterlessFamily({ externalId: "123", customFields: {}, ...inactive }), false);
+  assert.equal(isArchivedCenterlessFamily({ externalId: null, customFields: null, ...inactive }), false);
+  assert.equal(isArchivedCenterlessFamily({
+    externalId: "merged:123",
+    customFields: null,
+    children: [{ enrollmentStatus: "enrolled" }],
+    billingAccount: null,
+  }), false);
+  assert.equal(isArchivedCenterlessFamily({
+    externalId: "archived:123",
+    customFields: null,
+    children: [],
+    billingAccount: { balanceCents: 100, invoices: [] },
+  }), false);
+  assert.equal(isArchivedCenterlessFamily({
+    externalId: "archived:123",
+    customFields: null,
+    children: [],
+    billingAccount: { balanceCents: 0, invoices: [{ id: "invoice-1" }] },
+  }), false);
 });
 
 test("pilot readiness args support exact school selection and separate module gates", () => {

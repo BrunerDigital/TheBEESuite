@@ -204,14 +204,23 @@ function jsonRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-export function isArchivedCenterlessFamily(family: { externalId: string | null; customFields: unknown }) {
+export function isArchivedCenterlessFamily(family: {
+  externalId: string | null;
+  customFields: unknown;
+  children: Array<{ enrollmentStatus: string }>;
+  billingAccount: { balanceCents: number; invoices: Array<{ id: string }> } | null;
+}) {
   const externalId = family.externalId?.trim().toLowerCase() ?? "";
   const customFields = jsonRecord(family.customFields);
-  return externalId.startsWith("merged:")
+  const hasArchiveMarker = externalId.startsWith("merged:")
     || externalId.startsWith("archived:")
     || Boolean(customFields.mergedIntoFamilyId)
     || Boolean(customFields.archivedAt)
     || Boolean(customFields.archivedReason);
+  const hasCurrentChild = family.children.some((child) => isCurrentlyEnrolledStatus(child.enrollmentStatus));
+  const hasOpenInvoice = Boolean(family.billingAccount?.invoices.length);
+  const hasNonzeroBalance = (family.billingAccount?.balanceCents ?? 0) !== 0;
+  return hasArchiveMarker && !hasCurrentChild && !hasOpenInvoice && !hasNonzeroBalance;
 }
 
 export function buildModuleGates(input: {
@@ -461,7 +470,17 @@ async function main() {
       ? Promise.resolve([])
       : prisma.family.findMany({
           where: { centerId: null },
-          select: { externalId: true, customFields: true },
+          select: {
+            externalId: true,
+            customFields: true,
+            children: { select: { enrollmentStatus: true } },
+            billingAccount: {
+              select: {
+                balanceCents: true,
+                invoices: { where: { status: "OPEN" }, take: 1, select: { id: true } },
+              },
+            },
+          },
         }),
     prisma.center.count({ where: { id: { in: activeLiveCenterIds }, classrooms: { none: {} } } }),
     prisma.center.count({ where: { id: { in: activeLiveCenterIds }, staff: { none: {} } } }),

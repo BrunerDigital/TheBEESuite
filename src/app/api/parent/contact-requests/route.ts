@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { canAccessAllCenters, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
@@ -19,6 +20,7 @@ async function POSTHandler(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
+  const appReviewKind = appReviewReservedIdentityKind(user.email);
 
   const body = await request.json();
   const familyId = clean(body.familyId);
@@ -67,7 +69,7 @@ async function POSTHandler(request: NextRequest) {
     },
   });
 
-  const directors = family.centerId
+  const directors = !appReviewKind && family.centerId
     ? await getCenterLeadershipUsers({
         centerId: family.centerId,
         roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
@@ -96,6 +98,7 @@ async function POSTHandler(request: NextRequest) {
     metadata: {
       noteId: note.id,
       requestType,
+      appReviewOutboundSuppressed: Boolean(appReviewKind),
     },
   });
 

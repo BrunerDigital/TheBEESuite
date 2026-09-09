@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian, messageCenterIdsForUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { activeClassroomWhere } from "@/lib/classroom-status";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
@@ -153,12 +154,14 @@ async function uploadMessageAttachments({
   centerId,
   familyId,
   threadKey,
+  appReviewDemo = false,
 }: {
   files: File[];
   user: { id: string; tenantId: string };
   centerId?: string | null;
   familyId?: string | null;
   threadKey?: string | null;
+  appReviewDemo?: boolean;
 }) {
   if (!files.length) return [];
   if (files.length > maxMessageAttachments) {
@@ -178,6 +181,7 @@ async function uploadMessageAttachments({
       familyId,
       threadKey,
       uploadedById: user.id,
+      appReviewDemo,
     });
     attachments.push({
       id: randomUUID(),
@@ -371,6 +375,7 @@ async function POSTHandler(request: NextRequest) {
   const messageCenterIds = messageCenterIdsForUser(user);
 
   const input = await readMessageRequest(request);
+  const appReviewKind = appReviewReservedIdentityKind(user.email);
   const familyId = input.familyId;
   const targetMode = input.targetMode;
   const broadcastSegment = normalizeMessageBroadcastSegment(input.broadcastSegment);
@@ -379,16 +384,22 @@ async function POSTHandler(request: NextRequest) {
   const replyToMessageId = input.replyToMessageId;
   let subject = input.subject || "Portal message";
   let message = input.message;
-  const channel = input.channel;
+  const channel = appReviewKind ? "portal" : input.channel;
   const priority = input.priority;
-  const sendEmailCopy = input.sendEmailCopy;
-  const sendSmsCopy = input.sendSmsCopy;
-  const sendPushCopy = input.sendPushCopy;
+  const sendEmailCopy = appReviewKind ? false : input.sendEmailCopy;
+  const sendSmsCopy = appReviewKind ? false : input.sendSmsCopy;
+  const sendPushCopy = appReviewKind ? false : input.sendPushCopy;
   const senderIsParent = isParentGuardian(user);
   const senderCanManageOperations = canManageOperations(user);
   const senderCanManageClassroom = canManageClassroomTasks(user);
   const appBaseUrl = getAppBaseUrl(request.url);
 
+  if (appReviewKind && targetMode !== "family") {
+    return NextResponse.json(
+      { ok: false, error: "The App Review demo workspace supports portal-only family conversations." },
+      { status: 403 },
+    );
+  }
   if (!message && !input.files.length) {
     return NextResponse.json({ ok: false, error: "Message or attachment is required." }, { status: 400 });
   }
@@ -1017,6 +1028,7 @@ async function POSTHandler(request: NextRequest) {
       centerId: family?.centerId ?? user.primaryCenterId,
       familyId,
       threadKey: familyId ? `family:${familyId}` : `internal:${user.primaryCenterId ?? user.tenantId}`,
+      appReviewDemo: Boolean(appReviewKind),
     });
   } catch {
     return NextResponse.json(
@@ -1046,6 +1058,12 @@ async function POSTHandler(request: NextRequest) {
           push: sendPushCopy,
         },
         templateId,
+        ...(appReviewKind ? {
+          appReview: true,
+          appReviewKind,
+          demoWorkspace: true,
+          seededBy: "src/app/api/communications/messages/route.ts",
+        } : {}),
         contentSafety: messageContentSafetyMetadata(renderedContentSafety),
       }, attachments),
     },
@@ -1190,7 +1208,7 @@ async function POSTHandler(request: NextRequest) {
       : familyNotificationDeliveryRecipients(family)
     : [];
   const statusCallbackUrl = sendSmsCopy && deliveryRecipients.length ? twilioStatusCallbackUrl(request) : null;
-  const delivery = family
+  const delivery = family && !appReviewKind
     ? await deliverNotificationExternalChannels({
         tenantId: user.tenantId,
         centerId: family.centerId,
@@ -1242,7 +1260,7 @@ async function POSTHandler(request: NextRequest) {
     email: delivery.email,
     sms: delivery.sms,
     push: {
-      attempted: notificationUserIds.length,
+      attempted: sendPushCopy ? notificationUserIds.length : 0,
       queued: pushNotifications.filter(Boolean).length,
       provider: "in_app_notification",
       configured: Boolean(process.env.PUSH_PROVIDER_KEY),

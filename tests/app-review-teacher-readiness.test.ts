@@ -22,6 +22,17 @@ test("teacher App Review preparation is explicit, demo-scoped, and fail-closed",
   assert.match(script, /profile\.classroom\.sourceSystem !== DEMO_SOURCE/);
   assert.match(script, /sourceProfile\.classroom\.centerId !== sourceProfile\.centerId/);
   assert.match(script, /sourceProfile\.classroom\.sourceSystem !== DEMO_SOURCE/);
+  assert.match(script, /appReviewClassroomRosterSelect/);
+  assert.match(script, /appReviewCenterScopeSelect/);
+  assert.ok(
+    (script.match(/appReviewCenterScopeViolation/g) ?? []).length >= 5,
+    "candidate listing, exact preflight, inactive staging, and activation must validate the synthetic center graph",
+  );
+  assert.match(script, /scopeDigest: appReviewScopeDigest\(\{ center: stagedCenter, classroom: stagedClassroom \}\)/);
+  assert.ok(
+    (script.match(/appReviewClassroomScopeViolation/g) ?? []).length >= 5,
+    "candidate listing, exact preflight, inactive staging, and activation must validate the complete classroom roster graph",
+  );
   assert.match(script, /SYNTHETIC_ROLE_QA_TENANT_SLUG/);
   assert.match(script, /SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID/);
   assert.match(script, /profile\.user\.tenantId !== profile\.center\.organization\.tenantId/);
@@ -36,6 +47,9 @@ test("teacher App Review preparation is explicit, demo-scoped, and fail-closed",
   assert.match(script, /findUnique\(\{\s*where: \{ id: target\.sourceStaffProfileId \}/);
   assert.match(script, /assertAppReviewTargetFingerprint/);
   assert.match(script, /teacherTargetFingerprint\(\{\s*email,/);
+  assert.match(script, /scopeDigest: expectedScopeDigest/);
+  assert.match(script, /currentScopeDigest !== expectedScopeDigest/);
+  assert.match(script, /activationScopeDigest !== staged\.scopeDigest/);
   assert.ok(
     script.indexOf("assertAppReviewTargetFingerprint({") < script.indexOf("await upsertSupabaseAuthUserWithPassword({"),
     "the exact target fingerprint must be checked before the Auth identity can change",
@@ -54,11 +68,20 @@ test("teacher App Review preparation is explicit, demo-scoped, and fail-closed",
   assert.match(script, /authUserAfterWrite/);
   assert.match(script, /isActive: false/);
   assert.match(script, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
-  assert.match(script, /mergeCustomFields\(currentUser\?\.customFields/);
-  assert.match(script, /mergeCustomFields\(currentUser\?\.staffProfile\?\.customFields/);
+  assert.match(script, /mergeCustomFields\(removeProfilePhotoCustomFields\(currentUser\?\.customFields\)/);
+  assert.match(script, /reviewStaffCustomFields\(currentUser\?\.staffProfile\?\.customFields\)/);
+  assert.match(script, /delete fields\.staffKioskPinHash/);
+  assert.match(script, /delete fields\.staffKioskPinSetAt/);
+  assert.match(script, /delete fields\.staffKioskPinSetById/);
+  assert.match(script, /delete fields\.timeClock/);
   assert.match(script, /active grant outside the exact authorized target/);
   assert.match(script, /Multiple Teacher App Review Staff markers exist/);
+  assert.match(script, /asRecord\(sourceProfile\.customFields\)\.demoWorkspace !== true/);
   assert.match(script, /upsertSupabaseAuthUserWithPassword/);
   assert.doesNotMatch(script, /console\.log\(JSON\.stringify\(\{[\s\S]{0,500}password/);
   assert.match(packageJson, /"app-review:teacher:ensure"/);
+  assert.match(script, /webPushSubscription\.updateMany/);
+  assert.match(script, /deviceSession\.updateMany/);
+  assert.match(script, /activePushSubscriptionCount !== 0/);
+  assert.match(script, /unrevokedDeviceSessionCount !== 0/);
 });

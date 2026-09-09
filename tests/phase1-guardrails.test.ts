@@ -66,7 +66,7 @@ import {
   validateFtePeriod,
 } from "../src/lib/fte-report-guardrails";
 import { notificationTargetGuard } from "../src/lib/notification-guardrails";
-import { activeNotificationWhere, notificationDedupeKey, notificationExpiresAt } from "../src/lib/notification-policy";
+import { activeNotificationWhere, notificationDedupeKey, notificationExpiresAt, visibleNotificationWhere } from "../src/lib/notification-policy";
 import {
   buildPasswordResetRedirectUrl,
   buildPasswordResetTokenUrl,
@@ -1365,7 +1365,15 @@ test("RBAC keeps teacher workflows separate from staff management", () => {
   };
 
   assert.equal(canAccessModule(teacher, "teacher-portal"), true);
+  assert.equal(canAccessModule(teacher, "dashboard"), true);
+  assert.equal(canAccessModule(teacher, "classroom-dashboard"), true);
+  assert.equal(canAccessModule(teacher, "attendance"), true);
   assert.equal(canAccessModule(teacher, "daily-reports"), true);
+  assert.equal(canAccessModule(teacher, "incident-reports"), true);
+  assert.equal(canAccessModule(teacher, "documents"), true);
+  assert.equal(canAccessModule(teacher, "messages"), true);
+  assert.equal(canAccessModule(teacher, "notifications"), true);
+  assert.equal(canAccessModule(teacher, "help"), true);
   assert.equal(canAccessModule(teacher, "school-setup"), false);
   assert.equal(canAccessModule(teacher, "staff"), false);
   assert.equal(canAccessModule(teacher, "compliance"), false);
@@ -1569,6 +1577,136 @@ test("notification policy normalizes dedupe keys and active retention filters", 
     archivedAt: null,
     OR: [{ expiresAt: null }, { expiresAt: { gt: createdAt } }],
   });
+  assert.deepEqual(visibleNotificationWhere({ id: "teacher_1", role: UserRole.TEACHER }, createdAt), {
+    AND: [
+      activeNotificationWhere(createdAt),
+      { userId: "teacher_1" },
+    ],
+  });
+  assert.deepEqual(visibleNotificationWhere({ id: "owner_1", role: UserRole.PLATFORM_OWNER }, createdAt), {
+    AND: [
+      activeNotificationWhere(createdAt),
+      { OR: [{ userId: "owner_1" }, { userId: null }] },
+    ],
+  });
+});
+
+test("teacher web surfaces preserve capabilities while failing closed to assigned-classroom data", () => {
+  const dashboard = readFileSync("src/app/dashboard/page.tsx", "utf8");
+  const livePage = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const profileRoute = readFileSync("src/app/api/teacher/profile/route.ts", "utf8");
+  const notificationsRoute = readFileSync("src/app/api/notifications/summary/route.ts", "utf8");
+
+  assert.match(dashboard, /usesDedicatedTeacherWorkspace\(user\.role\)\) redirect\("\/teacher-portal"\)/);
+  assert.ok((livePage.match(/__no_assigned_teacher_classroom__/g) ?? []).length >= 2);
+  assert.match(livePage, /teacherMessageScope\s*\? \{ id: user\.id, tenantId: user\.tenantId, isActive: true \}/);
+  assert.match(profileRoute, /existingProfile\?\.classroomId\s*\? \[existingProfile\.classroomId\]/);
+  assert.match(livePage, /user\.role === UserRole\.TEACHER\s*\? \{ child: \{ classroomId: teacherAssignedClassroomId \} \}/);
+  assert.match(livePage, /teacherMessageScope\s*\? \{ id: teacherAssignedClassroomId \?\? "__no_assigned_teacher_classroom__" \}/);
+  assert.match(livePage, /visibleNotificationWhere\(user, now\)/);
+  assert.match(livePage, /__no_persisted_app_review_notifications__/);
+  assert.match(livePage, /appReviewClassroomScopeViolation/);
+  assert.match(livePage, /AppReviewScopeBlocked portal="Teacher"/);
+  assert.match(notificationsRoute, /visibleNotificationWhere\(user, now\)/);
+  assert.doesNotMatch(notificationsRoute, /canAccessAllCenters/);
+});
+
+test("reserved App Review identities cannot initiate financial provider mutations", () => {
+  const parentPortal = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
+  const livePage = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const guardedRoutes = [
+    "src/app/api/billing/family-payment/route.ts",
+    "src/app/api/billing/checkout-session/route.ts",
+    "src/app/api/billing/payment-method-session/route.ts",
+    "src/app/api/parent/products/purchase/route.ts",
+  ].map((path) => readFileSync(path, "utf8"));
+
+  assert.match(livePage, /paymentsReadOnly=\{verifiedAppReviewKind === "parent"\}/);
+  assert.match(parentPortal, /const checkoutBlocked = paymentsReadOnly \|\| !checkoutReadiness\.canAcceptParentPayments/);
+  assert.match(parentPortal, /Payments and payment-method changes are disabled in the App Review demo workspace/);
+  for (const route of guardedRoutes) {
+    assert.match(route, /appReviewReservedIdentityKind\(user\.email\)/);
+    assert.match(route, /App Review demo workspace/);
+  }
+});
+
+test("reserved App Review identities revalidate the complete graph at the shared authentication boundary", () => {
+  const auth = readFileSync("src/lib/auth.ts", "utf8");
+  const runtimeGuard = readFileSync("src/lib/app-review-runtime.ts", "utf8");
+  const livePage = readFileSync("src/app/[slug]/page.tsx", "utf8");
+
+  assert.match(auth, /appReviewRuntimeScopeIsValid/);
+  assert.ok(
+    auth.indexOf("appReviewRuntimeScopeIsValid({") < auth.indexOf("if (user.role === UserRole.PLATFORM_OWNER)"),
+    "reserved identities must fail closed before role-based center expansion",
+  );
+  assert.match(runtimeGuard, /appReviewReservedIdentityKind\(input\.email\)/);
+  assert.match(runtimeGuard, /guardianLinks\.length !== 1/);
+  assert.match(runtimeGuard, /appReviewFamilyScopeViolation/);
+  assert.match(runtimeGuard, /appReviewClassroomScopeViolation/);
+  assert.match(runtimeGuard, /hasExactReviewGrant/);
+  assert.match(livePage, /__no_app_review_announcements__/);
+  assert.match(livePage, /__no_app_review_teacher_directory__/);
+});
+
+test("reserved App Review identities cannot trigger external communications or push registration", () => {
+  const messagesRoute = readFileSync("src/app/api/communications/messages/route.ts", "utf8");
+  const pushSubscriptionRoute = readFileSync("src/app/api/notifications/push-subscription/route.ts", "utf8");
+  const notificationDelivery = readFileSync("src/lib/notification-delivery.ts", "utf8");
+  const webPush = readFileSync("src/lib/web-push.ts", "utf8");
+  const attendanceRoute = readFileSync("src/app/api/teacher/attendance/route.ts", "utf8");
+  const incidentRoute = readFileSync("src/app/api/teacher/incidents/route.ts", "utf8");
+  const mediaRoute = readFileSync("src/app/api/teacher/media/route.ts", "utf8");
+  const documentRoute = readFileSync("src/app/api/parent/documents/[id]/submit/route.ts", "utf8");
+  const contactRoute = readFileSync("src/app/api/parent/contact-requests/route.ts", "utf8");
+  const deletionRoute = readFileSync("src/app/api/privacy/deletion-requests/route.ts", "utf8");
+
+  assert.match(messagesRoute, /appReviewKind \? false : input\.sendEmailCopy/);
+  assert.match(messagesRoute, /appReviewKind \? false : input\.sendSmsCopy/);
+  assert.match(messagesRoute, /appReviewKind \? false : input\.sendPushCopy/);
+  assert.match(messagesRoute, /family && !appReviewKind/);
+  assert.match(messagesRoute, /demoWorkspace: true/);
+  assert.match(messagesRoute, /appReviewDemo: Boolean\(appReviewKind\)/);
+  assert.match(pushSubscriptionRoute, /Push notifications are disabled in the App Review demo workspace/);
+  assert.match(notificationDelivery, /isReservedAppReviewRecipient/);
+  assert.match(webPush, /app_review_delivery_disabled/);
+  assert.match(attendanceRoute, /logType === "check_out" && !appReviewKind/);
+  assert.match(attendanceRoute, /externalId: `app-review-attendance-/);
+  assert.match(mediaRoute, /appReviewDemo: Boolean\(appReviewKind\)/);
+  for (const route of [incidentRoute, mediaRoute, documentRoute, contactRoute, deletionRoute]) {
+    assert.match(route, /!appReviewKind &&/);
+    assert.match(route, /appReviewOutboundSuppressed/);
+  }
+});
+
+test("reserved App Review account credentials and billing controls remain immutable", () => {
+  const parentPortal = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
+  const teacherPortal = readFileSync("src/components/teacher-mobile-workspace.tsx", "utf8");
+  const appShell = readFileSync("src/components/app-shell.tsx", "utf8");
+  const livePage = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const passwordRoute = readFileSync("src/app/api/profile/password/route.ts", "utf8");
+  const kioskRoute = readFileSync("src/app/api/parent/kiosk-credential/route.ts", "utf8");
+  const tuitionRoute = readFileSync("src/app/api/parent/tuition-cadence/route.ts", "utf8");
+  const parentSetupRoute = readFileSync("src/app/api/parent/setup/route.ts", "utf8");
+  const parentSetupPage = readFileSync("src/app/parent-portal/setup/page.tsx", "utf8");
+  const teacherProfileRoute = readFileSync("src/app/api/teacher/profile/route.ts", "utf8");
+  const profilePhotoRoute = readFileSync("src/app/api/profile/photo/route.ts", "utf8");
+  const staffKioskRoute = readFileSync("src/app/api/kiosk/staff/route.ts", "utf8");
+
+  assert.match(livePage, /appReviewMode=\{verifiedAppReviewKind === "parent"\}/);
+  assert.match(livePage, /appReviewMode=\{verifiedAppReviewKind === "teacher"\}/);
+  assert.match(parentPortal, /Password changes are disabled for the shared App Review account/);
+  assert.match(parentPortal, /The shared App Review account cannot create or change a pickup PIN/);
+  assert.match(parentPortal, /The App Review workspace shows synthetic tuition and invoice history/);
+  assert.match(teacherPortal, /Profile and staff kiosk-code changes are disabled for the shared App Review account/);
+  assert.match(teacherPortal, /create a staff kiosk code, or clock time/);
+  assert.match(appShell, /Shared App Review profile is read-only/);
+  assert.match(parentSetupPage, /appReviewReservedIdentityKind\(user\.email\)[\s\S]*redirect\("\/parents"\)/);
+  assert.match(staffKioskRoute, /APP_REVIEW_TEACHER_CONTACT\.email/);
+  for (const route of [passwordRoute, kioskRoute, tuitionRoute, parentSetupRoute, teacherProfileRoute, profilePhotoRoute]) {
+    assert.match(route, /appReviewReservedIdentityKind\(user\.email\)/);
+    assert.match(route, /App Review/);
+  }
 });
 
 test("FTE report guard scopes directors and permits executive corrections", () => {

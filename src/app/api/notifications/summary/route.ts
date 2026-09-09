@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { EnrollmentStage, Prisma } from "@prisma/client";
-import { canAccessAllCenters, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { EnrollmentStage, Prisma, UserRole } from "@prisma/client";
+import { getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
-import { activeNotificationWhere } from "@/lib/notification-policy";
+import { visibleNotificationWhere } from "@/lib/notification-policy";
 import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
 
@@ -20,13 +21,10 @@ async function GETHandler(request: NextRequest) {
   }
 
   const now = new Date();
-  const tenantWide = canAccessAllCenters(user);
-  const notificationUserWhere: Prisma.NotificationWhereInput = {
-    AND: [
-      activeNotificationWhere(now),
-      tenantWide ? { OR: [{ userId: user.id }, { userId: null }] } : { userId: user.id },
-    ],
-  };
+  const reservedAppReviewKind = appReviewReservedIdentityKind(user.email);
+  const notificationUserWhere: Prisma.NotificationWhereInput = reservedAppReviewKind
+    ? { id: "__no_persisted_app_review_notifications__" }
+    : visibleNotificationWhere(user, now);
 
   if (request.nextUrl.searchParams.get("mode") === "count") {
     const unread = await prisma.notification.count({
@@ -42,10 +40,25 @@ async function GETHandler(request: NextRequest) {
   const centerIds = centers.map((center) => center.id);
   const scopedCenterIds = centerIdFilter(centerIds);
   const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds, status: { notIn: ["closed", "merged"] } };
-  const canViewEnrollment = canAccessModule(user, "crm-leads");
-  const canViewTours = canAccessModule(user, "tours");
-  const canViewFteReports = canAccessModule(user, "fte-reports");
-  const canViewIncidents = canAccessModule(user, "incident-reports");
+  const canViewEnrollment = !reservedAppReviewKind && canAccessModule(user, "crm-leads");
+  const canViewTours = !reservedAppReviewKind && canAccessModule(user, "tours");
+  const canViewFteReports = !reservedAppReviewKind && canAccessModule(user, "fte-reports");
+  const canViewIncidents = !reservedAppReviewKind && canAccessModule(user, "incident-reports");
+  const incidentWhere: Prisma.IncidentReportWhereInput = user.role === UserRole.TEACHER
+    ? {
+        adminReviewStatus: "pending",
+        OR: [
+          { classroomId: user.assignedClassroomId ?? "__no_assigned_teacher_classroom__" },
+          { child: { classroomId: user.assignedClassroomId ?? "__no_assigned_teacher_classroom__" } },
+        ],
+      }
+    : {
+        adminReviewStatus: "pending",
+        OR: [
+          { classroom: { is: { centerId: scopedCenterIds } } },
+          { child: { family: { is: { centerId: scopedCenterIds } } } },
+        ],
+      };
   const fteDueState = canViewFteReports ? getFteDueState(now) : null;
   const sevenDays = new Date(now);
   sevenDays.setDate(now.getDate() + 7);
@@ -73,15 +86,7 @@ async function GETHandler(request: NextRequest) {
     canViewEnrollment ? prisma.lead.count({ where: { ...leadWhere, score: { gte: 75 } } }) : Promise.resolve(0),
     canViewEnrollment ? prisma.task.count({ where: { status: "open", lead: leadWhere } }) : Promise.resolve(0),
     canViewTours ? prisma.tour.count({ where: { centerId: scopedCenterIds, startsAt: { gte: now, lte: sevenDays } } }) : Promise.resolve(0),
-    canViewIncidents ? prisma.incidentReport.count({
-      where: {
-        adminReviewStatus: "pending",
-        OR: [
-          { classroom: { is: { centerId: scopedCenterIds } } },
-          { child: { family: { is: { centerId: scopedCenterIds } } } },
-        ],
-      },
-    }) : Promise.resolve(0),
+    canViewIncidents ? prisma.incidentReport.count({ where: incidentWhere }) : Promise.resolve(0),
     fteDueState ? prisma.center.count({
       where: {
         id: scopedCenterIds,

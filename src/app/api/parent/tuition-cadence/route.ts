@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser, isParentGuardian } from "@/lib/auth";
 import {
@@ -23,6 +24,12 @@ async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!isParentGuardian(user)) return NextResponse.json({ ok: false, error: "Parent or guardian access is required." }, { status: 403 });
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json(
+      { ok: false, error: "Tuition billing changes are disabled in the App Review demo workspace." },
+      { status: 403 },
+    );
+  }
 
   const body = objectValue(await request.json().catch(() => ({})));
   const childId = typeof body.childId === "string" ? body.childId.trim() : "";

@@ -51,6 +51,40 @@ test("notification delivery filters email and SMS recipients by user overrides a
   );
 });
 
+test("notification delivery never selects reserved App Review identities for external channels", () => {
+  const preferences = [{
+    userId: null,
+    role: "PARENT_GUARDIAN",
+    type: "messages",
+    emailEnabled: true,
+    smsEnabled: true,
+    pushEnabled: true,
+  }];
+  const recipients = [
+    {
+      userId: "app-review-parent",
+      role: "PARENT_GUARDIAN",
+      email: "app-review-parent@thebeesuite.io",
+      phone: "+1 555 010 0424",
+    },
+    {
+      userId: "ordinary-parent",
+      role: "PARENT_GUARDIAN",
+      email: "ordinary@example.com",
+      phone: "+1 941 555 0102",
+    },
+  ];
+
+  assert.deepEqual(
+    collectNotificationEmailRecipients({ type: "messages", recipients, preferences }),
+    ["ordinary@example.com"],
+  );
+  assert.deepEqual(
+    collectNotificationSmsRecipients({ type: "messages", recipients, preferences }),
+    ["+1 941 555 0102"],
+  );
+});
+
 test("notification external delivery sends through enabled channels and records attempts", async () => {
   const emailInputs: unknown[] = [];
   const smsInputs: unknown[] = [];

@@ -27,8 +27,8 @@ import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode, getKidCityLocati
 import { prisma } from "@/lib/prisma";
 import { buildRegistrationShareUrl } from "@/lib/registration-sharing";
 import { registrationReviewFromData } from "@/lib/registration-packet";
-import { loginHrefForNextPath } from "@/lib/login-routing";
-import { dashboardLensesForRole, executiveRoles } from "@/lib/rbac";
+import { homePathForRole, loginHrefForNextPath } from "@/lib/login-routing";
+import { canAccessModule, dashboardLensesForRole, executiveRoles } from "@/lib/rbac";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { directorLaunchChecklistTasksForPayoutSetup, readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripePayoutSetupFlowForCenters } from "@/lib/stripe-payout-setup-flow";
@@ -58,10 +58,16 @@ function dateKey(value: Date | null | undefined) {
   return value ? value.toISOString().slice(0, 10) : null;
 }
 
+function usesDedicatedTeacherWorkspace(role: UserRole): boolean {
+  return role === UserRole.TEACHER;
+}
+
 export default async function DashboardPage() {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect(loginHrefForNextPath("/dashboard"));
   if (requiresPasswordResetGate(user)) redirect("/reset-password?force=1&next=/dashboard");
+  if (usesDedicatedTeacherWorkspace(user.role)) redirect("/teacher-portal");
+  if (!canAccessModule(user, "dashboard")) redirect(homePathForRole(user.role));
   const workspaceRedirect = workspaceSelectionRedirect(user.workspace, "/dashboard");
   if (workspaceRedirect) redirect(workspaceRedirect);
 

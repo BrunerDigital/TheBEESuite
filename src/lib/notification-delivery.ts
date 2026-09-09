@@ -11,6 +11,7 @@ import {
   type NotificationPreferenceRecord,
 } from "@/lib/notification-preferences";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 
 export type NotificationDeliveryRecipient = {
   userId?: string | null;
@@ -80,6 +81,10 @@ export type NotificationDeliverySummary = {
   };
 };
 
+function isReservedAppReviewRecipient(recipient: NotificationDeliveryRecipient) {
+  return Boolean(recipient.email && appReviewReservedIdentityKind(recipient.email));
+}
+
 function channelDedupeKey(base: string | null | undefined, channel: string, recipient?: string) {
   return base ? notificationDedupeKey([base, channel, recipient]) : null;
 }
@@ -113,6 +118,7 @@ export function collectNotificationEmailRecipients({
 }) {
   return uniqueEmails(
     recipients
+      .filter((recipient) => !isReservedAppReviewRecipient(recipient))
       .filter((recipient) => recipient.emailOptIn !== false)
       .filter((recipient) => resolveNotificationDeliveryRecipientChannels({ type, recipient, preferences }).emailEnabled)
       .map((recipient) => recipient.email ?? ""),
@@ -130,6 +136,7 @@ export function collectNotificationSmsRecipients({
 }) {
   return uniqueSmsRecipients(
     recipients
+      .filter((recipient) => !isReservedAppReviewRecipient(recipient))
       .filter((recipient) => recipient.smsOptIn !== false)
       .filter((recipient) => resolveNotificationDeliveryRecipientChannels({ type, recipient, preferences }).smsEnabled)
       .map((recipient) => recipient.phone ?? ""),

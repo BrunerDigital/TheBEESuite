@@ -17,7 +17,9 @@ Current repository status:
 - There is still no uploadable `.ipa` in this repository because the final archive must be built and signed from Xcode on macOS.
 - The committed parent icon and launch assets are role-specific, reproducible with `npm run mobile:assets:generate`, and verified at 1024 x 1024 / 2732 x 2732 without alpha. The App Store export is `output/app-store/ios/app-icon-1024-no-alpha.png`.
 - The native configuration is HTTPS-only, has WebView inspection and link previews disabled, has no broad navigation allowlist, and includes no unused push, Associated Domains, Face ID, microphone, location, contacts, tracking, or iPad capability.
-- A read-only production query on September 8 confirmed that `app-review-parent@thebeesuite.io` has one active application user, one active Parent grant, one confirmed Auth identity, and one fake-review Guardian marker. Password validity and the reviewer-visible fake-data boundary remain unverified and must be tested from the signed release candidate before upload.
+- A read-only production query on September 8 confirmed that the reserved `app-review-parent@thebeesuite.io` records exist, but their current Rivera assignment no longer passes the hardened fake-only review graph. The released portal therefore fails closed until an exactly approved candidate is assigned and the credential is rotated. Password validity has not been tested.
+- The final review guard validates the exact synthetic center plus every reviewer-visible family, child, guardian/pickup/contact, classroom, attendance/report/incident, message/attachment, document/media, deletion-request, invoice/payment, and ledger relationship before rendering. Its confirmation fingerprint changes if that graph changes.
+- Review actions remain usable without escaping that boundary: uploaded photos, documents, signatures, and message attachments are stored under dedicated `demo-media`, `demo-docs`, and `demo-messages` namespaces; messages stay portal-only; and checkout email, staff/guardian notifications, web push enrollment, payments, password/profile-photo/parent-setup changes, pickup-PIN changes, and tuition-cycle changes are suppressed for the reserved identity. The full graph is revalidated at the shared authentication boundary after every request.
 
 Repository verification completed on Windows on September 8, 2026:
 
@@ -209,13 +211,13 @@ The route has been added in the app. This must stay public, reachable without lo
 
 ## App Review Information
 
-Use the dedicated fake-data review identity below. It exists in production, but its password and displayed fake-data isolation have not been validated against the exact release candidate.
+Use the reserved fake-data identity below only after the exact candidate is approved and provisioned. The current identity exists, but the hardened runtime guard intentionally pauses its stale assignment without rendering data.
 
 ```text
 Demo account email: app-review-parent@thebeesuite.io
 Demo account password: <temporary review password; do not commit to the repository>
 Demo school: Kid City USA - Demo
-Demo family: Rivera Family
+Demo family: Murphy Family (recommended by the September 8 read-only preflight; refresh and approve the exact target before provisioning)
 Demo child records: Fake child records only
 ```
 
@@ -225,9 +227,9 @@ If the password is unavailable or must be rotated, first run the read-only candi
 npm run app-review:parent:ensure -- --preflight
 ```
 
-The candidate list is limited to the isolated demo tenant and designated synthetic school and excludes empty or non-demo child scope. Select one proven fake-demo target. Set `APP_REVIEW_PARENT_TENANT_ID`, `APP_REVIEW_PARENT_CENTER_ID`, `APP_REVIEW_PARENT_FAMILY_ID`, and `APP_REVIEW_PARENT_FAMILY_EXTERNAL_ID` outside Git/chat, then run the same `--preflight` command again. Record its exact target and fresh `targetFingerprint`; do not authorize or run a mutation from the unfiltered candidate list alone.
+The candidate list is limited to the isolated demo tenant and designated synthetic school, requires a current child or outstanding mock balance, and validates the entire reviewer-visible graph. The September 8 read-only run found 11 eligible fake families; Murphy Family is the recommended target because it exercises daily reports, an incident, media, documents, an invoice, and a mock payment. Set `APP_REVIEW_PARENT_TENANT_ID`, `APP_REVIEW_PARENT_CENTER_ID`, `APP_REVIEW_PARENT_FAMILY_ID`, and `APP_REVIEW_PARENT_FAMILY_EXTERNAL_ID` outside Git/chat, then run the same `--preflight` command again. Record its exact target and fresh `targetFingerprint`; do not authorize or run a mutation from the unfiltered candidate list alone.
 
-The fingerprint also binds the exact review email. The mutation may upsert the application/Auth identity and Guardian, reassign the Guardian to that exact fake demo family, create or reactivate the school access grant, and rotate the password. It stages the application user and grant inactive, updates and verifies Auth, then revalidates the exact demo scope before activation; an interrupted or failed run leaves the staged account inactive for a safe retry. Obtain exact authorization covering the email, all four production changes, and the preflighted target. Only then set `APP_REVIEW_PARENT_TARGET_FINGERPRINT` and `APP_REVIEW_PARENT_PASSWORD` outside Git/chat and run `npm run app-review:parent:ensure -- --confirm-parent-app-review-account`. Re-query the role/grant and verify the exact fake family boundary before copying credentials into App Store Connect. Rotate or disable the account after review.
+The fingerprint binds the exact review email, synthetic center, and full reachable family graph. The mutation may upsert the application/Auth identity and Guardian, reassign the Guardian to that exact fake demo family, create or reactivate the school access grant, rotate the password, revoke stale device sessions, and deactivate stale web-push subscriptions. It stages the application user and grant inactive, updates and verifies Auth, then revalidates the exact demo scope before activation; an interrupted or failed run leaves the staged account inactive for a safe retry. Obtain exact authorization covering the email, all listed production changes, and the preflighted target. Only then set `APP_REVIEW_PARENT_TARGET_FINGERPRINT` and `APP_REVIEW_PARENT_PASSWORD` outside Git/chat and run `npm run app-review:parent:ensure -- --confirm-parent-app-review-account`. Re-query the role/grant and verify the exact fake family boundary before copying credentials into App Store Connect. Rotate or disable the account after review.
 
 Suggested App Review notes:
 

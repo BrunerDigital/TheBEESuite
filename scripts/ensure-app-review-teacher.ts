@@ -1,10 +1,16 @@
 import "./load-env";
 import { Prisma, UserRole } from "@prisma/client";
 import {
+  appReviewCenterScopeSelect,
+  appReviewCenterScopeViolation,
+  appReviewClassroomRosterSelect,
+  appReviewClassroomScopeViolation,
+  appReviewScopeDigest,
   assertAppReviewTargetFingerprint,
   buildAppReviewTargetFingerprint,
 } from "@/lib/app-review-targeting";
 import { prisma } from "@/lib/prisma";
+import { removeProfilePhotoCustomFields } from "@/lib/profile-photo";
 import {
   SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID,
   SYNTHETIC_ROLE_QA_TENANT_SLUG,
@@ -42,6 +48,19 @@ function mergeCustomFields(value: unknown, patch: Prisma.InputJsonObject) {
   } as Prisma.InputJsonObject;
 }
 
+function reviewStaffCustomFields(value: unknown) {
+  const fields = { ...asRecord(value) };
+  delete fields.staffKioskPinHash;
+  delete fields.staffKioskPinSetAt;
+  delete fields.staffKioskPinSetById;
+  delete fields.staffContactEmail;
+  delete fields.timeClock;
+  return mergeCustomFields(fields, {
+    appReview: true,
+    seededBy: SCRIPT_SOURCE,
+  });
+}
+
 function readTargetInput() {
   return {
     tenantId: process.env.APP_REVIEW_TEACHER_TENANT_ID?.trim() || "",
@@ -60,6 +79,7 @@ function teacherTargetFingerprint(input: {
   classroomId: string;
   sourceStaffProfileId: string;
   sourceUserId: string;
+  scopeDigest: string;
 }) {
   return buildAppReviewTargetFingerprint("teacher", input);
 }
@@ -79,30 +99,31 @@ async function listTeacherTargets(email: string) {
     },
     orderBy: [{ centerId: "asc" }, { classroomId: "asc" }, { id: "asc" }],
     include: {
-      user: { select: { id: true, tenantId: true, role: true, isActive: true } },
-      center: {
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          sourceSystem: true,
-          externalId: true,
-          organizationId: true,
-          organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
-        },
-      },
-      classroom: { select: { id: true, name: true, centerId: true, sourceSystem: true } },
+      user: { select: { id: true, name: true, tenantId: true, role: true, isActive: true } },
+      center: { select: appReviewCenterScopeSelect },
+      classroom: { select: { ...appReviewClassroomRosterSelect, name: true } },
     },
   });
 
   return profiles.flatMap((profile) => {
     if (
       !profile.classroom ||
+      !profile.externalId ||
+      asRecord(profile.customFields).demoWorkspace !== true ||
       !profile.user.isActive ||
       profile.user.role !== UserRole.TEACHER ||
       profile.user.tenantId !== profile.center.organization.tenantId ||
       profile.classroom.centerId !== profile.centerId ||
-      profile.classroom.sourceSystem !== DEMO_SOURCE
+      profile.classroom.sourceSystem !== DEMO_SOURCE ||
+      appReviewCenterScopeViolation({
+        center: profile.center,
+        tenantId: profile.center.organization.tenantId,
+      }) ||
+      appReviewClassroomScopeViolation({
+        classroom: profile.classroom,
+        centerId: profile.centerId,
+        tenantId: profile.center.organization.tenantId,
+      })
     ) return [];
     const target = {
       email,
@@ -112,11 +133,30 @@ async function listTeacherTargets(email: string) {
       classroomId: profile.classroom.id,
       sourceStaffProfileId: profile.id,
       sourceUserId: profile.user.id,
+      scopeDigest: appReviewScopeDigest({ center: profile.center, classroom: profile.classroom }),
     };
+    const reviewFamilies = Array.from(new Map(
+      profile.classroom.children.map((child) => [child.familyId, child.family] as const),
+    ).values());
     return [{
       ...target,
       centerName: profile.center.name,
       classroomName: profile.classroom.name,
+      sourceStaffName: profile.user.name,
+      reviewDataSummary: {
+        children: profile.classroom.children.length,
+        families: reviewFamilies.length,
+        staff: profile.classroom.staff.length,
+        dailyReports: reviewFamilies.reduce(
+          (total, family) => total + family.children.reduce((familyTotal, child) => familyTotal + child.dailyReports.length, 0),
+          0,
+        ),
+        incidents: reviewFamilies.reduce(
+          (total, family) => total + family.children.reduce((familyTotal, child) => familyTotal + child.incidents.length, 0),
+          0,
+        ),
+        messages: reviewFamilies.reduce((total, family) => total + family.messages.length, 0),
+      },
       targetFingerprint: teacherTargetFingerprint(target),
     }];
   });
@@ -179,24 +219,16 @@ async function main() {
   const sourceProfile = await prisma.staffProfile.findUnique({
     where: { id: target.sourceStaffProfileId },
     include: {
-      user: { select: { id: true, tenantId: true, role: true, isActive: true } },
-      center: {
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          sourceSystem: true,
-          externalId: true,
-          organizationId: true,
-          organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
-        },
-      },
-      classroom: { select: { id: true, name: true, centerId: true, sourceSystem: true } },
+      user: { select: { id: true, name: true, tenantId: true, role: true, isActive: true } },
+      center: { select: appReviewCenterScopeSelect },
+      classroom: { select: { ...appReviewClassroomRosterSelect, name: true } },
     },
   });
   if (
     !sourceProfile?.classroom ||
     sourceProfile.sourceSystem !== DEMO_SOURCE ||
+    !sourceProfile.externalId ||
+    asRecord(sourceProfile.customFields).demoWorkspace !== true ||
     !sourceProfile.user.isActive ||
     sourceProfile.user.role !== UserRole.TEACHER ||
     sourceProfile.user.tenantId !== sourceProfile.center.organization.tenantId ||
@@ -209,10 +241,20 @@ async function main() {
     sourceProfile.classroom.sourceSystem !== DEMO_SOURCE ||
     sourceProfile.classroom.id !== target.classroomId ||
     sourceProfile.center.organization.tenantId !== target.tenantId
+    || appReviewCenterScopeViolation({ center: sourceProfile.center, tenantId: target.tenantId })
   ) {
     throw new Error("The exact Teacher App Review source profile is missing or no longer matches the fake-demo tenant, center, classroom, and role.");
   }
   const sourceClassroom = sourceProfile.classroom;
+  const sourceClassroomScopeViolation = appReviewClassroomScopeViolation({
+    classroom: sourceClassroom,
+    centerId: sourceProfile.centerId,
+    tenantId: sourceProfile.center.organization.tenantId,
+  });
+  if (sourceClassroomScopeViolation) {
+    throw new Error(`The exact Teacher App Review classroom is not isolated fake data: ${sourceClassroomScopeViolation}.`);
+  }
+  const expectedScopeDigest = appReviewScopeDigest({ center: sourceProfile.center, classroom: sourceClassroom });
 
   const expectedFingerprint = teacherTargetFingerprint({
     email,
@@ -222,6 +264,7 @@ async function main() {
     classroomId: sourceClassroom.id,
     sourceStaffProfileId: sourceProfile.id,
     sourceUserId: sourceProfile.user.id,
+    scopeDigest: expectedScopeDigest,
   });
 
   if (preflight) {
@@ -239,6 +282,7 @@ async function main() {
         classroomName: sourceClassroom.name,
         sourceStaffProfileId: sourceProfile.id,
         sourceUserId: sourceProfile.user.id,
+        sourceStaffName: sourceProfile.user.name,
         targetFingerprint: expectedFingerprint,
       },
     }, null, 2));
@@ -342,22 +386,28 @@ async function main() {
       where: { id: target.sourceStaffProfileId },
       include: {
         user: { select: { id: true, tenantId: true, role: true, isActive: true } },
-        center: {
-          select: {
-            id: true,
-            status: true,
-            sourceSystem: true,
-            externalId: true,
-            organizationId: true,
-            organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
-          },
-        },
-        classroom: { select: { id: true, centerId: true, sourceSystem: true } },
+        center: { select: appReviewCenterScopeSelect },
+        classroom: { select: appReviewClassroomRosterSelect },
       },
     });
+    const currentClassroomScopeViolation = currentSourceProfile?.classroom
+      ? appReviewClassroomScopeViolation({
+        classroom: currentSourceProfile.classroom,
+        centerId: target.centerId,
+        tenantId: target.tenantId,
+      })
+      : "classroom is missing";
+    const currentCenterScopeViolation = currentSourceProfile
+      ? appReviewCenterScopeViolation({ center: currentSourceProfile.center, tenantId: target.tenantId })
+      : "center is missing";
+    const currentScopeDigest = currentSourceProfile?.classroom
+      ? appReviewScopeDigest({ center: currentSourceProfile.center, classroom: currentSourceProfile.classroom })
+      : null;
     if (
       !currentSourceProfile?.classroom ||
       currentSourceProfile.sourceSystem !== DEMO_SOURCE ||
+      !currentSourceProfile.externalId ||
+      asRecord(currentSourceProfile.customFields).demoWorkspace !== true ||
       !currentSourceProfile.user.isActive ||
       currentSourceProfile.user.role !== UserRole.TEACHER ||
       currentSourceProfile.user.tenantId !== currentSourceProfile.center.organization.tenantId ||
@@ -370,6 +420,9 @@ async function main() {
       currentSourceProfile.classroom.centerId !== currentSourceProfile.centerId ||
       currentSourceProfile.classroom.sourceSystem !== DEMO_SOURCE ||
       currentSourceProfile.classroom.id !== target.classroomId ||
+      currentClassroomScopeViolation ||
+      currentCenterScopeViolation ||
+      currentScopeDigest !== expectedScopeDigest ||
       currentSourceProfile.center.organization.tenantId !== target.tenantId ||
       currentSourceProfile.center.organizationId !== sourceProfile.center.organizationId
     ) {
@@ -456,7 +509,7 @@ async function main() {
         isActive: false,
         mustResetPassword: false,
         sessionVersion: { increment: 1 },
-        customFields: mergeCustomFields(currentUser?.customFields, {
+        customFields: mergeCustomFields(removeProfilePhotoCustomFields(currentUser?.customFields), {
           appReview: true,
           seededBy: SCRIPT_SOURCE,
         }),
@@ -474,6 +527,16 @@ async function main() {
       select: { id: true },
     });
 
+    const revokedAt = new Date();
+    await tx.webPushSubscription.updateMany({
+      where: { userId: user.id, isActive: true },
+      data: { isActive: false, lastSeenAt: revokedAt },
+    });
+    await tx.deviceSession.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt, revokedById: user.id },
+    });
+
     const reviewProfile = await tx.staffProfile.upsert({
       where: { userId: user.id },
       update: {
@@ -483,10 +546,7 @@ async function main() {
         phone: "(555) 010-0425",
         sourceSystem: APP_REVIEW_SOURCE,
         externalId: APP_REVIEW_STAFF_EXTERNAL_ID,
-        customFields: mergeCustomFields(currentUser?.staffProfile?.customFields, {
-          appReview: true,
-          seededBy: SCRIPT_SOURCE,
-        }),
+        customFields: reviewStaffCustomFields(currentUser?.staffProfile?.customFields),
       },
       create: {
         userId: user.id,
@@ -497,7 +557,7 @@ async function main() {
         backgroundCheckStatus: "review_demo_only",
         sourceSystem: APP_REVIEW_SOURCE,
         externalId: APP_REVIEW_STAFF_EXTERNAL_ID,
-        customFields: { appReview: true, seededBy: SCRIPT_SOURCE },
+        customFields: reviewStaffCustomFields(null),
       },
       select: { id: true },
     });
@@ -508,7 +568,32 @@ async function main() {
       centerId: sourceProfile.centerId,
       isActive: false,
     });
-    return { userId: user.id, staffProfileId: reviewProfile.id, accessGrantId: grant.id };
+    const [stagedClassroom, stagedCenter] = await Promise.all([
+      tx.classroom.findUnique({
+        where: { id: target.classroomId },
+        select: appReviewClassroomRosterSelect,
+      }),
+      tx.center.findUnique({ where: { id: target.centerId }, select: appReviewCenterScopeSelect }),
+    ]);
+    const stagedClassroomScopeViolation = stagedClassroom
+      ? appReviewClassroomScopeViolation({
+        classroom: stagedClassroom,
+        centerId: target.centerId,
+        tenantId: target.tenantId,
+      })
+      : "classroom is missing";
+    const stagedCenterScopeViolation = stagedCenter
+      ? appReviewCenterScopeViolation({ center: stagedCenter, tenantId: target.tenantId })
+      : "center is missing";
+    if (!stagedClassroom || !stagedCenter || stagedClassroomScopeViolation || stagedCenterScopeViolation) {
+      throw new Error("Teacher App Review staging introduced an invalid review classroom scope.");
+    }
+    return {
+      userId: user.id,
+      staffProfileId: reviewProfile.id,
+      accessGrantId: grant.id,
+      scopeDigest: appReviewScopeDigest({ center: stagedCenter, classroom: stagedClassroom }),
+    };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   const authUserBeforeWrite = await getSupabaseAuthUserMetadataByEmail(email);
@@ -540,7 +625,14 @@ async function main() {
   }
 
   await prisma.$transaction(async (tx) => {
-    const [activationUser, activationGrant, activationSourceProfile, activeOtherGrantCount] = await Promise.all([
+    const [
+      activationUser,
+      activationGrant,
+      activationSourceProfile,
+      activeOtherGrantCount,
+      activePushSubscriptionCount,
+      unrevokedDeviceSessionCount,
+    ] = await Promise.all([
       tx.user.findUnique({
         where: { id: staged.userId },
         select: {
@@ -580,23 +672,30 @@ async function main() {
         where: { id: target.sourceStaffProfileId },
         include: {
           user: { select: { id: true, tenantId: true, role: true, isActive: true } },
-          center: {
-            select: {
-              status: true,
-              sourceSystem: true,
-              externalId: true,
-              organizationId: true,
-              organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
-            },
-          },
-          classroom: { select: { id: true, centerId: true, sourceSystem: true } },
+          center: { select: appReviewCenterScopeSelect },
+          classroom: { select: appReviewClassroomRosterSelect },
         },
       }),
       tx.userAccessGrant.count({
         where: { userId: staged.userId, isActive: true, id: { not: staged.accessGrantId } },
       }),
+      tx.webPushSubscription.count({ where: { userId: staged.userId, isActive: true } }),
+      tx.deviceSession.count({ where: { userId: staged.userId, revokedAt: null } }),
     ]);
 
+    const activationClassroomScopeViolation = activationSourceProfile?.classroom
+      ? appReviewClassroomScopeViolation({
+        classroom: activationSourceProfile.classroom,
+        centerId: target.centerId,
+        tenantId: target.tenantId,
+      })
+      : "classroom is missing";
+    const activationCenterScopeViolation = activationSourceProfile
+      ? appReviewCenterScopeViolation({ center: activationSourceProfile.center, tenantId: target.tenantId })
+      : "center is missing";
+    const activationScopeDigest = activationSourceProfile?.classroom
+      ? appReviewScopeDigest({ center: activationSourceProfile.center, classroom: activationSourceProfile.classroom })
+      : null;
     if (
       !activationUser ||
       activationUser.email !== email ||
@@ -625,8 +724,12 @@ async function main() {
       activationGrant.startsAt !== null ||
       activationGrant.endsAt !== null ||
       activeOtherGrantCount !== 0 ||
+      activePushSubscriptionCount !== 0 ||
+      unrevokedDeviceSessionCount !== 0 ||
       !activationSourceProfile?.classroom ||
       activationSourceProfile.sourceSystem !== DEMO_SOURCE ||
+      !activationSourceProfile.externalId ||
+      asRecord(activationSourceProfile.customFields).demoWorkspace !== true ||
       !activationSourceProfile.user.isActive ||
       activationSourceProfile.user.id !== sourceProfile.user.id ||
       activationSourceProfile.user.tenantId !== target.tenantId ||
@@ -640,7 +743,10 @@ async function main() {
       activationSourceProfile.center.organizationId !== sourceProfile.center.organizationId ||
       activationSourceProfile.classroom.id !== target.classroomId ||
       activationSourceProfile.classroom.centerId !== target.centerId ||
-      activationSourceProfile.classroom.sourceSystem !== DEMO_SOURCE
+      activationSourceProfile.classroom.sourceSystem !== DEMO_SOURCE ||
+      activationClassroomScopeViolation ||
+      activationCenterScopeViolation ||
+      activationScopeDigest !== staged.scopeDigest
     ) {
       throw new Error("Teacher App Review activation revalidation failed; the staged account remains inactive.");
     }

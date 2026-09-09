@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { canAccessAllCenters, canManageBilling, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import {
   createStripeBillingPortalSession,
   createStripeCustomer,
@@ -85,6 +86,9 @@ async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json({ ok: false, error: "Payment-method changes are disabled in the App Review demo workspace." }, { status: 403 });
   }
 
   const userCanManageBilling = canManageBilling(user);

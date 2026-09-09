@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { buildGuardianKioskCredential } from "@/lib/kiosk-credentials";
@@ -32,6 +33,13 @@ async function GETHandler() {
   }
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parents and guardians can manage kiosk credentials here." }, { status: 403 });
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json({
+      ok: true,
+      credentials: [],
+      disabledReason: "app_review_workspace",
+    });
   }
   const tenantCenterIds = await getParentPortalTenantCenterIds(user.tenantId);
   const guardians = await prisma.guardian.findMany({
@@ -75,6 +83,12 @@ async function POSTHandler(request: NextRequest) {
   }
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parents and guardians can manage kiosk credentials here." }, { status: 403 });
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json(
+      { ok: false, error: "Kiosk PIN changes are disabled for the shared App Review account." },
+      { status: 403 },
+    );
   }
   const body = await request.json().catch(() => ({}));
   const guardianId = clean(body.guardianId);

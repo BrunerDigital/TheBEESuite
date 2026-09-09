@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, retryAfterSeconds } from "@/lib/rate-limit";
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -84,6 +85,15 @@ async function GETHandler() {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json({
+      ok: true,
+      configured: false,
+      publicKey: null,
+      activeSubscriptions: 0,
+      disabledReason: "app_review_workspace",
+    });
+  }
 
   const configuration = getWebPushConfiguration();
   const activeSubscriptions = await prisma.webPushSubscription.count({
@@ -114,6 +124,12 @@ async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json(
+      { ok: false, error: "Push notifications are disabled in the App Review demo workspace." },
+      { status: 403 },
+    );
   }
   const rateLimit = await rateLimitUser(user.id);
   if (!rateLimit.ok) {
@@ -231,6 +247,9 @@ async function DELETEHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json({ ok: true, enabled: false, disabledReason: "app_review_workspace" });
   }
   const rateLimit = await rateLimitUser(user.id);
   if (!rateLimit.ok) {

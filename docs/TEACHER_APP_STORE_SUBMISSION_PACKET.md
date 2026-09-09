@@ -17,6 +17,8 @@ Current repository status:
 - The native configuration is HTTPS-only, disables WebView inspection/link previews, contains no broad navigation allowlist, and intentionally omits push, Associated Domains, Face ID, microphone, location, contacts, tracking, financial privacy categories, and iPad support.
 - Windows Capacitor sync completed on September 8, 2026; the shared `App` scheme is archive-enabled. Final Xcode/device/archive evidence still requires macOS.
 - A read-only production query on September 8 confirmed that the planned Teacher review identity does not yet exist as an application user, active grant, Auth identity, or fake-review Staff marker. Its preparation remains a separately authorized identity/access action.
+- The hardened Teacher runtime preserves attendance, classroom, daily-report, incident, document, message, notification, and profile capabilities while scoping every data loader to the assigned classroom. The reserved review identity additionally blocks persisted global templates, direct staff threads, and stored notification content, and renders no data if its sole grant or synthetic classroom graph drifts.
+- Teacher review writes remain inside the synthetic graph: attendance/check-log rows receive demo provenance, photo uploads use the dedicated `demo-media` namespace, and checkout email plus incident/media notifications are suppressed. Profile/profile-photo changes, staff kiosk credentials, and time-clock access are disabled for the shared reviewer identity, and provisioning clears any stale state. The graph is revalidated at the shared authentication boundary after every request.
 
 Do not submit until these blockers are resolved:
 
@@ -149,7 +151,8 @@ Create the dedicated fake-data review identity below only after exact authorizat
 Demo account email: app-review-teacher@thebeesuite.io
 Demo account password: <temporary review password; do not commit to the repository>
 Demo school: Kid City USA - Demo
-Demo classroom: fake classroom records only
+Demo classroom: Toddler Hive (recommended after a fresh exact preflight)
+Source fake staff profile: Mia Patel (recommended after a fresh exact preflight)
 ```
 
 Suggested App Review notes:
@@ -283,9 +286,9 @@ First run the read-only candidate listing with all Teacher target variables unse
 npm run app-review:teacher:ensure -- --preflight
 ```
 
-The candidate list is limited to the isolated demo tenant and designated synthetic school and excludes cross-school or non-demo classrooms. Select one proven fake-demo target. Set `APP_REVIEW_TEACHER_TENANT_ID`, `APP_REVIEW_TEACHER_CENTER_ID`, `APP_REVIEW_TEACHER_CLASSROOM_ID`, and `APP_REVIEW_TEACHER_SOURCE_STAFF_ID` outside Git/chat, then run the same `--preflight` command again. Record its exact target and fresh `targetFingerprint`; do not authorize or run a mutation from the unfiltered candidate list alone.
+The candidate list is limited to the isolated demo tenant and designated synthetic school and validates the complete reviewer-visible center, classroom, roster, family, report, incident, message, document/media, and mock-financial graph. The September 8 read-only run found five eligible source profiles across two fake classrooms. Mia Patel in Toddler Hive is recommended because that classroom covers roster, daily-report, incident, and message states. Set `APP_REVIEW_TEACHER_TENANT_ID`, `APP_REVIEW_TEACHER_CENTER_ID`, `APP_REVIEW_TEACHER_CLASSROOM_ID`, and `APP_REVIEW_TEACHER_SOURCE_STAFF_ID` outside Git/chat, then run the same `--preflight` command again. Record its exact target and fresh `targetFingerprint`; do not authorize or run a mutation from the unfiltered candidate list alone.
 
-The fingerprint also binds the exact review email. The command stages the application user and grant inactive, updates and verifies Auth, then revalidates the exact demo scope before activation; an interrupted or failed run leaves the staged account inactive for a safe retry. Obtain exact authorization covering that email, every listed production change, and the preflighted target. Only then set `APP_REVIEW_TEACHER_TARGET_FINGERPRINT` and `APP_REVIEW_TEACHER_PASSWORD` outside Git/chat and run `npm run app-review:teacher:ensure -- --confirm-teacher-app-review-account`.
+The fingerprint binds the exact review email, synthetic center, source profile, and full reachable classroom graph. The command stages the application user and grant inactive, adds the review Staff marker, recomputes the post-staging graph fingerprint, updates and verifies Auth, revokes stale device sessions, deactivates stale web-push subscriptions, then revalidates the exact demo scope before activation; an interrupted or failed run leaves the staged account inactive for a safe retry. Obtain exact authorization covering that email, every listed production change, and the preflighted target. Only then set `APP_REVIEW_TEACHER_TARGET_FINGERPRINT` and `APP_REVIEW_TEACHER_PASSWORD` outside Git/chat and run `npm run app-review:teacher:ensure -- --confirm-teacher-app-review-account`.
 
 Verify the login, Teacher role, demo tenant, demo school, assigned fake classroom, and absence of real child/staff data before copying credentials to App Store Connect. Rotate or disable the account after review.
 

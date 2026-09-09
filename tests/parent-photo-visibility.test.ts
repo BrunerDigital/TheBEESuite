@@ -53,8 +53,8 @@ test("permitted parent-share uploads go live while restricted uploads enter revi
   const parentPage = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const dashboardPage = readFileSync("src/app/dashboard/page.tsx", "utf8");
 
-  assert.match(teacherMediaRoute, /if \(sharedWithParents && centerId\)/);
-  assert.match(teacherMediaRoute, /if \(shareState\.sharedWithParents\)/);
+  assert.match(teacherMediaRoute, /else if \(!appReviewKind && sharedWithParents && centerId\)/);
+  assert.match(teacherMediaRoute, /if \(!appReviewKind && shareState\.sharedWithParents\)/);
   assert.match(teacherMediaRoute, /Photo needs parent permission review/);
   assert.match(parentPage, /status: \{ in: \["director_review", "permission_review"\] \}/);
   assert.match(dashboardPage, /status: \{ in: \["director_review", "permission_review"\] \}/);

@@ -22,6 +22,7 @@ import {
   FileCheck2,
   FileText,
   Home,
+  Info,
   KeyRound,
   LifeBuoy,
   LoaderCircle,
@@ -354,6 +355,8 @@ type Props = {
     };
   } | null;
   checkoutReadiness?: StripeCheckoutReadiness;
+  paymentsReadOnly?: boolean;
+  appReviewMode?: boolean;
   paymentTransitionActive?: boolean;
   paymentMethodReauthorizationRequired?: boolean;
   paymentMethodReauthorizationPreservesAutopay?: boolean;
@@ -765,6 +768,8 @@ function ParentPortalWorkspaceView({
   paymentContinuityAccess = false,
   billingAccount,
   checkoutReadiness = fallbackCheckoutReadiness,
+  paymentsReadOnly = false,
+  appReviewMode = false,
   paymentTransitionActive = false,
   paymentMethodReauthorizationRequired = false,
   paymentMethodReauthorizationPreservesAutopay = false,
@@ -935,6 +940,10 @@ function ParentPortalWorkspaceView({
 
   function saveTuitionCadence(child: Child) {
     if (previewOnly()) return;
+    if (appReviewMode) {
+      setError("Tuition billing changes are disabled in the App Review demo workspace.");
+      return;
+    }
     if (!family) {
       setError("Choose a linked family before changing the billing cycle.");
       return;
@@ -1041,11 +1050,15 @@ function ParentPortalWorkspaceView({
       return true;
     });
   }, [autopayEnableRequirements]);
-  const autopayUnavailable = paymentContinuityAccess;
+  const autopayUnavailable = paymentContinuityAccess || paymentsReadOnly;
   const canReplaceSavedPaymentMethod = !paymentContinuityAccess && !autopayUnavailable;
-  const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
-  const checkoutBlockedMessage =
-    "Online payments are temporarily unavailable. Please contact your school if you need help.";
+  const checkoutBlocked = paymentsReadOnly || !checkoutReadiness.canAcceptParentPayments;
+  const checkoutBlockedMessage = paymentsReadOnly
+    ? "Payments and payment-method changes are disabled in the App Review demo workspace."
+    : "Online payments are temporarily unavailable. Please contact your school if you need help.";
+  const autopayUnavailableMessage = paymentsReadOnly
+    ? "Payment-method and autopay changes are disabled in the App Review demo workspace."
+    : "Autopay is unavailable for a past family account. One-time payments remain available.";
   const currentGuardian = useMemo(() => {
     if (!family) return null;
     return (
@@ -1577,6 +1590,7 @@ function ParentPortalWorkspaceView({
     paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default",
   ) {
     if (previewOnly()) return;
+    if (paymentsReadOnly) return showError(checkoutBlockedMessage);
     if (!family)
       return showError(
         "A family profile is required before saving payment methods.",
@@ -1692,6 +1706,9 @@ function ParentPortalWorkspaceView({
 
   function updateProfilePassword() {
     if (previewOnly()) return;
+    if (appReviewMode) {
+      return showError("Password changes are disabled for the shared App Review account.");
+    }
     setPasswordConfirmation("");
     if (!currentPassword || !newPassword)
       return showError("Enter your current password and a new password.");
@@ -2587,10 +2604,20 @@ function ParentPortalWorkspaceView({
       ) : null}
 
       {activeView === "family" && activeFamilySection === "check-in" ? (
-        <ParentKioskCredentialPanel
-          initialCredentials={kioskCredentials}
-          previewMode={previewMode}
-        />
+        appReviewMode ? (
+          <Alert>
+            <Info aria-hidden="true" />
+            <AlertTitle>School kiosk PIN is protected</AlertTitle>
+            <AlertDescription>
+              The shared App Review account cannot create or change a pickup PIN. This keeps the demo credential reusable for every reviewer.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <ParentKioskCredentialPanel
+            initialCredentials={kioskCredentials}
+            previewMode={previewMode}
+          />
+        )
       ) : null}
 
       {activeView === "family" && activeFamilySection === "billing" ? (
@@ -2641,7 +2668,7 @@ function ParentPortalWorkspaceView({
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {autopayUnavailable
-                      ? "Autopay is unavailable for a past family account. One-time payments remain available."
+                      ? autopayUnavailableMessage
                       : paymentMethodReauthorizationRequired
                       ? "The prior saved method is protected but cannot be charged on the school's current payment account."
                       : autopayStatus === "enabled"
@@ -2913,7 +2940,7 @@ function ParentPortalWorkspaceView({
                     <div className="font-medium">Autopay</div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {autopayUnavailable
-                        ? "Autopay is unavailable for a past family account. One-time payments remain available."
+                        ? autopayUnavailableMessage
                         : paymentMethodReauthorizationRequired
                         ? paymentMethodReauthorizationPreservesAutopay
                           ? "Autopay is paused only until Stripe confirms the replacement method, then your existing consent resumes. You do not need to turn it on again."
@@ -3005,7 +3032,16 @@ function ParentPortalWorkspaceView({
                 )}
               </div>
             </div>
-            {family.children.some(
+            {appReviewMode ? (
+              <Alert>
+                <Info aria-hidden="true" />
+                <AlertTitle>Billing settings are read-only</AlertTitle>
+                <AlertDescription>
+                  The App Review workspace shows synthetic tuition and invoice history, but cannot change the family billing cycle or start a payment.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {!appReviewMode && family.children.some(
               (child) =>
                 child.tuitionAssignment?.enabled &&
                 child.tuitionAssignment.cadence !== "monthly" &&
@@ -4484,13 +4520,22 @@ function ParentPortalWorkspaceView({
               </div>
               </div>
             </details>
-            {passwordConfirmation ? (
+            {!appReviewMode && passwordConfirmation ? (
               <Alert className="border-emerald-500/30 bg-emerald-500/10">
                 <CheckCircle2 />
                 <AlertTitle>Password changed</AlertTitle>
                 <AlertDescription>{passwordConfirmation}</AlertDescription>
               </Alert>
             ) : null}
+            {appReviewMode ? (
+              <Alert>
+                <Info aria-hidden="true" />
+                <AlertTitle>Shared review sign-in is protected</AlertTitle>
+                <AlertDescription>
+                  Password changes are disabled for this App Review account so the supplied reviewer credential remains available.
+                </AlertDescription>
+              </Alert>
+            ) : (
             <details className="group rounded-2xl border bg-background/40">
               <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                 <KeyRound className="size-5 text-primary" aria-hidden="true" />
@@ -4583,6 +4628,7 @@ function ParentPortalWorkspaceView({
               </Button>
             </form>
             </details>
+            )}
             <div className="flex flex-col gap-3 rounded-xl border bg-background/40 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="font-medium">

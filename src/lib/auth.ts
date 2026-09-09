@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
 import { resolveWorkspaceBranding, type WorkspaceBranding } from "@/lib/brand-assets";
+import { appReviewRuntimeScopeIsValid } from "@/lib/app-review-runtime";
 import { isDemoAccountEmail } from "@/lib/demo-accounts";
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { defaultProfilePhotoUrlForRole, readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
@@ -320,6 +321,15 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
   if (!sessionMatchesCurrentVersion(session, user.sessionVersion)) return null;
   if (!(await sessionDeviceIsActive(session, user.tenantId))) return null;
   if (requiresPasswordResetGate(user) && !options.allowPasswordResetRequired) return null;
+  if (!await appReviewRuntimeScopeIsValid({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    tenantId: user.tenantId,
+    organizationId: user.organizationId,
+    customFields: user.customFields,
+    assignedClassroomId: user.staffProfile?.classroomId ?? null,
+  })) return null;
 
   const identityBrandName =
     user.organization?.brand?.settings?.brandName ??
@@ -440,7 +450,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     email: user.email,
   });
 
-  return {
+  const currentUser: CurrentUser = {
     id: user.id,
     tenantId: selectedPlatformCenter?.organization.tenantId ?? user.tenantId,
     email: user.email,
@@ -469,6 +479,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     }),
     workspace,
   };
+  return currentUser;
 }
 
 async function resolveAccessGrantCenterIds(

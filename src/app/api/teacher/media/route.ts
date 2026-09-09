@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { canAccessAllCenters, canAccessCenter, canManageChildInClassroom, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
@@ -25,6 +26,7 @@ async function POSTHandler(request: NextRequest) {
   if (!canManageClassroomTasks(user)) {
     return NextResponse.json({ ok: false, error: "Photo sharing is not allowed for this role." }, { status: 403 });
   }
+  const appReviewKind = appReviewReservedIdentityKind(user.email);
 
   const contentType = request.headers.get("content-type") || "";
   let childId = "";
@@ -62,6 +64,12 @@ async function POSTHandler(request: NextRequest) {
   const uploadGuard = validateMediaUploadInput({ hasUploadedFile: Boolean(uploadedFile), photoUrl });
   if (!uploadGuard.ok) {
     return NextResponse.json({ ok: false, error: uploadGuard.error }, { status: uploadGuard.status });
+  }
+  if (appReviewKind && !uploadedFile) {
+    return NextResponse.json(
+      { ok: false, error: "Choose a photo file to add it to the isolated App Review demo workspace." },
+      { status: 400 },
+    );
   }
 
   const child = await prisma.child.findUnique({
@@ -124,6 +132,7 @@ async function POSTHandler(request: NextRequest) {
         centerId,
         classroomId: child.classroom?.id ?? null,
         childId,
+        appReviewDemo: Boolean(appReviewKind),
       });
       photoUrl = upload.recordUrl;
       storageKey = upload.storageKey;
@@ -155,7 +164,7 @@ async function POSTHandler(request: NextRequest) {
   });
   const responseMedia = storageKey ? { ...media, url: await createChildMediaSignedUrl(storageKey).catch(() => media.url) } : media;
 
-  if (shareState.sharedWithParents) {
+  if (!appReviewKind && shareState.sharedWithParents) {
     const notifications = buildParentPhotoNotifications({
       mediaId: media.id,
       childName: child.fullName,
@@ -165,7 +174,7 @@ async function POSTHandler(request: NextRequest) {
     if (notifications.length) {
       await prisma.notification.createMany({ data: notifications, skipDuplicates: true });
     }
-  } else if (sharedWithParents && centerId) {
+  } else if (!appReviewKind && sharedWithParents && centerId) {
     const directors = await getCenterLeadershipUsers({
       centerId,
       excludeUserId: user.id,
@@ -197,6 +206,7 @@ async function POSTHandler(request: NextRequest) {
       sharedWithParents: shareState.sharedWithParents,
       photoVideoPermission: child.photoVideoPermission,
       storageProvider: storageKey ? "supabase" : "external_url",
+      appReviewOutboundSuppressed: Boolean(appReviewKind),
       custodyWarning: hasCustodyWarning(child.family),
     },
   });

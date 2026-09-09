@@ -1,10 +1,16 @@
 import "./load-env";
 import { Prisma, UserRole } from "@prisma/client";
 import {
+  appReviewCenterScopeSelect,
+  appReviewCenterScopeViolation,
+  appReviewFamilyScopeSelect,
+  appReviewFamilyScopeViolation,
+  appReviewScopeDigest,
   assertAppReviewTargetFingerprint,
   buildAppReviewTargetFingerprint,
 } from "@/lib/app-review-targeting";
 import { parentPortalLinkedFields } from "@/lib/parent-portal-logins";
+import { removeProfilePhotoCustomFields } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
 import {
   SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID,
@@ -43,6 +49,65 @@ function mergeCustomFields(value: unknown, patch: Prisma.InputJsonObject) {
   } as Prisma.InputJsonObject;
 }
 
+const reviewGuardianLinkSelect = {
+  id: true,
+  familyId: true,
+  userId: true,
+  sourceSystem: true,
+  externalId: true,
+  checkInPinHash: true,
+  checkInPinSetAt: true,
+  checkInPinSetById: true,
+  customFields: true,
+  family: {
+    select: {
+      id: true,
+      centerId: true,
+      sourceSystem: true,
+      externalId: true,
+      customFields: true,
+    },
+  },
+} as const satisfies Prisma.GuardianSelect;
+
+type ReviewGuardianLink = Prisma.GuardianGetPayload<{ select: typeof reviewGuardianLinkSelect }>;
+
+function reviewGuardianLinkViolation(input: {
+  links: ReviewGuardianLink[];
+  familyId: string;
+  centerId?: string;
+  expectedGuardianId?: string;
+  requireOne: boolean;
+  allowVerifiedDemoFamilyReassignment?: boolean;
+}) {
+  if (!input.requireOne && input.links.length === 0) return null;
+  if (input.links.length !== 1) return "the review user must have exactly one Guardian relationship";
+  const link = input.links[0];
+  const fields = asRecord(link.customFields);
+  const familyMatchesTarget = link.familyId === input.familyId;
+  const reassignmentIsSafe = input.allowVerifiedDemoFamilyReassignment === true
+    && Boolean(input.centerId)
+    && link.familyId === link.family.id
+    && link.family.centerId === input.centerId
+    && link.family.sourceSystem === DEMO_SOURCE
+    && Boolean(link.family.externalId)
+    && asRecord(link.family.customFields).demoWorkspace === true;
+  if (
+    (input.expectedGuardianId && link.id !== input.expectedGuardianId)
+    || (!familyMatchesTarget && !reassignmentIsSafe)
+    || link.sourceSystem !== APP_REVIEW_SOURCE
+    || link.externalId !== APP_REVIEW_GUARDIAN_EXTERNAL_ID
+    || fields.appReview !== true
+    || fields.seededBy !== SCRIPT_SOURCE
+    || link.checkInPinHash !== null
+    || link.checkInPinSetAt !== null
+    || link.checkInPinSetById !== null
+  ) {
+    return "the review user is linked to a non-review family, Guardian, or kiosk PIN";
+  }
+  return null;
+}
+
 function readTargetInput() {
   return {
     tenantId: process.env.APP_REVIEW_PARENT_TENANT_ID?.trim() || "",
@@ -60,6 +125,7 @@ function parentTargetFingerprint(input: {
   centerId: string;
   familyId: string;
   familyExternalId: string;
+  scopeDigest: string;
 }) {
   return buildAppReviewTargetFingerprint("parent", input);
 }
@@ -69,16 +135,8 @@ async function listParentTargets(email: string) {
     where: { sourceSystem: DEMO_SOURCE, centerId: { not: null } },
     orderBy: [{ centerId: "asc" }, { id: "asc" }],
     select: {
-      id: true,
+      ...appReviewFamilyScopeSelect,
       name: true,
-      centerId: true,
-      externalId: true,
-      children: {
-        select: {
-          sourceSystem: true,
-          classroom: { select: { centerId: true, sourceSystem: true } },
-        },
-      },
     },
   });
   const centerIds = [...new Set(families.flatMap((family) => family.centerId ? [family.centerId] : []))];
@@ -90,32 +148,21 @@ async function listParentTargets(email: string) {
       status: { notIn: ["closed", "archived", "inactive"] },
       organization: { tenant: { slug: SYNTHETIC_ROLE_QA_TENANT_SLUG } },
     },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      sourceSystem: true,
-      externalId: true,
-      organizationId: true,
-      organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
-    },
+    select: appReviewCenterScopeSelect,
   });
   const centersById = new Map(centers.map((center) => [center.id, center] as const));
 
   return families.flatMap((family) => {
-    if (
-      !family.centerId ||
-      !family.externalId ||
-      family.children.length === 0 ||
-      family.children.some((child) =>
-        child.sourceSystem !== DEMO_SOURCE ||
-        Boolean(child.classroom && (
-          child.classroom.centerId !== family.centerId || child.classroom.sourceSystem !== DEMO_SOURCE
-        ))
-      )
-    ) return [];
+    if (!family.centerId || !family.externalId) return [];
     const center = centersById.get(family.centerId);
-    if (!center) return [];
+    if (!center || appReviewCenterScopeViolation({
+      center,
+      tenantId: center.organization.tenantId,
+    }) || appReviewFamilyScopeViolation({
+      family,
+      centerId: center.id,
+      tenantId: center.organization.tenantId,
+    })) return [];
     const target = {
       email,
       tenantId: center.organization.tenantId,
@@ -123,11 +170,22 @@ async function listParentTargets(email: string) {
       centerId: center.id,
       familyId: family.id,
       familyExternalId: family.externalId,
+      scopeDigest: appReviewScopeDigest({ center, family }),
     };
     return [{
       ...target,
       centerName: center.name,
       familyName: family.name,
+      reviewDataSummary: {
+        children: family.children.length,
+        dailyReports: family.children.reduce((total, child) => total + child.dailyReports.length, 0),
+        incidents: family.children.reduce((total, child) => total + child.incidents.length, 0),
+        media: family.children.reduce((total, child) => total + child.media.length, 0),
+        documents: family.documents.length + family.children.reduce((total, child) => total + child.documents.length, 0),
+        messages: family.messages.length,
+        invoices: family.billingAccount?.invoices.length ?? 0,
+        payments: family.billingAccount?.payments.length ?? 0,
+      },
       targetFingerprint: parentTargetFingerprint(target),
     }];
   });
@@ -217,14 +275,14 @@ async function main() {
 
   const family = await prisma.family.findUnique({
     where: { id: target.familyId },
-    include: {
+    select: {
+      ...appReviewFamilyScopeSelect,
+      name: true,
       children: {
         select: {
-          id: true,
+          ...appReviewFamilyScopeSelect.children.select,
           fullName: true,
           enrollmentStatus: true,
-          sourceSystem: true,
-          classroom: { select: { centerId: true, sourceSystem: true } },
         },
       },
     },
@@ -241,15 +299,7 @@ async function main() {
 
   const center = await prisma.center.findUnique({
     where: { id: family.centerId },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      sourceSystem: true,
-      externalId: true,
-      organizationId: true,
-      organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
-    },
+    select: appReviewCenterScopeSelect,
   });
 
   if (
@@ -259,20 +309,18 @@ async function main() {
     center.externalId !== SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID ||
     ["closed", "archived", "inactive"].includes(center.status.toLowerCase()) ||
     center.organization.tenant.slug !== SYNTHETIC_ROLE_QA_TENANT_SLUG ||
-    center.organization.tenantId !== target.tenantId
+    center.organization.tenantId !== target.tenantId ||
+    appReviewCenterScopeViolation({ center, tenantId: target.tenantId })
   ) {
     throw new Error("The exact Parent App Review center no longer matches the authorized tenant and center identifiers.");
   }
-  if (
-    family.children.length === 0 ||
-    family.children.some((child) =>
-      child.sourceSystem !== DEMO_SOURCE ||
-      Boolean(child.classroom && (
-        child.classroom.centerId !== center.id || child.classroom.sourceSystem !== DEMO_SOURCE
-      ))
-    )
-  ) {
-    throw new Error("The exact Parent App Review family is empty or contains a child outside the isolated demo school.");
+  const familyScopeViolation = appReviewFamilyScopeViolation({
+    family,
+    centerId: center.id,
+    tenantId: center.organization.tenantId,
+  });
+  if (familyScopeViolation) {
+    throw new Error(`The exact Parent App Review family is not isolated fake data: ${familyScopeViolation}.`);
   }
 
   const expectedFingerprint = parentTargetFingerprint({
@@ -282,7 +330,9 @@ async function main() {
     centerId: center.id,
     familyId: family.id,
     familyExternalId: family.externalId,
+    scopeDigest: appReviewScopeDigest({ center, family }),
   });
+  const expectedScopeDigest = appReviewScopeDigest({ center, family });
 
   if (preflight) {
     console.log(JSON.stringify({
@@ -381,6 +431,22 @@ async function main() {
   if (existingGuardian?.userId && existingGuardian.userId !== existingUser?.id) {
     throw new Error("The Parent App Review Guardian marker is linked to a different application user.");
   }
+  if (existingUser) {
+    const links = await prisma.guardian.findMany({
+      where: { userId: existingUser.id },
+      select: reviewGuardianLinkSelect,
+      take: 2,
+    });
+    const violation = reviewGuardianLinkViolation({
+      links,
+      familyId: target.familyId,
+      centerId: target.centerId,
+      expectedGuardianId: existingGuardian?.id,
+      requireOne: false,
+      allowVerifiedDemoFamilyReassignment: true,
+    });
+    if (violation) throw new Error(`The existing Parent App Review identity is unsafe: ${violation}.`);
+  }
 
   const existingAuthUser = await getSupabaseAuthUserMetadataByEmail(email);
   if (existingAuthUser && (
@@ -394,40 +460,29 @@ async function main() {
   const staged = await prisma.$transaction(async (tx) => {
     const currentFamily = await tx.family.findUnique({
       where: { id: target.familyId },
-      select: {
-        sourceSystem: true,
-        externalId: true,
-        centerId: true,
-        children: {
-          select: {
-            sourceSystem: true,
-            classroom: { select: { centerId: true, sourceSystem: true } },
-          },
-        },
-      },
+      select: appReviewFamilyScopeSelect,
     });
     const currentCenter = await tx.center.findUnique({
       where: { id: target.centerId },
-      select: {
-        status: true,
-        sourceSystem: true,
-        externalId: true,
-        organizationId: true,
-        organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
-      },
+      select: appReviewCenterScopeSelect,
     });
+    const currentFamilyScopeViolation = currentFamily
+      ? appReviewFamilyScopeViolation({ family: currentFamily, centerId: target.centerId, tenantId: target.tenantId })
+      : "family is missing";
+    const currentCenterScopeViolation = currentCenter
+      ? appReviewCenterScopeViolation({ center: currentCenter, tenantId: target.tenantId })
+      : "center is missing";
+    const currentScopeDigest = currentFamily && currentCenter
+      ? appReviewScopeDigest({ center: currentCenter, family: currentFamily })
+      : null;
     if (
       !currentFamily?.centerId ||
       currentFamily.sourceSystem !== DEMO_SOURCE ||
       currentFamily.externalId !== target.familyExternalId ||
       currentFamily.centerId !== target.centerId ||
-      currentFamily.children.length === 0 ||
-      currentFamily.children.some((child) =>
-        child.sourceSystem !== DEMO_SOURCE ||
-        Boolean(child.classroom && (
-          child.classroom.centerId !== target.centerId || child.classroom.sourceSystem !== DEMO_SOURCE
-        ))
-      ) ||
+      currentFamilyScopeViolation ||
+      currentCenterScopeViolation ||
+      currentScopeDigest !== expectedScopeDigest ||
       !currentCenter ||
       currentCenter.sourceSystem !== DEMO_SOURCE ||
       currentCenter.externalId !== SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID ||
@@ -497,8 +552,24 @@ async function main() {
     if (currentGuardian?.userId && currentGuardian.userId !== currentUser?.id) {
       throw new Error("The Parent App Review Guardian marker is linked to a different application user.");
     }
+    if (currentUser) {
+      const currentLinks = await tx.guardian.findMany({
+        where: { userId: currentUser.id },
+        select: reviewGuardianLinkSelect,
+        take: 2,
+      });
+      const violation = reviewGuardianLinkViolation({
+        links: currentLinks,
+        familyId: target.familyId,
+        centerId: target.centerId,
+        expectedGuardianId: currentGuardian?.id,
+        requireOne: false,
+        allowVerifiedDemoFamilyReassignment: true,
+      });
+      if (violation) throw new Error(`The existing Parent App Review identity is unsafe: ${violation}.`);
+    }
 
-    const userFields = mergeCustomFields(currentUser?.customFields, {
+    const userFields = mergeCustomFields(removeProfilePhotoCustomFields(currentUser?.customFields), {
       appReview: true,
       seededBy: SCRIPT_SOURCE,
     });
@@ -526,6 +597,16 @@ async function main() {
       select: { id: true },
     });
 
+    const revokedAt = new Date();
+    await tx.webPushSubscription.updateMany({
+      where: { userId: user.id, isActive: true },
+      data: { isActive: false, lastSeenAt: revokedAt },
+    });
+    await tx.deviceSession.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt, revokedById: user.id },
+    });
+
     const guardianFields = mergeCustomFields(currentGuardian?.customFields, {
       appReview: true,
       seededBy: SCRIPT_SOURCE,
@@ -542,6 +623,9 @@ async function main() {
             relation: "Parent / Guardian",
             preferredCommunication: "Email + portal notification",
             isBillingContact: true,
+            checkInPinHash: null,
+            checkInPinSetAt: null,
+            checkInPinSetById: null,
             customFields: guardianFields,
           },
           select: { id: true, customFields: true },
@@ -556,6 +640,9 @@ async function main() {
             relation: "Parent / Guardian",
             preferredCommunication: "Email + portal notification",
             isBillingContact: true,
+            checkInPinHash: null,
+            checkInPinSetAt: null,
+            checkInPinSetById: null,
             sourceSystem: APP_REVIEW_SOURCE,
             externalId: APP_REVIEW_GUARDIAN_EXTERNAL_ID,
             customFields: guardianFields,
@@ -567,6 +654,9 @@ async function main() {
       where: { id: guardian.id },
       data: {
         userId: user.id,
+        checkInPinHash: null,
+        checkInPinSetAt: null,
+        checkInPinSetById: null,
         customFields: parentPortalLinkedFields({
           customFields: guardian.customFields,
           loginEmail: email,
@@ -582,7 +672,32 @@ async function main() {
       centerId: center.id,
       isActive: false,
     });
-    return { userId: user.id, guardianId: guardian.id, accessGrantId: grant.id };
+    const [stagedGuardianLinks, stagedFamily, stagedCenter] = await Promise.all([
+      tx.guardian.findMany({ where: { userId: user.id }, select: reviewGuardianLinkSelect, take: 2 }),
+      tx.family.findUnique({ where: { id: target.familyId }, select: appReviewFamilyScopeSelect }),
+      tx.center.findUnique({ where: { id: target.centerId }, select: appReviewCenterScopeSelect }),
+    ]);
+    const stagedLinkViolation = reviewGuardianLinkViolation({
+      links: stagedGuardianLinks,
+      familyId: target.familyId,
+      expectedGuardianId: guardian.id,
+      requireOne: true,
+    });
+    const stagedFamilyViolation = stagedFamily
+      ? appReviewFamilyScopeViolation({ family: stagedFamily, centerId: target.centerId, tenantId: target.tenantId })
+      : "family is missing";
+    const stagedCenterViolation = stagedCenter
+      ? appReviewCenterScopeViolation({ center: stagedCenter, tenantId: target.tenantId })
+      : "center is missing";
+    if (!stagedFamily || !stagedCenter || stagedLinkViolation || stagedFamilyViolation || stagedCenterViolation) {
+      throw new Error("Parent App Review inactive staging revalidation failed.");
+    }
+    return {
+      userId: user.id,
+      guardianId: guardian.id,
+      accessGrantId: grant.id,
+      scopeDigest: appReviewScopeDigest({ center: stagedCenter, family: stagedFamily }),
+    };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   const authUserBeforeWrite = await getSupabaseAuthUserMetadataByEmail(email);
@@ -614,14 +729,24 @@ async function main() {
   }
 
   await prisma.$transaction(async (tx) => {
-    const [activationUser, activationGuardian, activationGrant, activationFamily, activationCenter, activeOtherGrantCount] = await Promise.all([
+    const [
+      activationUser,
+      activationGuardianLinks,
+      activationGrant,
+      activationFamily,
+      activationCenter,
+      activeOtherGrantCount,
+      activePushSubscriptionCount,
+      unrevokedDeviceSessionCount,
+    ] = await Promise.all([
       tx.user.findUnique({
         where: { id: staged.userId },
         select: { email: true, tenantId: true, organizationId: true, role: true, isActive: true, customFields: true },
       }),
-      tx.guardian.findUnique({
-        where: { id: staged.guardianId },
-        select: { userId: true, familyId: true, sourceSystem: true, externalId: true },
+      tx.guardian.findMany({
+        where: { userId: staged.userId },
+        select: reviewGuardianLinkSelect,
+        take: 2,
       }),
       tx.userAccessGrant.findUnique({
         where: { id: staged.accessGrantId },
@@ -639,33 +764,35 @@ async function main() {
       }),
       tx.family.findUnique({
         where: { id: target.familyId },
-        select: {
-          centerId: true,
-          sourceSystem: true,
-          externalId: true,
-          children: {
-            select: {
-              sourceSystem: true,
-              classroom: { select: { centerId: true, sourceSystem: true } },
-            },
-          },
-        },
+        select: appReviewFamilyScopeSelect,
       }),
       tx.center.findUnique({
         where: { id: target.centerId },
-        select: {
-          status: true,
-          sourceSystem: true,
-          externalId: true,
-          organizationId: true,
-          organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
-        },
+        select: appReviewCenterScopeSelect,
       }),
       tx.userAccessGrant.count({
         where: { userId: staged.userId, isActive: true, id: { not: staged.accessGrantId } },
       }),
+      tx.webPushSubscription.count({ where: { userId: staged.userId, isActive: true } }),
+      tx.deviceSession.count({ where: { userId: staged.userId, revokedAt: null } }),
     ]);
 
+    const activationFamilyScopeViolation = activationFamily
+      ? appReviewFamilyScopeViolation({ family: activationFamily, centerId: target.centerId, tenantId: target.tenantId })
+      : "family is missing";
+    const activationGuardianLinkViolation = reviewGuardianLinkViolation({
+      links: activationGuardianLinks,
+      familyId: target.familyId,
+      expectedGuardianId: staged.guardianId,
+      requireOne: true,
+    });
+    const activationCenterScopeViolation = activationCenter
+      ? appReviewCenterScopeViolation({ center: activationCenter, tenantId: target.tenantId })
+      : "center is missing";
+    const activationScopeDigest = activationFamily && activationCenter
+      ? appReviewScopeDigest({ center: activationCenter, family: activationFamily })
+      : null;
+    const activationGuardian = activationGuardianLinks[0];
     if (
       !activationUser ||
       activationUser.email !== email ||
@@ -676,6 +803,7 @@ async function main() {
       asRecord(activationUser.customFields).appReview !== true ||
       asRecord(activationUser.customFields).seededBy !== SCRIPT_SOURCE ||
       !activationGuardian ||
+      activationGuardianLinkViolation ||
       activationGuardian.userId !== staged.userId ||
       activationGuardian.familyId !== target.familyId ||
       activationGuardian.sourceSystem !== APP_REVIEW_SOURCE ||
@@ -691,17 +819,15 @@ async function main() {
       activationGrant.startsAt !== null ||
       activationGrant.endsAt !== null ||
       activeOtherGrantCount !== 0 ||
+      activePushSubscriptionCount !== 0 ||
+      unrevokedDeviceSessionCount !== 0 ||
       !activationFamily ||
       activationFamily.centerId !== target.centerId ||
       activationFamily.sourceSystem !== DEMO_SOURCE ||
       activationFamily.externalId !== target.familyExternalId ||
-      activationFamily.children.length === 0 ||
-      activationFamily.children.some((child) =>
-        child.sourceSystem !== DEMO_SOURCE ||
-        Boolean(child.classroom && (
-          child.classroom.centerId !== target.centerId || child.classroom.sourceSystem !== DEMO_SOURCE
-        ))
-      ) ||
+      activationFamilyScopeViolation ||
+      activationCenterScopeViolation ||
+      activationScopeDigest !== staged.scopeDigest ||
       !activationCenter ||
       activationCenter.sourceSystem !== DEMO_SOURCE ||
       activationCenter.externalId !== SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID ||

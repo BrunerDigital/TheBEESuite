@@ -8,6 +8,7 @@ import {
   appReviewFamilyScopeViolation,
   appReviewIdentityKind,
   appReviewReservedIdentityKind,
+  appReviewTeacherStaffMarkerIsValid,
 } from "@/lib/app-review-targeting";
 import { prisma } from "@/lib/prisma";
 
@@ -96,6 +97,9 @@ export async function appReviewRuntimeScopeIsValid(input: RuntimeReviewUser) {
       select: {
         centerId: true,
         classroomId: true,
+        sourceSystem: true,
+        externalId: true,
+        customFields: true,
         classroom: { select: appReviewClassroomRosterSelect },
         center: { select: appReviewCenterScopeSelect },
       },
@@ -104,6 +108,7 @@ export async function appReviewRuntimeScopeIsValid(input: RuntimeReviewUser) {
       profile?.classroom
       && input.role === UserRole.TEACHER
       && input.organizationId === profile.center.organizationId
+      && appReviewTeacherStaffMarkerIsValid(profile)
       && input.assignedClassroomId === profile.classroom.id
       && profile.classroomId === profile.classroom.id
       && profile.centerId === profile.center.id

@@ -13,6 +13,7 @@ import {
   appReviewFamilyScopeViolation,
   appReviewIdentityKind,
   appReviewReservedIdentityKind,
+  appReviewTeacherStaffMarkerIsValid,
   assertAppReviewTargetFingerprint,
   buildAppReviewTargetFingerprint,
 } from "@/lib/app-review-targeting";
@@ -290,6 +291,24 @@ test("App Review identity and center guards require the exact reserved synthetic
     appReviewCenterScopeViolation({ center: liveProviderCenter, tenantId: "tenant-demo" }) ?? "",
     /live provider identifier/,
   );
+});
+
+test("App Review Teacher runtime marker rejects generic demo or stale kiosk state", () => {
+  const marker = {
+    sourceSystem: APP_REVIEW_TEACHER_CONTACT.sourceSystem,
+    externalId: APP_REVIEW_TEACHER_CONTACT.externalId,
+    customFields: { appReview: true, seededBy: APP_REVIEW_TEACHER_CONTACT.seededBy },
+  };
+  assert.equal(appReviewTeacherStaffMarkerIsValid(marker), true);
+  assert.equal(appReviewTeacherStaffMarkerIsValid({
+    ...marker,
+    sourceSystem: "bee_suite_demo",
+    customFields: { demoWorkspace: true },
+  }), false);
+  assert.equal(appReviewTeacherStaffMarkerIsValid({
+    ...marker,
+    customFields: { ...marker.customFields, staffKioskPinHash: "stale-review-pin" },
+  }), false);
 });
 
 test("App Review family scope accepts only the isolated synthetic relationship graph", () => {

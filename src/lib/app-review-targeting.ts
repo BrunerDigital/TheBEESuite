@@ -536,6 +536,22 @@ export function appReviewIdentityKind(user: {
   return null;
 }
 
+export function appReviewTeacherStaffMarkerIsValid(staff: {
+  sourceSystem: string | null;
+  externalId: string | null;
+  customFields: unknown;
+}) {
+  const staffFields = jsonRecord(staff.customFields);
+  return staff.sourceSystem === APP_REVIEW_TEACHER_CONTACT.sourceSystem
+    && staff.externalId === APP_REVIEW_TEACHER_CONTACT.externalId
+    && staffFields.appReview === true
+    && staffFields.seededBy === APP_REVIEW_TEACHER_CONTACT.seededBy
+    && !staffFields.staffKioskPinHash
+    && !staffFields.staffKioskPinSetAt
+    && !staffFields.staffKioskPinSetById
+    && !staffFields.timeClock;
+}
+
 export function appReviewReservedIdentityKind(email: string): AppReviewTargetKind | null {
   const normalized = email.trim().toLowerCase();
   if (normalized === APP_REVIEW_PARENT_CONTACT.email) return "parent";
@@ -561,22 +577,14 @@ function isAllowedReviewTeacherStaff(
   staff: AppReviewClassroomRoster["staff"][number],
   tenantId: string,
 ) {
-  const staffFields = jsonRecord(staff.customFields);
-  return staff.sourceSystem === APP_REVIEW_TEACHER_CONTACT.sourceSystem
-    && staff.externalId === APP_REVIEW_TEACHER_CONTACT.externalId
-    && staffFields.appReview === true
-    && staffFields.seededBy === APP_REVIEW_TEACHER_CONTACT.seededBy
+  return appReviewTeacherStaffMarkerIsValid(staff)
     && staff.user.role === "TEACHER"
     && isAllowedReviewUser(staff.user, tenantId)
     && staff.user.staffProfile?.id === staff.id
     && staff.user.staffProfile.centerId === staff.centerId
     && staff.user.staffProfile.classroomId === staff.classroomId
     && staff.user.staffProfile.sourceSystem === APP_REVIEW_TEACHER_CONTACT.sourceSystem
-    && staff.user.staffProfile.externalId === APP_REVIEW_TEACHER_CONTACT.externalId
-    && !staffFields.staffKioskPinHash
-    && !staffFields.staffKioskPinSetAt
-    && !staffFields.staffKioskPinSetById
-    && !staffFields.timeClock;
+    && staff.user.staffProfile.externalId === APP_REVIEW_TEACHER_CONTACT.externalId;
 }
 
 const providerIdentifierPattern = /(?:^|[^a-z0-9])(?:acct|cus|pm|pi|seti|cs_(?:live|test)|ch|src|tok|sk_live|rk_live)_[a-z0-9_]+/i;

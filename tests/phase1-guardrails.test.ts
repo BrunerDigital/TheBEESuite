@@ -1644,6 +1644,7 @@ test("reserved App Review identities revalidate the complete graph at the shared
   assert.match(runtimeGuard, /guardianLinks\.length !== 1/);
   assert.match(runtimeGuard, /appReviewFamilyScopeViolation/);
   assert.match(runtimeGuard, /appReviewClassroomScopeViolation/);
+  assert.match(runtimeGuard, /appReviewTeacherStaffMarkerIsValid\(profile\)/);
   assert.match(runtimeGuard, /hasExactReviewGrant/);
   assert.match(livePage, /__no_app_review_announcements__/);
   assert.match(livePage, /__no_app_review_teacher_directory__/);

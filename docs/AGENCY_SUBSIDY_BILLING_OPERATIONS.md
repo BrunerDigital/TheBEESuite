@@ -1,10 +1,10 @@
 # Agency Payment And Reconciliation SOP - The BEE Suite
 
-Last updated: September 3, 2026
+Last updated: September 9, 2026
 
 Audience: school directors, assistant directors, billing administrators, accounting users, and launch support.
 
-Pre-release status: this document describes the expanded agency-ledger workflow shipped with PR #310. Until both production database migrations and the exact reviewed application commit are released and validated, the public SOP and production application remain on the baseline direct `Record remittance` workflow. A successful Vercel preview build does not prove that the expanded runtime is compatible with an unmigrated production schema.
+Production status: the expanded agency-ledger workflow code and all three reviewed database migrations are released and validated, including the September 9 child-scope guard repair. Per-school operational activation remains a separate business gate; schools that are not explicitly activated retain the baseline direct `Record remittance` workflow. A successful build or schema migration alone never activates a school.
 
 ## Purpose
 

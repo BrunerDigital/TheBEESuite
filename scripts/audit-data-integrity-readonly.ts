@@ -1,4 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { closedEnrollmentStatusValues } from "../src/lib/enrollment-status";
 
 type IntegrityCounts = {
   family_without_center: bigint;
@@ -41,6 +42,7 @@ async function main() {
   }
 
   const prisma = new PrismaClient();
+  const closedEnrollmentStatuses = Prisma.join(closedEnrollmentStatusValues());
   try {
     const rows = await prisma.$queryRaw<IntegrityCounts[]>`
       SELECT
@@ -176,6 +178,8 @@ async function main() {
       grantUserTenantMismatches,
       grantCenterTenantMismatches,
       duplicateGuardianSources,
+      duplicateFamilySources,
+      centerlessFamilySummaries,
       duplicateChildSources,
       childClassroomCenterPairs,
       staffClassroomCenterPairs,
@@ -269,6 +273,72 @@ async function main() {
         ) duplicates
         GROUP BY COALESCE(duplicates.source_system, 'manual')
         ORDER BY duplicate_groups DESC, source_system
+      `,
+      prisma.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT
+          COALESCE(duplicates.source_system, 'manual') AS source_system,
+          COUNT(*) AS duplicate_groups,
+          SUM(duplicates.record_count)::bigint AS records_in_groups
+        FROM (
+          SELECT
+            f."sourceSystem" AS source_system,
+            f."centerId",
+            f."externalId",
+            COUNT(*) AS record_count
+          FROM "Family" f
+          WHERE f."externalId" IS NOT NULL
+          GROUP BY f."sourceSystem", f."centerId", f."externalId"
+          HAVING COUNT(*) > 1
+        ) duplicates
+        GROUP BY COALESCE(duplicates.source_system, 'manual')
+        ORDER BY duplicate_groups DESC, source_system
+      `,
+      prisma.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT
+          COALESCE(f."sourceSystem", 'manual') AS source_system,
+          CASE
+            WHEN EXISTS (
+              SELECT 1
+              FROM "Child" ch
+              WHERE ch."familyId" = f."id"
+                AND REGEXP_REPLACE(LOWER(TRIM(COALESCE(ch."enrollmentStatus", ''))), '[^a-z0-9]+', '_', 'g')
+                  NOT IN (${closedEnrollmentStatuses})
+            ) THEN 'nonclosed_child_present'
+            WHEN EXISTS (
+              SELECT 1
+              FROM "BillingAccount" ba
+              JOIN "Invoice" i ON i."billingAccountId" = ba."id"
+              WHERE ba."familyId" = f."id" AND i."status" = 'OPEN'
+            ) THEN 'open_invoice_present'
+            WHEN EXISTS (
+              SELECT 1
+              FROM "BillingAccount" ba
+              WHERE ba."familyId" = f."id" AND ba."balanceCents" <> 0
+            ) THEN 'nonzero_balance_present'
+            WHEN LOWER(TRIM(COALESCE(f."externalId", ''))) LIKE 'merged:%'
+              OR NULLIF(TRIM(COALESCE(f."customFields"->>'mergedIntoFamilyId', '')), '') IS NOT NULL
+              THEN 'merged_archive'
+            WHEN LOWER(TRIM(COALESCE(f."externalId", ''))) LIKE 'archived:%'
+              OR NULLIF(TRIM(COALESCE(f."customFields"->>'archivedAt', '')), '') IS NOT NULL
+              OR NULLIF(TRIM(COALESCE(f."customFields"->>'archivedReason', '')), '') IS NOT NULL
+              THEN 'archived'
+            WHEN EXISTS (SELECT 1 FROM "Child" ch WHERE ch."familyId" = f."id")
+              THEN 'historical_child_present'
+            ELSE 'no_children'
+          END AS disposition,
+          COUNT(*) AS families,
+          COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM "Guardian" g WHERE g."familyId" = f."id")) AS families_with_guardians,
+          COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM "BillingAccount" ba WHERE ba."familyId" = f."id")) AS families_with_billing_accounts,
+          COUNT(*) FILTER (WHERE EXISTS (
+            SELECT 1
+            FROM "BillingAccount" ba
+            JOIN "Invoice" i ON i."billingAccountId" = ba."id"
+            WHERE ba."familyId" = f."id" AND i."status" = 'OPEN'
+          )) AS families_with_open_invoices
+        FROM "Family" f
+        WHERE f."centerId" IS NULL
+        GROUP BY source_system, disposition
+        ORDER BY families DESC, source_system, disposition
       `,
       prisma.$queryRaw<Array<Record<string, unknown>>>`
         SELECT
@@ -382,6 +452,8 @@ async function main() {
         staff_classroom_mismatches: staffClassroomMismatches,
         grant_user_tenant_mismatches: grantUserTenantMismatches,
         grant_center_tenant_mismatches: grantCenterTenantMismatches,
+        centerless_family_summaries: centerlessFamilySummaries,
+        duplicate_family_sources: duplicateFamilySources,
         duplicate_guardian_sources: duplicateGuardianSources,
         duplicate_child_sources: duplicateChildSources,
         child_classroom_center_pairs: childClassroomCenterPairs,

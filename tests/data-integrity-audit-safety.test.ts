@@ -10,6 +10,9 @@ test("data-integrity audit remains count-only and read-only", () => {
 
   assert.match(source, /mode:\s*"read_only_counts"/);
   assert.match(source, /prisma\.\$queryRaw/g);
+  assert.match(source, /LOWER\(TRIM\(COALESCE\(f\."externalId", ''\)\)\) LIKE 'archived:%'/);
+  assert.match(source, /REGEXP_REPLACE\(LOWER\(TRIM\(COALESCE\(ch\."enrollmentStatus", ''\)\)\), '\[\^a-z0-9\]\+', '_', 'g'\)/);
+  assert.match(source, /closedEnrollmentStatusValues\(\)/);
   assert.doesNotMatch(source, /\$(?:executeRaw|executeRawUnsafe|queryRawUnsafe)/);
   assert.doesNotMatch(source, /\b(?:INSERT|UPDATE|DELETE|TRUNCATE|ALTER|DROP)\b/i);
   assert.doesNotMatch(source, /\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildModuleGates, needsCurrentClassroomAssignment, parsePilotReadinessArgs, readinessStatus, selectSchoolIds } from "../scripts/pilot-readiness-check";
+import { buildModuleGates, isArchivedCenterlessFamily, needsCurrentClassroomAssignment, parsePilotReadinessArgs, readinessStatus, selectSchoolIds } from "../scripts/pilot-readiness-check";
 
 test("pilot readiness args enable machine-readable rollout reports", () => {
   assert.deepEqual(parsePilotReadinessArgs([]), {
@@ -36,6 +36,48 @@ test("classroom readiness applies only to currently enrolled children", () => {
   assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "waitlisted", classroomId: null }), false);
   assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "withdrawn", classroomId: null }), false);
   assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "enrolled", classroomId: "room-1" }), false);
+});
+
+test("centerless archived and merged families preserve history without blocking readiness", () => {
+  const inactive = { children: [], billingAccount: null };
+  assert.equal(isArchivedCenterlessFamily({ externalId: "merged:123", customFields: null, ...inactive }), true);
+  assert.equal(isArchivedCenterlessFamily({ externalId: "ARCHIVED:456", customFields: null, ...inactive }), true);
+  assert.equal(isArchivedCenterlessFamily({ externalId: "123", customFields: { mergedIntoFamilyId: "family-2" }, ...inactive }), true);
+  assert.equal(isArchivedCenterlessFamily({ externalId: null, customFields: { archivedReason: "duplicate" }, ...inactive }), true);
+  assert.equal(isArchivedCenterlessFamily({ externalId: "123", customFields: {}, ...inactive }), false);
+  assert.equal(isArchivedCenterlessFamily({ externalId: null, customFields: null, ...inactive }), false);
+  assert.equal(isArchivedCenterlessFamily({
+    externalId: "merged:123",
+    customFields: null,
+    children: [{ enrollmentStatus: "enrolled" }],
+    billingAccount: null,
+  }), false);
+  for (const enrollmentStatus of ["current", "pending", "summer_break", "unexpected_status"]) {
+    assert.equal(isArchivedCenterlessFamily({
+      externalId: "merged:123",
+      customFields: null,
+      children: [{ enrollmentStatus }],
+      billingAccount: null,
+    }), false);
+  }
+  assert.equal(isArchivedCenterlessFamily({
+    externalId: "merged:123",
+    customFields: null,
+    children: [{ enrollmentStatus: "withdrawn" }],
+    billingAccount: null,
+  }), true);
+  assert.equal(isArchivedCenterlessFamily({
+    externalId: "archived:123",
+    customFields: null,
+    children: [],
+    billingAccount: { balanceCents: 100, invoices: [] },
+  }), false);
+  assert.equal(isArchivedCenterlessFamily({
+    externalId: "archived:123",
+    customFields: null,
+    children: [],
+    billingAccount: { balanceCents: 0, invoices: [{ id: "invoice-1" }] },
+  }), false);
 });
 
 test("pilot readiness args support exact school selection and separate module gates", () => {

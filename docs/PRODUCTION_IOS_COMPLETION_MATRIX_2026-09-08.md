@@ -73,11 +73,11 @@ Director, executive, billing, and support experiences remain responsive web targ
 
 ## Production database repair held behind authorization
 
-Migration `20260908200500_agency_child_scope_guard_repair` fixes the alias used by `protect_agency_child_parent_scope()` and skips the guard when neither relationship field changes. It contains no data backfill. The SQL is mirrored in Prisma and Supabase migration directories and has a focused regression test. Applying it to production is intentionally excluded until exact confirmation because production migrations are an independent gate.
+Migration `20260908200500_agency_child_scope_guard_repair` fixes the alias used by `protect_agency_child_parent_scope()` and skips the guard when neither relationship field changes. It contains no data backfill. The exact SQL remains mirrored in Prisma and `supabase/held-migrations/`, outside Supabase's automatic deployment directory, and has a focused regression test. Applying it to production is intentionally excluded until exact confirmation because production migrations are an independent gate.
 
 ## Supabase migration-history reconciliation
 
-The first post-merge main check reported two remote Supabase migration versions missing from the local Supabase ledger directory. A read-only production query identified them as the already-applied agency receivable and reconciliation migrations. Their stored SQL matches the existing Prisma/Supabase mirrors exactly after newline normalization. This closeout renames only the two Supabase mirror files to the production-recorded versions (`20260908161144` and `20260908161154`) and updates local harness paths; Prisma history and SQL bytes remain unchanged. It does not execute SQL, alter the production ledger, or apply the held `20260908200500` repair.
+The first post-merge main check reported two remote Supabase migration versions missing from the local Supabase ledger directory. A read-only production query identified them as the already-applied agency receivable and reconciliation migrations. Their stored SQL matches the existing Prisma/Supabase mirrors exactly after newline normalization. This closeout renames only the two deployable Supabase mirror files to the production-recorded versions (`20260908161144` and `20260908161154`), moves the unapplied `20260908200500` repair to the explicit held directory, and updates local harness paths; Prisma history and all SQL bytes remain unchanged. It does not execute SQL, alter the production ledger, or authorize the held repair.
 
 ## Evidence rules for closeout
 

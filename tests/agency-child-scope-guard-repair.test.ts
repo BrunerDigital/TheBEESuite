@@ -4,9 +4,9 @@ import test from "node:test";
 
 const migrationName = "20260908200500_agency_child_scope_guard_repair";
 const prismaMigration = readFileSync(`prisma/migrations/${migrationName}/migration.sql`, "utf8");
-const supabaseMigration = readFileSync(`supabase/migrations/${migrationName}.sql`, "utf8");
+const supabaseMigration = readFileSync(`supabase/held-migrations/${migrationName}.sql`, "utf8");
 
-test("child agency parent-scope guard repair stays mirrored and forward-only", () => {
+test("held child agency parent-scope guard repair stays mirrored and forward-only", () => {
   assert.equal(supabaseMigration, prismaMigration);
   assert.match(prismaMigration, /CREATE OR REPLACE FUNCTION public\.protect_agency_child_parent_scope\(\)/);
   assert.doesNotMatch(prismaMigration, /(?:INSERT INTO|UPDATE|DELETE FROM)\s+public\."/);

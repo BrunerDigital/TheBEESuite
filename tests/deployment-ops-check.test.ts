@@ -42,3 +42,26 @@ test("deployment ops check rejects a Prisma migration missing from the Supabase 
   assert.equal(result.ok, false);
   assert.match(result.failures.join("\n"), /missing from the Supabase ledger.*20260721000000_missing/);
 });
+
+test("deployment ops check preserves an exact held mirror outside automatic Supabase deployment", () => {
+  const root = fixture();
+  mkdirSync(join(root, "prisma/migrations/20260721000000_held"), { recursive: true });
+  mkdirSync(join(root, "supabase/held-migrations"), { recursive: true });
+  writeFileSync(join(root, "prisma/migrations/20260721000000_held/migration.sql"), "SELECT 2;");
+  writeFileSync(join(root, "supabase/held-migrations/20260721000000_held.sql"), "SELECT 2;");
+
+  const result = inspectDeploymentOps(root);
+  assert.equal(result.ok, true);
+  assert.match(result.notes.join("\n"), /1 are explicitly held from automatic deployment/);
+});
+
+test("deployment ops check rejects a changed or simultaneously deployable held migration", () => {
+  const root = fixture();
+  mkdirSync(join(root, "supabase/held-migrations"), { recursive: true });
+  writeFileSync(join(root, "supabase/held-migrations/20260720000000_example.sql"), "SELECT 2;");
+
+  const result = inspectDeploymentOps(root);
+  assert.equal(result.ok, false);
+  assert.match(result.failures.join("\n"), /cannot be both deployable and held/);
+  assert.match(result.failures.join("\n"), /differs from its Prisma mirror/);
+});

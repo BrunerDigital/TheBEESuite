@@ -34,6 +34,7 @@ export function inspectDeploymentOps(root = workspaceRoot) {
 
   const migrationRoot = resolve(root, "prisma", "migrations");
   const supabaseMigrationRoot = resolve(root, "supabase", "migrations");
+  const heldSupabaseMigrationRoot = resolve(root, "supabase", "held-migrations");
   const migrations = readdirSync(migrationRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
@@ -44,19 +45,44 @@ export function inspectDeploymentOps(root = workspaceRoot) {
   }
 
   const migrationKey = (name) => name.replace(/\.sql$/, "").replace(/^\d+_/, "");
-  const supabaseMigrationKeys = new Set(
-    readdirSync(supabaseMigrationRoot, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".sql"))
-      .map((entry) => migrationKey(entry.name))
-  );
-  const missingSupabaseMirrors = migrations.filter((migration) => !supabaseMigrationKeys.has(migrationKey(migration)));
+  const supabaseMigrations = readdirSync(supabaseMigrationRoot, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".sql"))
+    .map((entry) => entry.name);
+  const heldSupabaseMigrations = existsSync(heldSupabaseMigrationRoot)
+    ? readdirSync(heldSupabaseMigrationRoot, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.endsWith(".sql"))
+        .map((entry) => entry.name)
+    : [];
+  const supabaseMigrationKeys = new Set(supabaseMigrations.map(migrationKey));
+  const heldSupabaseMigrationKeys = new Set(heldSupabaseMigrations.map(migrationKey));
+  const mirroredMigrationKeys = new Set([...supabaseMigrationKeys, ...heldSupabaseMigrationKeys]);
+  const missingSupabaseMirrors = migrations.filter((migration) => !mirroredMigrationKeys.has(migrationKey(migration)));
   if (missingSupabaseMirrors.length) {
     failures.push(`Prisma migrations missing from the Supabase ledger: ${missingSupabaseMirrors.join(", ")}`);
+  }
+
+  const deployedAndHeld = [...heldSupabaseMigrationKeys].filter((key) => supabaseMigrationKeys.has(key));
+  if (deployedAndHeld.length) {
+    failures.push(`Supabase migrations cannot be both deployable and held: ${deployedAndHeld.join(", ")}`);
+  }
+  for (const heldMigration of heldSupabaseMigrations) {
+    const key = migrationKey(heldMigration);
+    const prismaMigration = migrations.find((migration) => migrationKey(migration) === key);
+    if (!prismaMigration) {
+      failures.push(`held Supabase migration has no Prisma mirror: ${heldMigration}`);
+      continue;
+    }
+    const prismaBytes = readFileSync(resolve(migrationRoot, prismaMigration, "migration.sql"));
+    const heldBytes = readFileSync(resolve(heldSupabaseMigrationRoot, heldMigration));
+    if (!prismaBytes.equals(heldBytes)) {
+      failures.push(`held Supabase migration differs from its Prisma mirror: ${heldMigration}`);
+    }
   }
 
   notes.push(`${implemented.length} cron handlers match ${configured.length} configured cron paths.`);
   notes.push(`${migrations.length} Prisma migration directories contain migration.sql files.`);
   notes.push(`${migrations.length - missingSupabaseMirrors.length} Prisma migrations have a Supabase ledger mirror.`);
+  notes.push(`${supabaseMigrations.length} Supabase migrations are deployable and ${heldSupabaseMigrations.length} are explicitly held from automatic deployment.`);
   notes.push("This static check does not query a database, apply migrations, verify backups, or prove cron execution.");
   return { ok: failures.length === 0, failures, notes };
 }

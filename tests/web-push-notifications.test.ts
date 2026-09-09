@@ -106,6 +106,7 @@ test("subscription, logout, dispatcher, and service worker keep device delivery 
   assert.match(dispatcher, /webPushBody\(preferenceType\)/);
   assert.doesNotMatch(dispatcher, /body:\s*notification\.body/);
   assert.match(integrationRoute, /Boolean\(targetUserId && webPush\.configured\)/);
+  assert.match(integrationRoute, /actorCanCreateUntargeted: user\.role === UserRole\.PLATFORM_OWNER/);
   assert.match(integrationRoute, /deliveryMode: webPushEligible \? "web_push_and_in_app" : "in_app_only"/);
   assert.match(serviceWorker, /addEventListener\("push"/);
   assert.match(serviceWorker, /showNotification/);

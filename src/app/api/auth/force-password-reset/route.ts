@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { createSessionToken, getCurrentUser, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -16,6 +17,12 @@ async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (appReviewReservedIdentityKind(user.email)) {
+    return NextResponse.json(
+      { ok: false, error: "Shared App Review credentials can be changed only through the controlled review-account process." },
+      { status: 403 },
+    );
   }
   if (!user.mustResetPassword) {
     return NextResponse.json({ ok: false, error: "This account does not require a forced password reset." }, { status: 400 });

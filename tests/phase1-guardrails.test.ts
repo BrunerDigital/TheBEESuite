@@ -1534,10 +1534,34 @@ test("notification target guard blocks cross-scope and center-scoped broadcasts"
     actorTenantId: "tenant_a",
     actorCenterIds: ["center_a"],
     actorHasTenantWideAccess: false,
+    actorCanCreateUntargeted: false,
   }), {
     ok: false,
     status: 403,
-    error: "Choose a specific user before queuing a notification from a center-scoped account.",
+    error: "Choose a specific user before queuing a notification from this account.",
+  });
+
+  assert.deepEqual(notificationTargetGuard({
+    targetUserId: null,
+    actorUserId: "regional_a",
+    actorTenantId: "tenant_a",
+    actorCenterIds: [],
+    actorHasTenantWideAccess: true,
+    actorCanCreateUntargeted: false,
+  }), {
+    ok: false,
+    status: 403,
+    error: "Choose a specific user before queuing a notification from this account.",
+  });
+  assert.deepEqual(notificationTargetGuard({
+    targetUserId: null,
+    actorUserId: "platform_owner",
+    actorTenantId: "tenant_a",
+    actorCenterIds: [],
+    actorHasTenantWideAccess: true,
+    actorCanCreateUntargeted: true,
+  }), {
+    ok: true,
   });
 
   assert.deepEqual(notificationTargetGuard({
@@ -1546,6 +1570,7 @@ test("notification target guard blocks cross-scope and center-scoped broadcasts"
     actorTenantId: "tenant_a",
     actorCenterIds: ["center_a"],
     actorHasTenantWideAccess: false,
+    actorCanCreateUntargeted: false,
     targetTenantId: "tenant_b",
     targetCenterIds: ["center_a"],
   }), {
@@ -1560,6 +1585,7 @@ test("notification target guard blocks cross-scope and center-scoped broadcasts"
     actorTenantId: "tenant_a",
     actorCenterIds: ["center_a"],
     actorHasTenantWideAccess: false,
+    actorCanCreateUntargeted: false,
     targetTenantId: "tenant_a",
     targetCenterIds: ["center_a"],
   }), { ok: true });
@@ -1685,6 +1711,10 @@ test("reserved App Review account credentials and billing controls remain immuta
   const teacherPortal = readFileSync("src/components/teacher-mobile-workspace.tsx", "utf8");
   const appShell = readFileSync("src/components/app-shell.tsx", "utf8");
   const livePage = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const forgotPasswordRoute = readFileSync("src/app/api/auth/forgot-password/route.ts", "utf8");
+  const forcePasswordRoute = readFileSync("src/app/api/auth/force-password-reset/route.ts", "utf8");
+  const resetPasswordRoute = readFileSync("src/app/api/auth/reset-password/route.ts", "utf8");
+  const supabaseAuth = readFileSync("src/lib/supabase-auth.ts", "utf8");
   const passwordRoute = readFileSync("src/app/api/profile/password/route.ts", "utf8");
   const kioskRoute = readFileSync("src/app/api/parent/kiosk-credential/route.ts", "utf8");
   const tuitionRoute = readFileSync("src/app/api/parent/tuition-cadence/route.ts", "utf8");
@@ -1704,6 +1734,24 @@ test("reserved App Review account credentials and billing controls remain immuta
   assert.match(appShell, /Shared App Review profile is read-only/);
   assert.match(parentSetupPage, /appReviewReservedIdentityKind\(user\.email\)[\s\S]*redirect\("\/parents"\)/);
   assert.match(staffKioskRoute, /APP_REVIEW_TEACHER_CONTACT\.email/);
+  assert.ok(
+    forgotPasswordRoute.indexOf("appReviewReservedIdentityKind(email)")
+      < forgotPasswordRoute.indexOf("await generateSupabasePasswordRecoveryLink"),
+    "reserved identities must be rejected before recovery-link generation",
+  );
+  assert.match(resetPasswordRoute, /getSupabaseAuthEmailForAccessToken/);
+  assert.ok(
+    resetPasswordRoute.indexOf("appReviewReservedIdentityKind(recoveryIdentity.email)")
+      < resetPasswordRoute.indexOf("updateSupabasePassword(resetAccessToken, password)"),
+    "reserved identities must be rejected before recovery password mutation",
+  );
+  assert.ok(
+    forcePasswordRoute.indexOf("appReviewReservedIdentityKind(user.email)")
+      < forcePasswordRoute.indexOf("await updateSupabaseAuthUserPasswordByEmail"),
+    "reserved identities must be rejected before forced password mutation",
+  );
+  assert.match(supabaseAuth, /generateSupabasePasswordRecoveryLink[\s\S]*appReviewReservedIdentityKind\(email\)/);
+  assert.match(supabaseAuth, /updateSupabaseAuthUserPasswordByEmail[\s\S]*appReviewReservedIdentityKind\(normalizedEmail\)/);
   for (const route of [passwordRoute, kioskRoute, tuitionRoute, parentSetupRoute, teacherProfileRoute, profilePhotoRoute]) {
     assert.match(route, /appReviewReservedIdentityKind\(user\.email\)/);
     assert.match(route, /App Review/);

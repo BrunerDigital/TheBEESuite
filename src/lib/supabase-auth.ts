@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type User } from "@supabase/supabase-js";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import {
   buildParentLoginSetupUrl,
   PARENT_PORTAL_SETUP_PATH,
@@ -233,6 +234,13 @@ export async function generateSupabasePasswordRecoveryLink({
   email: string;
   redirectTo?: string | null;
 }) {
+  if (appReviewReservedIdentityKind(email)) {
+    return {
+      ok: false as const,
+      error: "Shared App Review credentials cannot use account recovery.",
+      status: 403,
+    };
+  }
   const { url, key } = getSupabaseAuthConfig("service");
   const timedFetch: typeof fetch = (input, init) => {
     const timeoutSignal = AbortSignal.timeout(10_000);
@@ -289,6 +297,26 @@ export async function verifySupabaseRecoveryTokenHash(tokenHash: string) {
     accessToken: data.session.access_token,
     email: data.user?.email?.toLowerCase() || data.session.user.email?.toLowerCase() || "",
   };
+}
+
+export async function getSupabaseAuthEmailForAccessToken(accessToken: string) {
+  const { url, key } = getSupabaseAuthConfig("anon");
+  const response = await fetch(`${url}/auth/v1/user`, {
+    method: "GET",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${accessToken}`,
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) return { ok: false as const, status: response.status };
+
+  const payload = (await response.json().catch(() => null)) as { email?: unknown } | null;
+  const email = typeof payload?.email === "string" ? payload.email.trim().toLowerCase() : "";
+  if (!isSupabaseAuthCompatibleEmail(email)) {
+    return { ok: false as const, status: response.status };
+  }
+  return { ok: true as const, email };
 }
 
 export async function ensureSupabaseAuthUser({
@@ -473,6 +501,12 @@ export async function updateSupabaseAuthUserPasswordByEmail({
   metadataSource?: "forced_password_reset" | "profile_password_change" | "parent_setup_transition" | "password_change";
 }) {
   const normalizedEmail = email.toLowerCase();
+  if (appReviewReservedIdentityKind(normalizedEmail)) {
+    return {
+      ok: false as const,
+      error: "Shared App Review credentials can be changed only through the controlled review-account process.",
+    };
+  }
   const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedEmail);
   if (!user) {
     return {

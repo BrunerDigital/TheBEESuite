@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isSupabaseAuthCompatibleEmail } from "@/lib/supabase-auth";
+import { APP_REVIEW_PARENT_CONTACT } from "@/lib/app-review-targeting";
+import {
+  generateSupabasePasswordRecoveryLink,
+  getSupabaseAuthEmailForAccessToken,
+  isSupabaseAuthCompatibleEmail,
+  updateSupabaseAuthUserPasswordByEmail,
+} from "@/lib/supabase-auth";
 
 test("Supabase Auth email preflight accepts ordinary addresses", () => {
   assert.equal(isSupabaseAuthCompatibleEmail("parent@example.com"), true);
@@ -13,4 +19,52 @@ test("Supabase Auth email preflight rejects provider-incompatible address shapes
   assert.equal(isSupabaseAuthCompatibleEmail("parent@-example.com"), false);
   assert.equal(isSupabaseAuthCompatibleEmail("parent@example-.com"), false);
   assert.equal(isSupabaseAuthCompatibleEmail("parent@example"), false);
+});
+
+test("reserved App Review credentials reject recovery and ordinary password updates before provider access", async () => {
+  assert.deepEqual(
+    await generateSupabasePasswordRecoveryLink({ email: APP_REVIEW_PARENT_CONTACT.email }),
+    {
+      ok: false,
+      error: "Shared App Review credentials cannot use account recovery.",
+      status: 403,
+    },
+  );
+  assert.deepEqual(
+    await updateSupabaseAuthUserPasswordByEmail({
+      email: APP_REVIEW_PARENT_CONTACT.email,
+      password: "synthetic-unused-password",
+    }),
+    {
+      ok: false,
+      error: "Shared App Review credentials can be changed only through the controlled review-account process.",
+    },
+  );
+});
+
+test("Supabase access-token identity lookup normalizes the verified email before a password mutation", async (context) => {
+  const previousUrl = process.env.SUPABASE_URL;
+  const previousKey = process.env.SUPABASE_ANON_KEY;
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_ANON_KEY = "test-anon-key";
+  context.after(() => {
+    if (previousUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = previousUrl;
+    if (previousKey === undefined) delete process.env.SUPABASE_ANON_KEY;
+    else process.env.SUPABASE_ANON_KEY = previousKey;
+  });
+  context.mock.method(globalThis, "fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    assert.equal(String(input), "https://example.supabase.co/auth/v1/user");
+    assert.equal(init?.method, "GET");
+    assert.equal((init?.headers as Record<string, string>).Authorization, "Bearer synthetic-recovery-token");
+    return new Response(JSON.stringify({ email: "  APP-REVIEW-TEACHER@THEBEESUITE.IO  " }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  assert.deepEqual(
+    await getSupabaseAuthEmailForAccessToken("synthetic-recovery-token"),
+    { ok: true, email: "app-review-teacher@thebeesuite.io" },
+  );
 });

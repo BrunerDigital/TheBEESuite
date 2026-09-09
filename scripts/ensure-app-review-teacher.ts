@@ -9,11 +9,16 @@ import {
   SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID,
   SYNTHETIC_ROLE_QA_TENANT_SLUG,
 } from "@/lib/synthetic-role-qa";
-import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import {
+  getSupabaseAuthUserMetadataByEmail,
+  upsertSupabaseAuthUserWithPassword,
+} from "@/lib/supabase-auth";
 
 const DEMO_SOURCE = "bee_suite_demo";
 const APP_REVIEW_SOURCE = "bee_suite_app_review";
 const APP_REVIEW_STAFF_EXTERNAL_ID = "app-review-teacher-primary";
+const APP_REVIEW_EMAIL = "app-review-teacher@thebeesuite.io";
+const SCRIPT_SOURCE = "scripts/ensure-app-review-teacher.ts";
 const CONFIRM_FLAG = "--confirm-teacher-app-review-account";
 const TARGET_ENVIRONMENT_VARIABLES = [
   "APP_REVIEW_TEACHER_TENANT_ID",
@@ -74,7 +79,7 @@ async function listTeacherTargets(email: string) {
     },
     orderBy: [{ centerId: "asc" }, { classroomId: "asc" }, { id: "asc" }],
     include: {
-      user: { select: { id: true } },
+      user: { select: { id: true, tenantId: true, role: true, isActive: true } },
       center: {
         select: {
           id: true,
@@ -93,6 +98,9 @@ async function listTeacherTargets(email: string) {
   return profiles.flatMap((profile) => {
     if (
       !profile.classroom ||
+      !profile.user.isActive ||
+      profile.user.role !== UserRole.TEACHER ||
+      profile.user.tenantId !== profile.center.organization.tenantId ||
       profile.classroom.centerId !== profile.centerId ||
       profile.classroom.sourceSystem !== DEMO_SOURCE
     ) return [];
@@ -134,7 +142,7 @@ async function ensureTeacherGrant(
     isActive: true,
     startsAt: null,
     endsAt: null,
-    permissions: { appReview: true, seededBy: "scripts/ensure-app-review-teacher.ts" },
+    permissions: { appReview: true, seededBy: SCRIPT_SOURCE },
   } satisfies Prisma.UserAccessGrantUncheckedUpdateInput;
   return existing[0]
     ? db.userAccessGrant.update({ where: { id: existing[0].id }, data, select: { id: true } })
@@ -142,7 +150,10 @@ async function ensureTeacherGrant(
 }
 
 async function main() {
-  const email = normalizedEmail(process.env.APP_REVIEW_TEACHER_EMAIL || "app-review-teacher@thebeesuite.io");
+  const email = normalizedEmail(process.env.APP_REVIEW_TEACHER_EMAIL || APP_REVIEW_EMAIL);
+  if (email !== APP_REVIEW_EMAIL) {
+    throw new Error(`APP_REVIEW_TEACHER_EMAIL must remain the dedicated review identity ${APP_REVIEW_EMAIL}.`);
+  }
   const password = process.env.APP_REVIEW_TEACHER_PASSWORD?.trim() || "";
   const target = readTargetInput();
   const preflight = process.argv.includes("--preflight");
@@ -168,7 +179,7 @@ async function main() {
   const sourceProfile = await prisma.staffProfile.findUnique({
     where: { id: target.sourceStaffProfileId },
     include: {
-      user: { select: { id: true, role: true } },
+      user: { select: { id: true, tenantId: true, role: true, isActive: true } },
       center: {
         select: {
           id: true,
@@ -186,7 +197,9 @@ async function main() {
   if (
     !sourceProfile?.classroom ||
     sourceProfile.sourceSystem !== DEMO_SOURCE ||
+    !sourceProfile.user.isActive ||
     sourceProfile.user.role !== UserRole.TEACHER ||
+    sourceProfile.user.tenantId !== sourceProfile.center.organization.tenantId ||
     sourceProfile.centerId !== target.centerId ||
     sourceProfile.center.sourceSystem !== DEMO_SOURCE ||
     sourceProfile.center.externalId !== SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID ||
@@ -251,6 +264,7 @@ async function main() {
       id: true,
       tenantId: true,
       role: true,
+      customFields: true,
       staffProfile: { select: { sourceSystem: true, externalId: true } },
     },
   });
@@ -259,6 +273,12 @@ async function main() {
   }
   if (existingUser && existingUser.role !== UserRole.TEACHER) {
     throw new Error("The existing review email is not a teacher account.");
+  }
+  if (existingUser && (
+    asRecord(existingUser.customFields).appReview !== true ||
+    asRecord(existingUser.customFields).seededBy !== SCRIPT_SOURCE
+  )) {
+    throw new Error("The dedicated Teacher App Review email is linked to an unmarked application user.");
   }
   if (existingUser?.staffProfile && (
     existingUser.staffProfile.sourceSystem !== APP_REVIEW_SOURCE ||
@@ -308,6 +328,15 @@ async function main() {
     throw new Error("The App Review teacher marker is linked to a different user.");
   }
 
+  const existingAuthUser = await getSupabaseAuthUserMetadataByEmail(email);
+  if (existingAuthUser && (
+    existingAuthUser.email !== email ||
+    existingAuthUser.userMetadata.source !== APP_REVIEW_SOURCE ||
+    existingAuthUser.appMetadata.bee_suite_role !== UserRole.TEACHER
+  )) {
+    throw new Error("The dedicated Teacher App Review email is linked to an unmarked or wrong-role Auth identity.");
+  }
+
   await upsertSupabaseAuthUserWithPassword({
     email,
     name: "App Review Teacher",
@@ -321,7 +350,7 @@ async function main() {
     const currentSourceProfile = await tx.staffProfile.findUnique({
       where: { id: target.sourceStaffProfileId },
       include: {
-        user: { select: { id: true, role: true } },
+        user: { select: { id: true, tenantId: true, role: true, isActive: true } },
         center: {
           select: {
             id: true,
@@ -338,7 +367,9 @@ async function main() {
     if (
       !currentSourceProfile?.classroom ||
       currentSourceProfile.sourceSystem !== DEMO_SOURCE ||
+      !currentSourceProfile.user.isActive ||
       currentSourceProfile.user.role !== UserRole.TEACHER ||
+      currentSourceProfile.user.tenantId !== currentSourceProfile.center.organization.tenantId ||
       currentSourceProfile.user.id !== sourceProfile.user.id ||
       currentSourceProfile.centerId !== target.centerId ||
       currentSourceProfile.center.sourceSystem !== DEMO_SOURCE ||
@@ -369,6 +400,12 @@ async function main() {
     }
     if (currentUser && currentUser.role !== UserRole.TEACHER) {
       throw new Error("The existing review email is not a teacher account.");
+    }
+    if (currentUser && (
+      asRecord(currentUser.customFields).appReview !== true ||
+      asRecord(currentUser.customFields).seededBy !== SCRIPT_SOURCE
+    )) {
+      throw new Error("The dedicated Teacher App Review email is linked to an unmarked application user.");
     }
     if (currentUser?.staffProfile && (
       currentUser.staffProfile.sourceSystem !== APP_REVIEW_SOURCE ||
@@ -430,7 +467,7 @@ async function main() {
         sessionVersion: { increment: 1 },
         customFields: mergeCustomFields(currentUser?.customFields, {
           appReview: true,
-          seededBy: "scripts/ensure-app-review-teacher.ts",
+          seededBy: SCRIPT_SOURCE,
         }),
       },
       create: {
@@ -441,7 +478,7 @@ async function main() {
         role: UserRole.TEACHER,
         isActive: true,
         mustResetPassword: false,
-        customFields: { appReview: true, seededBy: "scripts/ensure-app-review-teacher.ts" },
+        customFields: { appReview: true, seededBy: SCRIPT_SOURCE },
       },
       select: { id: true },
     });
@@ -457,7 +494,7 @@ async function main() {
         externalId: APP_REVIEW_STAFF_EXTERNAL_ID,
         customFields: mergeCustomFields(currentUser?.staffProfile?.customFields, {
           appReview: true,
-          seededBy: "scripts/ensure-app-review-teacher.ts",
+          seededBy: SCRIPT_SOURCE,
         }),
       },
       create: {
@@ -469,7 +506,7 @@ async function main() {
         backgroundCheckStatus: "review_demo_only",
         sourceSystem: APP_REVIEW_SOURCE,
         externalId: APP_REVIEW_STAFF_EXTERNAL_ID,
-        customFields: { appReview: true, seededBy: "scripts/ensure-app-review-teacher.ts" },
+        customFields: { appReview: true, seededBy: SCRIPT_SOURCE },
       },
     });
     await ensureTeacherGrant(tx, {

@@ -24,6 +24,14 @@ test("teacher App Review preparation is explicit, demo-scoped, and fail-closed",
   assert.match(script, /sourceProfile\.classroom\.sourceSystem !== DEMO_SOURCE/);
   assert.match(script, /SYNTHETIC_ROLE_QA_TENANT_SLUG/);
   assert.match(script, /SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID/);
+  assert.match(script, /profile\.user\.tenantId !== profile\.center\.organization\.tenantId/);
+  assert.match(script, /APP_REVIEW_TEACHER_EMAIL must remain the dedicated review identity/);
+  assert.match(script, /getSupabaseAuthUserMetadataByEmail\(email\)/);
+  assert.match(script, /linked to an unmarked or wrong-role Auth identity/);
+  assert.ok(
+    script.indexOf("getSupabaseAuthUserMetadataByEmail(email)") < script.indexOf("await upsertSupabaseAuthUserWithPassword({"),
+    "an existing Auth identity must be verified before its password can change",
+  );
   assert.match(script, /process\.argv\.includes\("--preflight"\)/);
   assert.match(script, /findUnique\(\{\s*where: \{ id: target\.sourceStaffProfileId \}/);
   assert.match(script, /assertAppReviewTargetFingerprint/);

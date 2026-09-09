@@ -19,6 +19,13 @@ test("parent App Review preparation requires an exact preflighted target", async
   assert.match(script, /SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID/);
   assert.match(script, /family\.children\.length === 0/);
   assert.match(script, /child\.classroom\.centerId !== center\.id/);
+  assert.match(script, /APP_REVIEW_PARENT_EMAIL must remain the dedicated review identity/);
+  assert.match(script, /getSupabaseAuthUserMetadataByEmail\(email\)/);
+  assert.match(script, /linked to an unmarked or wrong-role Auth identity/);
+  assert.ok(
+    script.indexOf("getSupabaseAuthUserMetadataByEmail(email)") < script.indexOf("await upsertSupabaseAuthUserWithPassword({"),
+    "an existing Auth identity must be verified before its password can change",
+  );
   assert.ok(
     script.indexOf("assertAppReviewTargetFingerprint({") < script.indexOf("await upsertSupabaseAuthUserWithPassword({"),
     "the exact target fingerprint must be checked before the Auth identity can change",

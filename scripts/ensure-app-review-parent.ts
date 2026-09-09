@@ -10,11 +10,16 @@ import {
   SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID,
   SYNTHETIC_ROLE_QA_TENANT_SLUG,
 } from "@/lib/synthetic-role-qa";
-import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import {
+  getSupabaseAuthUserMetadataByEmail,
+  upsertSupabaseAuthUserWithPassword,
+} from "@/lib/supabase-auth";
 
 const DEMO_SOURCE = "bee_suite_demo";
 const APP_REVIEW_SOURCE = "bee_suite_app_review";
 const APP_REVIEW_GUARDIAN_EXTERNAL_ID = "app-review-parent-primary";
+const APP_REVIEW_EMAIL = "app-review-parent@thebeesuite.io";
+const SCRIPT_SOURCE = "scripts/ensure-app-review-parent.ts";
 const CONFIRM_FLAG = "--confirm-parent-app-review-account";
 const TARGET_ENVIRONMENT_VARIABLES = [
   "APP_REVIEW_PARENT_TENANT_ID",
@@ -63,7 +68,18 @@ async function listParentTargets(email: string) {
   const families = await prisma.family.findMany({
     where: { sourceSystem: DEMO_SOURCE, centerId: { not: null } },
     orderBy: [{ centerId: "asc" }, { id: "asc" }],
-    select: { id: true, name: true, centerId: true, externalId: true },
+    select: {
+      id: true,
+      name: true,
+      centerId: true,
+      externalId: true,
+      children: {
+        select: {
+          sourceSystem: true,
+          classroom: { select: { centerId: true, sourceSystem: true } },
+        },
+      },
+    },
   });
   const centerIds = [...new Set(families.flatMap((family) => family.centerId ? [family.centerId] : []))];
   const centers = await prisma.center.findMany({
@@ -87,7 +103,17 @@ async function listParentTargets(email: string) {
   const centersById = new Map(centers.map((center) => [center.id, center] as const));
 
   return families.flatMap((family) => {
-    if (!family.centerId || !family.externalId) return [];
+    if (
+      !family.centerId ||
+      !family.externalId ||
+      family.children.length === 0 ||
+      family.children.some((child) =>
+        child.sourceSystem !== DEMO_SOURCE ||
+        Boolean(child.classroom && (
+          child.classroom.centerId !== family.centerId || child.classroom.sourceSystem !== DEMO_SOURCE
+        ))
+      )
+    ) return [];
     const center = centersById.get(family.centerId);
     if (!center) return [];
     const target = {
@@ -139,7 +165,7 @@ async function ensureAccessGrant(db: Prisma.TransactionClient, input: {
     endsAt: null,
     permissions: {
       appReview: true,
-      seededBy: "scripts/ensure-app-review-parent.ts",
+      seededBy: SCRIPT_SOURCE,
     },
   } satisfies Prisma.UserAccessGrantUncheckedUpdateInput;
 
@@ -162,7 +188,10 @@ async function ensureAccessGrant(db: Prisma.TransactionClient, input: {
 }
 
 async function main() {
-  const email = normalizeEmail(process.env.APP_REVIEW_PARENT_EMAIL || "app-review-parent@thebeesuite.io");
+  const email = normalizeEmail(process.env.APP_REVIEW_PARENT_EMAIL || APP_REVIEW_EMAIL);
+  if (email !== APP_REVIEW_EMAIL) {
+    throw new Error(`APP_REVIEW_PARENT_EMAIL must remain the dedicated review identity ${APP_REVIEW_EMAIL}.`);
+  }
   const password = process.env.APP_REVIEW_PARENT_PASSWORD?.trim() || "";
   const target = readTargetInput();
   const preflight = process.argv.includes("--preflight");
@@ -289,7 +318,7 @@ async function main() {
 
   const existingUser = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, tenantId: true, role: true },
+    select: { id: true, tenantId: true, role: true, customFields: true },
   });
 
   if (existingUser && existingUser.tenantId !== center.organization.tenantId) {
@@ -297,6 +326,12 @@ async function main() {
   }
   if (existingUser && existingUser.role !== UserRole.PARENT_GUARDIAN) {
     throw new Error(`Existing user ${email} is ${existingUser.role}, not PARENT_GUARDIAN.`);
+  }
+  if (existingUser && (
+    asRecord(existingUser.customFields).appReview !== true ||
+    asRecord(existingUser.customFields).seededBy !== SCRIPT_SOURCE
+  )) {
+    throw new Error("The dedicated Parent App Review email is linked to an unmarked application user.");
   }
 
   if (existingUser) {
@@ -344,6 +379,15 @@ async function main() {
   const existingGuardian = existingGuardians[0];
   if (existingGuardian?.userId && existingGuardian.userId !== existingUser?.id) {
     throw new Error("The Parent App Review Guardian marker is linked to a different application user.");
+  }
+
+  const existingAuthUser = await getSupabaseAuthUserMetadataByEmail(email);
+  if (existingAuthUser && (
+    existingAuthUser.email !== email ||
+    existingAuthUser.userMetadata.source !== APP_REVIEW_SOURCE ||
+    existingAuthUser.appMetadata.bee_suite_role !== UserRole.PARENT_GUARDIAN
+  )) {
+    throw new Error("The dedicated Parent App Review email is linked to an unmarked or wrong-role Auth identity.");
   }
 
   await upsertSupabaseAuthUserWithPassword({
@@ -413,6 +457,12 @@ async function main() {
     if (currentUser && currentUser.role !== UserRole.PARENT_GUARDIAN) {
       throw new Error(`Existing user ${email} is ${currentUser.role}, not PARENT_GUARDIAN.`);
     }
+    if (currentUser && (
+      asRecord(currentUser.customFields).appReview !== true ||
+      asRecord(currentUser.customFields).seededBy !== SCRIPT_SOURCE
+    )) {
+      throw new Error("The dedicated Parent App Review email is linked to an unmarked application user.");
+    }
     if (currentUser) {
       const [activeGrants, matchingGrantCount] = await Promise.all([
         tx.userAccessGrant.findMany({
@@ -458,7 +508,7 @@ async function main() {
 
     const userFields = mergeCustomFields(currentUser?.customFields, {
       appReview: true,
-      seededBy: "scripts/ensure-app-review-parent.ts",
+      seededBy: SCRIPT_SOURCE,
     });
     const user = await tx.user.upsert({
       where: { email },
@@ -486,7 +536,7 @@ async function main() {
 
     const guardianFields = mergeCustomFields(currentGuardian?.customFields, {
       appReview: true,
-      seededBy: "scripts/ensure-app-review-parent.ts",
+      seededBy: SCRIPT_SOURCE,
     });
     const guardian = currentGuardian
       ? await tx.guardian.update({

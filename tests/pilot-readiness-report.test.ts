@@ -52,6 +52,20 @@ test("centerless archived and merged families preserve history without blocking 
     children: [{ enrollmentStatus: "enrolled" }],
     billingAccount: null,
   }), false);
+  for (const enrollmentStatus of ["current", "pending", "summer_break", "unexpected_status"]) {
+    assert.equal(isArchivedCenterlessFamily({
+      externalId: "merged:123",
+      customFields: null,
+      children: [{ enrollmentStatus }],
+      billingAccount: null,
+    }), false);
+  }
+  assert.equal(isArchivedCenterlessFamily({
+    externalId: "merged:123",
+    customFields: null,
+    children: [{ enrollmentStatus: "withdrawn" }],
+    billingAccount: null,
+  }), true);
   assert.equal(isArchivedCenterlessFamily({
     externalId: "archived:123",
     customFields: null,

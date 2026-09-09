@@ -8,7 +8,7 @@ import {
   procareSourceFingerprintCollisionCenterIds,
 } from "@/lib/parent-invitation-readiness";
 import { parentPortalAccessDisabled } from "@/lib/parent-portal-logins";
-import { isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
+import { isClosedEnrollmentStatus, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 import { isActiveProcareEnrollmentStatus } from "@/lib/procare-import-fields";
 import { databaseUrlEnvNames, hasDatabaseConfig, hasStripeBillingConfig, hasSupabaseAuthConfig } from "@/lib/readiness-guardrails";
@@ -217,10 +217,10 @@ export function isArchivedCenterlessFamily(family: {
     || Boolean(customFields.mergedIntoFamilyId)
     || Boolean(customFields.archivedAt)
     || Boolean(customFields.archivedReason);
-  const hasCurrentChild = family.children.some((child) => isCurrentlyEnrolledStatus(child.enrollmentStatus));
+  const hasNonclosedChild = family.children.some((child) => !isClosedEnrollmentStatus(child.enrollmentStatus));
   const hasOpenInvoice = Boolean(family.billingAccount?.invoices.length);
   const hasNonzeroBalance = (family.billingAccount?.balanceCents ?? 0) !== 0;
-  return hasArchiveMarker && !hasCurrentChild && !hasOpenInvoice && !hasNonzeroBalance;
+  return hasArchiveMarker && !hasNonclosedChild && !hasOpenInvoice && !hasNonzeroBalance;
 }
 
 export function buildModuleGates(input: {

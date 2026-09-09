@@ -1,4 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { closedEnrollmentStatusValues } from "../src/lib/enrollment-status";
 
 type IntegrityCounts = {
   family_without_center: bigint;
@@ -41,6 +42,7 @@ async function main() {
   }
 
   const prisma = new PrismaClient();
+  const closedEnrollmentStatuses = Prisma.join(closedEnrollmentStatusValues());
   try {
     const rows = await prisma.$queryRaw<IntegrityCounts[]>`
       SELECT
@@ -299,8 +301,9 @@ async function main() {
               SELECT 1
               FROM "Child" ch
               WHERE ch."familyId" = f."id"
-                AND LOWER(COALESCE(ch."enrollmentStatus", '')) IN ('active', 'enrolled', 'enrolling')
-            ) THEN 'current_child_present'
+                AND LOWER(REGEXP_REPLACE(TRIM(COALESCE(ch."enrollmentStatus", '')), '[^a-z0-9]+', '_', 'g'))
+                  NOT IN (${closedEnrollmentStatuses})
+            ) THEN 'nonclosed_child_present'
             WHEN EXISTS (
               SELECT 1
               FROM "BillingAccount" ba

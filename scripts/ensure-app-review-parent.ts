@@ -6,6 +6,10 @@ import {
 } from "@/lib/app-review-targeting";
 import { parentPortalLinkedFields } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
+import {
+  SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID,
+  SYNTHETIC_ROLE_QA_TENANT_SLUG,
+} from "@/lib/synthetic-role-qa";
 import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
 const DEMO_SOURCE = "bee_suite_demo";
@@ -63,12 +67,21 @@ async function listParentTargets(email: string) {
   });
   const centerIds = [...new Set(families.flatMap((family) => family.centerId ? [family.centerId] : []))];
   const centers = await prisma.center.findMany({
-    where: { id: { in: centerIds } },
+    where: {
+      id: { in: centerIds },
+      sourceSystem: DEMO_SOURCE,
+      externalId: SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID,
+      status: { notIn: ["closed", "archived", "inactive"] },
+      organization: { tenant: { slug: SYNTHETIC_ROLE_QA_TENANT_SLUG } },
+    },
     select: {
       id: true,
       name: true,
+      status: true,
+      sourceSystem: true,
+      externalId: true,
       organizationId: true,
-      organization: { select: { tenantId: true } },
+      organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
     },
   });
   const centersById = new Map(centers.map((center) => [center.id, center] as const));
@@ -176,8 +189,13 @@ async function main() {
     where: { id: target.familyId },
     include: {
       children: {
-        select: { id: true, fullName: true, enrollmentStatus: true },
-        take: 3,
+        select: {
+          id: true,
+          fullName: true,
+          enrollmentStatus: true,
+          sourceSystem: true,
+          classroom: { select: { centerId: true, sourceSystem: true } },
+        },
       },
     },
   });
@@ -196,13 +214,35 @@ async function main() {
     select: {
       id: true,
       name: true,
+      status: true,
+      sourceSystem: true,
+      externalId: true,
       organizationId: true,
-      organization: { select: { tenantId: true } },
+      organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
     },
   });
 
-  if (!center || center.id !== target.centerId || center.organization.tenantId !== target.tenantId) {
+  if (
+    !center ||
+    center.id !== target.centerId ||
+    center.sourceSystem !== DEMO_SOURCE ||
+    center.externalId !== SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID ||
+    ["closed", "archived", "inactive"].includes(center.status.toLowerCase()) ||
+    center.organization.tenant.slug !== SYNTHETIC_ROLE_QA_TENANT_SLUG ||
+    center.organization.tenantId !== target.tenantId
+  ) {
     throw new Error("The exact Parent App Review center no longer matches the authorized tenant and center identifiers.");
+  }
+  if (
+    family.children.length === 0 ||
+    family.children.some((child) =>
+      child.sourceSystem !== DEMO_SOURCE ||
+      Boolean(child.classroom && (
+        child.classroom.centerId !== center.id || child.classroom.sourceSystem !== DEMO_SOURCE
+      ))
+    )
+  ) {
+    throw new Error("The exact Parent App Review family is empty or contains a child outside the isolated demo school.");
   }
 
   const expectedFingerprint = parentTargetFingerprint({
@@ -318,18 +358,45 @@ async function main() {
   const provisioned = await prisma.$transaction(async (tx) => {
     const currentFamily = await tx.family.findUnique({
       where: { id: target.familyId },
-      select: { sourceSystem: true, externalId: true, centerId: true },
+      select: {
+        sourceSystem: true,
+        externalId: true,
+        centerId: true,
+        children: {
+          select: {
+            sourceSystem: true,
+            classroom: { select: { centerId: true, sourceSystem: true } },
+          },
+        },
+      },
     });
     const currentCenter = await tx.center.findUnique({
       where: { id: target.centerId },
-      select: { organizationId: true, organization: { select: { tenantId: true } } },
+      select: {
+        status: true,
+        sourceSystem: true,
+        externalId: true,
+        organizationId: true,
+        organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
+      },
     });
     if (
       !currentFamily?.centerId ||
       currentFamily.sourceSystem !== DEMO_SOURCE ||
       currentFamily.externalId !== target.familyExternalId ||
       currentFamily.centerId !== target.centerId ||
+      currentFamily.children.length === 0 ||
+      currentFamily.children.some((child) =>
+        child.sourceSystem !== DEMO_SOURCE ||
+        Boolean(child.classroom && (
+          child.classroom.centerId !== target.centerId || child.classroom.sourceSystem !== DEMO_SOURCE
+        ))
+      ) ||
       !currentCenter ||
+      currentCenter.sourceSystem !== DEMO_SOURCE ||
+      currentCenter.externalId !== SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID ||
+      ["closed", "archived", "inactive"].includes(currentCenter.status.toLowerCase()) ||
+      currentCenter.organization.tenant.slug !== SYNTHETIC_ROLE_QA_TENANT_SLUG ||
       currentCenter.organization.tenantId !== target.tenantId ||
       currentCenter.organizationId !== center.organizationId
     ) {

@@ -15,6 +15,10 @@ test("parent App Review preparation requires an exact preflighted target", async
   assert.match(script, /findUnique\(\{\s*where: \{ id: target\.familyId \}/);
   assert.match(script, /assertAppReviewTargetFingerprint/);
   assert.match(script, /parentTargetFingerprint\(\{\s*email,/);
+  assert.match(script, /SYNTHETIC_ROLE_QA_TENANT_SLUG/);
+  assert.match(script, /SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID/);
+  assert.match(script, /family\.children\.length === 0/);
+  assert.match(script, /child\.classroom\.centerId !== center\.id/);
   assert.ok(
     script.indexOf("assertAppReviewTargetFingerprint({") < script.indexOf("await upsertSupabaseAuthUserWithPassword({"),
     "the exact target fingerprint must be checked before the Auth identity can change",

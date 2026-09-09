@@ -5,6 +5,10 @@ import {
   buildAppReviewTargetFingerprint,
 } from "@/lib/app-review-targeting";
 import { prisma } from "@/lib/prisma";
+import {
+  SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID,
+  SYNTHETIC_ROLE_QA_TENANT_SLUG,
+} from "@/lib/synthetic-role-qa";
 import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
 const DEMO_SOURCE = "bee_suite_demo";
@@ -57,17 +61,41 @@ function teacherTargetFingerprint(input: {
 
 async function listTeacherTargets(email: string) {
   const profiles = await prisma.staffProfile.findMany({
-    where: { sourceSystem: DEMO_SOURCE, classroomId: { not: null }, user: { role: UserRole.TEACHER } },
+    where: {
+      sourceSystem: DEMO_SOURCE,
+      classroomId: { not: null },
+      user: { role: UserRole.TEACHER },
+      center: {
+        sourceSystem: DEMO_SOURCE,
+        externalId: SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID,
+        status: { notIn: ["closed", "archived", "inactive"] },
+        organization: { tenant: { slug: SYNTHETIC_ROLE_QA_TENANT_SLUG } },
+      },
+    },
     orderBy: [{ centerId: "asc" }, { classroomId: "asc" }, { id: "asc" }],
     include: {
       user: { select: { id: true } },
-      center: { select: { id: true, name: true, organizationId: true, organization: { select: { tenantId: true } } } },
-      classroom: { select: { id: true, name: true } },
+      center: {
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          sourceSystem: true,
+          externalId: true,
+          organizationId: true,
+          organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
+        },
+      },
+      classroom: { select: { id: true, name: true, centerId: true, sourceSystem: true } },
     },
   });
 
   return profiles.flatMap((profile) => {
-    if (!profile.classroom) return [];
+    if (
+      !profile.classroom ||
+      profile.classroom.centerId !== profile.centerId ||
+      profile.classroom.sourceSystem !== DEMO_SOURCE
+    ) return [];
     const target = {
       email,
       tenantId: profile.center.organization.tenantId,
@@ -141,8 +169,18 @@ async function main() {
     where: { id: target.sourceStaffProfileId },
     include: {
       user: { select: { id: true, role: true } },
-      center: { select: { id: true, name: true, organizationId: true, organization: { select: { tenantId: true } } } },
-      classroom: { select: { id: true, name: true } },
+      center: {
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          sourceSystem: true,
+          externalId: true,
+          organizationId: true,
+          organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
+        },
+      },
+      classroom: { select: { id: true, name: true, centerId: true, sourceSystem: true } },
     },
   });
   if (
@@ -150,6 +188,12 @@ async function main() {
     sourceProfile.sourceSystem !== DEMO_SOURCE ||
     sourceProfile.user.role !== UserRole.TEACHER ||
     sourceProfile.centerId !== target.centerId ||
+    sourceProfile.center.sourceSystem !== DEMO_SOURCE ||
+    sourceProfile.center.externalId !== SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID ||
+    ["closed", "archived", "inactive"].includes(sourceProfile.center.status.toLowerCase()) ||
+    sourceProfile.center.organization.tenant.slug !== SYNTHETIC_ROLE_QA_TENANT_SLUG ||
+    sourceProfile.classroom.centerId !== sourceProfile.centerId ||
+    sourceProfile.classroom.sourceSystem !== DEMO_SOURCE ||
     sourceProfile.classroom.id !== target.classroomId ||
     sourceProfile.center.organization.tenantId !== target.tenantId
   ) {
@@ -278,8 +322,17 @@ async function main() {
       where: { id: target.sourceStaffProfileId },
       include: {
         user: { select: { id: true, role: true } },
-        center: { select: { id: true, organizationId: true, organization: { select: { tenantId: true } } } },
-        classroom: { select: { id: true } },
+        center: {
+          select: {
+            id: true,
+            status: true,
+            sourceSystem: true,
+            externalId: true,
+            organizationId: true,
+            organization: { select: { tenantId: true, tenant: { select: { slug: true } } } },
+          },
+        },
+        classroom: { select: { id: true, centerId: true, sourceSystem: true } },
       },
     });
     if (
@@ -288,6 +341,12 @@ async function main() {
       currentSourceProfile.user.role !== UserRole.TEACHER ||
       currentSourceProfile.user.id !== sourceProfile.user.id ||
       currentSourceProfile.centerId !== target.centerId ||
+      currentSourceProfile.center.sourceSystem !== DEMO_SOURCE ||
+      currentSourceProfile.center.externalId !== SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID ||
+      ["closed", "archived", "inactive"].includes(currentSourceProfile.center.status.toLowerCase()) ||
+      currentSourceProfile.center.organization.tenant.slug !== SYNTHETIC_ROLE_QA_TENANT_SLUG ||
+      currentSourceProfile.classroom.centerId !== currentSourceProfile.centerId ||
+      currentSourceProfile.classroom.sourceSystem !== DEMO_SOURCE ||
       currentSourceProfile.classroom.id !== target.classroomId ||
       currentSourceProfile.center.organization.tenantId !== target.tenantId ||
       currentSourceProfile.center.organizationId !== sourceProfile.center.organizationId

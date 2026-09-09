@@ -18,6 +18,12 @@ test("teacher App Review preparation is explicit, demo-scoped, and fail-closed",
   assert.match(script, /sourceSystem: DEMO_SOURCE/);
   assert.match(script, /role: UserRole\.TEACHER/);
   assert.match(script, /classroomId: \{ not: null \}/);
+  assert.match(script, /profile\.classroom\.centerId !== profile\.centerId/);
+  assert.match(script, /profile\.classroom\.sourceSystem !== DEMO_SOURCE/);
+  assert.match(script, /sourceProfile\.classroom\.centerId !== sourceProfile\.centerId/);
+  assert.match(script, /sourceProfile\.classroom\.sourceSystem !== DEMO_SOURCE/);
+  assert.match(script, /SYNTHETIC_ROLE_QA_TENANT_SLUG/);
+  assert.match(script, /SYNTHETIC_ROLE_QA_CENTER_EXTERNAL_ID/);
   assert.match(script, /process\.argv\.includes\("--preflight"\)/);
   assert.match(script, /findUnique\(\{\s*where: \{ id: target\.sourceStaffProfileId \}/);
   assert.match(script, /assertAppReviewTargetFingerprint/);

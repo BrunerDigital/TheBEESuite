@@ -283,7 +283,7 @@ First run the read-only candidate listing with all Teacher target variables unse
 npm run app-review:teacher:ensure -- --preflight
 ```
 
-Select only a proven fake-demo target. Set `APP_REVIEW_TEACHER_TENANT_ID`, `APP_REVIEW_TEACHER_CENTER_ID`, `APP_REVIEW_TEACHER_CLASSROOM_ID`, and `APP_REVIEW_TEACHER_SOURCE_STAFF_ID` outside Git/chat, then run the same `--preflight` command again. Record its exact target and fresh `targetFingerprint`; do not authorize or run a mutation from the unfiltered candidate list alone.
+The candidate list is limited to the isolated demo tenant and designated synthetic school and excludes cross-school or non-demo classrooms. Select one proven fake-demo target. Set `APP_REVIEW_TEACHER_TENANT_ID`, `APP_REVIEW_TEACHER_CENTER_ID`, `APP_REVIEW_TEACHER_CLASSROOM_ID`, and `APP_REVIEW_TEACHER_SOURCE_STAFF_ID` outside Git/chat, then run the same `--preflight` command again. Record its exact target and fresh `targetFingerprint`; do not authorize or run a mutation from the unfiltered candidate list alone.
 
 The fingerprint also binds the exact review email. Obtain exact authorization covering that email, every listed production change, and the preflighted target. Only then set `APP_REVIEW_TEACHER_TARGET_FINGERPRINT` and `APP_REVIEW_TEACHER_PASSWORD` outside Git/chat and run `npm run app-review:teacher:ensure -- --confirm-teacher-app-review-account`.
 

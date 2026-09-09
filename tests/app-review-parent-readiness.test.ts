@@ -11,6 +11,7 @@ test("parent App Review preparation requires an exact preflighted target", async
   assert.match(script, /APP_REVIEW_PARENT_FAMILY_ID/);
   assert.match(script, /APP_REVIEW_PARENT_FAMILY_EXTERNAL_ID/);
   assert.match(script, /APP_REVIEW_PARENT_TARGET_FINGERPRINT/);
+  assert.match(script, /allowReservedAppReview: true/);
   assert.match(script, /--confirm-parent-app-review-account/);
   assert.match(script, /findUnique\(\{\s*where: \{ id: target\.familyId \}/);
   assert.match(script, /assertAppReviewTargetFingerprint/);

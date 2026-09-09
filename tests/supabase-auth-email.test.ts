@@ -2,10 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { APP_REVIEW_PARENT_CONTACT } from "@/lib/app-review-targeting";
 import {
+  deleteSupabaseAuthUserByEmail,
+  ensureSupabaseAuthUser,
   generateSupabasePasswordRecoveryLink,
   getSupabaseAuthEmailForAccessToken,
   isSupabaseAuthCompatibleEmail,
+  requestSupabasePasswordReset,
+  updateSupabaseAuthUserEmailByCurrentEmail,
   updateSupabaseAuthUserPasswordByEmail,
+  upsertSupabaseAuthUserWithPassword,
 } from "@/lib/supabase-auth";
 
 test("Supabase Auth email preflight accepts ordinary addresses", () => {
@@ -22,6 +27,11 @@ test("Supabase Auth email preflight rejects provider-incompatible address shapes
 });
 
 test("reserved App Review credentials reject recovery and ordinary password updates before provider access", async () => {
+  const directRecovery = await requestSupabasePasswordReset(
+    APP_REVIEW_PARENT_CONTACT.email,
+    "https://thebeesuite.io/reset-password",
+  );
+  assert.equal(directRecovery.status, 403);
   assert.deepEqual(
     await generateSupabasePasswordRecoveryLink({ email: APP_REVIEW_PARENT_CONTACT.email }),
     {
@@ -38,6 +48,38 @@ test("reserved App Review credentials reject recovery and ordinary password upda
     {
       ok: false,
       error: "Shared App Review credentials can be changed only through the controlled review-account process.",
+    },
+  );
+  await assert.rejects(
+    () => upsertSupabaseAuthUserWithPassword({
+      email: APP_REVIEW_PARENT_CONTACT.email,
+      password: "synthetic-unused-password",
+    }),
+    /controlled fingerprinted provisioner/,
+  );
+  assert.deepEqual(
+    await ensureSupabaseAuthUser({ email: APP_REVIEW_PARENT_CONTACT.email }),
+    {
+      ok: false,
+      created: false,
+      error: "Reserved App Review identities require the controlled fingerprinted provisioner.",
+    },
+  );
+  assert.deepEqual(
+    await deleteSupabaseAuthUserByEmail(APP_REVIEW_PARENT_CONTACT.email),
+    {
+      ok: false,
+      error: "Reserved App Review identities cannot be deleted through account workflows.",
+    },
+  );
+  assert.deepEqual(
+    await updateSupabaseAuthUserEmailByCurrentEmail({
+      currentEmail: APP_REVIEW_PARENT_CONTACT.email,
+      newEmail: "new-review-parent@example.com",
+    }),
+    {
+      ok: false,
+      error: "Reserved App Review identities cannot be changed through parent account workflows.",
     },
   );
 });

@@ -1715,6 +1715,7 @@ test("reserved App Review account credentials and billing controls remain immuta
   const forcePasswordRoute = readFileSync("src/app/api/auth/force-password-reset/route.ts", "utf8");
   const resetPasswordRoute = readFileSync("src/app/api/auth/reset-password/route.ts", "utf8");
   const supabaseAuth = readFileSync("src/lib/supabase-auth.ts", "utf8");
+  const executiveUserRoute = readFileSync("src/app/api/admin/executive/route.ts", "utf8");
   const passwordRoute = readFileSync("src/app/api/profile/password/route.ts", "utf8");
   const kioskRoute = readFileSync("src/app/api/parent/kiosk-credential/route.ts", "utf8");
   const tuitionRoute = readFileSync("src/app/api/parent/tuition-cadence/route.ts", "utf8");
@@ -1751,7 +1752,13 @@ test("reserved App Review account credentials and billing controls remain immuta
     "reserved identities must be rejected before forced password mutation",
   );
   assert.match(supabaseAuth, /generateSupabasePasswordRecoveryLink[\s\S]*appReviewReservedIdentityKind\(email\)/);
+  assert.match(supabaseAuth, /requestSupabasePasswordReset[\s\S]*appReviewReservedIdentityKind\(email\)/);
   assert.match(supabaseAuth, /updateSupabaseAuthUserPasswordByEmail[\s\S]*appReviewReservedIdentityKind\(normalizedEmail\)/);
+  assert.match(supabaseAuth, /upsertSupabaseAuthUserWithPassword[\s\S]*!allowReservedAppReview/);
+  assert.ok(
+    (executiveUserRoute.match(/appReviewReservedIdentityKind\(email\)/g) ?? []).length >= 4,
+    "executive create, password, status, and session mutations must reject reserved review identities",
+  );
   for (const route of [passwordRoute, kioskRoute, tuitionRoute, parentSetupRoute, teacherProfileRoute, profilePhotoRoute]) {
     assert.match(route, /appReviewReservedIdentityKind\(user\.email\)/);
     assert.match(route, /App Review/);

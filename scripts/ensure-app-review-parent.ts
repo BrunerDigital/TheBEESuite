@@ -716,6 +716,7 @@ async function main() {
     role: UserRole.PARENT_GUARDIAN,
     source: APP_REVIEW_SOURCE,
     updateExistingPassword: true,
+    allowReservedAppReview: true,
   });
 
   const authUserAfterWrite = await getSupabaseAuthUserMetadataByEmail(email);

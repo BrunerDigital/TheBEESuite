@@ -214,6 +214,9 @@ export function buildPasswordResetTokenUrl({
 }
 
 export async function requestSupabasePasswordReset(email: string, redirectTo: string) {
+  if (appReviewReservedIdentityKind(email)) {
+    return new Response(null, { status: 403, statusText: "Reserved App Review identity" });
+  }
   const { url, key } = getSupabaseAuthConfig("anon");
   return fetch(`${url}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
     method: "POST",
@@ -326,6 +329,13 @@ export async function ensureSupabaseAuthUser({
   email: string;
   name?: string;
 }) {
+  if (appReviewReservedIdentityKind(email)) {
+    return {
+      ok: false as const,
+      created: false,
+      error: "Reserved App Review identities require the controlled fingerprinted provisioner.",
+    };
+  }
   const { url, key } = getSupabaseAuthConfig("service");
   const password = randomUUID() + randomUUID();
   const response = await fetch(`${url}/auth/v1/admin/users`, {
@@ -382,6 +392,9 @@ export async function deleteSupabaseAuthUserByEmail(email: string) {
   if (!isSupabaseAuthCompatibleEmail(normalizedEmail)) {
     return { ok: false as const, error: "Target login email is not valid." };
   }
+  if (appReviewReservedIdentityKind(normalizedEmail)) {
+    return { ok: false as const, error: "Reserved App Review identities cannot be deleted through account workflows." };
+  }
   try {
     const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedEmail);
     if (!user) return { ok: true as const, deleted: false, alreadyMissing: true };
@@ -406,6 +419,9 @@ export async function updateSupabaseAuthUserEmailByCurrentEmail({
   const normalizedNewEmail = newEmail.trim().toLowerCase();
   if (!isSupabaseAuthCompatibleEmail(normalizedCurrentEmail) || !isSupabaseAuthCompatibleEmail(normalizedNewEmail)) {
     return { ok: false as const, error: "A valid current and new parent login email is required." };
+  }
+  if (appReviewReservedIdentityKind(normalizedCurrentEmail) || appReviewReservedIdentityKind(normalizedNewEmail)) {
+    return { ok: false as const, error: "Reserved App Review identities cannot be changed through parent account workflows." };
   }
   const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedCurrentEmail);
   if (!user) return { ok: false as const, error: "The existing parent login was not found in Supabase Auth." };
@@ -444,6 +460,7 @@ export async function upsertSupabaseAuthUserWithPassword({
   role,
   source = "bee_suite_executive_admin",
   updateExistingPassword = true,
+  allowReservedAppReview = false,
 }: {
   email: string;
   name?: string;
@@ -451,8 +468,12 @@ export async function upsertSupabaseAuthUserWithPassword({
   role?: string;
   source?: string;
   updateExistingPassword?: boolean;
+  allowReservedAppReview?: boolean;
 }) {
   const normalizedEmail = email.toLowerCase();
+  if (appReviewReservedIdentityKind(normalizedEmail) && !allowReservedAppReview) {
+    throw new Error("Reserved App Review identities require the controlled fingerprinted provisioner.");
+  }
   const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedEmail);
   const metadata = {
     name,

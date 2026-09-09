@@ -8,6 +8,7 @@ import {
 } from "@/lib/active-school-locations";
 import { canAdministerAllCenters, canAdministerCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { type AccessGrantTarget } from "@/lib/access-grant-guardrails";
+import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { parseExecutiveBulkImportCsv, type ExecutiveBulkImportRow } from "@/lib/executive-bulk-import";
 import { prisma } from "@/lib/prisma";
 import {
@@ -602,6 +603,9 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
       })
     : undefined;
   const email = generatedLogin?.email ?? submittedEmail;
+  if (appReviewReservedIdentityKind(email)) {
+    throw new Error("Reserved App Review identities require the controlled fingerprinted provisioner.");
+  }
   if (generatedLogin) password = generatedLogin.temporary_password;
   if (password && password.length < 8) throw new Error("Passwords must be at least 8 characters.");
   const requestedMustResetPassword = payload.mustResetPassword === true
@@ -743,6 +747,9 @@ async function resetUserPassword(payload: Payload, actor: Awaited<ReturnType<typ
   const email = clean(payload.email).toLowerCase();
   const password = clean(payload.password);
   if (!isEmail(email)) throw new Error("A valid user email is required.");
+  if (appReviewReservedIdentityKind(email)) {
+    throw new Error("Reserved App Review identities require the controlled fingerprinted provisioner.");
+  }
   if (password && password.length < 8) throw new Error("Passwords must be at least 8 characters.");
 
   const appUser = await prisma.user.findFirst({ where: { email, tenantId: actor.tenantId } });
@@ -781,6 +788,9 @@ async function setUserStatus(payload: Payload, actor: Awaited<ReturnType<typeof 
   const email = clean(payload.email).toLowerCase();
   const status = clean(payload.status);
   if (!isEmail(email)) throw new Error("A valid user email is required.");
+  if (appReviewReservedIdentityKind(email)) {
+    throw new Error("Reserved App Review identities require the controlled fingerprinted provisioner.");
+  }
   if (!["active", "inactive"].includes(status)) throw new Error("Supported user statuses are active or inactive.");
 
   const appUser = await prisma.user.findFirst({ where: { email, tenantId: actor.tenantId } });
@@ -808,6 +818,9 @@ async function setUserStatus(payload: Payload, actor: Awaited<ReturnType<typeof 
 async function revokeUserSessions(payload: Payload, actor: Awaited<ReturnType<typeof requireExecutiveAccess>>) {
   const email = clean(payload.email).toLowerCase();
   if (!isEmail(email)) throw new Error("A valid user email is required.");
+  if (appReviewReservedIdentityKind(email)) {
+    throw new Error("Reserved App Review identities require the controlled fingerprinted provisioner.");
+  }
 
   const appUser = await prisma.user.findFirst({
     where: { email, tenantId: actor.tenantId },

@@ -8,6 +8,7 @@ test("teacher App Review preparation is explicit, demo-scoped, and fail-closed",
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
   assert.match(script, /APP_REVIEW_TEACHER_PASSWORD/);
+  assert.match(script, /allowReservedAppReview: true/);
   assert.match(script, /APP_REVIEW_TEACHER_TENANT_ID/);
   assert.match(script, /APP_REVIEW_TEACHER_CENTER_ID/);
   assert.match(script, /APP_REVIEW_TEACHER_CLASSROOM_ID/);

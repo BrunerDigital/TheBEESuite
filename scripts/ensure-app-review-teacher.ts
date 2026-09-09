@@ -612,6 +612,7 @@ async function main() {
     role: UserRole.TEACHER,
     source: APP_REVIEW_SOURCE,
     updateExistingPassword: true,
+    allowReservedAppReview: true,
   });
 
   const authUserAfterWrite = await getSupabaseAuthUserMetadataByEmail(email);

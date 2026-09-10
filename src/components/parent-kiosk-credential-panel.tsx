@@ -65,7 +65,21 @@ export function ParentKioskCredentialPanel({ initialCredentials, previewMode = f
     });
   }
 
-  if (!credentials.length) return null;
+  if (!credentials.length) {
+    return (
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle as="h2" className="flex items-center gap-2">
+            <QrCode className="text-primary" aria-hidden="true" />
+            School Check-In
+          </CardTitle>
+          <CardDescription>
+            Check-in access is not available for this family yet. Contact your school office so they can confirm the guardian connection before a Family PIN or QR code is created.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   return (
     <Card className="glass-panel">
@@ -89,7 +103,7 @@ export function ParentKioskCredentialPanel({ initialCredentials, previewMode = f
       </CardHeader>
       <CardContent className="space-y-4">
         {status ? (
-          <Alert>
+          <Alert role="status" aria-live="polite">
             <CheckCircle2 className="size-4" aria-hidden="true" />
             <AlertTitle>Saved</AlertTitle>
             <AlertDescription>{status}</AlertDescription>

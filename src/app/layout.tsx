@@ -62,6 +62,11 @@ try {
   const dark = stored ? stored === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
   document.documentElement.classList.toggle("dark", dark);
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  window.requestAnimationFrame(() => {
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      meta.setAttribute("content", dark ? "#05070a" : "#f5b51b");
+    });
+  });
 } catch {}
 `;
 

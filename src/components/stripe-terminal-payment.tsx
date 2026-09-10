@@ -33,6 +33,8 @@ type TerminalAmounts = {
   paymentRequired: boolean;
 };
 
+export type TerminalPaymentStatus = "idle" | "loading" | "processing" | "succeeded" | "failed" | "review";
+
 type Props = {
   centerId: string;
   billingAccountId: string;
@@ -44,6 +46,7 @@ type Props = {
   presentation?: "dialog" | "embedded";
   contextLabel?: string;
   previewMode?: boolean;
+  onStatusChange?: (status: TerminalPaymentStatus) => void;
 };
 
 function money(cents: number) {
@@ -61,6 +64,7 @@ export function StripeTerminalPayment({
   presentation = "dialog",
   contextLabel,
   previewMode = false,
+  onStatusChange,
 }: Props) {
   const router = useRouter();
   const controlId = useId();
@@ -76,60 +80,75 @@ export function StripeTerminalPayment({
   const [amounts, setAmounts] = useState<TerminalAmounts | null>(previewMode ? { invoiceAmountCents: amountCents, accountCreditAppliedCents: 0, parentProcessingRecoveryAmountCents: 0, checkoutTotalCents: amountCents, paymentRequired: true } : null);
   const [parentPresent, setParentPresent] = useState(false);
   const [paymentId, setPaymentId] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "processing" | "succeeded" | "failed">("idle");
+  const [status, setStatus] = useState<TerminalPaymentStatus>("idle");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const embedded = presentation === "embedded";
   const active = embedded || open;
+
+  useEffect(() => {
+    onStatusChange?.(status);
+  }, [onStatusChange, status]);
 
   const loadReaders = useCallback(async () => {
     if (!centerId || amountCents <= 0) return;
     if (previewMode) return;
     setStatus("loading");
     setError("");
-    const response = await fetch(
-      `/api/billing/terminal-payment?centerId=${encodeURIComponent(centerId)}&billingAccountId=${encodeURIComponent(billingAccountId)}&familyId=${encodeURIComponent(familyId)}&invoiceId=${encodeURIComponent(invoiceId || "")}&amountCents=${amountCents}`,
-      { cache: "no-store" },
-    );
-    const json = await response.json().catch(() => null) as {
-      error?: string;
-      readers?: TerminalReader[];
-      amounts?: TerminalAmounts | null;
-    } | null;
-    if (!response.ok) {
+    try {
+      const response = await fetch(
+        `/api/billing/terminal-payment?centerId=${encodeURIComponent(centerId)}&billingAccountId=${encodeURIComponent(billingAccountId)}&familyId=${encodeURIComponent(familyId)}&invoiceId=${encodeURIComponent(invoiceId || "")}&amountCents=${amountCents}`,
+        { cache: "no-store" },
+      );
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        readers?: TerminalReader[];
+        amounts?: TerminalAmounts | null;
+      } | null;
+      if (!response.ok) {
+        setStatus("failed");
+        setError(json?.error || "Card readers could not be loaded.");
+        return;
+      }
+      const nextReaders = json?.readers ?? [];
+      setReaders(nextReaders);
+      setAmounts(json?.amounts ?? null);
+      setReaderId((current) => nextReaders.some((reader) => reader.id === current)
+        ? current
+        : nextReaders.find((reader) => reader.status === "online")?.id || nextReaders[0]?.id || "");
+      setStatus("idle");
+    } catch {
       setStatus("failed");
-      setError(json?.error || "Card readers could not be loaded.");
-      return;
+      setError("Card readers could not be loaded. Check the connection, then refresh the reader list.");
     }
-    const nextReaders = json?.readers ?? [];
-    setReaders(nextReaders);
-    setAmounts(json?.amounts ?? null);
-    setReaderId((current) => nextReaders.some((reader) => reader.id === current)
-      ? current
-      : nextReaders.find((reader) => reader.status === "online")?.id || nextReaders[0]?.id || "");
-    setStatus("idle");
   }, [amountCents, billingAccountId, centerId, familyId, invoiceId, previewMode]);
 
   useEffect(() => {
     if (!active || !paymentId || status !== "processing") return;
     let stopped = false;
     const check = async () => {
-      const response = await fetch("/api/billing/terminal-payment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "payment_status", paymentId }),
-      });
-      const json = await response.json().catch(() => null) as { status?: string; error?: string } | null;
-      if (stopped) return;
-      if (json?.status === "succeeded") {
-        setStatus("succeeded");
-        setMessage("The in-person card payment was approved and recorded.");
-        router.refresh();
-        return;
-      }
-      if ((!response.ok && json?.status !== "processing") || json?.status === "failed" || json?.status === "review") {
-        setStatus("failed");
-        setError(json?.error || "The in-person card payment did not complete.");
+      try {
+        const response = await fetch("/api/billing/terminal-payment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "payment_status", paymentId }),
+        });
+        const json = await response.json().catch(() => null) as { status?: string; error?: string } | null;
+        if (stopped) return;
+        if (json?.status === "succeeded") {
+          setStatus("succeeded");
+          setMessage("The in-person card payment was approved and recorded.");
+          router.refresh();
+          return;
+        }
+        if ((!response.ok && json?.status !== "processing") || json?.status === "failed" || json?.status === "review") {
+          setStatus(json?.status === "review" ? "review" : "failed");
+          setError(json?.error || "The in-person card payment did not complete.");
+        }
+      } catch {
+        if (!stopped) {
+          setMessage("The status check was interrupted. The original payment is still being reconciled automatically; do not start another payment.");
+        }
       }
     };
     const timer = window.setInterval(() => void check(), 2_000);
@@ -158,26 +177,31 @@ export function StripeTerminalPayment({
     setStatus("loading");
     setError("");
     setMessage("");
-    const response = await fetch("/api/billing/terminal-payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "register_reader",
-        centerId,
-        registrationCode: registrationCode.trim(),
-        label: readerLabel.trim(),
-      }),
-    });
-    const json = await response.json().catch(() => null) as { error?: string; reader?: TerminalReader } | null;
-    if (!response.ok || !json?.reader) {
+    try {
+      const response = await fetch("/api/billing/terminal-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "register_reader",
+          centerId,
+          registrationCode: registrationCode.trim(),
+          label: readerLabel.trim(),
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; reader?: TerminalReader } | null;
+      if (!response.ok || !json?.reader) {
+        setStatus("failed");
+        setError(json?.error || "The card reader could not be registered.");
+        return;
+      }
+      setRegistrationCode("");
+      setReaderLabel("");
+      setMessage("Reader registered to this school.");
+      await loadReaders();
+    } catch {
       setStatus("failed");
-      setError(json?.error || "The card reader could not be registered.");
-      return;
+      setError("The reader registration could not be confirmed. Check Stripe reader settings before trying the same code again.");
     }
-    setRegistrationCode("");
-    setReaderLabel("");
-    setMessage("Reader registered to this school.");
-    await loadReaders();
   }
 
   async function startPayment() {
@@ -197,38 +221,43 @@ export function StripeTerminalPayment({
     setStatus("loading");
     setError("");
     setMessage("");
-    const response = await fetch("/api/billing/terminal-payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "process_payment",
-        centerId,
-        billingAccountId,
-        familyId,
-        invoiceId: invoiceId || null,
-        readerId,
-        amountCents,
-        description,
-        parentPresent: true,
-      }),
-    });
-    const json = await response.json().catch(() => null) as { error?: string; paymentId?: string; status?: string } | null;
-    if (json?.paymentId && json.status === "processing") {
+    try {
+      const response = await fetch("/api/billing/terminal-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "process_payment",
+          centerId,
+          billingAccountId,
+          familyId,
+          invoiceId: invoiceId || null,
+          readerId,
+          amountCents,
+          description,
+          parentPresent: true,
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; paymentId?: string; status?: string } | null;
+      if (json?.paymentId && json.status === "processing") {
+        setPaymentId(json.paymentId);
+        setStatus("processing");
+        setMessage(response.ok
+          ? "Reader ready. Ask the parent to tap, insert, or swipe their card."
+          : "The reader response was interrupted. The original payment attempt is being reconciled; do not start another payment.");
+        return;
+      }
+      if (!response.ok || !json?.paymentId) {
+        setStatus("failed");
+        setError(json?.error || "The reader payment could not be started.");
+        return;
+      }
       setPaymentId(json.paymentId);
       setStatus("processing");
-      setMessage(response.ok
-        ? "Reader ready. Ask the parent to tap, insert, or swipe their card."
-        : "The reader response was interrupted. The original payment attempt is being reconciled; do not start another payment.");
-      return;
+      setMessage("Reader ready. Ask the parent to tap, insert, or swipe their card.");
+    } catch {
+      setStatus("review");
+      setError("The connection ended before the payment outcome was confirmed. Do not retry this charge until the original attempt is reconciled in Billing and Stripe.");
     }
-    if (!response.ok || !json?.paymentId) {
-      setStatus("failed");
-      setError(json?.error || "The reader payment could not be started.");
-      return;
-    }
-    setPaymentId(json.paymentId);
-    setStatus("processing");
-    setMessage("Reader ready. Ask the parent to tap, insert, or swipe their card.");
   }
 
   const selectedReader = readers.find((reader) => reader.id === readerId) ?? null;
@@ -241,7 +270,8 @@ export function StripeTerminalPayment({
     amountCents > 0 &&
     amounts?.paymentRequired === true &&
     status !== "loading" &&
-    status !== "processing",
+    status !== "processing" &&
+    status !== "review",
   );
 
   function openTerminal() {
@@ -357,14 +387,14 @@ export function StripeTerminalPayment({
             </label>
 
             {message ? (
-              <Alert aria-live="polite">
+              <Alert role="status" aria-live="polite">
                 <CreditCard className="size-4" />
                 <AlertTitle>{status === "succeeded" ? "Payment recorded" : "Reader status"}</AlertTitle>
                 <AlertDescription>{message}</AlertDescription>
               </Alert>
             ) : null}
             {error ? (
-              <Alert variant="destructive" aria-live="polite">
+              <Alert role="alert" variant="destructive">
                 <AlertTitle>Card reader needs attention</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
@@ -377,7 +407,7 @@ export function StripeTerminalPayment({
               </Button>
             ) : null}
             <Button type="button" disabled={!canProcess} onClick={startPayment}>
-              {status === "loading" || status === "processing" ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <CreditCard data-icon="inline-start" />}
+              {status === "loading" || status === "processing" ? <LoaderCircle className="animate-spin motion-reduce:animate-none" data-icon="inline-start" /> : <CreditCard data-icon="inline-start" />}
               {status === "processing"
                 ? "Waiting for card"
                 : status === "loading"

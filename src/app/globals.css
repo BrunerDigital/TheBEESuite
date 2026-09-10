@@ -134,6 +134,16 @@
     --module-accent: oklch(0.85 0.145 94);
     --module-accent-secondary: oklch(0.77 0.17 70);
     --module-on-accent: oklch(0.15 0.02 250);
+    --family-accent-ink: oklch(0.46 0.115 72);
+    --ring: var(--family-accent-ink);
+  }
+
+  .dark .bee-app-frame[data-module="family"] {
+    --family-accent-ink: oklch(0.85 0.145 94);
+  }
+
+  .bee-app-frame[data-module="family"] .text-primary {
+    color: var(--family-accent-ink);
   }
 
   .bee-app-frame[data-module="executive"] {
@@ -1631,6 +1641,10 @@
 
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) nav[aria-label="Family sections"] > div::-webkit-scrollbar {
     display: none;
+  }
+
+  .teacher-mobile-workspace [data-collapsible-card="true"] {
+    scroll-margin-top: calc(10rem + env(safe-area-inset-top));
   }
 
   @media (max-width: 639px) {

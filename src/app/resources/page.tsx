@@ -422,6 +422,24 @@ const guides: ResourceGuide[] = [
   },
 ];
 
+const guideIndexGroups = [
+  {
+    label: "Families",
+    ids: ["parent-portal-install", "payments", "parent-portal", "kiosk-pickup"],
+  },
+  {
+    label: "Classroom and school operations",
+    ids: ["school-launch", "director-data-clean-start", "director-sop", "director-parent-invites", "teacher-sop"],
+  },
+  {
+    label: "Leadership and billing",
+    ids: ["executive-admin", "agency-payment-reconciliation", "billing-admin"],
+  },
+].map((group) => ({
+  ...group,
+  guides: group.ids.map((id) => guides.find((guide) => guide.id === id)).filter((guide): guide is ResourceGuide => Boolean(guide)),
+}));
+
 const quickLinks = [
   { label: "Parent login", href: "/parents" },
   { label: "Choose sign-in page", href: "/app" },
@@ -610,24 +628,27 @@ export default function ResourcesPage() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              {guides.slice(0, 6).map((guide) => (
-                <Link
-                  key={guide.id}
-                  href={`#${guide.id}`}
-                  className="group rounded-lg border border-white/10 bg-white/[0.055] p-4 transition hover:border-amber-300/70 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-amber-300/45"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="grid size-10 place-items-center rounded-lg bg-amber-300 text-slate-950">
-                      <guide.icon className="size-5" />
-                    </div>
-                    <ArrowRight className="size-4 text-slate-500 transition group-hover:translate-x-1 group-hover:text-amber-300" />
-                  </div>
-                  <div className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">{guide.audience}</div>
-                  <div className="mt-2 text-base font-semibold text-white">{guide.title}</div>
-                </Link>
+            <nav aria-label="Resource guide index" className="grid gap-3 lg:grid-cols-3">
+              {guideIndexGroups.map((group) => (
+                <section key={group.label} className="rounded-lg border border-white/10 bg-white/[0.055] p-4">
+                  <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">{group.label}</h2>
+                  <ul className="mt-3 grid gap-1.5">
+                    {group.guides.map((guide) => (
+                      <li key={guide.id}>
+                        <Link
+                          href={`#${guide.id}`}
+                          className="group flex min-h-11 items-center gap-3 rounded-md px-2 py-2 text-sm font-semibold text-white transition motion-reduce:transition-none hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-amber-300/45"
+                        >
+                          <guide.icon className="size-4 shrink-0 text-amber-300" aria-hidden="true" />
+                          <span className="min-w-0 flex-1">{guide.title}</span>
+                          <ArrowRight className="size-4 shrink-0 text-slate-500 transition motion-reduce:transition-none group-hover:translate-x-1 group-hover:text-amber-300 motion-reduce:transform-none" aria-hidden="true" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </div>
+            </nav>
           </div>
 
           <div className="grid gap-3 border-y border-white/10 py-5 sm:grid-cols-2 lg:grid-cols-4">

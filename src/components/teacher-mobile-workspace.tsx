@@ -872,7 +872,7 @@ export function TeacherMobileWorkspace({
 
   return (
     <div
-      className="mx-auto flex w-full max-w-5xl flex-col gap-5 [&_button]:min-h-10"
+      className="teacher-mobile-workspace mx-auto flex w-full max-w-5xl flex-col gap-5 [&_button]:min-h-10"
       aria-busy={isPending}
     >
       {appReviewMode ? (
@@ -1088,9 +1088,9 @@ export function TeacherMobileWorkspace({
         </AlertDescription>
       </Alert>
 
-      <nav aria-label="Teacher task shortcuts" className="sticky top-[4.75rem] z-10 -mx-1 rounded-xl border bg-background p-2 shadow-sm lg:top-20">
+      <nav aria-label="Teacher task shortcuts" className="sticky top-[calc(4.75rem+env(safe-area-inset-top))] z-10 -mx-1 rounded-xl border bg-background p-2 shadow-sm lg:top-20">
         <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Do now</div>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="flex snap-x gap-2 overflow-x-auto pb-1 xl:grid xl:grid-cols-6 xl:overflow-visible xl:pb-0">
           {[
             ["Check attendance", "#teacher-attendance"],
             ["Write daily report", "#teacher-daily-report"],
@@ -1099,7 +1099,7 @@ export function TeacherMobileWorkspace({
             ["View roster", "#teacher-roster"],
             ["Edit profile", "#teacher-profile-setup"],
           ].map(([label, href]) => (
-            <Button key={href} size="sm" variant="outline" className="min-h-11 w-full justify-start whitespace-normal text-left" nativeButton={false} render={<a href={href} />}>
+            <Button key={href} size="sm" variant="outline" className="min-h-11 shrink-0 snap-start justify-start whitespace-nowrap text-left xl:w-full" nativeButton={false} render={<a href={href} />}>
               {label}
             </Button>
           ))}
@@ -1113,7 +1113,7 @@ export function TeacherMobileWorkspace({
           description={kioskAccess.centerName}
           collapsedSummary={`${kioskAccess.clockStatus === "clocked_in" ? "Clocked in" : "Clocked out"} · ${kioskAccess.hasStaffKioskCode ? "Staff code ready" : "Staff code missing"}`}
           headerActions={(
-            <Button type="button" size="sm" variant="outline" onClick={() => window.location.assign(kioskAccess.kioskPath)}>
+            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={kioskAccess.kioskPath} />}>
               <ExternalLink data-icon="inline-start" />
               Open clock
             </Button>
@@ -1154,7 +1154,7 @@ export function TeacherMobileWorkspace({
                 </div>
               </div>
             </div>
-            <Button type="button" onClick={() => window.location.assign(kioskAccess.kioskPath)}>
+            <Button nativeButton={false} render={<Link href={kioskAccess.kioskPath} />}>
               <ExternalLink data-icon="inline-start" />
               Open Staff Clock
             </Button>
@@ -1249,7 +1249,7 @@ export function TeacherMobileWorkspace({
                 </Alert>
               ) : null}
               <div className="grid gap-2">
-                {classroom.children.slice(0, 12).map((child) => {
+                {classroom.children.map((child) => {
                   const attendance = attendanceFor(child);
                   const dailyReport = dailyReportFor(child);
                   const isCheckedIn = attendance.latestLogType === "check_in";

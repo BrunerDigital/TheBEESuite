@@ -135,6 +135,7 @@ export type BillingWorkbenchCenter = {
   name: string;
   crmLocationId: string | null;
   state?: string | null;
+  timezone?: string | null;
   classrooms: Array<{ id: string; name: string; ageGroup: string }>;
   dashboardOptions?: DashboardOptions;
   isMissHoneysLearningCenter?: boolean;
@@ -444,7 +445,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   );
   const [assignmentBillingDay, setAssignmentBillingDay] = useState(String(initialAssignment?.billingDay ?? 1));
   const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
-  const [assignmentStartPeriod, setAssignmentStartPeriod] = useState(initialAssignment?.startsPeriod ?? "");
+  const [assignmentStartPeriod, setAssignmentStartPeriod] = useState(
+    initialAssignment?.startsPeriod && periodMatchesCadence(initialAssignment.startsPeriod, initialAssignment.cadence ?? "weekly")
+      ? initialAssignment.startsPeriod
+      : currentPeriodForCadence(initialAssignment?.cadence ?? "weekly"),
+  );
   const [assignmentDescription, setAssignmentDescription] = useState(initialAssignment?.description ?? initialAssignment?.tuitionPlanName ?? "");
   const [assignmentChildProgram, setAssignmentChildProgram] = useState(initialAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0]);
   const [assignmentChildClassroomId, setAssignmentChildClassroomId] = useState(initialAssignmentChild?.classroomId ?? "");
@@ -481,6 +486,17 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [paymentRequestEmailSelections, setPaymentRequestEmailSelections] = useState<Record<string, string[]>>({});
   const [paymentReviewMethod, setPaymentReviewMethod] = useState<DirectorPaymentMethod | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function runBillingTransition(action: () => Promise<void>) {
+    startTransition(async () => {
+      try {
+        await action();
+      } catch {
+        setStatusMessage("");
+        setErrorMessage("The billing request was interrupted. Review the current account and Stripe activity, if applicable, before trying the action again.");
+      }
+    });
+  }
 
   const filteredFamilies = useMemo(
     () => families.filter((family) => !centerId || family.centerId === centerId),
@@ -637,6 +653,79 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const selectedChildSummary = selectedChildren.length
     ? `${selectedChildren.length} child${selectedChildren.length === 1 ? "" : "ren"}`
     : selectedFamilyIsPast ? "Past family" : "No children";
+  const savedAssignmentCadence = selectedAssignment?.cadence === "monthly"
+    ? "monthly"
+    : selectedAssignment?.cadence === "biweekly"
+      ? "biweekly"
+      : selectedAssignment?.cadence === "four_week"
+        ? "four_week"
+        : "weekly";
+  const savedAssignmentStartPeriod = selectedAssignment?.startsPeriod && periodMatchesCadence(selectedAssignment.startsPeriod, selectedAssignment.cadence ?? "weekly")
+    ? selectedAssignment.startsPeriod
+    : currentPeriodForCadence(selectedAssignment?.cadence ?? "weekly");
+  const assignmentDraftIsDirty = Boolean(selectedAssignmentChild) && (
+    assignmentEnabled !== (selectedAssignment?.enabled === false ? "false" : "true")
+    || assignmentCadence !== savedAssignmentCadence
+    || assignmentBillingDay !== String(selectedAssignment?.billingDay ?? 1)
+    || assignmentTuitionPlanId !== (locationTuitionPlans.find((plan) => plan.id === selectedAssignment?.tuitionPlanId)?.id ?? "")
+    || assignmentStartPeriod !== savedAssignmentStartPeriod
+    || assignmentDescription !== (selectedAssignment?.description ?? selectedAssignment?.tuitionPlanName ?? "")
+    || assignmentChildProgram !== (selectedAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0])
+    || assignmentChildClassroomId !== (selectedAssignmentChild?.classroomId ?? "")
+    || assignmentChildScheduledDays !== scheduledDaysValue(selectedAssignmentChild)
+    || assignmentChildStartDate !== optionalDateInputValue(selectedAssignmentChild?.startDate)
+    || JSON.stringify(assignmentCredits) !== JSON.stringify(tuitionCreditInputs(selectedAssignment?.credits ?? []))
+    || JSON.stringify(assignmentAdditionalCharges) !== JSON.stringify(tuitionAdditionalChargeInputs(selectedAssignment?.additionalCharges))
+  );
+  const planBeingEdited = planEditorId === "new" ? null : locationTuitionPlans.find((plan) => plan.id === planEditorId) ?? null;
+  const planDraftIsDirty = planBeingEdited
+    ? planName !== planBeingEdited.name
+      || planAgeGroup !== planBeingEdited.ageGroup
+      || planCadence !== tuitionBillingCadence(planBeingEdited.cadence)
+      || dollarsToCents(planAmountDollars) !== planBeingEdited.amountCents
+      || planFundingType !== (planBeingEdited.amountCents === 0 ? "voucher" : "family")
+    : Boolean(planName.trim() || planAmountDollars.trim());
+  const invoiceDraftIsDirty = Boolean(
+    invoiceEditDraft
+    && selectedEditableInvoice
+    && (
+      invoiceEditAmountCents !== selectedEditableInvoice.totalCents
+      || invoiceEditDueDate !== dateInputValue(selectedEditableInvoice.dueDate)
+      || invoiceEditDescription !== invoiceLineDescription(selectedEditableInvoice)
+    )
+  );
+  const hasUncommittedBillingInput = Boolean(
+    amountDollars.trim()
+    || adjustmentAmountDollars.trim()
+    || adjustmentNote.trim()
+    || checkAmountDollars.trim()
+    || checkNumber.trim()
+    || checkNotes.trim()
+    || cashAmountDollars.trim()
+    || cashReference.trim()
+    || cashNotes.trim()
+    || payrollAmountDollars.trim()
+    || payrollReference.trim()
+    || payrollNotes.trim()
+    || refundAmountDollars.trim()
+    || refundReason.trim()
+    || refundPaymentIds.length
+    || paymentAmountDollars.trim()
+    || invoiceVoidReason.trim()
+    || invoiceDraftIsDirty
+    || assignmentDraftIsDirty
+    || planDraftIsDirty
+  );
+
+  useEffect(() => {
+    if (!hasUncommittedBillingInput) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [hasUncommittedBillingInput]);
 
   function billingContextDescription(childName?: string) {
     return [
@@ -649,6 +738,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   function confirmBillingAction(action: string, childName?: string) {
     if (!selectedFamily) return false;
     return window.confirm(`You are about to ${action} for ${billingContextDescription(childName)}. Continue?`);
+  }
+
+  function confirmDiscardBillingInput() {
+    return !hasUncommittedBillingInput
+      || window.confirm("This billing workspace has unsaved input. Discard it and change the selected school or family?");
   }
 
   function updateInvoiceEditDraft(patch: Partial<Omit<InvoiceEditDraft, "invoiceId">>) {
@@ -699,7 +793,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function manageFamilyPaymentMethod(action: "setup" | "portal", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
     if (!selectedFamily) return setErrorMessage("Choose a family before managing payment information.");
-    startTransition(async () => {
+    runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
       const response = await fetch("/api/billing/payment-method-session", {
@@ -747,7 +841,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const invoiceId = effectivePaymentTarget.startsWith("invoice:") ? selectedPaymentInvoice?.id ?? "" : "";
     setPaymentReviewMethod(null);
 
-    startTransition(async () => {
+    runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
 
@@ -855,7 +949,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (!requestEmails.length) return setErrorMessage(intent === "payment_method_reauthorization"
       ? "The guardian who enabled autopay needs a linked family email before a replacement link can be sent."
       : "Choose at least one family email to receive the payment form.");
-    startTransition(async () => {
+    runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
       setManualPaymentEmailCopies([]);
@@ -916,7 +1010,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function handleCenterChange(value: string | null) {
-    if (!value) return;
+    if (!value || value === centerId || !confirmDiscardBillingInput()) return;
     const nextPlans = tuitionPlans.filter((plan) => plan.centerId === value);
     const nextFamily = families.find((family) => family.centerId === value) ?? null;
     const localNow = currentLocalDateTime(resolveSchoolTimeZone(value));
@@ -939,7 +1033,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function handleFamilyChange(value: string | null) {
-    if (!value) return;
+    if (!value || value === effectiveFamilyId || !confirmDiscardBillingInput()) return;
     const nextFamily = filteredFamilies.find((family) => family.id === value) ?? null;
     setFamilyId(value);
     setChildId("none");
@@ -1007,7 +1101,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   }
 
   function submit(payload: Record<string, unknown>) {
-    startTransition(async () => {
+    runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
       const response = await fetch("/api/billing/invoices", {
@@ -1173,7 +1267,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       );
       if (!confirmed) return;
     }
-    startTransition(async () => {
+    runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
       const response = await fetch("/api/billing/tuition-recovery", {
@@ -1333,7 +1427,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     );
     if (!confirmed) return;
 
-    startTransition(async () => {
+    runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
       const response = await fetch("/api/billing/invoices", {
@@ -1388,7 +1482,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     );
     if (!confirmed) return;
 
-    startTransition(async () => {
+    runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
       const response = await fetch("/api/billing/invoices", {
@@ -1443,7 +1537,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (!assignmentChildProgram || !assignmentChildClassroomId) {
       return setErrorMessage("Choose a program and classroom before saving child setup.");
     }
-    startTransition(async () => {
+    runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
       const response = await fetch("/api/operations/records", {
@@ -1483,7 +1577,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       ? "save a $0 CCDF or voucher-funded tuition assignment"
       : "save recurring tuition";
     if (!confirmBillingAction(action, selectedAssignmentChild.fullName)) return;
-    startTransition(async () => {
+    runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
       const response = await fetch("/api/billing/tuition-assignments", {
@@ -1560,7 +1654,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (planFundingType === "voucher" && planAmountCents !== 0) {
       return setErrorMessage("No-family-charge tuition must be saved at $0.00 family responsibility.");
     }
-    startTransition(async () => {
+    runBillingTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
       const persistRate = async (id?: string) => {
@@ -1707,14 +1801,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       </CardHeader>
       <CardContent className="space-y-4">
         {statusMessage ? (
-          <Alert>
+          <Alert role="status" aria-live="polite">
             <CheckCircle2 className="size-4" />
             <AlertTitle>Update complete</AlertTitle>
             <AlertDescription>{statusMessage}</AlertDescription>
           </Alert>
         ) : null}
         {errorMessage ? (
-          <Alert variant="destructive">
+          <Alert role="alert" variant="destructive">
             <AlertCircle className="size-4" />
             <AlertTitle>Action needed</AlertTitle>
             <AlertDescription>{errorMessage}</AlertDescription>

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState, useTransition } from "react";
+import { createContext, FormEvent, useContext, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { AlertCircle, ArrowRight, CheckCircle2, CreditCard, FileCheck2, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -129,6 +129,24 @@ const financialAgreementItems = [
 
 const registrationSelectTriggerClassName =
   "w-full bg-background px-3 text-foreground dark:bg-input/30 data-[size=default]:h-10";
+
+const RegistrationErrorsContext = createContext<Record<string, string>>({});
+
+function useRegistrationFieldError(id: string) {
+  const errors = useContext(RegistrationErrorsContext);
+  const error = errors[id];
+  return {
+    error,
+    accessibility: {
+      "aria-invalid": error ? true : undefined,
+      "aria-describedby": error ? `${id}-error` : undefined,
+    },
+  };
+}
+
+function RegistrationFieldError({ id, error }: { id: string; error?: string }) {
+  return error ? <p id={`${id}-error`} className="text-sm text-destructive">{error}</p> : null;
+}
 
 function centerLabel(center: CenterOption) {
   const location = [center.city, center.state].filter(Boolean).join(", ");
@@ -312,6 +330,9 @@ function TextField({
   placeholder,
   autoComplete,
   maxLength,
+  minLength,
+  inputMode,
+  pattern,
 }: {
   id: string;
   label: string;
@@ -321,11 +342,28 @@ function TextField({
   placeholder?: string;
   autoComplete?: string;
   maxLength?: number;
+  minLength?: number;
+  inputMode?: "none" | "text" | "decimal" | "numeric" | "tel" | "search" | "email" | "url";
+  pattern?: string;
 }) {
+  const { error, accessibility } = useRegistrationFieldError(id);
   return (
     <div className={`space-y-1.5 ${className ?? ""}`}>
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} name={id} type={type} required={required} placeholder={placeholder} autoComplete={autoComplete} maxLength={maxLength} />
+      <Input
+        id={id}
+        name={id}
+        type={type}
+        required={required}
+        placeholder={placeholder}
+        autoComplete={autoComplete ?? "off"}
+        maxLength={maxLength}
+        minLength={minLength}
+        inputMode={inputMode}
+        pattern={pattern}
+        {...accessibility}
+      />
+      <RegistrationFieldError id={id} error={error} />
     </div>
   );
 }
@@ -343,10 +381,12 @@ function TextAreaField({
   className?: string;
   placeholder?: string;
 }) {
+  const { error, accessibility } = useRegistrationFieldError(id);
   return (
     <div className={`space-y-1.5 ${className ?? ""}`}>
       <Label htmlFor={id}>{label}</Label>
-      <Textarea id={id} name={id} required={required} placeholder={placeholder} />
+      <Textarea id={id} name={id} required={required} placeholder={placeholder} autoComplete="off" {...accessibility} />
+      <RegistrationFieldError id={id} error={error} />
     </div>
   );
 }
@@ -366,11 +406,12 @@ function SelectField({
   className?: string;
   emptyLabel?: string;
 }) {
+  const { error, accessibility } = useRegistrationFieldError(id);
   return (
     <div className={`space-y-1.5 ${className ?? ""}`}>
       <Label htmlFor={id}>{label}</Label>
       <Select name={id} required={required}>
-        <SelectTrigger id={id} className={registrationSelectTriggerClassName}>
+        <SelectTrigger id={id} className={registrationSelectTriggerClassName} {...accessibility}>
           <SelectValue placeholder={emptyLabel} />
         </SelectTrigger>
         <SelectContent>
@@ -381,22 +422,28 @@ function SelectField({
           })}
         </SelectContent>
       </Select>
+      <RegistrationFieldError id={id} error={error} />
     </div>
   );
 }
 
 function CheckboxCard({ name, children, required }: { name: string; children: string; required?: boolean }) {
+  const { error, accessibility } = useRegistrationFieldError(name);
   return (
-    <label htmlFor={name} className="flex min-h-11 gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6">
-      <input id={name} className="mt-1 size-5 shrink-0" name={name} type="checkbox" required={required} />
-      <span>{children}</span>
-    </label>
+    <div className="space-y-1.5">
+      <label htmlFor={name} className="flex min-h-11 gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6">
+        <input id={name} className="mt-1 size-5 shrink-0" name={name} type="checkbox" required={required} {...accessibility} />
+        <span>{children}</span>
+      </label>
+      <RegistrationFieldError id={name} error={error} />
+    </div>
   );
 }
 
 function CheckboxGroup({ label, name, options, columns = "sm:grid-cols-2" }: { label: string; name: string; options: Option[]; columns?: string }) {
+  const { error, accessibility } = useRegistrationFieldError(name);
   return (
-    <fieldset id={name} className="space-y-2 md:col-span-2">
+    <fieldset id={name} className="space-y-2 md:col-span-2" {...accessibility}>
       <legend className="text-sm font-medium">{label}</legend>
       <div className={`grid gap-2 ${columns}`}>
         {options.map((option) => (
@@ -406,6 +453,7 @@ function CheckboxGroup({ label, name, options, columns = "sm:grid-cols-2" }: { l
           </label>
         ))}
       </div>
+      <RegistrationFieldError id={name} error={error} />
     </fieldset>
   );
 }
@@ -417,6 +465,7 @@ export function OnlineRegistrationForm({
 }: RegistrationFormProps) {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<SubmitResult | null>(null);
+  const resultSummaryRef = useRef<HTMLDivElement | null>(null);
   const lockedCenter = centers.find((center) => center.id === initialCenterId);
 
   const groupedCenters = useMemo(() => {
@@ -428,31 +477,48 @@ export function OnlineRegistrationForm({
     return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [centers]);
 
+  useEffect(() => {
+    if (!result) return;
+    const frame = window.requestAnimationFrame(() => {
+      resultSummaryRef.current?.focus({ preventScroll: true });
+      resultSummaryRef.current?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "center",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [result]);
+
   function submitRegistration(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const payload = collectForm(formElement);
     setResult(null);
     startTransition(async () => {
-      const response = await fetch("/api/registration", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const json = await response.json().catch(() => null) as SubmitResult | null;
-      if (!response.ok || !json?.ok) {
-        setResult(json ?? { error: "Registration could not be submitted." });
-        return;
+      try {
+        const response = await fetch("/api/registration", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = await response.json().catch(() => null) as SubmitResult | null;
+        if (!response.ok || !json?.ok) {
+          setResult(json ?? { error: "Registration could not be submitted. Your information remains in the form; review it and try again." });
+          return;
+        }
+        formElement.reset();
+        setResult(json);
+      } catch {
+        setResult({ error: "We could not reach the registration service. Your information remains in the form; check your connection and try again." });
       }
-      formElement.reset();
-      setResult(json);
     });
   }
 
   return (
+    <RegistrationErrorsContext.Provider value={result?.errors ?? {}}>
     <form className="min-w-0 space-y-5" aria-busy={isPending} onSubmit={submitRegistration}>
       {result?.ok ? (
-        <Alert className="border-emerald-500/30 bg-emerald-500/10">
+        <Alert ref={resultSummaryRef} tabIndex={-1} role="status" aria-live="polite" className="scroll-mt-4 border-emerald-500/30 bg-emerald-500/10 focus:outline-none">
           <CheckCircle2 className="size-4" />
           <AlertTitle>Registration submitted</AlertTitle>
           <AlertDescription>
@@ -461,7 +527,7 @@ export function OnlineRegistrationForm({
         </Alert>
       ) : null}
       {result?.error || (result?.errors && Object.keys(result.errors).length) ? (
-        <Alert variant="destructive">
+        <Alert ref={resultSummaryRef} tabIndex={-1} role="alert" className="scroll-mt-4 focus:outline-none" variant="destructive">
           <AlertCircle className="size-4" />
           <AlertTitle>Review the form</AlertTitle>
           <AlertDescription>
@@ -477,7 +543,7 @@ export function OnlineRegistrationForm({
         </Alert>
       ) : null}
       {!centers.length ? (
-        <Alert variant="destructive">
+        <Alert role="note" variant="destructive">
           <AlertCircle className="size-4" />
           <AlertTitle>Schools are not available</AlertTitle>
           <AlertDescription>
@@ -573,26 +639,26 @@ export function OnlineRegistrationForm({
           <TextField id="primaryGuardianAddress" label="Primary address" autoComplete="street-address" className="md:col-span-2" />
           <TextField id="primaryGuardianRelation" label="Primary relationship to child" />
           <TextField id="primaryGuardianEmployer" label="Primary place of employment" />
-          <TextField id="primaryGuardianDriverLicense" label="Primary driver's license" />
-          <TextField id="primaryGuardianSocialSecurityNumber" label="Primary social security number if required" />
+          <TextField id="primaryGuardianDriverLicense" label="Primary driver's license" maxLength={32} />
+          <TextField id="primaryGuardianSocialSecurityNumber" label="Primary social security number if required" type="password" inputMode="numeric" maxLength={11} pattern="[0-9 -]{4,11}" />
 
           <div className="md:col-span-2 border-t border-border pt-4" />
-          <TextField id="secondaryGuardianName" label="Secondary guardian name" />
-          <TextField id="secondaryGuardianEmail" label="Secondary email" type="email" />
-          <TextField id="secondaryGuardianPhone" label="Secondary cell phone" type="tel" />
+          <TextField id="secondaryGuardianName" label="Secondary guardian name" autoComplete="section-secondary name" />
+          <TextField id="secondaryGuardianEmail" label="Secondary email" type="email" autoComplete="section-secondary email" />
+          <TextField id="secondaryGuardianPhone" label="Secondary cell phone" type="tel" autoComplete="section-secondary tel" />
           <TextField id="secondaryGuardianCellPhoneCarrier" label="Secondary cell carrier" />
           <TextField id="secondaryGuardianHomePhone" label="Secondary home phone" type="tel" />
           <TextField id="secondaryGuardianWorkPhone" label="Secondary work phone" type="tel" />
-          <TextField id="secondaryGuardianAddress" label="Secondary address" className="md:col-span-2" />
+          <TextField id="secondaryGuardianAddress" label="Secondary address" autoComplete="section-secondary street-address" className="md:col-span-2" />
           <TextField id="secondaryGuardianRelation" label="Secondary relationship" />
           <TextField id="secondaryGuardianEmployer" label="Secondary place of employment" />
-          <TextField id="secondaryGuardianDriverLicense" label="Secondary driver's license" />
-          <TextField id="secondaryGuardianSocialSecurityNumber" label="Secondary social security number if required" />
+          <TextField id="secondaryGuardianDriverLicense" label="Secondary driver's license" maxLength={32} />
+          <TextField id="secondaryGuardianSocialSecurityNumber" label="Secondary social security number if required" type="password" inputMode="numeric" maxLength={11} pattern="[0-9 -]{4,11}" />
 
           <div className="md:col-span-2 border-t border-border pt-4" />
-          <TextField id="billingContactName" label="Billing contact name" />
-          <TextField id="billingContactEmail" label="Billing email" type="email" />
-          <TextField id="billingContactPhone" label="Billing phone" type="tel" />
+          <TextField id="billingContactName" label="Billing contact name" autoComplete="section-billing name" />
+          <TextField id="billingContactEmail" label="Billing email" type="email" autoComplete="section-billing email" />
+          <TextField id="billingContactPhone" label="Billing phone" type="tel" autoComplete="section-billing tel" />
         </CardContent>
       </Card>
 
@@ -752,7 +818,7 @@ export function OnlineRegistrationForm({
           <TextAreaField id="mealApplicationChildIncome" label="Child income" placeholder="Source, amount, and frequency." />
           <TextAreaField id="mealApplicationHouseholdMembers" label="Household members" placeholder="Adult and child household members. Include foster children if applicable." />
           <TextAreaField id="mealApplicationAdultIncome" label="Adult household income" placeholder="Earnings, public assistance, pensions/retirement, and other income with frequency." className="md:col-span-2" />
-          <TextField id="mealApplicationLastFourSsn" label="Last four digits of adult household member SSN" maxLength={4} />
+          <TextField id="mealApplicationLastFourSsn" label="Last four digits of adult household member SSN" type="password" inputMode="numeric" minLength={4} maxLength={4} pattern="[0-9]{4}" />
           <CheckboxCard name="mealApplicationNoSsn">Adult household member has no SSN.</CheckboxCard>
           <TextField id="mealApplicationEthnicity" label="Optional ethnicity" placeholder="Hispanic/Latino or not Hispanic/Latino" />
           <TextField id="mealApplicationRace" label="Optional race" placeholder="American Indian/Alaskan Native, Asian, Black or African American, Native Hawaiian or Pacific Islander, White" />
@@ -808,5 +874,6 @@ export function OnlineRegistrationForm({
         </CardContent>
       </Card>
     </form>
+    </RegistrationErrorsContext.Provider>
   );
 }

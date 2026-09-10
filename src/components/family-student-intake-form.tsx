@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CollapsibleCard } from "@/components/workspace-preferences";
 import { enrollmentClassroomValidationError, isEnrollmentPipelineStatus } from "@/lib/enrollment-status";
 import { suggestedExpectedDueDate } from "@/lib/expected-child-birth";
+import { guardianCommunicationOptions } from "@/lib/guardian-communication";
 
 type CenterOption = {
   id: string;
@@ -28,7 +29,6 @@ type Props = {
 
 const ageGroups = ["Infant", "Toddler", "Twos", "Preschool", "Pre-K", "School Age"];
 const enrollmentStatuses = ["enrolled", "pending", "waitlisted", "tour_scheduled", "inactive"];
-const communicationMethods = ["email", "phone", "sms"];
 
 function suggestedFamilyName(fullName: string) {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -288,8 +288,8 @@ export function FamilyStudentIntakeForm({ centers, compact = false, defaultColla
               <Select value={preferredCommunication} onValueChange={(value) => value && setPreferredCommunication(value)}>
                 <SelectTrigger id={controlId("preferred-contact")} {...accessibilityFor("preferredCommunication")}><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {communicationMethods.map((method) => (
-                    <SelectItem key={method} value={method}>{method}</SelectItem>
+                  {guardianCommunicationOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

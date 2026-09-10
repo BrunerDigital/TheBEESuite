@@ -5,6 +5,12 @@ import { useSyncExternalStore } from "react";
 
 const themeStorageKey = "bee-suite-theme";
 
+function syncThemeColor(isDark: boolean) {
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((meta) => {
+    meta.content = isDark ? "#05070a" : "#f5b51b";
+  });
+}
+
 function subscribeToTheme(onStoreChange: () => void) {
   const observer = new MutationObserver(onStoreChange);
   const handleStorage = (event: StorageEvent) => {
@@ -13,6 +19,7 @@ function subscribeToTheme(onStoreChange: () => void) {
     const nextDark = event.newValue === "dark";
     document.documentElement.classList.toggle("dark", nextDark);
     document.documentElement.style.colorScheme = nextDark ? "dark" : "light";
+    syncThemeColor(nextDark);
     onStoreChange();
   };
 
@@ -42,6 +49,7 @@ export function PublicThemeToggle() {
 
     root.classList.toggle("dark", nextDark);
     root.style.colorScheme = nextDark ? "dark" : "light";
+    syncThemeColor(nextDark);
     window.localStorage.setItem(themeStorageKey, nextDark ? "dark" : "light");
   }
 

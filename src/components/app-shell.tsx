@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -519,6 +519,7 @@ function BrandMark({ branding, href = "/" }: { branding?: WorkspaceBranding; hre
       branding={branding}
       size="md"
       className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      textClassName="[&>span:first-child]:text-amber-800 [&>span:last-child]:text-slate-600 dark:[&>span:first-child]:text-amber-300 dark:[&>span:last-child]:text-zinc-300"
     />
   );
 }
@@ -1134,7 +1135,7 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
               )}
             >
               <Icon className="size-4" aria-hidden="true" />
-              <span className="truncate">{label}</span>
+              <span className="max-w-full break-words text-center leading-tight">{label}</span>
             </NavigationLink>
           );
         })}
@@ -1202,6 +1203,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
   });
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchUserEmail = previewMode ? "" : currentUser?.email ?? "";
   const displayUserName = currentUser
@@ -1291,8 +1293,9 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
       return;
     }
 
+    const controller = new AbortController();
     const handle = window.setTimeout(() => {
-      fetch(`/api/global-search?q=${encodeURIComponent(query)}`)
+      fetch(`/api/global-search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
         .then((response) => response.json())
         .then((json: { ok?: boolean; results?: GlobalSearchResult[]; error?: string }) => {
           if (!json?.ok) {
@@ -1302,14 +1305,23 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
           setSearchResponse({ query, results: json.results ?? [], error: "" });
         })
         .catch(() => {
-          setSearchResponse({ query, results: [], error: "Search is unavailable." });
+          if (!controller.signal.aborted) {
+            setSearchResponse({ query, results: [], error: "Search is unavailable." });
+          }
         });
     }, 180);
 
     return () => {
       window.clearTimeout(handle);
+      controller.abort();
     };
   }, [previewMode, searchQuery, searchUserEmail]);
+
+  useEffect(() => {
+    if (activeSearchIndex < 0) return;
+    const optionPrefix = mobileSearchOpen ? "mobile-global-search-option" : "global-search-option";
+    document.getElementById(`${optionPrefix}-${activeSearchIndex}`)?.scrollIntoView({ block: "nearest" });
+  }, [activeSearchIndex, mobileSearchOpen]);
 
 
   useEffect(() => {
@@ -1340,13 +1352,53 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
     router.refresh();
   }
 
-  function submitGlobalSearch() {
+  function submitGlobalSearch(selectedResult?: GlobalSearchResult) {
     const query = searchQuery.trim();
     if (!query) return;
-    const firstResult = query.length >= 2 ? activeSearchResults[0] : undefined;
+    const firstResult = selectedResult ?? (query.length >= 2 ? activeSearchResults[0] : undefined);
     setSearchOpen(false);
     setMobileSearchOpen(false);
+    setActiveSearchIndex(-1);
     router.push(firstResult?.href ?? `/${searchDestination}?q=${encodeURIComponent(query)}`);
+  }
+
+  function handleGlobalSearchKeyDown(
+    event: ReactKeyboardEvent<HTMLInputElement>,
+    surface: "desktop" | "mobile",
+  ) {
+    const resultCount = surface === "mobile"
+      ? Math.min(activeSearchResults.length, 6)
+      : activeSearchResults.length;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (!resultCount) return;
+      event.preventDefault();
+      if (surface === "desktop") setSearchOpen(true);
+      setActiveSearchIndex((current) => {
+        if (event.key === "ArrowDown") return current < resultCount - 1 ? current + 1 : 0;
+        return current > 0 ? current - 1 : resultCount - 1;
+      });
+      return;
+    }
+    if (event.key === "Home" || event.key === "End") {
+      if (!resultCount) return;
+      event.preventDefault();
+      setActiveSearchIndex(event.key === "Home" ? 0 : resultCount - 1);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setActiveSearchIndex(-1);
+      if (surface === "desktop") setSearchOpen(false);
+      else setMobileSearchOpen(false);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const visibleSelection = activeSearchIndex >= 0 && activeSearchIndex < resultCount
+        ? activeSearchResults[activeSearchIndex]
+        : undefined;
+      submitGlobalSearch(visibleSelection);
+    }
   }
 
   function toggleTheme() {
@@ -1359,7 +1411,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
   return (
     <SchoolTimeZoneProvider timeZone={currentUser?.timeZone} timeZonesByCenterId={currentUser?.timeZonesByCenterId}>
     <div
-      className="bee-app-frame min-h-screen"
+      className="bee-app-frame min-h-screen min-h-dvh"
       data-module={visualDomain}
       data-role={currentUser?.role ?? "PUBLIC"}
       data-honeyglass={honeyglassUiEnabled() ? "true" : "false"}
@@ -1417,6 +1469,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                   ref={searchInputRef}
                   aria-label="Search The BEE Suite"
                   aria-autocomplete="list"
+                  aria-activedescendant={searchOpen && activeSearchIndex >= 0 ? `global-search-option-${activeSearchIndex}` : undefined}
                   aria-controls="global-search-results"
                   aria-expanded={searchOpen && searchQuery.trim().length >= 2}
                   className="app-global-search h-11 rounded-xl border-border/70 bg-card/70 pl-10 pr-16"
@@ -1430,12 +1483,11 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                   }}
                   onChange={(event) => {
                     setSearchQuery(event.target.value);
+                    setActiveSearchIndex(-1);
                     setSearchOpen(true);
                   }}
                   onFocus={() => setSearchOpen(true)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") submitGlobalSearch();
-                  }}
+                  onKeyDown={(event) => handleGlobalSearchKeyDown(event, "desktop")}
                 />
                 <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border bg-background/80 px-2 py-1 text-[0.65rem] font-medium text-muted-foreground lg:block">/</kbd>
                 {searchOpen && searchQuery.trim().length >= 2 ? (
@@ -1448,18 +1500,22 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                       Search records
                     </div>
                     {searchPending ? (
-                      <div className="px-3 py-4 text-sm text-muted-foreground">Searching families, billing, leads, and child records...</div>
+                      <div className="px-3 py-4 text-sm text-muted-foreground" role="status">Searching families, billing, leads, and child records…</div>
                     ) : activeSearchError ? (
-                      <div className="px-3 py-4 text-sm text-destructive">{activeSearchError}</div>
+                      <div className="px-3 py-4 text-sm text-destructive" role="status">{activeSearchError}</div>
                     ) : activeSearchResults.length ? (
                       <div className="max-h-[28rem] overflow-auto p-2">
-                        {activeSearchResults.map((result) => (
+                        <p className="sr-only" role="status">{activeSearchResults.length} search suggestions available.</p>
+                        {activeSearchResults.map((result, index) => (
                           <Link
                             key={result.id}
+                            id={`global-search-option-${index}`}
                             href={result.href}
-                            className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-selected={activeSearchIndex === index}
+                            className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-selected:bg-primary/10"
                             role="option"
                             onClick={() => setSearchOpen(false)}
+                            onMouseEnter={() => setActiveSearchIndex(index)}
                           >
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-medium">{shellUserViewText(result.label, currentUser)}</span>
@@ -1471,7 +1527,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                         ))}
                       </div>
                     ) : (
-                      <div className="px-3 py-4 text-sm text-muted-foreground">
+                      <div className="px-3 py-4 text-sm text-muted-foreground" role="status">
                         No quick matches. Press Enter to search all records.
                       </div>
                     )}
@@ -1480,7 +1536,10 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
               </div>
             </div> : null}
             <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
-              {showActiveWorkspaceTools ? <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
+              {showActiveWorkspaceTools ? <Dialog open={mobileSearchOpen} onOpenChange={(open) => {
+                setMobileSearchOpen(open);
+                setActiveSearchIndex(-1);
+              }}>
                 <DialogTrigger render={<Button variant="outline" size="icon" aria-label="Search The BEE Suite" className="touch-manipulation lg:hidden" />}>
                   <Search aria-hidden="true" />
                 </DialogTrigger>
@@ -1490,17 +1549,43 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                     <DialogDescription>Find families, child records, billing items, tasks, and messages you can access.</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-3">
-                    <Input aria-label="Search The BEE Suite" autoComplete="off" name="mobile-workspace-search" placeholder={searchPlaceholder} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitGlobalSearch(); }} />
+                    <Input
+                      aria-label="Search The BEE Suite"
+                      aria-autocomplete="list"
+                      aria-activedescendant={activeSearchIndex >= 0 ? `mobile-global-search-option-${activeSearchIndex}` : undefined}
+                      aria-controls="mobile-global-search-results"
+                      aria-expanded={trimmedSearchQuery.length >= 2}
+                      autoComplete="off"
+                      name="mobile-workspace-search"
+                      placeholder={searchPlaceholder}
+                      role="combobox"
+                      value={searchQuery}
+                      onChange={(event) => {
+                        setSearchQuery(event.target.value);
+                        setActiveSearchIndex(-1);
+                      }}
+                      onKeyDown={(event) => handleGlobalSearchKeyDown(event, "mobile")}
+                    />
                     {trimmedSearchQuery.length < 2 ? (
                       <p className="text-sm text-muted-foreground">Type at least two characters to start searching.</p>
                     ) : searchPending ? (
                       <p className="text-sm text-muted-foreground" aria-live="polite">Searching…</p>
                     ) : activeSearchError ? (
-                      <p className="text-sm text-destructive">{activeSearchError}</p>
+                      <p className="text-sm text-destructive" role="status">{activeSearchError}</p>
                     ) : activeSearchResults.length ? (
-                      <div className="max-h-80 overflow-auto rounded-xl border p-2">
-                        {activeSearchResults.slice(0, 6).map((result) => (
-                          <Link key={result.id} href={result.href} onClick={() => setMobileSearchOpen(false)} className="flex items-center justify-between gap-3 rounded-lg p-3 text-sm transition hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      <div id="mobile-global-search-results" className="max-h-80 overflow-auto rounded-xl border p-2" role="listbox">
+                        <p className="sr-only" role="status">{Math.min(activeSearchResults.length, 6)} search suggestions available.</p>
+                        {activeSearchResults.slice(0, 6).map((result, index) => (
+                          <Link
+                            key={result.id}
+                            id={`mobile-global-search-option-${index}`}
+                            href={result.href}
+                            aria-selected={activeSearchIndex === index}
+                            role="option"
+                            onClick={() => setMobileSearchOpen(false)}
+                            onMouseEnter={() => setActiveSearchIndex(index)}
+                            className="flex items-center justify-between gap-3 rounded-lg p-3 text-sm transition hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-selected:bg-primary/10"
+                          >
                             <span className="min-w-0">
                               <span className="block truncate font-medium">{shellUserViewText(result.label, currentUser)}</span>
                               <span className="block truncate text-xs text-muted-foreground">{shellUserViewText(result.detail, currentUser)}</span>
@@ -1510,7 +1595,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">No quick matches. Press Enter to search all records.</p>
+                      <p className="text-sm text-muted-foreground" role="status">No quick matches. Press Enter to search all records.</p>
                     )}
                   </div>
                 </DialogContent>
@@ -1592,7 +1677,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
             </div>
           ) : null}
         </header>
-        <main id="workspace-main" className={cn("dashboard-workspace min-h-[calc(100vh-4rem)] min-w-0 scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 lg:pb-6 xl:pb-8")}>
+        <main id="workspace-main" className={cn("dashboard-workspace min-h-[calc(100dvh-4rem)] min-w-0 scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 lg:pb-6 xl:pb-8")}>
           {canViewDataReadiness && readinessContext ? <DataReadinessContextPanel context={readinessContext} summary={readinessSummary} loading={readinessLoading} /> : null}
           {children}
         </main>

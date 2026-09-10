@@ -61,6 +61,7 @@ import {
 } from "@/lib/expected-child-birth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
+import { parseGuardianCommunicationPreference } from "@/lib/guardian-communication";
 import { normalizeScheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
 import { canWriteCenterlessAnnouncement } from "@/lib/announcement-scope";
 import { hasTrustedMutationOrigin } from "@/lib/request-origin";
@@ -792,6 +793,13 @@ async function POSTHandler(request: NextRequest) {
     const parentPortalLoginEnabled = parentPortalLoginEnabledProvided
       ? optionalBoolean(body.parentPortalLoginEnabled) !== false
       : true;
+    const requestedPreferredCommunication = clean(body.preferredCommunication);
+    const preferredCommunication = requestedPreferredCommunication
+      ? parseGuardianCommunicationPreference(requestedPreferredCommunication)
+      : null;
+    if (requestedPreferredCommunication && !preferredCommunication) {
+      return NextResponse.json({ ok: false, error: "Preferred contact must be email, phone call, or text message." }, { status: 400 });
+    }
     const data = {
       familyId,
       fullName: clean(body.name),
@@ -799,7 +807,7 @@ async function POSTHandler(request: NextRequest) {
       phone: clean(body.phone) || null,
       employer: clean(body.employer) || null,
       relation: clean(body.relation) || clean(body.status) || "Guardian",
-      preferredCommunication: clean(body.preferredCommunication) || null,
+      preferredCommunication,
       isBillingContact: Boolean(body.isBillingContact),
       ...((parentPortalLoginEnabledProvided || !id)
         ? {

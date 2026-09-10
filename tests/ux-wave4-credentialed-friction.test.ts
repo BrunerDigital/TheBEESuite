@@ -9,8 +9,8 @@ test("teacher landing keeps setup and viewing data compact while actions open fo
   const checklist = await readSource("src/components/setup-checklist-panel.tsx");
 
   assert.match(teacher, /Today in your classroom/);
-  assert.match(teacher, /aria-label="Teacher task shortcuts"[\s\S]*grid grid-cols-2 gap-2/);
-  assert.match(teacher, /min-h-11 w-full justify-start whitespace-normal text-left/);
+  assert.match(teacher, /aria-label="Teacher task shortcuts"[\s\S]*top-\[calc\(4\.75rem\+env\(safe-area-inset-top\)\)\][\s\S]*flex snap-x gap-2 overflow-x-auto/);
+  assert.match(teacher, /min-h-11 shrink-0 snap-start justify-start whitespace-nowrap text-left xl:w-full/);
   assert.match(teacher, /id="teacher-profile-setup"[\s\S]*defaultCollapsed/);
   assert.match(teacher, /id="teacher-staff-clock"[\s\S]*collapsedSummary=[\s\S]*defaultCollapsed/);
   assert.match(checklist, /defaultCollapsed\?: boolean/);

@@ -22,6 +22,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  guardianCommunicationOptions,
+  guardianCommunicationPreferenceOrDefault,
+  type GuardianCommunicationPreference,
+} from "@/lib/guardian-communication";
 import { useNativeAppRuntime } from "@/lib/native-app-runtime";
 
 type SetupGuardian = {
@@ -109,7 +115,9 @@ export function ParentPortalSetupForm({ guardians }: Props) {
   const [fullName, setFullName] = useState(selectedGuardian?.fullName ?? "");
   const [phone, setPhone] = useState(selectedGuardian?.phone ?? "");
   const [relation, setRelation] = useState(selectedGuardian?.relation ?? "Parent/Guardian");
-  const [preferredCommunication, setPreferredCommunication] = useState(selectedGuardian?.preferredCommunication ?? "email");
+  const [preferredCommunication, setPreferredCommunication] = useState<GuardianCommunicationPreference>(
+    guardianCommunicationPreferenceOrDefault(selectedGuardian?.preferredCommunication),
+  );
   const [pin, setPin] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -120,7 +128,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
     setFullName(guardian.fullName);
     setPhone(guardian.phone ?? "");
     setRelation(guardian.relation);
-    setPreferredCommunication(guardian.preferredCommunication ?? "email");
+    setPreferredCommunication(guardianCommunicationPreferenceOrDefault(guardian.preferredCommunication));
     setPin("");
     setStatus("");
     setError("");
@@ -170,7 +178,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
       <div className="mx-auto max-w-3xl">
         <Card className="glass-panel">
           <CardHeader>
-            <CardTitle as="h2">Parent Portal Setup</CardTitle>
+            <CardTitle as="h1">Parent Portal Setup</CardTitle>
             <CardDescription>No parent or guardian profile is connected to this account. Contact your school office and ask them to review your Parent Portal access.</CardDescription>
           </CardHeader>
         </Card>
@@ -350,16 +358,23 @@ export function ParentPortalSetupForm({ guardians }: Props) {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="parent-setup-communication">Preferred contact method</Label>
-                  <Input
-                    id="parent-setup-communication"
+                  <Select
                     name="preferredCommunication"
-                    className="h-11"
                     value={preferredCommunication}
-                    onChange={(event) => setPreferredCommunication(event.target.value)}
-                    placeholder="Email, text message, or portal"
-                    autoComplete="off"
-                    aria-describedby="parent-setup-communication-help"
-                  />
+                    onValueChange={(value) => {
+                      const nextValue = guardianCommunicationPreferenceOrDefault(value, preferredCommunication);
+                      setPreferredCommunication(nextValue);
+                    }}
+                  >
+                    <SelectTrigger id="parent-setup-communication" className="h-11" aria-describedby="parent-setup-communication-help">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {guardianCommunicationOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <p id="parent-setup-communication-help" className="text-xs leading-5 text-muted-foreground">
                     Your school can use this preference for routine communication. Choose detailed alert settings in Notifications after setup.
                   </p>

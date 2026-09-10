@@ -268,7 +268,7 @@
 
 @media (max-width: 40rem) {
   .parentWorkspace {
-    height: max(28rem, calc(100dvh - 14rem - env(safe-area-inset-top, 0px)));
+    height: max(18rem, calc(100dvh - 8.75rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
     min-height: 0;
     width: calc(100% + 1.5rem);
     margin-inline: -0.75rem;
@@ -279,11 +279,12 @@
   }
 
   .parentWorkspacePreview {
-    height: max(28rem, calc(100dvh - 18.125rem - env(safe-area-inset-top, 0px)));
+    height: max(18rem, calc(100dvh - 14.75rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
   }
 
   .parentTimeline {
     padding: 0.85rem;
+    scroll-padding-bottom: 5rem;
   }
 
   .parentBubble {

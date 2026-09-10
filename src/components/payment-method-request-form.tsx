@@ -158,11 +158,15 @@ export function PaymentMethodRequestForm({
           </Alert>
         ) : null}
         {paymentStatus === "success" ? (
-          <Alert className="border-emerald-400/40 bg-emerald-400/10 text-emerald-50">
-            <CheckCircle2 className="size-4" />
-            <AlertTitle>Payment submitted</AlertTitle>
-            <AlertDescription className="text-emerald-100">
-              Confirmed card payments appear as paid. Bank payments may appear as processing until the bank confirms settlement. Sign in to the Parent Portal and choose Payments to review the current status and receipt.
+          <Alert className={reauthorization
+            ? "border-amber-300/40 bg-amber-300/10 text-amber-50"
+            : "border-emerald-400/40 bg-emerald-400/10 text-emerald-50"}>
+            {reauthorization ? <AlertCircle className="size-4" /> : <CheckCircle2 className="size-4" />}
+            <AlertTitle>{reauthorization ? "Payment received — method update still required" : "Payment submitted"}</AlertTitle>
+            <AlertDescription className={reauthorization ? "text-amber-100" : "text-emerald-100"}>
+              {reauthorization
+                ? "That payment did not replace the saved method. Use one of the replacement buttons below; no additional payment will be charged during the update."
+                : "Confirmed card payments appear as paid. Bank payments may appear as processing until the bank confirms settlement. Sign in to the Parent Portal and choose Payments to review the current status and receipt."}
               <Link href="/parents" className="mt-2 inline-flex min-h-11 items-center font-semibold underline underline-offset-4">
                 Open the Parent Portal
               </Link>
@@ -273,7 +277,7 @@ export function PaymentMethodRequestForm({
           </Button>
         </div>
 
-        {nextOpenInvoice ? (
+        {nextOpenInvoice && !reauthorization ? (
           <div className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -303,6 +307,14 @@ export function PaymentMethodRequestForm({
               </p>
             ) : null}
           </div>
+        ) : reauthorization && nextOpenInvoice ? (
+          <Alert className="border-sky-300/40 bg-sky-300/10 text-sky-50">
+            <ShieldCheck className="size-4" />
+            <AlertTitle>Finish the saved-method update first</AlertTitle>
+            <AlertDescription className="text-sky-100">
+              This reauthorization link will not start a tuition payment. Replace the saved card or bank account above so the old-account warning is cleared and does not return. You can pay from the Parent Portal afterward if a balance is due.
+            </AlertDescription>
+          </Alert>
         ) : null}
       </CardContent>
     </Card>

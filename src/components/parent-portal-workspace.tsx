@@ -3362,12 +3362,16 @@ function ParentPortalWorkspaceView({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-xs text-muted-foreground">
-                      {parentBalanceReviewRequired
+                      {paymentMethodReauthorizationRequired && canReplaceSavedPaymentMethod
+                        ? "Saved payment method update"
+                        : parentBalanceReviewRequired
                         ? "Make an account payment"
                         : "Pay today"}
                     </div>
                     <div className="font-medium">
-                      {parentBalanceReviewRequired ? (
+                      {paymentMethodReauthorizationRequired && canReplaceSavedPaymentMethod ? (
+                        <>Your balance stays unchanged while you complete the required no-charge update.</>
+                      ) : parentBalanceReviewRequired ? (
                         "Choose the amount you want credited to your family account."
                       ) : nextOpenInvoice ? (
                         <>
@@ -3383,122 +3387,151 @@ function ParentPortalWorkspaceView({
                       )}
                     </div>
                   </div>
-                  <div className="w-full space-y-1 sm:w-56">
-                    <Label htmlFor="account-payment-amount">
-                      Amount to pay
-                      {parentBalanceReviewRequired ? "" : " (optional)"}
-                    </Label>
-                    <Input
-                      id="account-payment-amount"
-                      type="number"
-                      inputMode="decimal"
-                      min="0.01"
-                      max={
-                        parentBalanceReviewRequired
-                          ? undefined
-                          : (balanceCents / 100).toFixed(2)
-                      }
-                      step="0.01"
-                      placeholder={
-                        parentBalanceReviewRequired
-                          ? "0.00"
-                          : money(balanceCents)
-                      }
-                      value={accountPaymentAmountDollars}
-                      onChange={(event) =>
-                        setAccountPaymentAmountDollars(event.target.value)
-                      }
-                      aria-invalid={
-                        accountPaymentAmountInvalid ||
-                        accountPaymentAmountExceedsBalance
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {parentBalanceReviewRequired
-                        ? "Enter the family portion you want to pay."
-                        : "Enter a custom amount to split the balance across payment methods, or leave blank to pay the full balance."}
-                    </p>
-                    {accountPaymentAmountInvalid ? (
-                      <p className="text-xs text-destructive">
-                        Payment amount must be greater than zero.
+                  {paymentMethodReauthorizationRequired && canReplaceSavedPaymentMethod ? null : (
+                    <div className="w-full space-y-1 sm:w-56">
+                      <Label htmlFor="account-payment-amount">
+                        Amount to pay
+                        {parentBalanceReviewRequired ? "" : " (optional)"}
+                      </Label>
+                      <Input
+                        id="account-payment-amount"
+                        type="number"
+                        inputMode="decimal"
+                        min="0.01"
+                        max={
+                          parentBalanceReviewRequired
+                            ? undefined
+                            : (balanceCents / 100).toFixed(2)
+                        }
+                        step="0.01"
+                        placeholder={
+                          parentBalanceReviewRequired
+                            ? "0.00"
+                            : money(balanceCents)
+                        }
+                        value={accountPaymentAmountDollars}
+                        onChange={(event) =>
+                          setAccountPaymentAmountDollars(event.target.value)
+                        }
+                        aria-invalid={
+                          accountPaymentAmountInvalid ||
+                          accountPaymentAmountExceedsBalance
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {parentBalanceReviewRequired
+                          ? "Enter the family portion you want to pay."
+                          : "Enter a custom amount to split the balance across payment methods, or leave blank to pay the full balance."}
                       </p>
-                    ) : accountPaymentAmountExceedsBalance ? (
-                      <p className="text-xs text-destructive">
-                        Amount cannot exceed {money(balanceCents)}.
+                      {accountPaymentAmountInvalid ? (
+                        <p className="text-xs text-destructive">
+                          Payment amount must be greater than zero.
+                        </p>
+                      ) : accountPaymentAmountExceedsBalance ? (
+                        <p className="text-xs text-destructive">
+                          Amount cannot exceed {money(balanceCents)}.
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                  {paymentMethodReauthorizationRequired && canReplaceSavedPaymentMethod ? (
+                    <div className="w-full rounded-lg border border-destructive/30 bg-background/70 p-3">
+                      <p className="text-sm font-medium text-destructive">
+                        Replace the old-account payment method before paying. The update is secure, does not charge anything, and prevents this warning from returning.
                       </p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      className="w-full sm:w-auto"
-                      disabled={
-                        isPending ||
-                        paymentCheckoutMethod !== null ||
-                        checkoutBlocked ||
-                        accountPaymentDisabled
-                      }
-                      aria-busy={paymentCheckoutMethod === "card"}
-                      onClick={() => payBalance("card")}
-                    >
-                      {paymentCheckoutMethod === "card" ? (
-                        <LoaderCircle className="animate-spin" data-icon="inline-start" />
-                      ) : (
-                        <CreditCard data-icon="inline-start" />
-                      )}
-                      {paymentCheckoutMethod === "card"
-                        ? "Opening secure checkout…"
-                        : "Debit or credit card"}
-                    </Button>
-                    <Button
-                      className="w-full sm:w-auto"
-                      disabled={
-                        isPending ||
-                        paymentCheckoutMethod !== null ||
-                        checkoutBlocked ||
-                        accountPaymentDisabled
-                      }
-                      aria-busy={paymentCheckoutMethod === "link_bank"}
-                      onClick={() => payBalance("link_bank")}
-                      variant="outline"
-                    >
-                      {paymentCheckoutMethod === "link_bank" ? (
-                        <LoaderCircle className="animate-spin" data-icon="inline-start" />
-                      ) : (
-                        <CreditCard data-icon="inline-start" />
-                      )}
-                      {paymentCheckoutMethod === "link_bank"
-                        ? "Opening secure checkout…"
-                        : "Pay with Link"}
-                    </Button>
-                    <Button
-                      className="w-full sm:w-auto"
-                      disabled={
-                        isPending ||
-                        paymentCheckoutMethod !== null ||
-                        checkoutBlocked ||
-                        accountPaymentDisabled
-                      }
-                      aria-busy={paymentCheckoutMethod === "ach"}
-                      onClick={() => payBalance("ach")}
-                      variant="outline"
-                    >
-                      {paymentCheckoutMethod === "ach" ? (
-                        <LoaderCircle className="animate-spin" data-icon="inline-start" />
-                      ) : (
-                        <Building2 data-icon="inline-start" />
-                      )}
-                      {paymentCheckoutMethod === "ach"
-                        ? "Opening secure checkout…"
-                        : "Bank account"}
-                    </Button>
-                  </div>
-                  {paymentMethodReauthorizationRequired ? (
-                    <p className="mt-2 text-xs font-medium text-destructive">
-                      {canReplaceSavedPaymentMethod
-                        ? "These are one-time payment options. They will not replace the saved autopay method; use the replacement buttons above first."
-                        : "These are one-time payment options. They do not save a reusable payment method or enable autopay."}
-                    </p>
-                  ) : null}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          className="w-full sm:w-auto"
+                          disabled={isPending || bankVerificationPending || paymentCheckoutMethod !== null || !family}
+                          onClick={() => managePaymentMethod("setup", "card")}
+                        >
+                          <CreditCard data-icon="inline-start" />
+                          Replace saved card
+                        </Button>
+                        <Button
+                          className="w-full sm:w-auto"
+                          disabled={isPending || bankVerificationPending || paymentCheckoutMethod !== null || !family}
+                          onClick={() => managePaymentMethod("setup", "link_bank")}
+                          variant="outline"
+                        >
+                          <Building2 data-icon="inline-start" />
+                          Connect bank account
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          className="w-full sm:w-auto"
+                          disabled={
+                            isPending ||
+                            paymentCheckoutMethod !== null ||
+                            checkoutBlocked ||
+                            accountPaymentDisabled
+                          }
+                          aria-busy={paymentCheckoutMethod === "card"}
+                          onClick={() => payBalance("card")}
+                        >
+                          {paymentCheckoutMethod === "card" ? (
+                            <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                          ) : (
+                            <CreditCard data-icon="inline-start" />
+                          )}
+                          {paymentCheckoutMethod === "card"
+                            ? "Opening secure checkout…"
+                            : "Debit or credit card"}
+                        </Button>
+                        <Button
+                          className="w-full sm:w-auto"
+                          disabled={
+                            isPending ||
+                            paymentCheckoutMethod !== null ||
+                            checkoutBlocked ||
+                            accountPaymentDisabled
+                          }
+                          aria-busy={paymentCheckoutMethod === "link_bank"}
+                          onClick={() => payBalance("link_bank")}
+                          variant="outline"
+                        >
+                          {paymentCheckoutMethod === "link_bank" ? (
+                            <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                          ) : (
+                            <CreditCard data-icon="inline-start" />
+                          )}
+                          {paymentCheckoutMethod === "link_bank"
+                            ? "Opening secure checkout…"
+                            : "Pay with Link"}
+                        </Button>
+                        <Button
+                          className="w-full sm:w-auto"
+                          disabled={
+                            isPending ||
+                            paymentCheckoutMethod !== null ||
+                            checkoutBlocked ||
+                            accountPaymentDisabled
+                          }
+                          aria-busy={paymentCheckoutMethod === "ach"}
+                          onClick={() => payBalance("ach")}
+                          variant="outline"
+                        >
+                          {paymentCheckoutMethod === "ach" ? (
+                            <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                          ) : (
+                            <Building2 data-icon="inline-start" />
+                          )}
+                          {paymentCheckoutMethod === "ach"
+                            ? "Opening secure checkout…"
+                            : "Bank account"}
+                        </Button>
+                      </div>
+                      {paymentMethodReauthorizationRequired ? (
+                        <p className="mt-2 text-xs font-medium text-destructive">
+                          These are one-time payment options. They do not save a reusable payment method or enable autopay.
+                        </p>
+                      ) : null}
+                    </>
+                  )}
                 </div>
                 {paymentCheckoutMethod ? (
                   <Alert className="mt-3" role="status" aria-live="polite">

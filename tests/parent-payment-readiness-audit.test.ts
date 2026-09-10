@@ -24,6 +24,9 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /review_procare_source_package_and_child_provenance/);
   assert.match(source, /supported_account_balance_without_invoice/);
   assert.match(source, /manual_account_adjustment_needs_evidence_review/);
+  assert.match(source, /missing_balance_ledger_history/);
+  assert.match(source, /unsupported_positive_balance_provenance/);
+  assert.match(source, /hasPositiveProcareOpeningBalance/);
   assert.match(source, /positiveBalancesWithoutOpenInvoiceNeedingEvidenceReview/);
   assert.match(source, /loadActiveSupabaseAuthEmails/);
   assert.match(source, /activeAuthUser/);
@@ -40,8 +43,11 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /ledgerEntry\.findMany/);
   assert.match(source, /const ledgerEntriesByAccountId = new Map/);
   assert.match(source, /const accountLedger = ledgerEntriesByAccountId\.get\(account\.id\) \?\? \[\]/);
-  assert.match(source, /needsEvidenceReview = accountLedger\.some/);
+  assert.match(source, /const evidenceReviewReason = accountLedger\.length === 0/);
+  assert.match(source, /!hasPositiveProcareOpeningBalance/);
+  assert.match(source, /const needsEvidenceReview = evidenceReviewReason != null/);
   assert.match(source, /entry\.sourceSystem === "bee_suite_manual" && entry\.amountCents > 0/);
+  assert.match(source, /accessDiagnosis\.includes\("guardian_email_invalid"\)/);
   assert.match(source, /\.sort\(\(left, right\) => left\.id\.localeCompare\(right\.id\)\)/);
   assert.doesNotMatch(source, /accountIds\.map\([\s\S]{0,120}ledgerEntry\.findFirst/);
 });

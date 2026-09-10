@@ -279,7 +279,8 @@ async function main() {
             ? "hold_for_explicit_access_reactivation_approval"
             : family.sourceSystem !== "procare" || !family.externalId?.trim()
               ? "hold_for_school_relationship_confirmation"
-              : family.guardians.some((guardian) => guardian.isBillingContact && (guardian.phone?.replace(/\D/g, "").length ?? 0) < 4)
+              : accessDiagnosis.includes("guardian_email_invalid")
+                || family.guardians.some((guardian) => guardian.isBillingContact && (guardian.phone?.replace(/\D/g, "").length ?? 0) < 4)
                 ? "hold_for_contact_data_correction"
                 : "review_procare_source_package_and_child_provenance",
         });
@@ -295,9 +296,22 @@ async function main() {
         const recentLedger = accountLedger
           .slice(0, 3)
           .map((entry) => ({ type: entry.type, sourceSystem: entry.sourceSystem, effectiveAt: entry.effectiveAt.toISOString() }));
-        const needsEvidenceReview = accountLedger.some((entry) => (
+        const hasPositiveManualEntry = accountLedger.some((entry) => (
           entry.sourceSystem === "bee_suite_manual" && entry.amountCents > 0
         ));
+        const hasPositiveProcareOpeningBalance = accountLedger.some((entry) => (
+          entry.sourceSystem === "procare"
+          && entry.type === "procare_balance_reconciliation"
+          && entry.amountCents > 0
+        ));
+        const evidenceReviewReason = accountLedger.length === 0
+          ? "missing_balance_ledger_history"
+          : hasPositiveManualEntry
+            ? "positive_manual_ledger_entry"
+            : !hasPositiveProcareOpeningBalance
+              ? "unsupported_positive_balance_provenance"
+              : null;
+        const needsEvidenceReview = evidenceReviewReason != null;
         if (needsEvidenceReview) center.balanceOnlyAccountsNeedingEvidenceReview += 1;
         exactPositiveBalancesWithoutOpenInvoice.push({
           school: center.school,
@@ -315,9 +329,13 @@ async function main() {
               }
             : null,
           recentLedger,
-          classification: needsEvidenceReview
+          needsEvidenceReview,
+          evidenceReviewReason,
+          classification: evidenceReviewReason === "positive_manual_ledger_entry"
             ? "manual_account_adjustment_needs_evidence_review"
-            : "supported_account_balance_without_invoice",
+            : needsEvidenceReview
+              ? "balance_without_supported_provenance_needs_evidence_review"
+              : "supported_account_balance_without_invoice",
           proposedDisposition: needsEvidenceReview
             ? "review_manual_adjustment_evidence_without_changing_balance"
             : "preserve_balance_and_allow_family_balance_checkout",
@@ -332,7 +350,7 @@ async function main() {
     noOpenInvoice: exactPositiveBalancesWithoutOpenInvoice,
   })).digest("hex");
   const positiveBalancesWithoutOpenInvoiceNeedingEvidenceReview = exactPositiveBalancesWithoutOpenInvoice
-    .filter((target) => target.classification === "manual_account_adjustment_needs_evidence_review").length;
+    .filter((target) => target.needsEvidenceReview === true).length;
 
   console.log(JSON.stringify({
     paymentEnabledSchools: paymentCenters.length,

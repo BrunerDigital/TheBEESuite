@@ -266,7 +266,7 @@ npm run mobile:store:check
 
 Mac/Apple evidence still required:
 
-1. Use Node.js 22 or later, Xcode 26 or later, and the iOS 26 SDK or later.
+1. Use Node.js 24.x, Xcode 26 or later, and the iOS 26 SDK or later.
 2. Select the Apple Team for `com.brunerdigital.thebeesuite.teacher` without sharing credentials or signing material.
 3. Confirm a build number unused for version 1.0, resolve packages, and build the shared `App` scheme in Release.
 4. Run the simulator and physical-device matrix in `docs/MOBILE_APP_PHYSICAL_DEVICE_EVIDENCE_PACKET.md`.

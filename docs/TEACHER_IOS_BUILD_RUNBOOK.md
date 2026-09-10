@@ -24,7 +24,7 @@ This runbook covers the native iOS shell for the teacher-facing App Store submis
 - macOS with Xcode 26 or later and the iOS 26 SDK or later. Apple has required this upload toolchain since April 28, 2026.
 - Apple Developer Program access for the BrunerDigital team or the final legal developer account.
 - The Apple Team ID that owns `com.brunerdigital.thebeesuite.teacher`.
-- Node.js 22 or later and npm installed on the Mac.
+- Node.js 24.x and npm installed on the Mac.
 - Production routes live:
   - `https://thebeesuite.io/teachers`
   - `https://thebeesuite.io/teacher-portal`

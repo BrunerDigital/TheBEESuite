@@ -9,6 +9,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import "./product-ui.css";
+import "./parent-mobile-home.css";
 
 const browserIcon = "/brand/the-bee-suite/browser-icon.png";
 

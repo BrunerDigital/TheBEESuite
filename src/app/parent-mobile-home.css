@@ -1,0 +1,34 @@
+/*
+ * Parent mobile release layer
+ *
+ * Keep these small parent-shell overrides in a distinct stylesheet so a
+ * parent UI release receives a new immutable asset even when the global
+ * stylesheet is restored from the hosting build cache.
+ */
+
+@layer utilities {
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .dashboard-workspace {
+    background-image: none;
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-heading {
+    background: var(--portal-surface);
+    box-shadow: 0 12px 32px var(--portal-shadow);
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-heading::after {
+    display: none;
+    content: none;
+  }
+
+  @media (max-width: 639px) {
+    .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-heading[data-parent-heading-view="home"] {
+      overflow: visible;
+      border-color: transparent;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      padding: 0.25rem 0.25rem 0.5rem;
+    }
+  }
+}

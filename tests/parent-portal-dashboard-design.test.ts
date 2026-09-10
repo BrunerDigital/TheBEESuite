@@ -7,6 +7,7 @@ const workspace = readFileSync(
   "utf8",
 );
 const globals = readFileSync("src/app/globals.css", "utf8");
+const parentMobileRelease = readFileSync("src/app/parent-mobile-home.css", "utf8");
 const layout = readFileSync("src/app/layout.tsx", "utf8");
 const shell = readFileSync("src/components/app-shell.tsx", "utf8");
 const preview = readFileSync("src/app/device-preview/page.tsx", "utf8");
@@ -76,6 +77,19 @@ test("the fixed mobile navigation leaves safe-area-aware clearance", () => {
   assert.match(
     shell,
     /pb-\[calc\(7rem\+env\(safe-area-inset-bottom\)\)\]/,
+  );
+});
+
+test("parent mobile overrides ship in a separately invalidated release layer", () => {
+  assert.match(
+    layout,
+    /import "\.\/globals\.css";[\s\S]*import "\.\/product-ui\.css";[\s\S]*import "\.\/parent-mobile-home\.css";/,
+  );
+  assert.match(parentMobileRelease, /\.dashboard-workspace[\s\S]*background-image: none/);
+  assert.match(parentMobileRelease, /\.parent-portal-heading::after[\s\S]*display: none/);
+  assert.match(
+    parentMobileRelease,
+    /parent-portal-heading\[data-parent-heading-view="home"\][\s\S]*background: transparent;[\s\S]*box-shadow: none/,
   );
 });
 

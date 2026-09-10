@@ -201,14 +201,17 @@ async function main() {
   const supabase = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const existingAuthEmails = new Set<string>();
+  const allAuthEmails = new Set<string>();
+  const activeAuthEmails = new Set<string>();
   let authPage = 1;
   while (true) {
     const { data, error } = await supabase.auth.admin.listUsers({ page: authPage, perPage: 1000 });
     if (error) throw error;
     for (const authUser of data.users) {
       const authEmail = normalizedEmail(authUser.email);
-      if (authEmail && activeAuthUser(authUser)) existingAuthEmails.add(authEmail);
+      if (!authEmail) continue;
+      allAuthEmails.add(authEmail);
+      if (activeAuthUser(authUser)) activeAuthEmails.add(authEmail);
     }
     if (data.users.length < 1000) break;
     authPage += 1;
@@ -253,7 +256,7 @@ async function main() {
   let missingEmailPayers = 0;
 
   for (const payer of payerGuardians) {
-    if (hasActiveParentLink(payer, existingAuthEmails, tenantIdByGuardianId.get(payer.id) ?? "")) {
+    if (hasActiveParentLink(payer, activeAuthEmails, tenantIdByGuardianId.get(payer.id) ?? "")) {
       alreadyLinkedPayers += 1;
       continue;
     }
@@ -299,7 +302,11 @@ async function main() {
         : ["Every guardian record that would be linked must pass readiness."]),
       ...(user && user.tenantId !== tenantId ? ["Existing app user belongs to another tenant."] : []),
       ...(user && user.role !== UserRole.PARENT_GUARDIAN ? ["Existing app user has a non-parent role."] : []),
-      ...(existingAuthEmails.has(email) && !user ? ["Supabase Auth account exists without a matching app parent user."] : []),
+      ...(user && !user.isActive ? ["Existing app parent user is inactive."] : []),
+      ...(allAuthEmails.has(email) && !activeAuthEmails.has(email)
+        ? ["Supabase Auth account is unconfirmed or banned."]
+        : []),
+      ...(allAuthEmails.has(email) && !user ? ["Supabase Auth account exists without a matching app parent user."] : []),
     ];
     if (blockers.length) {
       for (const blocker of new Set(blockers)) {
@@ -320,7 +327,8 @@ async function main() {
         guardianIds: group.map((guardian) => guardian.id).sort(),
         familyIds: [...new Set(group.map((guardian) => guardian.familyId))].sort(),
         existingAppUser: existingUserByEmail.has(normalizedEmail(group[0].email)),
-        existingAuthUser: existingAuthEmails.has(normalizedEmail(group[0].email)),
+        existingAuthUser: allAuthEmails.has(normalizedEmail(group[0].email)),
+        activeAuthUser: activeAuthEmails.has(normalizedEmail(group[0].email)),
       }))
       .sort((left, right) => `${left.tenantId}:${left.email}`.localeCompare(`${right.tenantId}:${right.email}`)),
   )).digest("hex");
@@ -349,7 +357,7 @@ async function main() {
       topBlockers: {},
     };
     item.payers += 1;
-    if (hasActiveParentLink(payer, existingAuthEmails, tenantIdByGuardianId.get(payer.id) ?? "")) {
+    if (hasActiveParentLink(payer, activeAuthEmails, tenantIdByGuardianId.get(payer.id) ?? "")) {
       item.linked += 1;
     } else if (!validEmail(normalizedEmail(payer.email))) {
       item.blocked += 1;
@@ -395,7 +403,7 @@ async function main() {
         familyNames: [...new Set(group.map((guardian) => guardian.family.name))].sort(),
         guardianNames: group.map((guardian) => guardian.fullName).sort(),
         existingAppUser: existingUserByEmail.has(normalizedEmail(group[0].email)),
-        activeAuthUser: existingAuthEmails.has(normalizedEmail(group[0].email)),
+        activeAuthUser: activeAuthEmails.has(normalizedEmail(group[0].email)),
       })),
     } : {}),
   };
@@ -418,7 +426,7 @@ async function main() {
         guardianId: payer.id,
         linkedBy: "system:payer-account-preparation",
         linkedReason: "payer_account_prepared_without_invite",
-        prepareWithoutInvite: !existingUser || !existingAuthEmails.has(email),
+        prepareWithoutInvite: !existingUser || !activeAuthEmails.has(email),
       });
       if (!result.ok) {
         failures[result.reason] = (failures[result.reason] ?? 0) + 1;
@@ -479,7 +487,7 @@ async function main() {
     if (error) throw error;
     for (const user of data.users) {
       const email = normalizedEmail(user.email);
-      if (processedEmails.has(email)) authEmails.add(email);
+      if (processedEmails.has(email) && activeAuthUser(user)) authEmails.add(email);
     }
     if (data.users.length < 1000) break;
     verificationPage += 1;

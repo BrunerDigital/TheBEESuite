@@ -2407,10 +2407,22 @@ function ParentPortalWorkspaceView({
               </div>
               {announcements[0] ? (
                 <div className="mt-5">
-                  <h3 className="font-semibold leading-6">{announcements[0].title}</h3>
-                  <p className="mt-2 line-clamp-4 text-sm leading-6 text-muted-foreground">
-                    {announcements[0].body}
-                  </p>
+                  <details className="group">
+                    <summary className="cursor-pointer list-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                      <span className="block font-semibold leading-6">{announcements[0].title}</span>
+                      <span className="mt-2 block line-clamp-4 text-sm leading-6 text-muted-foreground group-open:hidden">
+                        {announcements[0].body}
+                      </span>
+                      <span className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary">
+                        <span className="group-open:hidden">Read full announcement</span>
+                        <span className="hidden group-open:inline">Hide full announcement</span>
+                        <Plus className="size-4 transition-transform group-open:rotate-45 motion-reduce:transition-none" aria-hidden="true" />
+                      </span>
+                    </summary>
+                    <p className="border-t pt-3 text-sm leading-6 text-muted-foreground">
+                      {announcements[0].body}
+                    </p>
+                  </details>
                   {announcements[0].sendAt ? (
                     <p className="mt-4 text-xs font-medium text-muted-foreground">
                       {formatDate(announcements[0].sendAt)}

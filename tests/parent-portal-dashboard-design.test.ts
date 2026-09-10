@@ -59,6 +59,9 @@ test("mobile parent home uses one status card per child and keeps priority work 
   assert.match(home, /data-parent-home-actions="true"/);
   assert.match(home, /data-parent-home-priority="true"/);
   assert.doesNotMatch(home, /<CollapsiblePanel/);
+  assert.match(home, /Read full announcement/);
+  assert.match(home, /Hide full announcement/);
+  assert.match(home, /group-open:hidden/);
 });
 
 test("generic review identities do not create an awkward App greeting", () => {

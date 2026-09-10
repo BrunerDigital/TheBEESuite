@@ -36,6 +36,7 @@ const routes: PreviewRoute[] = [
   { id: "family-kiosk", path: "/device-preview?view=kiosk", preferredViewport: "tablet-landscape-1024" },
   { id: "staff-kiosk", path: "/device-preview?view=kiosk-staff", preferredViewport: "tablet-landscape-1024" },
   { id: "parent-home", path: "/device-preview?view=parent&screen=home", preferredViewport: "phone-390" },
+  { id: "parent-home-single-review", path: "/device-preview?view=parent&screen=home&scenario=single-review", preferredViewport: "phone-390" },
   { id: "parent-updates", path: "/device-preview?view=parent&screen=updates", preferredViewport: "phone-390" },
   { id: "parent-messages", path: "/device-preview?view=parent&screen=messages", preferredViewport: "phone-390" },
   { id: "parent-payments", path: "/device-preview?view=parent&screen=payments", preferredViewport: "phone-390" },

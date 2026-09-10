@@ -1544,9 +1544,7 @@
 
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .dashboard-workspace {
     background-color: var(--portal-canvas);
-    background-image:
-      radial-gradient(circle at 92% 2%, color-mix(in oklch, var(--primary) 13%, transparent), transparent 25rem),
-      radial-gradient(circle at 4% 32%, color-mix(in oklch, var(--primary) 7%, transparent), transparent 22rem);
+    background-image: none;
   }
 
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) :is(.app-sidebar, .app-header) {
@@ -1598,24 +1596,12 @@
     isolation: isolate;
     overflow: hidden;
     border-color: var(--portal-border);
-    background:
-      linear-gradient(115deg, color-mix(in oklch, var(--portal-surface) 94%, var(--primary) 6%), var(--portal-surface));
-    box-shadow: 0 20px 52px var(--portal-shadow);
+    background: var(--portal-surface);
+    box-shadow: 0 12px 32px var(--portal-shadow);
   }
 
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-heading::after {
-    position: absolute;
-    right: -2.5rem;
-    top: -4rem;
-    z-index: 0;
-    width: 15rem;
-    height: 15rem;
-    border: 1px solid color-mix(in oklch, var(--primary) 20%, transparent);
-    border-radius: 38% 62% 55% 45%;
-    background:
-      radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--primary) 13%, transparent), transparent 64%);
-    content: "";
-    transform: rotate(18deg);
+    content: none;
   }
 
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-feature,
@@ -1687,8 +1673,17 @@
     }
 
     .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-heading {
-      border-radius: 1.35rem;
-      padding: 1.15rem;
+      border-radius: 1.25rem;
+      padding: 1rem;
+    }
+
+    .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-heading[data-parent-heading-view="home"] {
+      overflow: visible;
+      border-color: transparent;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      padding: 0.25rem 0.25rem 0.5rem;
     }
 
     .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-workspace {

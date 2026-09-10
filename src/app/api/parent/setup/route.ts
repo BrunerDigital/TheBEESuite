@@ -7,6 +7,7 @@ import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
+import { parseGuardianCommunicationPreference } from "@/lib/guardian-communication";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -64,7 +65,7 @@ async function POSTHandler(request: NextRequest) {
   const fullName = clean(body.fullName);
   const phone = clean(body.phone);
   const relation = clean(body.relation) || "Parent/Guardian";
-  const preferredCommunication = clean(body.preferredCommunication) || null;
+  const preferredCommunication = parseGuardianCommunicationPreference(body.preferredCommunication);
   const pinInput = clean(body.pin);
   const pin = normalizePin(pinInput);
 
@@ -77,6 +78,9 @@ async function POSTHandler(request: NextRequest) {
   }
   if (!fullName) {
     return NextResponse.json({ ok: false, error: "Your full name is required." }, { status: 400 });
+  }
+  if (!preferredCommunication) {
+    return NextResponse.json({ ok: false, error: "Choose email, phone call, or text message as your preferred contact method." }, { status: 400 });
   }
   if (pinInput && !pin) {
     return NextResponse.json({ ok: false, error: "Check-in PIN must be exactly 4 digits." }, { status: 400 });

@@ -563,25 +563,40 @@ function ExecutiveLensDashboard({
             <div className="text-xs text-muted-foreground">FTE submitted</div>
             <div className="mt-2 text-3xl font-semibold">{submittedPercent}%</div>
             <p className="mt-1 text-xs text-muted-foreground">{metrics.fteSubmittedSchools}/{metrics.schoolComparisons.length} schools · due {metrics.fteDeadlineLabel}</p>
-            <Progress className="mt-3" value={submittedPercent} />
+            <Progress
+              className="mt-3"
+              value={submittedPercent}
+              aria-label="FTE submission completion"
+              aria-valuetext={`${metrics.fteSubmittedSchools} of ${metrics.schoolComparisons.length} schools submitted`}
+            />
           </div>
           <div className="rounded-xl border bg-background/50 p-4">
             <div className="text-xs text-muted-foreground">Missing FTE reports</div>
             <div className="mt-2 text-3xl font-semibold">{metrics.fteMissingSchools}</div>
             <p className="mt-1 text-xs text-muted-foreground">Current week {metrics.currentWeekStart}</p>
-            <Progress className="mt-3" value={Math.max(0, 100 - submittedPercent)} />
+            <Progress
+              className="mt-3"
+              value={Math.max(0, 100 - submittedPercent)}
+              aria-label="Schools missing an FTE report"
+              aria-valuetext={`${metrics.fteMissingSchools} of ${metrics.schoolComparisons.length} schools missing`}
+            />
           </div>
           <div className="rounded-xl border bg-background/50 p-4">
             <div className="text-xs text-muted-foreground">Average occupancy</div>
             <div className="mt-2 text-3xl font-semibold">{averageOccupancy}%</div>
             <p className="mt-1 text-xs text-muted-foreground">{totalOpenSeats.toLocaleString("en-US")} open seats across visible schools</p>
-            <Progress className="mt-3" value={averageOccupancy} />
+            <Progress
+              className="mt-3"
+              value={averageOccupancy}
+              aria-label="Average occupancy"
+              aria-valuetext={`${averageOccupancy}% occupied across visible schools`}
+            />
           </div>
           <div className="rounded-xl border bg-background/50 p-4">
             <div className="text-xs text-muted-foreground">Executive actions</div>
             <div className="mt-2 text-3xl font-semibold">{actionQueue.length + metrics.refundRequests.length}</div>
             <p className="mt-1 text-xs text-muted-foreground">FTE, compliance, enrollment, billing, and parent-response queue</p>
-            <Progress className="mt-3" value={Math.min((actionQueue.length + metrics.refundRequests.length) * 12, 100)} />
+            <p className="mt-3 text-xs font-medium text-muted-foreground">Open the action queue below to review each item by urgency.</p>
           </div>
         </CollapsibleCard>
       ),
@@ -654,18 +669,34 @@ function ExecutiveLensDashboard({
           defaultCollapsed
         >
           {metrics.weeklyFteTrend.length ? (
-            <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
-              {metrics.weeklyFteTrend.map((week) => (
-                <div key={week.week} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                  <div className="flex h-56 w-full items-end justify-center gap-1">
-                    <span className="w-4 rounded-t-md bg-primary" title={`${week.submitted} submitted`} style={{ height: percentBar(week.submitted, metrics.schoolComparisons.length || 1) }} />
-                    <span className="w-4 rounded-t-md bg-destructive/70" title={`${week.missing} missing`} style={{ height: percentBar(week.missing, metrics.schoolComparisons.length || 1) }} />
-                    <span className="w-4 rounded-t-md bg-[var(--chart-2)]" title={`${week.fteTotal} FTE`} style={{ height: percentBar(week.fteTotal, maxFteTotal) }} />
+            <figure className="rounded-xl border bg-background/40 p-5">
+              <figcaption className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-muted-foreground">
+                <span className="inline-flex items-center gap-2"><span className="size-3 rounded-sm bg-primary" aria-hidden="true" />Submitted schools</span>
+                <span className="inline-flex items-center gap-2"><span className="size-3 rounded-sm bg-destructive/70" aria-hidden="true" />Missing schools</span>
+                <span className="inline-flex items-center gap-2"><span className="size-3 rounded-sm bg-[var(--chart-2)]" aria-hidden="true" />Total FTE</span>
+              </figcaption>
+              <div aria-hidden="true" className="flex h-60 items-end gap-4">
+                {metrics.weeklyFteTrend.map((week) => (
+                  <div key={week.week} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                    <div className="flex h-52 w-full items-end justify-center gap-1">
+                      <span className="w-4 rounded-t-md bg-primary" style={{ height: percentBar(week.submitted, metrics.schoolComparisons.length || 1) }} />
+                      <span className="w-4 rounded-t-md bg-destructive/70" style={{ height: percentBar(week.missing, metrics.schoolComparisons.length || 1) }} />
+                      <span className="w-4 rounded-t-md bg-[var(--chart-2)]" style={{ height: percentBar(week.fteTotal, maxFteTotal) }} />
+                    </div>
+                    <span className="truncate text-xs text-muted-foreground">{week.week}</span>
                   </div>
-                  <span className="truncate text-xs text-muted-foreground">{week.week}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              <table className="sr-only">
+                <caption>Weekly FTE progress values</caption>
+                <thead><tr><th>Week</th><th>Submitted schools</th><th>Missing schools</th><th>Total FTE</th></tr></thead>
+                <tbody>
+                  {metrics.weeklyFteTrend.map((week) => (
+                    <tr key={week.week}><th>{week.week}</th><td>{week.submitted}</td><td>{week.missing}</td><td>{week.fteTotal}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </figure>
           ) : (
             <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">No FTE submissions are visible yet.</p>
           )}
@@ -702,10 +733,7 @@ function ExecutiveLensDashboard({
                   {school.fteSubmitted ? school.fteStatus : "Missing"}
                 </Badge>
               </div>
-              <div className="mt-3 flex items-center gap-3">
-                <Progress value={school.fteSubmitted ? 100 : 8} />
-                <span className="w-14 text-right text-xs font-medium">{school.fteCount ?? 0} FTE</span>
-              </div>
+              <div className="mt-3 text-right text-xs font-medium">{school.fteCount ?? 0} FTE</div>
             </div>
           ))}
           </div>
@@ -816,7 +844,11 @@ function ExecutiveLensDashboard({
                 <span className="truncate font-medium">{compactSchoolName(school.name)}</span>
                 <span className="text-muted-foreground">{school.occupancy}%</span>
               </div>
-              <Progress value={school.occupancy} />
+              <Progress
+                value={school.occupancy}
+                aria-label={`${compactSchoolName(school.name)} occupancy`}
+                aria-valuetext={`${school.children} of ${school.capacity} seats occupied, ${school.occupancy}%`}
+              />
             </div>
           ))}
         </CollapsibleCard>
@@ -841,7 +873,7 @@ function ExecutiveLensDashboard({
                 <span className="truncate font-medium">{compactSchoolName(school.name)}</span>
                 <span className="text-muted-foreground">${school.revenueDollars.toLocaleString("en-US")}</span>
               </div>
-              <Progress value={(school.revenueDollars / maxRevenueDollars) * 100} />
+              <Progress aria-hidden="true" value={(school.revenueDollars / maxRevenueDollars) * 100} />
             </div>
           ))}
         </CollapsibleCard>
@@ -874,7 +906,7 @@ function ExecutiveLensDashboard({
                   {school.leads} leads
                 </Badge>
               </div>
-              <Progress className="mt-3" value={(school.leads / maxLeadCount) * 100} />
+              <Progress aria-hidden="true" className="mt-3" value={(school.leads / maxLeadCount) * 100} />
             </div>
           ))}
         </CollapsibleCard>
@@ -893,19 +925,36 @@ function ExecutiveLensDashboard({
           collapsedSummary={`${trendData.length} months`}
           defaultCollapsed
         >
-          <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
-            {trendData.map((point) => (
-              <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                <div className="flex h-56 w-full items-end justify-center gap-1">
-                  <span className="w-3 rounded-t-md bg-[var(--chart-3)]" style={{ height: percentBar(point.leads, Math.max(...trendData.map((item) => item.leads), 1)) }} />
-                  <span className="w-3 rounded-t-md bg-primary" style={{ height: percentBar(point.tours, Math.max(...trendData.map((item) => item.tours), 1)) }} />
-                  <span className="w-3 rounded-t-md bg-[var(--chart-2)]" style={{ height: percentBar(point.enrolled, Math.max(...trendData.map((item) => item.enrolled), 1)) }} />
-                  <span className="w-3 rounded-t-md bg-[var(--chart-5)]" style={{ height: percentBar(point.revenue, Math.max(...trendData.map((item) => item.revenue), 1)) }} />
+          <figure className="rounded-xl border bg-background/40 p-5">
+            <figcaption className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-muted-foreground">
+              <span className="inline-flex items-center gap-2"><span className="size-3 rounded-sm bg-[var(--chart-3)]" aria-hidden="true" />Leads</span>
+              <span className="inline-flex items-center gap-2"><span className="size-3 rounded-sm bg-primary" aria-hidden="true" />Tours</span>
+              <span className="inline-flex items-center gap-2"><span className="size-3 rounded-sm bg-[var(--chart-2)]" aria-hidden="true" />Enrolled</span>
+              <span className="inline-flex items-center gap-2"><span className="size-3 rounded-sm bg-[var(--chart-5)]" aria-hidden="true" />Revenue</span>
+            </figcaption>
+            <div aria-hidden="true" className="flex h-60 items-end gap-4">
+              {trendData.map((point) => (
+                <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                  <div className="flex h-52 w-full items-end justify-center gap-1">
+                    <span className="w-3 rounded-t-md bg-[var(--chart-3)]" style={{ height: percentBar(point.leads, Math.max(...trendData.map((item) => item.leads), 1)) }} />
+                    <span className="w-3 rounded-t-md bg-primary" style={{ height: percentBar(point.tours, Math.max(...trendData.map((item) => item.tours), 1)) }} />
+                    <span className="w-3 rounded-t-md bg-[var(--chart-2)]" style={{ height: percentBar(point.enrolled, Math.max(...trendData.map((item) => item.enrolled), 1)) }} />
+                    <span className="w-3 rounded-t-md bg-[var(--chart-5)]" style={{ height: percentBar(point.revenue, Math.max(...trendData.map((item) => item.revenue), 1)) }} />
+                  </div>
+                  <span className="text-xs text-muted-foreground">{point.month}</span>
                 </div>
-                <span className="text-xs text-muted-foreground">{point.month}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            <table className="sr-only">
+              <caption>Company enrollment and revenue trend values</caption>
+              <thead><tr><th>Month</th><th>Leads</th><th>Tours</th><th>Enrolled</th><th>Revenue</th></tr></thead>
+              <tbody>
+                {trendData.map((point) => (
+                  <tr key={point.month}><th>{point.month}</th><td>{point.leads}</td><td>{point.tours}</td><td>{point.enrolled}</td><td>{point.revenue}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </figure>
         </CollapsibleCard>
       ),
     } satisfies WorkspaceBoardItem] : []),
@@ -1825,23 +1874,32 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                           defaultCollapsed
                         >
                           {dashboardAnalytics.length ? (
-                            <div className="flex h-64 items-end gap-4 rounded-xl border bg-background/40 p-4">
-                              {dashboardAnalytics.map((point) => (
-                                <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                                  <div className="flex h-52 w-full items-end justify-center gap-1">
-                                    <span
-                                      className="w-4 rounded-t-md bg-primary"
-                                      style={{ height: barHeight(point.revenue, maxRevenue) }}
-                                    />
-                                    <span
-                                      className="w-4 rounded-t-md bg-[var(--chart-2)]"
-                                      style={{ height: barHeight(point.enrolled, maxFunnelCount) }}
-                                    />
+                            <figure className="rounded-xl border bg-background/40 p-4">
+                              <figcaption className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-muted-foreground">
+                                <span className="inline-flex items-center gap-2"><span className="size-3 rounded-sm bg-primary" aria-hidden="true" />Revenue</span>
+                                <span className="inline-flex items-center gap-2"><span className="size-3 rounded-sm bg-[var(--chart-2)]" aria-hidden="true" />Enrolled</span>
+                              </figcaption>
+                              <div aria-hidden="true" className="flex h-56 items-end gap-4">
+                                {dashboardAnalytics.map((point) => (
+                                  <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                                    <div className="flex h-48 w-full items-end justify-center gap-1">
+                                      <span className="w-4 rounded-t-md bg-primary" style={{ height: barHeight(point.revenue, maxRevenue) }} />
+                                      <span className="w-4 rounded-t-md bg-[var(--chart-2)]" style={{ height: barHeight(point.enrolled, maxFunnelCount) }} />
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">{point.month}</span>
                                   </div>
-                                  <span className="text-xs text-muted-foreground">{point.month}</span>
-                                </div>
-                              ))}
-                            </div>
+                                ))}
+                              </div>
+                              <table className="sr-only">
+                                <caption>Director enrollment and revenue trend values</caption>
+                                <thead><tr><th>Month</th><th>Revenue</th><th>Enrolled</th></tr></thead>
+                                <tbody>
+                                  {dashboardAnalytics.map((point) => (
+                                    <tr key={point.month}><th>{point.month}</th><td>{point.revenue}</td><td>{point.enrolled}</td></tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </figure>
                           ) : (
                             <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
                               No enrollment or revenue trend data is available for this login yet.
@@ -1898,7 +1956,11 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                                   {Math.max(Number(room.capacity) - Number(room.present), 0)} open
                                 </Badge>
                               </div>
-                              <Progress value={(Number(room.present) / Math.max(Number(room.capacity), 1)) * 100} />
+                              <Progress
+                                value={(Number(room.present) / Math.max(Number(room.capacity), 1)) * 100}
+                                aria-label={`${room.name} occupancy`}
+                                aria-valuetext={`${room.present} of ${room.capacity} seats occupied`}
+                              />
                             </div>
                           ))}
                           {!classroomSnapshots.length ? (
@@ -2224,18 +2286,34 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   defaultCollapsed
                 >
                   {dashboardAnalytics.length ? (
-                    <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
-                      {dashboardAnalytics.map((point) => (
-                        <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                          <div className="flex h-56 w-full items-end justify-center gap-1">
-                            <span className="w-3 rounded-t-md bg-[var(--chart-3)]" style={{ height: barHeight(point.leads, maxFunnelCount) }} />
-                            <span className="w-3 rounded-t-md bg-primary" style={{ height: barHeight(point.tours, maxFunnelCount) }} />
-                            <span className="w-3 rounded-t-md bg-[var(--chart-2)]" style={{ height: barHeight(point.enrolled, maxFunnelCount) }} />
+                    <figure className="rounded-xl border bg-background/40 p-5">
+                      <figcaption className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-muted-foreground">
+                        <span className="inline-flex items-center gap-2"><span className="size-3 rounded-sm bg-[var(--chart-3)]" aria-hidden="true" />Leads</span>
+                        <span className="inline-flex items-center gap-2"><span className="size-3 rounded-sm bg-primary" aria-hidden="true" />Tours</span>
+                        <span className="inline-flex items-center gap-2"><span className="size-3 rounded-sm bg-[var(--chart-2)]" aria-hidden="true" />Enrolled</span>
+                      </figcaption>
+                      <div aria-hidden="true" className="flex h-60 items-end gap-4">
+                        {dashboardAnalytics.map((point) => (
+                          <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                            <div className="flex h-52 w-full items-end justify-center gap-1">
+                              <span className="w-3 rounded-t-md bg-[var(--chart-3)]" style={{ height: barHeight(point.leads, maxFunnelCount) }} />
+                              <span className="w-3 rounded-t-md bg-primary" style={{ height: barHeight(point.tours, maxFunnelCount) }} />
+                              <span className="w-3 rounded-t-md bg-[var(--chart-2)]" style={{ height: barHeight(point.enrolled, maxFunnelCount) }} />
+                            </div>
+                            <span className="text-xs text-muted-foreground">{point.month}</span>
                           </div>
-                          <span className="text-xs text-muted-foreground">{point.month}</span>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                      <table className="sr-only">
+                        <caption>Enrollment funnel trend values</caption>
+                        <thead><tr><th>Month</th><th>Leads</th><th>Tours</th><th>Enrolled</th></tr></thead>
+                        <tbody>
+                          {dashboardAnalytics.map((point) => (
+                            <tr key={point.month}><th>{point.month}</th><td>{point.leads}</td><td>{point.tours}</td><td>{point.enrolled}</td></tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </figure>
                   ) : (
                     <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
                       No enrollment funnel trend data is available for this login yet.

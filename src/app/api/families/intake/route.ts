@@ -14,6 +14,7 @@ import { prisma } from "@/lib/prisma";
 import { familyNameFromGuardian } from "@/lib/registration-packet";
 import { enrollmentClassroomValidationError, isEnrollmentPipelineStatus } from "@/lib/enrollment-status";
 import { activeClassroomWhere } from "@/lib/classroom-status";
+import { parseGuardianCommunicationPreference } from "@/lib/guardian-communication";
 import {
   childBirthCustomFields,
   expectedChildPlaceholderDate,
@@ -67,7 +68,10 @@ async function POSTHandler(request: NextRequest) {
   const guardianPhone = clean(body.guardianPhone);
   const guardianRelation = clean(body.guardianRelation) || "Parent/Guardian";
   const guardianEmployer = clean(body.guardianEmployer);
-  const preferredCommunication = clean(body.preferredCommunication) || (guardianEmail ? "email" : guardianPhone ? "phone" : null);
+  const requestedPreferredCommunication = clean(body.preferredCommunication);
+  const preferredCommunication = requestedPreferredCommunication
+    ? parseGuardianCommunicationPreference(requestedPreferredCommunication)
+    : guardianEmail ? "email" : guardianPhone ? "phone" : null;
   const checkInPin = normalizePin(body.checkInPin);
   const childName = clean(body.childName);
   const preferredName = clean(body.preferredName);
@@ -91,6 +95,7 @@ async function POSTHandler(request: NextRequest) {
   if (!centerId) errors.centerId = "Center is required.";
   if (!guardianName) errors.guardianName = "Primary guardian name is required.";
   if (!guardianEmail && !guardianPhone) errors.guardianEmail = "Parent email or phone is required.";
+  if (requestedPreferredCommunication && !preferredCommunication) errors.preferredCommunication = "Choose email, phone call, or text message.";
   if (!childName) errors.childName = "Child name is required.";
   if (requestedBirthStatus && !normalizeChildBirthStatus(requestedBirthStatus)) errors.birthStatus = "Birth status must be born or expected.";
   if (birthStatus === "expected" && !expectedDueDate) errors.expectedDueDate = "Expected due date is required for a child who is not born yet.";

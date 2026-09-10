@@ -70,10 +70,18 @@ async function hidePreviewOnlyUi(page) {
   const previewLabel = page.getByText("Preview only", { exact: true });
   if (await previewLabel.count()) {
     await previewLabel.first().evaluate((label) => {
-      const alert = label.closest('[role="alert"]');
+      const alert = label.closest('[data-slot="alert"]');
       if (alert instanceof HTMLElement) alert.hidden = true;
     });
   }
+  await page.evaluate(() => {
+    document.querySelectorAll('[class*="parentWorkspacePreview"]').forEach((element) => {
+      if (!(element instanceof HTMLElement)) return;
+      for (const className of [...element.classList]) {
+        if (className.includes("parentWorkspacePreview")) element.classList.remove(className);
+      }
+    });
+  });
 }
 
 async function capture(browser, item) {
@@ -82,8 +90,12 @@ async function capture(browser, item) {
     colorScheme: "light",
     reducedMotion: "reduce",
     deviceScaleFactor: 1,
+    serviceWorkers: "block",
   });
   const page = await context.newPage();
+  await page.route("**/_vercel/*/script.js", (route) =>
+    route.fulfill({ status: 200, contentType: "application/javascript", body: "" }),
+  );
   const apiRequests = [];
   const failures = [];
   const consoleErrors = [];
@@ -127,11 +139,6 @@ async function capture(browser, item) {
     }
     await page.evaluate(() => {
       window.scrollTo({ left: 0, top: window.scrollY, behavior: "instant" });
-      for (const element of document.querySelectorAll("*")) {
-        if (element instanceof HTMLElement && element.scrollLeft) {
-          element.scrollLeft = 0;
-        }
-      }
     });
 
     await page.waitForTimeout(150);

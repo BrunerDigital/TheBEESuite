@@ -1867,7 +1867,7 @@ function ParentPortalWorkspaceView({
     >
       <header
         id="family-summary"
-        className={`parent-portal-heading scroll-mt-28 rounded-[1.75rem] border border-border/70 bg-card px-5 py-5 sm:px-7 sm:py-6 ${activeView === "messages" ? "max-sm:sr-only" : ""}`}
+        className={`parent-portal-heading scroll-mt-28 rounded-[1.75rem] border border-border/70 bg-card px-5 py-5 sm:px-7 sm:py-6 ${activeView === "messages" ? "max-sm:hidden" : ""}`}
       >
         <div className="relative z-[1] flex min-w-0 items-center justify-between gap-3">
           <h1 className="text-balance font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -1899,10 +1899,10 @@ function ParentPortalWorkspaceView({
                       : undefined,
                 })}
                 aria-current={item.id === family.id ? "page" : undefined}
-                className={buttonVariants({
+                className={`${buttonVariants({
                   size: "sm",
                   variant: item.id === family.id ? "default" : "outline",
-                })}
+                })} h-auto min-h-11 max-w-full whitespace-normal break-words text-left`}
               >
                 <Building2 data-icon="inline-start" aria-hidden="true" />
                 {item.name}
@@ -1912,6 +1912,10 @@ function ParentPortalWorkspaceView({
           </div>
         ) : null}
       </header>
+
+      {activeView === "messages" ? (
+        <h1 className="sr-only sm:hidden">{activeViewCopy.title}</h1>
+      ) : null}
 
       {demoMode ? (
         <Alert className="border-primary/30 bg-primary/10">
@@ -2081,10 +2085,10 @@ function ParentPortalWorkspaceView({
                       </span>
                     ) : null}
                     <div className="min-w-0">
-                      <h3 className="truncate text-lg font-semibold">
+                      <h3 className="break-words text-lg font-semibold">
                         {child.preferredName || child.fullName}
                       </h3>
-                      <p className="mt-1 truncate text-sm text-muted-foreground">
+                      <p className="mt-1 break-words text-sm text-muted-foreground">
                         {child.classroom?.name || "Classroom not assigned"}
                       </p>
                     </div>
@@ -2450,6 +2454,7 @@ function ParentPortalWorkspaceView({
               <Select
                 value={selectedUpdateDay?.key ?? ""}
                 onValueChange={(value) => setSelectedUpdateDayKey(value ?? "")}
+                disabled={!dailyUpdateDays.length}
               >
                 <SelectTrigger
                   id="parent-update-day"
@@ -2475,6 +2480,15 @@ function ParentPortalWorkspaceView({
                 : "No updates yet"}
             </p>
           </div>
+
+          {!selectedUpdateDay ? (
+            <div className="rounded-2xl border border-dashed bg-muted/20 px-5 py-8 text-center">
+              <h2 className="font-semibold">No daily updates yet</h2>
+              <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+                Classroom reports, meals, naps, activities, and photos will appear here after your child&apos;s school shares them. If you expected an update today, contact the school office or send a message.
+              </p>
+            </div>
+          ) : null}
 
           <div className="divide-y" aria-label="Updates for the selected date">
             {(selectedUpdateDay?.reports ?? []).map((report) => {
@@ -2575,6 +2589,7 @@ function ParentPortalWorkspaceView({
                           alt={item.caption || `${item.child.fullName} classroom moment`}
                           fill
                           sizes="12rem"
+                          loading={index === 0 ? "eager" : "lazy"}
                           className="object-cover"
                           unoptimized
                         />
@@ -2779,8 +2794,8 @@ function ParentPortalWorkspaceView({
                       {(child.preferredName ?? child.fullName).slice(0, 1).toUpperCase()}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{child.fullName}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
+                      <span className="block break-words font-medium">{child.fullName}</span>
+                      <span className="block break-words text-xs text-muted-foreground">
                         {child.preferredName
                           ? `Preferred: ${child.preferredName} · `
                           : ""}
@@ -3474,7 +3489,7 @@ function ParentPortalWorkspaceView({
                           onClick={() => payBalance("card")}
                         >
                           {paymentCheckoutMethod === "card" ? (
-                            <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                            <LoaderCircle className="animate-spin motion-reduce:animate-none" data-icon="inline-start" />
                           ) : (
                             <CreditCard data-icon="inline-start" />
                           )}
@@ -3495,7 +3510,7 @@ function ParentPortalWorkspaceView({
                           variant="outline"
                         >
                           {paymentCheckoutMethod === "link_bank" ? (
-                            <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                            <LoaderCircle className="animate-spin motion-reduce:animate-none" data-icon="inline-start" />
                           ) : (
                             <CreditCard data-icon="inline-start" />
                           )}
@@ -3516,7 +3531,7 @@ function ParentPortalWorkspaceView({
                           variant="outline"
                         >
                           {paymentCheckoutMethod === "ach" ? (
-                            <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                            <LoaderCircle className="animate-spin motion-reduce:animate-none" data-icon="inline-start" />
                           ) : (
                             <Building2 data-icon="inline-start" />
                           )}
@@ -3535,7 +3550,7 @@ function ParentPortalWorkspaceView({
                 </div>
                 {paymentCheckoutMethod ? (
                   <Alert className="mt-3" role="status" aria-live="polite">
-                    <LoaderCircle className="size-4 animate-spin" />
+                    <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
                     <AlertTitle>Opening secure checkout</AlertTitle>
                     <AlertDescription>
                       Keep this screen open. Secure payment setup can take a few seconds on a mobile connection.
@@ -3913,7 +3928,7 @@ function ParentPortalWorkspaceView({
                   </CardDescription>
                 </div>
               </div>
-              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-emerald-500/10" aria-label="Private family conversation"><span className="size-2.5 rounded-full bg-emerald-600" aria-hidden="true" /></span>
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-emerald-500/10" role="img" aria-label="Private family conversation"><span className="size-2.5 rounded-full bg-emerald-600" aria-hidden="true" /></span>
             </div>
           </CardHeader>
           <CardContent className={`${styles.parentChatContent} p-0`}>

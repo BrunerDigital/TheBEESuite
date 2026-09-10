@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { ArrowLeft, BadgeCheck, CreditCard, FileCheck2, ShieldCheck } from "lucide-react";
 import { BrandIcon } from "@/components/brand-logo";
 import { OnlineRegistrationForm } from "@/components/online-registration-form";
@@ -10,6 +11,12 @@ import { logOperationalError } from "@/lib/request-response-logging";
 import { resolveRegistrationHandoffCenter } from "@/lib/registration-handoff";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Online Childcare Registration | The BEE Suite",
+  description: "Send a secure childcare registration packet to a participating school.",
+  alternates: { canonical: "/registration" },
+};
 
 async function getRegistrationCenters() {
   try {
@@ -70,7 +77,7 @@ export default async function OnlineRegistrationPage({
   }));
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(245,181,27,0.16),transparent_28rem),linear-gradient(135deg,#05070a,#0a0f15_56%,#171104)] px-4 py-8 text-foreground sm:px-6 lg:px-8">
+    <main className="min-h-screen min-h-dvh bg-[radial-gradient(circle_at_top_right,rgba(245,181,27,0.16),transparent_28rem),linear-gradient(135deg,#05070a,#0a0f15_56%,#171104)] px-4 pt-[max(2rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(2rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-[1180px] flex-col gap-6">
         <div className="flex items-center justify-between gap-4">
           <Button

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, Building2, CreditCard, ReceiptText, RadioTower, ShieldCheck, UserRoundSearch } from "lucide-react";
 import type { BillingWorkbenchCenter, BillingWorkbenchFamily } from "@/components/billing-workbench";
-import { StripeTerminalPayment } from "@/components/stripe-terminal-payment";
+import { StripeTerminalPayment, type TerminalPaymentStatus } from "@/components/stripe-terminal-payment";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -27,7 +27,7 @@ function money(cents: number) {
 
 function WorkflowStep({ number, title, detail, complete, active }: { number: number; title: string; detail: string; complete: boolean; active: boolean }) {
   return (
-    <li className={cn("flex min-w-0 gap-3 rounded-2xl border p-3", active ? "border-primary/40 bg-primary/8" : "bg-background/55")}>
+    <li aria-current={active ? "step" : undefined} className={cn("flex min-w-0 gap-3 rounded-2xl border p-3", active ? "border-primary/40 bg-primary/8" : "bg-background/55")}>
       <span className={cn(
         "grid size-9 shrink-0 place-items-center rounded-xl border text-sm font-bold tabular-nums",
         complete ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : active ? "border-primary/30 bg-primary text-primary-foreground" : "bg-muted/50 text-muted-foreground",
@@ -37,6 +37,7 @@ function WorkflowStep({ number, title, detail, complete, active }: { number: num
       <span className="min-w-0">
         <span className="block font-semibold">{title}</span>
         <span className="mt-0.5 block text-xs text-muted-foreground">{detail}</span>
+        <span className="sr-only">{complete ? "Completed" : active ? "Current step" : "Not started"}</span>
       </span>
     </li>
   );
@@ -49,6 +50,7 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
   const openInvoices = selectedFamily?.billingAccount?.openInvoices ?? [];
   const [paymentTarget, setPaymentTarget] = useState(openInvoices[0] ? `invoice:${openInvoices[0].id}` : "account");
   const [customAmount, setCustomAmount] = useState("");
+  const [terminalStatus, setTerminalStatus] = useState<TerminalPaymentStatus>("idle");
 
   const selectedInvoiceId = paymentTarget.startsWith("invoice:") ? paymentTarget.slice("invoice:".length) : null;
   const selectedInvoice = openInvoices.find((invoice) => invoice.id === selectedInvoiceId) ?? null;
@@ -61,14 +63,26 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
   const familyReady = Boolean(selectedFamily?.billingAccount && center);
   const amountReady = amountCents > 0;
   const terminalReady = familyReady && amountReady && center?.checkoutReadiness?.canAcceptParentPayments !== false;
+  const paymentRecorded = terminalStatus === "succeeded";
   const selectedFamilyLabel = selectedFamily ? `${selectedFamily.name}${center ? ` · ${center.crmLocationId || center.name}` : ""}` : "Choose a current family";
 
   function changeFamily(nextFamilyId: string) {
+    setTerminalStatus("idle");
     setFamilyId(nextFamilyId);
     const nextFamily = families.find((family) => family.id === nextFamilyId) ?? null;
     const firstInvoice = nextFamily?.billingAccount?.openInvoices?.[0] ?? null;
     setPaymentTarget(firstInvoice ? `invoice:${firstInvoice.id}` : "account");
     setCustomAmount("");
+  }
+
+  function changePaymentTarget(nextTarget: string) {
+    setTerminalStatus("idle");
+    setPaymentTarget(nextTarget);
+  }
+
+  function changeCustomAmount(nextAmount: string) {
+    setTerminalStatus("idle");
+    setCustomAmount(nextAmount);
   }
 
   const reviewRows = [
@@ -100,8 +114,8 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
       <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Payment workflow progress">
         <WorkflowStep number={1} title="Family" detail={selectedFamily ? selectedFamily.name : "Choose current family"} complete={familyReady} active={!familyReady} />
         <WorkflowStep number={2} title="Amount" detail={amountReady ? money(amountCents) : "Choose invoice or amount"} complete={amountReady} active={familyReady && !amountReady} />
-        <WorkflowStep number={3} title="Reader" detail="Confirm online hardware" complete={false} active={terminalReady} />
-        <WorkflowStep number={4} title="Receipt" detail="Recorded after approval" complete={false} active={false} />
+        <WorkflowStep number={3} title="Reader" detail={terminalStatus === "processing" ? "Waiting for the card" : paymentRecorded ? "Payment approved" : terminalReady ? "Confirm online hardware" : "Reader becomes available after amount review"} complete={paymentRecorded} active={familyReady && amountReady && !paymentRecorded} />
+        <WorkflowStep number={4} title="Receipt" detail={paymentRecorded ? "Payment recorded; receipt is ready" : "Recorded after approval"} complete={paymentRecorded} active={paymentRecorded} />
       </ol>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(28rem,1.15fr)]">
@@ -128,7 +142,7 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
               {selectedFamily?.billingAccount ? (
                 <div className="space-y-2">
                   <Label htmlFor="terminal-payment-target">Apply payment to</Label>
-                  <Select value={paymentTarget} onValueChange={(value) => value && setPaymentTarget(value)}>
+                  <Select value={paymentTarget} onValueChange={(value) => value && changePaymentTarget(value)}>
                     <SelectTrigger id="terminal-payment-target" aria-label="Apply payment to"><SelectValue placeholder="Choose an invoice or account payment…" /></SelectTrigger>
                     <SelectContent>
                       {openInvoices.map((invoice) => (
@@ -156,7 +170,7 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
                       min="0.01"
                       step="0.01"
                       value={customAmount}
-                      onChange={(event) => setCustomAmount(event.target.value)}
+                      onChange={(event) => changeCustomAmount(event.target.value)}
                       placeholder="Example: 125.00…"
                       className="pl-7 tabular-nums"
                     />
@@ -213,6 +227,7 @@ export function DirectorPaymentTerminalWorkspace({ families, centers, initialFam
           disabled={!terminalReady}
           contextLabel={selectedFamilyLabel}
           previewMode={previewMode}
+          onStatusChange={setTerminalStatus}
         />
       </div>
     </div>

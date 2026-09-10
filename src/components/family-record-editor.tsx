@@ -33,6 +33,7 @@ import {
 } from "@/lib/enrollment-status";
 import { childScheduleClassification, scheduledDaysPerWeek } from "@/lib/fte-scheduled-days";
 import { childBirthFormState, suggestedExpectedDueDate } from "@/lib/expected-child-birth";
+import { guardianCommunicationOptions, guardianCommunicationPreferenceOrDefault } from "@/lib/guardian-communication";
 
 type ClassroomOption = { id: string; name: string; ageGroup: string };
 type CenterOption = { id: string; name: string; classrooms: ClassroomOption[] };
@@ -204,7 +205,6 @@ type Props = {
 };
 
 const enrollmentStatuses = ["enrolled", "pending", "waitlisted", "tour_scheduled", "summer_break", "withdrawn", "graduated", "inactive"];
-const communicationMethods = ["email", "phone", "sms"];
 const documentStatuses = ["REQUESTED", "SUBMITTED", "APPROVED", "REJECTED", "EXPIRED"];
 const profileSectionLinks = [
   ["Relationships", "family-relationships"],
@@ -473,7 +473,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
   const [guardianPhone, setGuardianPhone] = useState(selectedGuardian?.phone ?? "");
   const [guardianEmployer, setGuardianEmployer] = useState(selectedGuardian?.employer ?? "");
   const [guardianRelation, setGuardianRelation] = useState(selectedGuardian?.relation ?? "Parent/Guardian");
-  const [preferredCommunication, setPreferredCommunication] = useState(selectedGuardian?.preferredCommunication ?? "email");
+  const [preferredCommunication, setPreferredCommunication] = useState(
+    guardianCommunicationPreferenceOrDefault(selectedGuardian?.preferredCommunication),
+  );
   const [isBillingContact, setIsBillingContact] = useState(Boolean(selectedGuardian?.isBillingContact));
   const [parentPortalLoginEnabled, setParentPortalLoginEnabled] = useState(parentPortalLoginEnabledForGuardian(selectedGuardian));
 
@@ -657,7 +659,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     setGuardianPhone(guardian?.phone ?? "");
     setGuardianEmployer(guardian?.employer ?? "");
     setGuardianRelation(guardian?.relation ?? "Parent/Guardian");
-    setPreferredCommunication(guardian?.preferredCommunication ?? "email");
+    setPreferredCommunication(guardianCommunicationPreferenceOrDefault(guardian?.preferredCommunication));
     setIsBillingContact(Boolean(guardian?.isBillingContact));
     setParentPortalLoginEnabled(parentPortalLoginEnabledForGuardian(guardian));
     setDuplicateGuardianId("");
@@ -1529,11 +1531,11 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             </div>
             <div className="space-y-1">
               <Label htmlFor="family-editor-guardian-preferred-contact">Preferred contact</Label>
-              <Select value={preferredCommunication} onValueChange={(value) => value && setPreferredCommunication(value)}>
+              <Select value={preferredCommunication} onValueChange={(value) => setPreferredCommunication(guardianCommunicationPreferenceOrDefault(value, preferredCommunication))}>
                 <SelectTrigger id="family-editor-guardian-preferred-contact"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {communicationMethods.map((method) => (
-                    <SelectItem key={method} value={method}>{method}</SelectItem>
+                  {guardianCommunicationOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

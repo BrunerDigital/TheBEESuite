@@ -149,7 +149,7 @@ export function PaymentMethodRequestForm({
           </Alert>
         ) : null}
         {paymentMethodStatus === "success" ? (
-          <Alert className="border-emerald-400/40 bg-emerald-400/10 text-emerald-50">
+          <Alert role="status" className="border-emerald-400/40 bg-emerald-400/10 text-emerald-50">
             <CheckCircle2 className="size-4" />
             <AlertTitle>Payment method submitted</AlertTitle>
             <AlertDescription className="text-emerald-100">
@@ -158,7 +158,7 @@ export function PaymentMethodRequestForm({
           </Alert>
         ) : null}
         {paymentStatus === "success" ? (
-          <Alert className={reauthorization
+          <Alert role="status" className={reauthorization
             ? "border-amber-300/40 bg-amber-300/10 text-amber-50"
             : "border-emerald-400/40 bg-emerald-400/10 text-emerald-50"}>
             {reauthorization ? <AlertCircle className="size-4" /> : <CheckCircle2 className="size-4" />}
@@ -174,7 +174,7 @@ export function PaymentMethodRequestForm({
           </Alert>
         ) : null}
         {paymentStatus === "cancelled" ? (
-          <Alert className="border-amber-300/40 bg-amber-300/10 text-amber-50">
+          <Alert role="status" className="border-amber-300/40 bg-amber-300/10 text-amber-50">
             <AlertCircle className="size-4" />
             <AlertTitle>Payment was cancelled</AlertTitle>
             <AlertDescription className="text-amber-100">
@@ -192,7 +192,7 @@ export function PaymentMethodRequestForm({
           </Alert>
         ) : null}
         {paymentMethodStatus === "cancelled" ? (
-          <Alert className="border-amber-300/40 bg-amber-300/10 text-amber-50">
+          <Alert role="status" className="border-amber-300/40 bg-amber-300/10 text-amber-50">
             <AlertCircle className="size-4" />
             <AlertTitle>Setup was cancelled</AlertTitle>
             <AlertDescription className="text-amber-100">
@@ -201,7 +201,7 @@ export function PaymentMethodRequestForm({
           </Alert>
         ) : null}
         {showPendingBankVerification ? (
-          <Alert className="border-amber-300/40 bg-amber-300/10 text-amber-50">
+          <Alert role="status" className="border-amber-300/40 bg-amber-300/10 text-amber-50">
             <AlertCircle className="size-4" />
             <AlertTitle>Bank verification is pending</AlertTitle>
             <AlertDescription className="text-amber-100">
@@ -212,7 +212,7 @@ export function PaymentMethodRequestForm({
           </Alert>
         ) : null}
         {focus === "instant-bank" ? (
-          <Alert className="border-sky-300/40 bg-sky-300/10 text-sky-50">
+          <Alert role="status" className="border-sky-300/40 bg-sky-300/10 text-sky-50">
             <Building2 className="size-4" />
             <AlertTitle>Bank verification requested</AlertTitle>
             <AlertDescription className="text-sky-100">

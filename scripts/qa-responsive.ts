@@ -20,8 +20,10 @@ const routes = [
   "/forgot-password",
   "/registration",
   "/reset-password",
-  "/parent-portal/setup",
-  "/check-in",
+  "/parents",
+  "/teachers",
+  "/directors",
+  "/executives",
   "/resources",
   "/support",
   "/privacy",
@@ -45,7 +47,11 @@ async function main() {
   try {
     for (const viewport of QA_TARGET_VIEWPORTS.filter((candidate) => !viewportFilter.size || viewportFilter.has(candidate.id))) {
       for (const route of routes.filter((candidate) => !routeFilter.size || routeFilter.has(candidate) || routeFilter.has(candidate.slice(1)))) {
-        const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height }, reducedMotion: "reduce" });
+        const page = await browser.newPage({
+          viewport: { width: viewport.width, height: viewport.height },
+          reducedMotion: "reduce",
+          serviceWorkers: "block",
+        });
         const errors: string[] = [];
         const blockedRequests: string[] = [];
         page.on("pageerror", (error) => errors.push(error.message));
@@ -56,6 +62,10 @@ async function main() {
           const request = routeHandler.request();
           const method = request.method().toUpperCase();
           const url = new URL(request.url());
+          if (url.origin === baseOrigin && ["/_vercel/insights/script.js", "/_vercel/speed-insights/script.js"].includes(url.pathname)) {
+            await routeHandler.fulfill({ status: 200, contentType: "application/javascript", body: "" });
+            return;
+          }
           if (method !== "GET" || url.origin !== baseOrigin || url.pathname.startsWith("/api/")) {
             blockedRequests.push(`${method} ${request.url()}`);
             await routeHandler.abort("blockedbyclient");
@@ -126,6 +136,15 @@ async function main() {
               ? [`Heading level skips from h${previous.level} to h${heading.level}: ${heading.text}`]
               : [];
           });
+          const main = document.querySelector<HTMLElement>("main");
+          const mainStyle = main ? getComputedStyle(main) : null;
+          const hasVisibleMain = Boolean(
+            main
+            && mainStyle?.visibility !== "hidden"
+            && mainStyle?.display !== "none"
+            && main.getBoundingClientRect().width > 0
+            && main.getBoundingClientRect().height > 0,
+          );
           return {
             scrollWidth: document.documentElement.scrollWidth,
             viewportWidth: window.innerWidth,
@@ -153,7 +172,10 @@ async function main() {
             })),
             headingOutline,
             headingLevelProblems,
-            meaningfulText: (document.querySelector("main")?.textContent || document.body.textContent || "").trim().length,
+            hasVisibleMain,
+            visibleHeadingCount: headingOutline.length,
+            meaningfulText: hasVisibleMain ? (main?.innerText ?? "").trim().length : 0,
+            finalPathname: window.location.pathname,
           };
         }).catch(() => ({
           scrollWidth: 0,
@@ -163,7 +185,10 @@ async function main() {
           unnamedInteractiveElements: [{ error: "metrics unavailable" }],
           headingOutline: [],
           headingLevelProblems: [{ error: "metrics unavailable" }],
+          hasVisibleMain: false,
+          visibleHeadingCount: 0,
           meaningfulText: 0,
+          finalPathname: "",
         }));
         const routeId = route === "/" ? "home" : route.slice(1).replaceAll("/", "-");
         const screenshot = resolve(outputDirectory, `${viewport.id}__${routeId}.png`);
@@ -171,6 +196,9 @@ async function main() {
         await page.screenshot({ path: screenshot, fullPage: true });
         const routeReadyMs = Math.round(performance.now() - startedAt);
         const passed = Boolean(response && response.ok()) &&
+          metrics.finalPathname === route &&
+          metrics.hasVisibleMain &&
+          metrics.visibleHeadingCount > 0 &&
           metrics.meaningfulText > 0 &&
           metrics.horizontalOverflowPx <= QA_RECOMMENDED_THRESHOLDS.browser.horizontalOverflowPx &&
           metrics.clippedInteractiveElements.length <= QA_RECOMMENDED_THRESHOLDS.browser.clippedInteractiveElements &&

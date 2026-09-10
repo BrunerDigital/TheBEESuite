@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { AlertCircle, Archive, Building2, CheckCircle2, Copy, FileUp, KeyRound, LogOut, MapPin, RefreshCw, Save, ShieldCheck, UserPlus } from "lucide-react";
 import {
   CRM_LOCATION_ID_EXAMPLE,
@@ -235,6 +235,9 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
   const [resetForm, setResetForm] = useState({ email: "", password: "" });
   const [bulkCsv, setBulkCsv] = useState("");
   const [bulkResults, setBulkResults] = useState<BulkImportResult[]>([]);
+  const [bulkPreviewExpanded, setBulkPreviewExpanded] = useState(false);
+  const [userQuery, setUserQuery] = useState("");
+  const [dirtySections, setDirtySections] = useState({ center: false, ownerGroup: false, user: false, password: false, bulk: false });
   const [generatedLogin, setGeneratedLogin] = useState<TeacherLoginResponse | null>(null);
 
   const sortedCenters = useMemo(
@@ -247,14 +250,32 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
     [ownerGroups],
   );
   const sortedUsers = useMemo(
-    () => [...users].sort((a, b) => a.email.localeCompare(b.email)).slice(0, 75),
+    () => [...users].sort((a, b) => a.email.localeCompare(b.email)),
     [users],
   );
+  const filteredUsers = useMemo(() => {
+    const query = userQuery.trim().toLowerCase();
+    if (!query) return sortedUsers;
+    return sortedUsers.filter((user) => {
+      const grant = user.accessGrants.find((item) => item.isActive) ?? user.accessGrants[0];
+      return [
+        user.name,
+        user.email,
+        userRoleLabel(user.role),
+        grant?.center?.crmLocationId,
+        grant?.center?.name,
+        user.staffProfile?.center?.crmLocationId,
+        user.staffProfile?.center?.name,
+        grant?.ownerGroup?.name,
+      ].some((value) => value?.toLowerCase().includes(query));
+    });
+  }, [sortedUsers, userQuery]);
   const centerValidationErrors = useMemo(() => validateExecutiveCenterForm(centerForm), [centerForm]);
   const ownerGroupValidationErrors = useMemo(() => validateExecutiveOwnerGroupForm(ownerGroupForm), [ownerGroupForm]);
   const userValidationErrors = useMemo(() => validateExecutiveUserForm(userForm), [userForm]);
   const passwordValidationErrors = useMemo(() => validateExecutivePasswordAction(resetForm), [resetForm]);
   const bulkRows = useMemo(() => parseExecutiveBulkImportCsv(bulkCsv), [bulkCsv]);
+  const visibleBulkRows = bulkPreviewExpanded ? bulkRows : bulkRows.slice(0, 12);
   const bulkSummary = useMemo(() => summarizeExecutiveBulkImport(bulkRows), [bulkRows]);
   const userFormIsTeacher = userForm.role === "TEACHER";
   const savingCenter = isPending && (activeAction === "Saving school changes..." || activeAction === "Creating school...");
@@ -262,6 +283,25 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
   const resettingPassword = isPending && (activeAction === "Setting password..." || activeAction === "Sending password reset...");
   const savingOwnerGroup = isPending && (activeAction === "Saving owner group..." || activeAction === "Creating owner group...");
   const importingBulkRows = isPending && activeAction === "Importing executive CSV rows...";
+  const hasUnsavedAdminInput = Object.values(dirtySections).some(Boolean);
+
+  useEffect(() => {
+    if (!hasUnsavedAdminInput) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [hasUnsavedAdminInput]);
+
+  function markDirty(section: keyof typeof dirtySections, dirty = true) {
+    setDirtySections((current) => current[section] === dirty ? current : { ...current, [section]: dirty });
+  }
+
+  function confirmReplaceDraft(section: keyof typeof dirtySections, label: string) {
+    return !dirtySections[section] || window.confirm(`Unsaved ${label} changes will be discarded. Continue?`);
+  }
 
   function clearInlineFeedback() {
     if (validationErrors.length) setValidationErrors([]);
@@ -270,6 +310,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
 
   function setCenterField(key: keyof ReturnType<typeof blankCenterForm>, value: string) {
     clearInlineFeedback();
+    markDirty("center");
     setCenterForm((current) => {
       const next = { ...current, [key]: value };
       if (key === "crmLocationId") {
@@ -288,30 +329,37 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
 
   function setOwnerGroupField(key: keyof ReturnType<typeof blankOwnerGroupForm>, value: string) {
     clearInlineFeedback();
+    markDirty("ownerGroup");
     setOwnerGroupForm((current) => ({ ...current, [key]: value }));
   }
 
   function setUserField(key: keyof typeof userForm, value: string) {
     clearInlineFeedback();
+    markDirty("user");
     setUserForm((current) => ({ ...current, [key]: value }));
   }
 
   function setResetField(key: keyof typeof resetForm, value: string) {
     clearInlineFeedback();
+    markDirty("password");
     setResetForm((current) => ({ ...current, [key]: value }));
   }
 
   function setBulkCsvText(value: string) {
     clearInlineFeedback();
+    markDirty("bulk");
     setBulkCsv(value);
     setBulkResults([]);
+    setBulkPreviewExpanded(false);
   }
 
   function loadCenter(centerId: string) {
+    if (!confirmReplaceDraft("center", "school")) return;
     clearInlineFeedback();
     const center = centers.find((item) => item.id === centerId);
     if (!center) {
       setCenterForm(blankCenterForm());
+      markDirty("center", false);
       return;
     }
     setCenterForm({
@@ -329,13 +377,16 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
       ownerGroupId: center.ownerGroupId ?? "",
       status: center.status || "active",
     });
+    markDirty("center", false);
   }
 
   function loadOwnerGroup(ownerGroupId: string) {
+    if (!confirmReplaceDraft("ownerGroup", "owner group")) return;
     clearInlineFeedback();
     const ownerGroup = ownerGroups.find((item) => item.id === ownerGroupId);
     if (!ownerGroup) {
       setOwnerGroupForm(blankOwnerGroupForm());
+      markDirty("ownerGroup", false);
       return;
     }
     setOwnerGroupForm({
@@ -346,6 +397,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
       contactName: ownerGroup.contactName ?? "",
       status: ownerGroup.status || "active",
     });
+    markDirty("ownerGroup", false);
   }
 
   function executiveSuccessDetail(action: string, fallback: string, json: ExecutiveActionResponse | null) {
@@ -468,6 +520,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
         : undefined,
       after: () => {
         if (!centerForm.centerId) setCenterForm(blankCenterForm());
+        markDirty("center", false);
       },
     });
   }
@@ -518,6 +571,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
         : undefined,
       after: () => {
         if (!ownerGroupForm.ownerGroupId) setOwnerGroupForm(blankOwnerGroupForm());
+        markDirty("ownerGroup", false);
       },
     });
   }
@@ -558,13 +612,15 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
             confirmLabel: "Update user",
           }
         : undefined,
-      after: () =>
+      after: () => {
         setUserForm((current) => ({
           ...current,
           name: existing ? current.name : "",
           email: existing ? current.email : "",
           password: "",
-        })),
+        }));
+        markDirty("user", false);
+      },
     });
   }
 
@@ -579,7 +635,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
       payload: resetForm,
       success: resetForm.password ? "Password set." : "Password reset email sent.",
       working: resetForm.password ? "Setting password..." : "Sending password reset...",
-      after: () => setResetForm({ email: "", password: "" }),
+      after: () => {
+        setResetForm({ email: "", password: "" });
+        markDirty("password", false);
+      },
       confirmation: {
         title: resetForm.password ? "Set password?" : "Send password reset?",
         description: resetForm.password
@@ -639,7 +698,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
       payload: { rows: bulkRows },
       success: "Bulk import finished.",
       working: "Importing executive CSV rows...",
-      onSuccess: (json) => setBulkResults(json?.results ?? []),
+      onSuccess: (json) => {
+        setBulkResults(json?.results ?? []);
+        markDirty("bulk", false);
+      },
       confirmation: {
         title: "Import executive rows?",
         description: `${bulkRows.length} row${bulkRows.length === 1 ? "" : "s"} will be imported. Location rows run first, then user rows are matched by Location ID.`,
@@ -653,9 +715,12 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
     clearInlineFeedback();
     setBulkCsv(await file.text());
     setBulkResults([]);
+    setBulkPreviewExpanded(false);
+    markDirty("bulk");
   }
 
   function loadUserForEdit(user: UserOption) {
+    if (!confirmReplaceDraft("user", "user access")) return;
     clearInlineFeedback();
     const grant = user.accessGrants.find((item) => item.isActive) ?? user.accessGrants[0];
     setUserForm({
@@ -669,6 +734,14 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
       password: "",
       sendPasswordReset: "no",
     });
+    markDirty("user", false);
+  }
+
+  function loadPasswordControls(email: string) {
+    if (!confirmReplaceDraft("password", "password")) return;
+    clearInlineFeedback();
+    setResetForm({ email, password: "" });
+    markDirty("password", false);
   }
 
   return (
@@ -724,7 +797,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
           </Alert>
         ) : null}
         {error ? (
-          <Alert variant="destructive">
+          <Alert role="alert" variant="destructive">
             <AlertCircle className="size-4" />
             <AlertTitle>Action could not be completed</AlertTitle>
             <AlertDescription>
@@ -741,7 +814,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
           </Alert>
         ) : null}
         {validationErrors.length ? (
-          <Alert variant="destructive">
+          <Alert role="alert" variant="destructive">
             <AlertCircle className="size-4" />
             <AlertTitle>Fix before saving</AlertTitle>
             <AlertDescription>
@@ -907,7 +980,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                 </div>
               </div>
               {bulkRows.length ? (
-                <div className="rounded-xl border">
+                <div id="executive-bulk-preview" className="rounded-xl border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -920,7 +993,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {bulkRows.slice(0, 12).map((row) => {
+                      {visibleBulkRows.map((row) => {
                         const result = bulkResults.find((item) => item.rowNumber === row.rowNumber);
                         return (
                           <TableRow key={`${row.rowNumber}-${row.type}`}>
@@ -949,6 +1022,23 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                       })}
                     </TableBody>
                   </Table>
+                  {bulkRows.length > 12 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2">
+                      <p id="executive-bulk-preview-count" className="text-sm text-muted-foreground">
+                        Showing {visibleBulkRows.length} of {bulkRows.length} parsed rows.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-expanded={bulkPreviewExpanded}
+                        aria-controls="executive-bulk-preview"
+                        onClick={() => setBulkPreviewExpanded((current) => !current)}
+                      >
+                        {bulkPreviewExpanded ? "Show first 12" : `Show all ${bulkRows.length}`}
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </CardContent>
@@ -967,8 +1057,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                 <Label htmlFor="executive-school-selection">Existing location</Label>
                 <Select value={centerForm.centerId || "new"} onValueChange={(value) => {
                   if ((value ?? "new") === "new") {
+                    if (!confirmReplaceDraft("center", "school")) return;
                     clearInlineFeedback();
                     setCenterForm(blankCenterForm());
+                    markDirty("center", false);
                   } else {
                     loadCenter(value ?? "");
                   }
@@ -1192,6 +1284,19 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
               summary={`${sortedUsers.filter((user) => user.isActive).length} active · ${sortedUsers.filter((user) => !user.isActive).length} inactive`}
               defaultCollapsed
             >
+            <div className="mb-4 grid gap-1 sm:max-w-md">
+              <Label htmlFor="executive-user-search">Search accounts</Label>
+              <Input
+                id="executive-user-search"
+                type="search"
+                value={userQuery}
+                onChange={(event) => setUserQuery(event.target.value)}
+                placeholder="Name, email, role, school, or owner group"
+              />
+              <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+                {userQuery.trim() ? `${filteredUsers.length} of ${sortedUsers.length} accounts match.` : `${sortedUsers.length} accounts in scope.`}
+              </p>
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1204,7 +1309,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedUsers.map((user) => {
+                {filteredUsers.map((user) => {
                   const grant = user.accessGrants.find((item) => item.isActive) ?? user.accessGrants[0];
                   return (
                     <TableRow key={user.id}>
@@ -1224,10 +1329,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" size="sm" className="min-h-10" onClick={() => loadUserForEdit(user)} aria-label={`Edit access for ${user.email}`}>Edit user</Button>
-                          <Button variant="outline" size="sm" className="min-h-10" aria-label={`Open password controls for ${user.email}`} onClick={() => {
-                            clearInlineFeedback();
-                            setResetForm((current) => ({ ...current, email: user.email }));
-                          }}>Reset password</Button>
+                          <Button variant="outline" size="sm" className="min-h-10" aria-label={`Open password controls for ${user.email}`} onClick={() => loadPasswordControls(user.email)}>Reset password</Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -1253,10 +1355,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                     </TableRow>
                   );
                 })}
-                {!sortedUsers.length ? (
+                {!filteredUsers.length ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-muted-foreground">
-                      No users are available for this account.
+                      {sortedUsers.length ? "No accounts match this search." : "No users are available for this account."}
                     </TableCell>
                   </TableRow>
                 ) : null}
@@ -1280,8 +1382,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }
                 <Label htmlFor="executive-owner-group-selection">Existing owner group</Label>
                 <Select value={ownerGroupForm.ownerGroupId || "new"} onValueChange={(value) => {
                   if ((value ?? "new") === "new") {
+                    if (!confirmReplaceDraft("ownerGroup", "owner group")) return;
                     clearInlineFeedback();
                     setOwnerGroupForm(blankOwnerGroupForm());
+                    markDirty("ownerGroup", false);
                   } else {
                     loadOwnerGroup(value ?? "");
                   }

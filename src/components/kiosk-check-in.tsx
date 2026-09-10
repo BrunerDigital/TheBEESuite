@@ -137,6 +137,8 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
   const qrVideoRef = useRef<HTMLVideoElement | null>(null);
   const qrControlsRef = useRef<IScannerControls | null>(null);
   const qrScanHandledRef = useRef(false);
+  const feedbackRef = useRef<HTMLDivElement | null>(null);
+  const resultPanelRef = useRef<HTMLDivElement | null>(null);
   const [idleSecondsRemaining, setIdleSecondsRemaining] = useState(idleResetSeconds);
   const [isPending, startTransition] = useTransition();
   const selectedChildren = useMemo(
@@ -241,6 +243,33 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
 
     return () => window.clearInterval(timer);
   }, [hasPrivateState, reset]);
+
+  useEffect(() => {
+    const target = error || status ? feedbackRef.current : null;
+    if (!target) return;
+    const frame = window.requestAnimationFrame(() => {
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "center",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [error, status]);
+
+  useEffect(() => {
+    if (error || status) return;
+    const target = lookup || staffLookup ? resultPanelRef.current : null;
+    if (!target) return;
+    const frame = window.requestAnimationFrame(() => {
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "center",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [error, lookup, staffLookup, status]);
 
   useEffect(() => {
     function clearPrivateState() {
@@ -578,14 +607,14 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
         </section>
 
         {status ? (
-          <Alert>
+          <Alert ref={feedbackRef} tabIndex={-1} role="status" aria-live="polite" className="scroll-mt-4 focus:outline-none">
             <CheckCircle2 className="size-4" aria-hidden="true" />
             <AlertTitle>Action confirmed</AlertTitle>
             <AlertDescription>{status}</AlertDescription>
           </Alert>
         ) : null}
         {error ? (
-          <Alert variant="destructive">
+          <Alert ref={feedbackRef} tabIndex={-1} role="alert" className="scroll-mt-4 focus:outline-none" variant="destructive">
             <AlertCircle className="size-4" aria-hidden="true" />
             <AlertTitle>We couldn&apos;t continue</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
@@ -613,11 +642,11 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
             <CardContent className="space-y-3 p-4 pt-2 lg:space-y-2 lg:p-3 lg:pt-1 2xl:space-y-3 2xl:p-4 2xl:pt-2">
               {!familyOnly ? (
                 <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/60 p-1">
-                  <Button type="button" variant={activeKioskMode === "family" ? "default" : "ghost"} onClick={() => selectKioskMode("family")}>
+                  <Button type="button" aria-pressed={activeKioskMode === "family"} variant={activeKioskMode === "family" ? "default" : "ghost"} onClick={() => selectKioskMode("family")}>
                     <ShieldCheck data-icon="inline-start" aria-hidden="true" />
                     Family check-in
                   </Button>
-                  <Button type="button" variant={activeKioskMode === "staff" ? "default" : "ghost"} onClick={() => selectKioskMode("staff")}>
+                  <Button type="button" aria-pressed={activeKioskMode === "staff"} variant={activeKioskMode === "staff" ? "default" : "ghost"} onClick={() => selectKioskMode("staff")}>
                     <UserRound data-icon="inline-start" aria-hidden="true" />
                     Staff time clock
                   </Button>
@@ -627,11 +656,11 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
               {activeKioskMode === "family" ? (
                 <>
                   <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/60 p-1">
-                    <Button type="button" variant={credentialMode === "pin" ? "default" : "ghost"} onClick={() => selectCredentialMode("pin")}>
+                    <Button type="button" aria-pressed={credentialMode === "pin"} variant={credentialMode === "pin" ? "default" : "ghost"} onClick={() => selectCredentialMode("pin")}>
                       <KeyRound data-icon="inline-start" aria-hidden="true" />
                       Enter PIN
                     </Button>
-                    <Button type="button" variant={credentialMode === "qr" ? "default" : "ghost"} onClick={() => selectCredentialMode("qr")}>
+                    <Button type="button" aria-pressed={credentialMode === "qr"} variant={credentialMode === "qr" ? "default" : "ghost"} onClick={() => selectCredentialMode("qr")}>
                       <QrCode data-icon="inline-start" aria-hidden="true" />
                       Scan QR code
                     </Button>
@@ -776,9 +805,9 @@ export function KioskCheckIn({ center, initialMode = "family", familyOnly = fals
             </CardContent>
           </Card>
 
-          <Card className="kiosk-halo-panel glass-panel min-w-0 overflow-hidden">
+          <Card ref={resultPanelRef} tabIndex={-1} className="kiosk-halo-panel glass-panel min-w-0 overflow-hidden scroll-mt-4 focus:outline-none">
             <CardHeader className="p-4 pb-2 lg:p-3 lg:pb-1 2xl:p-4 2xl:pb-2">
-              <CardTitle as="div">
+              <CardTitle as="h2">
                 {activeKioskMode === "staff"
                   ? staffLookup
                     ? staffLookup.staff.name

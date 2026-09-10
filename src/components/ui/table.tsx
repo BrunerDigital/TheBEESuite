@@ -5,10 +5,28 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const [isHorizontallyScrollable, setIsHorizontallyScrollable] = React.useState(true)
+
+  React.useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const update = () => setIsHorizontallyScrollable(container.scrollWidth > container.clientWidth + 1)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(container)
+    const table = container.querySelector("table")
+    if (table) observer.observe(table)
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <div
+      ref={containerRef}
       data-slot="table-container"
-      className="relative w-full overflow-x-auto rounded-xl border border-foreground/8 bg-background/25"
+      data-horizontal-scroll={isHorizontallyScrollable ? "true" : "false"}
+      tabIndex={isHorizontallyScrollable ? 0 : undefined}
+      className="relative w-full overflow-x-auto rounded-xl border border-foreground/8 bg-background/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
     >
       <table
         data-slot="table"

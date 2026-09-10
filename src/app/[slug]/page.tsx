@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import { AppReviewScopeBlocked } from "@/components/app-review-scope-blocked";
@@ -294,6 +295,24 @@ export function generateStaticParams() {
     { slug: "forgot-password" },
     { slug: "parent-portal" },
   ];
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  if (slug === "forgot-password") {
+    return {
+      title: "Forgot Password | The BEE Suite",
+      description: "Request a secure password reset link for your BEE Suite account.",
+      robots: { index: false, follow: false },
+    };
+  }
+  const moduleDefinition = modules.find((item) => item.slug === slug);
+  return {
+    title: moduleDefinition ? `${moduleDefinition.title} | The BEE Suite` : "Workspace | The BEE Suite",
+    description: moduleDefinition?.description ?? "Secure BEE Suite workspace.",
+    alternates: { canonical: `/${slug}` },
+    robots: { index: false, follow: false },
+  };
 }
 
 function visibleTeacherStaffWhere(scopedCenterIds: ReturnType<typeof centerIdFilter>): Prisma.StaffProfileWhereInput {
@@ -3137,7 +3156,6 @@ async function renderLivePage(
     const children = await prisma.child.findMany({
       where: childWhereForTeacher,
       orderBy: [{ classroom: { name: "asc" } }, { fullName: "asc" }],
-      take: 120,
       select: {
         id: true,
         fullName: true,
@@ -4446,6 +4464,7 @@ async function renderLivePage(
               name: center.name,
               crmLocationId: center.crmLocationId,
               state: center.state,
+              timezone: readCenterLocationTimeZone(center),
               classrooms: billingClassroomsByCenter.get(center.id) ?? [],
               isMissHoneysLearningCenter: isMissHoneysBrandText(center.name),
               dashboardOptions: dashboardOptionsFromCustomFields(center.customFields),
@@ -5633,7 +5652,6 @@ async function renderLivePage(
           ? { tenantId: user.tenantId }
           : { tenantId: user.tenantId, staffProfile: { centerId: scopedCenterIds } },
         orderBy: [{ isActive: "desc" }, { email: "asc" }],
-        take: 150,
         select: {
           id: true,
           name: true,
@@ -6786,7 +6804,6 @@ async function renderLivePage(
       const teacherChildren = await prisma.child.findMany({
         where: teacherChildWhere,
         orderBy: [{ classroom: { name: "asc" } }, { fullName: "asc" }],
-        take: 120,
         select: {
           id: true,
           fullName: true,

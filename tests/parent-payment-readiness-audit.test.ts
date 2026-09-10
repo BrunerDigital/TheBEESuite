@@ -36,7 +36,8 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /allAuthEmails/);
   assert.match(source, /activeAuthEmails/);
   assert.match(source, /auth_user_unconfirmed_or_banned/);
-  assert.match(source, /hold_for_inactive_auth_identity_review/);
+  assert.match(source, /auth_user_without_matching_app_parent/);
+  assert.match(source, /hold_for_auth_identity_collision_review/);
   assert.match(source, /const payerGuardians = family\.guardians\.filter\(\(guardian\) => guardian\.isBillingContact\)/);
   assert.match(source, /const payerAccessDiagnosis = diagnoseGuardianAccess\(payerGuardians\)/);
   assert.match(source, /isSupabaseAuthCompatibleEmail\(email\)/);

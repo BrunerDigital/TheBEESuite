@@ -193,7 +193,11 @@ async function main() {
       const email = normalizedEmail(guardian.email);
       if (!isSupabaseAuthCompatibleEmail(email)) reasons.push("guardian_email_invalid");
       if (parentPortalAccessDisabled(guardian.customFields)) reasons.push("parent_portal_disabled");
-      if (!guardian.user) reasons.push("app_parent_user_missing");
+      if (!guardian.user) {
+        reasons.push("app_parent_user_missing");
+        if (allAuthEmails.has(email)) reasons.push("auth_user_without_matching_app_parent");
+        if (allAuthEmails.has(email) && !activeAuthEmails.has(email)) reasons.push("auth_user_unconfirmed_or_banned");
+      }
       if (guardian.user && guardian.user.role !== UserRole.PARENT_GUARDIAN) reasons.push("linked_user_not_parent");
       if (guardian.user && !guardian.user.isActive) reasons.push("linked_user_inactive");
       if (guardian.user && guardian.user.tenantId !== paymentCenterTenantById.get(centerId)) reasons.push("linked_user_tenant_mismatch");
@@ -292,7 +296,8 @@ async function main() {
             : payerAccessDiagnosis.includes("parent_portal_disabled")
               ? "hold_for_explicit_access_reactivation_approval"
             : payerAccessDiagnosis.includes("auth_user_unconfirmed_or_banned")
-              ? "hold_for_inactive_auth_identity_review"
+              || payerAccessDiagnosis.includes("auth_user_without_matching_app_parent")
+              ? "hold_for_auth_identity_collision_review"
             : family.sourceSystem !== "procare" || !family.externalId?.trim()
               ? "hold_for_school_relationship_confirmation"
               : payerAccessDiagnosis.includes("guardian_email_invalid")

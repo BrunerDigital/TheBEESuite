@@ -67,6 +67,34 @@ test("an exact family-funded tuition assignment does not request a second respon
     },
   };
   assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, child), true);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, {
+    ...child,
+    customFields: {
+      tuitionFundingType: "family",
+      tuitionBillingEnabled: true,
+      tuitionPlanId: "plan_parent_copay",
+      tuitionPlanAmountCents: 4_000,
+    },
+  }), true);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, {
+    ...child,
+    customFields: {
+      tuitionFundingType: "family",
+      tuitionBillingEnabled: true,
+      tuitionPlanId: "plan_parent_copay",
+      tuitionNetAmountCents: "invalid",
+      tuitionPlanAmountCents: 4_000,
+    },
+  }), false);
+  assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_000, {
+    ...child,
+    customFields: {
+      tuitionFundingType: "voucher",
+      tuitionBillingEnabled: true,
+      tuitionPlanId: "plan_parent_copay",
+      tuitionPlanAmountCents: 4_000,
+    },
+  }), false);
   assert.equal(invoiceResponsibilityReviewExempt({ ...invoiceFields, invoiceWeekCount: 2 }, 8_000, child), true);
   assert.equal(invoiceResponsibilityReviewExempt({ ...invoiceFields, invoiceWeekCount: 4 }, 16_000, child), true);
   assert.equal(invoiceResponsibilityReviewExempt(invoiceFields, 4_001, child), false);

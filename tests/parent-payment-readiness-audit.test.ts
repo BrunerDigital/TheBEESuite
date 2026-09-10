@@ -55,6 +55,10 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /exactPositiveBalanceAccessIdentityFingerprintTargets/);
   assert.match(source, /linkedUserId: guardian\.user\?\.id \?\? null/);
   assert.match(source, /linkedUserEmail: normalizedEmail\(guardian\.user\?\.email\)/);
+  assert.match(source, /currentChildren: \[\.\.\.family\.children\]/);
+  assert.match(source, /familyExternalId: family\.externalId/);
+  assert.match(source, /tenantId: paymentCenterTenantById\.get\(centerId\) \?\? null/);
+  assert.match(source, /externalId: guardian\.externalId/);
   assert.match(source, /data\.users\.length < 1000/);
   assert.match(source, /page \+= 1/);
   assert.doesNotMatch(source, /nextPage/);

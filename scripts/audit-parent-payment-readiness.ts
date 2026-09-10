@@ -80,6 +80,10 @@ async function main() {
       centerId: true,
       sourceSystem: true,
       externalId: true,
+      children: {
+        where: currentlyEnrolledChildWhere(),
+        select: { id: true, sourceSystem: true, externalId: true },
+      },
       guardians: {
         select: {
           id: true,
@@ -313,11 +317,24 @@ async function main() {
           accessDiagnosis,
         });
         exactPositiveBalanceAccessIdentityFingerprintTargets.push({
+          centerId,
+          tenantId: paymentCenterTenantById.get(centerId) ?? null,
           familyId: family.id,
+          familySourceSystem: family.sourceSystem,
+          familyExternalId: family.externalId,
+          currentChildren: [...family.children]
+            .sort((left, right) => left.id.localeCompare(right.id))
+            .map((child) => ({
+              childId: child.id,
+              sourceSystem: child.sourceSystem,
+              externalId: child.externalId,
+            })),
           guardians: [...family.guardians]
             .sort((left, right) => left.id.localeCompare(right.id))
             .map((guardian) => ({
               guardianId: guardian.id,
+              sourceSystem: guardian.sourceSystem,
+              externalId: guardian.externalId,
               normalizedEmail: normalizedEmail(guardian.email),
               linkedUserId: guardian.user?.id ?? null,
               linkedUserEmail: normalizedEmail(guardian.user?.email),

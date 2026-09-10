@@ -117,7 +117,7 @@ test("critical public forms retain accessible labels, announcements, focus rings
     readFileSync("src/components/payment-method-request-form.tsx", "utf8"),
   ].join("\n");
 
-  assert.match(alert, /role=\{role \?\? \(variant === "destructive" \? "alert" : undefined\)\}/);
+  assert.match(alert, /role=\{role \?\? \(variant === "destructive" \? "alert" : "status"\)\}/);
   assert.match(sources, /<Alert role="status"/);
   assert.match(sources, /<Alert variant="destructive"/);
   assert.match(input, /focus-visible:ring-3/);

@@ -117,7 +117,7 @@ async function main() {
   const ledgerEntriesWithBalances = await prisma.ledgerEntry.findMany({
     where: { billingAccountId: { in: accountIds }, balanceAfterCents: { not: null } },
     orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
-    select: { id: true, billingAccountId: true, balanceAfterCents: true, effectiveAt: true, createdAt: true, type: true, sourceSystem: true },
+    select: { id: true, billingAccountId: true, balanceAfterCents: true, amountCents: true, effectiveAt: true, createdAt: true, type: true, sourceSystem: true },
   });
   const latestLedgerBalanceByAccountId = new Map<string, number>();
   for (const entry of ledgerEntriesWithBalances) {
@@ -258,7 +258,9 @@ async function main() {
           parentBalanceCents,
           familySourceSystem: family.sourceSystem,
           familyExternalIdPresent: Boolean(family.externalId?.trim()),
-          guardians: family.guardians.map((guardian) => ({
+          guardians: [...family.guardians]
+            .sort((left, right) => left.id.localeCompare(right.id))
+            .map((guardian) => ({
             guardianId: guardian.id,
             guardianName: guardian.fullName,
             billingContact: guardian.isBillingContact,
@@ -267,7 +269,7 @@ async function main() {
             emailPresent: Boolean(guardian.email?.trim()),
             phoneReady: (guardian.phone?.replace(/\D/g, "").length ?? 0) >= 4,
             linkedUserId: guardian.user ? "present" : null,
-          })),
+            })),
           accessDiagnosis,
           proposedDisposition: accessDiagnosis.includes("parent_portal_disabled")
             ? "hold_for_explicit_access_reactivation_approval"
@@ -291,7 +293,7 @@ async function main() {
           .slice(0, 3)
           .map((entry) => ({ type: entry.type, sourceSystem: entry.sourceSystem, effectiveAt: entry.effectiveAt.toISOString() }));
         const needsEvidenceReview = accountLedger.some((entry) => (
-          entry.type === "debit" && entry.sourceSystem === "bee_suite_manual"
+          entry.sourceSystem === "bee_suite_manual" && entry.amountCents > 0
         ));
         if (needsEvidenceReview) center.balanceOnlyAccountsNeedingEvidenceReview += 1;
         exactPositiveBalancesWithoutOpenInvoice.push({

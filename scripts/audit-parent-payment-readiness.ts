@@ -188,7 +188,7 @@ async function main() {
       && guardian.user.email === normalizedEmail(guardian.user.email)
       && activeAuthEmails.has(normalizedEmail(guardian.user.email))
     ));
-    const accessDiagnosis = [...new Set(family.guardians.flatMap((guardian) => {
+    const diagnoseGuardianAccess = (guardians: typeof family.guardians) => [...new Set(guardians.flatMap((guardian) => {
       const reasons: string[] = [];
       const email = normalizedEmail(guardian.email);
       if (!isSupabaseAuthCompatibleEmail(email)) reasons.push("guardian_email_invalid");
@@ -208,6 +208,9 @@ async function main() {
       }
       return reasons;
     }))].sort();
+    const payerGuardians = family.guardians.filter((guardian) => guardian.isBillingContact);
+    const accessDiagnosis = diagnoseGuardianAccess(family.guardians);
+    const payerAccessDiagnosis = diagnoseGuardianAccess(payerGuardians);
     if (!hasActiveParentLink) {
       currentFamiliesWithoutActiveParentLink += 1;
       center.familiesWithoutActiveParentLink += 1;
@@ -283,14 +286,17 @@ async function main() {
             linkedUserId: guardian.user ? "present" : null,
             })),
           accessDiagnosis,
-          proposedDisposition: accessDiagnosis.includes("parent_portal_disabled")
-            ? "hold_for_explicit_access_reactivation_approval"
-            : accessDiagnosis.includes("auth_user_unconfirmed_or_banned")
+          payerAccessDiagnosis,
+          proposedDisposition: payerGuardians.length === 0
+            ? "hold_for_school_relationship_confirmation"
+            : payerAccessDiagnosis.includes("parent_portal_disabled")
+              ? "hold_for_explicit_access_reactivation_approval"
+            : payerAccessDiagnosis.includes("auth_user_unconfirmed_or_banned")
               ? "hold_for_inactive_auth_identity_review"
             : family.sourceSystem !== "procare" || !family.externalId?.trim()
               ? "hold_for_school_relationship_confirmation"
-              : accessDiagnosis.includes("guardian_email_invalid")
-                || family.guardians.some((guardian) => guardian.isBillingContact && (guardian.phone?.replace(/\D/g, "").length ?? 0) < 4)
+              : payerAccessDiagnosis.includes("guardian_email_invalid")
+                || payerGuardians.some((guardian) => (guardian.phone?.replace(/\D/g, "").length ?? 0) < 4)
                 ? "hold_for_contact_data_correction"
                 : "review_procare_source_package_and_child_provenance",
         });
@@ -306,19 +312,27 @@ async function main() {
         const recentLedger = accountLedger
           .slice(0, 3)
           .map((entry) => ({ type: entry.type, sourceSystem: entry.sourceSystem, effectiveAt: entry.effectiveAt.toISOString() }));
-        const hasPositiveManualEntry = accountLedger.some((entry) => (
+        const chronologicalLedger = [...accountLedger].reverse();
+        const lastSettledIndex = chronologicalLedger.findLastIndex((entry) => (entry.balanceAfterCents ?? 0) <= 0);
+        const balanceEvidenceWindow = chronologicalLedger.slice(lastSettledIndex + 1);
+        const positiveBalanceEvidence = balanceEvidenceWindow.filter((entry) => entry.amountCents > 0);
+        const unsupportedPositiveBalanceEvidence = positiveBalanceEvidence.filter((entry) => !(
+          entry.sourceSystem === "procare"
+          && entry.type === "procare_balance_reconciliation"
+        ));
+        const hasPositiveManualEntry = unsupportedPositiveBalanceEvidence.some((entry) => (
           entry.sourceSystem === "bee_suite_manual" && entry.amountCents > 0
         ));
-        const hasPositiveProcareOpeningBalance = accountLedger.some((entry) => (
+        const hasPositiveProcareOpeningBalance = positiveBalanceEvidence.some((entry) => (
           entry.sourceSystem === "procare"
           && entry.type === "procare_balance_reconciliation"
           && entry.amountCents > 0
         ));
-        const evidenceReviewReason = accountLedger.length === 0
+        const evidenceReviewReason = balanceEvidenceWindow.length === 0 || positiveBalanceEvidence.length === 0
           ? "missing_balance_ledger_history"
           : hasPositiveManualEntry
             ? "positive_manual_ledger_entry"
-            : !hasPositiveProcareOpeningBalance
+            : !hasPositiveProcareOpeningBalance || unsupportedPositiveBalanceEvidence.length > 0
               ? "unsupported_positive_balance_provenance"
               : null;
         const needsEvidenceReview = evidenceReviewReason != null;
@@ -339,6 +353,13 @@ async function main() {
               }
             : null,
           recentLedger,
+          balanceEvidenceWindowEntries: balanceEvidenceWindow.length,
+          unsupportedPositiveBalanceEvidence: unsupportedPositiveBalanceEvidence.map((entry) => ({
+            type: entry.type,
+            sourceSystem: entry.sourceSystem,
+            amountCents: entry.amountCents,
+            effectiveAt: entry.effectiveAt.toISOString(),
+          })),
           needsEvidenceReview,
           evidenceReviewReason,
           classification: evidenceReviewReason === "positive_manual_ledger_entry"

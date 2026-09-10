@@ -120,19 +120,36 @@ function DirectorPreview() {
   );
 }
 
-function ParentPreview({ screen, familySection }: { screen: string | undefined; familySection: string | undefined }) {
+function ParentPreview({ screen, familySection, scenario }: { screen: string | undefined; familySection: string | undefined; scenario?: string }) {
   const activeView = normalizeParentPortalView(screen);
+  const singleChildReview = scenario === "single-review";
   const family = {
     ...executiveParentPortalDemo.family,
-    children: executiveParentPortalDemo.family.children.map((child, index) => ({
+    guardians: singleChildReview
+      ? executiveParentPortalDemo.family.guardians.map((guardian, index) =>
+          index === 0 ? { ...guardian, fullName: "App Review Parent" } : guardian,
+        )
+      : executiveParentPortalDemo.family.guardians,
+    children: (singleChildReview
+      ? executiveParentPortalDemo.family.children.slice(0, 1)
+      : executiveParentPortalDemo.family.children
+    ).map((child, index) => ({
       ...child,
-      today: {
-        status: index === 0 ? "checked_in" as const : "checked_out" as const,
-        label: index === 0 ? "Checked in" : "Checked out",
-        latestEventAt: index === 0 ? "2026-08-10T12:04:00.000Z" : "2026-08-10T19:32:00.000Z",
-        currentLocationName: index === 0 ? child.classroom.name : null,
-        dailyReportShared: true,
-      },
+      today: singleChildReview
+        ? {
+            status: "not_marked" as const,
+            label: "Not marked today",
+            latestEventAt: null,
+            currentLocationName: null,
+            dailyReportShared: false,
+          }
+        : {
+            status: index === 0 ? "checked_in" as const : "checked_out" as const,
+            label: index === 0 ? "Checked in" : "Checked out",
+            latestEventAt: index === 0 ? "2026-08-10T12:04:00.000Z" : "2026-08-10T19:32:00.000Z",
+            currentLocationName: index === 0 ? child.classroom.name : null,
+            dailyReportShared: true,
+          },
     })),
   };
 
@@ -163,7 +180,7 @@ function ParentPreview({ screen, familySection }: { screen: string | undefined; 
         sender: { name: index % 2 === 1 ? "Jordan Rivera" : "Ms. Morgan" },
       }))}
       previewMode
-      demoMode
+      demoMode={!singleChildReview}
     />
   );
 }
@@ -320,7 +337,7 @@ function PickupPreview() {
   );
 }
 
-function ShellPreview({ role, screen, familySection }: { role: Exclude<PreviewRole, "kiosk" | "kiosk-staff">; screen?: string; familySection?: string }) {
+function ShellPreview({ role, screen, familySection, scenario }: { role: Exclude<PreviewRole, "kiosk" | "kiosk-staff">; screen?: string; familySection?: string; scenario?: string }) {
   if (role === "role-dashboard") {
     return (
       <AppShell previewMode previewHrefBase="/device-preview?view=role-dashboard" currentUser={{ name: "Avery Thompson", email: "avery@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", workspace: { ...previewPortfolioWorkspace, mode: "fixed", selection: "center:preview-center", activeCenterId: "preview-center", label: "Sunshine Academy", detail: "Carmel, IN", canSwitch: false, canSelectAll: false, authorizedCenterCount: 1, options: previewPortfolioWorkspace.options.slice(0, 1) }, scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Center Director · 1 school", href: "/dashboard" } }}>
@@ -340,7 +357,8 @@ function ShellPreview({ role, screen, familySection }: { role: Exclude<PreviewRo
     );
   }
   if (role === "parent") {
-    return <AppShell previewMode previewHrefBase="/device-preview?view=parent" currentUser={{ name: "Jordan Rivera", email: "parent@example.com", role: "PARENT_GUARDIAN", timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "family", label: "Rivera Family", detail: "Sunshine Academy", href: "/parent-portal" } }}><ParentPreview screen={screen} familySection={familySection} /></AppShell>;
+    const reviewScenario = scenario === "single-review";
+    return <AppShell previewMode previewHrefBase="/device-preview?view=parent" currentUser={{ name: reviewScenario ? "App Review Parent" : "Jordan Rivera", email: "parent@example.com", role: "PARENT_GUARDIAN", timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "family", label: "Rivera Family", detail: "Sunshine Academy", href: "/parent-portal" } }}><ParentPreview screen={screen} familySection={familySection} scenario={scenario} /></AppShell>;
   }
   if (role === "teacher") {
     return <AppShell previewMode previewHrefBase="/device-preview?view=teacher" currentUser={{ name: "Morgan Lee", email: "morgan@example.com", role: "TEACHER", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "classroom", label: "Butterflies", detail: "Sunshine Academy · Teacher", href: "/teacher-portal" } }}><TeacherPreview screen={screen} /></AppShell>;
@@ -364,13 +382,13 @@ function ShellPreview({ role, screen, familySection }: { role: Exclude<PreviewRo
   return <AppShell previewMode previewHrefBase="/device-preview?view=director" currentUser={{ name: "Avery Thompson", email: "avery@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Center Director · 1 school", href: "/dashboard" } }}><DirectorPreview /></AppShell>;
 }
 
-export default async function DevicePreviewPage({ searchParams }: { searchParams: Promise<{ view?: string; screen?: string; section?: string }> }) {
+export default async function DevicePreviewPage({ searchParams }: { searchParams: Promise<{ view?: string; screen?: string; section?: string; scenario?: string }> }) {
   if (process.env.NODE_ENV !== "development") notFound();
 
-  const { view, screen, section } = await searchParams;
+  const { view, screen, section, scenario } = await searchParams;
   const role: PreviewRole = view === "role-dashboard" || view === "parent" || view === "pickup" || view === "teacher" || view === "executive" || view === "regional" || view === "billing" || view === "auditor" || view === "workflow" || view === "kiosk" || view === "kiosk-staff" ? view : "director";
   if (role === "kiosk" || role === "kiosk-staff") {
     return <DevicePreviewGuard><KioskCheckIn previewMode familyOnly={role === "kiosk"} center={{ id: "preview-center", name: "Sunshine Academy", place: "Carmel, Indiana", timeZone: "America/Indiana/Indianapolis" }} initialMode={role === "kiosk-staff" ? "staff" : "family"} /></DevicePreviewGuard>;
   }
-  return <DevicePreviewGuard><ShellPreview role={role} screen={screen} familySection={section} /></DevicePreviewGuard>;
+  return <DevicePreviewGuard><ShellPreview role={role} screen={screen} familySection={section} scenario={scenario} /></DevicePreviewGuard>;
 }

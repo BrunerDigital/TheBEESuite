@@ -89,13 +89,23 @@ test("report exports stay discoverable without crowding the mobile collapsed hea
 
 test("dynamic family media bypasses the optimizer that rejects arbitrary signed or demo URLs", async () => {
   const parent = await readSource("src/components/parent-portal-workspace.tsx");
-  const featuredMedia = parent.slice(
-    parent.indexOf("{featuredMediaSrc ? ("),
-    parent.indexOf(") : (", parent.indexOf("{featuredMediaSrc ? (")),
+  const dailyMediaStart = parent.indexOf("{(selectedUpdateDay?.media ?? []).map");
+  const dailyMedia = parent.slice(
+    dailyMediaStart,
+    parent.indexOf("</section>", dailyMediaStart),
+  );
+  const profilePhotoStart = parent.indexOf("{child.profilePhotoUrl ? (");
+  const profilePhoto = parent.slice(
+    profilePhotoStart,
+    parent.indexOf(") : (", profilePhotoStart),
   );
 
-  assert.match(featuredMedia, /src=\{featuredMediaSrc\}/);
-  assert.match(featuredMedia, /unoptimized/);
+  assert.notEqual(dailyMediaStart, -1);
+  assert.match(dailyMedia, /src=\{imageSrc\}/);
+  assert.match(dailyMedia, /unoptimized/);
+  assert.notEqual(profilePhotoStart, -1);
+  assert.match(profilePhoto, /src=\{child\.profilePhotoUrl\}/);
+  assert.match(profilePhoto, /unoptimized/);
 });
 
 test("shared controls provide explicit focus and phone-sized targets", async () => {

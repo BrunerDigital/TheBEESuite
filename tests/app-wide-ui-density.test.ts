@@ -35,14 +35,17 @@ test("teacher portal opens focused tasks from a compact landing view", async () 
   assert.match(source, /id="teacher-incident"[\s\S]*?defaultCollapsed/);
 });
 
-test("parent home uses status-aware compact panels without hiding today's child status", async () => {
+test("parent home keeps today's status, priority items, and key actions visible", async () => {
   const source = await readSource("src/components/parent-portal-workspace.tsx");
 
   assert.match(source, /className="parent-portal-feature/);
+  assert.match(source, /data-parent-home-primary="true"/);
+  assert.match(source, /data-parent-home-actions="true"/);
   assert.match(source, /id="parent-home-attention"/);
-  assert.match(source, /defaultCollapsed=\{!homeAttentionCount\}/);
-  assert.match(source, /id="parent-home-announcements"[\s\S]*?defaultCollapsed/);
-  assert.match(source, /id="parent-home-account"[\s\S]*?defaultCollapsed=\{balanceCents <= 0\}/);
+  assert.match(source, /data-parent-home-priority="true"/);
+  assert.match(source, /id="parent-home-announcements"/);
+  assert.match(source, /id="parent-home-account"/);
+  assert.doesNotMatch(source, /<CollapsiblePanel/);
 });
 
 test("executive and director dashboard secondary views default to compact summaries", async () => {

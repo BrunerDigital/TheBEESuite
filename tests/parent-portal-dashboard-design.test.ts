@@ -9,6 +9,8 @@ const workspace = readFileSync(
 const globals = readFileSync("src/app/globals.css", "utf8");
 const layout = readFileSync("src/app/layout.tsx", "utf8");
 const shell = readFileSync("src/components/app-shell.tsx", "utf8");
+const preview = readFileSync("src/app/device-preview/page.tsx", "utf8");
+const previewQa = readFileSync("scripts/qa-device-preview.ts", "utf8");
 
 test("parent dashboard keeps its balance card on the guarded family balance", () => {
   assert.match(workspace, /const balanceCents = billingAccount\?\.balanceCents \?\? 0/);
@@ -43,6 +45,35 @@ test("mobile parent summaries stay compact without removing detail", () => {
   assert.match(workspace, /grid grid-cols-2 gap-3 xl:grid-cols-4/);
   assert.match(workspace, /Schedule[\s\S]*Classroom[\s\S]*Last Check-In[\s\S]*Daily Update/);
   assert.match(workspace, /Account activity[\s\S]*Recent payments/);
+});
+
+test("mobile parent home uses one status card per child and keeps priority work visible", () => {
+  const home = workspace.slice(
+    workspace.indexOf('{activeView === "home"'),
+    workspace.indexOf('{activeView === "updates"'),
+  );
+
+  assert.match(home, /data-parent-home-primary="true"/);
+  assert.match(home, /family\.children\.map\(\(child\) =>/);
+  assert.doesNotMatch(home, /featuredChildPresent/);
+  assert.match(home, /data-parent-home-actions="true"/);
+  assert.match(home, /data-parent-home-priority="true"/);
+  assert.doesNotMatch(home, /<CollapsiblePanel/);
+});
+
+test("generic review identities do not create an awkward App greeting", () => {
+  assert.match(workspace, /\^\(app\|apple\|demo\|review\|test\)\$/i);
+  assert.match(workspace, /: "Welcome back"/);
+  assert.match(preview, /scenario === "single-review"/);
+  assert.match(preview, /fullName: "App Review Parent"/);
+  assert.match(previewQa, /id: "parent-home-single-review"/);
+});
+
+test("the fixed mobile navigation leaves safe-area-aware clearance", () => {
+  assert.match(
+    shell,
+    /pb-\[calc\(7rem\+env\(safe-area-inset-bottom\)\)\]/,
+  );
 });
 
 test("warm portal styling stays scoped to parent-facing roles", () => {

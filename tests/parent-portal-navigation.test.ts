@@ -188,7 +188,10 @@ test("authorized pickup shell navigation stays limited to the parent portal home
   );
   assert.match(shell, /if \(!roleUsesBottomNavigation\(currentUser\)\) return null/);
   assert.match(shell, /const hasRoleBottomNav = roleUsesBottomNavigation\(currentUser\)/);
-  assert.match(shell, /hasRoleBottomNav && "pb-24 lg:pb-6 xl:pb-8"/);
+  assert.match(
+    shell,
+    /hasRoleBottomNav && "pb-\[calc\(7rem\+env\(safe-area-inset-bottom\)\)\] lg:pb-6 xl:pb-8"/,
+  );
 });
 
 test("parent account menu exposes real destinations while preview stays mutation-free", () => {

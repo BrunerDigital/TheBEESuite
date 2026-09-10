@@ -39,6 +39,8 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /ledgerEntry\.findMany/);
   assert.match(source, /const accountLedger = ledgerEntriesWithBalances/);
   assert.match(source, /needsEvidenceReview = accountLedger\.some/);
+  assert.match(source, /entry\.sourceSystem === "bee_suite_manual" && entry\.amountCents > 0/);
+  assert.match(source, /\.sort\(\(left, right\) => left\.id\.localeCompare\(right\.id\)\)/);
   assert.doesNotMatch(source, /accountIds\.map\([\s\S]{0,120}ledgerEntry\.findFirst/);
 });
 

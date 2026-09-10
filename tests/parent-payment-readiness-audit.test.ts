@@ -42,7 +42,7 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /hold_for_auth_identity_collision_review/);
   assert.match(source, /hold_for_app_identity_review/);
   assert.match(source, /linked_user_guardian_email_mismatch/);
-  assert.match(source, /const payerGuardians = family\.guardians\.filter\(\(guardian\) => guardian\.isBillingContact\)/);
+  assert.match(source, /const payerGuardians = family\.guardians[\s\S]{0,120}\.sort\(\(left, right\) => left\.id\.localeCompare\(right\.id\)\)/);
   assert.match(source, /const payerAccessDiagnosis = diagnoseGuardianAccess\(payerGuardians\)/);
   assert.match(source, /const payerAccessReviews = payerGuardians\.map/);
   assert.match(source, /diagnoseGuardianAccess\(\[guardian\]\)/);

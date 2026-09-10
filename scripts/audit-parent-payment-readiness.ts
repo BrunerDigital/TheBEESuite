@@ -215,7 +215,9 @@ async function main() {
       }
       return reasons;
     }))].sort();
-    const payerGuardians = family.guardians.filter((guardian) => guardian.isBillingContact);
+    const payerGuardians = family.guardians
+      .filter((guardian) => guardian.isBillingContact)
+      .sort((left, right) => left.id.localeCompare(right.id));
     const accessDiagnosis = diagnoseGuardianAccess(family.guardians);
     const payerAccessDiagnosis = diagnoseGuardianAccess(payerGuardians);
     const payerAccessReviews = payerGuardians.map((guardian) => {

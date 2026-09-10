@@ -28,8 +28,12 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /unsupported_positive_balance_provenance/);
   assert.match(source, /hasPositiveProcareOpeningBalance/);
   assert.match(source, /positiveBalancesWithoutOpenInvoiceNeedingEvidenceReview/);
-  assert.match(source, /loadActiveSupabaseAuthEmails/);
+  assert.match(source, /loadSupabaseAuthEmails/);
   assert.match(source, /activeAuthUser/);
+  assert.match(source, /allAuthEmails/);
+  assert.match(source, /activeAuthEmails/);
+  assert.match(source, /auth_user_unconfirmed_or_banned/);
+  assert.match(source, /hold_for_inactive_auth_identity_review/);
   assert.match(source, /isSupabaseAuthCompatibleEmail\(email\)/);
   assert.match(source, /paymentCenterTenantById/);
   assert.match(source, /parentPortalAccessDisabled\(guardian\.customFields\)/);

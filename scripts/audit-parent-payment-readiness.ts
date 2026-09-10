@@ -32,22 +32,25 @@ function activeAuthUser(user: SupabaseUser) {
   );
 }
 
-async function loadActiveSupabaseAuthEmails() {
+async function loadSupabaseAuthEmails() {
   const { url, key } = getSupabaseAuthConfig("service");
   const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-  const emails = new Set<string>();
+  const allAuthEmails = new Set<string>();
+  const activeAuthEmails = new Set<string>();
   let page = 1;
   while (true) {
     const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
     if (error) throw error;
     for (const user of data.users) {
       const email = normalizedEmail(user.email);
-      if (email && activeAuthUser(user)) emails.add(email);
+      if (!email) continue;
+      allAuthEmails.add(email);
+      if (activeAuthUser(user)) activeAuthEmails.add(email);
     }
     if (data.users.length < 1000) break;
     page += 1;
   }
-  return emails;
+  return { allAuthEmails, activeAuthEmails };
 }
 
 async function main() {
@@ -137,7 +140,7 @@ async function main() {
       latestCreatedLedgerBalanceByAccountId.set(entry.billingAccountId, entry.balanceAfterCents);
     }
   }
-  const supabaseAuthEmails = await loadActiveSupabaseAuthEmails();
+  const { allAuthEmails, activeAuthEmails } = await loadSupabaseAuthEmails();
 
   const byCenter = new Map<string, {
     school: string;
@@ -183,7 +186,7 @@ async function main() {
       && !parentPortalAccessDisabled(guardian.customFields)
       && guardian.user.tenantId === paymentCenterTenantById.get(centerId)
       && guardian.user.email === normalizedEmail(guardian.user.email)
-      && supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
+      && activeAuthEmails.has(normalizedEmail(guardian.user.email))
     ));
     const accessDiagnosis = [...new Set(family.guardians.flatMap((guardian) => {
       const reasons: string[] = [];
@@ -195,8 +198,13 @@ async function main() {
       if (guardian.user && !guardian.user.isActive) reasons.push("linked_user_inactive");
       if (guardian.user && guardian.user.tenantId !== paymentCenterTenantById.get(centerId)) reasons.push("linked_user_tenant_mismatch");
       if (guardian.user && guardian.user.email !== normalizedEmail(guardian.user.email)) reasons.push("linked_user_email_not_normalized");
-      if (guardian.user?.role === UserRole.PARENT_GUARDIAN && guardian.user.isActive && !supabaseAuthEmails.has(normalizedEmail(guardian.user.email))) {
-        reasons.push("active_auth_user_missing");
+      if (guardian.user?.role === UserRole.PARENT_GUARDIAN && guardian.user.isActive) {
+        const userEmail = normalizedEmail(guardian.user.email);
+        if (allAuthEmails.has(userEmail) && !activeAuthEmails.has(userEmail)) {
+          reasons.push("auth_user_unconfirmed_or_banned");
+        } else if (!allAuthEmails.has(userEmail)) {
+          reasons.push("active_auth_user_missing");
+        }
       }
       return reasons;
     }))].sort();
@@ -249,7 +257,7 @@ async function main() {
             && guardian.user.isActive
             && (
               guardian.user.tenantId !== paymentCenterTenantById.get(centerId)
-              || !supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
+              || !activeAuthEmails.has(normalizedEmail(guardian.user.email))
             )
           )).length,
           accessDiagnosis,
@@ -277,6 +285,8 @@ async function main() {
           accessDiagnosis,
           proposedDisposition: accessDiagnosis.includes("parent_portal_disabled")
             ? "hold_for_explicit_access_reactivation_approval"
+            : accessDiagnosis.includes("auth_user_unconfirmed_or_banned")
+              ? "hold_for_inactive_auth_identity_review"
             : family.sourceSystem !== "procare" || !family.externalId?.trim()
               ? "hold_for_school_relationship_confirmation"
               : accessDiagnosis.includes("guardian_email_invalid")

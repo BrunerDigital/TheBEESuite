@@ -30,6 +30,8 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /const lastSettledIndex = chronologicalLedger\.findLastIndex/);
   assert.match(source, /const balanceEvidenceWindow = chronologicalLedger\.slice/);
   assert.match(source, /unsupportedPositiveBalanceEvidence\.length > 0/);
+  assert.match(source, /hasOrderedLedgerBalanceMismatch \|\| hasLatestCreatedLedgerBalanceMismatch/);
+  assert.match(source, /ledger_balance_mismatch/);
   assert.match(source, /positiveBalancesWithoutOpenInvoiceNeedingEvidenceReview/);
   assert.match(source, /loadSupabaseAuthEmails/);
   assert.match(source, /activeAuthUser/);
@@ -38,6 +40,7 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /auth_user_unconfirmed_or_banned/);
   assert.match(source, /auth_user_without_matching_app_parent/);
   assert.match(source, /hold_for_auth_identity_collision_review/);
+  assert.match(source, /hold_for_app_identity_review/);
   assert.match(source, /const payerGuardians = family\.guardians\.filter\(\(guardian\) => guardian\.isBillingContact\)/);
   assert.match(source, /const payerAccessDiagnosis = diagnoseGuardianAccess\(payerGuardians\)/);
   assert.match(source, /isSupabaseAuthCompatibleEmail\(email\)/);
@@ -53,7 +56,7 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /ledgerEntry\.findMany/);
   assert.match(source, /const ledgerEntriesByAccountId = new Map/);
   assert.match(source, /const accountLedger = ledgerEntriesByAccountId\.get\(account\.id\) \?\? \[\]/);
-  assert.match(source, /const evidenceReviewReason = balanceEvidenceWindow\.length === 0/);
+  assert.match(source, /const evidenceReviewReason = hasOrderedLedgerBalanceMismatch/);
   assert.match(source, /!hasPositiveProcareOpeningBalance/);
   assert.match(source, /const needsEvidenceReview = evidenceReviewReason != null/);
   assert.match(source, /entry\.sourceSystem === "bee_suite_manual" && entry\.amountCents > 0/);

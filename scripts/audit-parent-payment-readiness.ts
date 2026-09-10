@@ -228,12 +228,15 @@ async function main() {
     }
 
     const latestLedgerBalance = latestLedgerBalanceByAccountId.get(account.id);
-    if (latestLedgerBalance != null && latestLedgerBalance !== account.balanceCents) {
+    const hasOrderedLedgerBalanceMismatch = latestLedgerBalance != null && latestLedgerBalance !== account.balanceCents;
+    if (hasOrderedLedgerBalanceMismatch) {
       orderedLedgerBalanceMismatches += 1;
       center.orderedLedgerBalanceMismatches += 1;
     }
     const latestCreatedLedgerBalance = latestCreatedLedgerBalanceByAccountId.get(account.id);
-    if (latestCreatedLedgerBalance != null && latestCreatedLedgerBalance !== account.balanceCents) {
+    const hasLatestCreatedLedgerBalanceMismatch = latestCreatedLedgerBalance != null
+      && latestCreatedLedgerBalance !== account.balanceCents;
+    if (hasLatestCreatedLedgerBalanceMismatch) {
       latestCreatedLedgerBalanceMismatches += 1;
       center.latestCreatedLedgerBalanceMismatches += 1;
     }
@@ -298,6 +301,13 @@ async function main() {
             : payerAccessDiagnosis.includes("auth_user_unconfirmed_or_banned")
               || payerAccessDiagnosis.includes("auth_user_without_matching_app_parent")
               ? "hold_for_auth_identity_collision_review"
+            : payerAccessDiagnosis.some((reason) => [
+                "linked_user_inactive",
+                "linked_user_not_parent",
+                "linked_user_tenant_mismatch",
+                "linked_user_email_not_normalized",
+              ].includes(reason))
+              ? "hold_for_app_identity_review"
             : family.sourceSystem !== "procare" || !family.externalId?.trim()
               ? "hold_for_school_relationship_confirmation"
               : payerAccessDiagnosis.includes("guardian_email_invalid")
@@ -333,8 +343,10 @@ async function main() {
           && entry.type === "procare_balance_reconciliation"
           && entry.amountCents > 0
         ));
-        const evidenceReviewReason = balanceEvidenceWindow.length === 0 || positiveBalanceEvidence.length === 0
-          ? "missing_balance_ledger_history"
+        const evidenceReviewReason = hasOrderedLedgerBalanceMismatch || hasLatestCreatedLedgerBalanceMismatch
+          ? "ledger_balance_mismatch"
+          : balanceEvidenceWindow.length === 0 || positiveBalanceEvidence.length === 0
+            ? "missing_balance_ledger_history"
           : hasPositiveManualEntry
             ? "positive_manual_ledger_entry"
             : !hasPositiveProcareOpeningBalance || unsupportedPositiveBalanceEvidence.length > 0

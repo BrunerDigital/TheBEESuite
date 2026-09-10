@@ -463,6 +463,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [assignmentAdditionalCharges, setAssignmentAdditionalCharges] = useState(
     tuitionAdditionalChargeInputs(initialAssignment?.additionalCharges),
   );
+  const [lastSavedTuitionDraftSignature, setLastSavedTuitionDraftSignature] = useState<string | null>(null);
+  const [lastSavedChildContextDraftSignature, setLastSavedChildContextDraftSignature] = useState<string | null>(null);
   const [planEditorId, setPlanEditorId] = useState(initialAssignedPlan?.id ?? "new");
   const [planName, setPlanName] = useState(initialAssignedPlan?.name ?? "");
   const [planAgeGroup, setPlanAgeGroup] = useState(initialAssignedPlan?.ageGroup ?? initialAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0]);
@@ -663,19 +665,41 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const savedAssignmentStartPeriod = selectedAssignment?.startsPeriod && periodMatchesCadence(selectedAssignment.startsPeriod, selectedAssignment.cadence ?? "weekly")
     ? selectedAssignment.startsPeriod
     : currentPeriodForCadence(selectedAssignment?.cadence ?? "weekly");
+  const assignmentTuitionDraftSignature = JSON.stringify({
+    enabled: assignmentEnabled,
+    cadence: assignmentCadence,
+    billingDay: assignmentBillingDay,
+    tuitionPlanId: assignmentTuitionPlanId,
+    startPeriod: assignmentStartPeriod,
+    description: assignmentDescription,
+    credits: assignmentCredits,
+    additionalCharges: assignmentAdditionalCharges,
+  });
+  const persistedTuitionDraftSignature = JSON.stringify({
+    enabled: selectedAssignment?.enabled === false ? "false" : "true",
+    cadence: savedAssignmentCadence,
+    billingDay: String(selectedAssignment?.billingDay ?? 1),
+    tuitionPlanId: locationTuitionPlans.find((plan) => plan.id === selectedAssignment?.tuitionPlanId)?.id ?? "",
+    startPeriod: savedAssignmentStartPeriod,
+    description: selectedAssignment?.description ?? selectedAssignment?.tuitionPlanName ?? "",
+    credits: tuitionCreditInputs(selectedAssignment?.credits ?? []),
+    additionalCharges: tuitionAdditionalChargeInputs(selectedAssignment?.additionalCharges),
+  });
+  const assignmentChildContextDraftSignature = JSON.stringify({
+    program: assignmentChildProgram,
+    classroomId: assignmentChildClassroomId,
+    scheduledDays: assignmentChildScheduledDays,
+    startDate: assignmentChildStartDate,
+  });
+  const persistedChildContextDraftSignature = JSON.stringify({
+    program: selectedAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0],
+    classroomId: selectedAssignmentChild?.classroomId ?? "",
+    scheduledDays: scheduledDaysValue(selectedAssignmentChild),
+    startDate: optionalDateInputValue(selectedAssignmentChild?.startDate),
+  });
   const assignmentDraftIsDirty = Boolean(selectedAssignmentChild) && (
-    assignmentEnabled !== (selectedAssignment?.enabled === false ? "false" : "true")
-    || assignmentCadence !== savedAssignmentCadence
-    || assignmentBillingDay !== String(selectedAssignment?.billingDay ?? 1)
-    || assignmentTuitionPlanId !== (locationTuitionPlans.find((plan) => plan.id === selectedAssignment?.tuitionPlanId)?.id ?? "")
-    || assignmentStartPeriod !== savedAssignmentStartPeriod
-    || assignmentDescription !== (selectedAssignment?.description ?? selectedAssignment?.tuitionPlanName ?? "")
-    || assignmentChildProgram !== (selectedAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0])
-    || assignmentChildClassroomId !== (selectedAssignmentChild?.classroomId ?? "")
-    || assignmentChildScheduledDays !== scheduledDaysValue(selectedAssignmentChild)
-    || assignmentChildStartDate !== optionalDateInputValue(selectedAssignmentChild?.startDate)
-    || JSON.stringify(assignmentCredits) !== JSON.stringify(tuitionCreditInputs(selectedAssignment?.credits ?? []))
-    || JSON.stringify(assignmentAdditionalCharges) !== JSON.stringify(tuitionAdditionalChargeInputs(selectedAssignment?.additionalCharges))
+    assignmentTuitionDraftSignature !== (lastSavedTuitionDraftSignature ?? persistedTuitionDraftSignature)
+    || assignmentChildContextDraftSignature !== (lastSavedChildContextDraftSignature ?? persistedChildContextDraftSignature)
   );
   const planBeingEdited = planEditorId === "new" ? null : locationTuitionPlans.find((plan) => plan.id === planEditorId) ?? null;
   const planDraftIsDirty = planBeingEdited
@@ -1073,6 +1097,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const assignment = child?.tuitionAssignment ?? null;
     const assignedPlan = availablePlans.find((plan) => plan.id === assignment?.tuitionPlanId) ?? null;
 
+    setLastSavedTuitionDraftSignature(null);
+    setLastSavedChildContextDraftSignature(null);
     setAssignmentChildId(child?.id ?? "");
     setAssignmentEnabled(assignment?.enabled === false ? "false" : "true");
     const nextCadence = assignment?.cadence === "monthly" ? "monthly" : assignment?.cadence === "biweekly" ? "biweekly" : assignment?.cadence === "four_week" ? "four_week" : "weekly";
@@ -1559,6 +1585,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setErrorMessage(json?.error || "Child program and classroom could not be saved.");
         return;
       }
+      setLastSavedChildContextDraftSignature(assignmentChildContextDraftSignature);
       setStatusMessage(`Program, classroom, and care schedule saved for ${selectedAssignmentChild.fullName}. Tuition and ledger amounts were not changed.`);
       router.refresh();
     });
@@ -1601,6 +1628,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setErrorMessage(json?.error || "Recurring tuition could not be saved.");
         return;
       }
+      setLastSavedTuitionDraftSignature(assignmentTuitionDraftSignature);
       setStatusMessage(
         assignmentIsVoucherFunded
           ? `$0.00 CCDF or voucher-funded tuition saved for ${selectedAssignmentChild.fullName}. No family invoice or autopay is scheduled.`
@@ -1610,6 +1638,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             : `Recurring tuition enabled for ${selectedAssignmentChild.fullName} at ${money(effectiveAssignmentNetCents)} net per week. ${effectiveAssignmentCadence === "four_week" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 4)} and cover four weeks ahead.` : effectiveAssignmentCadence === "biweekly" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 2)} and cover two weeks ahead.` : "Thursday invoice creation is scheduled for the following week."}`
           : `Recurring tuition disabled for ${selectedAssignmentChild.fullName}.`,
       );
+      router.refresh();
     });
   }
 

@@ -28,7 +28,7 @@ function Alert({
   return (
     <div
       data-slot="alert"
-      role={role ?? (variant === "destructive" ? "alert" : undefined)}
+      role={role ?? (variant === "destructive" ? "alert" : "status")}
       className={cn(alertVariants({ variant }), className)}
       {...props}
     />

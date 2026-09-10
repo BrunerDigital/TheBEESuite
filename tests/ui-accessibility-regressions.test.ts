@@ -114,8 +114,8 @@ test("public responsive QA rejects redirects, blank main content, and headingles
   assert.doesNotMatch(responsiveQa, /document\.body\.textContent/);
 });
 
-test("static notices are neutral while dynamic feedback keeps explicit live-region semantics", () => {
-  assert.match(alert, /role=\{role \?\? \(variant === "destructive" \? "alert" : undefined\)\}/);
+test("non-destructive notices announce politely while destructive feedback stays assertive", () => {
+  assert.match(alert, /role=\{role \?\? \(variant === "destructive" \? "alert" : "status"\)\}/);
   assert.match(kiosk, /role="status" aria-live="polite"/);
   assert.match(kiosk, /role="alert"[\s\S]*variant="destructive"/);
 });
@@ -203,4 +203,8 @@ test("billing mutations surface interrupted requests with a reconciliation-safe 
   assert.equal((billing.match(/runBillingTransition\(async \(\) =>/g) ?? []).length, 10);
   assert.match(billing, /beforeunload/);
   assert.match(billing, /This billing workspace has unsaved input/);
+  assert.match(billing, /setLastSavedTuitionDraftSignature\(assignmentTuitionDraftSignature\)/);
+  assert.match(billing, /setLastSavedChildContextDraftSignature\(assignmentChildContextDraftSignature\)/);
+  assert.match(billing, /assignmentTuitionDraftSignature !== \(lastSavedTuitionDraftSignature \?\? persistedTuitionDraftSignature\)/);
+  assert.match(billing, /assignmentChildContextDraftSignature !== \(lastSavedChildContextDraftSignature \?\? persistedChildContextDraftSignature\)/);
 });

@@ -17,6 +17,7 @@ const APPLY = process.argv.includes("--apply");
 const ACKNOWLEDGED_NO_INVITES = process.argv.includes("--acknowledge-no-invites");
 const INCLUDE_AUTHORIZED_PICKUPS = process.argv.includes("--include-authorized-pickups");
 const EXCLUDE_TX_TYLER = process.argv.includes("--exclude-tx-tyler");
+const INCLUDE_EXACT_TARGETS = process.argv.includes("--include-exact-targets");
 const FINGERPRINT_PREFIX = "--confirm-fingerprint=";
 const ACTION = "parent_portal.payer_account_prepared";
 
@@ -42,7 +43,7 @@ async function loadGuardians() {
   return prisma.guardian.findMany({
     include: {
       user: {
-        select: { email: true, role: true, isActive: true },
+        select: { email: true, tenantId: true, role: true, isActive: true },
       },
       family: {
         include: {
@@ -65,10 +66,20 @@ async function loadGuardians() {
   });
 }
 
-function hasActiveParentLink(guardian: GuardianRecord) {
+function hasActiveParentLink(guardian: GuardianRecord, activeAuthEmails: Set<string>, expectedTenantId: string) {
   return guardian.user?.role === UserRole.PARENT_GUARDIAN
     && guardian.user.isActive
-    && normalizedEmail(guardian.user.email) === normalizedEmail(guardian.email);
+    && guardian.user.tenantId === expectedTenantId
+    && normalizedEmail(guardian.user.email) === normalizedEmail(guardian.email)
+    && !parentPortalAccessDisabled(guardian.customFields)
+    && activeAuthEmails.has(normalizedEmail(guardian.user.email));
+}
+
+function activeAuthUser(user: { email_confirmed_at?: string | null; banned_until?: string | null }) {
+  return Boolean(
+    user.email_confirmed_at
+    && (!user.banned_until || new Date(user.banned_until) <= new Date()),
+  );
 }
 
 function guardianIdentity(guardian: GuardianRecord) {
@@ -190,15 +201,20 @@ async function main() {
   const supabase = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const existingAuthEmails = new Set<string>();
-  for (let page = 1; page <= 20; page += 1) {
-    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+  const allAuthEmails = new Set<string>();
+  const activeAuthEmails = new Set<string>();
+  let authPage = 1;
+  while (true) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page: authPage, perPage: 1000 });
     if (error) throw error;
     for (const authUser of data.users) {
       const authEmail = normalizedEmail(authUser.email);
-      if (authEmail) existingAuthEmails.add(authEmail);
+      if (!authEmail) continue;
+      allAuthEmails.add(authEmail);
+      if (activeAuthUser(authUser)) activeAuthEmails.add(authEmail);
     }
     if (data.users.length < 1000) break;
+    authPage += 1;
   }
 
   const readinessByGuardianId = new Map<string, ReturnType<typeof evaluateParentInvitationReadiness>>();
@@ -240,7 +256,7 @@ async function main() {
   let missingEmailPayers = 0;
 
   for (const payer of payerGuardians) {
-    if (hasActiveParentLink(payer)) {
+    if (hasActiveParentLink(payer, activeAuthEmails, tenantIdByGuardianId.get(payer.id) ?? "")) {
       alreadyLinkedPayers += 1;
       continue;
     }
@@ -286,7 +302,11 @@ async function main() {
         : ["Every guardian record that would be linked must pass readiness."]),
       ...(user && user.tenantId !== tenantId ? ["Existing app user belongs to another tenant."] : []),
       ...(user && user.role !== UserRole.PARENT_GUARDIAN ? ["Existing app user has a non-parent role."] : []),
-      ...(existingAuthEmails.has(email) && !user ? ["Supabase Auth account exists without a matching app parent user."] : []),
+      ...(user && !user.isActive ? ["Existing app parent user is inactive."] : []),
+      ...(allAuthEmails.has(email) && !activeAuthEmails.has(email)
+        ? ["Supabase Auth account is unconfirmed or banned."]
+        : []),
+      ...(allAuthEmails.has(email) && !user ? ["Supabase Auth account exists without a matching app parent user."] : []),
     ];
     if (blockers.length) {
       for (const blocker of new Set(blockers)) {
@@ -307,7 +327,8 @@ async function main() {
         guardianIds: group.map((guardian) => guardian.id).sort(),
         familyIds: [...new Set(group.map((guardian) => guardian.familyId))].sort(),
         existingAppUser: existingUserByEmail.has(normalizedEmail(group[0].email)),
-        existingAuthUser: existingAuthEmails.has(normalizedEmail(group[0].email)),
+        existingAuthUser: allAuthEmails.has(normalizedEmail(group[0].email)),
+        activeAuthUser: activeAuthEmails.has(normalizedEmail(group[0].email)),
       }))
       .sort((left, right) => `${left.tenantId}:${left.email}`.localeCompare(`${right.tenantId}:${right.email}`)),
   )).digest("hex");
@@ -336,7 +357,7 @@ async function main() {
       topBlockers: {},
     };
     item.payers += 1;
-    if (hasActiveParentLink(payer)) {
+    if (hasActiveParentLink(payer, activeAuthEmails, tenantIdByGuardianId.get(payer.id) ?? "")) {
       item.linked += 1;
     } else if (!validEmail(normalizedEmail(payer.email))) {
       item.blocked += 1;
@@ -374,6 +395,17 @@ async function main() {
     centers: [...centerSummary.values()]
       .filter((center) => center.payers > 0)
       .sort((left, right) => left.center.localeCompare(right.center)),
+    ...(INCLUDE_EXACT_TARGETS ? {
+      safeTargets: safeGroups.map((group) => ({
+        center: centerById.get(group[0].family.centerId ?? "")?.crmLocationId
+          ?? centerById.get(group[0].family.centerId ?? "")?.name
+          ?? "Unassigned",
+        familyNames: [...new Set(group.map((guardian) => guardian.family.name))].sort(),
+        guardianNames: group.map((guardian) => guardian.fullName).sort(),
+        existingAppUser: existingUserByEmail.has(normalizedEmail(group[0].email)),
+        activeAuthUser: activeAuthEmails.has(normalizedEmail(group[0].email)),
+      })),
+    } : {}),
   };
   console.log(JSON.stringify(summary, null, 2));
   if (!APPLY) return;
@@ -394,7 +426,7 @@ async function main() {
         guardianId: payer.id,
         linkedBy: "system:payer-account-preparation",
         linkedReason: "payer_account_prepared_without_invite",
-        prepareWithoutInvite: !existingUser || !existingAuthEmails.has(email),
+        prepareWithoutInvite: !existingUser || !activeAuthEmails.has(email),
       });
       if (!result.ok) {
         failures[result.reason] = (failures[result.reason] ?? 0) + 1;
@@ -449,14 +481,16 @@ async function main() {
     }),
   ]);
   const authEmails = new Set<string>();
-  for (let page = 1; page <= 20; page += 1) {
-    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+  let verificationPage = 1;
+  while (true) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page: verificationPage, perPage: 1000 });
     if (error) throw error;
     for (const user of data.users) {
       const email = normalizedEmail(user.email);
-      if (processedEmails.has(email)) authEmails.add(email);
+      if (processedEmails.has(email) && activeAuthUser(user)) authEmails.add(email);
     }
     if (data.users.length < 1000) break;
+    verificationPage += 1;
   }
   console.log(JSON.stringify({
     applied: {

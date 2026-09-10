@@ -285,11 +285,12 @@ async function main() {
         const invoiceStatusCounts = Object.fromEntries([...new Set(account.invoices.map((invoice) => invoice.status))]
           .sort()
           .map((status) => [status, account.invoices.filter((invoice) => invoice.status === status).length]));
-        const recentLedger = ledgerEntriesWithBalances
-          .filter((entry) => entry.billingAccountId === account.id)
+        const accountLedger = ledgerEntriesWithBalances
+          .filter((entry) => entry.billingAccountId === account.id);
+        const recentLedger = accountLedger
           .slice(0, 3)
           .map((entry) => ({ type: entry.type, sourceSystem: entry.sourceSystem, effectiveAt: entry.effectiveAt.toISOString() }));
-        const needsEvidenceReview = recentLedger.some((entry) => (
+        const needsEvidenceReview = accountLedger.some((entry) => (
           entry.type === "debit" && entry.sourceSystem === "bee_suite_manual"
         ));
         if (needsEvidenceReview) center.balanceOnlyAccountsNeedingEvidenceReview += 1;

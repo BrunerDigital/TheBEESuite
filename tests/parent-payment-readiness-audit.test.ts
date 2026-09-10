@@ -37,6 +37,8 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /activeParentLinksMissingAuth/);
   assert.match(source, /center\.balanceOnlyAccountsNeedingEvidenceReview > 0/);
   assert.match(source, /ledgerEntry\.findMany/);
+  assert.match(source, /const accountLedger = ledgerEntriesWithBalances/);
+  assert.match(source, /needsEvidenceReview = accountLedger\.some/);
   assert.doesNotMatch(source, /accountIds\.map\([\s\S]{0,120}ledgerEntry\.findFirst/);
 });
 
@@ -45,6 +47,8 @@ test("payer account preparation verifies complete app and Auth access and suppor
 
   assert.match(source, /--include-exact-targets/);
   assert.match(source, /activeAuthUser/);
+  assert.match(source, /allAuthEmails/);
+  assert.match(source, /Supabase Auth account is unconfirmed or banned/);
   assert.match(source, /parentPortalAccessDisabled\(guardian\.customFields\)/);
   assert.match(source, /guardian\.user\.tenantId === expectedTenantId/);
   assert.match(source, /activeAuthEmails\.has/);

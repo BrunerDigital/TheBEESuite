@@ -215,6 +215,40 @@ async function main() {
     const payerGuardians = family.guardians.filter((guardian) => guardian.isBillingContact);
     const accessDiagnosis = diagnoseGuardianAccess(family.guardians);
     const payerAccessDiagnosis = diagnoseGuardianAccess(payerGuardians);
+    const payerAccessReviews = payerGuardians.map((guardian) => {
+      const diagnosis = diagnoseGuardianAccess([guardian]);
+      const proposedDisposition = diagnosis.includes("parent_portal_disabled")
+        ? "hold_for_explicit_access_reactivation_approval"
+        : diagnosis.includes("auth_user_unconfirmed_or_banned")
+          || diagnosis.includes("auth_user_without_matching_app_parent")
+          ? "hold_for_auth_identity_collision_review"
+        : diagnosis.some((reason) => [
+            "active_auth_user_missing",
+            "linked_user_inactive",
+            "linked_user_not_parent",
+            "linked_user_tenant_mismatch",
+            "linked_user_email_not_normalized",
+          ].includes(reason))
+          ? "hold_for_app_identity_review"
+        : family.sourceSystem !== "procare" || !family.externalId?.trim()
+          ? "hold_for_school_relationship_confirmation"
+          : diagnosis.includes("guardian_email_invalid")
+            || (guardian.phone?.replace(/\D/g, "").length ?? 0) < 4
+            ? "hold_for_contact_data_correction"
+            : "review_procare_source_package_and_child_provenance";
+      return {
+        guardianId: guardian.id,
+        guardianName: guardian.fullName,
+        diagnosis,
+        proposedDisposition,
+      };
+    });
+    const payerDispositions = [...new Set(payerAccessReviews.map((review) => review.proposedDisposition))];
+    const proposedDisposition = payerDispositions.length === 0
+      ? "hold_for_school_relationship_confirmation"
+      : payerDispositions.length === 1
+        ? payerDispositions[0]
+        : "review_payer_specific_dispositions";
     if (!hasActiveParentLink) {
       currentFamiliesWithoutActiveParentLink += 1;
       center.familiesWithoutActiveParentLink += 1;
@@ -294,26 +328,8 @@ async function main() {
             })),
           accessDiagnosis,
           payerAccessDiagnosis,
-          proposedDisposition: payerGuardians.length === 0
-            ? "hold_for_school_relationship_confirmation"
-            : payerAccessDiagnosis.includes("parent_portal_disabled")
-              ? "hold_for_explicit_access_reactivation_approval"
-            : payerAccessDiagnosis.includes("auth_user_unconfirmed_or_banned")
-              || payerAccessDiagnosis.includes("auth_user_without_matching_app_parent")
-              ? "hold_for_auth_identity_collision_review"
-            : payerAccessDiagnosis.some((reason) => [
-                "linked_user_inactive",
-                "linked_user_not_parent",
-                "linked_user_tenant_mismatch",
-                "linked_user_email_not_normalized",
-              ].includes(reason))
-              ? "hold_for_app_identity_review"
-            : family.sourceSystem !== "procare" || !family.externalId?.trim()
-              ? "hold_for_school_relationship_confirmation"
-              : payerAccessDiagnosis.includes("guardian_email_invalid")
-                || payerGuardians.some((guardian) => (guardian.phone?.replace(/\D/g, "").length ?? 0) < 4)
-                ? "hold_for_contact_data_correction"
-                : "review_procare_source_package_and_child_provenance",
+          payerAccessReviews,
+          proposedDisposition,
         });
       }
       const openInvoices = account.invoices.filter((invoice) => invoice.status === "OPEN");

@@ -43,6 +43,9 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /hold_for_app_identity_review/);
   assert.match(source, /const payerGuardians = family\.guardians\.filter\(\(guardian\) => guardian\.isBillingContact\)/);
   assert.match(source, /const payerAccessDiagnosis = diagnoseGuardianAccess\(payerGuardians\)/);
+  assert.match(source, /const payerAccessReviews = payerGuardians\.map/);
+  assert.match(source, /diagnoseGuardianAccess\(\[guardian\]\)/);
+  assert.match(source, /review_payer_specific_dispositions/);
   assert.match(source, /isSupabaseAuthCompatibleEmail\(email\)/);
   assert.match(source, /paymentCenterTenantById/);
   assert.match(source, /parentPortalAccessDisabled\(guardian\.customFields\)/);
@@ -60,7 +63,7 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /!hasPositiveProcareOpeningBalance/);
   assert.match(source, /const needsEvidenceReview = evidenceReviewReason != null/);
   assert.match(source, /entry\.sourceSystem === "bee_suite_manual" && entry\.amountCents > 0/);
-  assert.match(source, /payerAccessDiagnosis\.includes\("guardian_email_invalid"\)/);
+  assert.match(source, /diagnosis\.includes\("guardian_email_invalid"\)/);
   assert.match(source, /\.sort\(\(left, right\) => left\.id\.localeCompare\(right\.id\)\)/);
   assert.doesNotMatch(source, /accountIds\.map\([\s\S]{0,120}ledgerEntry\.findFirst/);
 });

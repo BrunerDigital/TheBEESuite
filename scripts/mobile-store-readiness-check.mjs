@@ -234,7 +234,7 @@ assert.match(shared.capacitor, /contentInset:\s*"automatic"/);
 assert.match(shared.capacitor, /allowsLinkPreview:\s*false/);
 assert.ok(existsSync("scripts/generate-ios-brand-assets.mjs"), "Missing deterministic iOS brand asset generator");
 assert.ok(shared.packageJson.devDependencies?.sharp, "Sharp must be a direct development dependency for deterministic iOS assets");
-assert.match(shared.packageJson.engines?.node ?? "", />=22/, "Capacitor 8 repository must require Node.js 22 or later");
+assert.match(shared.packageJson.engines?.node ?? "", /^24(?:\.x)?$/, "Capacitor 8 repository must pin the deployed Node.js 24 major");
 assert.ok(!shared.packageJson.dependencies?.["@capacitor/push-notifications"], "Native push dependency must remain absent while push is deferred");
 assert.ok(!shared.packageJson.dependencies?.["@capacitor/android"], "Android dependency must remain absent until the native Android release is approved");
 

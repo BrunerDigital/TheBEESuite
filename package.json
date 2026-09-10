@@ -4,7 +4,7 @@
   "author": "BrunerDigital",
   "private": true,
   "engines": {
-    "node": ">=22"
+    "node": "24.x"
   },
   "overrides": {
     "deepmerge-ts": "8.0.1",

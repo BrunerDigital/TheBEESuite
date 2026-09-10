@@ -1,4 +1,5 @@
 import "./load-env";
+import { createHash } from "node:crypto";
 import { createClient, type User as SupabaseUser } from "@supabase/supabase-js";
 import { UserRole } from "@prisma/client";
 import {
@@ -11,6 +12,8 @@ import { parentPortalAccessDisabled } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getSupabaseAuthConfig } from "@/lib/supabase-auth";
+
+const INCLUDE_EXACT_TARGETS = process.argv.includes("--include-exact-targets");
 
 function jsonObject(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -70,10 +73,14 @@ async function main() {
     },
     select: {
       id: true,
+      name: true,
       centerId: true,
       sourceSystem: true,
+      externalId: true,
       guardians: {
         select: {
+          id: true,
+          fullName: true,
           isBillingContact: true,
           email: true,
           phone: true,
@@ -96,7 +103,10 @@ async function main() {
             },
             select: { type: true, sourceSystem: true, amountCents: true },
           },
-          invoices: { where: { status: "OPEN" }, select: { id: true } },
+          invoices: {
+            select: { id: true, status: true, totalCents: true, dueDate: true, sourceSystem: true },
+            orderBy: [{ dueDate: "desc" }, { id: "desc" }],
+          },
         },
       },
     },
@@ -107,7 +117,7 @@ async function main() {
   const ledgerEntriesWithBalances = await prisma.ledgerEntry.findMany({
     where: { billingAccountId: { in: accountIds }, balanceAfterCents: { not: null } },
     orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
-    select: { id: true, billingAccountId: true, balanceAfterCents: true, effectiveAt: true, createdAt: true },
+    select: { id: true, billingAccountId: true, balanceAfterCents: true, effectiveAt: true, createdAt: true, type: true, sourceSystem: true },
   });
   const latestLedgerBalanceByAccountId = new Map<string, number>();
   for (const entry of ledgerEntriesWithBalances) {
@@ -133,6 +143,7 @@ async function main() {
     positiveParentBalances: number;
     positiveBalancesWithoutActiveParentLink: number;
     positiveBalancesWithoutOpenInvoice: number;
+    balanceOnlyAccountsNeedingEvidenceReview: number;
     orderedLedgerBalanceMismatches: number;
     latestCreatedLedgerBalanceMismatches: number;
   }>();
@@ -144,6 +155,8 @@ async function main() {
   let orderedLedgerBalanceMismatches = 0;
   let latestCreatedLedgerBalanceMismatches = 0;
   const positiveBalanceAccessExceptionProfiles: Array<Record<string, unknown>> = [];
+  const exactPositiveBalanceAccessTargets: Array<Record<string, unknown>> = [];
+  const exactPositiveBalancesWithoutOpenInvoice: Array<Record<string, unknown>> = [];
 
   for (const family of families) {
     const centerId = family.centerId!;
@@ -155,6 +168,7 @@ async function main() {
       positiveParentBalances: 0,
       positiveBalancesWithoutActiveParentLink: 0,
       positiveBalancesWithoutOpenInvoice: 0,
+      balanceOnlyAccountsNeedingEvidenceReview: 0,
       orderedLedgerBalanceMismatches: 0,
       latestCreatedLedgerBalanceMismatches: 0,
     };
@@ -167,6 +181,21 @@ async function main() {
       && guardian.user.email === normalizedEmail(guardian.user.email)
       && supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
     ));
+    const accessDiagnosis = [...new Set(family.guardians.flatMap((guardian) => {
+      const reasons: string[] = [];
+      const email = normalizedEmail(guardian.email);
+      if (!email || !email.includes("@")) reasons.push("guardian_email_invalid");
+      if (parentPortalAccessDisabled(guardian.customFields)) reasons.push("parent_portal_disabled");
+      if (!guardian.user) reasons.push("app_parent_user_missing");
+      if (guardian.user && guardian.user.role !== UserRole.PARENT_GUARDIAN) reasons.push("linked_user_not_parent");
+      if (guardian.user && !guardian.user.isActive) reasons.push("linked_user_inactive");
+      if (guardian.user && guardian.user.tenantId !== paymentCenterTenantById.get(centerId)) reasons.push("linked_user_tenant_mismatch");
+      if (guardian.user && guardian.user.email !== normalizedEmail(guardian.user.email)) reasons.push("linked_user_email_not_normalized");
+      if (guardian.user?.role === UserRole.PARENT_GUARDIAN && guardian.user.isActive && !supabaseAuthEmails.has(normalizedEmail(guardian.user.email))) {
+        reasons.push("active_auth_user_missing");
+      }
+      return reasons;
+    }))].sort();
     if (!hasActiveParentLink) {
       currentFamiliesWithoutActiveParentLink += 1;
       center.familiesWithoutActiveParentLink += 1;
@@ -219,15 +248,85 @@ async function main() {
               || !supabaseAuthEmails.has(normalizedEmail(guardian.user.email))
             )
           )).length,
+          accessDiagnosis,
+        });
+        exactPositiveBalanceAccessTargets.push({
+          school: center.school,
+          familyId: family.id,
+          familyName: family.name,
+          billingAccountId: account.id,
+          parentBalanceCents,
+          familySourceSystem: family.sourceSystem,
+          familyExternalIdPresent: Boolean(family.externalId?.trim()),
+          guardians: family.guardians.map((guardian) => ({
+            guardianId: guardian.id,
+            guardianName: guardian.fullName,
+            billingContact: guardian.isBillingContact,
+            guardianSourceSystem: guardian.sourceSystem,
+            guardianExternalIdPresent: Boolean(guardian.externalId?.trim()),
+            emailPresent: Boolean(guardian.email?.trim()),
+            phoneReady: (guardian.phone?.replace(/\D/g, "").length ?? 0) >= 4,
+            linkedUserId: guardian.user ? "present" : null,
+          })),
+          accessDiagnosis,
+          proposedDisposition: accessDiagnosis.includes("parent_portal_disabled")
+            ? "hold_for_explicit_access_reactivation_approval"
+            : family.sourceSystem !== "procare" || !family.externalId?.trim()
+              ? "hold_for_school_relationship_confirmation"
+              : family.guardians.some((guardian) => guardian.isBillingContact && (guardian.phone?.replace(/\D/g, "").length ?? 0) < 4)
+                ? "hold_for_contact_data_correction"
+                : "review_procare_source_package_and_child_provenance",
         });
       }
-      if (account.invoices.length === 0) {
+      const openInvoices = account.invoices.filter((invoice) => invoice.status === "OPEN");
+      if (openInvoices.length === 0) {
         positiveBalancesWithoutOpenInvoice += 1;
         center.positiveBalancesWithoutOpenInvoice += 1;
+        const invoiceStatusCounts = Object.fromEntries([...new Set(account.invoices.map((invoice) => invoice.status))]
+          .sort()
+          .map((status) => [status, account.invoices.filter((invoice) => invoice.status === status).length]));
+        const recentLedger = ledgerEntriesWithBalances
+          .filter((entry) => entry.billingAccountId === account.id)
+          .slice(0, 3)
+          .map((entry) => ({ type: entry.type, sourceSystem: entry.sourceSystem, effectiveAt: entry.effectiveAt.toISOString() }));
+        const needsEvidenceReview = recentLedger.some((entry) => (
+          entry.type === "debit" && entry.sourceSystem === "bee_suite_manual"
+        ));
+        if (needsEvidenceReview) center.balanceOnlyAccountsNeedingEvidenceReview += 1;
+        exactPositiveBalancesWithoutOpenInvoice.push({
+          school: center.school,
+          familyId: family.id,
+          familyName: family.name,
+          billingAccountId: account.id,
+          parentBalanceCents,
+          invoiceStatusCounts,
+          mostRecentInvoice: account.invoices[0]
+            ? {
+                status: account.invoices[0].status,
+                totalCents: account.invoices[0].totalCents,
+                dueDate: account.invoices[0].dueDate.toISOString(),
+                sourceSystem: account.invoices[0].sourceSystem,
+              }
+            : null,
+          recentLedger,
+          classification: needsEvidenceReview
+            ? "manual_account_adjustment_needs_evidence_review"
+            : "supported_account_balance_without_invoice",
+          proposedDisposition: needsEvidenceReview
+            ? "review_manual_adjustment_evidence_without_changing_balance"
+            : "preserve_balance_and_allow_family_balance_checkout",
+        });
       }
     }
     byCenter.set(centerId, center);
   }
+
+  const exactTargetFingerprint = createHash("sha256").update(JSON.stringify({
+    access: exactPositiveBalanceAccessTargets,
+    noOpenInvoice: exactPositiveBalancesWithoutOpenInvoice,
+  })).digest("hex");
+  const positiveBalancesWithoutOpenInvoiceNeedingEvidenceReview = exactPositiveBalancesWithoutOpenInvoice
+    .filter((target) => target.classification === "manual_account_adjustment_needs_evidence_review").length;
 
   console.log(JSON.stringify({
     paymentEnabledSchools: paymentCenters.length,
@@ -240,14 +339,22 @@ async function main() {
     positiveBalancesWithActiveParentLink: positiveParentBalances - positiveBalancesWithoutActiveParentLink,
     positiveBalancesWithoutActiveParentLink,
     positiveBalancesWithoutOpenInvoice,
+    supportedPositiveBalancesWithoutOpenInvoice:
+      positiveBalancesWithoutOpenInvoice - positiveBalancesWithoutOpenInvoiceNeedingEvidenceReview,
+    positiveBalancesWithoutOpenInvoiceNeedingEvidenceReview,
     orderedLedgerBalanceMismatches,
     latestCreatedLedgerBalanceMismatches,
+    exactTargetFingerprint,
     positiveBalanceAccessExceptionProfiles,
+    ...(INCLUDE_EXACT_TARGETS ? {
+      exactPositiveBalanceAccessTargets,
+      exactPositiveBalancesWithoutOpenInvoice,
+    } : {}),
     schoolExceptions: [...byCenter.values()].filter((center) => (
       center.missingBillingAccounts > 0
       || center.familiesWithoutActiveParentLink > 0
       || center.positiveBalancesWithoutActiveParentLink > 0
-      || center.positiveBalancesWithoutOpenInvoice > 0
+      || center.balanceOnlyAccountsNeedingEvidenceReview > 0
       || center.orderedLedgerBalanceMismatches > 0
       || center.latestCreatedLedgerBalanceMismatches > 0
     )),

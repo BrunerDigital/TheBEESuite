@@ -14,6 +14,17 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /currentFamiliesWithoutBillingAccounts/);
   assert.match(source, /currentFamiliesWithoutActiveParentLink/);
   assert.match(source, /latestCreatedLedgerBalanceMismatches/);
+  assert.match(source, /--include-exact-targets/);
+  assert.match(source, /exactTargetFingerprint/);
+  assert.match(source, /exactPositiveBalanceAccessTargets/);
+  assert.match(source, /exactPositiveBalancesWithoutOpenInvoice/);
+  assert.match(source, /hold_for_explicit_access_reactivation_approval/);
+  assert.match(source, /hold_for_school_relationship_confirmation/);
+  assert.match(source, /hold_for_contact_data_correction/);
+  assert.match(source, /review_procare_source_package_and_child_provenance/);
+  assert.match(source, /supported_account_balance_without_invoice/);
+  assert.match(source, /manual_account_adjustment_needs_evidence_review/);
+  assert.match(source, /positiveBalancesWithoutOpenInvoiceNeedingEvidenceReview/);
   assert.match(source, /loadActiveSupabaseAuthEmails/);
   assert.match(source, /activeAuthUser/);
   assert.match(source, /paymentCenterTenantById/);
@@ -24,7 +35,19 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.doesNotMatch(source, /nextPage/);
   assert.doesNotMatch(source, /page <= 20/);
   assert.match(source, /activeParentLinksMissingAuth/);
-  assert.match(source, /center\.positiveBalancesWithoutOpenInvoice > 0/);
+  assert.match(source, /center\.balanceOnlyAccountsNeedingEvidenceReview > 0/);
   assert.match(source, /ledgerEntry\.findMany/);
   assert.doesNotMatch(source, /accountIds\.map\([\s\S]{0,120}ledgerEntry\.findFirst/);
+});
+
+test("payer account preparation verifies complete app and Auth access and supports exact previews", () => {
+  const source = readFileSync("scripts/prepare-payer-portal-accounts.ts", "utf8");
+
+  assert.match(source, /--include-exact-targets/);
+  assert.match(source, /activeAuthUser/);
+  assert.match(source, /parentPortalAccessDisabled\(guardian\.customFields\)/);
+  assert.match(source, /guardian\.user\.tenantId === expectedTenantId/);
+  assert.match(source, /activeAuthEmails\.has/);
+  assert.match(source, /safeTargets/);
+  assert.doesNotMatch(source, /page <= 20/);
 });

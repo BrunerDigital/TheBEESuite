@@ -41,6 +41,7 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /auth_user_without_matching_app_parent/);
   assert.match(source, /hold_for_auth_identity_collision_review/);
   assert.match(source, /hold_for_app_identity_review/);
+  assert.match(source, /linked_user_guardian_email_mismatch/);
   assert.match(source, /const payerGuardians = family\.guardians\.filter\(\(guardian\) => guardian\.isBillingContact\)/);
   assert.match(source, /const payerAccessDiagnosis = diagnoseGuardianAccess\(payerGuardians\)/);
   assert.match(source, /const payerAccessReviews = payerGuardians\.map/);
@@ -50,6 +51,10 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /paymentCenterTenantById/);
   assert.match(source, /parentPortalAccessDisabled\(guardian\.customFields\)/);
   assert.match(source, /guardian\.user\.email === normalizedEmail\(guardian\.user\.email\)/);
+  assert.match(source, /normalizedEmail\(guardian\.user\.email\) === normalizedEmail\(guardian\.email\)/);
+  assert.match(source, /exactPositiveBalanceAccessIdentityFingerprintTargets/);
+  assert.match(source, /linkedUserId: guardian\.user\?\.id \?\? null/);
+  assert.match(source, /linkedUserEmail: normalizedEmail\(guardian\.user\?\.email\)/);
   assert.match(source, /data\.users\.length < 1000/);
   assert.match(source, /page \+= 1/);
   assert.doesNotMatch(source, /nextPage/);

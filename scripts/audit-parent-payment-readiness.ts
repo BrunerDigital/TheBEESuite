@@ -90,7 +90,7 @@ async function main() {
           sourceSystem: true,
           externalId: true,
           customFields: true,
-          user: { select: { email: true, tenantId: true, role: true, isActive: true } },
+          user: { select: { id: true, email: true, tenantId: true, role: true, isActive: true } },
         },
       },
       billingAccount: {
@@ -163,6 +163,7 @@ async function main() {
   let latestCreatedLedgerBalanceMismatches = 0;
   const positiveBalanceAccessExceptionProfiles: Array<Record<string, unknown>> = [];
   const exactPositiveBalanceAccessTargets: Array<Record<string, unknown>> = [];
+  const exactPositiveBalanceAccessIdentityFingerprintTargets: Array<Record<string, unknown>> = [];
   const exactPositiveBalancesWithoutOpenInvoice: Array<Record<string, unknown>> = [];
 
   for (const family of families) {
@@ -185,6 +186,7 @@ async function main() {
       && guardian.user.isActive
       && !parentPortalAccessDisabled(guardian.customFields)
       && guardian.user.tenantId === paymentCenterTenantById.get(centerId)
+      && normalizedEmail(guardian.user.email) === normalizedEmail(guardian.email)
       && guardian.user.email === normalizedEmail(guardian.user.email)
       && activeAuthEmails.has(normalizedEmail(guardian.user.email))
     ));
@@ -201,6 +203,7 @@ async function main() {
       if (guardian.user && guardian.user.role !== UserRole.PARENT_GUARDIAN) reasons.push("linked_user_not_parent");
       if (guardian.user && !guardian.user.isActive) reasons.push("linked_user_inactive");
       if (guardian.user && guardian.user.tenantId !== paymentCenterTenantById.get(centerId)) reasons.push("linked_user_tenant_mismatch");
+      if (guardian.user && normalizedEmail(guardian.user.email) !== email) reasons.push("linked_user_guardian_email_mismatch");
       if (guardian.user && guardian.user.email !== normalizedEmail(guardian.user.email)) reasons.push("linked_user_email_not_normalized");
       if (guardian.user?.role === UserRole.PARENT_GUARDIAN && guardian.user.isActive) {
         const userEmail = normalizedEmail(guardian.user.email);
@@ -227,6 +230,7 @@ async function main() {
             "linked_user_inactive",
             "linked_user_not_parent",
             "linked_user_tenant_mismatch",
+            "linked_user_guardian_email_mismatch",
             "linked_user_email_not_normalized",
           ].includes(reason))
           ? "hold_for_app_identity_review"
@@ -305,6 +309,17 @@ async function main() {
             )
           )).length,
           accessDiagnosis,
+        });
+        exactPositiveBalanceAccessIdentityFingerprintTargets.push({
+          familyId: family.id,
+          guardians: [...family.guardians]
+            .sort((left, right) => left.id.localeCompare(right.id))
+            .map((guardian) => ({
+              guardianId: guardian.id,
+              normalizedEmail: normalizedEmail(guardian.email),
+              linkedUserId: guardian.user?.id ?? null,
+              linkedUserEmail: normalizedEmail(guardian.user?.email),
+            })),
         });
         exactPositiveBalanceAccessTargets.push({
           school: center.school,
@@ -411,6 +426,7 @@ async function main() {
 
   const exactTargetFingerprint = createHash("sha256").update(JSON.stringify({
     access: exactPositiveBalanceAccessTargets,
+    accessIdentities: exactPositiveBalanceAccessIdentityFingerprintTargets,
     noOpenInvoice: exactPositiveBalancesWithoutOpenInvoice,
   })).digest("hex");
   const positiveBalancesWithoutOpenInvoiceNeedingEvidenceReview = exactPositiveBalancesWithoutOpenInvoice

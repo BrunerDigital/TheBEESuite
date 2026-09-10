@@ -114,7 +114,8 @@ test("payer portal preparation is explicit, audited, and cannot send invitations
   const provisioning = readFileSync(new URL("../src/lib/parent-portal-logins.ts", import.meta.url), "utf8");
   assert.match(provisioning, /email:\s*\{ equals: email, mode: "insensitive" \}/);
   assert.match(provisioning, /prisma\.user\.update/);
-  assert.match(source, /prepareWithoutInvite:\s*!existingUser \|\| !existingAuthEmails\.has\(email\)/);
+  assert.match(source, /prepareWithoutInvite:\s*!existingUser \|\| !activeAuthEmails\.has\(email\)/);
+  assert.match(source, /Supabase Auth account is unconfirmed or banned/);
   assert.match(source, /--include-authorized-pickups/);
   assert.match(source, /--exclude-tx-tyler/);
   assert.match(source, /pickupExternalIds\.has\(clean\(guardian\.externalId\)\)/);

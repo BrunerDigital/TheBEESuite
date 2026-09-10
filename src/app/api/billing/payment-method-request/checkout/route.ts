@@ -90,6 +90,16 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const payload = validation.payload;
+  if (payload.intent === "payment_method_reauthorization") {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "payment_method_reauthorization_required",
+        error: "This link is for replacing the saved payment method. No payment was started. Complete the no-charge replacement first so the update is not requested again.",
+      },
+      { status: 409 },
+    );
+  }
   if (appReviewReservedIdentityKind(payload.email)) {
     return NextResponse.json({
       ok: false,

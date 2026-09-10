@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { appReviewReservedIdentityKind } from "@/lib/app-review-targeting";
 import { provisionalAchCreditCents } from "@/lib/ach-payment-lifecycle";
 import { canAccessCenter, canManageBilling, getCurrentUser, isParentGuardian } from "@/lib/auth";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import {
   activeStripeCheckoutPaymentMessage,
   activeStripeCheckoutPaymentSummary,
@@ -204,6 +205,9 @@ async function POSTHandler(request: NextRequest) {
           customFields: true,
           guardians: { select: { userId: true } },
           children: { select: { id: true, customFields: true } },
+          _count: {
+            select: { children: { where: currentlyEnrolledChildWhere() } },
+          },
         },
       },
     },
@@ -558,7 +562,25 @@ async function POSTHandler(request: NextRequest) {
       ...billingAccountFields,
       ...stripeCustomerCustomFieldPatch(billingAccountFields, stripeCustomerId, connectedAccountId),
     },
+    activeConnectedAccountId,
+    centerCustomFields: center.customFields,
   });
+  if (
+    !retryableFamilySubmission
+    && parentCheckout
+    && method !== "saved_method"
+    && billingAccount.family._count.children > 0
+    && savedPaymentMethod.paymentMethodReauthorizationRequired
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "payment_method_reauthorization_required",
+        error: "Replace the saved payment method first. No payment was started. The no-charge replacement moves saved payments to the school's current account; eligible existing autopay authorization resumes automatically.",
+      },
+      { status: 409 },
+    );
+  }
   const requestedPaymentMethodCategory = storedPaymentMethodCategory(retryableFamilyFields.requestedPaymentMethodCategory)
     || storedPaymentMethodCategory(retryableFamilyFields.paymentMethodCategory)
     || (method === "saved_method" ? paymentMethodAutopayCategory(savedPaymentMethod) : checkoutCategory(method));

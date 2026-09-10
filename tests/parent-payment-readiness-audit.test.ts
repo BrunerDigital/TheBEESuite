@@ -27,6 +27,7 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /positiveBalancesWithoutOpenInvoiceNeedingEvidenceReview/);
   assert.match(source, /loadActiveSupabaseAuthEmails/);
   assert.match(source, /activeAuthUser/);
+  assert.match(source, /isSupabaseAuthCompatibleEmail\(email\)/);
   assert.match(source, /paymentCenterTenantById/);
   assert.match(source, /parentPortalAccessDisabled\(guardian\.customFields\)/);
   assert.match(source, /guardian\.user\.email === normalizedEmail\(guardian\.user\.email\)/);
@@ -37,7 +38,8 @@ test("parent payment readiness audit checks balances, access, and account covera
   assert.match(source, /activeParentLinksMissingAuth/);
   assert.match(source, /center\.balanceOnlyAccountsNeedingEvidenceReview > 0/);
   assert.match(source, /ledgerEntry\.findMany/);
-  assert.match(source, /const accountLedger = ledgerEntriesWithBalances/);
+  assert.match(source, /const ledgerEntriesByAccountId = new Map/);
+  assert.match(source, /const accountLedger = ledgerEntriesByAccountId\.get\(account\.id\) \?\? \[\]/);
   assert.match(source, /needsEvidenceReview = accountLedger\.some/);
   assert.match(source, /entry\.sourceSystem === "bee_suite_manual" && entry\.amountCents > 0/);
   assert.match(source, /\.sort\(\(left, right\) => left\.id\.localeCompare\(right\.id\)\)/);

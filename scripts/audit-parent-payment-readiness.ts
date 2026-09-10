@@ -11,7 +11,7 @@ import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { parentPortalAccessDisabled } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
-import { getSupabaseAuthConfig } from "@/lib/supabase-auth";
+import { getSupabaseAuthConfig, isSupabaseAuthCompatibleEmail } from "@/lib/supabase-auth";
 
 const INCLUDE_EXACT_TARGETS = process.argv.includes("--include-exact-targets");
 
@@ -120,7 +120,11 @@ async function main() {
     select: { id: true, billingAccountId: true, balanceAfterCents: true, amountCents: true, effectiveAt: true, createdAt: true, type: true, sourceSystem: true },
   });
   const latestLedgerBalanceByAccountId = new Map<string, number>();
+  const ledgerEntriesByAccountId = new Map<string, typeof ledgerEntriesWithBalances>();
   for (const entry of ledgerEntriesWithBalances) {
+    const accountEntries = ledgerEntriesByAccountId.get(entry.billingAccountId) ?? [];
+    accountEntries.push(entry);
+    ledgerEntriesByAccountId.set(entry.billingAccountId, accountEntries);
     if (entry.balanceAfterCents != null && !latestLedgerBalanceByAccountId.has(entry.billingAccountId)) {
       latestLedgerBalanceByAccountId.set(entry.billingAccountId, entry.balanceAfterCents);
     }
@@ -184,7 +188,7 @@ async function main() {
     const accessDiagnosis = [...new Set(family.guardians.flatMap((guardian) => {
       const reasons: string[] = [];
       const email = normalizedEmail(guardian.email);
-      if (!email || !email.includes("@")) reasons.push("guardian_email_invalid");
+      if (!isSupabaseAuthCompatibleEmail(email)) reasons.push("guardian_email_invalid");
       if (parentPortalAccessDisabled(guardian.customFields)) reasons.push("parent_portal_disabled");
       if (!guardian.user) reasons.push("app_parent_user_missing");
       if (guardian.user && guardian.user.role !== UserRole.PARENT_GUARDIAN) reasons.push("linked_user_not_parent");
@@ -287,8 +291,7 @@ async function main() {
         const invoiceStatusCounts = Object.fromEntries([...new Set(account.invoices.map((invoice) => invoice.status))]
           .sort()
           .map((status) => [status, account.invoices.filter((invoice) => invoice.status === status).length]));
-        const accountLedger = ledgerEntriesWithBalances
-          .filter((entry) => entry.billingAccountId === account.id);
+        const accountLedger = ledgerEntriesByAccountId.get(account.id) ?? [];
         const recentLedger = accountLedger
           .slice(0, 3)
           .map((entry) => ({ type: entry.type, sourceSystem: entry.sourceSystem, effectiveAt: entry.effectiveAt.toISOString() }));

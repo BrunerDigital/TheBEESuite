@@ -182,8 +182,9 @@ function confirmedFamilyOnlyTuitionAssignment(fields: Record<string, unknown>, c
         assignment.tuitionBillingEnabled === false
         && text(assignment.tuitionBillingDisabledReason) === "enrollment_closed"
       );
-    const assignmentAmountCents = cents(assignment.tuitionNetAmountCents)
-      ?? cents(assignment.tuitionPlanAmountCents);
+    const assignmentAmountCents = Object.prototype.hasOwnProperty.call(assignment, "tuitionNetAmountCents")
+      ? cents(assignment.tuitionNetAmountCents)
+      : cents(assignment.tuitionPlanAmountCents);
     const ownAmount = (
       text(assignment.tuitionFundingType).toLowerCase() === "family"
       && billingEvidenceApplies

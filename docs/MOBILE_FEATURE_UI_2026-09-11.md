@@ -2,6 +2,14 @@
 
 Scope: parent and teacher feature screens, with shared help and navigation-clearance fixes. This is a web UI release, not an App Store submission or a claim that physical iOS testing is complete.
 
+## Authenticated production follow-up
+
+PR #345 reached Ready production at `a50427e9`. All ten parent screens passed at normal text size, health and public routes passed, and runtime error logs were empty. Enlarging the actual fake App Review parent's home to 200% exposed a 7px overflow inside the expanded day-details summary (the page itself did not overflow). The rotated plus icon extended outside its box; announcement disclosures had the same pattern. Shrinkable labels and separate plus/minus states eliminate the protrusion without clipping focus rings or content.
+
+The approved fake teacher's 320px/200% live header also overflowed by 156px: the full authenticated toolbar includes controls intentionally omitted by the earlier preview. The follow-up keeps mobile icon targets at 44px, constrains the account avatar, and adds disabled search/notification counterparts to the no-network preview. Bottom navigation reflows enlarged labels into readable rows with 48px-minimum targets. The feature matrix now includes the single-child home, header controls, bottom navigation and reserved content clearance. No authenticated tool, destination, permission or business behavior is removed.
+
+This follow-up uses `work/mobile-home-disclosure-20260911` from current `origin/main` at `a50427e9`. Final production verification is required after its protected release; earlier successful checks are not a waiver of a later failure.
+
 ## Current-state evidence and fixes
 
 Baseline: `origin/main` at `24f86b8a5f9302664efca06477677f7ea81297a6` (PR #344). The primary checkout contained unrelated work, so implementation and validation use `work/mobile-feature-polish-20260911` in an isolated worktree. No database, identity, role, access, provider, financial, messaging, or native-entitlement changes are included.
@@ -32,7 +40,9 @@ The initial 20 normal-size mobile screenshots passed simple page bounds. Opening
 
 ## Repeatable local checks
 
-Verified in this worktree: 200 feature layout/interaction cases (160 light + 40 dark), 40 supplementary accessibility cases across both browser engines/themes, 33 cross-role/home responsive cases, 63 focused regressions, and all 1,904 repository tests. No attempted writes, unexpected API requests, or client exceptions were recorded in the synthetic feature matrices. The complete `npm run vercel-build` gate (Prisma generation, lint, typecheck, tests, optimized Next build) and both-app static store checks pass. Intermediate failing source-contract assertions were updated to guard the new non-overlaying layouts; browser assertions were not weakened.
+Original PR #345 verification: 200 feature layout/interaction cases (160 light + 40 dark), 40 supplementary accessibility cases across both browser engines/themes, 33 cross-role/home responsive cases, 63 focused regressions, and all 1,904 repository tests. No attempted writes, unexpected API requests, or client exceptions were recorded in those synthetic feature matrices. The complete `npm run vercel-build` gate (Prisma generation, lint, typecheck, tests, optimized Next build) and both-app static store checks passed. Intermediate failing source-contract assertions were updated to guard the new non-overlaying layouts; browser assertions were not weakened.
+
+Follow-up local browser verification: 220 feature cases (176 light + 44 dark), plus 44 repeated 320px cases after the final navigation-label spacing adjustment, all pass without attempted writes, API requests or client exceptions. All 44 supplementary accessibility cases (both engines, both themes, including home) and 33 role/home responsive cases pass. Focused regressions: 66 pass. Lint, typecheck and both-app static readiness also pass. The complete production build is a separate required release gate.
 
 Install the locked dependencies and generate Prisma normally. Start the development preview with `npm run dev -- --hostname 127.0.0.1 --port 3212`.
 
@@ -45,7 +55,7 @@ node --import tsx --test tests/mobile-feature-reflow.test.ts tests/ui-accessibil
 npm run mobile:store:check
 ```
 
-The feature matrix covers ten screens, widths 320/390/768/1024, normal and 200% root text, Chromium and WebKit; the additional dark matrix covers 390px at both text sizes. It exercises real components with fake data, rejects production URLs, blocks API/external requests and all writes, checks control/text bounds and selector/help positioning, and fails on client exceptions. Browser text scaling is not a physical-device Dynamic Type or keyboard test.
+The feature matrix covers eleven screens, widths 320/390/768/1024, normal and 200% root text, Chromium and WebKit; the additional dark matrix covers 390px at both text sizes. It exercises real components with fake data, rejects production URLs, blocks API/external requests and all writes, checks control/text bounds and selector/help positioning, and fails on client exceptions. Browser text scaling is not a physical-device Dynamic Type or keyboard test.
 
 The supplementary accessibility evidence uses axe WCAG A/AA checks plus rendered-color verification for parser/occlusion gaps. Offscreen horizontal navigation is scrolled into view before measuring; unresolved colors or obscured targets fail rather than being waived. Native WebKit on Windows is not iOS Safari on a physical device.
 

@@ -16,7 +16,7 @@ const output = resolve(argument("--output-dir", "output/playwright/mobile-featur
 const engine = argument("--browser", "chromium");
 const widthOption = argument("--width", "all");
 const theme = argument("--theme", "light");
-const screens = ["updates", "messages", "payments", "children", "check-in", "documents", "billing", "profile", "notifications", "teacher"];
+const screens = ["home", "updates", "messages", "payments", "children", "check-in", "documents", "billing", "profile", "notifications", "teacher"];
 const screenOption = argument("--screen", "all");
 assert.ok(["chromium", "webkit"].includes(engine), "Unsupported browser");
 assert.ok(["all", "320", "390", "768", "1024"].includes(widthOption), "Unsupported width");
@@ -31,7 +31,12 @@ async function layoutFindings(page: Page) {
   return page.evaluate(() => {
     const issues: unknown[] = [];
     if (document.documentElement.scrollWidth > innerWidth) issues.push({ pageOverflow: document.documentElement.scrollWidth - innerWidth });
-    for (const element of document.querySelectorAll<HTMLElement>("main :is(button,input,textarea,select,[role=combobox],summary)")) {
+    const navigation = document.querySelector<HTMLElement>(".app-bottom-navigation");
+    const main = document.querySelector("main");
+    if (navigation && main && navigation.getBoundingClientRect().height > Number.parseFloat(getComputedStyle(main).paddingBottom)) {
+      issues.push({ navigationClearance: "Bottom navigation exceeds the reserved content space" });
+    }
+    for (const element of document.querySelectorAll<HTMLElement>(":is(main,.app-header) :is(button,input,textarea,select,[role=combobox],summary), .app-bottom-navigation :is(a,button)")) {
       const box = element.getBoundingClientRect(), style = getComputedStyle(element);
       if (box.width <= 1 || box.height <= 1 || style.clip !== "auto" || style.visibility === "hidden") continue;
       // Native input text can scroll horizontally inside its own field.
@@ -121,6 +126,7 @@ async function main() {
         });
         try {
           const search = screen === "teacher" ? "view=teacher&scenario=long-content"
+            : screen === "home" ? "view=parent&screen=home&scenario=single-review"
             : ["updates", "messages", "payments"].includes(screen) ? `view=parent&screen=${screen}&scenario=feature-stress`
               : `view=parent&screen=family&section=${screen}&scenario=feature-stress`;
           await page.goto(`${base}/device-preview?${search}`, { waitUntil: "networkidle", timeout: 60000 });

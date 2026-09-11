@@ -2076,10 +2076,11 @@ function ParentPortalWorkspaceView({
                       ) : null}
                     </div>
                     <details className="group mt-3 border-t text-sm">
-                      <summary className="flex min-h-11 cursor-pointer list-none select-none items-center justify-between gap-3 py-3 font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-                        <span className="group-open:hidden">View day details</span>
-                        <span className="hidden group-open:inline">Hide day details</span>
-                        <Plus className="size-4 transition-transform group-open:rotate-45 motion-reduce:transition-none" aria-hidden="true" />
+                      <summary className="flex min-h-11 min-w-0 flex-wrap cursor-pointer list-none select-none items-center justify-between gap-3 py-3 font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                        <span className="min-w-0 flex-1 group-open:hidden">View day details</span>
+                        <span className="hidden min-w-0 flex-1 group-open:inline">Hide day details</span>
+                        <Plus className="size-4 shrink-0 group-open:hidden" aria-hidden="true" />
+                        <Minus className="hidden size-4 shrink-0 group-open:block" aria-hidden="true" />
                       </summary>
                       <dl className="grid gap-3 border-t py-3 sm:grid-cols-2">
                         <div>
@@ -2388,10 +2389,11 @@ function ParentPortalWorkspaceView({
                       <span className="mt-2 line-clamp-4 text-sm leading-6 text-muted-foreground group-open:hidden">
                         {announcements[0].body}
                       </span>
-                      <span className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary">
-                        <span className="group-open:hidden">Read full announcement</span>
-                        <span className="hidden group-open:inline">Hide full announcement</span>
-                        <Plus className="size-4 transition-transform group-open:rotate-45 motion-reduce:transition-none" aria-hidden="true" />
+                      <span className="mt-3 flex min-h-11 min-w-0 items-center gap-2 text-sm font-semibold text-primary">
+                        <span className="min-w-0 flex-1 group-open:hidden">Read full announcement</span>
+                        <span className="hidden min-w-0 flex-1 group-open:inline">Hide full announcement</span>
+                        <Plus className="size-4 shrink-0 group-open:hidden" aria-hidden="true" />
+                        <Minus className="hidden size-4 shrink-0 group-open:block" aria-hidden="true" />
                       </span>
                     </summary>
                     <p className="border-t pt-3 text-sm leading-6 text-muted-foreground">

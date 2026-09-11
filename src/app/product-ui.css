@@ -90,6 +90,58 @@
     backdrop-filter: none;
   }
 
+  @media (max-width: 1023px) {
+    /* Icon-only controls do not need to scale with text. Preserve 44px touch
+       targets so the complete authenticated toolbar fits a small phone. */
+    .app-header-toolbar {
+      min-height: 64px;
+      gap: 8px;
+      padding-inline: 12px;
+    }
+
+    .app-header-actions {
+      gap: 6px;
+    }
+
+    .bee-app-frame[data-role] .app-header button[data-size^="icon"] {
+      width: 44px;
+      min-width: 44px;
+      height: 44px;
+      min-height: 44px;
+    }
+
+    .app-header button[data-size^="icon"] > svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .app-header .app-header-avatar {
+      width: 40px;
+      height: 40px;
+    }
+
+    /* Reflow enlarged navigation labels into rows instead of breaking each
+       word into tiny fragments. Icon targets stay at least 48px tall. */
+    .app-bottom-navigation > div {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 3.4rem), 1fr));
+      gap: 4px;
+      font-size: 0.68rem;
+    }
+
+    .bee-app-frame .app-bottom-navigation > div > :is(a, button) {
+      min-width: 0;
+      min-height: 48px;
+      gap: 4px;
+      padding: 4px 2px;
+    }
+
+    .app-bottom-navigation > div > :is(a, button) > svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+  }
+
   .app-global-search {
     border-color: var(--input);
     background: var(--background);

@@ -1,6 +1,6 @@
-# Portal response-time repair — approval required
+# Portal response-time repair — approved release
 
-Status: LOCAL PREPARATION ONLY. Do not push this branch, trigger its Vercel preview, merge, or deploy before Brenden confirms the provider-region change below. A push creates a deployment through the existing integration. No provider setting has been changed by this preparation.
+Status: APPROVED FOR PROTECTED RELEASE. On September 11, 2026, Brenden confirmed the exact `iad1` to `sfo1` change below after reviewing its scope, regional pricing and rollback. Push/preview, protected merge and production deployment are now authorized for this change only. Deployment and performance evidence are still pending; approval is not proof of completion.
 
 ## Current verified state
 
@@ -38,7 +38,7 @@ Branch `work/portal-region-readiness-20260911` is isolated from current `origin/
 - The live official Vercel `regions` property's JSON subschema accepts the prepared value. Whole-schema validation with the installed validator could not run because the current upstream schema declares draft-04 but uses a newer `exclusiveMinimum` form in unrelated experimental trigger definitions. No validation rules or upstream schema were relaxed; full provider acceptance remains for the approval-gated preview.
 - Local environment provenance was compared privately: both API and database target the exact Supabase project above; the runtime pooler is `us-west-1`. No credential values were printed.
 
-No preview, protected CI, production region change or post-change performance verification has been performed. The commit remains local until exact approval.
+At preparation closeout, no preview, protected CI, production region change or post-change performance verification had been performed. Approval is now recorded above; the next step is the protected release followed by authenticated production timing and flow checks. Application, schema, dependency and test files are unchanged from the completed local gate.
 
 ## Official references checked
 

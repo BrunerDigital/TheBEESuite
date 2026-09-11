@@ -104,7 +104,7 @@ function checkNativeRole(role, shared) {
   assert.match(shared.capacitor, new RegExp(`appId: "${role.bundleId.replaceAll(".", "\\.")}"`));
   assert.match(shared.capacitor, new RegExp(`appName: "${role.appName}"`));
   assert.match(shared.capacitor, new RegExp(`webDir: "${role.webDir.replace("/", "\\/")}"`));
-  assert.match(shared.capacitor, new RegExp(`launchPath: "${role.loginPath}"`));
+  assert.match(shared.capacitor, new RegExp(`appStartPath: "${role.loginPath}"`));
   assert.match(shared.capacitor, new RegExp(`iosPath: "${role.iosPath}"`));
 
   assert.match(project, new RegExp(`PRODUCT_BUNDLE_IDENTIFIER = ${role.bundleId.replaceAll(".", "\\.")};`));
@@ -170,6 +170,9 @@ function checkNativeRole(role, shared) {
   }
 
   assertTextIncludes(index, `https://thebeesuite.io${role.loginPath}`, `${role.key} shell`);
+  // iOS checks the local launch path even when loading the remote application.
+  assert.equal(normalizeLineEndings(read(`${role.webDir}${role.loginPath}/index.html`)), normalizeLineEndings(index),
+    `${role.key} bundled launch resource must exist and match the canonical shell`);
   assertTextIncludes(offline, `https://thebeesuite.io${role.loginPath}`, `${role.key} offline shell`);
   assertTextIncludes(offline, `<meta name="theme-color" content="${role.themeColor}"`, `${role.key} offline theme`);
   if (syncEvidenceAvailable) {
@@ -179,8 +182,10 @@ function checkNativeRole(role, shared) {
     assert.equal(normalizeLineEndings(generatedIndex), normalizeLineEndings(index), `${role.key} generated index shell is stale; run ios:${role.key}:sync`);
     assert.equal(normalizeLineEndings(generatedOffline), normalizeLineEndings(offline), `${role.key} generated offline shell is stale; run ios:${role.key}:sync`);
     assert.equal(generatedConfig.appId, role.bundleId, `${role.key} generated Capacitor app id is stale`);
-    assert.equal(generatedConfig.server?.url, `https://thebeesuite.io${role.loginPath}`, `${role.key} generated remote launch URL is stale`);
-    assert.equal(generatedConfig.server?.appStartPath, undefined, `${role.key} must not require a nonexistent bundled role route`);
+    assert.equal(generatedConfig.server?.url, "https://thebeesuite.io", `${role.key} must retain the full application origin`);
+    assert.equal(generatedConfig.server?.appStartPath, role.loginPath, `${role.key} generated launch path is stale`);
+    assert.equal(normalizeLineEndings(read(`${role.iosPath}/App/App/public${role.loginPath}/index.html`)), normalizeLineEndings(index),
+      `${role.key} generated local launch resource is missing or stale; run ios:${role.key}:sync`);
   }
   assertTextIncludes(submissionPacket, role.bundleId, `${role.key} submission packet`);
   assertTextIncludes(submissionPacket, role.sku, `${role.key} submission packet`);
@@ -226,8 +231,7 @@ assert.deepEqual(screenshotManifest.dimensions, { width: 1290, height: 2796 });
 
 assert.match(shared.capacitor, /BEE_SUITE_NATIVE_APP/);
 assert.match(shared.capacitor, /url:\s*`https:\/\//);
-assert.ok(shared.capacitor.includes('url: `https://${productionHost}${app.launchPath}`'));
-assert.doesNotMatch(shared.capacitor, /appStartPath\s*:/);
+assert.ok(shared.capacitor.includes('url: `https://${productionHost}`'));
 assert.doesNotMatch(shared.capacitor, /allowNavigation/);
 assert.match(shared.capacitor, /cleartext:\s*false/);
 assert.match(shared.capacitor, /errorPath:\s*"offline\.html"/);

@@ -72,8 +72,8 @@ export function unsignedBuildArguments(target, sdk, buildRoot) {
 
 export function assertPackagedConfiguration(config, target) {
   assert.equal(config.appId, target.bundleId, "Packaged role must match the selected app");
-  assert.equal(config.server?.url, `https://thebeesuite.io${target.launchPath}`);
-  assert.equal(config.server?.appStartPath, undefined, "Remote role routes must not become nonexistent local launch resources");
+  assert.equal(config.server?.url, "https://thebeesuite.io", "Keep the entire application origin for post-login navigation");
+  assert.equal(config.server?.appStartPath, target.launchPath);
   assert.equal(config.server?.cleartext, false);
   assert.equal(config.server?.errorPath, "offline.html");
   assert.equal(config.server?.allowNavigation, undefined);
@@ -175,6 +175,9 @@ export async function verifyNative(role) {
         assert.equal(readFileSync(path.join(app, "public", file), "utf8").replaceAll("\r\n", "\n"),
           readFileSync(`native/${role}-shell/${file}`, "utf8").replaceAll("\r\n", "\n"));
       }
+      assert.equal(readFileSync(path.join(app, "public", target.launchPath.slice(1), "index.html"), "utf8").replaceAll("\r\n", "\n"),
+        readFileSync(`native/${role}-shell/index.html`, "utf8").replaceAll("\r\n", "\n"),
+        "Capacitor's local appStartFileURL must exist and contain the current role shell");
       check(`${sdk} Release compiled; bundle, privacy manifest, HTTPS and offline resources verified`);
     }
 

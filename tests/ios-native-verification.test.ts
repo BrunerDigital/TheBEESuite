@@ -48,17 +48,31 @@ test("simulator selection orders multi-digit versions numerically", () => {
 test("compiled bundle must preserve role, HTTPS, offline recovery and disabled inspection", () => {
   for (const role of ["parent", "teacher"]) {
     const target = nativeTarget(role);
-    const config = { appId: target.bundleId, server: { url: `https://thebeesuite.io${target.launchPath}`,
+    const config = { appId: target.bundleId, server: { url: "https://thebeesuite.io", appStartPath: target.launchPath,
       cleartext: false, errorPath: "offline.html" }, ios: { webContentsDebuggingEnabled: false } };
     assert.doesNotThrow(() => assertPackagedConfiguration(config, target));
     for (const server of [{ ...config.server, url: "http://localhost:3000" }, { ...config.server, appStartPath: "/dashboard" },
-      { ...config.server, appStartPath: target.launchPath }, { ...config.server, url: "https://thebeesuite.io" },
+      { ...config.server, appStartPath: undefined }, { ...config.server, url: `https://thebeesuite.io${target.launchPath}` },
       { ...config.server, url: `https://thebeesuite.io${role === "parent" ? "/teachers" : "/parents"}` },
       { ...config.server, cleartext: true }, { ...config.server, allowNavigation: ["*"] }, { ...config.server, errorPath: undefined }]) {
       assert.throws(() => assertPackagedConfiguration({ ...config, server }, target));
     }
     assert.throws(() => assertPackagedConfiguration({ ...config, appId: "com.other.app" }, target));
     assert.throws(() => assertPackagedConfiguration({ ...config, ios: { webContentsDebuggingEnabled: true } }, target));
+  }
+});
+
+test("every native launch path has a real bundled resource without restricting portal navigation", () => {
+  for (const role of ["parent", "teacher"]) {
+    const target = nativeTarget(role);
+    const read = (file: string) => readFileSync(file, "utf8").replaceAll("\r\n", "\n");
+    assert.equal(read(`native/${role}-shell${target.launchPath}/index.html`), read(`native/${role}-shell/index.html`));
+    const origin = "https://thebeesuite.io";
+    assert.equal(`${origin}${target.launchPath}`, `${origin}/${role === "parent" ? "parents" : "teachers"}`);
+    for (const pathname of [`/${role}-portal`, "/login", "/privacy", "/support"]) {
+      assert.ok(`${origin}${pathname}`.startsWith(origin));
+      assert.ok(!`${origin}${pathname}`.startsWith(`${origin}${target.launchPath}`), "A path-scoped server URL would eject this route from the native app");
+    }
   }
 });
 

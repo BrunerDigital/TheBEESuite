@@ -19,9 +19,8 @@ test("parent iOS v1 remains iPhone-only and HTTPS-only", { skip: !nativeProjectP
   assert.match(project, /IPHONEOS_DEPLOYMENT_TARGET = 16\.0;/);
   assert.match(project, /TARGETED_DEVICE_FAMILY = 1;/);
   assert.match(capacitorConfig, /url:\s*`https:\/\//);
-  assert.match(capacitorConfig, /launchPath:\s*"\/parents"/);
-  assert.ok(capacitorConfig.includes('url: `https://${productionHost}${app.launchPath}`'));
-  assert.doesNotMatch(capacitorConfig, /appStartPath\s*:/);
+  assert.match(capacitorConfig, /appStartPath:\s*"\/parents"/);
+  assert.ok(capacitorConfig.includes('url: `https://${productionHost}`'));
   assert.match(capacitorConfig, /cleartext:\s*false/);
 });
 

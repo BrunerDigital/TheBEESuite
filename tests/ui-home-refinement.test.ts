@@ -47,7 +47,7 @@ test("dashboard priorities reuse scoped destinations and empty states remain tru
 
 test("home zoom and tablet control rules retain readable, full-width actions", () => {
   const css = source("src/app/parent-mobile-home.css");
-  assert.match(css, /repeat\(auto-fit, minmax\(min\(100%, 9rem\), 1fr\)\)/);
+  assert.match(css, /repeat\(auto-fit, minmax\(min\(100%, 7\.5rem\), 1fr\)\)/);
   assert.match(css, /overflow-wrap: anywhere/);
   const product = source("src/app/product-ui.css");
   assert.match(product, /dashboard-compact-kpis \.honeycomb-kpi-controls button[\s\S]*min-width: 44px;[\s\S]*min-height: 44px/);

@@ -180,7 +180,7 @@ function TeacherPreview({ scenario }: { scenario?: string }) {
       entries: { meals: 1, naps: 0, diapers: 0, activities: 1 },
     },
   }));
-  return <TeacherMobileWorkspace previewMode teacherName="Morgan Lee" roster={roster}
+  return <TeacherMobileWorkspace previewMode appReviewMode={scenario === "review"} teacherName="Morgan Lee" roster={roster}
     teacherProfile={{ name: "Morgan Lee", loginEmail: "morgan@example.com", contactEmail: "morgan@example.com", phone: "", title: "Teacher", centerId: "preview-center", centerName: "Sunshine Academy", classroomId: "preview-classroom", hasStaffKioskCode: true }}
     classroomOptions={[{ id: "preview-classroom", name: "Butterflies", ageGroup: "Preschool" }]}
     classroomRatios={[{ classroomId: "preview-classroom", name: "Butterflies", capacity: 20, ratioRule: "1:10", assignedStaff: 1 }]}

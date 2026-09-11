@@ -1205,6 +1205,18 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const appHeaderRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const header = appHeaderRef.current;
+    const frame = header?.closest<HTMLElement>(".bee-app-frame");
+    if (!header || !frame) return;
+    const updateHeaderHeight = () => frame.style.setProperty("--bee-app-header-height", `${header.getBoundingClientRect().height}px`);
+    updateHeaderHeight();
+    const observer = new ResizeObserver(updateHeaderHeight);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
   const searchUserEmail = previewMode ? "" : currentUser?.email ?? "";
   const displayUserName = currentUser
     ? removeDemoMarkersFromUserView(currentUser.name)
@@ -1426,7 +1438,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
         <SidebarNav currentUser={currentUser} onLogout={previewMode ? undefined : logout} previewMode={previewMode} previewHrefBase={previewHrefBase} />
       </aside> : null}
       <div className={cn("min-w-0", !workspacePending && "lg:pl-20 xl:pl-72")}>
-        <header className="app-header sticky top-0 z-10 min-w-0 border-b bg-background/75 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+        <header ref={appHeaderRef} className="app-header sticky top-0 z-10 min-w-0 border-b bg-background/75 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
           <div className="flex min-h-16 min-w-0 items-center gap-2 px-3 sm:px-4 lg:px-6">
             {parentFacing ? (
               <BrandLogo
@@ -1434,7 +1446,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
                 branding={currentUser?.branding}
                 compact
                 size="sm"
-                className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+                className="min-w-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
               />
             ) : workspacePending ? (
               <BrandLogo

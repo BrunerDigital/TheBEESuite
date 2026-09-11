@@ -718,24 +718,22 @@ function ExecutiveLensDashboard({
         >
           <div className="grid max-h-[36rem] gap-3 overflow-auto pr-1">
           {fteFollowUpSchools.map((school) => (
-            <div key={school.id} className="rounded-xl border bg-background/50 p-3">
-              <div className="flex items-center justify-between gap-3">
+            <Link key={school.id} href={fteReportHref(school.id, metrics.currentWeekKey)} aria-label={`Open FTE report follow-up for ${school.name}`} className="block min-h-11 rounded-xl border bg-background/50 p-3 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{compactSchoolName(school.name)}</div>
+                  <div className="break-words text-sm font-medium">{compactSchoolName(school.name)}</div>
                   <div className="text-xs text-muted-foreground">{school.region}</div>
                 </div>
                 <Badge
                   variant={school.fteSubmitted ? "default" : "destructive"}
-                  render={(
-                    <Link href={fteReportHref(school.id, metrics.currentWeekKey)} aria-label={`Open FTE report follow-up for ${school.name}`} />
-                  )}
                 >
                   {school.fteSubmitted ? school.fteStatus : "Missing"}
                 </Badge>
               </div>
-              <div className="mt-3 text-right text-xs font-medium">{school.fteCount ?? 0} FTE</div>
-            </div>
+              <div className="mt-3 text-right text-xs font-medium">{school.fteCount === null ? "FTE not reported" : `${school.fteCount} FTE`}</div>
+            </Link>
           ))}
+          {!fteFollowUpSchools.length ? <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">No schools in this workspace.</p> : null}
           </div>
         </CollapsibleCard>
       ),
@@ -1328,9 +1326,9 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             <Icon className="text-primary" />
           </CardHeader>
           <CardContent>
-            <div className={cn("font-semibold", valueClassName)}>{kpi.value}</div>
+            <div className={cn("break-words font-semibold tabular-nums", valueClassName)}>{kpi.value}</div>
             <p className="mt-1 text-xs text-muted-foreground">{kpi.trend}</p>
-            <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+            <span className={cn("mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary", honeycomb && "sr-only")}>
               Open view
               <ArrowUpRight className="size-3" />
             </span>
@@ -1338,6 +1336,13 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         </Card>
       </Link>
     );
+  }
+
+  function actionQueueHref(item: DashboardNotification) {
+    const href = typeof item !== "string" && item.widgetId
+      ? widgetSummaries[item.widgetId]?.href ?? "/notifications"
+      : "/notifications";
+    return withQueryParam(href, "q", notificationText(item));
   }
 
   const topKpiItems: WorkspaceBoardItem[] = [
@@ -1632,12 +1637,12 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             </div>
           </div>
           <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
-            <Card className="border-amber-500/25 bg-amber-500/[0.04]">
+            <Card className={actionQueue.length ? "border-amber-500/25 bg-amber-500/[0.04]" : "border-emerald-500/20 bg-emerald-500/[0.03]"}>
               <CardHeader className="pb-3">
-                <div className="flex items-center gap-2 text-lg font-semibold" id="dashboard-needs-attention">
-                  <ShieldAlert className="size-5 text-amber-600" aria-hidden="true" />
-                  Needs attention
-                </div>
+                <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold" id="dashboard-needs-attention">
+                  {actionQueue.length ? <ShieldAlert className="size-5 text-amber-600" aria-hidden="true" /> : <CheckCircle2 className="size-5 text-emerald-600" aria-hidden="true" />}
+                  {actionQueue.length ? `Needs attention (${actionQueue.length})` : "You’re up to date"}
+                </h2>
                 <CardDescription>Current exceptions and incomplete work in this workspace.</CardDescription>
               </CardHeader>
               <CardContent>
@@ -1645,8 +1650,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   <ul className="grid gap-2" aria-labelledby="dashboard-needs-attention">
                     {actionQueue.slice(0, 3).map((item, index) => (
                       <li key={`${index}-${notificationText(item)}`}>
-                        <Link href="/notifications" className="flex min-h-11 items-center justify-between gap-3 rounded-lg border bg-background/70 px-3 py-2 text-sm transition-colors hover:border-primary/40 hover:bg-primary/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                          <span>{notificationText(item)}</span>
+                        <Link href={actionQueueHref(item)} className="flex min-h-11 items-center justify-between gap-3 rounded-lg border bg-background/70 px-3 py-2 text-sm transition-colors hover:border-primary/40 hover:bg-primary/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                          <span className="min-w-0 break-words [overflow-wrap:anywhere]">{notificationText(item)}</span>
                           <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                         </Link>
                       </li>
@@ -1658,11 +1663,12 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     No current exceptions are visible in this workspace.
                   </div>
                 )}
+                {actionQueue.length > 3 ? <Link href="/notifications" className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline">View all {actionQueue.length} items</Link> : null}
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-3">
-                <div className="text-lg font-semibold" id="dashboard-primary-actions">Primary actions</div>
+                <h2 className="text-lg font-semibold" id="dashboard-primary-actions">Primary actions</h2>
                 <CardDescription>The most common destinations for your role.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2" aria-labelledby="dashboard-primary-actions">
@@ -1676,8 +1682,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     )}
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold capitalize">{item.label}</span>
-                      <span className="mt-0.5 block line-clamp-1 text-xs text-muted-foreground">{item.description}</span>
+                      <span className="block break-words text-sm font-semibold capitalize">{item.label}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{item.description}</span>
                     </span>
                     <ArrowUpRight className="size-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" />
                   </DashboardPrimaryActionLink>
@@ -1689,7 +1695,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             {topKpiRows.length ? (
               <WorkspaceBoard
                 storageId="dashboard-command-center-kpis"
-                className="honeycomb-kpi-cluster"
+                className="honeycomb-kpi-cluster dashboard-compact-kpis"
                 itemClassName="honeycomb-kpi-item"
                 controlsClassName="honeycomb-kpi-controls"
                 items={topKpiItems}
@@ -2081,15 +2087,10 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                         collapsedSummary={`${actionQueue.length} item${actionQueue.length === 1 ? "" : "s"}`}
                       >
                         {actionQueue.slice(0, 8).map((item, index) => {
-                          const href = typeof item === "string"
-                            ? "/notifications"
-                            : item.widgetId
-                              ? widgetSummaries[item.widgetId]?.href ?? "/notifications"
-                              : "/notifications";
                           return (
                             <Link
                               key={notificationText(item)}
-                              href={withQueryParam(href, "q", notificationText(item))}
+                              href={actionQueueHref(item)}
                               className="group flex items-start gap-3 rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
                               <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">

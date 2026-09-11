@@ -9,8 +9,8 @@ test("teacher landing keeps setup and viewing data compact while actions open fo
   const checklist = await readSource("src/components/setup-checklist-panel.tsx");
 
   assert.match(teacher, /Today in your classroom/);
-  assert.match(teacher, /aria-label="Teacher task shortcuts"[\s\S]*top-\[calc\(4\.75rem\+env\(safe-area-inset-top\)\)\][\s\S]*flex snap-x gap-2 overflow-x-auto/);
-  assert.match(teacher, /min-h-11 shrink-0 snap-start justify-start whitespace-nowrap text-left xl:w-full/);
+  assert.match(teacher, /aria-label="Teacher task shortcuts"[\s\S]*sm:sticky top-\[calc\(var\(--bee-app-header-height,4\.75rem\)\+0\.5rem\)\][\s\S]*grid grid-cols-2 gap-2 sm:grid-cols-3/);
+  assert.match(teacher, /min-h-11 w-full justify-start whitespace-normal/);
   assert.match(teacher, /id="teacher-profile-setup"[\s\S]*defaultCollapsed/);
   assert.match(teacher, /id="teacher-staff-clock"[\s\S]*collapsedSummary=[\s\S]*defaultCollapsed/);
   assert.match(checklist, /defaultCollapsed\?: boolean/);
@@ -118,6 +118,6 @@ test("shared controls provide explicit focus and phone-sized targets", async () 
   assert.match(css, /\.bee-app-frame :is\(a\[href\], button, summary, \[role="button"\], \[data-slot="button"\]\):focus-visible/);
   assert.match(css, /outline: 2px solid var\(--primary\) !important/);
   assert.match(css, /@media \(max-width: 639px\)[\s\S]*input:not\(\[type="hidden"\]\)[\s\S]*\.bee-app-frame a\[href\][\s\S]*min-height: 2\.75rem/);
-  assert.match(css, /\.bee-app-frame a\[href\][\s\S]*min-width: 2\.75rem/);
+  assert.match(css, /\.bee-app-frame a\[href\][\s\S]*min-width: 44px/);
   assert.match(crm, /min-h-11 cursor-pointer[\s\S]*Add files/);
 });

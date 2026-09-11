@@ -70,6 +70,12 @@ test("native workflow uses read-only permissions, both roles, pinned actions and
   assert.match(workflow, /path: output\/audit\/ios-native\/\*\/evidence\//);
   assert.doesNotMatch(workflow, /secrets\.|pull_request_target|write-all|contents: write|\.p12|apple-id|app-store-connect/i);
   for (const line of workflow.split("\n").filter((line) => line.includes("uses:"))) assert.match(line, /@[a-f0-9]{40}\b/);
+  const deploymentIgnore = readFileSync(".vercelignore", "utf8");
+  assert.match(deploymentIgnore, /^\.github\/\*\r?$/m);
+  assert.match(deploymentIgnore, /^!\.github\/workflows\r?$/m);
+  assert.match(deploymentIgnore, /^\.github\/workflows\/\*\r?$/m);
+  assert.match(deploymentIgnore, /^!\.github\/workflows\/ios-native-verify\.yml\r?$/m);
+  assert.match(deploymentIgnore, /^\.env\.\*\r?$/m);
 });
 
 test("native verification preserves existing simulators and does not overstate evidence", () => {

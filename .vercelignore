@@ -31,7 +31,9 @@ docs/*
 !docs/sops/SCHOOL_SYSTEM_OPERATING_MANUAL.md
 !docs/sops/TEACHER_SOP.md
 ios
-native
+native/*
+!native/parent-shell
+!native/teacher-shell
 output
 outputs
 /screenshots

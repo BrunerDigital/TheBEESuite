@@ -70,8 +70,9 @@ test("every native launch path has a real bundled resource without restricting p
     const origin = "https://thebeesuite.io";
     assert.equal(`${origin}${target.launchPath}`, `${origin}/${role === "parent" ? "parents" : "teachers"}`);
     for (const pathname of [`/${role}-portal`, "/login", "/privacy", "/support"]) {
-      assert.ok(`${origin}${pathname}`.startsWith(origin));
-      assert.ok(!`${origin}${pathname}`.startsWith(`${origin}${target.launchPath}`), "A path-scoped server URL would eject this route from the native app");
+      const destination = new URL(pathname, origin);
+      assert.equal(destination.origin, origin);
+      assert.ok(!destination.pathname.startsWith(target.launchPath), "A path-scoped server URL would eject this route from the native app");
     }
   }
 });
@@ -91,6 +92,9 @@ test("native workflow uses read-only permissions, both roles, pinned actions and
   assert.match(deploymentIgnore, /^!\.github\/workflows\r?$/m);
   assert.match(deploymentIgnore, /^\.github\/workflows\/\*\r?$/m);
   assert.match(deploymentIgnore, /^!\.github\/workflows\/ios-native-verify\.yml\r?$/m);
+  assert.match(deploymentIgnore, /^native\/\*\r?$/m);
+  assert.match(deploymentIgnore, /^!native\/parent-shell\r?$/m);
+  assert.match(deploymentIgnore, /^!native\/teacher-shell\r?$/m);
   assert.match(deploymentIgnore, /^\.env\.\*\r?$/m);
 });
 

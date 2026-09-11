@@ -2,7 +2,7 @@
 
 Status date: September 9, 2026 (America/New_York)
 
-This is the current release-candidate truth record. `Verified in production` means the named behavior was exercised against the canonical deployment; a public HTTP 200 is not treated as authenticated workflow evidence. `iOS verified` means execution in Xcode Simulator or on a physical device, not a browser-sized preview.
+This records the September 9 release candidate; deployment IDs and checks below are historical, not a claim about the current production commit. Later mobile UI releases are recorded in their protected PRs, including #348. The current native verification procedure and remaining human gates are consolidated in [iOS native verification and final handoff](IOS_NATIVE_VERIFICATION_AND_HANDOFF.md). `Verified in production` means the named behavior was exercised against the canonical deployment; a public HTTP 200 is not treated as authenticated workflow evidence. `iOS verified` means execution in Xcode Simulator or on a physical device, not a browser-sized preview.
 
 ## Verified release evidence
 

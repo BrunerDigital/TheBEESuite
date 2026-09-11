@@ -1,8 +1,10 @@
 # Parent iOS Build Runbook
 
-Last updated: September 8, 2026
+Last updated: September 11, 2026
 
 This runbook covers the native iOS shell for the first App Store submission: BEE Suite Parent Portal.
+
+For repeatable unsigned GitHub/macOS builds and the single remaining human-action checklist, see [iOS native verification and final handoff](IOS_NATIVE_VERIFICATION_AND_HANDOFF.md). Unsigned simulator evidence does not replace the signing, archive, physical-device or TestFlight steps below.
 
 ## Native Project
 

@@ -1,0 +1,68 @@
+name: iOS native verification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/ios-native-verify.yml'
+      - 'ios/**'
+      - 'ios-teacher/**'
+      - 'native/**'
+      - 'capacitor.config.ts'
+      - 'package*.json'
+      - 'scripts/*capacitor*'
+      - 'scripts/*ios*'
+      - 'scripts/mobile-store-readiness-check.mjs'
+      - 'tests/ios-native-verification.test.ts'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ios-native-verify.yml'
+      - 'ios/**'
+      - 'ios-teacher/**'
+      - 'native/**'
+      - 'capacitor.config.ts'
+      - 'package*.json'
+      - 'scripts/*capacitor*'
+      - 'scripts/*ios*'
+      - 'scripts/mobile-store-readiness-check.mjs'
+      - 'tests/ios-native-verification.test.ts'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-native-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Unsigned ${{ matrix.role }} iOS
+    runs-on: macos-26
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [parent, teacher]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Compile and launch without signing or Apple credentials
+        run: node scripts/verify-ios-native.mjs "${{ matrix.role }}"
+      - name: Retain public launch and build evidence only
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-${{ matrix.role }}-${{ github.sha }}
+          path: output/audit/ios-native/*/evidence/
+          if-no-files-found: warn
+          retention-days: 14

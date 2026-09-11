@@ -41,7 +41,8 @@ async function main() {
         const url = `${base}/device-preview?view=${role}&scenario=long-content`;
         await page.goto(url, { waitUntil: "networkidle" });
         await noOverflow(page, `${role} ${width} home`);
-        await page.screenshot({ path: resolve(output, `${engine}-${role}-${width}-home.png`), style: "nextjs-portal{display:none!important}" });
+        // Keep screenshot capture from mutating input styles during React hydration.
+        await page.screenshot({ path: resolve(output, `${engine}-${role}-${width}-home.png`), caret: "initial", style: "nextjs-portal{display:none!important}" });
         if (role === "teacher") {
           await page.getByRole("link", { name: "View roster", exact: true }).click();
           await page.locator('#teacher-roster[data-collapsed="false"]').waitFor();
@@ -104,9 +105,8 @@ async function main() {
         await page.goto(url, { waitUntil: "networkidle" });
         await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
         await noOverflow(page, `${role} ${width} 200% text`);
-        await page.screenshot({ path: resolve(output, `${engine}-${role}-${width}-large-text.png`), style: "nextjs-portal{display:none!important}" });
-        assert.deepEqual(unsafe, []);
-        assert.deepEqual(errors, []);
+        await page.screenshot({ path: resolve(output, `${engine}-${role}-${width}-large-text.png`), caret: "initial", style: "nextjs-portal{display:none!important}" });
+        assert.deepEqual({ unsafe, errors }, { unsafe: [], errors: [] }, `${role} ${width}: preview requests and browser errors`);
         results.push({ engine, role, width, passed: true, unsafeRequests: 0, pageErrors: 0 });
         await context.close();
       }

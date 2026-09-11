@@ -1049,13 +1049,13 @@ function RoleBottomNav({ currentUser, previewMode = false, previewHrefBase }: { 
   const directorItems = [
     { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
     { label: "School", href: "/classroom-dashboard", slug: "classroom-dashboard", Icon: Building2 },
-    { label: "Notifications", href: "/notifications", slug: "notifications", Icon: ClipboardList },
+    { label: "Alerts", href: "/notifications", slug: "notifications", Icon: ClipboardList },
     { label: "Inbox", href: STAFF_MESSAGING_HREF, slug: "messages", Icon: MessageSquare },
   ];
   const executiveItems = [
     { label: "Overview", href: "/dashboard", slug: "dashboard", Icon: Home },
     { label: "Schools", href: "/multi-location-dashboard", slug: "multi-location-dashboard", Icon: Building2 },
-    { label: "Notifications", href: "/notifications", slug: "notifications", Icon: ClipboardList },
+    { label: "Alerts", href: "/notifications", slug: "notifications", Icon: ClipboardList },
     { label: "Inbox", href: STAFF_MESSAGING_HREF, slug: "messages", Icon: MessageSquare },
   ];
   const billingItems = [

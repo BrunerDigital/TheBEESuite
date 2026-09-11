@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { assertPackagedConfiguration, nativeTarget, selectSimulatorTemplate, unsignedBuildArguments } from "../scripts/verify-ios-native.mjs";
+import { assertPackagedConfiguration, nativeTarget, selectSimulatorTemplate, unsignedBuildArguments, SIMULATOR_BOOT_TIMEOUT_MS } from "../scripts/verify-ios-native.mjs";
 
 test("native verifier restricts roles and aligns projects with production routes", () => {
   assert.equal(nativeTarget("parent").project, "ios/App/App.xcodeproj");
@@ -86,4 +86,11 @@ test("native verification preserves existing simulators and does not overstate e
   for (const gate of ["signed", "archived", "uploaded", "authenticatedFlowsTested", "physicalDeviceTested", "screenshotsAreStoreReady"]) {
     assert.ok(script.includes(`${gate}: false`));
   }
+});
+
+test("fresh simulator migration has a bounded initialization window and starts before compilation", () => {
+  assert.ok(SIMULATOR_BOOT_TIMEOUT_MS >= 10 * 60 * 1000 && SIMULATOR_BOOT_TIMEOUT_MS <= 15 * 60 * 1000);
+  const script = readFileSync("scripts/verify-ios-native.mjs", "utf8");
+  assert.ok(script.indexOf('["simctl", "boot", createdDevice]') < script.indexOf('for (const sdk of ["iphoneos", "iphonesimulator"])'));
+  assert.match(script, /timeout: SIMULATOR_BOOT_TIMEOUT_MS/);
 });

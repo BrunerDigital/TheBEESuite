@@ -5,6 +5,9 @@ import path from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
+// A fresh iOS 26 simulator performs OS data migration before SpringBoard is ready.
+export const SIMULATOR_BOOT_TIMEOUT_MS = 12 * 60 * 1000;
+
 export function nativeTarget(role) {
   assert.ok(["parent", "teacher"].includes(role), "Role must be parent or teacher");
   return {
@@ -60,13 +63,16 @@ export async function verifyNative(role) {
     authenticatedFlowsTested: false, physicalDeviceTested: false, screenshotsAreStoreReady: false };
   const save = () => writeFileSync(path.join(evidencePath, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   function run(command, args, { log, timeout = 120000 } = {}) {
+    report.activeCommand = [command, ...args].join(" ");
+    save();
+    console.log(`RUN ${role}: ${command} ${args.slice(0, 3).join(" ")}`);
     const fd = log ? openSync(path.join(evidencePath, log), "w") : null;
     let result;
     try {
       result = spawnSync(command, args, { encoding: "utf8", timeout, maxBuffer: 16 * 1024 * 1024,
         stdio: fd === null ? "pipe" : ["ignore", fd, fd] });
     } finally { if (fd !== null) closeSync(fd); }
-    assert.ifError(result.error);
+    assert.ifError(result.error && new Error(`${report.activeCommand}: ${result.error.message}`));
     assert.equal(result.status, 0, `${command} failed (${result.status}); ${log ? `see ${log}` : result.stderr?.slice(-2000)}`);
     return result.stdout?.trim() ?? "";
   }
@@ -85,6 +91,13 @@ export async function verifyNative(role) {
     run("git", ["diff", "--exit-code", "--", "ios", "ios-teacher", "native", "capacitor.config.ts"]);
     run(process.execPath, ["scripts/mobile-store-readiness-check.mjs"], { log: "store-check.log" });
     check("Capacitor sync and static checks; tracked native source unchanged");
+
+    const template = selectSimulatorTemplate(JSON.parse(run("xcrun", ["simctl", "list", "devices", "available", "--json"])));
+    report.simulator = { name: template.name, runtime: template.runtime };
+    // Warm a newly created simulator while compiling; never reuse a user's device.
+    createdDevice = run("xcrun", ["simctl", "create", `BEE verification ${role} ${Date.now()}`, template.deviceType, template.runtime]);
+    assert.match(createdDevice, /^[A-F0-9-]{36}$/i, "Unexpected created simulator identifier");
+    run("xcrun", ["simctl", "boot", createdDevice]);
 
     for (const sdk of ["iphoneos", "iphonesimulator"]) {
       console.log(`Building ${role} Release for ${sdk} without signing`);
@@ -106,13 +119,7 @@ export async function verifyNative(role) {
       check(`${sdk} Release compiled; bundle, privacy manifest, HTTPS and offline resources verified`);
     }
 
-    const template = selectSimulatorTemplate(JSON.parse(run("xcrun", ["simctl", "list", "devices", "available", "--json"])));
-    report.simulator = { name: template.name, runtime: template.runtime };
-    // Create a new isolated simulator; never boot, erase or reuse a user's existing device.
-    createdDevice = run("xcrun", ["simctl", "create", `BEE verification ${role} ${Date.now()}`, template.deviceType, template.runtime]);
-    assert.match(createdDevice, /^[A-F0-9-]{36}$/i, "Unexpected created simulator identifier");
-    run("xcrun", ["simctl", "boot", createdDevice]);
-    run("xcrun", ["simctl", "bootstatus", createdDevice, "-b"], { log: "simulator-boot.log", timeout: 300000 });
+    run("xcrun", ["simctl", "bootstatus", createdDevice, "-b"], { log: "simulator-boot.log", timeout: SIMULATOR_BOOT_TIMEOUT_MS });
     const simulatorApp = path.join(buildRoot, "iphonesimulator", "Build", "Products", "Release-iphonesimulator", "App.app");
     run("xcrun", ["simctl", "install", createdDevice, simulatorApp]);
     check("Unsigned Release installed on isolated iPhone simulator");

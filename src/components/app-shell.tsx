@@ -1689,7 +1689,7 @@ export function AppShell({ children, currentUser, previewMode = false, previewHr
             </div>
           ) : null}
         </header>
-        <main id="workspace-main" className={cn("dashboard-workspace min-h-[calc(100dvh-4rem)] min-w-0 scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6 xl:pb-8")}>
+        <main id="workspace-main" className={cn("dashboard-workspace min-h-[calc(100dvh-4rem)] min-w-0 scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-[calc(7rem+env(safe-area-inset-bottom))] sm:pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6 xl:pb-8")}>
           {canViewDataReadiness && readinessContext ? <DataReadinessContextPanel context={readinessContext} summary={readinessSummary} loading={readinessLoading} /> : null}
           {children}
         </main>

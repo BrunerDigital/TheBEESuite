@@ -15,6 +15,7 @@ import {
   CalendarDays,
   Camera,
   CheckCircle2,
+  ChevronDown,
   ClipboardList,
   CreditCard,
   Eye,
@@ -861,6 +862,7 @@ function ParentPortalWorkspaceView({
   const [documentFiles, setDocumentFiles] = useState<
     Record<string, File | null>
   >({});
+  const [visibleDocumentCount, setVisibleDocumentCount] = useState(5);
   const [signatureAcknowledgements, setSignatureAcknowledgements] = useState<
     Record<string, boolean>
   >({});
@@ -1866,7 +1868,7 @@ function ParentPortalWorkspaceView({
         className={`parent-portal-heading scroll-mt-28 rounded-[1.5rem] border border-border/70 bg-card px-4 py-4 sm:px-7 sm:py-6 ${activeView === "messages" ? "max-sm:hidden" : ""}`}
         data-parent-heading-view={activeView}
       >
-        <div className="relative z-[1] flex min-w-0 items-center justify-between gap-3">
+        <div className="relative z-[1] flex min-w-0 flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-balance font-heading text-[1.75rem] font-semibold leading-tight tracking-tight sm:text-4xl">
               {activeView === "home" ? homeGreeting : activeViewCopy.title}
@@ -2459,13 +2461,13 @@ function ParentPortalWorkspaceView({
             </div>
           ) : null}
 
-          <div className="divide-y" aria-label="Updates for the selected date">
-            {(selectedUpdateDay?.reports ?? []).map((report) => {
+          <div role="group" className="divide-y" aria-label="Updates for the selected date">
+            {(selectedUpdateDay?.reports ?? []).map((report, reportIndex) => {
               const timedCareEvents = dailyReportTimedCareEvents(report);
               return (
                 <article
                   key={report.id}
-                  id="daily-reports"
+                  id={reportIndex === 0 ? "daily-reports" : `daily-report-${report.id}`}
                   className="py-4 first:pt-1"
                 >
                   <div className="rounded-2xl border bg-background/55 p-4">
@@ -2576,7 +2578,7 @@ function ParentPortalWorkspaceView({
               );
             })}
 
-            {!selectedUpdateDay?.totalItems ? (
+            {selectedUpdateDay && !selectedUpdateDay.totalItems ? (
               <div className="py-12 text-center">
                 <ClipboardList className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
                 <h2 className="mt-3 font-semibold">No updates for this date</h2>
@@ -2758,7 +2760,7 @@ function ParentPortalWorkspaceView({
                   key={child.id}
                   className="group rounded-2xl border bg-background/40"
                 >
-                  <summary className="flex min-h-20 cursor-pointer list-none items-center gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                  <summary className="parent-record-summary min-h-20 cursor-pointer list-none gap-x-3 gap-y-1 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                     <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary/12 font-semibold text-primary" aria-hidden="true">
                       {(child.preferredName ?? child.fullName).slice(0, 1).toUpperCase()}
                     </span>
@@ -2771,9 +2773,10 @@ function ParentPortalWorkspaceView({
                         {child.ageGroup}
                       </span>
                     </span>
-                    <Badge variant="outline">
-                      {displayTokenLabel(child.enrollmentStatus)}
-                    </Badge>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Badge variant="outline">{displayTokenLabel(child.enrollmentStatus)}</Badge>
+                      <ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+                    </span>
                   </summary>
                   <div className="border-t px-4 pb-4 pt-3">
                   <div className="grid gap-2 text-xs text-muted-foreground">
@@ -2976,7 +2979,7 @@ function ParentPortalWorkspaceView({
                 ) : null}
               </div>
             ) : null}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
               <div className="rounded-xl border bg-background/40 p-3 sm:p-4">
                 <div className="text-xs text-muted-foreground">Balance due</div>
                 <div className="mt-1 text-2xl font-semibold">
@@ -3143,7 +3146,7 @@ function ParentPortalWorkspaceView({
                       const provisionallyCredited = isAchPaymentProcessing(payment);
                       const credited = completed || provisionallyCredited;
                       return (
-                        <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
+                        <div key={payment.id} className="grid min-w-0 gap-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto]">
                           <div>
                             <span className="text-muted-foreground">
                               {paymentProviderLabel(payment.provider)} · {paymentListLabel(payment, timeZone)}
@@ -3271,7 +3274,7 @@ function ParentPortalWorkspaceView({
                   return (
                     <div
                       key={payment.id}
-                      className="grid grid-cols-[1fr_auto] gap-3 text-sm"
+                      className="grid min-w-0 gap-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto]"
                     >
                       <div>
                         <span className="text-muted-foreground">
@@ -3747,13 +3750,13 @@ function ParentPortalWorkspaceView({
                 </div>
               </div>
             ) : null}
-            <details className="rounded-xl border bg-background/40 p-4">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <span className="flex items-center gap-3">
-                  <span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
+            <details className="group rounded-xl border bg-background/40 p-4">
+              <summary className="flex flex-wrap cursor-pointer list-none items-center justify-between gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <span className="flex min-w-0 flex-1 basis-40 flex-wrap items-center gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
                     <ReceiptText className="size-5" aria-hidden="true" />
                   </span>
-                  <span>
+                  <span className="min-w-0 flex-1 basis-24">
                     <span className="block font-semibold">Invoice history</span>
                     <span className="block text-xs text-muted-foreground">
                       {openInvoices.length
@@ -3762,7 +3765,7 @@ function ParentPortalWorkspaceView({
                     </span>
                   </span>
                 </span>
-                <Plus className="size-5 shrink-0 text-primary" aria-hidden="true" />
+                <ChevronDown className="size-5 shrink-0 text-primary transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
               </summary>
               <div className="mt-4 space-y-3 border-t pt-4">
                 <p className="sr-only">
@@ -4162,23 +4165,33 @@ function ParentPortalWorkspaceView({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {documents.slice(0, 5).map((document) => (
+                {!documents.length ? (
+                  <div className="rounded-xl border border-dashed bg-muted/20 p-4">
+                    <p className="font-medium">No documents requested</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Your school’s document requests will appear here. You can still request a contact or pickup change below.</p>
+                  </div>
+                ) : null}
+                {documents.slice(0, visibleDocumentCount).map((document) => (
                   <details
                     key={document.id}
+                    data-parent-document={document.id}
                     className="group rounded-2xl border bg-background/40"
                   >
-                    <summary className="flex min-h-16 cursor-pointer list-none items-start gap-3 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                    <summary className="parent-record-summary min-h-16 cursor-pointer list-none gap-x-3 gap-y-1 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary" aria-hidden="true">
                         <FileText className="size-5" />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block break-words font-medium leading-5">{document.name}</span>
                         <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
-                          {displayTokenLabel(document.type)} · expires{" "}
-                          {formatDate(document.expiresAt)}
+                          {displayTokenLabel(document.type)}
+                          {document.expiresAt ? ` · expires ${formatDate(document.expiresAt)}` : " · No expiration date"}
                         </span>
                       </span>
-                      <Badge className="shrink-0">{displayTokenLabel(document.status)}</Badge>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Badge>{displayTokenLabel(document.status)}</Badge>
+                        <ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+                      </span>
                     </summary>
                     <div className="space-y-3 border-t px-4 pb-4 pt-3">
                         {document.downloadUrl ? (
@@ -4289,16 +4302,33 @@ function ParentPortalWorkspaceView({
                     </div>
                   </details>
                 ))}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+                    {documents.length ? `Showing ${Math.min(visibleDocumentCount, documents.length)} of ${documents.length} available documents` : null}
+                  </p>
+                  {visibleDocumentCount < documents.length ? (
+                    <Button type="button" variant="outline" onClick={() => {
+                      setVisibleDocumentCount((count) => count + 5);
+                      // Continue at the first revealed document, including the
+                      // final batch when this button leaves the DOM.
+                      requestAnimationFrame(() => {
+                        document.querySelectorAll<HTMLElement>("[data-parent-document] > summary")[visibleDocumentCount]?.focus();
+                      });
+                    }}>
+                      <Plus data-icon="inline-start" aria-hidden="true" />
+                      Show more documents
+                    </Button>
+                  ) : null}
+                </div>
                 <details
                   id="contact-request"
                   className="group scroll-mt-28 rounded-2xl border bg-background/40"
                   aria-labelledby="contact-request-heading"
                 >
-                  <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                  <summary className="parent-record-summary min-h-16 cursor-pointer list-none gap-x-3 gap-y-1 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                     <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary" aria-hidden="true"><FileCheck2 className="size-5" /></span>
                     <span id="contact-request-heading" className="flex-1 text-sm font-medium">Contact or pickup change</span>
-                    <span className="text-xs font-medium text-primary group-open:hidden">Start request</span>
-                    <span className="hidden text-xs font-medium text-primary group-open:inline">Close</span>
+                    <span className="text-xs font-medium text-primary"><span className="group-open:hidden">Start request</span><span className="hidden group-open:inline">Close</span></span>
                   </summary>
                   <div className="space-y-3 border-t px-4 pb-4 pt-3">
                   <div className="grid gap-3 sm:grid-cols-2">

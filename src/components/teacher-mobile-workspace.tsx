@@ -961,7 +961,7 @@ export function TeacherMobileWorkspace({
         </AlertDescription>
       </Alert> : <p className="flex items-center gap-2 px-1 text-xs text-muted-foreground"><CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" />Online · ready for classroom updates</p>}
 
-      <nav aria-label="Teacher task shortcuts" className="sm:sticky top-[calc(var(--bee-app-header-height,4.75rem)+0.5rem)] z-[5] -mx-1 rounded-xl border bg-background p-2 shadow-sm">
+      <nav aria-label="Teacher task shortcuts" className="-mx-1 rounded-xl border bg-background p-2 shadow-sm">
         <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Do now</div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {[
@@ -1134,7 +1134,7 @@ export function TeacherMobileWorkspace({
                       className={`rounded-lg border p-2 text-sm transition ${selectedChild?.id === child.id ? "border-primary bg-primary/10" : "bg-card/40"}`}
                     >
                       <button type="button" aria-pressed={selectedChild?.id === child.id} className="flex min-h-11 w-full flex-wrap items-start justify-between gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => chooseChild(child.id)}>
-                        <span className="flex min-w-0 items-start gap-2">
+                        <span className="flex min-w-0 max-w-full flex-wrap items-start gap-2">
                           <UserAvatar name={child.fullName} src={child.profilePhotoUrl} size="sm" className="shrink-0" />
                           <span className="min-w-0">
                             <span className="font-medium">{child.fullName}</span>
@@ -1146,7 +1146,7 @@ export function TeacherMobileWorkspace({
                             ) : null}
                           </span>
                         </span>
-                        <span className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="flex min-w-0 max-w-full flex-col items-start gap-1">
                           <Badge variant="outline">{attendanceLabel(attendance)}</Badge>
                           <Badge variant={dailyReportBadgeVariant(dailyReport)}>{dailyReportLabel(dailyReport)}</Badge>
                         </span>

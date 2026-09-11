@@ -73,8 +73,10 @@ test("kiosk lookup outcomes move focus to visible feedback and result content", 
   assert.match(kiosk, /<Card ref=\{resultPanelRef\} tabIndex=\{-1\}[\s\S]*?<CardTitle as="h2">[\s\S]*staffLookup\.staff\.name[\s\S]*lookup\.family\.name/);
 });
 
-test("teacher shortcuts clear the notched header and kiosk navigation uses links", () => {
-  assert.match(teacher, /sm:sticky top-\[calc\(var\(--bee-app-header-height,4\.75rem\)\+0\.5rem\)\]/);
+test("teacher shortcuts stay in flow without covering enlarged forms and kiosk navigation uses links", () => {
+  const shortcuts = teacher.match(/<nav aria-label="Teacher task shortcuts"[^>]*>/)?.[0];
+  assert.ok(shortcuts);
+  assert.doesNotMatch(shortcuts, /sticky|fixed/);
   assert.match(teacher, /grid grid-cols-2 gap-2 sm:grid-cols-3/);
   assert.match(teacher, /min-h-11 w-full justify-start whitespace-normal/);
   assert.doesNotMatch(teacher, /window\.location\.assign\(kioskAccess\.kioskPath\)/);
@@ -96,8 +98,8 @@ test("mobile messages remove the visual header without removing the page heading
   assert.match(parentWorkspace, /<h1 className="sr-only sm:hidden">\{activeViewCopy\.title\}<\/h1>/);
   assert.doesNotMatch(parentWorkspace, /activeView === "messages" \? "max-sm:sr-only"/);
   assert.match(parentWorkspace, /role="img" aria-label="Private family conversation"/);
-  assert.match(messageStyles, /height: max\(18rem, calc\(100dvh - 8\.75rem/);
-  assert.match(messageStyles, /height: max\(18rem, calc\(100dvh - 14\.75rem/);
+  assert.match(messageStyles, /\.parentWorkspace\s*\{[^}]*height: auto/);
+  assert.match(messageStyles, /\.parentTimeline\s*\{[^}]*min-height: 12rem;[^}]*flex: none/);
   assert.doesNotMatch(messageStyles, /parentWorkspace[\s\S]{0,250}28rem/);
 });
 

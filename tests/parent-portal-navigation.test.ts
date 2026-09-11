@@ -190,7 +190,7 @@ test("authorized pickup shell navigation stays limited to the parent portal home
   assert.match(shell, /const hasRoleBottomNav = roleUsesBottomNavigation\(currentUser\)/);
   assert.match(
     shell,
-    /hasRoleBottomNav && "pb-\[calc\(7rem\+env\(safe-area-inset-bottom\)\)\] lg:pb-6 xl:pb-8"/,
+    /hasRoleBottomNav && "pb-\[calc\(7rem\+env\(safe-area-inset-bottom\)\)\] sm:pb-\[calc\(7rem\+env\(safe-area-inset-bottom\)\)\] lg:pb-6 xl:pb-8"/,
   );
 });
 

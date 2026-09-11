@@ -323,21 +323,81 @@
   }
 
   .teacher-mobile-workspace :is(a, button, input, textarea, [role="combobox"]) {
-    scroll-margin-block: 16rem 8rem;
+    scroll-margin-block: calc(var(--bee-app-header-height, 4.75rem) + 1rem) 8rem;
   }
 
-  .teacher-mobile-workspace {
+  /* A short phone viewport needs room for the form itself, particularly with
+     enlarged text. Keep the header in document flow; navigation stays available. */
+  @media (max-height: 640px) and (max-width: 1023px) {
+    .bee-app-frame:has(:is(.parent-portal-workspace, .teacher-mobile-workspace)) .app-header {
+      position: relative;
+    }
+  }
+
+  /* Feature forms must reflow as text grows, including controls inside nested
+     cards. Keep these overrides within the two mobile portal workspaces. */
+  :is(.parent-portal-workspace, .teacher-mobile-workspace) {
+    min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  :is(.parent-portal-workspace, .teacher-mobile-workspace) :is([data-slot="card"], [data-slot="card-header"], [data-slot="card-content"], details) {
+    min-width: 0;
+  }
+
+  :is(.parent-portal-workspace, .teacher-mobile-workspace) .grid > * {
+    min-width: 0;
+  }
+
+  :is(.parent-portal-workspace, .teacher-mobile-workspace) [data-slot="button"]:not([data-size^="icon"]) {
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    min-height: 2.75rem;
+    padding-block: 0.5rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  :is(.parent-portal-workspace, .teacher-mobile-workspace) [data-slot="badge"] {
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    min-height: 1.25rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  :is(.parent-portal-workspace, .teacher-mobile-workspace) [data-slot="select-trigger"] {
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    min-height: 2.75rem;
+    white-space: normal;
+  }
+
+  :is(.parent-portal-workspace, .teacher-mobile-workspace) [data-slot="select-value"] {
+    min-width: 0;
+    flex-wrap: wrap;
+    overflow-wrap: anywhere;
+    -webkit-line-clamp: unset;
+  }
+
+  .parent-portal-workspace .parent-record-summary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .parent-portal-workspace .parent-record-summary > :last-child {
+    grid-column: 2;
+    justify-self: start;
+    max-width: 100%;
+    flex-wrap: wrap;
   }
 
   .teacher-mobile-workspace :is([data-collapsible-card="true"], #teacher-quick-log) {
     scroll-margin-top: calc(var(--bee-app-header-height, 4.75rem) + 1rem);
-  }
-
-  @media (min-width: 640px) {
-    .teacher-mobile-workspace :is([data-collapsible-card="true"], #teacher-quick-log) {
-      scroll-margin-top: calc(var(--bee-app-header-height, 4.75rem) + 13rem);
-    }
   }
 
   .teacher-mobile-workspace nav[aria-label="Teacher task shortcuts"] > div:last-child {

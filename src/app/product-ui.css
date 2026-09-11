@@ -60,6 +60,12 @@
     background-image: none;
   }
 
+  /* Keyboard focus must clear the fixed shell, just like an anchor target.
+     Rem-based bottom clearance also grows with enlarged navigation labels. */
+  .dashboard-workspace :where(a, button, input, select, textarea, summary, [tabindex]) {
+    scroll-margin-block: calc(var(--bee-app-header-height, 4rem) + 1rem) calc(7rem + env(safe-area-inset-bottom));
+  }
+
   .app-sidebar {
     border-color: var(--border);
     background: var(--sidebar);
@@ -229,12 +235,20 @@
 
   .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-item,
   .honeycomb-kpi-item {
+    display: flex;
+    flex-direction: column;
     position: relative;
     width: auto;
     min-width: 0;
     margin: 0;
     padding: 0;
     transform: none;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-link,
+  .honeycomb-kpi-link {
+    flex: 1;
+    height: auto;
   }
 
   .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-card,
@@ -272,6 +286,7 @@
 
   .bee-app-frame[data-honeyglass="true"] .honeycomb-kpi-controls,
   .honeycomb-kpi-controls {
+    flex-shrink: 0;
     position: static;
     margin: 0 0 0.5rem;
     padding: 0;

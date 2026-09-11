@@ -2383,7 +2383,7 @@ function ParentPortalWorkspaceView({
                   <details className="group">
                     <summary className="cursor-pointer list-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                       <span className="block font-semibold leading-6">{announcements[0].title}</span>
-                      <span className="mt-2 block line-clamp-4 text-sm leading-6 text-muted-foreground group-open:hidden">
+                      <span className="mt-2 line-clamp-4 text-sm leading-6 text-muted-foreground group-open:hidden">
                         {announcements[0].body}
                       </span>
                       <span className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary">

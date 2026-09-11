@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
@@ -14,6 +15,22 @@ export function launchProcessId(output, target) {
   const pid = line?.slice(target.bundleId.length + 1).trim();
   assert.match(pid ?? "", /^[1-9]\d*$/, "Launcher must return the selected bundle's process ID");
   return pid;
+}
+
+export function assertProcessAlive(pid, probe = process.kill) {
+  assert.match(pid, /^[1-9]\d*$/, "Only a positive launcher PID may be probed");
+  assert.ok(Number.isSafeInteger(Number(pid)), "Launcher PID must be a safe integer");
+  // Simulator UIKit processes run on the Mac host; the simulator has no kill binary.
+  // Signal zero checks existence/permission without sending a signal.
+  probe(Number(pid), 0);
+}
+
+export function matchingCrashReport(contents, pid, target) {
+  try {
+    // Apple .ips files contain a metadata JSON line followed by the crash JSON body.
+    const report = JSON.parse(contents.slice(contents.indexOf("\n") + 1));
+    return report.pid === Number(pid) && report.bundleInfo?.CFBundleIdentifier === target.bundleId ? report : null;
+  } catch { return null; }
 }
 
 export function loginScreenVisible(text, target) {
@@ -93,6 +110,32 @@ export async function verifyNative(role) {
     return result.stdout?.trim() ?? "";
   }
   const check = (name) => { report.checks.push(name); console.log(`PASS ${role}: ${name}`); save(); };
+  function captureLaunchDiagnostics() {
+    if (!createdDevice || !report.launchedProcess) return;
+    const { launch, pid } = report.launchedProcess;
+    // This is an isolated, public-only simulator: scope logs to this app/PID. Never
+    // copy an entire host log archive, app container or another user's crash report.
+    const fd = openSync(path.join(evidencePath, `${launch}-process.log`), "w");
+    try {
+      const result = spawnSync("xcrun", ["simctl", "spawn", createdDevice, "log", "show", "--last", "5m", "--style", "compact",
+        "--predicate", `processID == ${pid} OR eventMessage CONTAINS "${target.bundleId}"`],
+      { stdio: ["ignore", fd, fd], timeout: 60000 });
+      report.processLogCaptured = result.status === 0;
+    } finally { closeSync(fd); }
+    const crashDirectory = path.join(homedir(), "Library/Logs/DiagnosticReports");
+    report.matchingCrashReports = [];
+    if (!existsSync(crashDirectory)) return;
+    for (const file of readdirSync(crashDirectory).filter((file) => /^App[-_].*\.ips$/.test(file))) {
+      const source = path.join(crashDirectory, file);
+      const info = statSync(source);
+      if (!info.isFile() || info.mtimeMs < Date.parse(report.startedAt) || info.size > 8 * 1024 * 1024) continue;
+      const contents = readFileSync(source, "utf8");
+      const crash = matchingCrashReport(contents, pid, target);
+      if (!crash) continue;
+      writeFileSync(path.join(evidencePath, `${launch}-${file}`), contents);
+      report.matchingCrashReports.push({ file, exception: crash.exception, termination: crash.termination });
+    }
+  }
   let createdDevice;
   try {
     report.sourceCommit = run("git", ["rev-parse", "HEAD"]);
@@ -150,9 +193,7 @@ export async function verifyNative(role) {
         const screenshot = path.join(evidencePath, `${launch}-public-launch.png`);
         // Capture failure evidence before the liveness assertion, including a real crash/home screen.
         run("xcrun", ["simctl", "io", createdDevice, "screenshot", screenshot]);
-        // launchctl list can omit UIKit services in a different bootstrap domain. Signal 0
-        // checks the launcher's actual process without sending a signal or changing state.
-        run("xcrun", ["simctl", "spawn", createdDevice, "kill", "-0", pid]);
+        assertProcessAlive(pid);
         const recognized = JSON.parse(run("swift", ["scripts/recognize-ios-screen.swift", screenshot]));
         loginVisible = loginScreenVisible(recognized.text, target);
         writeFileSync(path.join(evidencePath, `${launch}-screen-check.json`), `${JSON.stringify({ attempt, pid, loginVisible, text: recognized.text }, null, 2)}\n`);
@@ -164,6 +205,8 @@ export async function verifyNative(role) {
   } catch (error) {
     report.status = "failed";
     report.error = error instanceof Error ? error.message : String(error);
+    try { captureLaunchDiagnostics(); }
+    catch (diagnosticError) { report.diagnosticError = diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError); }
     throw error;
   } finally {
     if (createdDevice && /^[A-F0-9-]{36}$/i.test(createdDevice)) {

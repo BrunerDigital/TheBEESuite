@@ -29,6 +29,8 @@ GitHub retains `report.json`, build/sync logs and public launch screenshots for 
 
 Launch verification checks the exact PID returned by `simctl launch` using non-mutating signal 0, then uses Apple's Vision text recognition to require the matching public sign-in heading in the native screenshot. Failure screenshots are saved before liveness checks. The verifier has one shared 45-minute deadline; the 60-minute Actions job reserves time for setup, isolated-simulator cleanup and artifact upload rather than adding independent command timeouts indefinitely.
 
+The initial complete launch run produced home-screen screenshots, not verified app screens. Its PID check also exposed that the simulator runtime has no `kill` executable; signal zero now probes the simulator app's host PID directly. On failure, diagnostics are limited to the fresh public-only simulator's app/PID and newly created crash reports matching both that PID and the exact bundle ID. Launch stays unverified until the sign-in screenshots and survival checks pass.
+
 Record the Git SHA, workflow run URL, Xcode/SDK/runtime, compile results and screenshot review in the protected PR closeout. Until that evidence exists, compilation and simulator launch remain **unverified**. CI never archives, signs, uploads, invites testers or submits either app.
 
 ## Remaining human-only critical path

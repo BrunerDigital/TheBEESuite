@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { assertPackagedConfiguration, nativeTarget, selectSimulatorTemplate, unsignedBuildArguments, SIMULATOR_BOOT_TIMEOUT_MS, VERIFICATION_TIMEOUT_MS, launchProcessId, loginScreenVisible } from "../scripts/verify-ios-native.mjs";
+import { assertPackagedConfiguration, nativeTarget, selectSimulatorTemplate, unsignedBuildArguments, SIMULATOR_BOOT_TIMEOUT_MS, VERIFICATION_TIMEOUT_MS, launchProcessId, loginScreenVisible, assertProcessAlive, matchingCrashReport } from "../scripts/verify-ios-native.mjs";
 
 test("native verifier restricts roles and aligns projects with production routes", () => {
   assert.equal(nativeTarget("parent").project, "ios/App/App.xcodeproj");
@@ -105,8 +105,27 @@ test("native liveness uses only the exact process returned for the selected bund
     assert.throws(() => launchProcessId(value, target));
   }
   const script = readFileSync("scripts/verify-ios-native.mjs", "utf8");
-  assert.match(script, /"kill", "-0", pid/);
-  assert.ok(script.indexOf('"screenshot", screenshot') < script.indexOf('"kill", "-0", pid'));
+  assert.match(script, /assertProcessAlive\(pid\)/);
+  assert.doesNotMatch(script, /"spawn", createdDevice, "kill"/);
+  assert.ok(script.indexOf('"screenshot", screenshot') < script.indexOf('assertProcessAlive(pid);'));
+  let calls = 0;
+  assertProcessAlive("812", (pid, signal) => { assert.equal(pid, 812); assert.equal(signal, 0); calls++; });
+  assert.equal(calls, 1);
+  for (const invalid of ["0", "-1", "all", "812; exit", "99999999999999999"]) {
+    assert.throws(() => assertProcessAlive(invalid, () => assert.fail("Invalid PID must not be probed")));
+  }
+  assert.throws(() => assertProcessAlive("812", () => { throw new Error("ESRCH"); }), /ESRCH/);
+});
+
+test("native crash evidence must match both the exact launch PID and app bundle", () => {
+  const target = nativeTarget("parent");
+  const report = { pid: 812, bundleInfo: { CFBundleIdentifier: target.bundleId }, exception: { type: "EXC_CRASH" } };
+  const ips = (body) => `${JSON.stringify({ app_name: "App" })}\n${JSON.stringify(body)}`;
+  assert.deepEqual(matchingCrashReport(ips(report), "812", target), report);
+  assert.equal(matchingCrashReport(ips(report), "813", target), null);
+  assert.equal(matchingCrashReport(ips(report), "812", nativeTarget("teacher")), null);
+  assert.equal(matchingCrashReport("malformed", "812", target), null);
+  assert.equal(matchingCrashReport(ips({ ...report, bundleInfo: undefined }), "812", target), null);
 });
 
 test("native screen evidence must identify the right public role, not just a running process", () => {

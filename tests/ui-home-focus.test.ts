@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { homeFocusFilters } from "../scripts/qa-home-focus-options";
+
+test("focus audit accepts only supported explicit filters", () => {
+  assert.deepEqual(homeFocusFilters([]), { role: undefined, width: undefined, zoom: undefined });
+  assert.deepEqual(homeFocusFilters(["--role", "parent", "--width", "390", "--zoom", "2"]), { role: "parent", width: "390", zoom: "2" });
+  assert.deepEqual(homeFocusFilters(["--role", "executive", "--width", "1024", "--zoom", "1"]), { role: "executive", width: "1024", zoom: "1" });
+});
+
+test("focus audit rejects typos, unsupported and missing filter values", () => {
+  for (const args of [["--role", "diretcor"], ["--width", "430"], ["--zoom", "3"], ["--role"], ["--width"], ["--zoom"], ["--role", "--width", "390"], ["--width", "0"], ["--zoom", ""], ["--role", "all"]]) {
+    assert.throws(() => homeFocusFilters(args), /requires one of/, args.join(" "));
+  }
+});
+
+test("focus audit cannot report an empty run as passing", () => {
+  assert.match(readFileSync("scripts/qa-home-focus.ts", "utf8"), /assert\.ok\(results\.length > 0/);
+});
 
 test("workspace focus clearance accounts for the measured header and scalable bottom nav", () => {
   const css = readFileSync("src/app/product-ui.css", "utf8");

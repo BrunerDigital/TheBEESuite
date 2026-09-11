@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { chromium, webkit } from "playwright";
 import { assertNonProductionBaseUrl } from "./qa-standards";
+import { homeFocusFilters } from "./qa-home-focus-options";
 
 const argument = (name: string, fallback: string) => {
   const index = process.argv.indexOf(name);
@@ -11,6 +12,7 @@ const argument = (name: string, fallback: string) => {
 const base = assertNonProductionBaseUrl(argument("--base-url", "http://127.0.0.1:3210"));
 const output = resolve(argument("--output-dir", "output/playwright/home-focus"));
 const engine = argument("--browser", "chromium");
+const filters = homeFocusFilters(process.argv.slice(2));
 
 async function main() {
   assert.ok(["chromium", "webkit"].includes(engine));
@@ -19,7 +21,7 @@ async function main() {
   await mkdir(output, { recursive: true });
   try {
     for (const width of [390, 1024]) for (const zoom of [1, 2]) for (const role of ["parent", "teacher", "director", "executive"]) {
-      if (argument("--role", role) !== role || Number(argument("--width", String(width))) !== width || Number(argument("--zoom", String(zoom))) !== zoom) continue;
+      if ((filters.role && filters.role !== role) || (filters.width && Number(filters.width) !== width) || (filters.zoom && Number(filters.zoom) !== zoom)) continue;
       const context = await browser.newContext({ viewport: { width, height: 844 }, reducedMotion: "reduce", serviceWorkers: "block" });
       const page = await context.newPage();
       const unsafe: string[] = [], errors: string[] = [], findings: unknown[] = [];
@@ -131,6 +133,7 @@ async function main() {
       console.log(JSON.stringify({ engine, role, width, zoom, counts, findings: findings.length, unsafeRequests: unsafe.length, pageErrors: errors.length }));
       await context.close();
     }
+    assert.ok(results.length > 0, "A passing focus audit must execute at least one case");
     await writeFile(resolve(output, `${engine}-results.json`), JSON.stringify({ generatedAt: new Date().toISOString(), syntheticOnly: true, results }, null, 2));
     assert.ok(results.every((row) => !row.findings.length && !row.unsafeRequests.length && !row.pageErrors.length), "Review focus and disclosure failures in the browser report");
   } finally { await browser.close(); }

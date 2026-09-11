@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, MapPin, Moon, Palette, Plus, Save, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -53,6 +54,8 @@ type Props = {
   classroomRatios?: ClassroomRatioSnapshot[];
   teacherChecklistCompletedIds?: string[];
   appReviewMode?: boolean;
+  /** Development-only synthetic preview: never reads or writes classroom data. */
+  previewMode?: boolean;
 };
 
 type TeacherProfileSetup = {
@@ -251,6 +254,7 @@ export function TeacherMobileWorkspace({
   classroomRatios = [],
   teacherChecklistCompletedIds = [],
   appReviewMode = false,
+  previewMode = false,
 }: Props) {
   const timeZone = useSchoolTimeZone(teacherProfile?.centerId);
   const router = useRouter();
@@ -377,6 +381,7 @@ export function TeacherMobileWorkspace({
   }, [persistOfflineQueue, readOfflineQueue, showError, showStatus]);
 
   useEffect(() => {
+    if (previewMode) return;
     const loadStoredState = window.setTimeout(() => {
       setIsOnline(navigator.onLine);
       window.localStorage.removeItem(CLASSROOM_OFFLINE_QUEUE_KEY);
@@ -395,7 +400,7 @@ export function TeacherMobileWorkspace({
       window.removeEventListener("online", updateOnlineState);
       window.removeEventListener("offline", updateOnlineState);
     };
-  }, [readOfflineQueue, showError, syncStoredQueue]);
+  }, [previewMode, readOfflineQueue, showError, syncStoredQueue]);
 
   async function queueOfflineAction(action: ClassroomOfflineAction) {
     try {
@@ -422,6 +427,10 @@ export function TeacherMobileWorkspace({
     onSuccess: (json: Record<string, unknown> | null) => void;
     onQueued?: () => void;
   }) {
+    if (previewMode) {
+      showStatus("Preview only — no classroom record was changed.");
+      return;
+    }
     const action = createClassroomOfflineAction({ endpoint, body, label });
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       if (await queueOfflineAction(action)) onQueued?.();
@@ -449,6 +458,7 @@ export function TeacherMobileWorkspace({
   }
 
   function flushOfflineQueue() {
+    if (previewMode) return;
     if (!offlineQueue.length) return;
     startTransition(async () => {
       const remaining: ClassroomOfflineAction[] = [];
@@ -526,6 +536,10 @@ export function TeacherMobileWorkspace({
 
   function saveTeacherProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (previewMode) {
+      showStatus("Preview only — no profile was changed.");
+      return;
+    }
     if (appReviewMode) {
       showError("Profile and staff kiosk-code changes are disabled for the shared App Review account.");
       return;
@@ -846,6 +860,10 @@ export function TeacherMobileWorkspace({
   }
 
   function submitPhoto() {
+    if (previewMode) {
+      showStatus("Preview only — no photo was uploaded.");
+      return;
+    }
     if (!selectedChild?.id || !photo) return;
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       showError("Photo uploads need an active connection. Attendance, daily reports, and incidents can still be queued offline.");
@@ -872,7 +890,7 @@ export function TeacherMobileWorkspace({
 
   return (
     <div
-      className="teacher-mobile-workspace mx-auto flex w-full max-w-5xl flex-col gap-5 [&_button]:min-h-10"
+      className="teacher-mobile-workspace mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-4 [&_button]:min-h-11 [&_button]:min-w-11"
       aria-busy={isPending}
     >
       {appReviewMode ? (
@@ -883,28 +901,22 @@ export function TeacherMobileWorkspace({
             The reviewer can use the assigned synthetic classroom tools, but cannot change the shared profile, create a staff kiosk code, or clock time.
           </AlertDescription>
         </Alert>
-      ) : (
-        <SetupChecklistPanel
-          checklistKey="teacher_profile"
-          title="Teacher profile setup checklist"
-          description="Confirm your account, classroom, roster, staff kiosk code, and classroom tablet."
-          tasks={teacherProfileChecklistTasks}
-          initialCompletedIds={teacherChecklistCompletedIds}
-          graphicHref="/brand/the-bee-suite/explainers/current/teacher-daily-flow.png"
-          compact
-          defaultCollapsed
-        />
-      )}
+      ) : null}
 
-      <section className="rounded-xl border bg-card p-5">
-        <Badge className="mb-3">
+      <section className="rounded-xl border bg-card p-4 sm:p-5">
+        <Badge className="mb-2">
           <ClipboardCheck data-icon="inline-start" />
           Classroom tools
         </Badge>
         <h1 className="text-2xl font-semibold tracking-tight">Today in your classroom</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Hi {teacherName}. Record attendance, daily care, photos, and incidents from one focused action at a time.
+          Hi {teacherName}. {teacherProfile?.centerName ?? "Your classroom"}
         </p>
+        <dl className="mt-4 grid grid-cols-3 gap-2 border-t pt-3 text-sm">
+          <div><dt className="text-xs text-muted-foreground">In your roster</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{roster.length}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">At school</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{roster.filter((child) => attendanceFor(child).latestLogType === "check_in" || attendanceFor(child).status === "present").length}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">Reports sent</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{roster.filter((child) => dailyReportFor(child).status === "sent").length}</dd></div>
+        </dl>
       </section>
 
       {status ? (
@@ -922,145 +934,6 @@ export function TeacherMobileWorkspace({
         </Alert>
       ) : null}
 
-      <CollapsibleCard
-        id="teacher-profile-setup"
-        title="My profile"
-        description={appReviewMode
-          ? "Review the protected account and assigned synthetic classroom."
-          : "Review your contact information, classroom assignment, and staff kiosk code."}
-        collapsedSummary={`${profileReady ? "Ready" : "Needs setup"} · ${teacherProfile?.centerName ?? "School not assigned"}`}
-        headerActions={(
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={profileReady ? "default" : "outline"}>{profileReady ? "Ready" : "Needs setup"}</Badge>
-            <Badge variant={appReviewMode || hasStaffKioskCode ? "default" : "destructive"}>
-              {appReviewMode ? "Staff code disabled" : hasStaffKioskCode ? "Staff code ready" : "Staff code missing"}
-            </Badge>
-          </div>
-        )}
-        className="shadow-none"
-        defaultCollapsed
-      >
-          <div className="mb-4 flex items-center gap-3 rounded-xl border bg-background/40 p-3">
-            <UserAvatar name={profileName || teacherName} src={teacherProfile?.profilePhotoUrl} size="lg" />
-            <div className="min-w-0 text-sm">
-              <div className="truncate font-medium">{profileName || teacherName}</div>
-              <div className="truncate text-muted-foreground">{teacherProfile?.centerName ?? "School not assigned"}</div>
-            </div>
-          </div>
-          {appReviewMode ? (
-            <Alert>
-              <ShieldAlert aria-hidden="true" />
-              <AlertTitle>Profile settings are read-only</AlertTitle>
-              <AlertDescription>
-                The App Review login, name, classroom assignment, profile photo, and staff kiosk state are fixed so the shared credential stays safe and reusable.
-              </AlertDescription>
-            </Alert>
-          ) : (
-          <form className="grid gap-4" onSubmit={saveTeacherProfile}>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="teacher-profile-name">Full name</Label>
-                <Input
-                  id="teacher-profile-name"
-                  value={profileName}
-                  onChange={(event) => setProfileName(event.target.value)}
-                  className="h-11"
-                  autoComplete="name"
-                  required
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="teacher-profile-contact-email">Contact email</Label>
-                <Input
-                  id="teacher-profile-contact-email"
-                  value={profileContactEmail}
-                  onChange={(event) => setProfileContactEmail(event.target.value)}
-                  className="h-11"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="Work or personal email"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="teacher-profile-phone">Phone</Label>
-                <Input
-                  id="teacher-profile-phone"
-                  value={profilePhone}
-                  onChange={(event) => setProfilePhone(event.target.value)}
-                  className="h-11"
-                  type="tel"
-                  autoComplete="tel"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="teacher-profile-title">Title</Label>
-                <Input
-                  id="teacher-profile-title"
-                  value={profileTitle}
-                  onChange={(event) => setProfileTitle(event.target.value)}
-                  className="h-11"
-                  placeholder="Lead Teacher"
-                  required
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="teacher-profile-classroom">Classroom</Label>
-                <Select value={profileClassroomId} onValueChange={(value) => setProfileClassroomId(value || "none")}>
-                  <SelectTrigger id="teacher-profile-classroom" className="h-11 w-full">
-                    <SelectValue placeholder="Choose a classroom" />
-                  </SelectTrigger>
-                  <SelectContent align="start" className="w-[min(28rem,calc(100vw-2rem))]">
-                    <SelectItem value="none">Director will assign later</SelectItem>
-                    {classroomOptions.map((classroom) => (
-                      <SelectItem key={classroom.id} value={classroom.id}>
-                        {classroom.name} - {classroom.ageGroup}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {selectedProfileClassroom ? (
-                  <p className="text-xs text-muted-foreground">
-                    Roster access will use {selectedProfileClassroom.name}.
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="teacher-profile-kiosk-pin">Staff kiosk code</Label>
-                <Input
-                  id="teacher-profile-kiosk-pin"
-                  value={profileKioskPin}
-                  onChange={(event) => setProfileKioskPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                  className="h-11"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder={hasStaffKioskCode ? "Leave blank to keep current code" : "Choose a 4 digit code"}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-3 rounded-xl border bg-background/40 p-3 text-sm md:grid-cols-3">
-              <div>
-                <div className="text-xs text-muted-foreground">Teacher login</div>
-                <div className="truncate font-medium">{teacherProfile?.loginEmail ?? "Not available"}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">School</div>
-                <div className="truncate font-medium">{teacherProfile?.centerName ?? "Not assigned"}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Role</div>
-                <div className="font-medium">Teacher</div>
-              </div>
-            </div>
-
-            <Button type="submit" className="h-11 w-full sm:w-fit" disabled={isPending || !teacherProfile?.centerId}>
-              <Save data-icon="inline-start" />
-              Save profile
-            </Button>
-          </form>
-          )}
-      </CollapsibleCard>
-
       {selectedCustodyWarning ? (
         <Alert variant="destructive">
           <ShieldAlert className="size-4" />
@@ -1071,7 +944,7 @@ export function TeacherMobileWorkspace({
           </AlertDescription>
         </Alert>
       ) : null}
-      <Alert className={isOnline ? "border-primary/30 bg-primary/10" : "border-amber-300/50 bg-amber-50 text-slate-900"}>
+      {!isOnline || offlineQueue.length > 0 ? <Alert className={isOnline ? "border-primary/30 bg-primary/10" : "border-amber-300/50 bg-amber-50 text-slate-900"}>
         <Clock className="size-4" />
         <AlertTitle>{isOnline ? "Tablet online" : "Tablet offline"}</AlertTitle>
         <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1086,11 +959,11 @@ export function TeacherMobileWorkspace({
             </Button>
           ) : null}
         </AlertDescription>
-      </Alert>
+      </Alert> : <p className="flex items-center gap-2 px-1 text-xs text-muted-foreground"><CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" />Online · ready for classroom updates</p>}
 
-      <nav aria-label="Teacher task shortcuts" className="sticky top-[calc(4.75rem+env(safe-area-inset-top))] z-10 -mx-1 rounded-xl border bg-background p-2 shadow-sm lg:top-20">
+      <nav aria-label="Teacher task shortcuts" className="sm:sticky top-[calc(var(--bee-app-header-height,4.75rem)+0.5rem)] z-[5] -mx-1 rounded-xl border bg-background p-2 shadow-sm">
         <div className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Do now</div>
-        <div className="flex snap-x gap-2 overflow-x-auto pb-1 xl:grid xl:grid-cols-6 xl:overflow-visible xl:pb-0">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {[
             ["Check attendance", "#teacher-attendance"],
             ["Write daily report", "#teacher-daily-report"],
@@ -1099,9 +972,9 @@ export function TeacherMobileWorkspace({
             ["View roster", "#teacher-roster"],
             ["Edit profile", "#teacher-profile-setup"],
           ].map(([label, href]) => (
-            <Button key={href} size="sm" variant="outline" className="min-h-11 shrink-0 snap-start justify-start whitespace-nowrap text-left xl:w-full" nativeButton={false} render={<a href={href} />}>
+            <a key={href} href={href} className={cn(buttonVariants({ size: "sm", variant: "outline" }), "h-auto min-h-11 w-full justify-start whitespace-normal py-2 text-left leading-5")}>
               {label}
-            </Button>
+            </a>
           ))}
         </div>
       </nav>
@@ -1170,6 +1043,7 @@ export function TeacherMobileWorkspace({
         contentClassName="grid gap-3 md:grid-cols-2"
         defaultCollapsed
       >
+          {!roster.length ? <div className="rounded-xl border border-dashed p-4 text-sm md:col-span-2"><h3 className="font-semibold">No children assigned yet</h3><p className="mt-1 leading-6 text-muted-foreground">Ask your director to assign your classroom and roster. You can review your profile below while setup is completed.</p></div> : null}
           {byClassroom.map((classroom) => {
             const ratioSnapshot = classroom.id ? ratioByClassroomId.get(classroom.id) : null;
             const presentChildren = classroom.children.filter((child) => {
@@ -1228,7 +1102,7 @@ export function TeacherMobileWorkspace({
                         variant={ratioWarning.tone}
                         render={(
                           <Link
-                            href="/classroom-dashboard#classroom-editor"
+                            href={previewMode ? "/device-preview?view=director" : "/classroom-dashboard#classroom-editor"}
                             aria-label={`Open classroom setup to resolve ${ratioWarning.label} for ${classroom.name}`}
                           />
                         )}
@@ -1259,7 +1133,7 @@ export function TeacherMobileWorkspace({
                       key={child.id}
                       className={`rounded-lg border p-2 text-sm transition ${selectedChild?.id === child.id ? "border-primary bg-primary/10" : "bg-card/40"}`}
                     >
-                      <button type="button" className="flex min-h-10 w-full items-start justify-between gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => chooseChild(child.id)}>
+                      <button type="button" aria-pressed={selectedChild?.id === child.id} className="flex min-h-11 w-full flex-wrap items-start justify-between gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => chooseChild(child.id)}>
                         <span className="flex min-w-0 items-start gap-2">
                           <UserAvatar name={child.fullName} src={child.profilePhotoUrl} size="sm" className="shrink-0" />
                           <span className="min-w-0">
@@ -1289,7 +1163,7 @@ export function TeacherMobileWorkspace({
                           </span>
                         </span>
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <label className="flex min-h-10 items-center gap-2 rounded-md border bg-background px-2 text-xs">
+                          <label className="flex min-h-11 items-center gap-2 rounded-md border bg-background px-2 text-xs">
                             <input
                               type="checkbox"
                               className="size-5 shrink-0 accent-primary"
@@ -1297,13 +1171,14 @@ export function TeacherMobileWorkspace({
                               onChange={() => toggleDailyReportTarget(child.id)}
                               aria-label={`Include ${child.fullName} in daily report batch`}
                             />
-                            Daily
+                            Daily report
                           </label>
                           <span className="flex flex-wrap gap-1">
                             <Button
                               type="button"
                               size="xs"
                               variant="outline"
+                              aria-label={`Check in ${child.fullName}`}
                               disabled={isPending || isCheckedIn}
                               onClick={() => {
                                 chooseChild(child.id);
@@ -1317,6 +1192,7 @@ export function TeacherMobileWorkspace({
                               type="button"
                               size="xs"
                               variant="outline"
+                              aria-label={`Check out ${child.fullName}`}
                               disabled={isPending || !isCheckedIn}
                               onClick={() => {
                                 chooseChild(child.id);
@@ -1330,6 +1206,7 @@ export function TeacherMobileWorkspace({
                               type="button"
                               size="xs"
                               variant="outline"
+                              aria-label={`Mark absent ${child.fullName}`}
                               disabled={isPending || isCheckedIn || attendance.status === "absent"}
                               onClick={() => {
                                 chooseChild(child.id);
@@ -1757,6 +1634,157 @@ export function TeacherMobileWorkspace({
             </Button>
         </CollapsibleCard>
       </div>
+
+      <CollapsibleCard
+        id="teacher-profile-setup"
+        title="My profile"
+        description={appReviewMode
+          ? "Review the protected account and assigned synthetic classroom."
+          : "Review your contact information, classroom assignment, and staff kiosk code."}
+        collapsedSummary={`${profileReady ? "Ready" : "Needs setup"} · ${teacherProfile?.centerName ?? "School not assigned"}`}
+        headerActions={(
+          <div className="flex flex-wrap gap-2">
+            <Badge variant={profileReady ? "default" : "outline"}>{profileReady ? "Ready" : "Needs setup"}</Badge>
+            <Badge variant={appReviewMode || hasStaffKioskCode ? "default" : "destructive"}>
+              {appReviewMode ? "Staff code disabled" : hasStaffKioskCode ? "Staff code ready" : "Staff code missing"}
+            </Badge>
+          </div>
+        )}
+        className="shadow-none"
+        defaultCollapsed
+      >
+          <div className="mb-4 flex items-center gap-3 rounded-xl border bg-background/40 p-3">
+            <UserAvatar name={profileName || teacherName} src={teacherProfile?.profilePhotoUrl} size="lg" />
+            <div className="min-w-0 text-sm">
+              <div className="truncate font-medium">{profileName || teacherName}</div>
+              <div className="truncate text-muted-foreground">{teacherProfile?.centerName ?? "School not assigned"}</div>
+            </div>
+          </div>
+          {appReviewMode ? (
+            <Alert>
+              <ShieldAlert aria-hidden="true" />
+              <AlertTitle>Profile settings are read-only</AlertTitle>
+              <AlertDescription>
+                The App Review login, name, classroom assignment, profile photo, and staff kiosk state are fixed so the shared credential stays safe and reusable.
+              </AlertDescription>
+            </Alert>
+          ) : (
+          <form className="grid gap-4" onSubmit={saveTeacherProfile}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="teacher-profile-name">Full name</Label>
+                <Input
+                  id="teacher-profile-name"
+                  value={profileName}
+                  onChange={(event) => setProfileName(event.target.value)}
+                  className="h-11"
+                  autoComplete="name"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="teacher-profile-contact-email">Contact email</Label>
+                <Input
+                  id="teacher-profile-contact-email"
+                  value={profileContactEmail}
+                  onChange={(event) => setProfileContactEmail(event.target.value)}
+                  className="h-11"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="Work or personal email"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="teacher-profile-phone">Phone</Label>
+                <Input
+                  id="teacher-profile-phone"
+                  value={profilePhone}
+                  onChange={(event) => setProfilePhone(event.target.value)}
+                  className="h-11"
+                  type="tel"
+                  autoComplete="tel"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="teacher-profile-title">Title</Label>
+                <Input
+                  id="teacher-profile-title"
+                  value={profileTitle}
+                  onChange={(event) => setProfileTitle(event.target.value)}
+                  className="h-11"
+                  placeholder="Lead Teacher"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="teacher-profile-classroom">Classroom</Label>
+                <Select value={profileClassroomId} onValueChange={(value) => setProfileClassroomId(value || "none")}>
+                  <SelectTrigger id="teacher-profile-classroom" className="h-11 w-full">
+                    <SelectValue placeholder="Choose a classroom" />
+                  </SelectTrigger>
+                  <SelectContent align="start" className="w-[min(28rem,calc(100vw-2rem))]">
+                    <SelectItem value="none">Director will assign later</SelectItem>
+                    {classroomOptions.map((classroom) => (
+                      <SelectItem key={classroom.id} value={classroom.id}>
+                        {classroom.name} - {classroom.ageGroup}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedProfileClassroom ? (
+                  <p className="text-xs text-muted-foreground">
+                    Roster access will use {selectedProfileClassroom.name}.
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="teacher-profile-kiosk-pin">Staff kiosk code</Label>
+                <Input
+                  id="teacher-profile-kiosk-pin"
+                  value={profileKioskPin}
+                  onChange={(event) => setProfileKioskPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                  className="h-11"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder={hasStaffKioskCode ? "Leave blank to keep current code" : "Choose a 4 digit code"}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 rounded-xl border bg-background/40 p-3 text-sm md:grid-cols-3">
+              <div>
+                <div className="text-xs text-muted-foreground">Teacher login</div>
+                <div className="truncate font-medium">{teacherProfile?.loginEmail ?? "Not available"}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">School</div>
+                <div className="truncate font-medium">{teacherProfile?.centerName ?? "Not assigned"}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Role</div>
+                <div className="font-medium">Teacher</div>
+              </div>
+            </div>
+
+            <Button type="submit" className="h-11 w-full sm:w-fit" disabled={isPending || !teacherProfile?.centerId}>
+              <Save data-icon="inline-start" />
+              Save profile
+            </Button>
+          </form>
+          )}
+      </CollapsibleCard>
+      {!appReviewMode && !previewMode ? (
+        <SetupChecklistPanel
+          checklistKey="teacher_profile"
+          title="Teacher profile setup checklist"
+          description="Confirm your account, classroom, roster, staff kiosk code, and classroom tablet."
+          tasks={teacherProfileChecklistTasks}
+          initialCompletedIds={teacherChecklistCompletedIds}
+          graphicHref="/brand/the-bee-suite/explainers/current/teacher-daily-flow.png"
+          compact
+          defaultCollapsed
+        />
+      ) : null}
     </div>
   );
 }

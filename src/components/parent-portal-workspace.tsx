@@ -1872,7 +1872,7 @@ function ParentPortalWorkspaceView({
               {activeView === "home" ? homeGreeting : activeViewCopy.title}
             </h1>
             {activeView === "home" ? (
-              <p className="mt-1 truncate text-sm text-muted-foreground">
+              <p className="mt-1 break-words text-sm leading-5 text-muted-foreground">
                 {centerName ?? family.name} · {family.children.length}{" "}
                 {family.children.length === 1 ? "child" : "children"}
               </p>
@@ -2001,24 +2001,11 @@ function ParentPortalWorkspaceView({
             aria-labelledby="parent-today-heading"
             data-parent-home-primary="true"
           >
-            <div className="flex items-start justify-between gap-4 border-b border-border/70 p-4 sm:p-6">
+            <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-2 sm:px-6 sm:py-3">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                <h2 id="parent-today-heading" className="text-base font-semibold text-pretty">
                   Today at school
-                </p>
-                <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <h2
-                    id="parent-today-heading"
-                    className="text-2xl font-semibold tracking-tight text-pretty"
-                  >
-                    {family.children.length === 1
-                      ? family.children[0]?.preferredName || family.children[0]?.fullName
-                      : "Your children"}
-                  </h2>
-                  <span className="text-sm text-muted-foreground">
-                    {centerName ?? "Your school"}
-                  </span>
-                </div>
+                </h2>
                 <p className="sr-only">
                   See today’s check-in status, classroom, schedule, and latest
                   update from your school. Schedule, Classroom, Last Check-In
@@ -2027,17 +2014,16 @@ function ParentPortalWorkspaceView({
               </div>
               <ParentPortalDocumentLink
                 href={workspaceHref("updates", { familyId: family.id })}
-                className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-primary/50 bg-primary/[0.07] px-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
+                className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="View today’s photos and daily reports"
               >
                 <Camera className="size-4" aria-hidden="true" />
-                <span className="hidden sm:inline">View updates</span>
+                <span>Updates</span>
                 <span className="sr-only">View Today’s Update</span>
-                <ArrowRight className="size-4" aria-hidden="true" />
               </ParentPortalDocumentLink>
             </div>
             <div
-              className={`flex snap-x snap-mandatory gap-3 overflow-x-auto p-4 sm:grid sm:overflow-visible sm:p-6 ${family.children.length > 1 ? "lg:grid-cols-2" : ""}`}
+              className={`grid divide-y divide-border/70 ${family.children.length > 1 ? "lg:grid-cols-2 lg:divide-y-0" : ""}`}
               aria-label="Children’s status today"
             >
               {family.children.map((child) => {
@@ -2048,16 +2034,10 @@ function ParentPortalWorkspaceView({
                   child.today?.currentLocationName ||
                   child.classroom?.name ||
                   "Not assigned";
-                const attendanceSummary = childPresent
-                  ? "Currently at school"
-                  : child.today?.status === "checked_out"
-                    ? "Checked out for the day"
-                    : "No attendance event yet";
-
                 return (
                   <article
                     key={child.id}
-                    className={`${family.children.length > 1 ? "w-[88%] sm:w-auto" : "w-full"} min-w-0 shrink-0 snap-start rounded-2xl border bg-background/70 p-4 sm:shrink sm:p-5`}
+                    className="min-w-0 px-4 pt-4 sm:px-6 sm:pt-5"
                   >
                     <div className="flex min-w-0 items-start gap-3">
                       {child.profilePhotoUrl ? (
@@ -2074,54 +2054,28 @@ function ParentPortalWorkspaceView({
                         </span>
                       )}
                       <div className="min-w-0 flex-1">
-                        <h3 className="truncate text-lg font-semibold">
+                        <h3 className="break-words text-lg font-semibold leading-6">
                           {child.preferredName || child.fullName}
                         </h3>
-                        <p className="truncate text-sm text-muted-foreground">
+                        <p className="mt-0.5 break-words text-sm leading-5 text-muted-foreground">
                           {child.classroom?.name || "Classroom not assigned"}
                         </p>
                       </div>
-                      <Badge className="shrink-0" variant={todayStatusVariant(child.today?.status)}>
-                        {child.today?.label || "Not marked"}
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                      <Badge className="px-2 py-0.5 text-xs leading-5" variant={todayStatusVariant(child.today?.status)}>
+                        {child.today?.label || "Not marked today"}
                       </Badge>
+                      {child.today?.latestEventAt ? (
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {formatTime(child.today.latestEventAt)}
+                        </span>
+                      ) : null}
                     </div>
-
-                    <div className={`mt-4 flex items-center gap-3 rounded-xl px-3 py-3 ${childPresent ? "bg-emerald-500/[0.08]" : "bg-muted/55"}`}>
-                      <span className={`size-2.5 shrink-0 rounded-full ${childPresent ? "bg-emerald-600" : "bg-muted-foreground/50"}`} aria-hidden="true" />
-                      <p className="min-w-0 flex-1 text-sm font-semibold">
-                        {attendanceSummary}
-                      </p>
-                      <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                        {child.today?.latestEventAt
-                          ? formatTime(child.today.latestEventAt)
-                          : "Today"}
-                      </p>
-                    </div>
-
-                    <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                      <div className="min-w-0 rounded-xl border bg-card/70 p-3">
-                        <dt className="text-xs font-medium text-muted-foreground">
-                          Classroom
-                        </dt>
-                        <dd className="mt-1 break-words font-semibold leading-5">
-                          {currentLocation}
-                        </dd>
-                      </div>
-                      <div className="min-w-0 rounded-xl border bg-card/70 p-3">
-                        <dt className="text-xs font-medium text-muted-foreground">
-                          Daily update
-                        </dt>
-                        <dd className="mt-1 break-words font-semibold leading-5">
-                          {child.today?.dailyReportShared
-                            ? "Ready to view"
-                            : "Not shared yet"}
-                        </dd>
-                      </div>
-                    </dl>
-
                     <details className="group mt-3 border-t text-sm">
-                      <summary className="flex cursor-pointer select-none items-center justify-between gap-3 py-3 font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                        View day details
+                      <summary className="flex min-h-11 cursor-pointer list-none select-none items-center justify-between gap-3 py-3 font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                        <span className="group-open:hidden">View day details</span>
+                        <span className="hidden group-open:inline">Hide day details</span>
                         <Plus className="size-4 transition-transform group-open:rotate-45 motion-reduce:transition-none" aria-hidden="true" />
                       </summary>
                       <dl className="grid gap-3 border-t py-3 sm:grid-cols-2">
@@ -2134,8 +2088,12 @@ function ParentPortalWorkspaceView({
                           </dd>
                         </div>
                         <div>
+                          <dt className="text-xs font-medium text-muted-foreground">Classroom</dt>
+                          <dd className="mt-1 break-words font-medium">{currentLocation}</dd>
+                        </div>
+                        <div>
                           <dt className="text-xs font-medium text-muted-foreground">
-                            Last Check-In Update
+                            Latest attendance update
                           </dt>
                           <dd className="mt-1 font-medium">
                             {child.today?.latestEventAt
@@ -2143,8 +2101,23 @@ function ParentPortalWorkspaceView({
                               : "No event recorded today"}
                           </dd>
                         </div>
+                        <div>
+                          <dt className="text-xs font-medium text-muted-foreground">Daily update</dt>
+                          <dd className="mt-1 font-medium">
+                            {child.today?.dailyReportShared ? "Ready to view in Updates" : "Not shared yet"}
+                          </dd>
+                        </div>
                       </dl>
                     </details>
+                    {child.today?.dailyReportShared ? (
+                      <ParentPortalDocumentLink
+                        href={workspaceHref("updates", { familyId: family.id })}
+                        className="mb-3 flex min-h-11 items-center justify-between gap-3 rounded-xl bg-primary/[0.06] px-3 text-sm font-medium text-primary transition-colors hover:bg-primary/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span>Daily report ready<span className="sr-only"> for {child.preferredName || child.fullName}</span></span>
+                        <ArrowRight className="size-4 shrink-0" aria-hidden="true" />
+                      </ParentPortalDocumentLink>
+                    ) : null}
                   </article>
                 );
               })}
@@ -2163,11 +2136,8 @@ function ParentPortalWorkspaceView({
           <section aria-labelledby="parent-quick-actions-heading" data-parent-home-actions="true">
             <div className="flex items-end justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Shortcuts
-                </p>
-                <h2 id="parent-quick-actions-heading" className="mt-1 text-xl font-semibold">
-                  What do you need?
+                <h2 id="parent-quick-actions-heading" className="text-base font-semibold">
+                  Quick actions
                 </h2>
               </div>
             </div>
@@ -2208,7 +2178,7 @@ function ParentPortalWorkspaceView({
                 <ParentPortalDocumentLink
                   key={href}
                   href={href}
-                  className="group relative flex min-h-20 items-center gap-2 rounded-2xl border bg-card p-3 transition-colors hover:border-primary/60 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-24 sm:gap-3 sm:p-4"
+                  className="group relative flex min-h-[4.5rem] items-center gap-2 rounded-2xl border bg-card p-3 transition-colors hover:border-primary/60 hover:bg-primary/[0.04] active:bg-primary/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-24 sm:gap-3 sm:p-4"
                 >
                   <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
                     <Icon className="size-5" aria-hidden="true" />
@@ -2230,7 +2200,7 @@ function ParentPortalWorkspaceView({
             aria-labelledby="parent-home-attention-heading"
             data-parent-home-priority="true"
           >
-            <div className="flex items-center gap-3 border-b px-4 py-4 sm:px-6">
+            <div className={`flex items-center gap-3 px-4 py-4 sm:px-6 ${homeAttentionCount ? "border-b" : ""}`}>
               <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${homeAttentionCount ? "bg-amber-400/15 text-amber-800 dark:text-amber-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}`}>
                 {homeAttentionCount ? (
                   <AlertCircle className="size-5" aria-hidden="true" />
@@ -2352,6 +2322,11 @@ function ParentPortalWorkspaceView({
                     Your school is confirming family and agency responsibility before showing a payable amount.
                   </p>
                 </div>
+              ) : balanceCents === 0 ? (
+                <p className="mt-3 flex flex-wrap items-baseline justify-between gap-2 text-sm">
+                  <span className="text-muted-foreground">Your family balance is current.</span>
+                  <span className="font-semibold tabular-nums">{money(balanceCents)}</span>
+                </p>
               ) : (
                 <div className="mt-5">
                   <p className="text-3xl font-semibold tabular-nums">
@@ -2372,7 +2347,7 @@ function ParentPortalWorkspaceView({
                 href={workspaceHref("payments", { familyId: family.id })}
                 className={buttonVariants({
                   variant: balanceCents > 0 && !checkoutBlocked ? "default" : "outline",
-                  className: "mt-5 w-full min-h-12",
+                  className: "mt-4 w-full min-h-12",
                 })}
               >
                 {balanceCents > 0 && !checkoutBlocked ? "Review & Pay" : "View Payment Details"}
@@ -2397,9 +2372,6 @@ function ParentPortalWorkspaceView({
                   <BellRing className="size-5" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-medium text-muted-foreground">
-                    {centerName ?? "Your school"}
-                  </p>
                   <h2 id="parent-home-announcements-heading" className="text-lg font-semibold">
                     Latest announcement
                   </h2>
@@ -2430,8 +2402,8 @@ function ParentPortalWorkspaceView({
                   ) : null}
                 </div>
               ) : (
-                <p className="mt-5 text-sm leading-6 text-muted-foreground">
-                  No new announcements. Your school’s latest updates will appear here.
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  No new announcements from your school.
                 </p>
               )}
             </section>

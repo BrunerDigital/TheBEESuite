@@ -40,7 +40,8 @@ test("parent dashboard preserves every primary destination in responsive navigat
 });
 
 test("mobile parent summaries stay compact without removing detail", () => {
-  assert.match(workspace, /snap-x snap-mandatory/);
+  assert.match(workspace, /aria-label="Children’s status today"/);
+  assert.doesNotMatch(workspace, /snap-x snap-mandatory/);
   assert.match(workspace, /View day details/);
   assert.match(workspace, /View account history/);
   assert.match(workspace, /grid grid-cols-2 gap-3 xl:grid-cols-4/);

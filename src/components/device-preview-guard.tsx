@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type FormEvent, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, type FormEvent, type MouseEvent, type ReactNode } from "react";
 
 const PREVIEW_PATH = "/device-preview";
 
@@ -37,7 +37,30 @@ function isAllowedPreviewRequest(method: string, url: URL) {
  * blocks accidental API calls, form submissions, and navigation into a real
  * authenticated workspace while reviewers exercise nested components.
  */
-export function DevicePreviewGuard({ children }: { children: ReactNode }) {
+export function DevicePreviewGuard({ children, rewriteWorkspaceLinks = false }: { children: ReactNode; rewriteWorkspaceLinks?: boolean }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!rewriteWorkspaceLinks || !containerRef.current) return;
+    // Real dashboard components retain their real destinations as evidence, but
+    // every actionable preview URL (including Open in New Tab) stays synthetic.
+    function rewriteLinks() {
+      containerRef.current?.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((anchor) => {
+        const href = anchor.getAttribute("href");
+        if (!href || href.startsWith("#") || anchor.dataset.previewDestination) return;
+        const destination = new URL(href, window.location.href);
+        if (destination.pathname === PREVIEW_PATH && destination.origin === window.location.origin) return;
+        const preview = new URL(window.location.href);
+        preview.searchParams.set("target", `${destination.pathname}${destination.search}${destination.hash}`);
+        anchor.dataset.previewDestination = href;
+        anchor.href = `${preview.pathname}${preview.search}`;
+      });
+    }
+    rewriteLinks();
+    const observer = new MutationObserver(rewriteLinks);
+    observer.observe(containerRef.current, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [rewriteWorkspaceLinks]);
   useEffect(() => {
     const originalFetch = window.fetch.bind(window);
 
@@ -70,6 +93,14 @@ export function DevicePreviewGuard({ children }: { children: ReactNode }) {
     const href = anchor.getAttribute("href");
     if (!href || href.startsWith("#")) return;
 
+    if (anchor.hasAttribute("data-preview-destination")) {
+      event.preventDefault();
+      event.stopPropagation();
+      // Prevent Next Link's original closure from navigating to the live route.
+      window.location.assign(href);
+      return;
+    }
+
     const url = new URL(href, window.location.href);
     if (url.origin === window.location.origin && url.pathname === PREVIEW_PATH) return;
 
@@ -78,7 +109,7 @@ export function DevicePreviewGuard({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div data-device-preview-guard="true" onSubmitCapture={preventSubmit} onClickCapture={trapNavigation}>
+    <div ref={containerRef} data-device-preview-guard="true" onSubmitCapture={preventSubmit} onClickCapture={trapNavigation}>
       <div className="sr-only" role="status">
         UI review preview. Network actions, form submissions, and navigation to live workspaces are disabled.
       </div>

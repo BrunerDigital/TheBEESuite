@@ -1659,7 +1659,7 @@
       [role="checkbox"]
     ),
     .bee-app-frame a[href] {
-      min-width: 2.75rem;
+      min-width: 44px;
     }
 
     .bee-app-frame a[href]:not([class*="block"]):not([class*="flex"]):not([class*="grid"]) {

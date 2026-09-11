@@ -74,9 +74,9 @@ test("kiosk lookup outcomes move focus to visible feedback and result content", 
 });
 
 test("teacher shortcuts clear the notched header and kiosk navigation uses links", () => {
-  assert.match(teacher, /top-\[calc\(4\.75rem\+env\(safe-area-inset-top\)\)\]/);
-  assert.match(teacher, /flex snap-x gap-2 overflow-x-auto/);
-  assert.match(teacher, /shrink-0 snap-start/);
+  assert.match(teacher, /sm:sticky top-\[calc\(var\(--bee-app-header-height,4\.75rem\)\+0\.5rem\)\]/);
+  assert.match(teacher, /grid grid-cols-2 gap-2 sm:grid-cols-3/);
+  assert.match(teacher, /min-h-11 w-full justify-start whitespace-normal/);
   assert.doesNotMatch(teacher, /window\.location\.assign\(kioskAccess\.kioskPath\)/);
   assert.ok((teacher.match(/render=\{<Link href=\{kioskAccess\.kioskPath\} \/>\}/g) ?? []).length >= 2);
 });

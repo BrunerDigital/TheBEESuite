@@ -283,6 +283,62 @@
     opacity: 1;
   }
 
+  /* Keep operational summaries flat at every breakpoint, including staggered legacy tiles. */
+  .bee-app-frame[data-honeyglass="true"] .dashboard-compact-kpis .honeycomb-kpi-item:nth-child(n) {
+    transform: none;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .dashboard-compact-kpis .honeycomb-kpi-item:nth-child(n) .honeycomb-kpi-card {
+    min-height: 0;
+    background: var(--card);
+    border-color: var(--border);
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .dashboard-compact-kpis .honeycomb-kpi-controls button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .bee-app-frame[data-honeyglass="true"] .dashboard-compact-kpis .honeycomb-kpi-link:focus-visible {
+    border-radius: var(--radius-xl);
+  }
+
+  .teacher-mobile-workspace :is(button, [role="combobox"], label:has(input[type="checkbox"])) {
+    min-height: 44px;
+  }
+
+  .teacher-mobile-workspace :is(a, button, input, textarea, [role="combobox"]) {
+    scroll-margin-block: 16rem 8rem;
+  }
+
+  .teacher-mobile-workspace {
+    overflow-wrap: anywhere;
+  }
+
+  .teacher-mobile-workspace :is([data-collapsible-card="true"], #teacher-quick-log) {
+    scroll-margin-top: calc(var(--bee-app-header-height, 4.75rem) + 1rem);
+  }
+
+  @media (min-width: 640px) {
+    .teacher-mobile-workspace :is([data-collapsible-card="true"], #teacher-quick-log) {
+      scroll-margin-top: calc(var(--bee-app-header-height, 4.75rem) + 13rem);
+    }
+  }
+
+  .teacher-mobile-workspace nav[aria-label="Teacher task shortcuts"] > div:last-child {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  }
+
+  .teacher-mobile-workspace [data-slot="card-header"] > div:first-child {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .teacher-mobile-workspace [data-slot="card-header"] > div > div:last-child {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
   .bee-app-frame[data-honeyglass="true"] .readiness-honeycomb,
   .readiness-honeycomb {
     display: grid;

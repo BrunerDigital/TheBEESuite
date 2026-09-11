@@ -7,6 +7,16 @@
  */
 
 @layer utilities {
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) :is(.app-header, nav[aria-label="Family portal navigation"], nav[aria-label="Authorized pickup navigation"]) {
+    background: var(--portal-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .app-header a[aria-label$="home"] .text-amber-300 {
+    color: var(--foreground);
+  }
+
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .dashboard-workspace {
     background-image: none;
   }
@@ -19,6 +29,49 @@
   .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .parent-portal-heading::after {
     display: none;
     content: none;
+  }
+
+  .bee-app-frame[data-role="PARENT_GUARDIAN"] .parent-portal-workspace[data-parent-portal-view="home"] > section,
+  .bee-app-frame[data-role="PARENT_GUARDIAN"] .parent-portal-workspace[data-parent-portal-view="home"] > div > section {
+    box-shadow: 0 2px 8px var(--portal-shadow);
+  }
+
+  .bee-app-frame[data-role="PARENT_GUARDIAN"] .parent-portal-workspace[data-parent-portal-view="home"] > [data-parent-home-actions="true"] {
+    box-shadow: none;
+  }
+
+  .bee-app-frame[data-role="PARENT_GUARDIAN"] .parent-portal-workspace :is(a, button, summary, input, textarea, select) {
+    scroll-margin-block: 6rem 7rem;
+  }
+
+  .bee-app-frame[data-role="PARENT_GUARDIAN"] .parent-portal-workspace[data-parent-portal-view="home"] {
+    overflow-wrap: anywhere;
+  }
+
+  .bee-app-frame[data-role="PARENT_GUARDIAN"] [data-parent-home-actions="true"] > div {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  }
+
+  .bee-app-frame[data-role="PARENT_GUARDIAN"] #today > div:first-child {
+    flex-wrap: wrap;
+  }
+
+  .bee-app-frame[data-role="PARENT_GUARDIAN"] #parent-home-account .text-3xl {
+    font-size: 1.5rem;
+  }
+
+  @media (max-width: 639px) {
+    /* Icons need a stable hit area; they must not consume the header at text zoom. */
+    .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .app-header button {
+      width: 44px;
+      height: 44px;
+      min-height: 44px;
+    }
+
+    .bee-app-frame:is([data-role="PARENT_GUARDIAN"], [data-role="AUTHORIZED_PICKUP"]) .app-header button svg {
+      width: 24px;
+      height: 24px;
+    }
   }
 
   @media (max-width: 639px) {

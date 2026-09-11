@@ -7,11 +7,15 @@ const parentPage = readFileSync("src/app/[slug]/page.tsx", "utf8");
 const messageRoute = readFileSync("src/app/api/communications/messages/route.ts", "utf8");
 
 test("parent daily reports are complete, concise, and visible without expansion", () => {
-  assert.match(workspace, /Teacher note:/);
-  assert.match(workspace, /report\.activities\?\.map/);
-  assert.doesNotMatch(workspace, /report\.activities\?\.slice\(0, 4\)/);
-  assert.doesNotMatch(workspace, /group-open:hidden">View day/);
-  for (const label of ["Mood:", "meal", "nap", "care log", "activit"]) assert.match(workspace, new RegExp(label));
+  const start = workspace.indexOf('{activeView === "updates" ? (');
+  const end = workspace.indexOf('{activeView === "family"', start);
+  assert.ok(start >= 0 && end > start, "The Updates section must be present");
+  const updates = workspace.slice(start, end);
+  assert.match(updates, /Teacher note:/);
+  assert.match(updates, /report\.activities\?\.map/);
+  assert.doesNotMatch(updates, /report\.activities\?\.slice\(0, 4\)/);
+  assert.doesNotMatch(updates, /<details|<CollapsiblePanel|group-open:hidden/);
+  for (const label of ["Mood:", "meal", "nap", "care log", "activit"]) assert.match(updates, new RegExp(label));
 });
 
 test("parents can choose only teachers from their children's current classrooms", () => {

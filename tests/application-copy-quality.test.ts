@@ -51,10 +51,15 @@ test("shared module descriptions avoid prototype and implementation language", (
 
 test("the inert role preview uses task-focused copy", () => {
   const preview = source("src/app/device-preview/page.tsx");
+  const dashboard = source("src/components/dashboard.tsx");
+  const roleExperience = source("src/lib/role-experience.ts");
 
-  assert.match(preview, /Director overview/);
-  assert.match(preview, /Common director tasks/);
-  assert.doesNotMatch(preview, /Director command center|Frequent director workflows/);
+  assert.match(preview, /<ExecutiveDashboard live=\{\{/);
+  assert.match(preview, /role: "CENTER_DIRECTOR"/);
+  assert.match(dashboard, /roleExperience\.homeLabel/);
+  assert.match(roleExperience, /Today at your school/);
+  assert.match(dashboard, /Needs attention/);
+  assert.doesNotMatch([preview, dashboard, roleExperience].join("\n"), /Director command center|Frequent director workflows/);
 });
 
 test("an unavailable SMS integration does not claim a message was queued", () => {

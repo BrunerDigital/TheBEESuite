@@ -1,14 +1,14 @@
 import { notFound } from "next/navigation";
-import { Activity, BadgeDollarSign, BellRing, CheckCircle2, Clock3, CreditCard, ShieldCheck, Users } from "lucide-react";
+import { Activity, CreditCard, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { AutomationWorkflowBuilder, type AutomationWorkflowBuilderData } from "@/components/automation-workflow-builder";
 import { DevicePreviewGuard } from "@/components/device-preview-guard";
 import { ExecutiveDashboard } from "@/components/dashboard";
 import { KioskCheckIn } from "@/components/kiosk-check-in";
+import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { ParentPortalWorkspace } from "@/components/parent-portal-workspace";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { executiveParentPortalDemo } from "@/lib/executive-demo-data";
 import { centers as demoCenters, kpis as demoKpis, pipelineStages as demoPipelineStages } from "@/lib/demo-data";
 import { normalizeParentPortalView } from "@/lib/parent-portal-navigation";
@@ -33,13 +33,6 @@ const workflowData: AutomationWorkflowBuilderData = {
   stats: { total: 8, active: 6, paused: 2, recentRuns: 14 },
 };
 
-const metrics = [
-  { label: "Children present", value: "142 / 158", detail: "89.9% checked in", Icon: Users },
-  { label: "Staff on site", value: "28 / 32", detail: "Coverage is on target", Icon: CheckCircle2 },
-  { label: "Open follow-ups", value: "2", detail: "Review before pickup", Icon: BellRing },
-  { label: "Collected today", value: "$18,420", detail: "Current families only", Icon: BadgeDollarSign },
-];
-
 const previewPortfolioWorkspace: WorkspaceState = {
   mode: "all",
   selection: "all",
@@ -59,86 +52,34 @@ const previewPortfolioWorkspace: WorkspaceState = {
   ],
 };
 
-function DirectorPreview() {
-  return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <section className="honeyglass-hero overflow-hidden rounded-2xl border bg-card p-5 sm:p-7">
-        <Badge className="mb-4">Director overview</Badge>
-        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-end">
-          <div className="min-w-0">
-            <h1 className="text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">Good morning, Avery</h1>
-            <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-muted-foreground sm:text-base">
-              Your school is steady. Two items need a closer look before afternoon pickup.
-            </p>
-          </div>
-          <Card className="dashboard-ai-brief min-w-0">
-            <CardHeader className="pb-2">
-              <CardTitle as="h2" className="text-base">Today&apos;s focus</CardTitle>
-              <CardDescription>Staff coverage and pickup readiness</CardDescription>
-            </CardHeader>
-            <CardContent className="flex items-center gap-2 text-sm">
-              <Clock3 className="size-4 shrink-0 text-primary" aria-hidden="true" />
-              Next review at 2:30 PM
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map(({ label, value, detail, Icon }) => (
-          <Card key={label} className="min-w-0 overflow-hidden">
-            <CardHeader className="pb-2">
-              <div className="flex min-w-0 items-center justify-between gap-3">
-                <CardDescription className="min-w-0 truncate">{label}</CardDescription>
-                <Icon className="size-5 shrink-0 text-primary" aria-hidden="true" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold tabular-nums">{value}</div>
-              <p className="mt-1 truncate text-xs text-muted-foreground">{detail}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card className="min-w-0 overflow-hidden">
-          <CardHeader><CardTitle as="h2">School pulse</CardTitle><CardDescription>What needs attention now</CardDescription></CardHeader>
-          <CardContent className="grid gap-3">
-            <div className="rounded-lg border border-amber-300/70 bg-amber-50/70 p-4 dark:border-amber-700/50 dark:bg-amber-950/20"><div className="font-medium">Creative Kids</div><p className="mt-1 text-sm text-muted-foreground">Ratio below target · 14 of 18 present</p></div>
-            <div className="rounded-lg border p-4"><div className="font-medium">Explorer Pre-K</div><p className="mt-1 text-sm text-muted-foreground">One child has not signed in</p></div>
-          </CardContent>
-        </Card>
-        <Card className="min-w-0 overflow-hidden">
-          <CardHeader><CardTitle as="h2">Common director tasks</CardTitle><CardDescription>Director shortcuts in the full workspace</CardDescription></CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
-            {['Attendance', 'Message families', 'Report incident', 'Run report'].map((label) => <div key={label} className="rounded-lg border p-4 text-sm font-medium">{label}</div>)}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
 function ParentPreview({ screen, familySection, scenario }: { screen: string | undefined; familySection: string | undefined; scenario?: string }) {
   const activeView = normalizeParentPortalView(screen);
   const singleChildReview = scenario === "single-review";
+  const quietHome = scenario === "quiet-home";
+  const longContent = scenario === "long-content";
+  const absentHome = scenario === "absent-home";
+  const oneChild = singleChildReview || quietHome || longContent || absentHome;
   const family = {
     ...executiveParentPortalDemo.family,
-    guardians: singleChildReview
+    guardians: oneChild
       ? executiveParentPortalDemo.family.guardians.map((guardian, index) =>
           index === 0 ? { ...guardian, fullName: "App Review Parent" } : guardian,
         )
       : executiveParentPortalDemo.family.guardians,
-    children: (singleChildReview
+    children: (oneChild
       ? executiveParentPortalDemo.family.children.slice(0, 1)
       : executiveParentPortalDemo.family.children
     ).map((child, index) => ({
       ...child,
-      today: singleChildReview
+      ...(longContent ? {
+        preferredName: "Alexandria Isabella Montgomery-Rivera",
+        fullName: "Alexandria Isabella Montgomery-Rivera",
+        classroom: { ...child.classroom, name: "Early Explorers and Discoverers Afternoon Classroom" },
+      } : {}),
+      today: oneChild
         ? {
-            status: "not_marked" as const,
-            label: "Not marked today",
+            status: absentHome ? "absent" as const : "not_marked" as const,
+            label: absentHome ? "Absent" : "Not marked today",
             latestEventAt: null,
             currentLocationName: null,
             dailyReportShared: false,
@@ -159,7 +100,22 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
       activeView={activeView}
       familySection={familySection}
       family={family}
-      centerName="Sunshine Academy"
+      centerName={longContent ? "Sunshine Academy of Early Learning and Family Discovery · North Campus" : "Sunshine Academy"}
+      {...(quietHome ? {
+        billingAccount: { ...executiveParentPortalDemo.billingAccount, balanceCents: 0 },
+        invoices: [],
+        documents: [],
+        incidents: [],
+        announcements: [],
+        ledgerEntries: [],
+      } : {})}
+      {...(longContent ? {
+        announcements: executiveParentPortalDemo.announcements.map((announcement) => ({
+          ...announcement,
+          title: "Family picnic and classroom celebration for our early learning community",
+          body: `${announcement.body} `.repeat(12) + "Please contact the school office with any questions.",
+        })),
+      } : {})}
       currentGuardianId="exec-demo-guardian-a"
       kioskCredentials={[{
         guardianId: "exec-demo-guardian-a",
@@ -180,76 +136,38 @@ function ParentPreview({ screen, familySection, scenario }: { screen: string | u
         sender: { name: index % 2 === 1 ? "Jordan Rivera" : "Ms. Morgan" },
       }))}
       previewMode
-      demoMode={!singleChildReview}
+      demoMode={!oneChild}
     />
   );
 }
 
-function TeacherPreview({ screen }: { screen?: string }) {
-  const activeScreen = screen === "roster" || screen === "quick-log" ? screen : "home";
-  const roster = [
-    ["Ava Rivera", "Present", "Daily report started"],
-    ["Mason Brooks", "Present", "Lunch recorded"],
-    ["Noah Williams", "Present", "Nap pending"],
-    ["Lily Chen", "Checked out", "Report shared"],
-    ["Emma Davis", "Present", "Photo approved"],
-  ];
-
-  if (activeScreen === "roster") {
-    return (
-      <div className="flex min-w-0 flex-col gap-5">
-        <section className="overflow-hidden rounded-2xl border bg-card p-5 sm:p-7">
-          <Badge className="mb-4">Butterflies classroom</Badge>
-          <h1 className="text-pretty text-3xl font-semibold tracking-tight">Classroom roster</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Current classroom status and daily-report progress</p>
-        </section>
-        <Card id="teacher-roster" className="min-w-0 overflow-hidden">
-          <CardHeader><CardTitle as="h2">Children today</CardTitle><CardDescription>Five safe preview records · four currently present</CardDescription></CardHeader>
-          <CardContent className="grid gap-2">
-            {roster.map(([name, status, detail]) => (
-              <div key={name} className="flex min-h-16 items-center justify-between gap-3 rounded-lg border p-3 text-sm">
-                <div className="min-w-0"><div className="truncate font-medium">{name}</div><div className="mt-1 truncate text-xs text-muted-foreground">{detail}</div></div>
-                <Badge variant={status === "Present" ? "secondary" : "outline"}>{status}</Badge>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (activeScreen === "quick-log") {
-    return (
-      <div className="flex min-w-0 flex-col gap-5">
-        <section className="overflow-hidden rounded-2xl border bg-card p-5 sm:p-7">
-          <Badge className="mb-4">Butterflies classroom</Badge>
-          <h1 className="text-pretty text-3xl font-semibold tracking-tight">Quick log</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Record routine care and classroom moments with fewer taps</p>
-        </section>
-        <Card id="teacher-quick-log" className="min-w-0 overflow-hidden">
-          <CardHeader><CardTitle as="h2">What would you like to record?</CardTitle><CardDescription>Applies only to the children you select</CardDescription></CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
-            {["Meal", "Nap", "Diaper", "Activity", "Photo", "Teacher note"].map((label) => <div key={label} className="grid min-h-24 place-items-center rounded-xl border bg-muted/30 p-4 text-center text-sm font-semibold">{label}</div>)}
-          </CardContent>
-        </Card>
-        <Card><CardHeader><CardTitle as="h2">Report progress</CardTitle><CardDescription>Two reports still need a final review</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-2"><Badge variant="secondary">12 ready</Badge><Badge variant="outline">2 in progress</Badge></CardContent></Card>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <section className="overflow-hidden rounded-2xl border bg-card p-5 sm:p-7">
-        <Badge className="mb-4">Butterflies classroom</Badge>
-        <h1 className="text-pretty text-3xl font-semibold tracking-tight">Today with your class</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Fourteen children present · two daily reports need review</p>
-      </section>
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <Card id="teacher-roster" className="scroll-mt-36 min-w-0 overflow-hidden"><CardHeader><CardTitle as="h2">Roster</CardTitle><CardDescription>Children currently in your classroom</CardDescription></CardHeader><CardContent className="grid gap-2">{roster.slice(0, 4).map(([name, status]) => <div key={name} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm"><span className="truncate font-medium">{name}</span><Badge variant="outline">{status}</Badge></div>)}</CardContent></Card>
-        <Card id="teacher-quick-log" className="scroll-mt-36 min-w-0 overflow-hidden"><CardHeader><CardTitle as="h2">Quick log</CardTitle><CardDescription>Record the classroom day with fewer taps</CardDescription></CardHeader><CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">{['Meal', 'Nap', 'Diaper', 'Activity', 'Photo', 'Note'].map((label) => <div key={label} className="rounded-lg border p-4 text-center text-sm font-semibold">{label}</div>)}</CardContent></Card>
-      </div>
-    </div>
-  );
+function TeacherPreview({ scenario }: { scenario?: string }) {
+  const roster = (scenario === "empty" ? [] : ["Ava Rivera", "Mason Brooks", "Noah Williams", "Lily Chen", "Emma Davis"]).map((name, index) => ({
+    id: `preview-child-${index + 1}`,
+    fullName: scenario === "long-content" && index === 0 ? "Alexandria Isabella Montgomery-Rivera" : name,
+    ageGroup: "Preschool",
+    enrollmentStatus: "active",
+    photoVideoPermission: true,
+    classroom: { id: "preview-classroom", name: "Butterflies" },
+    attendance: {
+      status: index === 3 ? "checked_out" : index === 4 ? "not_marked" : "present",
+      latestLogType: index === 3 ? "check_out" : index === 4 ? null : "check_in",
+      latestLogAt: index === 4 ? null : "2026-09-10T12:05:00Z",
+      lastMarkedAt: index === 4 ? null : "2026-09-10T12:05:00Z",
+    },
+    dailyReport: {
+      status: index === 3 ? "sent" as const : index === 4 ? "not_started" as const : "draft" as const,
+      latestReportAt: index === 4 ? null : "2026-09-10T15:00:00Z",
+      sentAt: index === 3 ? "2026-09-10T16:00:00Z" : null,
+      entries: { meals: 1, naps: 0, diapers: 0, activities: 1 },
+    },
+  }));
+  return <TeacherMobileWorkspace previewMode teacherName="Morgan Lee" roster={roster}
+    teacherProfile={{ name: "Morgan Lee", loginEmail: "morgan@example.com", contactEmail: "morgan@example.com", phone: "", title: "Teacher", centerId: "preview-center", centerName: "Sunshine Academy", classroomId: "preview-classroom", hasStaffKioskCode: true }}
+    classroomOptions={[{ id: "preview-classroom", name: "Butterflies", ageGroup: "Preschool" }]}
+    classroomRatios={[{ classroomId: "preview-classroom", name: "Butterflies", capacity: 20, ratioRule: "1:10", assignedStaff: 1 }]}
+    kioskAccess={{ centerId: "preview-center", centerName: "Sunshine Academy", kioskPath: "/device-preview?view=kiosk-staff", hasStaffKioskCode: true, clockStatus: "clocked_in", lastActionAt: "2026-09-10T12:00:00Z", timeClockSummary: { totalMinutes: 240, closedShiftCount: 1, openShiftMinutes: 60, openShiftStartedAt: "2026-09-10T12:00:00Z" } }}
+  />;
 }
 
 function PreviewMetrics({ items }: { items: Array<{ label: string; value: string; detail: string }> }) {
@@ -266,36 +184,27 @@ function PreviewMetrics({ items }: { items: Array<{ label: string; value: string
   );
 }
 
-function PortfolioPreview({ regional = false }: { regional?: boolean }) {
-  const schools = [
-    { name: "Sunshine Academy", location: "Carmel, Indiana", occupancy: "91%", status: "On track" },
-    { name: "Little Harbor", location: "Fishers, Indiana", occupancy: "87%", status: "Review staffing" },
-    { name: "Maple Grove", location: "Westfield, Indiana", occupancy: "93%", status: "On track" },
-  ];
-  return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <section className="rounded-2xl border bg-card p-5 sm:p-7">
-        <Badge className="mb-4">{regional ? "Regional operations" : "Executive portfolio"}</Badge>
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{regional ? "North region" : "School portfolio"}</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">Compare school health, follow up on exceptions, and keep decisions tied to the right location.</p>
-      </section>
-      <PreviewMetrics items={[
-        { label: "Open schools", value: regional ? "5" : "14", detail: "All reporting" },
-        { label: "Children enrolled", value: regional ? "612" : "1,684", detail: "Current enrollment" },
-        { label: "Portfolio occupancy", value: "90%", detail: "+2.4% this quarter" },
-        { label: "Items to review", value: "3", detail: "Staffing and compliance" },
-      ]} />
-      <Card className="overflow-hidden">
-        <CardHeader><CardTitle as="h2">School comparison</CardTitle><CardDescription>Operational signals by location</CardDescription></CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader><TableRow><TableHead>School</TableHead><TableHead>Location</TableHead><TableHead>Occupancy</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-            <TableBody>{schools.map((school) => <TableRow key={school.name}><TableCell className="font-medium">{school.name}</TableCell><TableCell>{school.location}</TableCell><TableCell className="tabular-nums">{school.occupancy}</TableCell><TableCell><Badge variant={school.status === "On track" ? "secondary" : "outline"}>{school.status}</Badge></TableCell></TableRow>)}</TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
-  );
+function PortfolioPreview({ regional = false, scenario }: { regional?: boolean; scenario?: string }) {
+  const schoolComparisons = (scenario === "empty" ? [] : previewPortfolioWorkspace.options).map((school, index) => ({
+    id: school.id, name: scenario === "long-content" && index === 0 ? "Sunshine Academy of Early Learning and Family Discovery · North Campus" : school.name,
+    region: school.detail, children: 52, capacity: 60, occupancy: 87, staff: 9, leads: 3, toursToday: 1,
+    revenueDollars: 12500, compliance: 100, fteCount: index === 1 ? null : 48, fteStatus: "Submitted", fteSubmitted: index !== 1,
+  }));
+  return <ExecutiveDashboard live={{
+    role: regional ? "REGIONAL_MANAGER" : "PLATFORM_OWNER",
+    accessScope: regional ? "tenant" : "platform",
+    workspace: { mode: "all", label: "All locations", detail: `${schoolComparisons.length} schools in your authorized workspace` },
+    kpis: demoKpis, pipelineStages: demoPipelineStages, centers: scenario === "empty" ? [] : demoCenters,
+    aiSummary: "Review current-week reporting and classroom coverage across your authorized schools.",
+    notifications: scenario === "empty" ? [] : [{ text: "One school needs a current-week FTE follow-up", widgetId: "executiveRollup" }],
+    visibleLenses: [regional ? "regional" : "platform"], asOfLabel: "Safe preview data",
+    executiveMetrics: {
+      currentWeekStart: "2026-09-07T00:00:00Z", currentWeekKey: "2026-09-07", fteDeadlineLabel: "Friday",
+      fteSubmittedSchools: schoolComparisons.filter((school) => school.fteSubmitted).length,
+      fteMissingSchools: schoolComparisons.filter((school) => !school.fteSubmitted).length,
+      schoolComparisons, weeklyFteTrend: [], fteSubmissions: [], payrollSummaries: [], refundRequests: [],
+    },
+  }} />;
 }
 
 function BillingPreview() {
@@ -338,7 +247,7 @@ function PickupPreview() {
 }
 
 function ShellPreview({ role, screen, familySection, scenario }: { role: Exclude<PreviewRole, "kiosk" | "kiosk-staff">; screen?: string; familySection?: string; scenario?: string }) {
-  if (role === "role-dashboard") {
+  if (role === "role-dashboard" || role === "director") {
     return (
       <AppShell previewMode previewHrefBase="/device-preview?view=role-dashboard" currentUser={{ name: "Avery Thompson", email: "avery@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", workspace: { ...previewPortfolioWorkspace, mode: "fixed", selection: "center:preview-center", activeCenterId: "preview-center", label: "Sunshine Academy", detail: "Carmel, IN", canSwitch: false, canSelectAll: false, authorizedCenterCount: 1, options: previewPortfolioWorkspace.options.slice(0, 1) }, scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Center Director · 1 school", href: "/dashboard" } }}>
         <ExecutiveDashboard live={{
@@ -349,7 +258,12 @@ function ShellPreview({ role, screen, familySection, scenario }: { role: Exclude
           pipelineStages: demoPipelineStages,
           centers: demoCenters,
           aiSummary: "Attendance is steady. Review two pickup notes before the afternoon transition.",
-          notifications: ["Two daily reports need review", "One enrollment follow-up is due today"],
+          notifications: scenario === "empty" ? [] : [
+            { text: scenario === "long-content" ? "Review the afternoon classroom coverage and follow-up instructions for the extended-day early learning program" : "Two classroom attendance follow-ups need review", widgetId: "attendanceSnapshot" },
+            { text: "One enrollment follow-up is due today", widgetId: "enrollmentPipeline" },
+            { text: "Review classroom staffing coverage", widgetId: "staffingRatios" },
+            { text: "One compliance follow-up is due", widgetId: "complianceQueue" },
+          ],
           visibleLenses: ["director"],
           asOfLabel: "Safe preview data",
         }} />
@@ -357,18 +271,18 @@ function ShellPreview({ role, screen, familySection, scenario }: { role: Exclude
     );
   }
   if (role === "parent") {
-    const reviewScenario = scenario === "single-review";
+    const reviewScenario = ["single-review", "quiet-home", "long-content", "absent-home"].includes(scenario ?? "");
     return <AppShell previewMode previewHrefBase="/device-preview?view=parent" currentUser={{ name: reviewScenario ? "App Review Parent" : "Jordan Rivera", email: "parent@example.com", role: "PARENT_GUARDIAN", timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "family", label: "Rivera Family", detail: "Sunshine Academy", href: "/parent-portal" } }}><ParentPreview screen={screen} familySection={familySection} scenario={scenario} /></AppShell>;
   }
   if (role === "teacher") {
-    return <AppShell previewMode previewHrefBase="/device-preview?view=teacher" currentUser={{ name: "Morgan Lee", email: "morgan@example.com", role: "TEACHER", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "classroom", label: "Butterflies", detail: "Sunshine Academy · Teacher", href: "/teacher-portal" } }}><TeacherPreview screen={screen} /></AppShell>;
+    return <AppShell previewMode previewHrefBase="/device-preview?view=teacher" currentUser={{ name: "Morgan Lee", email: "morgan@example.com", role: "TEACHER", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "classroom", label: "Butterflies", detail: "Sunshine Academy · Teacher", href: "/teacher-portal" } }}><TeacherPreview scenario={scenario} /></AppShell>;
   }
   if (role === "pickup") {
     return <AppShell previewMode previewHrefBase="/device-preview?view=pickup" currentUser={{ name: "Taylor Rivera", email: "pickup@example.com", role: "AUTHORIZED_PICKUP", timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "family", label: "Rivera Family", detail: "Authorized pickup access", href: "/parent-portal" } }}><PickupPreview /></AppShell>;
   }
   if (role === "executive" || role === "regional") {
     const regional = role === "regional";
-    return <AppShell previewMode previewHrefBase={`/device-preview?view=${role}`} currentUser={{ name: regional ? "Riley Morgan" : "Casey Bennett", email: `${role}@example.com`, role: regional ? "REGIONAL_MANAGER" : "PLATFORM_OWNER", accessScope: regional ? "tenant" : "platform", centerIds: ["preview-center", "preview-center-two", "preview-center-three"], timeZone: "America/Indiana/Indianapolis", workspace: previewPortfolioWorkspace, scopeContext: { kind: "portfolio", label: "All locations", detail: regional ? "3 schools · Regional Manager" : "3 schools · Platform Owner", href: "/multi-location-dashboard" } }}><PortfolioPreview regional={regional} /></AppShell>;
+    return <AppShell previewMode previewHrefBase={`/device-preview?view=${role}`} currentUser={{ name: regional ? "Riley Morgan" : "Casey Bennett", email: `${role}@example.com`, role: regional ? "REGIONAL_MANAGER" : "PLATFORM_OWNER", accessScope: regional ? "tenant" : "platform", centerIds: ["preview-center", "preview-center-two", "preview-center-three"], timeZone: "America/Indiana/Indianapolis", workspace: previewPortfolioWorkspace, scopeContext: { kind: "portfolio", label: "All locations", detail: regional ? "3 schools · Regional Manager" : "3 schools · Platform Owner", href: "/multi-location-dashboard" } }}><PortfolioPreview regional={regional} scenario={scenario} /></AppShell>;
   }
   if (role === "billing") {
     return <AppShell previewMode previewHrefBase="/device-preview?view=billing" currentUser={{ name: "Jamie Patel", email: "billing@example.com", role: "BILLING_ADMIN", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Billing Admin · 1 school", href: "/billing-invoices" } }}><BillingPreview /></AppShell>;
@@ -379,7 +293,7 @@ function ShellPreview({ role, screen, familySection, scenario }: { role: Exclude
   if (role === "workflow") {
     return <AppShell previewMode previewHrefBase="/device-preview?view=workflow" currentUser={{ name: "Avery Thompson", email: "avery@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Center Director · 1 school", href: "/dashboard" } }}><AutomationWorkflowBuilder data={workflowData} readOnly /></AppShell>;
   }
-  return <AppShell previewMode previewHrefBase="/device-preview?view=director" currentUser={{ name: "Avery Thompson", email: "avery@example.com", role: "CENTER_DIRECTOR", centerIds: ["preview-center"], timeZone: "America/Indiana/Indianapolis", scopeContext: { kind: "school", label: "Sunshine Academy", detail: "Center Director · 1 school", href: "/dashboard" } }}><DirectorPreview /></AppShell>;
+  return null;
 }
 
 export default async function DevicePreviewPage({ searchParams }: { searchParams: Promise<{ view?: string; screen?: string; section?: string; scenario?: string }> }) {
@@ -390,5 +304,5 @@ export default async function DevicePreviewPage({ searchParams }: { searchParams
   if (role === "kiosk" || role === "kiosk-staff") {
     return <DevicePreviewGuard><KioskCheckIn previewMode familyOnly={role === "kiosk"} center={{ id: "preview-center", name: "Sunshine Academy", place: "Carmel, Indiana", timeZone: "America/Indiana/Indianapolis" }} initialMode={role === "kiosk-staff" ? "staff" : "family"} /></DevicePreviewGuard>;
   }
-  return <DevicePreviewGuard><ShellPreview role={role} screen={screen} familySection={section} scenario={scenario} /></DevicePreviewGuard>;
+  return <DevicePreviewGuard rewriteWorkspaceLinks={role === "director" || role === "role-dashboard" || role === "executive" || role === "regional"}><ShellPreview role={role} screen={screen} familySection={section} scenario={scenario} /></DevicePreviewGuard>;
 }

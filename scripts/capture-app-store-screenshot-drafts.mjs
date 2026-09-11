@@ -4,6 +4,7 @@ import { chromium } from "playwright";
 import sharp from "sharp";
 
 const root = process.cwd();
+const outputRoot = process.env.APP_STORE_SCREENSHOT_OUTPUT_DIR || path.join(root, "output", "app-store");
 const baseUrl = (process.env.APP_STORE_SCREENSHOT_BASE_URL || "http://localhost:4177").replace(/\/$/, "");
 const cssViewport = { width: 430, height: 932 };
 const deviceScaleFactor = 3;
@@ -16,8 +17,8 @@ const captures = [
   { app: "parent", name: "04-payments.png", path: "/device-preview?view=parent&screen=payments", caption: "Tuition and payment history in one place" },
   { app: "parent", name: "05-documents.png", path: "/device-preview?view=parent&screen=family&section=documents", caption: "Family documents and acknowledgements" },
   { app: "teacher", name: "01-classroom-today.png", path: "/device-preview?view=teacher&screen=home", caption: "The classroom day at a glance" },
-  { app: "teacher", name: "02-roster.png", path: "/device-preview?view=teacher&screen=roster", caption: "A current classroom roster" },
-  { app: "teacher", name: "03-quick-log.png", path: "/device-preview?view=teacher&screen=quick-log", caption: "Meals, naps, activities, photos, and notes" },
+  { app: "teacher", name: "02-roster.png", path: "/device-preview?view=teacher&screen=roster#teacher-roster", expandedSelector: "#teacher-roster", focusSelector: "#teacher-roster", caption: "A current classroom roster" },
+  { app: "teacher", name: "03-quick-log.png", path: "/device-preview?view=teacher&screen=quick-log#teacher-quick-log", expandedSelector: "#teacher-daily-report", focusSelector: "#teacher-quick-log", caption: "Meals, naps, activities, photos, and notes" },
 ];
 
 async function preparePage(page) {
@@ -71,10 +72,10 @@ async function capture(browser, item) {
     await page.locator('html[data-device-preview-hydrated="true"]').waitFor({ timeout: 10_000 });
     await page.evaluate(() => document.fonts.ready);
     await preparePage(page);
+    if (item.expandedSelector) await page.locator(`${item.expandedSelector}[data-collapsed="false"]`).waitFor();
     if (item.focusSelector) {
       const target = page.locator(item.focusSelector).first();
-      await target.scrollIntoViewIfNeeded();
-      await page.evaluate(() => window.scrollBy(0, -96));
+      await target.evaluate((element) => element.scrollIntoView({ block: "start" }));
     } else {
       await page.evaluate(() => window.scrollTo(0, 0));
     }
@@ -88,10 +89,15 @@ async function capture(browser, item) {
     }, { preserveWindowScroll: Boolean(item.focusSelector), resetSelector: item.resetSelector ?? null });
     const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     if (horizontalOverflow) problems.push("Horizontal overflow detected.");
+    const headerVisible = await page.locator('.app-header').evaluate((header) => {
+      const rect = header.getBoundingClientRect();
+      return header.contains(document.elementFromPoint(rect.left + 30, rect.top + 30));
+    });
+    if (!headerVisible) problems.push("Scrolled content obscures the app header.");
     if (problems.length) throw new Error(`${item.name}: ${problems.join(" | ")}`);
 
     const screenshot = await page.screenshot({ type: "png", animations: "disabled", fullPage: false });
-    const outputDirectory = path.join(root, "output", "app-store", item.app === "parent" ? "ios" : "ios-teacher", "screenshots-draft");
+    const outputDirectory = path.join(outputRoot, item.app === "parent" ? "ios" : "ios-teacher", "screenshots-draft");
     await mkdir(outputDirectory, { recursive: true });
     const outputPath = path.join(outputDirectory, item.name);
     await sharp(screenshot).flatten({ background: "#ffffff" }).removeAlpha().png({ compressionLevel: 9 }).toFile(outputPath);
@@ -113,7 +119,7 @@ async function main() {
   } finally {
     await browser.close();
   }
-  const manifestPath = path.join(root, "output", "app-store", "screenshot-drafts-manifest.json");
+  const manifestPath = path.join(outputRoot, "screenshot-drafts-manifest.json");
   await mkdir(path.dirname(manifestPath), { recursive: true });
   await writeFile(manifestPath, `${JSON.stringify({
     schemaVersion: 1,

@@ -44,7 +44,7 @@ test("mobile parent summaries stay compact without removing detail", () => {
   assert.doesNotMatch(workspace, /snap-x snap-mandatory/);
   assert.match(workspace, /View day details/);
   assert.match(workspace, /View account history/);
-  assert.match(workspace, /grid grid-cols-2 gap-3 xl:grid-cols-4/);
+  assert.match(workspace, /grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3 xl:grid-cols-4/);
   assert.match(workspace, /Schedule[\s\S]*Classroom[\s\S]*Last Check-In[\s\S]*Daily Update/);
   assert.match(workspace, /Account activity[\s\S]*Recent payments/);
 });

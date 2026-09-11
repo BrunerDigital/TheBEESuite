@@ -74,8 +74,9 @@ test("past families cannot receive payment-method setup links", () => {
   assert.match(billingWorkbench, /disabled=\{isPending \|\| !selectedFamily \|\| selectedFamilyIsPast \|\| !selectedPaymentMethod\.paymentMethodReauthorizationRecipientEmails\.length\}/);
   assert.match(billingWorkbench, /disabled=\{isPending \|\| !selectedFamily \|\| selectedFamilyIsPast \|\| !selectedPaymentRequestEmails\.length\}[\s\S]*sendPaymentMethodRequest\("instant_bank_verification"\)/);
   assert.match(billingWorkbench, /disabled=\{isPending \|\| !selectedFamily \|\| selectedFamilyIsPast \|\| !selectedPaymentRequestEmails\.length\}[\s\S]*sendPaymentMethodRequest\("payment_steps"\)/);
-  assert.match(requestRoute, /children: \{ where: currentlyEnrolledChildWhere\(\) \}/);
-  assert.match(requestRoute, /if \(family\._count\.children === 0\)/);
+  assert.match(requestRoute, /children: \{ select: \{ enrollmentStatus: true, classroomId: true \} \}/);
+  assert.match(requestRoute, /if \(billingFamilyAccountCategory\(family\.children\) === "past"\)/);
+  assert.doesNotMatch(requestRoute, /family\._count\.children === 0/);
 });
 
 test("director billing finds past payable accounts but keeps them payment-only", () => {
